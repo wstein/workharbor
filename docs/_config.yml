@@ -3,12 +3,29 @@ description: Self-hosted supervisor for AI coding agents. Isolated workspaces, h
 url: https://wstein.github.io
 baseurl: /workharbor
 
-remote_theme: just-the-docs/just-the-docs
-color_scheme: dark
-logo: /assets/images/logo.svg
+theme: just-the-docs
+plugins:
+  - jekyll-include-cache
+  - jekyll-seo-tag
+
+# The light scheme is compiled into the default stylesheet; the dark one lives in
+# assets/css/harbor-dark.scss and is switched by prefers-color-scheme or the toggle.
+color_scheme: harbor
 favicon_ico: /assets/images/favicon.ico
 search_enabled: true
 heading_anchors: true
+
+kramdown:
+  toc_levels: 2..2
+
+callouts_level: quiet
+callouts:
+  warning:
+    title: Design phase
+    color: yellow
+  note:
+    title: Note
+    color: blue
 
 aux_links:
   GitHub: https://github.com/wstein/workharbor
@@ -17,7 +34,13 @@ aux_links_new_tab: true
 footer_content: >-
   Released under the <a href="https://github.com/wstein/workharbor/blob/main/LICENSE">EUPL-1.2</a>.
 
-# Only published files live under docs/; keep the source tidy.
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
 exclude:
   - Gemfile
   - Gemfile.lock
+  - vendor/

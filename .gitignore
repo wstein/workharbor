@@ -6,3 +6,9 @@
 .DS_Store
 .env
 /_site/
+
+# Jekyll
+/docs/vendor/
+/docs/.bundle/
+.jekyll-cache/
+.sass-cache/
