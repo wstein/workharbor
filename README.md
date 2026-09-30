@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="workharbor logo" width="128" height="128">
-</p>
-
-# workharbor
+<h1 align="center">
+  <img src="assets/banner.png" alt="workharbor: supervise AI coding agents, stay in the loop" width="100%">
+</h1>
 
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
