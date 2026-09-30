@@ -14,7 +14,8 @@ Revision of the original discussion summary (`agent-work-supervisor-summary.md`)
 A self-hosted service in which AI coding agents carry out project work independently while one developer acts as human-in-the-loop (HitL): intervening, answering questions, reviewing and approving.
 
 - Agents work repository issues, modify code, run tests, update issues and open or update PRs.
-- The developer attaches via SSH or an editor temporarily. Disconnecting never interrupts the agent.
+- Usage is a live coding assistant, not an automation pipeline: the developer chats with an agent about the work, then detaches while it works for 15 to 60 minutes or longer, and returns when it needs them. A personal tool with one developer and a handful of concurrent sessions.
+- The developer attaches via chat, SSH or an editor temporarily. Disconnecting never interrupts the agent.
 - Web UI and `whr` CLI are two front ends over one service layer: the CLI calls the JSON API, the web UI is server-rendered HTML (see D8).
 - First host: Apple-silicon Mac mini (16 GB, ~1 TB) on Apple Container. Other runtimes later via adapters.
 
