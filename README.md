@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="workharbor logo" width="128" height="128">
+</p>
+
 # workharbor
 
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
