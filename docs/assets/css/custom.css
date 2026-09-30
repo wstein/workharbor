@@ -21,3 +21,46 @@
 .dark a[class*="bg-primary-600"]:hover {
   background-color: #115e59;
 }
+
+/*
+ * Mobile first: the rules above and below apply to phones; larger screens
+ * are enhanced with min-width queries.
+ */
+
+/* Looser headline tracking on small screens, where -0.05em looks cramped. */
+h1[class*="tracking-tighter"] {
+  letter-spacing: -0.025em;
+}
+
+/* Denser tables on phones so multi-column tables stay readable. */
+main table {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+main table th,
+main table td {
+  padding-inline: 0.5rem;
+}
+
+/* Keep long words and inline code from forcing horizontal page scroll. */
+main :not(pre) > code {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  h1[class*="tracking-tighter"] {
+    letter-spacing: -0.05em;
+  }
+}
+
+@media (min-width: 768px) {
+  main table {
+    font-size: 0.875rem;
+  }
+
+  main table th,
+  main table td {
+    padding-inline: 0.75rem;
+  }
+}
