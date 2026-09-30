@@ -13,7 +13,7 @@ A self-hosted supervisor for AI coding agents. Agents work on repository issues 
 
 The command-line tool is **`whr`**.
 
-> **Status:** design phase. There is no implementation yet. See [docs/design.md](docs/design.md).
+> **Status:** design phase. There is no implementation yet. Documentation: <https://wstein.github.io/workharbor/> ([source](docs/design.md)).
 
 ## Concept
 
