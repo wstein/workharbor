@@ -2,7 +2,7 @@
 GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 
-.PHONY: build test vet fmt fmt-check lint editorconfig check hooks
+.PHONY: build test vet fmt fmt-check lint editorconfig check commitlint changelog hooks
 
 build:
 	go build -o bin/whr ./cmd/whr
@@ -31,6 +31,15 @@ editorconfig:
 
 check: fmt-check vet lint editorconfig test
 
-# Enable the repository git hooks (pre-commit, commit-msg).
+# Check commits on this branch that are not on origin/main.
+commitlint:
+	go run ./cmd/commitlint --range origin/main..HEAD
+
+# Regenerate CHANGELOG.md from Conventional Commits (git-cliff via npx).
+changelog:
+	npx --yes git-cliff@2 --output CHANGELOG.md
+
+# Enable the repository git hooks and the commit message template.
 hooks:
 	git config core.hooksPath .githooks
+	git config commit.template .gitmessage
