@@ -324,3 +324,23 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Wider forge/CI coverage
 
 Phases are proposals, not a schedule.
+
+## 14. Review log
+
+Reviewers disagreed on two points; the resolutions adopted here:
+
+- **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge via PAT.
+- **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted: minimal read-mostly UI with inbox, since decisions are answered there.
+
+Skipped for now: separate identity service, Kubernetes, multi-host placement, Portainer/Coder UI integration.
+
+## 15. References
+
+Carried over from the original summary; compatibility claims require testing against pinned versions.
+
+- Apple Container: [README](https://github.com/apple/container), [technical overview](https://github.com/apple/container/blob/main/docs/technical-overview.md), [container machine](https://github.com/apple/container/blob/main/docs/container-machine.md), [VS Code Remote-SSH example](https://github.com/apple/container/blob/main/examples/container-machine-vscode/README.md)
+- Socktainer: [repository](https://github.com/socktainer/socktainer)
+- Editors: [code-server FAQ](https://github.com/coder/code-server/blob/main/docs/FAQ.md), [JetBrains remote development](https://www.jetbrains.com/help/idea/remote-development-overview.html)
+- Platforms: [Coder](https://coder.com/docs/about), [external provisioners](https://coder.com/docs/admin/provisioners), [DevPod](https://devpod.sh/docs/what-is-devpod), [Eclipse Che](https://eclipse.dev/che/docs/)
+- Portainer: [Add-ons](https://docs.portainer.io/admin/add-ons), [custom templates](https://docs.portainer.io/user/docker/templates/custom), [REST API](https://docs.portainer.io/api/access)
+- OAuth: [GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Gitea](https://docs.gitea.com/development/oauth2-provider/), [Forgejo](https://forgejo.org/docs/latest/admin/advanced/oauth2-provider/), [Codeberg](https://docs.codeberg.org/integrations/keycloak/), [GitLab](https://docs.gitlab.com/api/oauth2/)
