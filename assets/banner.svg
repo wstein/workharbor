@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 240" width="1000" height="240">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 180" width="1000" height="180">
   <title>workharbor</title>
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -6,8 +6,8 @@
       <stop offset="1" stop-color="#13315c"/>
     </linearGradient>
   </defs>
-  <rect width="1000" height="240" rx="22" fill="url(#g)"/>
-  <g transform="translate(56 60) scale(2.0625)">
+  <rect width="1000" height="180" rx="20" fill="url(#g)"/>
+  <g transform="translate(56 34) scale(1.75)">
     <rect width="64" height="64" rx="14" fill="#0b2545" stroke="#1d4573" stroke-width="0.6"/>
     <g fill="none" stroke="#5eead4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="32" cy="14" r="5"/>
@@ -19,8 +19,8 @@
     </g>
   </g>
   <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
-    <text x="228" y="104" font-size="80" font-weight="700" fill="#ffffff">workharbor</text>
-    <text x="231" y="152" font-size="34" fill="#5eead4">Supervise AI coding agents. Stay in the loop.</text>
-    <text x="231" y="194" font-size="27" fill="#9fb3c8">Self-hosted · isolated workspaces · whr CLI</text>
+    <text x="196" y="78" font-size="64" font-weight="700" fill="#ffffff">workharbor</text>
+    <text x="198" y="112" font-size="28" fill="#5eead4">Supervise AI coding agents. Stay in the loop.</text>
+    <text x="198" y="144" font-size="22" fill="#9fb3c8">Self-hosted · isolated workspaces · whr CLI</text>
   </g>
 </svg>
