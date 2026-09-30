@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320">
+  <title>workharbor</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b2545"/>
+      <stop offset="1" stop-color="#13315c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#g)"/>
+  <g transform="translate(96 64) scale(3)">
+    <rect width="64" height="64" rx="14" fill="#0b2545" stroke="#1d4573" stroke-width="0.5"/>
+    <g fill="none" stroke="#5eead4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="32" cy="14" r="5"/>
+      <path d="M32 19V51"/>
+      <path d="M23 28H41"/>
+      <path d="M14 37Q14 52 32 52Q50 52 50 37"/>
+      <path d="M9 41L14 36L19 41"/>
+      <path d="M45 41L50 36L55 41"/>
+    </g>
+  </g>
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+    <text x="340" y="170" font-size="96" font-weight="700" fill="#ffffff">workharbor</text>
+    <text x="344" y="226" font-size="34" fill="#5eead4">Supervise AI coding agents. Stay in the loop.</text>
+  </g>
+</svg>
