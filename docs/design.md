@@ -1,3 +1,8 @@
+---
+title: Design
+nav_order: 2
+---
+
 # workharbor — Design
 
 **CLI:** `whr` · **Status:** Revised design, 30 September 2026 · No implementation or compatibility testing yet.
