@@ -1,0 +1,12 @@
+{{- /* Colour of the mobile browser chrome; follows the active theme (dark by default). */ -}}
+<meta name="theme-color" content="#0c1b33" />
+<script>
+  (function () {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    function sync() {
+      meta.content = document.documentElement.classList.contains('light') ? '#ffffff' : '#0c1b33';
+    }
+    sync();
+    new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
