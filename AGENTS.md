@@ -34,6 +34,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Conventions
 
+- Web UI: server-rendered Go with `templ`, htmx and SSE, embedded in the binary (design D8). No Node toolchain, no SPA framework, no CSS framework. HTML handlers stay thin and call the same service layer as the JSON API; never duplicate business logic in a handler.
 - Go, standard library first. Add a dependency only when it is clearly justified, and say why in the commit message.
 - Formatting (gofumpt, goimports) and linting (`.golangci.yml`) are enforced; keep `make check` green. Follow `.editorconfig`.
 - Add table-driven or small focused tests next to the code for domain logic and policy.
