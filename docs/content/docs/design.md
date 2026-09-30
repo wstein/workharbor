@@ -342,12 +342,15 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Drone CI with revision-aware feedback
 - [ ] Resource-aware scheduling, recovery improvements
 - [ ] code-server, UI pause/resume and editor launch, `whr top`
+- [ ] Installable PWA for phone use: web app manifest, service worker for the app shell and Web Push alongside ntfy (§9.4). Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and iOS Web Push needs the app installed to the Home Screen (**unverified**). Per-device revocable tokens.
 
 ### Long term
 
 - [ ] Other microVM/VM platforms, Kubernetes where useful
 - [ ] Multiple hosts and placement policies
 - [ ] Wider forge/CI coverage
+
+**Not planned:** native iOS and Android apps. The installable PWA is the mobile client; the JSON API stays the contract for any client.
 
 Phases are proposals, not a schedule.
 
