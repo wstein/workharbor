@@ -1,0 +1,23 @@
+/* workharbor palette: navy ink and teal accents, dark by default. */
+:root {
+  --primary-hue: 175deg;
+  --primary-saturation: 77%;
+  --primary-lightness: 26%;
+}
+
+.dark {
+  --primary-hue: 171deg;
+  --primary-saturation: 77%;
+  --primary-lightness: 64%;
+  --hx-color-dark: #0c1b33;
+}
+
+/* Hero button: the dark-mode teal is too light for white text. */
+.dark a[class*="bg-primary-600"] {
+  color: #ffffff;
+  background-color: #0f766e;
+}
+
+.dark a[class*="bg-primary-600"]:hover {
+  background-color: #115e59;
+}
