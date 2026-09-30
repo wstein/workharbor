@@ -49,7 +49,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Commits
 
-Small, atomic, [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, for example `feat(domain): ...`, `docs(design): ...`, `chore: ...`. One logical change per commit. Do not push or merge without being asked.
+Focused, atomic, [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, for example `feat(domain): ...`, `docs(design): ...`, `chore: ...`. One logical change per commit. Do not push or merge without being asked.
 
 ## License
 
