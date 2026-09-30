@@ -273,16 +273,16 @@ Ordered by what is cheap and blocks the most work.
 1. **Runner scorecard** (value 10, effort 3). One page comparing Claude Code, Codex CLI, Aider, OpenHands, Goose and others on: headless mode, permission/approval bypass, session-ID resume after process or VM kill, mid-run instruction injection (stdin vs resumed turn), structured event output, how "blocked, needs human" is reported. Pause via SIGSTOP or stop-after-turn is not a resumed session; most CLIs resume only between turns.
 2. **Adopt-or-extend spike** (value 9, effort 3). Time-box 1–2 days on two of OpenHands, Vibe Kanban, Sculptor, Coder Tasks before committing to a build.
 3. **Apple Container native spike**, merged with benchmarking. Compatibility checklist:
-   - [ ] Create/start/stop/delete representative workspaces
-   - [ ] Enforce explicit CPU/memory
-   - [ ] Preserve project data across stop/start and rebuild
-   - [ ] SSH, VS Code, selected JetBrains IDE (code-server optional)
-   - [ ] Recover after runtime/manager restart and Mac reboot (LaunchAgent vs LaunchDaemon; auto-login/FileVault implications; `container system start` on boot)
-   - [ ] Private registry pulls and credential handling
-   - [ ] VPN reachability, forwarding or jump host
-   - [ ] **Default-deny egress and network isolation controls**
-   - [ ] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected**
-   - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap
+    - [ ] Create/start/stop/delete representative workspaces
+    - [ ] Enforce explicit CPU/memory
+    - [ ] Preserve project data across stop/start and rebuild
+    - [ ] SSH, VS Code, selected JetBrains IDE (code-server optional)
+    - [ ] Recover after runtime/manager restart and Mac reboot (LaunchAgent vs LaunchDaemon; auto-login/FileVault implications; `container system start` on boot)
+    - [ ] Private registry pulls and credential handling
+    - [ ] VPN reachability, forwarding or jump host
+    - [ ] **Default-deny egress and network isolation controls**
+    - [ ] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected**
+    - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
 5. **Persistence semantics** (§4.4).
 6. **Primary forge and login provider** for release 1.

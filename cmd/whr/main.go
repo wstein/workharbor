@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor/internal/version"
 )
 
+// editorconfig-checker-disable
 const usage = `whr - workharbor agent work supervisor
 
 Usage:
@@ -21,6 +22,8 @@ Commands:
 Not yet implemented: serve, login, run, ls, show, logs, watch, say, pause,
 resume, cancel, inbox, approve, reject, diff, ssh, open, wait, kill-all, doctor.
 `
+
+// editorconfig-checker-enable
 
 func main() {
 	os.Exit(run(os.Args[1:]))
