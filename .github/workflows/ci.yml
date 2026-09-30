@@ -18,3 +18,19 @@ jobs:
           go-version-file: go.mod
       - name: Check format, lint, editorconfig and tests
         run: make check
+
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: go run ./cmd/commitlint --range "$BASE..$HEAD"
