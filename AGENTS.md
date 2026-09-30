@@ -44,6 +44,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 - Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output contract: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
+- README: keep it a short landing page (what it is, concept bullets, build or usage snippet, key links, contributing, license). Put detail in `docs/`, and mark provisional commands as provisional.
 
 ## Hard rules
 
