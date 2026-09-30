@@ -1,0 +1,61 @@
+# Contributing to workharbor
+
+Thank you for your interest. workharbor is in the **design phase**: the most valuable contributions right now are reviews of the [design](docs/content/docs/design.md), spikes against the open decisions in section 12, and bug reports against the existing skeleton and tooling.
+
+Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. [AGENTS.md](AGENTS.md) holds the full conventions and applies to humans as well as AI agents.
+
+## Before you start
+
+- **Open an issue first** for anything beyond a typo. Commits of type `feat`, `fix`, `perf` and `refactor` must reference an issue, so there is always one to link.
+- For architecture changes, discuss in the issue. Decisions are recorded as numbered rows (D1, D2, ...) in the design document.
+- Report security problems privately, as described in [SECURITY.md](SECURITY.md).
+
+## Development setup
+
+You need Go (see `go.mod`) and, for the docs, a C++ compiler the first time Hugo is built. Nothing else needs installing: tools run through pinned `go run` or `npx` commands.
+
+```bash
+git clone https://github.com/wstein/workharbor
+cd workharbor
+make hooks   # enable the pre-commit and commit-msg hooks and the commit template
+make check   # format, vet, lint, editorconfig and tests
+make docs    # build the documentation site into _site
+```
+
+## Making a change
+
+1. Branch from `main`. Keep the change small and focused.
+2. Add or update tests for domain logic and policy. Update the design or docs when behaviour or decisions change.
+3. Run `make check`. The hooks and CI run the same checks.
+4. Open a pull request and fill in the template.
+
+## Commit messages
+
+[Conventional Commits](https://www.conventionalcommits.org/) with metadata in Git trailers, enforced by `commitlint`:
+
+```text
+feat(domain): add run interrupted state
+
+Why the change was made.
+
+Refs: #12
+Assisted-by: Claude Code:claude-sonnet-5-5
+```
+
+- `Refs: #N` or `Closes: #N` is required for `feat`, `fix`, `perf` and `refactor`.
+- `Assisted-by: <tool>:<model-id>` discloses AI assistance (see below).
+- `Signed-off-by` is for humans only.
+- One logical change per commit. Do not bypass the hooks with `--no-verify`.
+
+## AI-assisted contributions
+
+AI tools are welcome, including coding agents. You remain responsible for everything you submit:
+
+- review and understand every line before you open the pull request
+- disclose the tool and model with an `Assisted-by` trailer
+- never add `Signed-off-by` on behalf of an agent
+- do not submit work you could not explain or that you have not run
+
+## License
+
+workharbor is released under the [EUPL-1.2](LICENSE). By contributing you agree that your contribution is licensed under the same terms.
