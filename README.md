@@ -40,6 +40,10 @@ Command names are provisional; see the design document.
 
 Go, a single static binary, SQLite, and a server-rendered web UI (`templ`, htmx, SSE).
 
+## Contributing
+
+Contributions are welcome, especially design reviews. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 [EUPL-1.2](LICENSE)
