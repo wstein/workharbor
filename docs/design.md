@@ -1,9 +1,17 @@
 ---
 title: Design
 nav_order: 2
+permalink: /design/
 ---
 
 # workharbor — Design
+
+<details open markdown="block">
+  <summary>Table of contents</summary>
+  {: .text-delta }
+- TOC
+{:toc}
+</details>
 
 **CLI:** `whr` · **Status:** Revised design, 30 September 2026 · No implementation or compatibility testing yet.
 
