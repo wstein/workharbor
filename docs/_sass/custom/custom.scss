@@ -1,0 +1,125 @@
+// workharbor layout and components. Compiled into both the light and dark
+// stylesheets, so it may use the colour variables of either scheme.
+
+// Header logo: the anchor mark followed by the name.
+.site-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: $body-heading-color;
+}
+
+.wh-mark {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: $wh-accent;
+}
+
+.wh-theme-toggle {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  margin-right: 0.5rem;
+  color: $link-color;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+
+  &:hover,
+  &:focus-visible {
+    background: $feedback-color;
+  }
+
+  svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+}
+
+// Home page.
+.wh-hero {
+  padding: 0.5rem 0 1.5rem;
+
+  h1 {
+    margin: 0 0 1rem;
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+
+    em {
+      font-style: normal;
+      color: $wh-accent;
+    }
+  }
+
+  .wh-lead {
+    max-width: 40rem;
+    margin: 0 0 1.5rem;
+    font-size: 1.15rem;
+    line-height: 1.6;
+  }
+}
+
+.wh-eyebrow {
+  display: inline-block;
+  padding: 0.15rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $wh-accent;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: $wh-accent-soft;
+  border-radius: 999px;
+}
+
+.wh-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.wh-card {
+  padding: 1.1rem 1.25rem;
+  background: $sidebar-color;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+
+  h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    color: $body-heading-color;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+}
+
+// Code blocks and callouts.
+div.highlighter-rouge,
+figure.highlight {
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.main-content {
+  h1,
+  h2 {
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  h2 {
+    margin-top: 2.25rem;
+  }
+}

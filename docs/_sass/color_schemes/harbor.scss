@@ -1,0 +1,21 @@
+// workharbor light scheme: navy ink on white, teal accents.
+$color-scheme: light;
+$wh-accent: #0f766e;
+$wh-accent-soft: #e6f6f4;
+
+$body-background-color: #ffffff;
+$body-heading-color: #0b2545;
+$body-text-color: #2b3a55;
+$link-color: #0f766e;
+$nav-child-link-color: #2b3a55;
+$sidebar-color: #f4f7fb;
+$base-button-color: #eef2f7;
+$btn-primary-color: #0b2545;
+$code-background-color: #f4f7fb;
+$feedback-color: #eaf0f7;
+$table-background-color: #ffffff;
+$search-background-color: #ffffff;
+$search-result-preview-color: #4a5a78;
+$border-color: #dbe3ee;
+
+@import "./vendor/accessible-pygments/github-light";
