@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in the code, tooling, CI or documentation site is broken
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        workharbor is in the design phase, so bugs are mostly about the skeleton, tooling, CI and docs. For security problems use the private report form instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, links or a minimal example.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `whr version`, or the commit SHA.
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Go version and anything else relevant.
