@@ -138,3 +138,16 @@ Desired state lives in the database. A loop compares it with actual runtime stat
 ### 5.4 Events and idempotency
 
 Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
+
+## 6. Policy and autonomy
+
+Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`**.
+
+| Action | Default |
+| --- | --- |
+| Push to `agent/*` branches | auto |
+| Open/update PR, comment on issue | auto |
+| Merge, tag, release, deploy | **forbid** for the agent; human-gated |
+| Sensitive actions triggered by untrusted input | ask |
+
+Enforcement is outside the agent: forge branch protection, required human review, and a bot identity that cannot bypass them. Approval is per commit SHA (ties to ReviewCandidate). Every approval is a Decision record.
