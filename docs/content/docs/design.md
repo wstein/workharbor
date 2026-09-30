@@ -244,7 +244,16 @@ v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Dec
 
 ### 9.4 Notifications
 
-Push (ntfy, webhook or macOS notification) when a blocking Decision stops a task: the value of a supervisor is not having to watch it. This includes `auth_expired` and `quota_exhausted` (§5.2), which are the most likely reasons a detached run stalls.
+Push when a blocking Decision stops a task: the value of a supervisor is not having to watch it. This includes `auth_expired` and `quota_exhausted` (§5.2), which are the most likely reasons a detached run stalls.
+
+**Default channel: ntfy** (phone and desktop apps; self-hosted or ntfy.sh). Generic webhook and macOS notification are secondary channels; Pushover, Telegram and Web Push are later options. ntfy's iOS delivery through a self-hosted server is **unverified**.
+
+- **Events:** a new blocking Decision (question, approval, review), `auth_expired`, `quota_exhausted`, and a run that ended or failed. Deduplicate and rate-limit per task so a stalled run does not notify repeatedly.
+- **Generic payload.** Task ID, event kind and a link only. Never issue text, code, logs, transcripts or tokens: the message leaves the host, may pass a public relay, and issue text is untrusted input.
+- **Link, not action.** The notification opens the task in the web UI behind the supervisor login. No approve or answer buttons in the push. Approvals stay per commit SHA (§6).
+- **Reachability.** The API is bound to loopback or VPN (§7.5), so the link uses the VPN hostname and the phone needs that VPN to open it.
+- **Topic protection.** A long random topic, or an access token on a self-hosted server. Keep the topic and token in the credential service, never in the repo or logs.
+- **Best effort.** The inbox stays the source of truth; a push can arrive late or be lost.
 
 ## 10. Forge, CI and identity integrations
 
