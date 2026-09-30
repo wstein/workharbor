@@ -17,10 +17,12 @@ make fmt-check     # fail if any source is unformatted
 make lint          # golangci-lint (pinned; runs via go run)
 make editorconfig  # enforce .editorconfig
 make check         # all of the above; run before every commit
-make hooks         # enable pre-commit and commit-msg hooks (once per clone)
+make commitlint    # check this branch's commits against the commit rules
+make changelog     # regenerate CHANGELOG.md
+make hooks         # enable hooks and the commit template (once per clone)
 ```
 
-The pre-commit hook runs format, lint and editorconfig checks; the commit-msg hook rejects non-Conventional-Commit messages. CI runs `make check`. Never bypass hooks with `--no-verify`.
+The pre-commit hook runs format, lint and editorconfig checks; the commit-msg hook runs `commitlint` (see Commits). CI runs `make check`. Never bypass hooks with `--no-verify`.
 
 ## Layout
 
@@ -49,7 +51,27 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Commits
 
-Focused, atomic, [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, for example `feat(domain): ...`, `docs(design): ...`, `chore: ...`. One logical change per commit. Do not push or merge without being asked.
+Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` (72 characters at most), one logical change per commit. Metadata goes in Git **trailers** in the last paragraph of the message. `commitlint` (run by the commit-msg hook and, for every commit of a pull request, by CI) enforces the rules; `make commitlint` checks the commits on your branch.
+
+```text
+feat(domain): add run interrupted state
+
+Why the change was made.
+
+Refs: #12
+Assisted-by: Claude Code:claude-sonnet-5-5
+```
+
+| Trailer | Rule |
+| --- | --- |
+| `Refs: #12`, `Closes: #12` (also `Fixes`, `Resolves`, `Related`; `owner/repo#12` and comma lists work) | **Required for `feat`, `fix`, `perf` and `refactor`**; optional for other types. Put the issue in a trailer, never in the subject. Never invent an issue number: open one first. |
+| `Assisted-by: <tool>:<model-id>` | Add it when an AI tool wrote or substantially shaped the change, using the exact model ID you run as (for example `Claude Code:claude-sonnet-5-5`); extra tools go in brackets. One line per tool. Use this instead of `Co-authored-by` for AI. |
+| `Signed-off-by` | **Humans only.** It certifies origin, so agents and bot identities must never add it. The hook rejects it for bot authors. |
+| `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` when it commits for an agent run. `Whr-Run` requires `Whr-Task`. |
+
+`make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
+
+Do not push or merge without being asked. Keep trailers when merging: use rebase merges, or make sure a squash-merge message keeps them, because the pull request body is not a commit.
 
 ## License
 
