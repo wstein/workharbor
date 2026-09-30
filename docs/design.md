@@ -229,3 +229,16 @@ v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Dec
 ### 9.4 Notifications
 
 Push (ntfy, webhook or macOS notification) when a blocking Decision stops a task: the value of a supervisor is not having to watch it.
+
+## 10. Forge, CI and identity integrations
+
+Keep Git transport separate from forge API operations. Release 1 ships **one forge** (Gitea or GitHub) with a PAT or bot token and no manual-handoff half-state.
+
+| Provider | Login | Automation |
+| --- | --- | --- |
+| Gitea | OAuth2, configurable instance URL | Scoped bot credentials |
+| Forgejo / Codeberg | OAuth2; Codeberg as Forgejo preset | Forgejo adapter |
+| GitLab | OAuth2, hosted or self-managed | GitLab adapter |
+| GitHub | OAuth2 | GitHub App installation credentials |
+
+Result chain: **Task → branch → commit SHA → PR → CI results** (ReviewCandidate). CI adapter (Drone, later Woodpecker) covers state, links, logs/artifacts, retry and cancel; it is an interface only in release 1. CLI login is browser-based with supervisor-issued credentials; a supervisor-owned device flow supports headless terminals. No separate identity service for a personal deployment.
