@@ -4,14 +4,15 @@
 
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
-[![Status: design phase](https://img.shields.io/badge/status-design%20phase-orange.svg)](docs/design.md)
-[![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/design.md)
+[![Status: design phase](https://img.shields.io/badge/status-design%20phase-orange.svg)](docs/content/docs/design.md)
+[![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design.md)
+
+> [!WARNING]
+> **Work in progress: design phase.** workharbor has no working implementation yet. The repository currently holds the [design](docs/content/docs/design.md), the skeleton of the Go module and the project tooling. Interfaces, command names and the architecture are provisional and will change. Do not use it to supervise real work. Documentation: <https://wstein.github.io/workharbor/>.
 
 A self-hosted supervisor for AI coding agents. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
 The command-line tool is **`whr`**.
-
-> **Status:** design phase. There is no implementation yet. Documentation: <https://wstein.github.io/workharbor/> ([source](docs/design.md)).
 
 ## Concept
 
@@ -19,7 +20,7 @@ The command-line tool is **`whr`**.
 - **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from the CLI or web UI.
 - **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini, with default-deny networking and per-run credentials. Other runtimes follow through adapters.
 - **Approval boundaries are policy.** Agents push branches and open PRs; merge, release and deploy stay with you.
-- **One API.** The `whr` CLI and the web UI are clients of the same API.
+- **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
 
 ## Planned CLI
 
