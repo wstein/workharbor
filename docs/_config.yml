@@ -1,0 +1,23 @@
+title: workharbor
+description: Self-hosted supervisor for AI coding agents. Isolated workspaces, human-in-the-loop decisions, and the whr CLI.
+url: https://wstein.github.io
+baseurl: /workharbor
+
+remote_theme: just-the-docs/just-the-docs
+color_scheme: dark
+logo: /assets/images/logo.svg
+favicon_ico: /assets/images/favicon.ico
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  GitHub: https://github.com/wstein/workharbor
+aux_links_new_tab: true
+
+footer_content: >-
+  Released under the <a href="https://github.com/wstein/workharbor/blob/main/LICENSE">EUPL-1.2</a>.
+
+# Only published files live under docs/; keep the source tidy.
+exclude:
+  - Gemfile
+  - Gemfile.lock
