@@ -1,0 +1,4 @@
+#!/bin/sh
+# Enforce formatting and linting before each commit. Enable with `make hooks`.
+set -e
+make fmt-check lint editorconfig
