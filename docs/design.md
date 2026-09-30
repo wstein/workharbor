@@ -40,3 +40,48 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D5 | Approval boundaries are **data** (a policy table), enforced at the forge adapter, never by prompts | Prompt rules are not a security boundary |
 | D6 | Supervisor is a **DB-first reconciler**, not a process tree | Only realistic answer to reboot/restart gaps |
 | D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
+
+## 4. Domain model
+
+| Object | Responsibility | Lifetime |
+| --- | --- | --- |
+| Task | Issue, instructions, decisions, progress, results, PR link | Until completed or cancelled |
+| Workspace | Checkout/worktree, branch, files, tool config, caches | May span several runs |
+| Run | One execution of an agent in an environment | Start, pause, resume, terminate |
+| Environment (`env`) | Container or VM backing a run/workspace | Stopped or recreated independently of workspace data |
+| **Decision** | A question, approval or review request raised to the human | Until answered |
+| **ReviewCandidate** | Task → branch → commit SHA → PR → CI results, keyed by SHA | One per pushed revision |
+| Event | Append-only record of instructions, observations, decisions, actions | Permanent (audit trail and UI feed) |
+
+### 4.1 State machines
+
+Task, run and environment each get their own small FSM with explicit legal transitions; these are specified before coding.
+
+- **Task:** `queued → running → awaiting_guidance → ready_for_review → completed`, plus `cancelled`.
+- **Run and environment:** tracked separately. Pause is a **run** state, not an environment state.
+- **Coupling rules (examples):**
+  - `ready_for_review` requires a stopped run and a pinned commit SHA.
+  - Pausing a run never stops its environment.
+  - A passing pipeline on an earlier SHA never marks the current revision ready.
+
+### 4.2 Decision object
+
+Fields: ID, task, kind (`question | approval | review`), blocking flag, options, created/answered timestamps, answering actor. The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision is open.
+
+### 4.3 Lifecycle rules
+
+- IDE/SSH disconnect does not pause the agent or stop the environment.
+- Pausing lets a human inspect or edit without concurrent agent changes. Human takeover holds an explicit, visible workspace lock (agent vs human); on resume the agent is re-synced with the human's changes.
+- Stopping an environment preserves files, logs and agent session state.
+- Agent-level checkpoint/resume is distinct from VM suspend and must work on backends without suspend.
+- Environments awaiting review may be stopped.
+- **Worker recycling** (recreate the environment, keep the workspace) is a first-class lifecycle action because freed guest memory is not returned to macOS.
+- Only validated runner × backend pairs may claim resumability.
+
+### 4.4 Persistence semantics (to decide before coding)
+
+- Volume vs bind-mounted checkout.
+- Which paths survive stop, rebuild and delete: repo, caches, agent session directory.
+- Git worktree per task vs full clone.
+- Retention and garbage collection of completed tasks and workspaces on the 1 TB disk.
+- Forbid the `$HOME` mount by default; enforce in adapter tests.
