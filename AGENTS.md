@@ -9,12 +9,18 @@ A self-hosted supervisor that lets AI coding agents work on repository issues in
 ## Commands
 
 ```bash
-make build   # go build -o bin/whr ./cmd/whr
-make test    # go test ./...
-make vet     # go vet ./...
-make fmt     # gofmt -l -w .
-make check   # vet + test; run before every commit
+make build         # go build -o bin/whr ./cmd/whr
+make test          # go test ./...
+make vet           # go vet ./...
+make fmt           # rewrite sources with gofumpt + goimports
+make fmt-check     # fail if any source is unformatted
+make lint          # golangci-lint (pinned; runs via go run)
+make editorconfig  # enforce .editorconfig
+make check         # all of the above; run before every commit
+make hooks         # enable pre-commit and commit-msg hooks (once per clone)
 ```
+
+The pre-commit hook runs format, lint and editorconfig checks; the commit-msg hook rejects non-Conventional-Commit messages. CI runs `make check`. Never bypass hooks with `--no-verify`.
 
 ## Layout
 
@@ -27,7 +33,7 @@ make check   # vet + test; run before every commit
 ## Conventions
 
 - Go, standard library first. Add a dependency only when it is clearly justified, and say why in the commit message.
-- Format with `gofmt`; keep `go vet` clean. Follow `.editorconfig`.
+- Formatting (gofumpt, goimports) and linting (`.golangci.yml`) are enforced; keep `make check` green. Follow `.editorconfig`.
 - Add table-driven or small focused tests next to the code for domain logic and policy.
 - Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output contract: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
