@@ -85,3 +85,56 @@ Fields: ID, task, kind (`question | approval | review`), blocking flag, options,
 - Git worktree per task vs full clone.
 - Retention and garbage collection of completed tasks and workspaces on the 1 TB disk.
 - Forbid the `$HOME` mount by default; enforce in adapter tests.
+
+## 5. Architecture
+
+Logical components live in one Go binary on the Mac; boundaries are package interfaces, not microservices.
+
+| Component | Responsibility |
+| --- | --- |
+| Control plane | Tasks, runs, workspaces, decisions, policies, integration config, event log, reconciler |
+| Web UI | v0: read-only task list, event log and inbox; answering Decisions is the only write |
+| CLI (`whr`) | Same operations through the shared API |
+| Host worker | Executes a **fixed set** of authorized lifecycle operations beside the runtime |
+| Agent adapter | Start, observe, instruct, pause, resume a coding agent |
+| Runtime adapter | Provision and manage environments |
+| Forge adapter | Issues, PRs, reviews, metadata, webhooks; enforces the policy table |
+| CI adapter | Interface only in release 1 |
+| Credential service | Encrypted store (macOS Keychain holds the master key); issues per-run credentials |
+
+Host worker and credential service are package boundaries on one host. Keep the contract remote-capable so a remote worker can be added later, without building inter-process auth now.
+
+### 5.1 Runtime adapter
+
+Covers provision, start/stop/delete, inspect, resource limits, logs, exec, storage and endpoint discovery. Capabilities are explicit and never assumed:
+
+| Capability | Purpose |
+| --- | --- |
+| Isolation boundary | Shared-kernel container, guest kernel or full VM |
+| CPU architecture | Image, toolchain and IDE compatibility |
+| Persistent storage | What survives stop, rebuild, delete |
+| Networking | Reachability and supported isolation controls |
+| Suspend/checkpoint | Reported support only |
+| SSH/browser access | Intervention endpoints |
+
+Do not pretend backends share Docker semantics. One **runtime conformance suite** (the §12 checklist, automated) must pass for every backend; it turns capability flags into verified claims.
+
+### 5.2 Agent adapter
+
+Specified as explicitly as the runtime contract. Capability flags:
+
+- headless / unattended operation
+- mid-run instruction injection
+- cooperative pause (e.g. stop after current turn)
+- session persistence and resume
+- structured event stream
+- PR/issue tooling
+- "awaiting guidance" signal (how the agent raises a blocking Decision)
+
+### 5.3 Reconciler
+
+Desired state lives in the database. A loop compares it with actual runtime state, marks orphaned runs `interrupted`, and resumes from the agent session rather than the VM. This is the answer to Apple Container's missing restart-policy recovery.
+
+### 5.4 Events and idempotency
+
+Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
