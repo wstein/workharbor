@@ -290,3 +290,37 @@ Ordered by what is cheap and blocks the most work.
 8. Confirm stack (§3 D3) and finalize the `whr` grammar.
 
 Reboot considerations also include power-loss/UPS behaviour and macOS auto-update reboot policy.
+
+## 13. Delivery
+
+### Release 1: one vertical slice
+
+- [ ] Apple Container backend, one host, native adapter
+- [ ] One agent runner with observed progress and validated recovery
+- [ ] Task/workspace/run/decision model with durable state, event log, reconciler
+- [ ] `whr` CLI (scripting contract, completion, `doctor`)
+- [ ] Read-mostly web UI with inbox
+- [ ] SSH access (certificates, `whr ssh --config`)
+- [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
+- [ ] Single static-token login
+- [ ] One forge via PAT/bot token
+- [ ] Runtime and forge adapters as interfaces with one implementation each
+
+**Explicitly out of release 1:** code-server, JetBrains validation, OAuth, pause/resume and editor launch in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
+
+### Medium term
+
+- [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
+- [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
+- [ ] Additional runners
+- [ ] Drone CI with revision-aware feedback
+- [ ] Resource-aware scheduling, recovery improvements
+- [ ] code-server, UI pause/resume and editor launch, `whr top`
+
+### Long term
+
+- [ ] Other microVM/VM platforms, Kubernetes where useful
+- [ ] Multiple hosts and placement policies
+- [ ] Wider forge/CI coverage
+
+Phases are proposals, not a schedule.
