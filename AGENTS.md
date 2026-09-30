@@ -19,6 +19,8 @@ make editorconfig  # enforce .editorconfig
 make check         # all of the above; run before every commit
 make commitlint    # check this branch's commits against the commit rules
 make changelog     # regenerate CHANGELOG.md
+make docs          # build the Hugo documentation site into _site
+make docs-serve    # serve the docs locally with live reload
 make hooks         # enable hooks and the commit template (once per clone)
 ```
 
@@ -26,6 +28,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Layout
 
+- `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design.md` is the design document
 - `cmd/whr/`: single binary entrypoint (CLI now, `whr serve` later)
 - `internal/domain/`: Task, Workspace, Run, Environment, Decision, ReviewCandidate, Event and state transitions
 - `internal/policy/`: autonomy table (action -> auto | ask | forbid)
