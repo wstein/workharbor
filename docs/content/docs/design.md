@@ -79,6 +79,8 @@ Fields: ID, task, kind (`question | approval | review`), blocking flag, options,
 ### 4.3 Lifecycle rules
 
 - IDE/SSH disconnect does not pause the agent or stop the environment.
+- **Detached sessions.** The agent process runs inside the environment under the supervisor with no client attached. Chat is attach and detach over a persistent session, never the owner of the process. Session state (transcript and agent session ID) lives in the workspace, so it survives a supervisor restart and a reattach from another client. The reconciler (§5.3) resumes from that session after a restart.
+- A long run can outlive its credentials. Expired auth or an exhausted usage window pauses the run and opens a blocking Decision (§5.2) instead of failing it.
 - Pausing lets a human inspect or edit without concurrent agent changes. Human takeover holds an explicit, visible workspace lock (agent vs human); on resume the agent is re-synced with the human's changes.
 - Stopping an environment preserves files, logs and agent session state.
 - Agent-level checkpoint/resume is distinct from VM suspend and must work on backends without suspend.
