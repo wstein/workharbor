@@ -138,6 +138,10 @@ Specified as explicitly as the runtime contract. Capability flags:
 - structured event stream
 - PR/issue tooling
 - "awaiting guidance" signal (how the agent raises a blocking Decision)
+- **auth modes**, reported explicitly and never assumed:
+    - `api-key`: the key stays in the host-side proxy and is issued per run (§7.3).
+    - `subscription`: a consumer-plan login (for example Claude or ChatGPT sign-in) kept in a dedicated per-environment auth directory. The CLI refreshes the token itself, so it cannot sit behind the proxy.
+- **auth and quota blocking states**: the adapter reports `auth_expired` and `quota_exhausted` (with the reset time when known). Each opens a blocking Decision and pauses the run instead of failing or retrying. Re-login is a UI action through a browser or device-code flow.
 
 ### 5.3 Reconciler
 
@@ -238,7 +242,7 @@ v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Dec
 
 ### 9.4 Notifications
 
-Push (ntfy, webhook or macOS notification) when a blocking Decision stops a task: the value of a supervisor is not having to watch it.
+Push (ntfy, webhook or macOS notification) when a blocking Decision stops a task: the value of a supervisor is not having to watch it. This includes `auth_expired` and `quota_exhausted` (§5.2), which are the most likely reasons a detached run stalls.
 
 ## 10. Forge, CI and identity integrations
 
