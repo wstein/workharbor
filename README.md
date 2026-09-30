@@ -37,7 +37,7 @@ Command names are provisional; see the design document.
 
 ## Stack
 
-Go, single static binary, SQLite.
+Go, a single static binary, SQLite, and a server-rendered web UI (`templ`, htmx, SSE).
 
 ## License
 

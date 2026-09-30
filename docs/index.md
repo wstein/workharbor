@@ -66,7 +66,7 @@ Command names are provisional.
 
 ## Stack
 
-Go, a single static binary and SQLite.
+Go, a single static binary, SQLite, and a server-rendered web UI built with `templ`, htmx and server-sent events.
 
 ## License
 
