@@ -8,8 +8,8 @@ plugins:
   - jekyll-include-cache
   - jekyll-seo-tag
 
-# The light scheme is compiled into the default stylesheet; the dark one lives in
-# assets/css/harbor-dark.scss and is switched by prefers-color-scheme or the toggle.
+# The light scheme is compiled into the default stylesheet. The dark one lives in
+# assets/css/harbor-dark.scss, is the default, and is switched off by the header toggle.
 color_scheme: harbor
 favicon_ico: /assets/images/favicon.ico
 search_enabled: true

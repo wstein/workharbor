@@ -1,33 +1,32 @@
 <link rel="icon" type="image/svg+xml" href="{{ '/assets/images/favicon.svg' | relative_url }}">
 <link rel="apple-touch-icon" href="{{ '/assets/images/apple-touch-icon.png' | relative_url }}">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0c1b33" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0c1b33">
 
 {%- comment -%}
-  The dark stylesheet follows the system setting by default. The toggle stores an
-  explicit choice and forces it by changing the link's media query.
+  Dark is the default. The dark stylesheet is always loaded (media="all") and
+  overrides the light one. Choosing light in the toggle disables it and stores
+  the choice; the system colour scheme is deliberately ignored.
 {%- endcomment -%}
-<link rel="stylesheet" id="wh-dark-css" href="{{ '/assets/css/harbor-dark.css' | relative_url }}" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" id="wh-dark-css" href="{{ '/assets/css/harbor-dark.css' | relative_url }}" media="all">
 <script>
   (function () {
     var KEY = 'wh-theme';
     var link = document.getElementById('wh-dark-css');
     var root = document.documentElement;
-    var query = window.matchMedia('(prefers-color-scheme: dark)');
+    var meta = document.querySelector('meta[name="theme-color"]');
 
     function apply(mode) {
-      link.media = mode === 'dark' ? 'all' : mode === 'light' ? 'not all' : '(prefers-color-scheme: dark)';
+      link.media = mode === 'light' ? 'not all' : 'all';
       root.setAttribute('data-theme', mode);
+      if (meta) { meta.content = mode === 'light' ? '#ffffff' : '#0c1b33'; }
     }
 
     var saved = null;
     try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
-    apply(saved === 'light' || saved === 'dark' ? saved : 'auto');
+    apply(saved === 'light' ? 'light' : 'dark');
 
     window.whToggleTheme = function () {
-      var mode = root.getAttribute('data-theme');
-      var dark = mode === 'dark' || (mode === 'auto' && query.matches);
-      var next = dark ? 'light' : 'dark';
+      var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
       apply(next);
       try { localStorage.setItem(KEY, next); } catch (e) { /* storage unavailable */ }
     };
