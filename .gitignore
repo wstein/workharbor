@@ -7,8 +7,8 @@
 .env
 /_site/
 
-# Jekyll
-/docs/vendor/
-/docs/.bundle/
-.jekyll-cache/
-.sass-cache/
+# Hugo
+/docs/public/
+/docs/resources/_gen/
+/docs/_vendor/
+.hugo_build.lock

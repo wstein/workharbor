@@ -22,18 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/setup-go@v5
         with:
-          ruby-version: "3.4"
-          bundler-cache: true
-          working-directory: docs
+          go-version-file: go.mod
+          cache-dependency-path: docs/go.sum
       - id: pages
         uses: actions/configure-pages@v5
       - name: Build site
         working-directory: docs
         env:
-          JEKYLL_ENV: production
-        run: bundle exec jekyll build --destination ../_site --baseurl "${{ steps.pages.outputs.base_path }}"
+          HUGO_ENVIRONMENT: production
+        run: >-
+          go run -tags extended github.com/gohugoio/hugo@v0.167.0
+          --gc --minify --destination ../_site
+          --baseURL "${{ steps.pages.outputs.base_url }}/"
       - uses: actions/upload-pages-artifact@v3
 
   deploy:

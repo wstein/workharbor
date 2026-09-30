@@ -1,5 +1,7 @@
 # Tool versions are pinned; tools run via `go run`, so nothing needs installing.
 GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+# Hugo extended builds with cgo, so a C++ compiler is needed the first time.
+HUGO := go run -tags extended github.com/gohugoio/hugo@v0.167.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 
 .PHONY: build test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
@@ -39,13 +41,13 @@ commitlint:
 changelog:
 	npx --yes git-cliff@2 --output CHANGELOG.md
 
-# Build the documentation site into _site (needs Ruby and Bundler).
+# Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
 docs:
-	cd docs && bundle install && bundle exec jekyll build --destination ../_site
+	cd docs && $(HUGO) --gc --minify --destination ../_site
 
 # Serve the documentation site locally with live reload.
 docs-serve:
-	cd docs && bundle install && bundle exec jekyll serve --livereload
+	cd docs && $(HUGO) server
 
 # Enable the repository git hooks and the commit message template.
 hooks:
