@@ -1,0 +1,59 @@
+baseURL: https://wstein.github.io/workharbor/
+locale: en
+title: workharbor
+enableRobotsTXT: true
+
+module:
+  imports:
+    - path: github.com/imfing/hextra
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    noClasses: false
+
+menu:
+  main:
+    - name: Docs
+      pageRef: /docs
+      weight: 1
+    - name: Search
+      weight: 2
+      params:
+        type: search
+    - name: GitHub
+      weight: 3
+      url: https://github.com/wstein/workharbor
+      params:
+        icon: github
+    - name: Theme
+      weight: 4
+      params:
+        type: theme-toggle
+
+params:
+  description: Self-hosted supervisor for AI coding agents. Isolated workspaces, human-in-the-loop decisions, and the whr CLI.
+  theme:
+    default: dark
+    displayToggle: true
+  navbar:
+    displayTitle: true
+    displayLogo: true
+    logo:
+      path: images/logo-light.svg
+      dark: images/logo-dark.svg
+      width: 28
+      height: 28
+  search:
+    enable: true
+    type: flexsearch
+  editURL:
+    enable: true
+    base: https://github.com/wstein/workharbor/edit/main/docs/content
+  footer:
+    displayCopyright: false
+    displayPoweredBy: true
+  images:
+    - images/social-preview.png

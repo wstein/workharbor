@@ -1,17 +1,9 @@
 ---
 title: Design
-nav_order: 2
-permalink: /design/
+description: Architecture, security model and delivery plan for workharbor.
+weight: 1
+toc: true
 ---
-
-# workharbor — Design
-
-<details open markdown="block">
-  <summary>Table of contents</summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
 **CLI:** `whr` · **Status:** Revised design, 30 September 2026 · No implementation or compatibility testing yet.
 
@@ -54,6 +46,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D6 | Supervisor is a **DB-first reconciler**, not a process tree | Only realistic answer to reboot/restart gaps |
 | D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
 | D8 | **Web UI: server-rendered Go with `templ` templates, htmx and SSE**, embedded in the binary. No Node toolchain and no CSS framework in release 1. The JSON API and the HTML handlers call the **same service layer**, so nothing is implemented twice | Release 1 is a read-mostly UI whose only write is answering Decisions. One language, one binary, fewer dependencies and a smaller attack surface on the same origin. Revisit (Svelte) if the UI needs rich client-side state such as inline diff review or a takeover panel |
+| D9 | **Documentation site: Hugo with the Hextra theme** (Go module, pinned version), deployed to GitHub Pages, dark by default with a light toggle | Go toolchain only, no Ruby or Node. Fast builds, built-in search and dark mode. Replaces the earlier Jekyll setup |
 
 ## 4. Domain model
 

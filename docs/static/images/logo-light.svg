@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="28" height="28">
+  <title>workharbor</title>
+  <g fill="none" stroke="#0f766e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="12" r="5.5"/>
+    <path d="M32 18V54"/>
+    <path d="M22 28H42"/>
+    <path d="M12 38Q12 55 32 55Q52 55 52 38"/>
+    <path d="M6 43L12 37L18 43"/>
+    <path d="M46 43L52 37L58 43"/>
+  </g>
+</svg>
