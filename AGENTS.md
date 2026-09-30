@@ -75,7 +75,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 `make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
 
-Do not push or merge without being asked. Keep trailers when merging: use rebase merges, or make sure a squash-merge message keeps them, because the pull request body is not a commit.
+Do not push or merge without being asked. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
 ## License
 

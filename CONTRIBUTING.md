@@ -27,7 +27,9 @@ make docs    # build the documentation site into _site
 1. Branch from `main`. Keep the change small and focused.
 2. Add or update tests for domain logic and policy. Update the design or docs when behaviour or decisions change.
 3. Run `make check`. The hooks and CI run the same checks.
-4. Open a pull request and fill in the template.
+4. Open a pull request and fill in the template. Pull requests are merged with **rebase merge**, so each commit lands on `main` as written, with its trailers; squash and merge commits are disabled.
+
+For open-ended questions and ideas, use [Discussions](https://github.com/wstein/workharbor/discussions). Issues labelled `design` concern the architecture and the design document.
 
 ## Commit messages
 
