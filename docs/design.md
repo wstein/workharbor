@@ -165,3 +165,22 @@ Threat model and autonomy policy are written before the build.
 7. **Audit and kill switch.** Tamper-evident append-only log stored outside the workspace, linked to commit SHA. `whr kill-all` stops all runs and revokes tokens. Alert on anomalous egress or token spikes. Optional: signed bot commits.
 
 Separate identities: login identity, connected forge accounts, agent (bot) identity, supervisor sessions.
+
+## 8. Resources
+
+Starting estimates, to be replaced by measurement. Assumes API-backed agents, not local inference.
+
+| Workload | Guest memory | Target |
+| --- | --- | --- |
+| Terminal agent, Git, small scripts | 0.75–1 GiB | up to 6–8 light (stretch) |
+| Agent, language server, moderate builds | 1.5–2 GiB | ~4 |
+| JetBrains indexing or heavy builds | 3–4 GiB | 1–2 plus light workers |
+
+Review corrections to the original budget:
+
+- 8–10 GiB guests + 4–6 GiB macOS leaves near-zero slack on 16 GB. **Plan for 4 concurrent instances; 8 is a stretch.**
+- Per-VM overhead sits outside the guest limit; a Linux kernel plus a Node-based agent is typically 300–500 MB, so the 0.75 GiB floor is tight.
+- Freed guest pages are not returned to macOS: recycling is policy, not an occasional fix.
+- Admission control uses host memory pressure (`memory_pressure`, `vm_stat`) plus static limits; heavy jobs are serialised. A simple admission counter ships in release 1; full scheduling is deferred.
+- Benchmark on the real Mac mini before designing the scheduler.
+- Explicitly set CPU/memory; `container machine` defaults to half host RAM and shares the host home.
