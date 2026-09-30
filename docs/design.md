@@ -28,3 +28,15 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: one) |
 | CI | Drone medium/long term, behind an adapter |
 | Auth | OAuth for the five forges (release 1: static token) |
+
+## 3. Key decisions
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| D1 | Reuse runtimes, agents and IDE connections; build a thin supervision layer | Original 9/10 direction, kept |
+| D2 | **Native Apple Container path** via the `container` CLI behind the runtime adapter. Portainer/Socktainer demoted to an optional compatibility shim (rating 7 → ~4–5) | Three layers, partial compatibility, known exec and restart-recovery gaps; an adapter is needed anyway |
+| D3 | **Go, single static binary** (server, host worker and `whr` as subcommands), **SQLite in WAL mode**, embedded web UI, OpenAPI as the single source for CLI and UI types, SSE for live events | One host, one user; easy launchd packaging, later Linux cross-compile |
+| D4 | Agent runner chosen **first**, by scorecard (§12), preferring one with a structured headless protocol | Constrains the whole model |
+| D5 | Approval boundaries are **data** (a policy table), enforced at the forge adapter, never by prompts | Prompt rules are not a security boundary |
+| D6 | Supervisor is a **DB-first reconciler**, not a process tree | Only realistic answer to reboot/restart gaps |
+| D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
