@@ -23,7 +23,7 @@ A self-hosted service in which AI coding agents carry out project work independe
 
 - Agents work repository issues, modify code, run tests, update issues and open or update PRs.
 - The developer attaches via SSH or an editor temporarily. Disconnecting never interrupts the agent.
-- Web UI and `whr` CLI are two clients of one API.
+- Web UI and `whr` CLI are two front ends over one service layer: the CLI calls the JSON API, the web UI is server-rendered HTML (see D8).
 - First host: Apple-silicon Mac mini (16 GB, ~1 TB) on Apple Container. Other runtimes later via adapters.
 
 The central concept is an **agent task supervisor with managed workspaces**, not an editor-centred dev environment.
@@ -48,11 +48,12 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | --- | --- | --- |
 | D1 | Reuse runtimes, agents and IDE connections; build a thin supervision layer | Original 9/10 direction, kept |
 | D2 | **Native Apple Container path** via the `container` CLI behind the runtime adapter. Portainer/Socktainer demoted to an optional compatibility shim (rating 7 → ~4–5) | Three layers, partial compatibility, known exec and restart-recovery gaps; an adapter is needed anyway |
-| D3 | **Go, single static binary** (server, host worker and `whr` as subcommands), **SQLite in WAL mode**, embedded web UI, OpenAPI as the single source for CLI and UI types, SSE for live events | One host, one user; easy launchd packaging, later Linux cross-compile |
+| D3 | **Go, single static binary** (server, host worker and `whr` as subcommands), **SQLite in WAL mode**, embedded web UI (see D8), OpenAPI as the source for the JSON API and the `whr` client types, SSE for live events | One host, one user; easy launchd packaging, later Linux cross-compile |
 | D4 | Agent runner chosen **first**, by scorecard (§12), preferring one with a structured headless protocol | Constrains the whole model |
 | D5 | Approval boundaries are **data** (a policy table), enforced at the forge adapter, never by prompts | Prompt rules are not a security boundary |
 | D6 | Supervisor is a **DB-first reconciler**, not a process tree | Only realistic answer to reboot/restart gaps |
 | D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
+| D8 | **Web UI: server-rendered Go with `templ` templates, htmx and SSE**, embedded in the binary. No Node toolchain and no CSS framework in release 1. The JSON API and the HTML handlers call the **same service layer**, so nothing is implemented twice | Release 1 is a read-mostly UI whose only write is answering Decisions. One language, one binary, fewer dependencies and a smaller attack surface on the same origin. Revisit (Svelte) if the UI needs rich client-side state such as inline diff review or a takeover panel |
 
 ## 4. Domain model
 
@@ -106,7 +107,7 @@ Logical components live in one Go binary on the Mac; boundaries are package inte
 | Component | Responsibility |
 | --- | --- |
 | Control plane | Tasks, runs, workspaces, decisions, policies, integration config, event log, reconciler |
-| Web UI | v0: read-only task list, event log and inbox; answering Decisions is the only write |
+| Web UI | v0: read-only task list, event log and inbox; answering Decisions is the only write. Server-rendered (D8) |
 | CLI (`whr`) | Same operations through the shared API |
 | Host worker | Executes a **fixed set** of authorized lifecycle operations beside the runtime |
 | Agent adapter | Start, observe, instruct, pause, resume a coding agent |
@@ -239,6 +240,8 @@ Avoid `review` as a verb (ambiguous). Task refs accept a short ID, a prefix or `
 
 v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Decisions and resource use, with a single summary card per task. Sections "Harbor" (overview) and "Inbox". Writes: answering Decisions only. Pause/resume and editor launch come after v0.
 
+**Stack (D8).** `templ` templates rendered by the Go server, htmx for partial updates and form posts, and the htmx SSE extension for live event and inbox updates. htmx is vendored and version-pinned; styling is plain CSS with design tokens shared with the documentation site (navy and teal, light and dark). Pages are semantic HTML first, so they work without JavaScript for reading. Handlers stay thin: they call the same service layer as the JSON API. Diffs are server-rendered (or use a small library such as diff2html); an interactive terminal (xterm.js) is out of scope for v0.
+
 ### 9.4 Notifications
 
 Push (ntfy, webhook or macOS notification) when a blocking Decision stops a task: the value of a supervisor is not having to watch it.
@@ -300,7 +303,7 @@ Ordered by what is cheap and blocks the most work.
 5. **Persistence semantics** (§4.4).
 6. **Primary forge and login provider** for release 1.
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
-8. Confirm stack (§3 D3) and finalize the `whr` grammar.
+8. Confirm stack (§3 D3, D8) and finalize the `whr` grammar.
 
 Reboot considerations also include power-loss/UPS behaviour and macOS auto-update reboot policy.
 
@@ -344,6 +347,7 @@ Reviewers disagreed on two points; the resolutions adopted here:
 
 - **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge via PAT.
 - **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted: minimal read-mostly UI with inbox, since decisions are answered there.
+- **UI stack (D8):** `templ` + htmx (option 1 of 7 weighed) over Svelte, Preact, React and others. The cost is that the UI does not consume the JSON API directly; the shared service layer keeps the two front ends consistent.
 
 Skipped for now: separate identity service, Kubernetes, multi-host placement, Portainer/Coder UI integration.
 
