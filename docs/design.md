@@ -242,3 +242,26 @@ Keep Git transport separate from forge API operations. Release 1 ships **one for
 | GitHub | OAuth2 | GitHub App installation credentials |
 
 Result chain: **Task → branch → commit SHA → PR → CI results** (ReviewCandidate). CI adapter (Drone, later Woodpecker) covers state, links, logs/artifacts, retry and cancel; it is an interface only in release 1. CLI login is browser-based with supervisor-issued credentials; a supervisor-owned device flow supports headless terminals. No separate identity service for a personal deployment.
+
+## 11. Existing platforms
+
+| Option | Use | Gap |
+| --- | --- | --- |
+| Coder | Workspace portal, IDE access | No task supervision; Apple backend unverified; external provisioners Premium |
+| DevPod | Portable environments | Client-only; no central service |
+| Portainer | Infra UI, templates, REST API | No agent progress/review semantics; add-ons need Business Edition + Kubernetes |
+| Socktainer | Docker API over Apple Container | Partial compatibility; exec and restart recovery limits |
+| Eclipse Che | Kubernetes dev workspaces | Heavy |
+| code-server | Browser editor | No orchestration; Open VSX |
+| **Agent-task supervisors** (OpenHands, Vibe Kanban, Sculptor, Coder Tasks) | May cover 60–80% of release 1 | **Not yet assessed; status and Apple Container support unverified** |
+
+The original rating table missed agent-task supervisors. It now has an explicit "adopt/extend" column and is **re-rated after the spikes**.
+
+| Strategy | Original fit | Revised note |
+| --- | --- | --- |
+| Existing runner + thin supervisor + native Apple Container | 9 | Preferred; runner unselected |
+| Same supervisor via Portainer/Socktainer | 7 | → ~4–5; optional shim only |
+| Coder workspace layer + task supervisor | 7 | Re-rate after spike |
+| Portainer + templates alone | 4 | Insufficient |
+| Full new Codespaces/DevPod replacement | 3 | Excessive scope |
+| Adopt/extend an agent-task supervisor | — | **Unrated; spike first** |
