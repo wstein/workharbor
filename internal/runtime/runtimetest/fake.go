@@ -274,7 +274,11 @@ func (f *Fake) info(e *fakeEnv) runtime.Info {
 	for k, v := range e.labels {
 		labels[k] = v
 	}
-	return runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
+	info := runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
+	if e.sidecar != "" && e.state == domain.EnvRunning {
+		info.Proxy = "http://" + e.addr + ":3128"
+	}
+	return info
 }
 
 // Inspect implements runtime.Adapter.

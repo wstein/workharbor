@@ -702,6 +702,19 @@ func checkSurroundings(ctx context.Context, h Harness) error {
 	if !contains(inv.Networks, res.Network) || !contains(inv.Sidecars, res.Sidecar) || !contains(inv.Volumes, "wh-conformance-home-a") {
 		return fmt.Errorf("the inventory lacks what was created: %+v", inv)
 	}
+	// The proxy's address is known only while the environment runs.
+	if info, err := a.Inspect(ctx, id); err != nil || info.Proxy != "" {
+		return fmt.Errorf("a stopped environment has no proxy address: %+v (%s)", info, show(err))
+	}
+	if err := a.Start(ctx, id); err != nil {
+		return err
+	}
+	if info, err := a.Inspect(ctx, id); err != nil || !strings.HasPrefix(info.Proxy, "http://") {
+		return fmt.Errorf("a running environment with an egress sidecar must report its proxy: %+v (%s)", info, show(err))
+	}
+	if err := a.Stop(ctx, id); err != nil {
+		return err
+	}
 	// A network is never shared between environments.
 	if _, err := h.provision(ctx, spec); !errors.Is(err, runtime.ErrInvalidSpec) {
 		return fmt.Errorf("a second environment on the same network = %s, want ErrInvalidSpec", show(err))

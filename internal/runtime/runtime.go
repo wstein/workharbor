@@ -58,6 +58,10 @@ type Info struct {
 	// environment is running, and it changes across a restart and a recreate,
 	// so it is read again every time and never stored.
 	Addr string
+	// Proxy is the egress proxy's URL for the agent's HTTPS_PROXY, empty unless
+	// the environment runs and has an egress sidecar. Like Addr it is read each
+	// time and never stored.
+	Proxy string
 }
 
 // Resources are what an environment depends on besides its own container.
