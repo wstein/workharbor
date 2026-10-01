@@ -5,7 +5,14 @@ weight: 1
 toc: true
 ---
 
-**CLI:** `whr` · **Status:** Revised design, updated 1 October 2026 · No implementation yet. Two spikes have measured the agent contract (issue #1) and Apple Container (issue #2); results are marked in the sections they affect.
+**CLI:** `whr` · **Status:** Revised design, updated 1 October 2026 · The domain layer is implemented test first; there is no runnable service yet. Two spikes have measured the agent contract (issue #1) and Apple Container (issue #2); results are marked in the sections they affect.
+
+| Status | What | Where |
+| --- | --- | --- |
+| Decided | D1 to D21 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks | `internal/domain`, `internal/policy`, `internal/runtime`; issues #4, #8, #15, #16, #17, #18 |
+| Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container | Issues #1 and #2; results in §4.4, §5.1 to §5.3, §5.6, §7 |
+| Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
 
 Revision of the original discussion summary (`agent-work-supervisor-summary.md`) after a four-role team review (architecture, security, product/CLI, feasibility/ops). Review ratings are value/effort out of 10. Claims about Apple Container that spike #2 measured are stated as measured in §4.4, §5.1, §5.3, §5.6, §7 and §12. Claims about Socktainer, Coder and Portainer, and anything marked **unverified**, still come from the original sources and are unverified until the remaining spikes in §12 are done.
 
@@ -56,6 +63,12 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D13 | **Task state machine** (§4.1): a terminal `failed` state, rework from `ready_for_review` back to `running`, and `awaiting_guidance` only for blocking Decisions raised by a live run, so "Ready to push?" leaves the task in `ready_for_review` | Gives exit code 10 a state, makes the rework path explicit, and keeps the review gate from looking like a stalled run in the inbox |
 | D14 | **CLI framework: `spf13/cobra`**, without viper (issue #46). The root command silences cobra's own error and usage output, sets stdout and stderr explicitly, and `main` maps errors to `internal/exitcode` (§9.2) | The design needs generated shell completion with dynamic task and workspace IDs and a noun-verb grammar with aliases (§9.1, §9.2); cobra provides both and can generate the CLI reference. Rated above kong, urfave/cli and the standard library `flag` |
 | D15 | **Release 1 forge: GitHub, through a GitHub App installation** (issue #6). The App is the bot identity: its installation tokens last about an hour and are scoped to the repositories it is installed on and to the permissions it asks for (contents and pull requests write, issues write, metadata read). Its private key lives in the credential service. A ruleset on the default branch requires a human review and lists no bypass for the App, so it cannot merge (§6). Gitea, Forgejo and GitLab follow behind the same forge adapter | The repository and its CI already live on GitHub, so the limits can be checked against a real ruleset at once. Short-lived, repo-scoped tokens match §7.3 better than a long-lived PAT, and an App is a separate identity that commits and audit entries can name. That an App's installation token cannot bypass a ruleset without being listed as a bypass actor is **unverified** until #27 tests it |
+| D16 | **Persistence** (§4.4): repositories live on the host and are mounted into environments; the agent home (auth directory, session, caches) is one writable named volume per environment; build caches stay on that volume outside the checkout; the root filesystem is disposable | Measured in spike #2: volumes and bind mounts survive delete, the root filesystem does not, and caches on a bind mount roughly double warm builds |
+| D17 | **Agent checkouts are per-task clones** of a bare cache whose objects are mounted read-only (§4.5); `git worktree` stays the developer's own tool and is never handed to an agent | A worktree's `.git` exposes the shared repository's branches, hooks and config (spike #2, item 9) |
+| D18 | **Agents never push** (§4.5, §6). The agent commits in its checkout; the supervisor rebases, folds and checks the topic, opens a "Ready to push?" Decision per commit SHA, and pushes and opens the PR only after approval | Nothing leaves the host unreviewed, and policy is enforced outside the agent (D5) |
+| D19 | **Stock images plus a shared read-only tool store** (§5.6): agent CLIs live once, content-addressed, on the host and are mounted read-only; versions are profiles | Spike #2: installing per container cost about 11 s and 230 MB; the store is immutable from inside and shared by several containers |
+| D20 | **Adapters are built in for release 1 and out-of-process plugins later** (§5.5), never Go's in-process `plugin` package | Two built-in adapters prove the contract first; third-party code stays out of the supervisor process |
+| D21 | **Task state machine, amending D13** (§4.1): a run paused by `auth_expired` or `quota_exhausted` moves its task to `awaiting_guidance`; a task fails only from `running` or `awaiting_guidance`, and a lost workspace in `ready_for_review` opens a review Decision (rework or cancel) | Settles the gaps found in the review of the D13 implementation without new transitions, so the code in `internal/domain` already agrees |
 
 ## 4. Domain model
 
@@ -86,8 +99,8 @@ Task, run and environment each get their own small FSM with explicit legal trans
     - `awaiting_guidance` is for blocking Decisions raised by a live run: a question, a tool approval, `auth_expired` or `quota_exhausted`. The review Decisions of `ready_for_review` ("Ready to push?", §4.5) leave the task in `ready_for_review`.
     - **Rework** (`ready_for_review → running`) happens when the push is declined or the PR needs changes. It starts a new run on the same workspace and topic.
     - **`completed`** is set when the pushed PR is merged on the forge.
-    - **`failed`** is terminal and maps to exit code 10 (§9.2). A failed run does not fail its task: it opens a blocking Decision (retry or cancel). A task fails only when a hard limit ends it (time or cost budget, a lost workspace) or the human answers that Decision with "give up".
-    - A paused run leaves its task `running`: pause is a run state.
+    - **`failed`** is terminal and maps to exit code 10 (§9.2). A failed run does not fail its task: it opens a blocking Decision (retry or cancel). A task fails only when a hard limit ends it (time or cost budget, a lost workspace) or the human answers that Decision with "give up". Both happen while the task is `running` or `awaiting_guidance`. In `ready_for_review` a lost workspace opens a review Decision instead (rework or cancel), so no other state needs a way into `failed` (D21).
+    - A run paused by the human leaves its task `running`: pause is a run state. A run paused by `auth_expired` or `quota_exhausted` opens a blocking Decision, which moves the task to `awaiting_guidance` like any blocking Decision raised by the run (D21).
 - **Run** (issue #15):
 
     | From | To |
@@ -246,7 +259,7 @@ Adapter rules that follow from it:
 
 ### 5.2 Agent adapter
 
-Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Capability flags:
+Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Codex CLI lacks mid-run injection and host-routed approvals in what spike #1 could test, so in release 1 it runs in the degraded mode below, labelled in the UI. Capability flags:
 
 - headless / unattended operation
 - **mid-run message injection (required for release 1)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
@@ -543,7 +556,7 @@ The original rating table missed agent-task supervisors. It now has an explicit 
 
 | Strategy | Original fit | Revised note |
 | --- | --- | --- |
-| Existing runner + thin supervisor + native Apple Container | 9 | Preferred; runner unselected |
+| Existing runner + thin supervisor + native Apple Container | 9 | Preferred; Claude Code first, Codex CLI second (D12, §5.2) |
 | Same supervisor via Portainer/Socktainer | 7 | → ~4–5; optional shim only |
 | Coder workspace layer + task supervisor | 7 | Re-rate after spike |
 | Portainer + templates alone | 4 | Insufficient |
@@ -568,17 +581,17 @@ Ordered by what is cheap and blocks the most work.
     - [ ] VPN reachability, forwarding or jump host. Not tested
     - [x] **Default-deny egress and network isolation controls** (`--internal` network plus a proxy sidecar; §7.2)
     - [x] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected** (mounted unix sockets unusable; mount rejection is the adapter's job; §7.4)
-    - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap. Not started; an idle agent in a container used about 277 MiB
+    - [ ] Memory behaviour at 1 then 4 instances, including pressure and swap; 8 only once 4 is measured (#39). Not started; an idle agent in a container used about 277 MiB
     - [x] Stock images with a shared read-only tool store (§5.6)
     - [x] Agent run inside a container with a real login (spike #2, `05c-agent-run.sh`): a stock image on an `--internal` network, tools from the store, the model reached only through the proxy sidecar, the spike #1 harness on the host driving it with live events, token deltas, a mid-run message and a resume after a container restart. The agent container used about 290 MiB
     - [ ] Approvals from inside the container: the guest has no path to the supervisor on an internal network. An HTTP MCP server reached through the sidecar, or a relay in the sidecar to a supervisor listener bound to the bridge address, is the open option
     - [ ] A reliable cancel from the host (§5.1)
-    - [ ] Repositories mounted from the host (§4.5): fetching an agent's branch into a supervisor-owned repository, partial `.git` mounts, and bind-mount speed with `node_modules`-style trees and much larger repositories
+    - [ ] Repositories mounted from the host (§4.5): fetching an agent's branch into a supervisor-owned repository (#19) and bind-mount speed with `node_modules`-style trees and much larger repositories
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
-5. **Persistence semantics** (§4.4).
+5. **Persistence semantics** (§4.4): decided (D16).
 6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
-8. Confirm stack (§3 D3, D8) and finalize the `whr` grammar.
+8. Finalize the `whr` grammar (#9). The stack is decided (D3, D8, D14).
 
 Reboot considerations also include power-loss/UPS behaviour and macOS auto-update reboot policy.
 
@@ -626,10 +639,10 @@ Phases are proposals, not a schedule.
 
 ## 14. Review log
 
-Reviewers disagreed on two points; the resolutions adopted here:
+Reviewers disagreed on three points; the resolutions adopted here:
 
 - **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge via PAT.
-- **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted: minimal read-mostly UI with inbox, since decisions are answered there.
+- **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted then: a minimal read-mostly UI with inbox, since decisions are answered there. Since superseded by the remote-control scope of §9.3 (D8, D12).
 - **UI stack (D8):** `templ` + htmx (option 1 of 7 weighed) over Svelte, Preact, React and others. The cost is that the UI does not consume the JSON API directly; the shared service layer keeps the two front ends consistent.
 
 Skipped for now: separate identity service, Kubernetes, multi-host placement, Portainer/Coder UI integration.
