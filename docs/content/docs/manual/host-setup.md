@@ -132,10 +132,69 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 
 Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor generates during onboarding ([design §9.4](../design/interfaces.md#94-notifications)). A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7.
 
-## 11. Build and configure whr (dogfood)
+## 11. The GitHub App
 
-Three steps, as the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
+workharbor talks to GitHub as an App of your own, never with your personal token (D15, D31): its tokens last about an hour, cover one repository and only the permissions below, and the App cannot merge, tag or release. On github.com, as the repository's owner:
 
-1. **Install.** `make install` builds `whr`, the launcher `whr-shim` and the egress proxy `whr-proxy` (both for the guest, linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`; the guest binaries go to `libexec/whr`). It refuses a dirty tree and a commit that is not on `origin/main` (run `git fetch origin` first), so the supervisor always runs approved, committed code (D34). It builds with `GOWORK=off` and an empty `GOFLAGS`, so a parent `go.work` or your environment cannot change the build. `whr version` shows the version and whether the tree was clean.
+1. **Create the App.** Your account's **Settings → Developer settings → GitHub Apps → New GitHub App**.
+    - **Name:** for example `workharbor-<your-name>` (it must be unique on GitHub). **Homepage URL:** the repository's URL.
+    - **Webhook:** untick **Active**. `whr` asks GitHub when it needs something; webhooks would need a public address, which workharbor does not have (D29).
+    - **Repository permissions:** Contents **Read and write**, Issues **Read and write**, Pull requests **Read and write**; Metadata stays **Read-only**. Nothing else: without the Workflows permission the App cannot change `.github/workflows`, and without Administration it cannot change rulesets.
+    - **Where can this GitHub App be installed:** **Only on this account**.
+    - **Create GitHub App**, then note the **App ID** on its General page.
+2. **Generate a private key** on the same page (**Private keys → Generate a private key**). The browser downloads a `.pem` file: that file is the secret, see step 12.
+3. **Install it** (**Install App**) on your account with **Only select repositories** and pick the repositories workharbor works on. `whr` finds the installation by itself.
+4. **Check the ruleset of `main`** (the repository's **Settings → Rules → Rulesets**): changes need a pull request with a human review, force pushes are blocked, and the App is **not** in the bypass list (D15). The supervisor pushes only `agent/*` branches and opens pull requests; merging stays with you.
+
+## 12. Secrets
+
+Every secret is a file with mode `0600`, owned by the `whr` user, outside the workspace roots and the tool store, and the configuration names only its path. Never paste a secret into a chat, an agent session, a command line, a script or an issue: an agent never needs the value, only the path. `whr serve` refuses a secret file that is not `0600`, belongs to another user, is a link or has a second hard link, or lies inside a workspace root or the tool store.
+
+As the `whr` user:
+
+```bash
+mkdir -p ~/.config/whr && chmod 700 ~/.config/whr
+
+# The API token the local whr CLI uses: generated, never typed.
+umask 077 && openssl rand -base64 32 > ~/.config/whr/api.token
+
+# The GitHub App's private key from step 11.
+mv ~/Downloads/<app-name>.*.private-key.pem ~/.config/whr/github-app.pem
+chmod 600 ~/.config/whr/github-app.pem
+```
+
+**The agent's login:**
+
+- **A subscription (Claude Pro or Max) is the default** and has no file: you sign in inside the environment with Claude Code's own login, and `whr` never sees it (design D40, [agent vendor terms](vendor-terms.md)). How that works from the console is being measured (issue #82); the first sign-in needs the Mac or an SSH session.
+- **An API key is optional.** Type it so that it is neither echoed nor kept in the shell history nor visible in the process list (`read -s` does not echo, and `printf` is a shell builtin):
+
+  ```bash
+  umask 077; read -rs KEY; printf 'ANTHROPIC_API_KEY=%s\n' "$KEY" > ~/.config/whr/agent.env; unset KEY
+  ```
+
+**Keys for your own experiments** (a spike, a test) live in a password manager such as `pass` or 1Password, and a script reads them from a `0600` env file named by an environment variable, never inline: the repository's hooks refuse a literal key. If a secret leaks anyway, follow the runbook in [SECURITY.md](https://github.com/wstein/workharbor/blob/main/SECURITY.md).
+
+## 13. Build and configure whr (dogfood)
+
+As the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
+
+1. **Install.** `make install` builds `whr`, the launcher `whr-shim` and the egress proxy `whr-proxy` (both for the guest, linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`; the guest binaries go to `libexec/whr`). It refuses a dirty tree and a commit that is not on `origin/main` (run `git fetch origin` first), so the supervisor always runs approved, committed code (D34). It builds with `GOWORK=off` and an empty `GOFLAGS`, so a parent `go.work` or your environment cannot change the build. `whr version` shows the version and whether the tree was clean. `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
 2. **Fill the tool store.** `whr tools build -store <tool store> -shim ~/.local/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.
-3. **Write the configuration file.** One JSON file with the repositories, the cache, workspace and tool-store directories, the GitHub App ID and key file, the agent-login file, the API token file and a loopback listen address. Every secret is a path to a file with mode `0600`, never a value in the configuration. `whr serve` checks all of it at start and lists every problem.
+3. **Write the configuration file**, `~/.config/whr/config.json`. Secrets are paths (step 12), never values:
+
+    ```json
+    {
+      "listen": "127.0.0.1:8787",
+      "repositories": [{ "name": "<owner>/<repository>" }],
+      "roots": {
+        "workspaces": ["/Volumes/<ssd>/workspaces"],
+        "tool_store": "/Users/whr/tools"
+      },
+      "github": { "app_id": 123456, "key_file": "/Users/whr/.config/whr/github-app.pem" },
+      "api_token_file": "/Users/whr/.config/whr/api.token",
+      "agent_allowed_tools": ["Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"]
+    }
+    ```
+
+    Add `"agent_api_key_env_file": "/Users/whr/.config/whr/agent.env"` only for an API key. `agent_allowed_tools` is required while the agent runs without host approvals (issue #75): only the tools listed there run, and the list above is an example to adapt.
+4. **Start it and create a workspace.** `whr serve` checks the whole configuration at start and lists every problem. In another terminal: `whr ws add <name> --path <empty folder below a workspace root> --repo <owner>/<repository> --role <role>` creates the workspace, seeds its agent clone and starts its environment; `whr agent add <workspace> <role>` adds an agent. Then `whr run <issue-url> --agent <workspace>/<role>`. Running `whr serve` as a launchd job that survives a restart comes with issue #38.
