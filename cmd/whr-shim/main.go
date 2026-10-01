@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -56,12 +57,12 @@ func runCmd(args []string) {
 	}
 
 	pid := cmd.Process.Pid
-	if err := os.WriteFile(*pidfile, []byte(fmt.Sprintf("%d\n", pid)), 0o600); err != nil {
+	if err := writePIDFile(*pidfile, pid); err != nil {
 		fmt.Fprintf(os.Stderr, "write pidfile failed: %v\n", err)
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		_ = cmd.Wait()
 		os.Exit(1)
 	}
-	defer func() { _ = os.Remove(*pidfile) }()
 
 	sigCh := make(chan os.Signal, 4)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -77,18 +78,51 @@ func runCmd(args []string) {
 	signal.Stop(sigCh)
 	close(sigCh)
 
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				if ws.Signaled() {
-					os.Exit(128 + int(ws.Signal()))
-				}
-				os.Exit(ws.ExitStatus())
-			}
-		}
-		os.Exit(1)
+	// Remove the pidfile before exiting on every path: os.Exit skips deferred
+	// calls, and a stale pidfile would let a later kill signal whatever
+	// process group reuses this ID.
+	_ = os.Remove(*pidfile)
+	os.Exit(exitCode(err))
+}
+
+// exitCode maps the child's end to the shim's exit status: the child's own
+// status, or 128 plus the signal that ended it.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
 	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			if ws.Signaled() {
+				return 128 + int(ws.Signal())
+			}
+			return ws.ExitStatus()
+		}
+	}
+	return 1
+}
+
+// writePIDFile writes the PID through a temporary file and a rename, so kill
+// never reads a partly written file.
+func writePIDFile(path string, pid int) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := fmt.Fprintf(tmp, "%d\n", pid); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func killCmd(args []string) {
