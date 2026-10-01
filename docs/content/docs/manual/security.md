@@ -18,7 +18,7 @@ workharbor has no runnable service yet: these are the design's guarantees. Each 
 
 ## What you accept
 
-- **The agent's login sits inside its environment.** With a subscription login (Claude or ChatGPT sign-in), any process in that environment can read it while a run is active. Delete environments you no longer use, and revoke the login at the vendor if one is ever exposed.
+- **The agent's login sits inside its environment.** With a subscription login (Claude or ChatGPT sign-in) you sign in inside the environment, and `whr` never sees the credential ([vendor terms](vendor-terms.md)). Any process in that environment can read it while a run is active. Delete environments you no longer use, and revoke the login at the vendor if one is ever exposed.
 - **Data can leave through the model provider.** The proxy allows the provider's API host, so an agent could send repository contents there. That is also how agents work: send only repositories you are willing to share with the provider.
 - **The proxy matches host names.** It does not stop domain fronting through an allowed host.
 

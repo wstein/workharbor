@@ -6,7 +6,7 @@ weight: 2
 
 > Source: [`spike/apple-container`](https://github.com/wstein/workharbor/tree/spike/apple-container/spikes/apple-container) at `59ba7b43035d1eab06bc93a36c2ff965ce83c055`, with the scripts and raw output next to the results. Tracks [#2](https://github.com/wstein/workharbor/issues/2). Published as recorded on 1 October 2026.
 >
-> **Since then:** Item 3's first claim that `--internal` blocks the host was wrong and is corrected on the branch; issue #69 measured what guests reach on the host (see [host reachability](host-reachability.md)), and D29 records the consequence.
+> **Since then:** Item 3's first claim that `--internal` blocks the host was wrong and is corrected on the branch; issue #69 measured what guests reach on the host (see [host reachability](host-reachability.md)), and D29 records the consequence. Item 5's authenticated run passed a `claude setup-token` token in from the host; under D40 `whr` never handles a subscription credential, and the human signs in inside the environment instead (spike #82).
 
 Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2) with `container` CLI 1.5.0, guest Linux 6.12.28 on the `fedora:latest` image. Tracks [issue #2](https://github.com/wstein/workharbor/issues/2). Raw output of every script is in `results/`. All objects were named `whspike-*` and removed afterwards; the two containers that already existed were not touched.
 
