@@ -1,0 +1,18 @@
+flags: (none)
+  canaries: local mcp project user
+  init mcp_servers: ['evil'] skills named evil: ['evil']
+flags: --setting-sources user
+  canaries: user
+  init mcp_servers: [] skills named evil: []
+flags: --setting-sources
+  canaries:
+  init mcp_servers: [] skills named evil: []
+flags: --setting-sources  --strict-mcp-config
+  canaries:
+  init mcp_servers: [] skills named evil: []
+flags: --setting-sources  --settings /var/folders/g3/fzgcpsts26j_bzpn6ymprbwm0000gn/T/tmp.luxoH7twnp/supervisor.json --strict-mcp-config
+  canaries: supervisor
+  init mcp_servers: [] skills named evil: []
+flags: --setting-sources  --settings {"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"touch /var/folders/g3/fzgcpsts26j_bzpn6ymprbwm0000gn/T/tmp.luxoH7twnp/canary-supervisor"}]}]},"permissions":{"allow":["Read"]}} --strict-mcp-config --disable-slash-commands
+  canaries: supervisor
+  init mcp_servers: [] skills named evil: []
