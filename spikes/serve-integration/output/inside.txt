@@ -1,0 +1,49 @@
+--- id, home, worktree, tools
+uid=1000 gid=1000 groups=1000
+HOME=/
+/home/agent:
+total 12
+drwxr-xr-x 3 root root 4096 Oct  1 20:34 .
+drwxr-xr-x 3 root root 4096 Oct  1 20:34 ..
+drwx------ 2 root root 4096 Oct  1 20:34 lost+found
+
+/tools/profiles/claude-2.1.285/bin:
+total 0
+drwxr-x--- 4 1000 1000 128 Oct  1 20:34 .
+drwx------ 3 1000 1000  96 Oct  1 20:34 ..
+lrwxr-xr-x 1 1000 1000  61 Oct  1 20:34 claude -> ../../../store/24fac777-claude-2.1.285-linux-arm64/bin/claude
+lrwxr-xr-x 1 1000 1000  75 Oct  1 20:34 whr-shim -> ../../../store/808356c4-whr-shim-v0.0.0-0-g59f33fc-linux-arm64/bin/whr-shim
+
+/ws:
+total 0
+drwxr-x--- 4 1000 1000 128 Oct  1 20:34 .
+drwxr-xr-x 4 1000 1000 128 Oct  1 20:34 repo
+drwxr-xr-x 3 1000 1000  96 Oct  1 20:34 wt
+
+/ws/wt/docs:
+total 8
+drwxr-xr-x 4 1000 1000 128 Oct  1 20:34 .
+drwxr-xr-x 3 1000 1000  96 Oct  1 20:34 ..
+-rw-r--r-- 1 1000 1000  37 Oct  1 20:34 .git
+-rw-r--r-- 1 1000 1000   8 Oct  1 20:34 README.md
+--- processes (from /proc)
+1 /.cz-init -- sleep 2147483647
+
+2 /usr/bin/sleep 2147483647
+
+59 sh -c for p in /proc/[0-9]*; do printf "%s " "${p#/proc/}"; tr "\0" " " <$p/cmdline | cut -c1-200; echo; done
+
+--- proxy variables the agent could use (none are set for it by whr unless listed here)
+(end)
+--- can the guest reach the internet directly? (it must not) and through the sidecar?
+direct 000
+sidecar address on the internal network: 192.168.128.2
+via the proxy 404
+--- claude by hand, as the adapter runs it, with the proxy set
+{"type":"system","subtype":"init","cwd":"/ws/wt/docs","session_id":"11b27e02-0943-427e-9ec8-fe5292c3820f","tools":["Task","Bash","CronCreate","CronDelete","CronList","DesignSync","Edit","EnterWorktree","ExitWorktree","ListAgents","NotebookEdit","Read","ReportFindings","ScheduleWakeup","SendMessage","Skill","TaskStop","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":
+{"type":"assistant","message":{"diagnostics":null,"id":"349d1679-5616-4446-8eea-ecea0ffe3183","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"output_tokens_details":null,"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_searc
+{"duration_api_ms":0,"stop_reason":"stop_sequence","session_id":"11b27e02-0943-427e-9ec8-fe5292c3820f","total_cost_usd":0,"usage":{"output_tokens_details":{"thinking_tokens":0},"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_inp
+--- the same without the proxy variable
+{"type":"system","subtype":"init","cwd":"/ws/wt/docs","session_id":"1e6852e4-fcbf-46f6-bd9f-eb4432174119","tools":["Task","Bash","CronCreate","CronDelete","CronList","DesignSync","Edit","EnterWorktree","ExitWorktree","ListAgents","NotebookEdit","Read","ReportFindings","ScheduleWakeup","SendMessage","Skill","TaskStop","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":
+{"type":"assistant","message":{"diagnostics":null,"id":"4230024b-b02d-4632-8aa2-12c976a72460","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"output_tokens_details":null,"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_searc
+{"duration_api_ms":0,"stop_reason":"stop_sequence","session_id":"1e6852e4-fcbf-46f6-bd9f-eb4432174119","total_cost_usd":0,"usage":{"output_tokens_details":{"thinking_tokens":0},"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_inp

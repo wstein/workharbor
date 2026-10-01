@@ -7,6 +7,7 @@ set -u
 ROOT=$HOME/whr-serve-int
 OUT=$(cd "$(dirname "$0")" && pwd)/output
 PORT=8799; GHPORT=8798
+IMAGE=${IMAGE:-docker.io/library/golang:1.27.1-trixie}   # a stock image that has git; fedora:latest has none (run1)
 mkdir -p "$OUT"
 log() { printf '%s\n' "$*" | tee -a "$OUT/steps.txt"; }
 : >"$OUT/steps.txt"
@@ -32,6 +33,7 @@ for v in json.load(sys.stdin):
 }
 trap cleanup EXIT
 
+[ -d "$ROOT" ] && chmod -R u+w "$ROOT" 2>/dev/null
 rm -rf "$ROOT"; mkdir -p "$ROOT/ws" "$ROOT/secrets" "$ROOT/state" "$ROOT/src" "$ROOT/prefix/bin" "$ROOT/prefix/libexec/whr"
 chmod 700 "$ROOT/secrets"
 
@@ -58,7 +60,7 @@ cat >"$ROOT/config.json" <<JSON
   "api_token_file": "$ROOT/secrets/api.token",
   "state_dir": "$ROOT/state",
   "agent_allowed_tools": ["Read", "Glob", "Grep"],
-  "environment": {"image": "docker.io/library/fedora:latest", "egress_allow": ["api.anthropic.com"]}
+  "environment": {"image": "$IMAGE", "egress_allow": ["api.anthropic.com"]}
 }
 JSON
 chmod 600 "$ROOT/config.json"
@@ -92,4 +94,36 @@ TASK=$($W ls 2>/dev/null | awk 'NR==2{print $1}')
 log "-- whr logs $TASK"; $W logs "$TASK" 2>&1 | cut -c1-400 | tee "$OUT/logs.txt" | tee -a "$OUT/steps.txt"
 log "-- the fake forge saw (requests, never a credential)"; cat "$OUT/fakegithub.log" | tee -a "$OUT/steps.txt"
 log "-- serve log"; cat "$OUT/serve.log" | tee -a "$OUT/steps.txt"
+log "== 9. what is inside the environment 40 s after the run started"
+sleep 20
+ENV=$(container list --all --format json | python3 -c '
+import json,sys
+for c in json.load(sys.stdin):
+    l=c["configuration"].get("labels",{})
+    if l.get("workharbor.owner")=="whr" and l.get("workharbor.role")=="environment": print(c["id"])')
+log "environment: $ENV"
+{
+  echo "--- id, home, worktree, tools"
+  container exec "$ENV" sh -c 'id; echo HOME=$HOME; ls -la /ws /ws/wt/docs /home/agent /tools/profiles/*/bin 2>&1 | head -40'
+  echo "--- processes (from /proc)"
+  container exec "$ENV" sh -c 'for p in /proc/[0-9]*; do printf "%s " "${p#/proc/}"; tr "\0" " " <$p/cmdline | cut -c1-200; echo; done'
+  echo "--- proxy variables the agent could use (none are set for it by whr unless listed here)"
+  container exec "$ENV" sh -c 'env | grep -i proxy; echo "(end)"'
+  echo "--- can the guest reach the internet directly? (it must not) and through the sidecar?"
+  container exec "$ENV" sh -c 'timeout 8 curl -sS -m 6 -o /dev/null -w "direct %{http_code}\n" https://api.anthropic.com 2>&1 | tail -1'
+  P=$(container list --format json | python3 -c '
+import json,sys
+for c in json.load(sys.stdin):
+    l=c["configuration"].get("labels",{})
+    if l.get("workharbor.role")=="sidecar":
+        for n in c["status"]["networks"]:
+            if "128" in n["ipv4Address"]: print(n["ipv4Address"].split("/")[0])')
+  echo "sidecar address on the internal network: $P"
+  container exec "$ENV" sh -c "timeout 15 curl -sS -m 10 -x http://$P:3128 -o /dev/null -w 'via the proxy %{http_code}\n' https://api.anthropic.com 2>&1 | tail -1"
+  echo "--- claude by hand, as the adapter runs it, with the proxy set"
+  container exec "$ENV" sh -c "cd /ws/wt/docs && HOME=/home/agent CLAUDE_CONFIG_DIR=/home/agent/.claude HTTPS_PROXY=http://$P:3128 timeout 40 /tools/profiles/*/bin/claude -p hello --output-format stream-json --verbose 2>&1 | cut -c1-400 | head -12"
+  echo "--- the same without the proxy variable"
+  container exec "$ENV" sh -c "cd /ws/wt/docs && HOME=/home/agent CLAUDE_CONFIG_DIR=/home/agent/.claude timeout 40 /tools/profiles/*/bin/claude -p hello --output-format stream-json --verbose 2>&1 | cut -c1-400 | head -12"
+} 2>&1 | tee "$OUT/inside.txt" | tee -a "$OUT/steps.txt"
+log "-- whr logs again"; $W logs "$TASK" 2>&1 | cut -c1-300 | tee -a "$OUT/steps.txt"
 log "== done"

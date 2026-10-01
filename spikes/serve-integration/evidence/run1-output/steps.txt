@@ -1,0 +1,40 @@
+== 1. build and install whr, whr-shim and whr-proxy (as make install does, from this commit)
+== 2. the tool store: pinned Claude Code (checked against the pin and the vendor manifest) and the launcher
+fetching claude 2.1.285 for linux-arm64 and checking it against the pin and the vendor manifest
+store /Users/werner/whr-serve-int/store/store/24fac777-claude-2.1.285-linux-arm64 sha256:24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d
+store /Users/werner/whr-serve-int/store/store/91e0b6c8-whr-shim-v0.0.0-0-gf1b8155-linux-arm64 sha256:91e0b6c857a8574aed17127d0127d2de22cba5a55615a50c095b09d133e9020d
+profile /Users/werner/whr-serve-int/store/profiles/claude-2.1.285
+== 3. secrets (0600) and the configuration
+== 4. a source repository (the human's, outside every workspace root) and a stand-in for the GitHub API
+== 5. create a workspace and an agent through the real stack (clone, environment, tools mount, agent home volume, egress sidecar, worktree)
+setup: add worktree for agent docs: git exited 1: start failed: exec: "git": executable file not found in $PATH
+== 6. what the runtime now holds for the owner whr
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP                 CPUS  MEMORY   STARTED
+fedora2                               docker.io/library/fedora:latest                                linux  arm64  stopped                     4     1024 MB
+80feef4f-efc9-42d9-a657-65b18406902a  mcr.microsoft.com/devcontainers/javascript-node:1-18-bullseye  linux  arm64  stopped                     4     1024 MB
+buildkit                              ghcr.io/apple/container-builder-shim/builder:0.13.1            linux  arm64  running  192.168.64.106/24  2     2048 MB  2026-10-01T17:14:02Z
+48295029-1a1a-4143-beb0-ddebd59e13b6  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.161/24  4     1024 MB  2026-10-01T20:09:02Z
+6d7382f6-3477-4d84-8eef-15c2fd5cfe18  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.160/24  4     1024 MB  2026-10-01T20:08:54Z
+06de4ec2-58f0-45f9-a764-cbaea72bc928  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.162/24  4     1024 MB  2026-10-01T20:09:27Z
+NETWORK  SUBNET
+default  192.168.64.0/24
+NAME                         TYPE   DRIVER  OPTIONS
+whr-home-x-1dedfffad918b057  named  local   size=10240M
+== 7. whr serve (reconciles first, then serves the API on loopback)
+whr serve: reconciled: 0 interrupted, 0 resumed, 0 failed
+whr serve: listening on 127.0.0.1:8799
+-- whr ls (empty)
+ID  STATE  ISSUE  REPO  AGENT
+== 8. whr run: the issue comes from the stand-in forge, the agent starts in its worktree
+whr: workspace docs-ws not found
+-- whr ls
+ID  STATE  ISSUE  REPO  AGENT
+-- whr inbox
+DECISION  TASK  KIND  SUBJECT  SHA  OPTIONS
+-- whr logs
+whr: a task is needed
+-- the fake forge saw (requests, never a credential)
+-- serve log
+whr serve: reconciled: 0 interrupted, 0 resumed, 0 failed
+whr serve: listening on 127.0.0.1:8799
+== done

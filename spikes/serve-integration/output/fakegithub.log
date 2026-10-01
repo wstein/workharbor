@@ -1,0 +1,3 @@
+GET /repos/wstein/workharbor/installation
+POST /app/installations/7/access_tokens
+GET /repos/wstein/workharbor/issues/1

@@ -1,0 +1,1 @@
+setup: add worktree for agent docs: git exited 1: start failed: exec: "git": executable file not found in $PATH

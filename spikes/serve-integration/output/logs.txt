@@ -1,0 +1,5 @@
+3	2026-10-01T20:34:29Z	env.added	{"id":"whr-7567ab8fe1","backend":"apple-container","state":"running"}
+4	2026-10-01T20:34:29Z	task.state	{"object":"task","id":"x-6e8a38b462f49afb","from":"queued","to":"running"}
+5	2026-10-01T20:34:29Z	run.started	{"run_id":"x-38c946d13cf8bbe6","env_id":"whr-7567ab8fe1"}
+6	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"starting","to":"running"}
+7	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"running","to":"interrupted"}

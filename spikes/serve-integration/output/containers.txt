@@ -1,0 +1,9 @@
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP                                  CPUS  MEMORY   STARTED
+fedora2                               docker.io/library/fedora:latest                                linux  arm64  stopped                                      4     1024 MB
+80feef4f-efc9-42d9-a657-65b18406902a  mcr.microsoft.com/devcontainers/javascript-node:1-18-bullseye  linux  arm64  stopped                                      4     1024 MB
+buildkit                              ghcr.io/apple/container-builder-shim/builder:0.13.1            linux  arm64  running  192.168.64.106/24                   2     2048 MB  2026-10-01T17:14:02Z
+48295029-1a1a-4143-beb0-ddebd59e13b6  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.161/24                   4     1024 MB  2026-10-01T20:09:02Z
+whr-7567ab8fe1-proxy                  docker.io/library/golang:1.27.1-trixie                         linux  arm64  running  192.168.64.173/24,192.168.128.2/24  1     256 MB   2026-10-01T20:34:26Z
+6d7382f6-3477-4d84-8eef-15c2fd5cfe18  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.160/24                   4     1024 MB  2026-10-01T20:08:54Z
+whr-7567ab8fe1                        docker.io/library/golang:1.27.1-trixie                         linux  arm64  running  192.168.128.3/24                    2     4096 MB  2026-10-01T20:34:28Z
+06de4ec2-58f0-45f9-a764-cbaea72bc928  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.162/24                   4     1024 MB  2026-10-01T20:09:27Z

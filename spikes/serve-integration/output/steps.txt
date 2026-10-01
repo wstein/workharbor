@@ -1,0 +1,111 @@
+== 1. build and install whr, whr-shim and whr-proxy (as make install does, from this commit)
+== 2. the tool store: pinned Claude Code (checked against the pin and the vendor manifest) and the launcher
+fetching claude 2.1.285 for linux-arm64 and checking it against the pin and the vendor manifest
+store /Users/werner/whr-serve-int/store/store/24fac777-claude-2.1.285-linux-arm64 sha256:24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d
+store /Users/werner/whr-serve-int/store/store/808356c4-whr-shim-v0.0.0-0-g59f33fc-linux-arm64 sha256:808356c45bc2622e523a106315c22392e15bd01465fea087c225de97a7ac34f3
+profile /Users/werner/whr-serve-int/store/profiles/claude-2.1.285
+== 3. secrets (0600) and the configuration
+== 4. a source repository (the human's, outside every workspace root) and a stand-in for the GitHub API
+== 5. create a workspace and an agent through the real stack (clone, environment, tools mount, agent home volume, egress sidecar, worktree)
+workspace docs-ws (x-a83c57a439e2b8db) environment whr-7567ab8fe1 agent docs-ws/docs worktree /ws/wt/docs
+== 6. what the runtime now holds for the owner whr
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP                                  CPUS  MEMORY   STARTED
+fedora2                               docker.io/library/fedora:latest                                linux  arm64  stopped                                      4     1024 MB
+80feef4f-efc9-42d9-a657-65b18406902a  mcr.microsoft.com/devcontainers/javascript-node:1-18-bullseye  linux  arm64  stopped                                      4     1024 MB
+buildkit                              ghcr.io/apple/container-builder-shim/builder:0.13.1            linux  arm64  running  192.168.64.106/24                   2     2048 MB  2026-10-01T17:14:02Z
+48295029-1a1a-4143-beb0-ddebd59e13b6  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.161/24                   4     1024 MB  2026-10-01T20:09:02Z
+whr-7567ab8fe1-proxy                  docker.io/library/golang:1.27.1-trixie                         linux  arm64  running  192.168.64.173/24,192.168.128.2/24  1     256 MB   2026-10-01T20:34:26Z
+6d7382f6-3477-4d84-8eef-15c2fd5cfe18  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.160/24                   4     1024 MB  2026-10-01T20:08:54Z
+whr-7567ab8fe1                        docker.io/library/golang:1.27.1-trixie                         linux  arm64  running  192.168.128.3/24                    2     4096 MB  2026-10-01T20:34:28Z
+06de4ec2-58f0-45f9-a764-cbaea72bc928  docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.162/24                   4     1024 MB  2026-10-01T20:09:27Z
+NETWORK                     SUBNET
+default                     192.168.64.0/24
+whr-net-x-a83c57a439e2b8db  192.168.128.0/24
+NAME                         TYPE   DRIVER  OPTIONS
+whr-home-x-a83c57a439e2b8db  named  local   size=10240M
+== 7. whr serve (reconciles first, then serves the API on loopback)
+whr serve: reconciled: 0 interrupted, 0 resumed, 0 failed
+whr serve: listening on 127.0.0.1:8799
+-- whr ls (empty)
+ID  STATE  ISSUE  REPO  AGENT
+== 8. whr run: the issue comes from the stand-in forge, the agent starts in its worktree
+x-6e8a38b462f49afb	x-38c946d13cf8bbe6
+-- whr ls
+ID                  STATE    ISSUE  REPO               AGENT
+x-6e8a38b462f49afb  running  #1     wstein/workharbor  x-03b39344027c0afd
+-- whr inbox
+DECISION  TASK  KIND  SUBJECT  SHA  OPTIONS
+-- whr logs x-6e8a38b462f49afb
+3	2026-10-01T20:34:29Z	env.added	{"id":"whr-7567ab8fe1","backend":"apple-container","state":"running"}
+4	2026-10-01T20:34:29Z	task.state	{"object":"task","id":"x-6e8a38b462f49afb","from":"queued","to":"running"}
+5	2026-10-01T20:34:29Z	run.started	{"run_id":"x-38c946d13cf8bbe6","env_id":"whr-7567ab8fe1"}
+6	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"starting","to":"running"}
+7	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"running","to":"interrupted"}
+-- the fake forge saw (requests, never a credential)
+GET /repos/wstein/workharbor/installation
+POST /app/installations/7/access_tokens
+GET /repos/wstein/workharbor/issues/1
+-- serve log
+whr serve: reconciled: 0 interrupted, 0 resumed, 0 failed
+whr serve: listening on 127.0.0.1:8799
+== 9. what is inside the environment 40 s after the run started
+environment: whr-7567ab8fe1
+--- id, home, worktree, tools
+uid=1000 gid=1000 groups=1000
+HOME=/
+/home/agent:
+total 12
+drwxr-xr-x 3 root root 4096 Oct  1 20:34 .
+drwxr-xr-x 3 root root 4096 Oct  1 20:34 ..
+drwx------ 2 root root 4096 Oct  1 20:34 lost+found
+
+/tools/profiles/claude-2.1.285/bin:
+total 0
+drwxr-x--- 4 1000 1000 128 Oct  1 20:34 .
+drwx------ 3 1000 1000  96 Oct  1 20:34 ..
+lrwxr-xr-x 1 1000 1000  61 Oct  1 20:34 claude -> ../../../store/24fac777-claude-2.1.285-linux-arm64/bin/claude
+lrwxr-xr-x 1 1000 1000  75 Oct  1 20:34 whr-shim -> ../../../store/808356c4-whr-shim-v0.0.0-0-g59f33fc-linux-arm64/bin/whr-shim
+
+/ws:
+total 0
+drwxr-x--- 4 1000 1000 128 Oct  1 20:34 .
+drwxr-xr-x 4 1000 1000 128 Oct  1 20:34 repo
+drwxr-xr-x 3 1000 1000  96 Oct  1 20:34 wt
+
+/ws/wt/docs:
+total 8
+drwxr-xr-x 4 1000 1000 128 Oct  1 20:34 .
+drwxr-xr-x 3 1000 1000  96 Oct  1 20:34 ..
+-rw-r--r-- 1 1000 1000  37 Oct  1 20:34 .git
+-rw-r--r-- 1 1000 1000   8 Oct  1 20:34 README.md
+--- processes (from /proc)
+1 /.cz-init -- sleep 2147483647
+
+2 /usr/bin/sleep 2147483647
+
+59 sh -c for p in /proc/[0-9]*; do printf "%s " "${p#/proc/}"; tr "\0" " " <$p/cmdline | cut -c1-200; echo; done
+
+--- proxy variables the agent could use (none are set for it by whr unless listed here)
+(end)
+--- can the guest reach the internet directly? (it must not) and through the sidecar?
+direct 000
+sidecar address on the internal network: 192.168.128.2
+via the proxy 404
+--- claude by hand, as the adapter runs it, with the proxy set
+{"type":"system","subtype":"init","cwd":"/ws/wt/docs","session_id":"11b27e02-0943-427e-9ec8-fe5292c3820f","tools":["Task","Bash","CronCreate","CronDelete","CronList","DesignSync","Edit","EnterWorktree","ExitWorktree","ListAgents","NotebookEdit","Read","ReportFindings","ScheduleWakeup","SendMessage","Skill","TaskStop","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":
+{"type":"assistant","message":{"diagnostics":null,"id":"349d1679-5616-4446-8eea-ecea0ffe3183","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"output_tokens_details":null,"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_searc
+{"duration_api_ms":0,"stop_reason":"stop_sequence","session_id":"11b27e02-0943-427e-9ec8-fe5292c3820f","total_cost_usd":0,"usage":{"output_tokens_details":{"thinking_tokens":0},"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_inp
+--- the same without the proxy variable
+{"type":"system","subtype":"init","cwd":"/ws/wt/docs","session_id":"1e6852e4-fcbf-46f6-bd9f-eb4432174119","tools":["Task","Bash","CronCreate","CronDelete","CronList","DesignSync","Edit","EnterWorktree","ExitWorktree","ListAgents","NotebookEdit","Read","ReportFindings","ScheduleWakeup","SendMessage","Skill","TaskStop","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":
+{"type":"assistant","message":{"diagnostics":null,"id":"4230024b-b02d-4632-8aa2-12c976a72460","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"output_tokens_details":null,"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_searc
+{"duration_api_ms":0,"stop_reason":"stop_sequence","session_id":"1e6852e4-fcbf-46f6-bd9f-eb4432174119","total_cost_usd":0,"usage":{"output_tokens_details":{"thinking_tokens":0},"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_inp
+-- whr logs again
+3	2026-10-01T20:34:29Z	env.added	{"id":"whr-7567ab8fe1","backend":"apple-container","state":"running"}
+4	2026-10-01T20:34:29Z	task.state	{"object":"task","id":"x-6e8a38b462f49afb","from":"queued","to":"running"}
+5	2026-10-01T20:34:29Z	run.started	{"run_id":"x-38c946d13cf8bbe6","env_id":"whr-7567ab8fe1"}
+6	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"starting","to":"running"}
+7	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"running","to":"interrupted"}
+8	2026-10-01T20:34:58Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"interrupted","to":"failed"}
+9	2026-10-01T20:34:58Z	decision.raised	{"id":"x-d565a8f0346dd950","run_id":"x-38c946d13cf8bbe6","kind":"question","blocking":true,"subject":"The run failed","cause":"run_failed"}
+10	2026-10-01T20:34:58Z	task.state	{"object":"task","id":"x-6e8a38b462f49afb","from":"running","to":"awaiting_guidance"}
+== done
