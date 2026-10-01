@@ -60,6 +60,9 @@ type Config struct {
 	// ReadyTimeout bounds the wait, and ReadyInterval is the pause between
 	// attempts. Defaults 30 s and 100 ms.
 	ReadyTimeout, ReadyInterval time.Duration
+	// MaxAttempts is how many failed launches of the agent a run may have
+	// before it ends failed (design §5.3). Default 3.
+	MaxAttempts int
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)
@@ -75,8 +78,13 @@ type Service struct {
 
 	wg       sync.WaitGroup
 	mu       sync.Mutex
-	sessions map[domain.ID]agent.Session // by run
+	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
 }
+
+// slot is a run's entry in the sessions map. It is put there before the agent
+// is called, so a run whose launch is in progress is not mistaken for a lost
+// one, and the session is filled in once the agent is up.
+type slot struct{ sess agent.Session }
 
 // New returns a service.
 func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg Config) *Service {
@@ -86,13 +94,16 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 	if len(cfg.ReadyCmd) == 0 {
 		cfg.ReadyCmd = []string{"true"}
 	}
+	if cfg.MaxAttempts <= 0 {
+		cfg.MaxAttempts = 3
+	}
 	if cfg.ReadyTimeout <= 0 {
 		cfg.ReadyTimeout = 30 * time.Second
 	}
 	if cfg.ReadyInterval <= 0 {
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
-	return &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]agent.Session{}}
+	return &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}}
 }
 
 // Wait blocks until every attached session's handler has finished.
@@ -104,8 +115,10 @@ func (s *Service) Wait() { s.wg.Wait() }
 func (s *Service) Shutdown() {
 	s.mu.Lock()
 	live := make([]agent.Session, 0, len(s.sessions))
-	for _, sess := range s.sessions {
-		live = append(live, sess)
+	for _, sl := range s.sessions {
+		if sl.sess != nil {
+			live = append(live, sl.sess)
+		}
 	}
 	s.mu.Unlock()
 	for _, sess := range live {
@@ -148,21 +161,45 @@ func (s *Service) update(ctx context.Context, task domain.ID, fn func(*domain.Ta
 	return fmt.Errorf("task %s: %w", task, err)
 }
 
+// begin marks a run's launch as in progress.
+func (s *Service) begin(run domain.ID) *slot {
+	sl := &slot{}
+	s.mu.Lock()
+	s.sessions[run] = sl
+	s.mu.Unlock()
+	return sl
+}
+
+// end removes a run's entry, but only if it is still this one: a relaunch
+// during a pass may have put a new session there.
+func (s *Service) end(run domain.ID, sl *slot) {
+	s.mu.Lock()
+	if s.sessions[run] == sl {
+		delete(s.sessions, run)
+	}
+	s.mu.Unlock()
+}
+
+// attached reports whether the service owns a session, or a launch in
+// progress, for a run.
+func (s *Service) attached(run domain.ID) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.sessions[run]
+	return ok
+}
+
 // attach pumps a session's events into the task until the session ends: the
 // agent's session ID is recorded, a login or quota end suspends the run, and the
-// result ends or fails it. Everything goes through the aggregate.
-func (s *Service) attach(task, run domain.ID, sess agent.Session) {
+// result ends, fails or interrupts it. Everything goes through the aggregate.
+func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 	s.mu.Lock()
-	s.sessions[run] = sess
+	sl.sess = sess
 	s.mu.Unlock()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		defer func() {
-			s.mu.Lock()
-			delete(s.sessions, run)
-			s.mu.Unlock()
-		}()
+		defer s.end(run, sl)
 		ctx := context.Background()
 		for e := range sess.Events() {
 			switch e.Kind {
@@ -198,8 +235,13 @@ func (s *Service) finish(ctx context.Context, task, run domain.ID, res agent.Res
 			return nil
 		}
 		switch res.Status {
-		case agent.ResultCompleted, agent.ResultStopped:
+		case agent.ResultCompleted:
 			return a.StopRun(run)
+		case agent.ResultStopped:
+			// A stop the human asked for (cancel) has ended the run already, so
+			// a live run here lost its agent to the supervisor: a shutdown. The
+			// run is interrupted and resumes on the next start.
+			return a.Interrupt(run)
 		case agent.ResultFailed:
 			_, err := a.FailRun(run, s.cfg.NewID(), s.clock.Now())
 			return err
@@ -222,28 +264,31 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	if err != nil {
 		return err
 	}
-	var before domain.RunState
-	if run, ok := s.runOf(ctx, row.TaskID, row.RunID); ok {
-		before = run.State
+	resumes := r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && row.RunID != ""
+	var sl *slot
+	if resumes {
+		sl = s.begin(row.RunID) // the run is about to start: it is not lost
 	}
 	if _, _, err := s.store.RespondDecision(ctx, id, r); err != nil {
+		if sl != nil {
+			s.end(row.RunID, sl)
+		}
 		return err
 	}
 	switch {
 	case r.Option == domain.AnswerCancel:
 		s.stopSession(row.RunID)
-	case r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && before != "":
-		return s.launch(ctx, row.TaskID, row.RunID)
+	case resumes:
+		err := s.launch(ctx, row.TaskID, row.RunID, sl)
+		if errors.Is(err, agent.ErrNoSession) || errors.Is(err, errAttemptsUsedUp) {
+			// The session is gone, or the attempts are used up: the run ends
+			// failed and waits on a retry-or-cancel Decision.
+			var rep Report
+			return errors.Join(err, s.failRun(ctx, row.TaskID, row.RunID, &rep))
+		}
+		return err
 	}
 	return nil
-}
-
-func (s *Service) runOf(ctx context.Context, task, run domain.ID) (domain.Run, bool) {
-	agg, err := s.store.LoadTask(ctx, task)
-	if err != nil {
-		return domain.Run{}, false
-	}
-	return agg.Run(run)
 }
 
 // Cancel cancels a task: its live run is stopped, its Decisions are
@@ -264,9 +309,9 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 
 func (s *Service) stopSession(run domain.ID) {
 	s.mu.Lock()
-	sess := s.sessions[run]
+	sl := s.sessions[run]
 	s.mu.Unlock()
-	if sess != nil {
-		_ = sess.Stop(context.Background())
+	if sl != nil && sl.sess != nil {
+		_ = sl.sess.Stop(context.Background())
 	}
 }

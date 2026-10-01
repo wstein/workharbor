@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,6 +142,16 @@ func must(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// live attaches an agent session to the run, as a running supervisor has, so
+// the reconciler does not take the run for a lost one.
+func (r *rig) live() {
+	r.t.Helper()
+	r.agent.Block()
+	sess, err := r.agent.Resume(bg, spec(), r.session)
+	must(r.t, err)
+	r.svc.attach("t1", "r1", r.svc.begin("r1"), sess)
 }
 
 func (r *rig) load() *domain.TaskAggregate {
@@ -310,6 +321,7 @@ func TestAnAgentThatCannotStartLeavesTheRunInterrupted(t *testing.T) {
 
 func TestAnExpiredApprovalIsExpiredAndTheTaskIsFreed(t *testing.T) {
 	r := newRig(t)
+	r.live()
 	a := r.load()
 	_, err := a.RaiseDecision(domain.NewDecision{ID: "ap1", RunID: "r1", Kind: domain.DecisionApproval, Blocking: true, Subject: "Bash", Now: r.clock.now})
 	must(t, err)
@@ -434,4 +446,159 @@ func (f failingAgent) Start(context.Context, agent.StartSpec) (agent.Session, er
 
 func (f failingAgent) Resume(context.Context, agent.StartSpec, string) (agent.Session, error) {
 	return nil, f.err
+}
+
+// After a supervisor restart the container is still up, but the agent process
+// the supervisor owned is gone: the run is lost although the environment
+// looks fine (D6).
+func TestARunWithoutASessionIsLostEvenWithAnEnvironmentThatIsUp(t *testing.T) {
+	r := newRig(t)
+	r.agent.Block()
+	rep := r.reconcile() // a fresh service: nothing is attached
+	if len(rep.Interrupted) != 1 || len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
+		t.Errorf("report %+v, run %s", rep, r.runState())
+	}
+	if len(r.agent.Specs) < 2 {
+		t.Error("the agent was not resumed")
+	}
+	// A run whose agent is attached is left alone.
+	if rep := r.reconcile(); len(rep.Interrupted) != 0 || len(rep.Resumed) != 0 {
+		t.Errorf("an attached run was disturbed: %+v", rep)
+	}
+}
+
+// A shutdown ends the sessions, and the runs resume on the next start.
+func TestShutdownInterruptsRunsInsteadOfStoppingThem(t *testing.T) {
+	r := newRig(t)
+	r.live()
+	r.svc.Shutdown()
+	got := r.load()
+	run, _ := got.Run("r1")
+	if run.State != domain.RunInterrupted || got.Task().State != domain.TaskRunning {
+		t.Fatalf("after a shutdown: run %s, task %s; want interrupted and running", run.State, got.Task().State)
+	}
+	r.agent.Block()
+	if rep := r.reconcile(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
+		t.Errorf("the next start: %+v, run %s", rep, r.runState())
+	}
+}
+
+func TestResumingAfterANoSessionAnswerFailsTheRun(t *testing.T) {
+	r := newRig(t, withSession("gone"))
+	a := r.load()
+	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
+	must(t, err)
+	_, err = r.store.SaveTask(bg, a)
+	must(t, err)
+	if err := r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}); !errors.Is(err, agent.ErrNoSession) {
+		t.Fatalf("answer = %v, want ErrNoSession", err)
+	}
+	if got := r.runState(); got != domain.RunFailed {
+		t.Errorf("run = %s, want failed rather than stuck in starting", got)
+	}
+}
+
+func TestAChosenWaitForTheResetSurvivesAnInterruption(t *testing.T) {
+	r := newRig(t)
+	reset := t0.Add(2 * time.Hour)
+	a := r.load()
+	_, err := a.SuspendRun("r1", domain.CauseQuotaExhausted, reset, "q1", r.clock.now)
+	must(t, err)
+	must(t, a.Answer("q1", domain.Response{By: "w", Option: domain.AnswerResumeAtReset, At: r.clock.now}))
+	must(t, a.Interrupt("r1"))
+	_, err = r.store.SaveTask(bg, a)
+	must(t, err)
+	must(t, r.rt.Restart(bg)) // the environment is stopped too
+
+	rep := r.reconcile()
+	if len(rep.Resumed) != 0 || r.runState() != domain.RunInterrupted || r.envState() != domain.EnvStopped {
+		t.Fatalf("before the reset: %+v, run %s, env %s; it must wait and start nothing", rep, r.runState(), r.envState())
+	}
+	r.clock.now = reset
+	r.agent.Block()
+	if rep := r.reconcile(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
+		t.Errorf("at the reset: %+v, run %s", rep, r.runState())
+	}
+}
+
+func (r *rig) envState() domain.EnvState {
+	info, err := r.rt.Adapter.Inspect(bg, string(r.env))
+	must(r.t, err)
+	return info.State
+}
+
+// A run that waits for a human costs no container.
+func TestNoContainerIsStartedForARunWaitingOnTheHuman(t *testing.T) {
+	r := newRig(t)
+	a := r.load()
+	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
+	must(t, err)
+	must(t, a.Interrupt("r1"))
+	_, err = r.store.SaveTask(bg, a)
+	must(t, err)
+	must(t, r.rt.Restart(bg))
+	for range 3 {
+		rep := r.reconcile()
+		if len(rep.Errors) != 0 || len(rep.Resumed) != 0 || r.envState() != domain.EnvStopped {
+			t.Fatalf("report %+v, env %s: the login question is open, so nothing may start", rep, r.envState())
+		}
+	}
+}
+
+func TestEveryResumeStartsWithTheBriefing(t *testing.T) {
+	r := newRig(t)
+	r.live()
+	a := r.load()
+	_, err := a.RaiseDecision(domain.NewDecision{ID: "ap1", RunID: "r1", Kind: domain.DecisionApproval, Blocking: true, Subject: "Bash", Input: "make deploy", Now: r.clock.now})
+	must(t, err)
+	_, err = r.store.SaveTask(bg, a)
+	must(t, err)
+	r.svc.Shutdown() // interrupts the run and supersedes the approval
+	r.agent.Block()
+	r.reconcile()
+
+	specs := r.agent.Specs
+	last := specs[len(specs)-1]
+	if !strings.HasPrefix(last.Prompt, "Supervisor briefing") {
+		t.Fatalf("the first message does not start with the briefing:\n%s", last.Prompt)
+	}
+	for _, want := range []string{"unknown", "partial", "Bash", "make deploy", "superseded", "Check the workspace first", "continue"} {
+		if !strings.Contains(last.Prompt, want) {
+			t.Errorf("the briefing lacks %q:\n%s", want, last.Prompt)
+		}
+	}
+}
+
+// A failing agent is retried a few times and then the run fails.
+func TestAttemptsAreCountedAndUsedUp(t *testing.T) {
+	r := newRig(t)
+	must(t, r.rt.Restart(bg))
+	r.svc.ag = failingAgent{err: errors.New("agent binary missing")}
+	for attempt := 1; attempt <= 2; attempt++ {
+		rep := r.reconcile()
+		if len(rep.Errors) != 1 || r.runState() != domain.RunInterrupted {
+			t.Fatalf("attempt %d: %+v, run %s", attempt, rep, r.runState())
+		}
+	}
+	rep := r.reconcile()
+	got := r.load()
+	run, _ := got.Run("r1")
+	if len(rep.Failed) != 1 || run.State != domain.RunFailed || len(got.Decisions()) != 1 {
+		t.Errorf("third attempt: %+v, run %s, decisions %d", rep, run.State, len(got.Decisions()))
+	}
+}
+
+// The old session's deferred cleanup must not remove a newer session's entry.
+func TestAnOldSessionDoesNotRemoveANewerEntry(t *testing.T) {
+	r := newRig(t)
+	old := r.svc.begin("r1")
+	fresh := r.svc.begin("r1") // a relaunch during a pass
+	r.svc.end("r1", old)
+	if !r.svc.attached("r1") {
+		t.Fatal("the old session's cleanup removed the new entry")
+	}
+	r.svc.end("r1", fresh)
+	if r.svc.attached("r1") {
+		t.Error("the entry was not removed by its own session")
+	}
 }

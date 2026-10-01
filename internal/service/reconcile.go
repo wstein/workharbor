@@ -79,6 +79,17 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 				}
 			}
 		}
+		// A live run with no agent session is lost even if its container is
+		// up: after a supervisor restart the container survives and the agent
+		// process the supervisor owned does not.
+		for _, r := range a.Runs() {
+			if (r.State == domain.RunStarting || r.State == domain.RunRunning) && !s.attached(r.ID) {
+				if err := a.Interrupt(r.ID); err != nil {
+					return err
+				}
+				interrupted = append(interrupted, r.ID)
+			}
+		}
 		expired = a.ExpireDecisions(s.clock.Now())
 		return nil
 	})
@@ -95,13 +106,13 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 		return err
 	}
 	var todo []domain.ID
+	now := s.clock.Now()
 	for _, r := range agg.Runs() {
-		if r.State == domain.RunInterrupted {
+		if r.State == domain.RunInterrupted && !agg.WaitsForReset(r.ID, now) {
 			todo = append(todo, r.ID)
 		}
 	}
-	due := agg.DueResumes(s.clock.Now())
-	todo = append(todo, due...)
+	todo = append(todo, agg.DueResumes(now)...)
 	var firstErr error
 	for _, run := range todo {
 		if err := s.recover(ctx, task, run, rep); err != nil && firstErr == nil {
@@ -135,6 +146,11 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if !ok || (r.State != domain.RunInterrupted && r.State != domain.RunPaused) {
 		return nil
 	}
+	// A run that cannot resume (an open login or quota question) costs no
+	// container: the human has to answer first.
+	if agg.ResumeBlocked(run) != nil {
+		return nil
+	}
 	env, ok := agg.Environment(r.EnvID)
 	if !ok || env.State == domain.EnvDeleted {
 		return s.failRun(ctx, task, run, rep) // the environment is gone: nothing to resume in
@@ -151,7 +167,9 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if err := s.waitReady(ctx, env.ID); err != nil {
 		return err
 	}
-	// The database says starting before the agent is launched (DB-first).
+	// The database says starting before the agent is launched (DB-first). The
+	// slot is taken first, so this run is not taken for a lost one meanwhile.
+	sl := s.begin(run)
 	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		if err := a.ObserveEnv(env.ID, domain.EnvRunning); err != nil {
 			return err
@@ -159,10 +177,11 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 		return a.Resume(run)
 	})
 	if err != nil {
+		s.end(run, sl)
 		return err
 	}
-	if err := s.launch(ctx, task, run); err != nil {
-		if errors.Is(err, agent.ErrNoSession) {
+	if err := s.launch(ctx, task, run, sl); err != nil {
+		if errors.Is(err, agent.ErrNoSession) || errors.Is(err, errAttemptsUsedUp) {
 			return s.failRun(ctx, task, run, rep)
 		}
 		return err
@@ -171,34 +190,52 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	return nil
 }
 
+// errAttemptsUsedUp tells recover that a run's launch attempts are used up.
+var errAttemptsUsedUp = errors.New("the run's launch attempts are used up")
+
 // launch relaunches the agent of a starting run from its session and attaches
-// the session. If the agent cannot be started the run goes back to interrupted
-// so the next pass tries again, unless the session is gone, which the caller
-// handles.
-func (s *Service) launch(ctx context.Context, task, run domain.ID) error {
+// the session. The first message is the resume briefing (D27). If the agent
+// cannot be started the run goes back to interrupted and the attempt is
+// counted; when the attempts are used up errAttemptsUsedUp is returned and the
+// caller fails the run. A session the agent forgot is ErrNoSession.
+func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) error {
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
+		s.end(run, sl)
 		return err
 	}
 	r, ok := agg.Run(run)
 	if !ok {
+		s.end(run, sl)
 		return &domain.NotFoundError{Kind: "run", ID: string(run)}
 	}
-	sess, err := s.ag.Resume(ctx, s.cfg.Spec(agg.Task(), r), r.SessionID)
+	spec := s.cfg.Spec(agg.Task(), r)
+	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
+	sess, err := s.ag.Resume(ctx, spec, r.SessionID)
 	if err != nil {
+		s.end(run, sl)
 		if errors.Is(err, agent.ErrNoSession) {
 			return err
 		}
-		if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.Interrupt(run) }); uerr != nil {
+		var exhausted bool
+		if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+			var rerr error
+			exhausted, rerr = a.RecordLaunchFailure(run, s.cfg.MaxAttempts)
+			return rerr
+		}); uerr != nil {
 			return errors.Join(err, uerr)
+		}
+		if exhausted {
+			return errors.Join(err, errAttemptsUsedUp)
 		}
 		return err
 	}
 	if err := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.MarkRunning(run) }); err != nil {
 		_ = sess.Stop(ctx)
+		s.end(run, sl)
 		return err
 	}
-	s.attach(task, run, sess)
+	s.attach(task, run, sl, sess)
 	return nil
 }
 
@@ -210,7 +247,7 @@ func (s *Service) failRun(ctx context.Context, task, run domain.ID, rep *Report)
 		if !ok || r.State.Terminal() {
 			return nil
 		}
-		if r.State == domain.RunPaused { // a paused run cannot fail; it is lost first
+		if r.State == domain.RunPaused || r.State == domain.RunStarting { // neither can fail directly; it is lost first
 			if err := a.Interrupt(run); err != nil {
 				return err
 			}

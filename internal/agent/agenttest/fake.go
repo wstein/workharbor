@@ -84,6 +84,10 @@ type Fake struct {
 
 	caps agent.Capabilities
 
+	// Specs are the StartSpecs of every Start and Resume, in order, so a test
+	// can check what the first message of a session was.
+	Specs []agent.StartSpec
+
 	mu       sync.Mutex
 	queue    []scenario
 	sessions int
@@ -152,6 +156,7 @@ func (f *Fake) Start(ctx context.Context, spec agent.StartSpec) (agent.Session, 
 	f.mu.Lock()
 	f.sessions++
 	id := "session-" + strconv.Itoa(f.sessions)
+	f.Specs = append(f.Specs, spec)
 	f.mu.Unlock()
 	return f.launch(ctx, spec, id, true), nil
 }
@@ -166,6 +171,7 @@ func (f *Fake) Resume(ctx context.Context, spec agent.StartSpec, sessionID strin
 	}
 	f.mu.Lock()
 	ok := f.known[sessionID]
+	f.Specs = append(f.Specs, spec)
 	f.mu.Unlock()
 	if !ok {
 		return nil, agent.ErrNoSession
