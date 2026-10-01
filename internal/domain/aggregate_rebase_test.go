@@ -80,3 +80,26 @@ func TestRebaseConflictPathsAreCappedUntrustedInput(t *testing.T) {
 		t.Errorf("input of %d characters, truncated=%v", len(d.Input), d.InputTruncated)
 	}
 }
+
+func TestRunFailedAgainOnlyForAFailedRun(t *testing.T) {
+	a := newStoppedAggregate(t)
+	a.runs[0].State = RunFailed
+	d, err := a.RaiseRunFailedAgain("r1", "d-again", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Cause != CauseRunFailed || !d.Blocking || strings.Join(d.Options, ",") != "retry,cancel" || a.task.State != TaskAwaitingGuidance {
+		t.Errorf("decision %+v, task %s", d, a.task.State)
+	}
+	if _, err := a.RaiseRunFailedAgain("r1", "d-again", time.Now()); err == nil {
+		t.Error("a duplicate decision ID was accepted")
+	}
+	for _, state := range []RunState{RunStarting, RunRunning, RunPaused, RunInterrupted, RunStopped} {
+		b := newStoppedAggregate(t)
+		b.runs[0].State = state
+		var c *ConflictError
+		if _, err := b.RaiseRunFailedAgain("r1", "d1", time.Now()); !errors.As(err, &c) {
+			t.Errorf("a %s run: %v", state, err)
+		}
+	}
+}

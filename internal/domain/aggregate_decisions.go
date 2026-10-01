@@ -265,6 +265,32 @@ func (a *TaskAggregate) RaiseRebaseConflict(runID, decisionID ID, target string,
 	return *d, nil
 }
 
+// RaiseRunFailedAgain asks the retry-or-cancel question again for a run that
+// already failed, when the retry the human chose could not be carried out (the
+// new run could not start): without it the task would be left running with no
+// run and no question. The run must be failed.
+func (a *TaskAggregate) RaiseRunFailedAgain(runID, decisionID ID, now time.Time) (Decision, error) {
+	run, err := a.run(runID)
+	if err != nil {
+		return Decision{}, err
+	}
+	if run.State != RunFailed {
+		return Decision{}, conflict(RuleRunLive, "run %s is %s: only a failed run is asked about again", run.ID, run.State)
+	}
+	if _, err := a.decision(decisionID); err == nil {
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", decisionID, a.task.ID)
+	}
+	d, err := raise(NewDecision{
+		ID: decisionID, TaskID: a.task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true, Subject: "The run failed",
+		Options: []string{AnswerRetry, AnswerCancel}, Cause: CauseRunFailed, Now: now,
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	a.addDecision(d)
+	return *d, nil
+}
+
 // MarkRunning moves a starting run to running once the agent is up.
 func (a *TaskAggregate) MarkRunning(runID ID) error {
 	run, err := a.run(runID)

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -153,11 +154,52 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	}
 	switch {
 	case d.Cause == domain.CauseRunFailed && r.Option == domain.AnswerRetry:
-		return w.NewRun(ctx, d.TaskID, "", "")
+		run, err := w.NewRun(ctx, d.TaskID, "", "")
+		return run, w.askAgain(ctx, d, err)
 	case d.Cause == domain.CauseRebaseConflict && r.Option == domain.AnswerRework:
-		return w.NewRun(ctx, d.TaskID, "Your branch did not rebase onto the integration branch. Rebase it yourself and resolve the conflicts.", d.Input)
+		run, err := w.NewRun(ctx, d.TaskID, "Your branch did not rebase onto the integration branch. Rebase it yourself and resolve the conflicts.", d.Input)
+		return run, w.askAgain(ctx, d, err)
 	}
 	return "", nil
+}
+
+// askAgain keeps a task from being left running with no run and no question
+// when the new run that an answer called for could not start (the environment
+// will not come up, say): the same question is raised again for the same run,
+// and the failure is returned with it. A nil failure is passed through.
+func (w *Workspaces) askAgain(ctx context.Context, answered *domain.Decision, failure error) error {
+	if failure == nil {
+		return nil
+	}
+	err := w.svc.update(context.WithoutCancel(ctx), answered.TaskID, func(a *domain.TaskAggregate) error {
+		if _, live := a.LiveRun(); a.Task().State.Terminal() || live {
+			return nil // the task moved on, or a run did start after all
+		}
+		for _, d := range a.Decisions() {
+			if d.Status == domain.DecisionOpen && d.Blocking {
+				return nil // a start that failed after its run was saved already asked (the new run failed into its own question)
+			}
+		}
+		var err error
+		switch answered.Cause {
+		case domain.CauseRunFailed:
+			_, err = a.RaiseRunFailedAgain(answered.RunID, w.cfg.NewID(), w.svc.clock.Now())
+		case domain.CauseRebaseConflict:
+			_, err = a.RaiseRebaseConflict(answered.RunID, w.cfg.NewID(), "the integration branch", splitLines(answered.Input), w.svc.clock.Now())
+		}
+		return err
+	})
+	if err != nil {
+		return errors.Join(failure, fmt.Errorf("and the question could not be raised again: %w", err))
+	}
+	return fmt.Errorf("the answer was recorded but the new run could not start, so the question was raised again: %w", failure)
+}
+
+func splitLines(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
 }
 
 // AgentCredentials says how the agent authenticates (design D40): with an API

@@ -313,3 +313,86 @@ func TestInstalledProxy(t *testing.T) {
 		}
 	}
 }
+
+// If the new run that an answer called for cannot start, the human is asked
+// again: the task is not left running with no run and no question. When the run
+// was saved and its agent failed to start, that run's own question is the one.
+func TestAFailedRetryLeavesAQuestionOpen(t *testing.T) {
+	r := newWsRig(t)
+	_, a := r.create("again")
+	r.failAg = true
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err == nil {
+		t.Fatal("the agent should not start")
+	}
+	tasks, _ := r.store.Tasks(bg, true)
+	task := tasks[0].ID
+	open := func() []domain.Decision {
+		t.Helper()
+		agg, _ := r.store.LoadTask(bg, task)
+		var out []domain.Decision
+		for _, d := range agg.Decisions() {
+			if d.Status == domain.DecisionOpen && d.Cause == domain.CauseRunFailed {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+	first := open()
+	if len(first) != 1 {
+		t.Fatalf("failed-run questions = %+v", first)
+	}
+
+	// The retry cannot start an agent either: the new run fails into its own question.
+	if _, err := r.ws.Answer(bg, first[0].ID, domain.Response{By: "w", Option: domain.AnswerRetry, At: r.svc.clock.Now()}); err == nil {
+		t.Fatal("a retry that cannot start was reported as done")
+	}
+	second := open()
+	if len(second) != 1 || second[0].ID == first[0].ID {
+		t.Fatalf("after a failed retry there must be exactly one new open question: %+v", second)
+	}
+	if v, _ := r.svc.Show(bg, task); v.Task.State != domain.TaskAwaitingGuidance {
+		t.Errorf("task = %s, want awaiting_guidance", v.Task.State)
+	}
+	r.failAg = false
+	if run, err := r.ws.Answer(bg, second[0].ID, domain.Response{By: "w", Option: domain.AnswerRetry, At: r.svc.clock.Now()}); err != nil || run == "" {
+		t.Errorf("the next retry = %q, %v", run, err)
+	}
+}
+
+// When the environment will not even start, no run is saved, and the answered
+// question is raised again so the task is not left with nothing to answer.
+func TestARetryThatCannotReachTheEnvironmentAsksAgain(t *testing.T) {
+	r := newWsRig(t)
+	w, a := r.create("noenv")
+	r.failAg = true
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err == nil {
+		t.Fatal("the agent should not start")
+	}
+	tasks, _ := r.store.Tasks(bg, true)
+	task := tasks[0].ID
+	agg, _ := r.store.LoadTask(bg, task)
+	var q domain.Decision
+	for _, d := range agg.Decisions() {
+		if d.Status == domain.DecisionOpen && d.Cause == domain.CauseRunFailed {
+			q = d
+		}
+	}
+	// The environment is gone from the runtime: a new run cannot be made.
+	must(t, r.rt.Adapter.Stop(bg, string(w.EnvID)))
+	must(t, r.rt.Adapter.Delete(bg, string(w.EnvID)))
+	r.failAg = false
+	_, err := r.ws.Answer(bg, q.ID, domain.Response{By: "w", Option: domain.AnswerRetry, At: r.svc.clock.Now()})
+	if err == nil || !strings.Contains(err.Error(), "raised again") {
+		t.Fatalf("err = %v, want the question raised again", err)
+	}
+	agg, _ = r.store.LoadTask(bg, task)
+	asked := 0
+	for _, d := range agg.Decisions() {
+		if d.Status == domain.DecisionOpen && d.Cause == domain.CauseRunFailed && d.ID != q.ID {
+			asked++
+		}
+	}
+	if asked != 1 || agg.Task().State != domain.TaskAwaitingGuidance {
+		t.Errorf("%d new open questions, task %s: the human must be asked once", asked, agg.Task().State)
+	}
+}
