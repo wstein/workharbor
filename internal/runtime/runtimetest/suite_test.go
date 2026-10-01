@@ -19,8 +19,10 @@ func TestSuiteNoticesDefectiveAdapters(t *testing.T) {
 		defect Defects
 		check  string
 	}{
-		{"accepts an unhardened spec", Defects{SkipValidate: true}, "an unhardened spec is rejected and creates nothing"},
-		{"accepts forbidden mounts", Defects{SkipMountCheck: true}, "forbidden mounts are rejected and create nothing"},
+		{"accepts a spec that was not prepared", Defects{AcceptUnprepared: true}, "provision takes only a prepared spec"},
+		{"leaves the network and sidecar after a delete", Defects{LeaveResources: true}, "the network, volume and sidecar are created and removed"},
+		{"lets two running environments write one volume", Defects{ShareVolumes: true}, "a writable volume has one running writer"},
+		{"mounts something other than what was prepared", Defects{DropMounts: true}, "the prepared mounts are what the runtime mounts"},
 		{"lists every owner's environments", Defects{ListAll: true}, "list returns only the owner's environments"},
 		{"acts on foreign environments", Defects{TouchForeign: true}, "foreign environments are off limits"},
 		{"deletes a running environment", Defects{DeleteRunning: true}, "delete needs a stopped environment"},

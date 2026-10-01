@@ -3,6 +3,8 @@ package runtimetest
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,13 +12,27 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
-func newFake(t *testing.T) (*Fake, runtime.Spec) {
+// newFake returns a fake and a function that makes a fresh prepared spec for
+// it each time, since a network is never shared between environments.
+func newFake(t *testing.T) (*Fake, func() runtime.PreparedSpec) {
 	t.Helper()
-	home := t.TempDir()
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	f := NewFake("wh-test", home, runtime.OSFS{})
-	return f, runtime.Spec{
-		Image: "debian", Owner: "wh-test", CPUs: 1, MemoryMB: 512, DiskMB: 1024,
-		User: "1000:1000", Init: true, CapDrop: []string{"ALL"},
+	n := 0
+	return f, func() runtime.PreparedSpec {
+		n++
+		prep, err := runtime.Prepare(runtime.PrepareOptions{FS: runtime.OSFS{}, Home: home}, runtime.Spec{
+			Image: "debian", Owner: "wh-test", CPUs: 1, MemoryMB: 512, DiskMB: 1024,
+			Network: runtime.Network{Name: fmt.Sprintf("wh-test-net-%d", n), Internal: true}, ReadOnlyRoot: true,
+			User: "1000:1000", Init: true, CapDrop: []string{"ALL"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return prep
 	}
 }
 
@@ -25,7 +41,7 @@ func TestRestartStopsEveryEnvironmentAndNothingComesBack(t *testing.T) {
 	f, spec := newFake(t)
 	var ids []string
 	for range 3 {
-		id, err := f.Provision(ctx, spec)
+		id, err := f.Provision(ctx, spec())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +72,7 @@ func TestRestartStopsEveryEnvironmentAndNothingComesBack(t *testing.T) {
 func TestEveryStartGivesANewAddress(t *testing.T) {
 	ctx := context.Background()
 	f, spec := newFake(t)
-	id, _ := f.Provision(ctx, spec)
+	id, _ := f.Provision(ctx, spec())
 	_ = f.Start(ctx, id)
 	first, _ := f.Inspect(ctx, id)
 	_ = f.Stop(ctx, id)
@@ -89,7 +105,7 @@ func TestForeignEnvironmentsAreOffLimits(t *testing.T) {
 func TestExecCommands(t *testing.T) {
 	ctx := context.Background()
 	f, spec := newFake(t)
-	id, _ := f.Provision(ctx, spec)
+	id, _ := f.Provision(ctx, spec())
 	if _, err := f.Exec(ctx, id, runtime.ExecRequest{Cmd: []string{"echo", "hi"}}); !errors.Is(err, runtime.ErrNotRunning) {
 		t.Fatalf("exec in a stopped environment = %v, want ErrNotRunning", err)
 	}
@@ -130,7 +146,7 @@ func TestExecCommands(t *testing.T) {
 func TestDeleteNeedsAStoppedEnvironmentAndIsRetrySafe(t *testing.T) {
 	ctx := context.Background()
 	f, spec := newFake(t)
-	id, _ := f.Provision(ctx, spec)
+	id, _ := f.Provision(ctx, spec())
 	_ = f.Start(ctx, id)
 	if err := f.Delete(ctx, id); !errors.Is(err, runtime.ErrRunning) {
 		t.Fatalf("delete of a running environment = %v, want ErrRunning", err)

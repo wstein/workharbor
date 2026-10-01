@@ -134,77 +134,86 @@ const maxSecretEntries = 4096
 // Unicode normalization forms of one name are the same path (see identities).
 // home is the user's home directory.
 func CheckMount(fsys FS, home, source string) error {
+	_, err := ResolveMount(fsys, home, source)
+	return err
+}
+
+// ResolveMount is CheckMount that also returns the resolved path the check
+// judged. An adapter mounts exactly that path, never the source as given: a
+// source swapped for a symlink after the check is then not followed (issue
+// #26).
+func ResolveMount(fsys FS, home, source string) (string, error) {
 	if !filepath.IsAbs(source) {
-		return &MountError{Source: source, Reason: ReasonNotAbsolute}
+		return "", &MountError{Source: source, Reason: ReasonNotAbsolute}
 	}
 	resolved, err := fsys.EvalSymlinks(filepath.Clean(source))
 	if err != nil {
-		return &MountError{Source: source, Reason: ReasonUnresolvable, Err: err}
+		return "", &MountError{Source: source, Reason: ReasonUnresolvable, Err: err}
 	}
 	reject := func(r Reason) error {
 		return &MountError{Source: source, Resolved: resolved, Reason: r}
 	}
 
 	if info, err := fsys.Stat(resolved); err != nil {
-		return &MountError{Source: source, Resolved: resolved, Reason: ReasonUnresolvable, Err: err}
+		return "", &MountError{Source: source, Resolved: resolved, Reason: ReasonUnresolvable, Err: err}
 	} else if info.Mode()&fs.ModeSocket != 0 {
-		return reject(ReasonSocket)
+		return "", reject(ReasonSocket)
 	}
 
 	if home == "" {
-		return fmt.Errorf("check mount %q: home directory unknown", source)
+		return "", fmt.Errorf("check mount %q: home directory unknown", source)
 	}
 	realHome, err := fsys.EvalSymlinks(filepath.Clean(home))
 	if err != nil {
-		return fmt.Errorf("check mount %q: resolve home directory: %w", source, err)
+		return "", fmt.Errorf("check mount %q: resolve home directory: %w", source, err)
 	}
 
 	ids := &identities{fsys: fsys, info: map[string]fs.FileInfo{}}
 	switch {
 	case ids.same(resolved, realHome):
-		return reject(ReasonHome)
+		return "", reject(ReasonHome)
 	case ids.within(realHome, resolved):
-		return reject(ReasonHomeParent)
+		return "", reject(ReasonHomeParent)
 	}
 	for _, root := range systemRoots {
 		if ids.same(resolved, root) {
-			return reject(ReasonSystem)
+			return "", reject(ReasonSystem)
 		}
 	}
 	for _, tree := range systemTrees {
 		if ids.within(resolved, tree) {
-			return reject(ReasonSystem)
+			return "", reject(ReasonSystem)
 		}
 	}
 	if !ids.within(resolved, realHome) {
 		for _, tree := range outsideHomeTrees {
 			if ids.within(resolved, tree) {
-				return reject(ReasonSystem)
+				return "", reject(ReasonSystem)
 			}
 		}
 	}
 	for _, rel := range secretsUnderHome {
 		for _, target := range protectedTargets(fsys, filepath.Join(realHome, rel)) {
 			if ids.overlaps(resolved, target) {
-				return reject(ReasonSecrets)
+				return "", reject(ReasonSecrets)
 			}
 		}
 	}
 	for _, rel := range runtimeSocketDirsUnderHome {
 		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
 			if ids.overlaps(resolved, target) {
-				return reject(ReasonRuntimeSocket)
+				return "", reject(ReasonRuntimeSocket)
 			}
 		}
 	}
 	for _, dir := range runtimeSocketDirs {
 		for _, target := range withResolved(fsys, dir) {
 			if ids.overlaps(resolved, target) {
-				return reject(ReasonRuntimeSocket)
+				return "", reject(ReasonRuntimeSocket)
 			}
 		}
 	}
-	return nil
+	return resolved, nil
 }
 
 // CheckMounts checks every bind mount and returns all rejections joined. A

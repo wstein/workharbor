@@ -38,6 +38,12 @@ var (
 	ErrNotRunning = errors.New("environment is not running")
 	ErrRunning    = errors.New("environment is running and must be stopped first")
 	ErrNotOwned   = errors.New("environment is not owned by this supervisor")
+
+	// ErrNotPrepared is returned by Provision for a spec that did not come from Prepare.
+	ErrNotPrepared = errors.New("the spec was not prepared: use runtime.Prepare")
+	// ErrVolumeBusy means another running environment holds the volume read-write
+	// (design §4.4: a writable volume is exclusive).
+	ErrVolumeBusy = errors.New("the volume is held read-write by a running environment")
 )
 
 // Info describes one environment as the runtime reports it.
@@ -46,11 +52,24 @@ type Info struct {
 	Owner  string // the OwnerLabel value
 	Labels map[string]string
 	Image  string
+	Mounts []Mount // what the runtime mounted: the resolved paths of the prepared spec
 	State  domain.EnvState
 	// Addr is the address the environment has now. It is empty unless the
 	// environment is running, and it changes across a restart and a recreate,
 	// so it is read again every time and never stored.
 	Addr string
+}
+
+// Resources are what an environment depends on besides its own container.
+type Resources struct {
+	Network string   // the internal network
+	Volumes []string // named volumes
+	Sidecar string   // the egress proxy container, empty when the spec has none
+}
+
+// Inventory lists the networks, volumes and sidecars an owner has.
+type Inventory struct {
+	Networks, Volumes, Sidecars []string
 }
 
 // ExecRequest is a command to run in a running environment.
@@ -116,16 +135,26 @@ type Adapter interface {
 	Name() string
 	Capabilities() Capabilities
 
-	// Provision creates an environment, stopped. It validates the spec and its
-	// bind mounts first (Spec.Validate and Spec.CheckMounts) and creates
-	// nothing if either fails.
-	Provision(ctx context.Context, spec Spec) (envID string, err error)
+	// Provision creates an environment, stopped, from a spec that Prepare
+	// checked (ErrNotPrepared otherwise). It also creates the environment's
+	// internal network, the volumes it names and the egress sidecar.
+	Provision(ctx context.Context, spec PreparedSpec) (envID string, err error)
 	Start(ctx context.Context, envID string) error
 	Stop(ctx context.Context, envID string) error
 	// Delete removes one stopped environment by its exact ID, never by pattern
 	// (ErrRunning if it is running, as the environment machine of design §4.1
-	// deletes only from stopped).
+	// deletes only from stopped), together with its internal network and its
+	// egress sidecar. Its volumes stay: the agent home survives a delete and a
+	// rebuild (design §4.4), and RemoveVolume discards one.
 	Delete(ctx context.Context, envID string) error
+	// RemoveVolume discards one volume by its exact name (ErrVolumeBusy if a
+	// running environment holds it). Removing one that is gone succeeds.
+	RemoveVolume(ctx context.Context, name string) error
+	// Resources reports the network, volumes and sidecar of an environment.
+	Resources(ctx context.Context, envID string) (Resources, error)
+	// Inventory lists every network, volume and sidecar this adapter's owner
+	// has, so a conformance run can show that a delete left nothing behind.
+	Inventory(ctx context.Context) (Inventory, error)
 
 	Inspect(ctx context.Context, envID string) (Info, error)
 	// List returns the environments with this owner label and no others.

@@ -59,6 +59,21 @@ type Spec struct {
 	Init         bool     // run an init as PID 1 (--init); always true
 	Tmpfs        []string // writable in-memory directories
 	Mounts       []Mount
+
+	// Egress is the proxy sidecar that gives the internal network its only way
+	// out (design §7.2). Nil means no way out at all.
+	Egress *Egress
+	// Alternates are the cache object directories a --shared topic borrows
+	// from (issue #45). Prepare mounts each read-only at its host path.
+	Alternates []string
+}
+
+// Egress describes the logging allowlist proxy that runs in a sidecar attached
+// to the default and the environment's internal network.
+type Egress struct {
+	Image string   // the stock image the proxy runs in
+	Proxy string   // the host path of the proxy binary, mounted read-only into the sidecar
+	Allow []string // host names the agent may reach through the proxy
 }
 
 // ErrInvalidSpec is matched by every error Validate returns.

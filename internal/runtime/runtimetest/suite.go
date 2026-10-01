@@ -39,13 +39,30 @@ type Harness struct {
 	// ForbiddenMounts are host paths that must be rejected.
 	AllowedMount    string
 	ForbiddenMounts []string
-	Commands        Commands
+	// ProxyBinary is a host file the egress sidecar can run (an allowed path).
+	ProxyBinary string
+	// CacheObjects is a cache objects directory for the read-only mount check.
+	// Optional.
+	CacheObjects string
+	Commands     Commands
+	// Prepare is the one checked step (runtime.Prepare) with this backend's
+	// host: the filesystem, the home, the roots and which volumes are owned.
+	Prepare func(runtime.Spec) (runtime.PreparedSpec, error)
 	// Restart simulates a runtime service restart (every environment ends up
 	// stopped). Optional.
 	Restart func(ctx context.Context) error
 	// NewForeign creates an environment that another tool owns and returns its
 	// ID. Optional.
 	NewForeign func(ctx context.Context) (string, error)
+}
+
+// provision prepares a spec and provisions it, as a caller must.
+func (h Harness) provision(ctx context.Context, spec runtime.Spec) (string, error) {
+	prep, err := h.Prepare(spec)
+	if err != nil {
+		return "", err
+	}
+	return h.Adapter.Provision(ctx, prep)
 }
 
 // ErrSkip is returned by a check that needs an optional part of the harness.
@@ -64,6 +81,7 @@ func Checks() []Check {
 		{"capabilities are reported", checkCapabilities},
 		{"lifecycle is typed, idempotent and retry safe", checkLifecycle},
 		{"delete needs a stopped environment", checkDeleteRunning},
+		{"provision takes only a prepared spec", checkPreparedOnly},
 		{"an unhardened spec is rejected and creates nothing", checkUnhardenedSpecs},
 		{"forbidden mounts are rejected and create nothing", checkForbiddenMounts},
 		{"list returns only the owner's environments", checkListByOwner},
@@ -71,6 +89,9 @@ func Checks() []Check {
 		{"exec streams output, errors and the exit code", checkExec},
 		{"exec passes stdin to the command, also while it runs", checkStdin},
 		{"cancelling an exec ends the process in the guest", checkCancelKillsGuestProcess},
+		{"the network, volume and sidecar are created and removed", checkSurroundings},
+		{"a writable volume has one running writer", checkVolumeExclusive},
+		{"the prepared mounts are what the runtime mounts", checkMountsAsPrepared},
 		{"delete is by exact ID only", checkDeleteExact},
 		{"a service restart leaves every environment stopped", checkRestart},
 	}
@@ -119,7 +140,7 @@ func checkCapabilities(_ context.Context, h Harness) error {
 func checkLifecycle(ctx context.Context, h Harness) error {
 	a := h.Adapter
 	spec := h.NewSpec()
-	id, err := a.Provision(ctx, spec)
+	id, err := h.provision(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("provision: %w", err)
 	}
@@ -164,7 +185,7 @@ func checkLifecycle(ctx context.Context, h Harness) error {
 
 func checkDeleteRunning(ctx context.Context, h Harness) error {
 	a := h.Adapter
-	id, err := a.Provision(ctx, h.NewSpec())
+	id, err := h.provision(ctx, h.NewSpec())
 	if err != nil {
 		return err
 	}
@@ -203,6 +224,13 @@ func checkUnhardenedSpecs(ctx context.Context, h Harness) error {
 		"another owner":   func(s *runtime.Spec) { s.Owner = "someone-else" },
 		"no disk quota":   func(s *runtime.Spec) { s.DiskMB = 0 },
 		"relative target": func(s *runtime.Spec) { s.Tmpfs = []string{"tmp"} },
+		// What the review of 6a48473 found validating: hardening is required.
+		"the default network": func(s *runtime.Spec) { s.Network = runtime.Network{} },
+		"a shared network":    func(s *runtime.Spec) { s.Network.Internal = false },
+		"a writable root":     func(s *runtime.Spec) { s.ReadOnlyRoot = false },
+		"another task's volume": func(s *runtime.Spec) {
+			s.Mounts = append(s.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "someone-elses-home", Target: "/home/agent"})
+		},
 	}
 	before, err := count(ctx, h)
 	if err != nil {
@@ -211,7 +239,7 @@ func checkUnhardenedSpecs(ctx context.Context, h Harness) error {
 	for name, mutate := range mutations {
 		spec := h.NewSpec()
 		mutate(&spec)
-		id, err := h.Adapter.Provision(ctx, spec)
+		id, err := h.provision(ctx, spec)
 		if err == nil {
 			return fmt.Errorf("%s: an unhardened spec was provisioned as %s", name, id)
 		}
@@ -233,7 +261,7 @@ func checkForbiddenMounts(ctx context.Context, h Harness) error {
 	for _, path := range h.ForbiddenMounts {
 		spec := h.NewSpec()
 		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: path, Target: "/mnt/forbidden", ReadOnly: true})
-		if _, err := h.Adapter.Provision(ctx, spec); !errors.Is(err, runtime.ErrForbiddenMount) {
+		if _, err := h.provision(ctx, spec); !errors.Is(err, runtime.ErrForbiddenMount) {
 			return fmt.Errorf("bind mount of %s: error = %s, want ErrForbiddenMount (read-only makes no difference)", path, show(err))
 		}
 	}
@@ -245,7 +273,7 @@ func checkForbiddenMounts(ctx context.Context, h Harness) error {
 	spec.Mounts = append(spec.Mounts,
 		runtime.Mount{Kind: runtime.MountBind, Source: h.AllowedMount, Target: "/work"},
 		runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-cache", Target: "/cache"})
-	if _, err := h.Adapter.Provision(ctx, spec); err != nil {
+	if _, err := h.provision(ctx, spec); err != nil {
 		return fmt.Errorf("an allowed bind mount and a volume were rejected: %w", err)
 	}
 	return nil
@@ -257,7 +285,7 @@ func checkListByOwner(ctx context.Context, h Harness) error {
 	for range 2 {
 		spec := h.NewSpec()
 		spec.Labels = map[string]string{"workharbor.task": "t-1"}
-		id, err := a.Provision(ctx, spec)
+		id, err := h.provision(ctx, spec)
 		if err != nil {
 			return err
 		}
@@ -325,7 +353,7 @@ func checkForeign(ctx context.Context, h Harness) error {
 
 func checkExec(ctx context.Context, h Harness) error {
 	a := h.Adapter
-	id, err := a.Provision(ctx, h.NewSpec())
+	id, err := h.provision(ctx, h.NewSpec())
 	if err != nil {
 		return err
 	}
@@ -378,7 +406,7 @@ func checkExec(ctx context.Context, h Harness) error {
 
 // startRunning provisions and starts an environment.
 func startRunning(ctx context.Context, h Harness) (string, error) {
-	id, err := h.Adapter.Provision(ctx, h.NewSpec())
+	id, err := h.provision(ctx, h.NewSpec())
 	if err != nil {
 		return "", err
 	}
@@ -491,7 +519,7 @@ func checkDeleteExact(ctx context.Context, h Harness) error {
 	a := h.Adapter
 	var ids []string
 	for range 2 {
-		id, err := a.Provision(ctx, h.NewSpec())
+		id, err := h.provision(ctx, h.NewSpec())
 		if err != nil {
 			return err
 		}
@@ -515,7 +543,7 @@ func checkRestart(ctx context.Context, h Harness) error {
 	a := h.Adapter
 	var ids []string
 	for range 2 {
-		id, err := a.Provision(ctx, h.NewSpec())
+		id, err := h.provision(ctx, h.NewSpec())
 		if err != nil {
 			return err
 		}
@@ -568,16 +596,35 @@ func fakeHarness(t *testing.T, defects Defects) Harness {
 			t.Fatal(err)
 		}
 	}
+	proxy := filepath.Join(home, "bin", "whr-proxy")
+	objects := filepath.Join(home, "cache", "repo.git", "objects")
+	for _, dir := range []string{filepath.Dir(proxy), objects} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(proxy, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for the proxy binary
+		t.Fatal(err)
+	}
 	const owner = "wh-conformance"
 	f := NewFake(owner, home, runtime.OSFS{})
 	f.Defects = defects
+	nets := 0
 	return Harness{
 		Adapter: f,
 		Owner:   owner,
+		Prepare: func(spec runtime.Spec) (runtime.PreparedSpec, error) {
+			return runtime.Prepare(runtime.PrepareOptions{
+				FS: runtime.OSFS{}, Home: home, CacheRoots: []string{filepath.Join(home, "cache")},
+				Owns: func(volume string) bool { return strings.HasPrefix(volume, "wh-conformance-") },
+			}, spec)
+		},
+		ProxyBinary: proxy, CacheObjects: objects,
 		NewSpec: func() runtime.Spec {
+			nets++ // a network is never shared between environments
 			return runtime.Spec{
 				Image: "debian:stable-slim", Owner: owner, CPUs: 2, MemoryMB: 1024, DiskMB: 10240,
-				Network: runtime.Network{Name: "wh-net", Internal: true},
+				Network: runtime.Network{Name: fmt.Sprintf("wh-net-%d", nets), Internal: true},
 				User:    "1000:1000", ReadOnlyRoot: true, CapDrop: []string{"ALL"}, Init: true, Tmpfs: []string{"/tmp"},
 			}
 		},
@@ -594,4 +641,173 @@ func fakeHarness(t *testing.T, defects Defects) Harness {
 		Restart:    func(context.Context) error { f.Restart(); return nil },
 		NewForeign: func(context.Context) (string, error) { return f.AddForeign("another-tool"), nil },
 	}
+}
+
+func checkPreparedOnly(ctx context.Context, h Harness) error {
+	before, err := count(ctx, h)
+	if err != nil {
+		return err
+	}
+	id, err := h.Adapter.Provision(ctx, runtime.PreparedSpec{})
+	if err == nil {
+		return fmt.Errorf("a spec that did not come from Prepare was provisioned as %s", id)
+	}
+	if !errors.Is(err, runtime.ErrNotPrepared) {
+		return fmt.Errorf("Provision of an unprepared spec = %s, want ErrNotPrepared", show(err))
+	}
+	if after, err := count(ctx, h); err != nil || after != before {
+		return fmt.Errorf("an unprepared spec created an environment: %d before, %d after (%s)", before, after, show(err))
+	}
+	return nil
+}
+
+// withEgress returns a spec with an egress sidecar and a volume of its own.
+func withEgress(h Harness, volume string) runtime.Spec {
+	spec := h.NewSpec()
+	spec.Egress = &runtime.Egress{Image: "debian:stable-slim", Proxy: h.ProxyBinary, Allow: []string{"api.anthropic.com"}}
+	if volume != "" {
+		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: volume, Target: "/home/agent"})
+	}
+	return spec
+}
+
+func contains(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+func checkSurroundings(ctx context.Context, h Harness) error {
+	a := h.Adapter
+	spec := withEgress(h, "wh-conformance-home-a")
+	spec.Network.Name = "wh-conformance-net-a"
+	id, err := h.provision(ctx, spec)
+	if err != nil {
+		return err
+	}
+	res, err := a.Resources(ctx, id)
+	if err != nil {
+		return fmt.Errorf("Resources: %w", err)
+	}
+	if res.Network != spec.Network.Name || res.Sidecar == "" || !contains(res.Volumes, "wh-conformance-home-a") {
+		return fmt.Errorf("provisioning must create the network, the sidecar and the volume: %+v", res)
+	}
+	inv, err := a.Inventory(ctx)
+	if err != nil {
+		return fmt.Errorf("Inventory: %w", err)
+	}
+	if !contains(inv.Networks, res.Network) || !contains(inv.Sidecars, res.Sidecar) || !contains(inv.Volumes, "wh-conformance-home-a") {
+		return fmt.Errorf("the inventory lacks what was created: %+v", inv)
+	}
+	// A network is never shared between environments.
+	if _, err := h.provision(ctx, spec); !errors.Is(err, runtime.ErrInvalidSpec) {
+		return fmt.Errorf("a second environment on the same network = %s, want ErrInvalidSpec", show(err))
+	}
+
+	if err := a.Delete(ctx, id); err != nil {
+		return err
+	}
+	inv, err = a.Inventory(ctx)
+	if err != nil {
+		return err
+	}
+	if contains(inv.Networks, res.Network) || contains(inv.Sidecars, res.Sidecar) {
+		return fmt.Errorf("a delete left the network or the sidecar behind: %+v", inv)
+	}
+	// The agent home survives a delete and a rebuild (design §4.4).
+	if !contains(inv.Volumes, "wh-conformance-home-a") {
+		return fmt.Errorf("a delete removed the agent-home volume: %+v", inv)
+	}
+	if err := a.RemoveVolume(ctx, "wh-conformance-home-a"); err != nil {
+		return fmt.Errorf("RemoveVolume: %w", err)
+	}
+	if inv, _ = a.Inventory(ctx); contains(inv.Volumes, "wh-conformance-home-a") {
+		return errors.New("RemoveVolume left the volume")
+	}
+	if err := a.RemoveVolume(ctx, "wh-conformance-home-a"); err != nil {
+		return fmt.Errorf("removing a volume that is gone must succeed: %w", err)
+	}
+	return nil
+}
+
+func checkVolumeExclusive(ctx context.Context, h Harness) error {
+	a := h.Adapter
+	mk := func(net string) (string, error) {
+		spec := h.NewSpec()
+		spec.Network.Name = net
+		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-shared-home", Target: "/home/agent"})
+		return h.provision(ctx, spec)
+	}
+	first, err := mk("wh-conformance-net-x")
+	if err != nil {
+		return err
+	}
+	second, err := mk("wh-conformance-net-y")
+	if err != nil {
+		return err
+	}
+	if err := a.Start(ctx, first); err != nil {
+		return err
+	}
+	if err := a.Start(ctx, second); !errors.Is(err, runtime.ErrVolumeBusy) {
+		return fmt.Errorf("a second running writer of one volume = %s, want ErrVolumeBusy", show(err))
+	}
+	if info, err := a.Inspect(ctx, second); err != nil || info.State != domain.EnvStopped {
+		return fmt.Errorf("a refused start left the environment %s (%s)", info.State, show(err))
+	}
+	if err := a.RemoveVolume(ctx, "wh-conformance-shared-home"); !errors.Is(err, runtime.ErrVolumeBusy) {
+		return fmt.Errorf("removing a volume a running environment holds = %s, want ErrVolumeBusy", show(err))
+	}
+	// A rebuild stops the old environment before the new one starts.
+	if err := a.Stop(ctx, first); err != nil {
+		return err
+	}
+	if err := a.Start(ctx, second); err != nil {
+		return fmt.Errorf("start after the first writer stopped: %w", err)
+	}
+	return nil
+}
+
+func checkMountsAsPrepared(ctx context.Context, h Harness) error {
+	spec := h.NewSpec()
+	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: h.AllowedMount, Target: "/work"})
+	if h.CacheObjects != "" {
+		spec.Alternates = []string{h.CacheObjects}
+	}
+	prep, err := h.Prepare(spec)
+	if err != nil {
+		return err
+	}
+	want := prep.Spec().Mounts
+	id, err := h.Adapter.Provision(ctx, prep)
+	if err != nil {
+		return err
+	}
+	info, err := h.Adapter.Inspect(ctx, id)
+	if err != nil {
+		return err
+	}
+	if len(info.Mounts) != len(want) {
+		return fmt.Errorf("the runtime mounted %d things, the prepared spec has %d: %+v", len(info.Mounts), len(want), info.Mounts)
+	}
+	for i, m := range want {
+		if info.Mounts[i] != m {
+			return fmt.Errorf("mount %d is %+v, want exactly what was checked: %+v", i, info.Mounts[i], m)
+		}
+	}
+	if h.CacheObjects != "" {
+		found := false
+		for _, m := range info.Mounts {
+			if m.Kind == runtime.MountBind && m.Source == m.Target && m.ReadOnly && strings.HasSuffix(m.Source, "objects") {
+				found = true
+			}
+		}
+		if !found {
+			return errors.New("the cache objects were not mounted read-only at their host path")
+		}
+	}
+	return nil
 }

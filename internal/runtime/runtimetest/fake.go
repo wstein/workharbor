@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,14 +20,16 @@ import (
 // Defects switches off one guarantee of the fake, so tests can show that the
 // conformance suite notices an adapter that lacks it.
 type Defects struct {
-	SkipValidate    bool // Provision accepts an unhardened spec
-	SkipMountCheck  bool // Provision accepts forbidden bind mounts
-	ListAll         bool // List ignores the owner
-	TouchForeign    bool // ID methods act on environments it does not own
-	DeleteRunning   bool // Delete removes a running environment
-	RestartKeepsRun bool // Restart leaves running environments running
-	IgnoreStdin     bool // Exec never reads the request's Stdin
-	CancelLeavesRun bool // cancelling an exec returns, but the process in the guest keeps running
+	AcceptUnprepared bool // Provision accepts a spec that Prepare did not check
+	ShareVolumes     bool // two running environments may hold one volume read-write
+	LeaveResources   bool // Delete leaves the network and the sidecar behind
+	DropMounts       bool // the runtime mounts nothing of what was prepared
+	ListAll          bool // List ignores the owner
+	TouchForeign     bool // ID methods act on environments it does not own
+	DeleteRunning    bool // Delete removes a running environment
+	RestartKeepsRun  bool // Restart leaves running environments running
+	IgnoreStdin      bool // Exec never reads the request's Stdin
+	CancelLeavesRun  bool // cancelling an exec returns, but the process in the guest keeps running
 }
 
 // Fake is an in-memory runtime.Adapter acting for one owner.
@@ -38,10 +41,13 @@ type Fake struct {
 	fsys  runtime.FS
 	home  string
 
-	mu   sync.Mutex
-	envs map[string]*fakeEnv
-	next int
-	ip   int
+	mu       sync.Mutex
+	envs     map[string]*fakeEnv
+	volumes  map[string]bool   // named volumes that exist
+	networks map[string]string // network name to the environment it belongs to
+	sidecars map[string]bool
+	next     int
+	ip       int
 }
 
 type fakeEnv struct {
@@ -53,12 +59,16 @@ type fakeEnv struct {
 	addr   string
 	logs   []byte
 	procs  int // sleep commands running in the guest
+
+	mounts  []runtime.Mount
+	network string
+	sidecar string
 }
 
 // NewFake returns a fake that acts for owner. Bind mounts are vetted against
 // home on fsys, as a real adapter must.
 func NewFake(owner, home string, fsys runtime.FS) *Fake {
-	return &Fake{owner: owner, home: home, fsys: fsys, envs: map[string]*fakeEnv{}}
+	return &Fake{owner: owner, home: home, fsys: fsys, envs: map[string]*fakeEnv{}, volumes: map[string]bool{}, networks: map[string]string{}, sidecars: map[string]bool{}}
 }
 
 // Name implements runtime.Adapter.
@@ -74,30 +84,46 @@ func (f *Fake) Capabilities() runtime.Capabilities {
 	}
 }
 
-// Provision implements runtime.Adapter.
-func (f *Fake) Provision(_ context.Context, spec runtime.Spec) (string, error) {
-	if !f.Defects.SkipValidate {
-		if err := spec.Validate(); err != nil {
-			return "", err
-		}
-		if spec.Owner != f.owner {
-			return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("owner %q is not this adapter's owner %q", spec.Owner, f.owner)}}
-		}
+// Provision implements runtime.Adapter. It creates the environment's internal
+// network, the volumes it names and the egress sidecar.
+func (f *Fake) Provision(_ context.Context, prep runtime.PreparedSpec) (string, error) {
+	if !prep.Prepared() && !f.Defects.AcceptUnprepared {
+		return "", runtime.ErrNotPrepared
 	}
-	if !f.Defects.SkipMountCheck {
-		if err := spec.CheckMounts(f.fsys, f.home); err != nil {
-			return "", err
-		}
+	spec := prep.Spec()
+	if spec.Owner != f.owner {
+		return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("owner %q is not this adapter's owner %q", spec.Owner, f.owner)}}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if spec.Network.Name != "" {
+		if _, taken := f.networks[spec.Network.Name]; taken {
+			return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("network %q is already in use: a network is never shared between environments", spec.Network.Name)}}
+		}
+	}
 	f.next++
 	id := "fake-" + strconv.Itoa(f.next)
 	labels := map[string]string{runtime.OwnerLabel: spec.Owner}
 	for k, v := range spec.Labels {
 		labels[k] = v
 	}
-	f.envs[id] = &fakeEnv{id: id, owner: spec.Owner, labels: labels, image: spec.Image, state: domain.EnvStopped}
+	env := &fakeEnv{id: id, owner: spec.Owner, labels: labels, image: spec.Image, state: domain.EnvStopped, network: spec.Network.Name}
+	if !f.Defects.DropMounts {
+		env.mounts = append(env.mounts, spec.Mounts...)
+	}
+	if env.network != "" {
+		f.networks[env.network] = id
+	}
+	if spec.Egress != nil {
+		env.sidecar = id + "-proxy"
+		f.sidecars[env.sidecar] = true
+	}
+	for _, m := range spec.Mounts {
+		if m.Kind == runtime.MountVolume {
+			f.volumes[m.Source] = true
+		}
+	}
+	f.envs[id] = env
 	return id, nil
 }
 
@@ -123,6 +149,13 @@ func (f *Fake) Start(_ context.Context, id string) error {
 		return err
 	}
 	if e.state != domain.EnvRunning {
+		if !f.Defects.ShareVolumes {
+			for _, m := range e.mounts {
+				if m.Kind == runtime.MountVolume && !m.ReadOnly && f.heldByRunning(m.Source, e.id) {
+					return runtime.ErrVolumeBusy
+				}
+			}
+		}
 		f.ip++
 		e.addr = "192.168.64." + strconv.Itoa(f.ip)
 		e.state = domain.EnvRunning
@@ -157,8 +190,83 @@ func (f *Fake) Delete(_ context.Context, id string) error {
 	if e.state == domain.EnvRunning && !f.Defects.DeleteRunning {
 		return runtime.ErrRunning
 	}
+	if !f.Defects.LeaveResources {
+		delete(f.networks, e.network)
+		delete(f.sidecars, e.sidecar)
+	}
 	delete(f.envs, id)
 	return nil
+}
+
+// heldByRunning reports whether another running environment holds a volume
+// read-write. The caller holds the lock.
+func (f *Fake) heldByRunning(volume, except string) bool {
+	for _, o := range f.envs {
+		if o.id == except || o.state != domain.EnvRunning {
+			continue
+		}
+		for _, m := range o.mounts {
+			if m.Kind == runtime.MountVolume && m.Source == volume && !m.ReadOnly {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// RemoveVolume implements runtime.Adapter.
+func (f *Fake) RemoveVolume(_ context.Context, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, o := range f.envs {
+		if o.state != domain.EnvRunning {
+			continue
+		}
+		for _, m := range o.mounts {
+			if m.Kind == runtime.MountVolume && m.Source == name {
+				return runtime.ErrVolumeBusy
+			}
+		}
+	}
+	delete(f.volumes, name)
+	return nil
+}
+
+// Resources implements runtime.Adapter.
+func (f *Fake) Resources(_ context.Context, id string) (runtime.Resources, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, err := f.own(id)
+	if err != nil {
+		return runtime.Resources{}, err
+	}
+	res := runtime.Resources{Network: e.network, Sidecar: e.sidecar}
+	for _, m := range e.mounts {
+		if m.Kind == runtime.MountVolume {
+			res.Volumes = append(res.Volumes, m.Source)
+		}
+	}
+	return res, nil
+}
+
+// Inventory implements runtime.Adapter.
+func (f *Fake) Inventory(context.Context) (runtime.Inventory, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var inv runtime.Inventory
+	for n := range f.networks {
+		inv.Networks = append(inv.Networks, n)
+	}
+	for v := range f.volumes {
+		inv.Volumes = append(inv.Volumes, v)
+	}
+	for sc := range f.sidecars {
+		inv.Sidecars = append(inv.Sidecars, sc)
+	}
+	sort.Strings(inv.Networks)
+	sort.Strings(inv.Volumes)
+	sort.Strings(inv.Sidecars)
+	return inv, nil
 }
 
 func (f *Fake) info(e *fakeEnv) runtime.Info {
@@ -166,7 +274,7 @@ func (f *Fake) info(e *fakeEnv) runtime.Info {
 	for k, v := range e.labels {
 		labels[k] = v
 	}
-	return runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, State: e.state, Addr: e.addr}
+	return runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
 }
 
 // Inspect implements runtime.Adapter.

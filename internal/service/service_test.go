@@ -86,7 +86,11 @@ func newRig(t *testing.T, opts ...rigOption) *rig {
 	r.rt = runtimetest.NewFakeHarness(t)
 	r.agent = agenttest.NewFake(agenttest.FullCaps())
 
-	id, err := r.rt.Adapter.Provision(bg, r.rt.NewSpec())
+	prep, err := r.rt.Prepare(r.rt.NewSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := r.rt.Adapter.Provision(bg, prep)
 	if err != nil {
 		t.Fatal(err)
 	}
