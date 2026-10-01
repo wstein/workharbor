@@ -22,6 +22,37 @@ jobs:
       - name: Check format, lint, editorconfig and tests
         run: make check
 
+  agent-cli:
+    # The proof that nothing planted in a repository or an agent home configures
+    # the Claude Code CLI (#68, #79) needs the real CLI. It is not logged in:
+    # hooks, MCP servers and skills load before the model call fails.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CLAUDE_VERSION: 2.1.285
+      # linux-x64 checksum from the vendor's manifest for this version; the
+      # linux-arm64 one there matches internal/toolstore/pins.json.
+      CLAUDE_SHA256: 33dad1ec615a2e08cc78b494f05c110e49916de2c79d78ec8799ebf46b233d29
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install the pinned Claude Code CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL --proto '=https' "https://downloads.claude.ai/claude-code-releases/$CLAUDE_VERSION/linux-x64/claude" -o "$RUNNER_TEMP/bin/claude"
+          echo "$CLAUDE_SHA256  $RUNNER_TEMP/bin/claude" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/claude"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Prove planted configuration does not take effect
+        env:
+          WHR_REQUIRE_CLAUDE: "1"
+        run: go test -count=1 -run 'TestPlanted' ./internal/agent/claude/
+
   commits:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

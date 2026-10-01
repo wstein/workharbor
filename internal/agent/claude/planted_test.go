@@ -3,10 +3,12 @@ package claude
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -97,10 +99,7 @@ func clearCanaries(dir string) {
 // The control run without the flags shows each plant does fire. The CLI is not
 // logged in, so no model call is made: hooks and MCP servers start first.
 func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
-	bin, err := exec.LookPath("claude")
-	if err != nil {
-		t.Skip("the claude CLI is not installed")
-	}
+	bin := claudeBin(t)
 	dir, home, proj := plantedFixture(t)
 
 	// The control: the CLI with no flags runs every plant.
@@ -110,7 +109,7 @@ func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
 	_ = control.Run() // it fails to log in; the hooks have run by then
 	time.Sleep(time.Second)
 	if got := canaries(dir); len(got) != 4 {
-		t.Skipf("the control did not fire every plant (%v): this CLI version behaves differently, so the test proves nothing", got)
+		skipOrFail(t, fmt.Sprintf("the control did not fire every plant (%v): this CLI version behaves differently, so the test proves nothing", got))
 	}
 	clearCanaries(dir)
 
@@ -126,7 +125,7 @@ func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
 	}
 	for range s.Events() {
 	}
-	_, _ = s.Wait()
+	res, _ := s.Wait()
 	time.Sleep(time.Second)
 	if got := strings.Join(canaries(dir), " "); got != "supervisor" {
 		t.Errorf("after a start the canaries are %q: only the supervisor's own settings may run", got)
@@ -134,8 +133,16 @@ func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
 
 	// After a resume the same holds.
 	clearCanaries(dir)
-	r, err := ad.Resume(ctx, spec, "00000000-0000-4000-8000-000000000000")
-	if err == nil {
+	// The resume uses the session the start created; the CLI reports one even
+	// without a login.
+	if res.SessionID == "" {
+		skipOrFail(t, "the start reported no session ID, so the resume cannot be tested")
+	}
+	r, err := ad.Resume(ctx, spec, res.SessionID)
+	if err != nil {
+		skipOrFail(t, fmt.Sprintf("resuming the real session %s: %v", res.SessionID, err))
+	}
+	{
 		for range r.Events() {
 		}
 		_, _ = r.Wait()
@@ -145,5 +152,65 @@ func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
 		if c != "supervisor" {
 			t.Errorf("after a resume the planted %q ran", c)
 		}
+	}
+}
+
+// claudeBin returns the claude CLI on PATH. CI sets WHR_REQUIRE_CLAUDE=1 and
+// installs a pinned CLI, so there a missing CLI fails instead of skipping.
+func claudeBin(t *testing.T) string {
+	t.Helper()
+	bin, err := exec.LookPath("claude")
+	if err != nil {
+		skipOrFail(t, "the claude CLI is not installed")
+	}
+	return bin
+}
+
+func skipOrFail(t *testing.T, why string) {
+	t.Helper()
+	if os.Getenv("WHR_REQUIRE_CLAUDE") == "1" {
+		t.Fatal(why)
+	}
+	t.Skip(why)
+}
+
+// initSkills runs a command line and returns the skills its init event lists.
+// The CLI is not logged in: it reports init, then fails on the model call.
+func initSkills(t *testing.T, dir, home string, args []string) []string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // the CLI, in a temp fixture
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR="+home)
+	cmd.Stdin = strings.NewReader(`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}` + "\n")
+	out, _ := cmd.Output()
+	for _, line := range strings.Split(string(out), "\n") {
+		var e struct {
+			Type    string   `json:"type"`
+			Subtype string   `json:"subtype"`
+			Skills  []string `json:"skills"`
+		}
+		if json.Unmarshal([]byte(line), &e) == nil && e.Type == "system" && e.Subtype == "init" {
+			return e.Skills
+		}
+	}
+	skipOrFail(t, "the CLI reported no init event")
+	return nil
+}
+
+// #79: a skill planted in the repository is not loaded with the adapter's
+// flags; the control without them shows the plant is real.
+func TestPlantedSkillIsNotLoadedWithTheRealCLI(t *testing.T) {
+	bin := claudeBin(t)
+	_, home, proj := plantedFixture(t)
+	control := initSkills(t, proj, home, []string{bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"})
+	if !slices.Contains(control, "evil") {
+		skipOrFail(t, fmt.Sprintf("the control did not load the planted skill (%v): this CLI version behaves differently", control))
+	}
+	ad := New(localRunner{}, Config{Bin: bin, ConfigDir: home})
+	spec := agent.StartSpec{EnvID: "env", Workdir: proj, Prompt: "hi", Auth: agent.AuthSubscription, PermissionMode: agent.PermissionDontAsk, AllowedTools: []string{"Read"}}
+	if got := initSkills(t, proj, home, ad.args(spec, "")); slices.Contains(got, "evil") {
+		t.Errorf("with the adapter's flags the planted skill was loaded: %v", got)
 	}
 }
