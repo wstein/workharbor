@@ -4,6 +4,8 @@ GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 HUGO := go run -tags extended github.com/gohugoio/hugo@v0.167.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 
+.DEFAULT_GOAL := build
+
 .PHONY: build install check-clean test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
