@@ -77,22 +77,49 @@ func TestReadSecretChecksTheFileItOpened(t *testing.T) {
 	}
 }
 
-func TestAgentLoginIsKeyValueLines(t *testing.T) {
+func TestAgentAPIKeyIsKeyValueLines(t *testing.T) {
 	r := newRig(t)
 	write := func(s string) {
-		if err := os.WriteFile(r.cfg.AgentLoginEnvFile, []byte(s), 0o600); err != nil {
+		if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte(s), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	write("# the subscription login\nCLAUDE_CODE_OAUTH_TOKEN=test-token-x=y\r\n\nOTHER=1\n")
-	env, err := r.cfg.AgentLogin()
-	if err != nil || !slices.Equal(env, []string{"CLAUDE_CODE_OAUTH_TOKEN=test-token-x=y", "OTHER=1"}) {
-		t.Fatalf("AgentLogin = %q, %v", env, err)
+	write("# the API key\nANTHROPIC_API_KEY=test-key-x=y\r\n\nOTHER=1\n")
+	env, err := r.cfg.AgentAPIKey()
+	if err != nil || !slices.Equal(env, []string{"ANTHROPIC_API_KEY=test-key-x=y", "OTHER=1"}) {
+		t.Fatalf("AgentAPIKey = %q, %v", env, err)
 	}
 	for _, bad := range []string{"test-token-SECRET\n", "export A=test-token-SECRET\n", "# only a comment\n"} {
 		write(bad)
-		if _, err := r.cfg.AgentLogin(); err == nil || strings.Contains(err.Error(), "SECRET") {
-			t.Errorf("AgentLogin(%q) = %v", bad, err)
+		if _, err := r.cfg.AgentAPIKey(); err == nil || strings.Contains(err.Error(), "SECRET") {
+			t.Errorf("AgentAPIKey(%q) = %v", bad, err)
 		}
+	}
+}
+
+// D40: whr never handles a subscription credential, so one in the API-key
+// file is refused, by name, without showing the value.
+func TestASubscriptionTokenIsRefused(t *testing.T) {
+	for _, line := range []string{"CLAUDE_CODE_OAUTH_TOKEN=test-token-SECRET", "SOME_SESSION_TOKEN=test-token-SECRET"} {
+		r := newRig(t)
+		if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte("ANTHROPIC_API_KEY=k\n"+line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := r.parse(t)
+		if msg := problems(err); !strings.Contains(msg, "subscription credential") || !strings.Contains(msg, "line 2") || strings.Contains(msg, "SECRET") {
+			t.Errorf("%s: problems = %q", line, msg)
+		}
+	}
+}
+
+func TestTheAPIKeyFileIsOptional(t *testing.T) {
+	r := newRig(t)
+	r.cfg.AgentAPIKeyEnvFile = ""
+	c, err := r.parse(t)
+	if err != nil {
+		t.Fatalf("a configuration without an API key (subscription mode): %v", err)
+	}
+	if env, err := c.AgentAPIKey(); env != nil || err != nil {
+		t.Errorf("AgentAPIKey without a file = %q, %v", env, err)
 	}
 }

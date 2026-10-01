@@ -34,11 +34,14 @@ func newRig(t *testing.T) *rig {
 		return p
 	}
 	r.cfg = Config{
-		Listen:            "127.0.0.1:8787",
-		Repositories:      []Repository{{Name: "wstein/workharbor", CloneDepth: 0}},
-		Roots:             Roots{Cache: filepath.Join(dir, "cache"), Workspaces: filepath.Join(dir, "workspaces"), ToolStore: filepath.Join(dir, "store")},
-		GitHub:            GitHub{AppID: 12345, KeyFile: secret("app.pem")},
-		AgentLoginEnvFile: secret("agent.env"), APITokenFile: secret("api.token"),
+		Listen:             "127.0.0.1:8787",
+		Repositories:       []Repository{{Name: "wstein/workharbor", CloneDepth: 0}},
+		Roots:              Roots{Cache: filepath.Join(dir, "cache"), Workspaces: filepath.Join(dir, "workspaces"), ToolStore: filepath.Join(dir, "store")},
+		GitHub:             GitHub{AppID: 12345, KeyFile: secret("app.pem")},
+		AgentAPIKeyEnvFile: secret("agent.env"), APITokenFile: secret("api.token"),
+	}
+	if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte("ANTHROPIC_API_KEY=value\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	return r
 }

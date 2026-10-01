@@ -49,9 +49,12 @@ type Config struct {
 	Repositories []Repository `json:"repositories"`
 	Roots        Roots        `json:"roots"`
 	GitHub       GitHub       `json:"github"`
-	// AgentLoginEnvFile holds the agent's login (for example the
-	// CLAUDE_CODE_OAUTH_TOKEN of a subscription) as KEY=VALUE lines.
-	AgentLoginEnvFile string `json:"agent_login_env_file"`
+	// AgentAPIKeyEnvFile holds an agent API key (for example
+	// ANTHROPIC_API_KEY) as KEY=VALUE lines. It is optional: with a
+	// subscription login there is none, because whr never handles a
+	// subscription credential; the human signs in inside the environment
+	// (D40), and a subscription token in this file is refused.
+	AgentAPIKeyEnvFile string `json:"agent_api_key_env_file,omitempty"`
 	// APITokenFile holds the API token that guards the API (D29).
 	APITokenFile string `json:"api_token_file"`
 }
@@ -148,11 +151,17 @@ func (c *Config) Validate() error {
 	if c.GitHub.AppID <= 0 {
 		add("github.app_id: a positive App ID is needed")
 	}
-	for key, path := range map[string]string{
-		"github.key_file": c.GitHub.KeyFile, "agent_login_env_file": c.AgentLoginEnvFile, "api_token_file": c.APITokenFile,
-	} {
-		if msg := checkSecretFile(path); msg != "" {
+	secrets := map[string]string{"github.key_file": c.GitHub.KeyFile, "api_token_file": c.APITokenFile}
+	if c.AgentAPIKeyEnvFile != "" {
+		secrets["agent_api_key_env_file"] = c.AgentAPIKeyEnvFile
+	}
+	for _, key := range sortedKeys(secrets) {
+		if msg := checkSecretFile(secrets[key]); msg != "" {
 			add("%s: %s", key, msg)
+		} else if key == "agent_api_key_env_file" {
+			if _, err := c.AgentAPIKey(); err != nil {
+				add("%s: %s", key, strings.TrimPrefix(err.Error(), "config: "+key+": "))
+			}
 		}
 	}
 	// A secret file inside a root would reach an agent: it writes the
@@ -164,7 +173,7 @@ func (c *Config) Validate() error {
 		"roots.tool_store": "the tool store, which every environment mounts",
 		"roots.cache":      "the cache root, which the checkouts share",
 	}
-	for key, path := range map[string]string{"github.key_file": c.GitHub.KeyFile, "agent_login_env_file": c.AgentLoginEnvFile, "api_token_file": c.APITokenFile} {
+	for key, path := range secrets {
 		for _, root := range sortedKeys(resolved) {
 			if within(path, resolved[root]) {
 				add("%s: %s is inside %s", key, path, why[root])
@@ -314,11 +323,16 @@ func ReadSecret(path string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(f, maxSecret))
 }
 
-// AgentLogin reads AgentLoginEnvFile: KEY=VALUE lines, with blank lines and
+// AgentAPIKey reads AgentAPIKeyEnvFile: KEY=VALUE lines, with blank lines and
 // lines starting with '#' ignored. The entries go to the agent's process
-// environment through the runtime's env file, never a command line.
-func (c *Config) AgentLogin() ([]string, error) {
-	raw, err := ReadSecret(c.AgentLoginEnvFile)
+// environment through the runtime's env file, never a command line. With no
+// file it returns nothing. A subscription credential is refused: whr never
+// reads, stores or relays one (D40); errors name the line, never its value.
+func (c *Config) AgentAPIKey() ([]string, error) {
+	if c.AgentAPIKeyEnvFile == "" {
+		return nil, nil
+	}
+	raw, err := ReadSecret(c.AgentAPIKeyEnvFile)
 	if err != nil {
 		return nil, err
 	}
@@ -328,15 +342,22 @@ func (c *Config) AgentLogin() ([]string, error) {
 			continue
 		}
 		k, _, ok := strings.Cut(line, "=")
-		if !ok || !envKey.MatchString(k) {
-			return nil, fmt.Errorf("config: agent_login_env_file line %d is not KEY=VALUE", i+1)
+		switch {
+		case !ok || !envKey.MatchString(k):
+			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d is not KEY=VALUE", i+1)
+		case subscriptionKey.MatchString(k):
+			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s, a subscription credential; whr never handles one, so sign in inside the environment instead (D40)", i+1, k)
 		}
 		env = append(env, line)
 	}
 	if len(env) == 0 {
-		return nil, errors.New("config: agent_login_env_file holds no KEY=VALUE line")
+		return nil, errors.New("config: agent_api_key_env_file: no KEY=VALUE line")
 	}
 	return env, nil
 }
+
+// subscriptionKey matches variable names that carry a consumer-plan sign-in,
+// such as CLAUDE_CODE_OAUTH_TOKEN, rather than an API key.
+var subscriptionKey = regexp.MustCompile(`(?i)oauth|session`)
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
