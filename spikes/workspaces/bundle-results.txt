@@ -1,0 +1,21 @@
+3
+== small range: 3 commits
+bundle create exit 0, 1000 bytes, 107 ms
+The bundle uses this hash algorithm: sha1
+verify 33 ms, fetch 51 ms; imported tip: d125261 c2
+== large range: 400 commits x 20 files plus a 60 MB blob
+bundle create exit 0, 63394137 bytes, 2131 ms
+The bundle uses this hash algorithm: sha1
+verify 34 ms, fetch 412 ms; imported commits: 401
+== a truncated and a corrupt large bundle are refused
+truncated to half: verify exit 0
+truncated to half: fetch exit 1
+corrupted in the middle: fetch exit 1
+refs after the refused imports: refs/heads/main
+== nothing planted in the workspace ran on the host during verify and fetch
+no marker: nothing ran on the host
+== control: host git IN the workspace clone does run the planted config (this is why the host never does that)
+MARKER after host git in the workspace: FSMONITOR
+MARKER after host git in the workspace: HOOK_POST_CHECKOUT
+MARKER after host git in the workspace: HOOK_REF_TX
+== the environment kept running: running
