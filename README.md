@@ -19,7 +19,7 @@ The command-line tool is **`whr`**.
 - **Task supervision, not an IDE.** Tasks, workspaces, runs and environments are separate objects; attaching or detaching an editor never interrupts the agent.
 - **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from the CLI or web UI.
 - **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini, with default-deny networking and per-run credentials. Other runtimes follow through adapters.
-- **Approval boundaries are policy.** Agents push branches and open PRs; merge, release and deploy stay with you.
+- **Approval boundaries are policy.** Agents commit in their own checkouts on the host; after your cleanup and approval the supervisor pushes the branch and opens the PR. Merge, release and deploy stay with you.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
 
 ## Planned CLI
