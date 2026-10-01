@@ -122,7 +122,7 @@ Task, run and environment each get their own small FSM with explicit legal trans
 
 ### 4.2 Decision object
 
-Fields: ID, task, kind (`question | approval | review`), blocking flag, options, created/answered timestamps, answering actor. The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision raised by a live run is open; review Decisions belong to `ready_for_review` (§4.1).
+Fields: ID, task, run (empty for a review Decision, which no live run raised), kind (`question | approval | review`), blocking flag, subject, input (untrusted, capped), commit SHA, options, status, created and answered timestamps, deadline, answer, reason and answering actor (issue #17). The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision raised by a live run is open; review Decisions belong to `ready_for_review` (§4.1).
 
 **Approvals are live and blocking.** Spike #1 showed the pattern with Claude Code: the agent's permission prompt is routed to the supervisor, which opens an `approval` Decision carrying the tool name and a capped copy of its input. The agent stays blocked until a human answers allow or deny, with an optional reason that is passed back to the agent. Rules:
 
@@ -130,6 +130,11 @@ Fields: ID, task, kind (`question | approval | review`), blocking flag, options,
 - **No silent survival.** A pending approval does not survive a supervisor restart, because the agent process does not. The reconciler marks the run `interrupted` and the ask is raised again on resume.
 - **Plan approval.** In plan mode the agent's `ExitPlanMode` arrives as an approval whose subject is the plan.
 - **Capped input.** Tool inputs in a Decision are capped (the spike used 2,000 characters); the full input stays with the agent. All of it is untrusted data.
+- **Status.** `open` becomes `answered`, `expired` (the deadline passed) or `superseded` (the supervisor restarted); each is terminal. Only `answered` with `allow` ever permits anything: an open, expired or superseded approval is a denial.
+- **Deadline.** An approval always has one (default 10 minutes). An answer that arrives after it is refused and the Decision expires, so a late "allow" does not count.
+- **Commit SHA.** A review Decision such as "Ready to push?" carries the pinned SHA of its ReviewCandidate (§4.5, §6). An allow is tied to that SHA: an allow given for a different SHA is recorded as a denial, and the supervisor asks `Allows(sha)` against the commit it is about to push, so an approval for an earlier revision never covers a later one.
+- **Restart.** A Decision raised by a live run (a question or an approval) is `superseded` when the supervisor restarts, and the reconciler raises a new one for the resumed run (§5.3). A review Decision belongs to no run, so it survives a restart.
+- **Task state (D13).** Only a blocking Decision raised by a live run moves its task to `awaiting_guidance`; a review Decision leaves the task in `ready_for_review`.
 
 ### 4.3 Lifecycle rules
 
