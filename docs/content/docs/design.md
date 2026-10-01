@@ -112,6 +112,26 @@ Decided from spike #2 (Apple Container, issue #2; confirm on other backends):
 
 Still open: retention and garbage collection of completed tasks, topics and workspaces on the 1 TB disk, quotas (a named volume is a sparse image with a virtual size of 512 GiB), and bind-mount speed on very large repositories.
 
+### 4.5 Topics, checkouts and cleanup before push
+
+A **topic** is one line of work: one branch (`agent/<topic>`) with its own checkout on the host. Several topics are in flight at once, each with its own environment and agent, and the developer can open any checkout in their editor at the same time. That is the worktree idea: parallel topics that are merged and tidied locally before anything leaves the machine.
+
+**Checkout layout** (spike #2, item 9):
+
+- **A per-task clone with a read-only object cache is the default for agent topics.** The supervisor keeps a bare cache per repository on the host. Each topic is a `git clone --shared` of it, with its own `.git` (hooks, config, refs). The cache's objects are mounted read-only at their host path, because the clone's alternates point there, so the agent cannot write the cache and cannot see other topics. New objects go to the clone's own object directory.
+- **Worktrees of one repository** (`git worktree`) are the developer's tool on the host for their own parallel topics. They are not handed to agents. A worktree's `.git` file points at the shared repository by host path: mounting only the worktree fails (`not a git repository`), and mounting the shared repository exposes every branch, the shared hooks and config, and the other worktrees' metadata. `git worktree add --relative-paths` makes the pointer work if the mounts keep the relative layout, but the exposure is the same.
+
+**Cleanup before push:**
+
+- **Agents do not push.** The agent commits in its topic's checkout. Nothing leaves the host until a cleanup step has run and been approved.
+- **Prepare for push.** The supervisor, or the agent at its request, rebases the topic onto its target, folds attempts into one commit per finished change (fixup and autosquash of unpushed commits only), checks the commit messages (conventional commits and the repository's commit linter), signs the commits with the bot key (§7.7) and runs the repository's checks. Several finished topics can be merged into one integration branch first.
+- **Approval.** The result is a ReviewCandidate (a pinned commit SHA) and a Decision, "Ready to push?", that shows the commit list and the diff stat. Approval is per commit SHA, as for any review (§6).
+- **Push and PR.** On approval the supervisor pushes the prepared `agent/*` branch with the run's scoped credentials and opens or updates the PR. Merging stays human, on the forge.
+- **Pushed commits are never rewritten.** After a push a topic is only extended; rewriting pushed history needs an explicit request.
+- **Done or cancelled topics.** The checkout and its branch are removed by the retention rules (§4.4, §5.4) after the push is merged or the topic is cancelled. Unpushed work is kept until the owner discards it.
+
+**The host treats every agent-writable checkout as hostile** (§7.4). It never runs plain git there: cleanup and push use hardened git, or fetch the branch into a supervisor-owned repository first.
+
 ## 5. Architecture
 
 Logical components live in one Go binary on the Mac; boundaries are package interfaces, not microservices.
