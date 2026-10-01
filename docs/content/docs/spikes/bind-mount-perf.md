@@ -10,7 +10,7 @@ Measured on a Mac mini (Apple silicon), Apple `container` 1.5.0, a `fedora` gues
 
 | Measurement | nodemods bind | nodemods volume | large bind | large volume |
 | --- | --- | --- | --- | --- |
-| `git status`, first run | 11.8 | 0.45 | 40 (74 in an earlier run) | 1.5 |
+| `git status`, first run | 11.8 | 0.45 | 40 | 1.5 |
 | `git status`, warm | 1.8 | 0.04 | 8 | 0.11 |
 | read the whole tree (`tar`) | 1.2 | 0.07 | 9.1 | 0.17 |
 | copy the tree (`cp -a`) | 35 | 0.43 | 128 | 1.5 |
