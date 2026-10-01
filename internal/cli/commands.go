@@ -58,6 +58,7 @@ type taskRow struct {
 	Issue   string `json:"issue"`
 	State   string `json:"state"`
 	AgentID string `json:"agent_id"`
+	Agent   string `json:"agent"`
 }
 
 func (s *state) tasks(ctx context.Context, all bool) ([]taskRow, []byte, error) {
@@ -202,7 +203,7 @@ func newLs(s *state) *cobra.Command {
 			return s.emit(raw, func(w io.Writer) error {
 				out := make([][]string, len(rows))
 				for i, t := range rows {
-					out[i] = []string{t.ID, t.State, t.Issue, t.Repo, t.AgentID}
+					out[i] = []string{t.ID, t.State, t.Issue, t.Repo, agentName(t)}
 				}
 				return table(w, []string{"ID", "STATE", "ISSUE", "REPO", "AGENT"}, out)
 			})
@@ -667,4 +668,13 @@ func (s *state) completeAgents(cmd *cobra.Command, _ []string, _ string) ([]stri
 		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
+// agentName shows an agent as <workspace>/<role>, falling back to its ID for a
+// server that does not send the name.
+func agentName(t taskRow) string {
+	if t.Agent != "" {
+		return t.Agent
+	}
+	return t.AgentID
 }
