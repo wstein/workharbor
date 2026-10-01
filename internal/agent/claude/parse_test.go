@@ -63,6 +63,7 @@ func TestGoldenStreams(t *testing.T) {
 	}{
 		{"finish", false, nil},
 		{"tools", true, []string{"Read"}},
+		{"errors", true, []string{"Read"}},
 		{"auth", false, nil},
 		{"quota", false, nil},
 		{"partial", false, nil},
@@ -242,6 +243,40 @@ func TestResetTimeFormats(t *testing.T) {
 	} {
 		if got := parseTime(json.RawMessage(in)); !got.Equal(want) {
 			t.Errorf("parseTime(%s) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// A denied tool can come back as a tool_result with is_error. It must never
+// be recorded as allowed; and denials with no tool use before them keep
+// their own IDs.
+func TestAnErrorResultIsNeverRecordedAsAllowed(t *testing.T) {
+	events, _ := parseAll(t, fixture(t, "errors"), true, "Read")
+	var records []agent.ApprovalRecord
+	for _, e := range events {
+		if e.Kind == agent.EventApproval {
+			records = append(records, *e.Approval)
+		}
+	}
+	if len(records) != 4 {
+		t.Fatalf("records = %+v, want one per tool decision", records)
+	}
+	byID := map[string]agent.ApprovalRecord{}
+	for _, r := range records {
+		if _, dup := byID[r.ID]; dup {
+			t.Errorf("approval ID %q is used twice", r.ID)
+		}
+		byID[r.ID] = r
+	}
+	if r := byID["tu1"]; r.Allow {
+		t.Errorf("a Bash error result off the allowlist was recorded as allowed: %+v", r)
+	}
+	if r := byID["tu2"]; !r.Allow || r.Reason != "on the allowlist" {
+		t.Errorf("an allowlisted tool that failed was still permitted: %+v", r)
+	}
+	for id, r := range byID {
+		if strings.HasPrefix(id, "denied-") && r.Allow {
+			t.Errorf("a denial was recorded as allowed: %+v", r)
 		}
 	}
 }

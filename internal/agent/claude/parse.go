@@ -6,6 +6,7 @@ package claude
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -71,6 +72,7 @@ type parser struct {
 	pending   map[string]string // tool_use ID to tool name, until its outcome is known
 	order     []string          // pending IDs, oldest first
 
+	denials    int // denials that matched no tool use, for unique IDs
 	sawInit    bool
 	authFailed bool
 	exhausted  bool
@@ -166,7 +168,8 @@ func (p *parser) system(ev rawEvent) []agent.Event {
 		}
 		id := p.pendingByName(ev.ToolUseID, ev.ToolName)
 		if id == "" {
-			id = "denied-" + ev.ToolName
+			p.denials++ // a denial with no tool use before it: the ID must still be its own
+			id = fmt.Sprintf("denied-%d-%s", p.denials, ev.ToolName)
 		}
 		return []agent.Event{p.approval(id, ev.ToolName, false, "not allowed in dontAsk mode: denied")}
 	}
@@ -196,6 +199,23 @@ func (p *parser) dropPending(id string) {
 			p.order = append(p.order[:i], p.order[i+1:]...)
 			return
 		}
+	}
+}
+
+// toolDecision records what happened to a tool use that no denial event covered. A
+// tool on the allowlist was permitted whatever its result. For any other tool
+// a result that is not an error means the agent's own rules let it run; a
+// result that is an error is how a denial can come back, so it is never
+// recorded as allowed: the audit trail must not say "allowed" for a tool that
+// may have been refused.
+func (p *parser) toolDecision(id, tool string, isError bool) agent.Event {
+	switch {
+	case p.allowlist[tool]:
+		return p.approval(id, tool, true, "on the allowlist")
+	case isError:
+		return p.approval(id, tool, false, "the tool returned an error and no denial was seen: recorded as denied")
+	default:
+		return p.approval(id, tool, true, "allowed by the agent's own rules")
 	}
 }
 
@@ -242,14 +262,9 @@ func (p *parser) message(ev rawEvent) []agent.Event {
 				p.order = append(p.order, it.ID)
 			}
 		case "tool_result":
-			if _, ok := p.pending[it.UseID]; ok {
-				// It ran, so nothing denied it: the allowlist or the agent's own rules let it.
-				tool, reason := p.pending[it.UseID], "allowed by the agent's own rules"
-				if p.allowlist[tool] {
-					reason = "on the allowlist"
-				}
+			if tool, ok := p.pending[it.UseID]; ok {
+				events = append(events, p.toolDecision(it.UseID, tool, it.IsError))
 				p.dropPending(it.UseID)
-				events = append(events, p.approval(it.UseID, tool, true, reason))
 			}
 			e := p.event(agent.EventToolResult)
 			e.Text = capText(flatten(it.Content))
