@@ -262,7 +262,7 @@ Host worker and credential service are package boundaries on one host. Keep the 
 
 ### 5.1 Runtime adapter
 
-Covers provision, start/stop/delete, inspect, resource limits, logs, exec, storage and endpoint discovery. Capabilities are explicit and never assumed:
+Covers provision, start/stop/delete, inspect, resource limits, logs, exec, storage and endpoint discovery. The Apple Container behaviour below was measured in the [Apple Container](spikes/apple-container.md) and [host reachability](spikes/host-reachability.md) spikes. Capabilities are explicit and never assumed:
 
 | Capability | Purpose |
 | --- | --- |
@@ -312,7 +312,7 @@ Adapter rules that follow from it:
 
 ### 5.2 Agent adapter
 
-Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Codex CLI lacks mid-run injection and host-routed approvals in what spike #1 could test, so in release 1 it runs in the degraded mode below, labelled in the UI. *Full mode* needs every capability marked so; an agent without them runs degraded (D12 requires full mode only of Claude Code, the first agent). Capability flags:
+Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Codex CLI lacks mid-run injection and host-routed approvals in what [spike #1](spikes/agent-contract.md) could test (approvals and cancel: [spike #7](spikes/agent-approval.md); planted configuration: [spike #68](spikes/claude-config.md)), so in release 1 it runs in the degraded mode below, labelled in the UI. *Full mode* needs every capability marked so; an agent without them runs degraded (D12 requires full mode only of Claude Code, the first agent). Capability flags:
 
 - headless / unattended operation
 - **mid-run message injection (required for full mode)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
@@ -745,7 +745,7 @@ The original rating table missed agent-task supervisors; it is re-rated here (D2
 
 ## 12. Open decisions and spikes (reordered)
 
-Ordered by what is cheap and blocks the most work.
+Ordered by what is cheap and blocks the most work. The measured results are on the [spike pages](spikes/_index.md).
 
 1. **Runner scorecard** (value 10, effort 3). Target agents are Claude Code, Codex CLI and Google Antigravity; Aider, OpenHands, Goose and others are scored for reference. Claude Code ships first and Codex CLI second. Antigravity ships a CLI (`agy`) with a headless print mode, so the gate is met: spike #1 drove it headless with typed events and resume. It has no mid-run injection and no approval channel in print mode, so it is a second-tier adapter in degraded mode (§5.2). Its account requirements and vendor terms for headless use are {{< status unverified >}}. Spike #1 (issue #1) measured Claude Code, and Codex CLI and Antigravity in part; the results are in §5.2, and still open are a real Codex run (usage limit until 3 October), a login that expires mid-session, what the usage-limit `status` reads once exhausted, and approvals for Codex and Antigravity. One page comparing them on: headless mode, permission/approval bypass, session-ID resume after process or VM kill, mid-run message injection (stdin vs resumed turn; a release 1 requirement, §5.2), structured event output (also required), how "blocked, needs human" is reported. Also score subscription sign-in for Claude Code and Codex CLI (all {{< status unverified >}}): headless or device-code login, where the token is stored, whether it survives a container restart and a Mac reboot, refresh behaviour inside a container, what happens when two environments share one login, how an expired login or exhausted usage window is signalled, current vendor terms for this kind of use, and whether a run keeps going with no client attached. Pause via SIGSTOP or stop-after-turn is not a resumed session; most CLIs resume only between turns.
 2. **Adopt-or-extend** (value 9, effort 3): decided by desk research, build (D22, §11). Hands-on checks of the unverified claims are optional and only worth doing if a candidate adds Apple Container support or host-routed approvals.

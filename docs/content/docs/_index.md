@@ -9,6 +9,7 @@ Design and reference documentation for workharbor. The project is in the design 
 {{< cards >}}
   {{< card link="design" title="Design" subtitle="Architecture, domain model, security, CLI and delivery plan." icon="book-open" >}}
   {{< card link="threat-model" title="Threat model" subtitle="Assets, trust boundaries, threats, controls and accepted risks." icon="shield-check" >}}
+  {{< card link="spikes" title="Spikes" subtitle="The measured results behind the design." icon="beaker" >}}
   {{< card link="manual" title="Manual" subtitle="Prepare the Mac mini, and the security notes for running agents." icon="book-open" >}}
 {{< /cards >}}
 
