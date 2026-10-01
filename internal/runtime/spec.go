@@ -157,6 +157,12 @@ func (s Spec) CheckMounts(fsys FS, home string) error {
 	return CheckMounts(fsys, home, s.Mounts)
 }
 
+// CheckMountsWithin is CheckMounts that also requires every bind mount to lie
+// inside one of the workspace roots the supervisor owns.
+func (s Spec) CheckMountsWithin(fsys FS, home string, roots []string) error {
+	return CheckMountsWithin(fsys, home, roots, s.Mounts)
+}
+
 func hasAll(drop []string) bool {
 	for _, c := range drop {
 		if strings.EqualFold(c, "ALL") {

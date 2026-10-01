@@ -24,6 +24,7 @@ const (
 	ReasonSecrets       Reason = "secrets directory"
 	ReasonRuntimeSocket Reason = "runtime socket directory"
 	ReasonSystem        Reason = "system directory"
+	ReasonOutsideRoots  Reason = "outside the workspace roots"
 )
 
 // MountError describes a rejected mount source.
@@ -57,6 +58,9 @@ type FS interface {
 	EvalSymlinks(path string) (string, error)
 	// Stat returns file information, following symbolic links.
 	Stat(path string) (fs.FileInfo, error)
+	// ReadDir lists a directory. CheckMount reads it to follow the symbolic
+	// links among the entries of a secrets directory.
+	ReadDir(path string) ([]fs.DirEntry, error)
 	// SameFile reports whether two FileInfo values describe the same file.
 	SameFile(a, b fs.FileInfo) bool
 }
@@ -73,7 +77,9 @@ var secretsUnderHome = []string{
 	".docker",
 	".config/gh",
 	".config/gcloud",
+	".config/op",
 	".netrc",
+	".gitconfig",
 	".git-credentials",
 	".npmrc",
 	".pypirc",
@@ -81,6 +87,7 @@ var secretsUnderHome = []string{
 	".claude",
 	".codex",
 	"Library/Keychains",
+	"Library/Containers",
 	"Library/Group Containers",    // holds the 1Password agent socket
 	"Library/Application Support", // browser cookies and other apps' stored logins
 }
@@ -96,8 +103,17 @@ var (
 // every user or every volume; systemTrees are rejected with everything below.
 var (
 	systemRoots = []string{"/", "/Users", "/Users/Shared", "/home", "/private", "/var", "/private/var", "/private/var/folders", "/tmp", "/private/tmp", "/Volumes", "/Library"}
-	systemTrees = []string{"/etc", "/private/etc", "/System", "/dev", "/proc", "/sys", "/boot", "/root", "/private/var/root"}
+	systemTrees = []string{"/etc", "/private/etc", "/System", "/dev", "/proc", "/sys", "/boot", "/root", "/private/var/root", "/Library/Keychains", "/private/var/db"}
+
+	// outsideHomeTrees are rejected with everything below them unless the path
+	// lies inside the home directory: another disk can hold a copy of the home
+	// directory, and $TMPDIR holds other programs' files. A home directory on
+	// such a volume still works.
+	outsideHomeTrees = []string{"/Volumes", "/private/var/folders"}
 )
+
+// maxSecretEntries bounds how many entries of one secrets directory are read.
+const maxSecretEntries = 4096
 
 // CheckMount reports whether source may be bind-mounted into an agent
 // environment. The runtime accepts any host path, so the adapter calls this
@@ -160,8 +176,15 @@ func CheckMount(fsys FS, home, source string) error {
 			return reject(ReasonSystem)
 		}
 	}
+	if !ids.within(resolved, realHome) {
+		for _, tree := range outsideHomeTrees {
+			if ids.within(resolved, tree) {
+				return reject(ReasonSystem)
+			}
+		}
+	}
 	for _, rel := range secretsUnderHome {
-		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
+		for _, target := range protectedTargets(fsys, filepath.Join(realHome, rel)) {
 			if ids.overlaps(resolved, target) {
 				return reject(ReasonSecrets)
 			}
@@ -187,16 +210,44 @@ func CheckMount(fsys FS, home, source string) error {
 // CheckMounts checks every bind mount and returns all rejections joined. A
 // mount without a Kind is a bind mount.
 func CheckMounts(fsys FS, home string, mounts []Mount) error {
+	return CheckMountsWithin(fsys, home, nil, mounts)
+}
+
+// CheckMountsWithin is CheckMounts with a second layer: when roots are given,
+// a bind mount must also lie inside one of them, the workspace roots the
+// supervisor owns (design §7.4, threat model T2). The deny-list comes first,
+// so a root never widens it. Without roots only the deny-list applies.
+func CheckMountsWithin(fsys FS, home string, roots []string, mounts []Mount) error {
 	var errs []error
 	for _, m := range mounts {
 		if m.Kind == MountVolume {
 			continue // a named volume is not a host path
 		}
-		if err := CheckMount(fsys, home, m.Source); err != nil {
+		err := CheckMount(fsys, home, m.Source)
+		if err == nil && len(roots) > 0 {
+			err = withinRoots(fsys, roots, m.Source)
+		}
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// withinRoots reports ReasonOutsideRoots unless the resolved source is a root
+// or lies below one. A root that cannot be examined holds nothing.
+func withinRoots(fsys FS, roots []string, source string) error {
+	resolved, err := fsys.EvalSymlinks(filepath.Clean(source))
+	if err != nil {
+		return &MountError{Source: source, Reason: ReasonUnresolvable, Err: err}
+	}
+	ids := &identities{fsys: fsys, info: map[string]fs.FileInfo{}}
+	for _, root := range roots {
+		if r, err := fsys.EvalSymlinks(filepath.Clean(root)); err == nil && ids.within(resolved, r) {
+			return nil
+		}
+	}
+	return &MountError{Source: source, Resolved: resolved, Reason: ReasonOutsideRoots}
 }
 
 // withResolved returns a path and, when it is a symbolic link that resolves,
@@ -208,6 +259,39 @@ func withResolved(fsys FS, path string) []string {
 		return []string{path}
 	}
 	return []string{path, resolved}
+}
+
+// protectedTargets returns what must stay out of an environment for one
+// secrets path: the path, where it leads if it is a link, and where the
+// symbolic links among its direct entries lead. GNU stow links
+// ~/.ssh/id_ed25519 into ~/keys when ~/.ssh is a real directory, so mounting
+// ~/keys would hand the key over. Only one level is followed, and hard links
+// are not seen.
+func protectedTargets(fsys FS, path string) []string {
+	targets := withResolved(fsys, path)
+	for _, dir := range targets {
+		info, err := fsys.Stat(dir)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		entries, err := fsys.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for i, e := range entries {
+			if i >= maxSecretEntries {
+				break
+			}
+			if e.Type()&fs.ModeSymlink == 0 {
+				continue
+			}
+			entry := filepath.Join(dir, e.Name())
+			if resolved, err := fsys.EvalSymlinks(entry); err == nil {
+				targets = append(targets, resolved)
+			}
+		}
+	}
+	return targets
 }
 
 // fold normalizes a path for comparison: cleaned and lower-cased.

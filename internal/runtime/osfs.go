@@ -17,3 +17,6 @@ func (OSFS) Stat(path string) (fs.FileInfo, error) { return os.Stat(path) }
 
 // SameFile implements FS.
 func (OSFS) SameFile(a, b fs.FileInfo) bool { return os.SameFile(a, b) }
+
+// ReadDir implements FS.
+func (OSFS) ReadDir(path string) ([]fs.DirEntry, error) { return os.ReadDir(path) }

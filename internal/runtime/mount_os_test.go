@@ -112,8 +112,9 @@ func TestCheckMountResolvesAHomeThatIsALink(t *testing.T) {
 }
 
 func TestCheckMountRejectsAUnixSocket(t *testing.T) {
-	// A short path, because a unix socket path is limited to about 100 bytes.
-	dir, err := os.MkdirTemp("", "wh")
+	// A short path, because a unix socket path is limited to about 100 bytes,
+	// and under /tmp, because the user's $TMPDIR is rejected (#58).
+	dir, err := os.MkdirTemp("/tmp", "wh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,5 +247,26 @@ func TestCheckMountComparesCaseVariantsOnTheRealFilesystem(t *testing.T) {
 		} else if got := reasonOf(t, err); got != want {
 			t.Errorf("CheckMount(%q) reason = %q, want %q", source, got, want)
 		}
+	}
+}
+
+// #58: GNU stow links ~/.ssh/id_ed25519 into ~/keys when ~/.ssh is a real
+// directory, so mounting ~/keys must be refused.
+func TestStowStyleSymlinkedKeyOnTheRealFilesystem(t *testing.T) {
+	home := realDir(t)
+	mkdirs(t, filepath.Join(home, ".ssh"), filepath.Join(home, "keys"), filepath.Join(home, "other"))
+	if err := os.WriteFile(filepath.Join(home, "keys", "id_ed25519"), []byte("key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, filepath.Join(home, "keys", "id_ed25519"), filepath.Join(home, ".ssh", "id_ed25519"))
+
+	if got := reasonOf(t, CheckMount(OSFS{}, home, filepath.Join(home, "keys"))); got != ReasonSecrets {
+		t.Errorf("the directory the stowed key points into: reason %q, want %q", got, ReasonSecrets)
+	}
+	if got := reasonOf(t, CheckMount(OSFS{}, home, filepath.Join(home, "keys", "id_ed25519"))); got != ReasonSecrets {
+		t.Errorf("the key file: reason %q, want %q", got, ReasonSecrets)
+	}
+	if err := CheckMount(OSFS{}, home, filepath.Join(home, "other")); err != nil {
+		t.Errorf("an unrelated directory: %v", err)
 	}
 }

@@ -89,6 +89,34 @@ func (f *fakeFS) Stat(path string) (fs.FileInfo, error) {
 	return fakeInfo{name: filepath.Base(resolved), mode: f.nodes[strings.ToLower(resolved)], id: id}, nil
 }
 
+// ReadDir lists the direct children of a directory, in the case they were
+// stored (lower).
+func (f *fakeFS) ReadDir(path string) ([]fs.DirEntry, error) {
+	resolved, err := f.EvalSymlinks(path)
+	if err != nil {
+		return nil, err
+	}
+	dir := strings.ToLower(resolved)
+	var out []fs.DirEntry
+	for p, mode := range f.nodes {
+		if p != dir && filepath.Dir(p) == dir {
+			out = append(out, fakeEntry{name: filepath.Base(p), mode: mode})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
+	return out, nil
+}
+
+type fakeEntry struct {
+	name string
+	mode fs.FileMode
+}
+
+func (e fakeEntry) Name() string               { return e.name }
+func (e fakeEntry) IsDir() bool                { return e.mode.IsDir() }
+func (e fakeEntry) Type() fs.FileMode          { return e.mode.Type() }
+func (e fakeEntry) Info() (fs.FileInfo, error) { return fakeInfo{name: e.name, mode: e.mode}, nil }
+
 func (f *fakeFS) SameFile(a, b fs.FileInfo) bool {
 	ia, okA := a.(fakeInfo)
 	ib, okB := b.(fakeInfo)
@@ -152,6 +180,20 @@ func testFS() *fakeFS {
 	f.link("/work/app", "/Users/me/src/app")
 	f.link("/work/loop-a", "/work/loop-b")
 	f.link("/work/loop-b", "/work/loop-a")
+
+	// #58: stow links a key into the real ~/.ssh, and other locations.
+	f.dir("/Users/me/keys")
+	f.file("/Users/me/keys/id_ed25519")
+	f.file("/Users/me/keys/notes.txt")
+	f.link("/Users/me/.ssh/id_stow", "/Users/me/keys/id_ed25519")
+	f.dir("/Users/me/other-keys")
+	f.dir("/Users/me/.config/op")
+	f.dir("/Users/me/Library/Containers/com.example.app")
+	f.file("/Users/me/.gitconfig")
+	f.dir("/Library/Keychains")
+	f.dir("/private/var/db/dslocal")
+	f.dir("/Volumes/Backup/Users/me")
+	f.dir("/private/var/folders/xx/T/other")
 	return f
 }
 
@@ -163,8 +205,6 @@ func TestCheckMount(t *testing.T) {
 	}{
 		{"project directory", "/Users/me/src/app", ""},
 		{"another user's project is outside our concern", "/Users/other/src", ""},
-		{"temp directory below /private/var", "/private/var/folders/xx/T/proj", ""},
-		{"temp directory through the /var link", "/var/folders/xx/T/proj", ""},
 		{"link to a project", "/work/app", ""},
 		{"directory below home that is not a secret", "/Users/me/.config/other", ""},
 		{"directory below Library that is not Keychains", "/Users/me/Library/Preferences", ""},
@@ -206,6 +246,19 @@ func TestCheckMount(t *testing.T) {
 		{"/Volumes", "/Volumes", ReasonSystem},
 		{"/Library", "/Library", ReasonSystem},
 		{"/home", "/home", ReasonSystem},
+
+		// #58
+		{"the directory a stowed key points into", "/Users/me/keys", ReasonSecrets},
+		{"the stowed key's target file", "/Users/me/keys/id_ed25519", ReasonSecrets},
+		{"a sibling of the key's directory", "/Users/me/other-keys", ""},
+		{"1Password CLI config", "/Users/me/.config/op", ReasonSecrets},
+		{"app containers", "/Users/me/Library/Containers/com.example.app", ReasonSecrets},
+		{"the git config file", "/Users/me/.gitconfig", ReasonSecrets},
+		{"system keychains", "/Library/Keychains", ReasonSystem},
+		{"the system database", "/private/var/db/dslocal", ReasonSystem},
+		{"a backup disk", "/Volumes/Backup/Users/me", ReasonSystem},
+		{"the user's TMPDIR", "/private/var/folders/xx/T/other", ReasonSystem},
+		{"the user's TMPDIR through the /var link", "/var/folders/xx/T/proj", ReasonSystem},
 
 		{"relative path", "src/app", ReasonNotAbsolute},
 		{"empty path", "", ReasonNotAbsolute},
@@ -460,5 +513,49 @@ func TestCheckMountComparesByFileIdentity(t *testing.T) {
 				t.Errorf("CheckMount(%q) reason = %q, want %q (%v)", tc.source, got, tc.want, err)
 			}
 		})
+	}
+}
+
+// #58: mounts may be limited to the workspace roots the supervisor owns.
+func TestCheckMountsWithinRoots(t *testing.T) {
+	fsys := testFS()
+	mounts := func(paths ...string) []Mount {
+		var out []Mount
+		for _, p := range paths {
+			out = append(out, Mount{Kind: MountBind, Source: p, Target: "/work"})
+		}
+		return out
+	}
+	roots := []string{"/Users/me/src"}
+
+	if err := CheckMountsWithin(fsys, testHome, roots, mounts("/Users/me/src/app")); err != nil {
+		t.Errorf("a mount inside a root: %v", err)
+	}
+	if err := CheckMountsWithin(fsys, testHome, roots, mounts("/work/app")); err != nil {
+		t.Errorf("a link into a root is judged by where it leads: %v", err)
+	}
+	err := CheckMountsWithin(fsys, testHome, roots, mounts("/Users/me/other-keys"))
+	var me *MountError
+	if !errors.As(err, &me) || me.Reason != ReasonOutsideRoots || !errors.Is(err, ErrForbiddenMount) {
+		t.Errorf("a mount outside every root = %v, want ReasonOutsideRoots", err)
+	}
+	// The deny-list stays first: a root that covers a secret does not widen it.
+	err = CheckMountsWithin(fsys, testHome, []string{"/Users/me"}, mounts("/Users/me/.ssh"))
+	if !errors.As(err, &me) || me.Reason != ReasonSecrets {
+		t.Errorf("a secret inside a root = %v, want ReasonSecrets", err)
+	}
+	// A root is a directory, not a prefix of a name.
+	err = CheckMountsWithin(fsys, testHome, []string{"/Users/me/src/ap"}, mounts("/Users/me/src/app"))
+	if !errors.As(err, &me) || me.Reason != ReasonOutsideRoots {
+		t.Errorf("a name that merely starts like a root = %v, want ReasonOutsideRoots", err)
+	}
+	// No roots: only the deny-list applies; volumes are not mounts.
+	if err := CheckMountsWithin(fsys, testHome, nil, append(mounts("/Users/me/src/app"), Mount{Kind: MountVolume, Source: "cache"})); err != nil {
+		t.Errorf("without roots: %v", err)
+	}
+	// Every violation is reported.
+	err = CheckMountsWithin(fsys, testHome, roots, mounts("/Users/me/other-keys", "/Users/me/.ssh"))
+	if err == nil || len(strings.Split(err.Error(), "\n")) != 2 {
+		t.Errorf("both violations must be joined: %v", err)
 	}
 }
