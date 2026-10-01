@@ -6,7 +6,7 @@ EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/
 
 .DEFAULT_GOAL := build
 
-.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
+.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -83,6 +83,20 @@ commitlint:
 # Regenerate CHANGELOG.md from Conventional Commits (git-cliff via npx).
 changelog:
 	npx --yes git-cliff@2 --output CHANGELOG.md
+
+# Run what CI runs beyond make check, before a branch is merged or rebased into
+# main: the docs build, spelling (typos), links (lychee, online, as CI does),
+# secrets (gitleaks over the history being merged, as CI scans it) and the
+# workflows (actionlint). typos and lychee come from Homebrew
+# (brew install typos-cli lychee); the rest run through pinned `go run`.
+TYPOS_VERSION := 1.50.3
+check-ci: docs
+	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
+	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
+	typos --config typos.toml .
+	lychee --config lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
+	go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
+	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 # Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
 docs:
