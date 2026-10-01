@@ -63,6 +63,9 @@ const (
 // untrusted data. A Decision fails closed: only an answered allow permits
 // anything (see Allows).
 type Decision struct {
+	// Version is the Decision's version: the store saves with compare-and-swap
+	// on it, so an answer and an expiry cannot both win (design §5.4).
+	Version  int64
 	ID       ID
 	TaskID   ID
 	RunID    ID // the run that raised it; empty for a review Decision
@@ -85,6 +88,8 @@ type Decision struct {
 	AnsweredBy string // the actor who answered
 
 	SupersededBy ID // the Decision raised again after a restart
+
+	events []Event // recorded changes, taken by TakeEvents
 }
 
 // NewDecision describes a Decision to raise.
@@ -166,6 +171,10 @@ func Raise(spec NewDecision) (*Decision, error) {
 		d.Timeout = timeout
 		d.Deadline = spec.Now.Add(timeout)
 	}
+	d.record(EventDecisionRaised, DecisionRaised{
+		ID: d.ID, RunID: d.RunID, Kind: d.Kind, Blocking: d.Blocking, Subject: d.Subject,
+		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline,
+	}, spec.Now)
 	return d, nil
 }
 
@@ -193,10 +202,30 @@ func (d *Decision) RaisesGuidance() bool {
 
 // move changes the status through the transition table. Every status change
 // goes through it, so none can skip the table.
-func (d *Decision) move(to DecisionStatus) error {
+func (d *Decision) move(to DecisionStatus, at time.Time) error {
 	if !d.Status.CanTransition(to) {
 		return conflict(RuleTransition, "decision %s: illegal transition %s -> %s", d.ID, d.Status, to)
 	}
+	from := d.Status
 	d.Status = to
+	switch to {
+	case DecisionExpired:
+		d.record(EventDecisionExpired, StateChanged{Object: "decision", ID: d.ID, From: string(from), To: string(to)}, at)
+	case DecisionSuperseded:
+		d.record(EventDecisionSuperseded, StateChanged{Object: "decision", ID: d.ID, From: string(from), To: string(to)}, at)
+	}
 	return nil
+}
+
+func (d *Decision) record(kind EventKind, payload any, at time.Time) {
+	d.events = append(d.events, newEvent(d.TaskID, kind, payload, at))
+}
+
+// TakeEvents returns the events the changes since the last call produced and
+// forgets them. The store writes the new state and these events in one
+// transaction (design §5.4).
+func (d *Decision) TakeEvents() []Event {
+	ev := d.events
+	d.events = nil
+	return ev
 }

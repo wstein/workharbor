@@ -59,7 +59,7 @@ func (d *Decision) Respond(r Response) error {
 		return ErrDecisionTime
 	}
 	if !d.Deadline.IsZero() && !r.At.Before(d.Deadline) {
-		if err := d.move(DecisionExpired); err != nil {
+		if err := d.move(DecisionExpired, r.At); err != nil {
 			return err
 		}
 		return ErrDecisionExpired
@@ -68,7 +68,7 @@ func (d *Decision) Respond(r Response) error {
 		return ErrDecisionOption
 	}
 
-	if err := d.move(DecisionAnswered); err != nil {
+	if err := d.move(DecisionAnswered, r.At); err != nil {
 		return err
 	}
 	at := r.At
@@ -76,8 +76,13 @@ func (d *Decision) Respond(r Response) error {
 	d.AnsweredBy = r.By
 	d.Reason = r.Reason
 	d.Answer = r.Option
+	var mismatch bool
 	if d.SHA != "" && r.Option == AnswerAllow && r.SHA != d.SHA {
 		d.Answer = AnswerDeny
+		mismatch = true
+	}
+	d.record(EventDecisionAnswered, AnswerRecorded{ID: d.ID, Answer: d.Answer, By: r.By, Reason: d.Reason, SHA: r.SHA, At: r.At}, r.At)
+	if mismatch {
 		return ErrSHAMismatch
 	}
 	return nil
@@ -89,7 +94,7 @@ func (d *Decision) Expire(now time.Time) bool {
 	if d.Status != DecisionOpen || d.Deadline.IsZero() || now.Before(d.Deadline) {
 		return false
 	}
-	return d.move(DecisionExpired) == nil
+	return d.move(DecisionExpired, now) == nil
 }
 
 // Supersede marks an open Decision superseded because the supervisor
@@ -102,7 +107,7 @@ func (d *Decision) Supersede() error {
 	if d.RunID == "" {
 		return ErrNotRunBound
 	}
-	return d.move(DecisionSuperseded)
+	return d.move(DecisionSuperseded, time.Time{})
 }
 
 // Reraise opens a new Decision with the same ask for the resumed run, with a
@@ -133,6 +138,7 @@ func (d *Decision) Reraise(id ID, now time.Time) (*Decision, error) {
 	}
 	n.InputTruncated = d.InputTruncated
 	d.SupersededBy = id
+	d.record(EventDecisionReraised, Reraised{ID: d.ID, NewID: id}, now)
 	return n, nil
 }
 

@@ -45,6 +45,9 @@ const (
 
 // Task is the unit of work: an issue, instructions, decisions and results.
 type Task struct {
+	// Version is the aggregate's version: the store saves with
+	// compare-and-swap on it, so two writers cannot both win (design §5.4).
+	Version   int64
 	ID        ID
 	Repo      string
 	Issue     string
@@ -95,12 +98,3 @@ const (
 	CIPassed  CIState = "passed"
 	CIFailed  CIState = "failed"
 )
-
-// Event is an append-only record: the audit trail, UI feed and CLI stream.
-type Event struct {
-	ID      ID
-	TaskID  ID
-	Kind    string
-	Payload []byte
-	At      time.Time
-}

@@ -179,7 +179,7 @@ func TestStatusMovesThroughTheTable(t *testing.T) {
 	for _, from := range allDecisionStatuses {
 		for _, to := range allDecisionStatuses {
 			d := &Decision{ID: "d1", Status: from}
-			err := d.move(to)
+			err := d.move(to, time.Time{})
 			if from.CanTransition(to) {
 				if err != nil || d.Status != to {
 					t.Errorf("%s -> %s: err %v, status %s", from, to, err, d.Status)

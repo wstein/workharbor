@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Rules of design §4.1 that couple the task, run and environment machines.
 const (
@@ -29,6 +32,8 @@ type TaskAggregate struct {
 	// Candidates are the prepared revisions, oldest first. The last one is the
 	// current revision.
 	Candidates []*ReviewCandidate
+
+	events []Event // recorded changes, taken by TakeEvents
 }
 
 // NewTaskAggregate returns an aggregate for task with nothing attached yet.
@@ -38,6 +43,46 @@ func NewTaskAggregate(task Task) *TaskAggregate {
 
 // AddEnvironment registers an environment the task's runs may use.
 func (a *TaskAggregate) AddEnvironment(e *Environment) { a.Envs[e.ID] = e }
+
+// TakeEvents returns the events the changes since the last call produced and
+// forgets them. The store writes the new state and these events in one
+// transaction (design §5.4).
+func (a *TaskAggregate) TakeEvents() []Event {
+	ev := a.events
+	a.events = nil
+	return ev
+}
+
+func (a *TaskAggregate) record(kind EventKind, payload any) {
+	a.events = append(a.events, newEvent(a.Task.ID, kind, payload, time.Time{}))
+}
+
+func (a *TaskAggregate) moveRun(run *Run, to RunState) error {
+	from := run.State
+	if err := run.Transition(to); err != nil {
+		return err
+	}
+	a.record(EventRunState, StateChanged{Object: "run", ID: run.ID, From: string(from), To: string(to)})
+	return nil
+}
+
+func (a *TaskAggregate) moveEnv(env *Environment, to EnvState) error {
+	from := env.State
+	if err := env.Transition(to); err != nil {
+		return err
+	}
+	a.record(EventEnvState, StateChanged{Object: "environment", ID: env.ID, From: string(from), To: string(to)})
+	return nil
+}
+
+func (a *TaskAggregate) moveTask(to TaskState) error {
+	from := a.Task.State
+	if err := a.Task.Transition(to); err != nil {
+		return err
+	}
+	a.record(EventTaskState, StateChanged{Object: "task", ID: a.Task.ID, From: string(from), To: string(to)})
+	return nil
+}
 
 func (a *TaskAggregate) run(id ID) (*Run, error) {
 	for _, r := range a.Runs {
@@ -98,6 +143,7 @@ func (a *TaskAggregate) StartRun(run *Run) error {
 	run.TaskID = a.Task.ID
 	run.State = RunStarting
 	a.Runs = append(a.Runs, run)
+	a.record(EventRunStarted, RunStarted{RunID: run.ID, EnvID: run.EnvID})
 	return nil
 }
 
@@ -115,7 +161,7 @@ func (a *TaskAggregate) Pause(runID ID) error {
 	if env.State != EnvRunning {
 		return conflict(RuleEnvRunning, "run %s cannot be paused: its environment %s is %s", run.ID, env.ID, env.State)
 	}
-	return run.Transition(RunPaused)
+	return a.moveRun(run, RunPaused)
 }
 
 // Resume starts a paused or interrupted run again, which relaunches the agent
@@ -135,7 +181,7 @@ func (a *TaskAggregate) Resume(runID ID) error {
 	if env.State != EnvRunning {
 		return conflict(RuleEnvRunning, "run %s cannot resume: its environment %s is %s", run.ID, env.ID, env.State)
 	}
-	return run.Transition(RunStarting)
+	return a.moveRun(run, RunStarting)
 }
 
 // StopEnvironment stops an environment. It is refused while a run in it is
@@ -150,7 +196,7 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 			return conflict(RuleEnvInUse, "environment %s cannot be stopped: run %s is %s", envID, r.ID, r.State)
 		}
 	}
-	return env.Transition(EnvStopped)
+	return a.moveEnv(env, EnvStopped)
 }
 
 // PinRevision records a prepared revision: the commit SHA that cleanup pinned
@@ -170,6 +216,7 @@ func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (*ReviewCandid
 	}
 	c := &ReviewCandidate{TaskID: a.Task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending}
 	a.Candidates = append(a.Candidates, c)
+	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha})
 	return c, nil
 }
 
@@ -193,6 +240,7 @@ func (a *TaskAggregate) RecordCI(sha string, state CIState) error {
 	for _, c := range a.Candidates {
 		if c.SHA == sha {
 			c.CI = state
+			a.record(EventCIRecorded, CIRecorded{SHA: sha, State: state})
 			return nil
 		}
 	}
@@ -234,7 +282,7 @@ func (a *TaskAggregate) MarkReady(requireCI bool) error {
 		}
 		return conflict(RuleCIPassed, "%s", msg)
 	}
-	return a.Task.Transition(TaskReadyForReview)
+	return a.moveTask(TaskReadyForReview)
 }
 
 func orPending(s CIState) CIState {
