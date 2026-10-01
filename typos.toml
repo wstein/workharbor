@@ -1,0 +1,8 @@
+# Spell checker settings for typos (.github/workflows/docs-quality.yml).
+[files]
+extend-exclude = [
+  "LICENSE",            # EUPL text, with its own spelling
+  "CODE_OF_CONDUCT.md", # third-party text
+  "CHANGELOG.md",       # generated
+  "go.sum",
+]
