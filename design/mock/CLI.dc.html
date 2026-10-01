@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>whr CLI</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 900px; height: 640px; box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #07111f; border: 1px solid #1f3556; color: #c7d3e6; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px">
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: #0a1322; border-bottom: 1px solid #1f3556; color: #9fb3c8; font-size: 12px">
+    <span>whr on mac-mini</span><span>zsh</span>
+  </div>
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 20px 24px; display: flex; flex-direction: column; gap: 4px; line-height: 1.55; white-space: pre; overflow: hidden">
+<div><span style="color: #5eead4">$</span> whr ls</div>
+<div style="color: #6b819e">ID    STATE              ISSUE  TITLE                                    AGE</div>
+<div>t-15  <span style="color: #fbbf24">awaiting_guidance</span>  #15    Egress allowlist proxy                   18m</div>
+<div>t-16  <span style="color: #f87171">auth_expired     </span>  #16    Audit log export                         31m</div>
+<div>t-12  <span style="color: #60a5fa">running          </span>  #12    Add run interrupted state                42m</div>
+<div>t-11  <span style="color: #60a5fa">running          </span>  #11    Policy table: table-driven tests          9m</div>
+<div>t-9   <span style="color: #5eead4">ready_for_review </span>  #9     Reconciler: orphaned runs                 2h</div>
+<div>t-18  <span style="color: #9fb3c8">queued           </span>  #18    Persistence semantics                     4m</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr inbox</div>
+<div><span style="color: #fbbf24">1</span>  question  t-15  Allow proxy.golang.org and sum.golang.org in the default allowlist?</div>
+<div><span style="color: #60a5fa">2</span>  approval  t-12  Add the dependency golang.org/x/sync?</div>
+<div><span style="color: #5eead4">3</span>  review    t-9   Reconciler: orphaned runs (CI passed for 3c71a9e)</div>
+<div><span style="color: #f87171">4</span>  login     t-16  Claude Code login expired (run r-91 paused, log in again in the web UI)</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr approve 1 --option allow-both-log</div>
+<div><span style="color: #4ade80">ok</span>  decision d-31 answered, run r-88 resumed</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr say t-12 "prefer the standard library where you can"</div>
+<div><span style="color: #4ade80">ok</span>  instruction delivered at the next turn</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr wait t-15 --for decision; echo $?</div>
+<div>6</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr ssh --config &gt;&gt; ~/.ssh/config <span style="color: #6b819e"># VS Code and JetBrains connect through it</span></div>
+<div><span style="color: #5eead4">$</span> <span style="color: #9fb3c8">_</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

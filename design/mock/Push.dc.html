@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone push</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 640px; box-sizing: border-box; padding: 56px 16px 24px; display: flex; flex-direction: column; gap: 12px; background: #060d18; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <div style="text-align: center; display: flex; flex-direction: column; gap: 4px; padding-bottom: 18px">
+    <span style="font-size: 56px; font-weight: 500; letter-spacing: -0.02em">10:02</span>
+    <span style="color: #9fb3c8">Thursday, 1 October</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 18px; background: #14233b">
+    <div style="display: flex; justify-content: space-between; align-items: center; color: #9fb3c8; font-size: 12px"><span style="display: flex; align-items: center; gap: 8px"><svg viewBox="0 0 64 64" width="16" height="16" aria-hidden="true"><g fill="none" stroke="{{accent}}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/></g></svg>workharbor via ntfy</span><span>now</span></div>
+    <div style="font-weight: 600">Task t-15 needs you</div>
+    <div style="color: #c7d3e6">question · blocking</div>
+    <div style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">Tap to open in workharbor</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 18px; background: #14233b">
+    <div style="display: flex; justify-content: space-between; align-items: center; color: #9fb3c8; font-size: 12px"><span style="display: flex; align-items: center; gap: 8px"><svg viewBox="0 0 64 64" width="16" height="16" aria-hidden="true"><g fill="none" stroke="{{accent}}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/></g></svg>workharbor via ntfy</span><span>31m ago</span></div>
+    <div style="font-weight: 600">Task t-16 paused</div>
+    <div style="color: #c7d3e6">auth_expired</div>
+    <div style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">Tap to open in workharbor</div>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+  <div style="color: #6b819e; font-size: 12px; line-height: 1.5; text-align: center">Task ID, event kind and a link only. No issue text, no code, no approve button. The link opens over your VPN.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":390,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#5eead4' };
+  }
+}
+</script>
+</body>
+</html>

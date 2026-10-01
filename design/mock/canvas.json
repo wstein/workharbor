@@ -1,0 +1,27 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-01T01:40:00Z" },
+  "title": "workharbor App Mock",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1360, "h": 900, "title": "Harbor overview", "is_interactive": true },
+    "Task.dc.html": { "x": 1440, "y": 0, "w": 1360, "h": 1000, "title": "Task detail", "is_interactive": true },
+    "Inbox.dc.html": { "x": 2880, "y": 0, "w": 1360, "h": 900, "title": "Inbox", "is_interactive": true },
+    "Mobile.dc.html": { "x": 0, "y": 1120, "w": 390, "h": 844, "title": "Phone inbox", "is_interactive": true },
+    "CLI.dc.html": { "x": 470, "y": 1120, "w": 900, "h": 640, "title": "whr CLI" },
+    "Push.dc.html": { "x": 1870, "y": 1120, "w": 390, "h": 640, "title": "Phone push (ntfy)" },
+    "Onboarding.dc.html": { "x": 0, "y": 2084, "w": 1360, "h": 900, "title": "Onboarding wizard", "is_interactive": true }
+  },
+  "order": ["Main.dc.html", "Task.dc.html", "Inbox.dc.html", "Mobile.dc.html", "CLI.dc.html", "Push.dc.html", "Onboarding.dc.html"],
+  "notes": {
+    "title": { "x": 0, "y": -260, "text": "workharbor: web UI and whr CLI mock, with example data", "kind": "title1", "maxW": 4240 },
+    "phone": { "x": 1450, "y": 1120, "w": 340, "text": "Phone view puts decisions first. Answering from the phone resumes the agent. Medium term this becomes an installable PWA with Web Push.", "fill": "teal", "size": "m" },
+    "cli": { "x": 1450, "y": 1330, "w": 340, "text": "Every action in the web UI has a whr command. Exit code 6 means a task needs human input.", "fill": "blue", "size": "m" },
+    "push": { "x": 2290, "y": 1120, "w": 340, "text": "ntfy push: task ID, event kind and a link only. Never issue text or code, and no approve button. Approvals stay behind your login.", "fill": "purple", "size": "m" },
+    "v0": { "x": 2290, "y": 1330, "w": 340, "text": "Marked after v0: pause and take over, open in editor, new task and cancel in the UI. In v0 the web UI only answers Decisions.", "fill": "orange", "size": "m" },
+    "login": { "x": 2290, "y": 1540, "w": 340, "text": "New: auth_expired shows as a blocking Decision. The run pauses, the workspace and session are kept, and you log in again from the UI.", "fill": "red", "size": "m" },
+    "onboarding": { "x": 1450, "y": 2084, "w": 340, "text": "First-run wizard: sign in, connect the forge, choose subscription or API key, check the host (unverified items are marked), set up ntfy.", "fill": "green", "size": "m" }
+  },
+  "designSystems": []
+}

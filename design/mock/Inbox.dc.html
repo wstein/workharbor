@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+<div style="width: 1360px; height: 900px; box-sizing: border-box; display: flex; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <aside style="width: 232px; box-sizing: border-box; padding: 22px 14px; display: flex; flex-direction: column; gap: 28px; background: #0a1322; border-right: 1px solid #1f3556">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><g fill="none" stroke="{{accent}}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/><path d="M6 43L12 37L18 43"/><path d="M46 43L52 37L58 43"/></g></svg>
+      <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em">workharbor</span>
+    </div>
+    <nav style="display: flex; flex-direction: column; gap: 2px">
+      <a href="Main.dc.html" style="display: flex; align-items: center; padding: 9px 12px; border-radius: 8px; color: #c7d3e6">Harbor</a>
+      <a href="Inbox.dc.html" style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-radius: 8px; background: #13294a; font-weight: 500">Inbox <span style="min-width: 20px; padding: 1px 6px; box-sizing: border-box; text-align: center; border-radius: 999px; background: {{ badge.bg }}; color: {{ badge.fg }}; font-size: 12px; font-weight: 600">{{ openCount }}</span></a>
+      <div style="padding: 9px 12px; color: #9fb3c8">Tasks</div>
+      <div style="padding: 9px 12px; color: #9fb3c8">Workspaces</div>
+      <div style="padding: 9px 12px; color: #9fb3c8">Policy</div>
+      <div style="padding: 9px 12px; color: #9fb3c8">Audit log</div>
+    </nav>
+  </aside>
+
+  <main style="flex-grow: 1; min-width: 0; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 22px">
+    <header style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.015em">Inbox</h1>
+      <div style="color: #9fb3c8">{{ subtitle }}</div>
+    </header>
+
+    <div style="flex-grow: 1; min-height: 0; display: flex; gap: 24px">
+      <section style="width: 420px; flex: none; display: flex; flex-direction: column; gap: 10px">
+        <sc-for list="{{ items }}" as="it" hint-placeholder-count="3">
+          <button onClick="{{ it.pick }}" style="text-align: left; display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; border: 1px solid {{ it.border }}; background: {{ it.bg }}; color: #e6edf7; font: inherit; cursor: pointer; opacity: {{ it.opacity }}">
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <span style="padding: 3px 9px; border-radius: 999px; background: {{ it.kindBg }}; color: {{ it.kindFg }}; font-size: 12px; font-weight: 600">{{ it.kind }}</span>
+              <span style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">{{ it.ref }}</span>
+            </div>
+            <div style="font-weight: 500; line-height: 1.4">{{ it.title }}</div>
+            <div style="color: #9fb3c8; font-size: 12px">{{ it.status }}</div>
+          </button>
+        </sc-for>
+      </section>
+
+      <section style="flex-grow: 1; min-width: 0; padding: 26px; border-radius: 12px; border: 1px solid #1f3556; background: #0f2038; display: flex; flex-direction: column; gap: 18px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="color: #9fb3c8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">{{ cur.kindLong }}</span>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600; line-height: 1.35">{{ cur.title }}</h2>
+        </div>
+        <div style="line-height: 1.6; color: #c7d3e6">{{ cur.body }}</div>
+        <div style="padding: 14px 16px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; font-size: 13px; line-height: 1.6; color: #9fb3c8">{{ cur.context }}</div>
+        <sc-if value="{{ cur.isOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span style="font-weight: 600">Your answer</span>
+            <sc-for list="{{ cur.options }}" as="opt" hint-placeholder-count="3">
+              <button onClick="{{ opt.pick }}" style="display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid {{ opt.border }}; background: {{ opt.bg }}; color: #e6edf7; font: inherit; cursor: pointer"><span style="width: 14px; height: 14px; flex: none; border-radius: 999px; border: 2px solid {{ opt.ring }}; background: {{ opt.dot }}"></span>{{ opt.label }}</button>
+            </sc-for>
+            <div style="display: flex; gap: 10px; margin-top: 4px">
+              <button onClick="{{ cur.submit }}" style="padding: 11px 20px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ cur.submitOpacity }}">Send answer</button>
+              <span style="align-self: center; color: #6b819e; font-size: 12px">{{ cur.hint }}</span>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ cur.isDone }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div style="padding: 14px 16px; border-radius: 10px; background: #11331f; color: #86efac">Answered: <strong style="color: #ffffff">{{ cur.answerLabel }}</strong>. The agent has been told and continues.</div>
+            <button onClick="{{ cur.undo }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #c7d3e6; font: inherit; cursor: pointer">Change answer</button>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#5eead4';
+    const sel = this.state.sel ?? 0;
+    const picks = this.state.picks ?? {};
+    const done = this.state.done ?? {};
+    const defs = [
+      {
+        kind: 'Question', kindLong: 'Question from the agent', kindBg: '#3a2d0b', kindFg: '#fbbf24', ref: '#15',
+        title: 'Allow proxy.golang.org and sum.golang.org in the default egress allowlist?',
+        body: 'The egress proxy needs to fetch Go modules to run the tests. The default policy blocks everything except the forge, the package registries you configured and the LLM API.',
+        context: 'Task: Egress allowlist proxy · Run r-88 · Claude Code · claude-sonnet-5-5. Blocking: the agent waits for your answer.',
+        options: ['Allow both, and log every request', 'Allow only sum.golang.org', 'Deny for now and ask me per dependency'],
+        hint: 'Sent to the agent as an instruction.',
+      },
+      {
+        kind: 'Approval', kindLong: 'Approval needed by policy', kindBg: '#10294d', kindFg: '#60a5fa', ref: '#12',
+        title: 'Add the dependency golang.org/x/sync?',
+        body: 'The interrupted-state change needs errgroup to stop a run and its log reader together. Adding a dependency is set to ask you.',
+        context: 'Task: Add run interrupted state · go.mod +1 line · BSD-3-Clause · 0 known advisories (unverified).',
+        options: ['Approve', 'Reject and use the standard library'],
+        hint: 'Recorded in the audit log with the commit.',
+      },
+      {
+        kind: 'Review', kindLong: 'Ready for your review', kindBg: '#0f3733', kindFg: '#5eead4', ref: '#9',
+        title: 'Reconciler: mark orphaned runs interrupted',
+        body: 'PR #21 at 3c71a9e: 312 lines added, 41 removed in 9 files. Tests pass (58) and CI passed for this commit. Merging stays with you, on the forge.',
+        context: 'CI result is tied to commit 3c71a9e, the current revision. A newer commit would reset it to pending.',
+        options: ['Mark as reviewed, task completed', 'Request changes'],
+        hint: 'Approving does not merge the pull request.',
+      },
+      {
+        kind: 'Login', kindLong: 'Agent login expired', kindBg: '#3a1518', kindFg: '#f87171', ref: '#16',
+        title: 'Claude Code login expired in ws-4d1c',
+        body: 'The subscription login in this environment can no longer refresh, so run r-91 is paused. The workspace, session and all files are kept. Log in again and the agent continues where it stopped.',
+        context: 'Task: Audit log export · state auth_expired · paused at 09:58. Usage window not affected. A device-code login opens in a new tab.',
+        options: ['Log in again with a device code', 'Cancel the run and keep the workspace'],
+        hint: 'No credentials pass through this page.',
+      },
+    ];
+    const items = defs.map((d, i) => {
+      const isDone = done[i] !== undefined;
+      const on = i === sel;
+      return {
+        kind: d.kind, kindBg: d.kindBg, kindFg: d.kindFg, ref: d.ref, title: d.title,
+        status: isDone ? 'Answered: ' + d.options[done[i]] : 'Waiting for you',
+        bg: on ? '#13294a' : '#0f2038', border: on ? accent : '#1f3556', opacity: isDone ? 0.6 : 1,
+        pick: () => this.setState({ sel: i }),
+      };
+    });
+    const d = defs[sel];
+    const p = picks[sel] ?? null;
+    const isDone = done[sel] !== undefined;
+    const cur = {
+      kindLong: d.kindLong, title: d.title, body: d.body, context: d.context, hint: d.hint,
+      isOpen: !isDone, isDone,
+      answerLabel: isDone ? d.options[done[sel]] : '',
+      submitOpacity: p === null ? 0.4 : 1,
+      options: d.options.map((label, i) => {
+        const on = p === i;
+        return { label, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ picks: Object.assign({}, picks, { [sel]: i }) }) };
+      }),
+      submit: () => { if (p !== null) this.setState({ done: Object.assign({}, done, { [sel]: p }) }); },
+      undo: () => { const next = Object.assign({}, done); delete next[sel]; this.setState({ done: next }); },
+    };
+    const openCount = defs.filter((x, i) => done[i] === undefined).length;
+    return {
+      accent, items, cur, openCount,
+      badge: openCount ? { bg: '#fbbf24', fg: '#1a1305' } : { bg: '#1f3556', fg: '#9fb3c8' },
+      subtitle: openCount ? openCount + ' waiting for you. Agents pause on blocking questions.' : 'All caught up. Agents are working.',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onboarding</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+<div style="width: 1360px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <header style="display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; border-bottom: 1px solid #1f3556; background: #0a1322">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><g fill="none" stroke="{{accent}}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/><path d="M6 43L12 37L18 43"/><path d="M46 43L52 37L58 43"/></g></svg>
+      <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em">workharbor setup</span>
+    </div>
+    <a href="Main.dc.html" style="color: #9fb3c8">Skip for now</a>
+  </header>
+
+  <div style="flex-grow: 1; min-height: 0; display: flex; gap: 40px; padding: 36px 48px; box-sizing: border-box">
+    <nav style="width: 300px; flex: none; display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="6">
+        <button onClick="{{ st.go }}" style="display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid {{ st.border }}; background: {{ st.bg }}; color: {{ st.fg }}; font: inherit; cursor: pointer">
+          <span style="width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: {{ st.dotBg }}; color: {{ st.dotFg }}; font-size: 13px; font-weight: 600">{{ st.mark }}</span>
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ st.title }}</span><span style="font-size: 12px; color: #9fb3c8">{{ st.sub }}</span></span>
+        </button>
+      </sc-for>
+    </nav>
+
+    <main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+      <section style="flex-grow: 1; min-height: 0; padding: 32px; border-radius: 14px; border: 1px solid #1f3556; background: #0f2038; display: flex; flex-direction: column; gap: 20px; overflow: hidden">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="color: #9fb3c8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Step {{ stepNo }} of 6</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.015em">{{ head.title }}</h1>
+          <div style="color: #c7d3e6; line-height: 1.6; max-width: 760px">{{ head.lead }}</div>
+        </div>
+
+        <sc-if value="{{ s0 }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 16px; max-width: 640px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="server" style="font-weight: 500">Server</label>
+              <input id="server" value="https://mac-mini.example.net" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #9fb3c8; font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: #6b819e; font-size: 12px">Reached over your VPN. The API is not exposed publicly.</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="token" style="font-weight: 500">Access token</label>
+              <input id="token" value="{{ token }}" onInput="{{ onToken }}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #e6edf7; font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: #6b819e; font-size: 12px">Release 1 uses a single static token, stored encrypted. OAuth sign-in comes later. The CLI uses the same login: whr login --server &lt;url&gt;.</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s1 }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 16px; max-width: 700px">
+            <div style="display: flex; gap: 10px">
+              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid {{accent}}; background: #13294a"><div style="font-weight: 600">GitHub</div><div style="color: #9fb3c8; font-size: 12px; margin-top: 2px">Bot token, release 1</div></div>
+              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid #1f3556; opacity: 0.55"><div style="font-weight: 600">Gitea · Forgejo · GitLab</div><div style="color: #9fb3c8; font-size: 12px; margin-top: 2px">Later</div></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="repo" style="font-weight: 500">Repository</label>
+              <input id="repo" value="wstein/workharbor" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #e6edf7; font: inherit; font-family: 'IBM Plex Mono', monospace">
+            </div>
+            <div style="padding: 16px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 10px">
+              <span style="font-weight: 600">Limits enforced on the forge, not in prompts</span>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #c7d3e6">
+                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>The bot can push agent/* branches and open pull requests.</div>
+                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>Branch protection requires a human review before merge.</div>
+                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>The bot cannot bypass protection, and merge, tag, release and deploy stay forbidden.</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 12px; max-width: 760px">
+            <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+              <button onClick="{{ m.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 16px; border-radius: 12px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: #e6edf7; font: inherit; cursor: pointer">
+                <span style="width: 16px; height: 16px; margin-top: 3px; flex: none; border-radius: 999px; border: 2px solid {{ m.ring }}; background: {{ m.dot }}"></span>
+                <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">{{ m.title }}</span><span style="color: #c7d3e6; line-height: 1.5">{{ m.text }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ m.note }}</span></span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ isSub }}" hint-placeholder-val="{{ true }}">
+              <div style="padding: 16px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+                <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Sign in to Claude Code</span><span style="color: #9fb3c8; font-size: 12px">Open the link on any device and enter this code. Nothing is typed into this page.</span></div>
+                <span style="padding: 8px 14px; border-radius: 8px; background: #13294a; font-family: 'IBM Plex Mono', monospace; font-size: 18px; letter-spacing: 0.08em">XXXX-0000</span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; max-width: 820px; border: 1px solid #1f3556; border-radius: 12px; overflow: hidden">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) 150px; gap: 14px; align-items: start; padding: 14px 18px; border-bottom: 1px solid #172a48; background: #0b1626">
+                <span style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: {{ c.bg }}; color: {{ c.fg }}; font-size: 12px; font-weight: 600">{{ c.mark }}</span>
+                <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ c.label }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ c.note }}</span></span>
+                <span style="color: {{ c.fg }}; font-size: 13px; text-align: right">{{ c.state }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 14px; max-width: 700px">
+            <sc-for list="{{ providers }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; color: #e6edf7; font: inherit; cursor: pointer">
+                <span style="width: 16px; height: 16px; margin-top: 3px; flex: none; border-radius: 999px; border: 2px solid {{ p.ring }}; background: {{ p.dot }}"></span>
+                <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{ p.title }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ p.note }}</span></span>
+              </button>
+            </sc-for>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="topic" style="font-weight: 500">Topic</label>
+              <input id="topic" value="wh-k7q2m9x4p1d8v3ztn6" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #e6edf7; font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: #6b819e; font-size: 12px">Long and random, kept in the credential service. Subscribe to it in the ntfy app on your phone.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px">
+              <button onClick="{{ sendTest }}" style="padding: 10px 18px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">Send test push</button>
+              <span style="color: {{ testFg }}">{{ testText }}</span>
+            </div>
+            <div style="color: #9fb3c8; font-size: 12px; line-height: 1.6">Pushes carry the task ID, the event kind and a link only. The link opens over your VPN, so keep it on when you are away.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 18px; max-width: 760px">
+            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px 16px; padding: 18px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556">
+              <sc-for list="{{ summary }}" as="r" hint-placeholder-count="5">
+                <span style="color: #9fb3c8">{{ r.k }}</span><span>{{ r.v }}</span>
+              </sc-for>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-weight: 600">Start your first task</span>
+              <div style="padding: 12px 16px; border-radius: 8px; background: #07111f; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace"><span style="color: #5eead4">$</span> whr run https://github.com/wstein/workharbor/issues/15</div>
+              <span style="color: #9fb3c8; font-size: 12px">Then chat with the agent, detach, and wait for your phone to ring. Merge, release and deploy always stay with you.</span>
+            </div>
+          </div>
+        </sc-if>
+      </section>
+
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <button onClick="{{ back }}" style="padding: 11px 20px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #c7d3e6; font: inherit; cursor: pointer; opacity: {{ backOpacity }}">Back</button>
+        <sc-if value="{{ notLast }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ next }}" style="padding: 11px 26px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Continue</button>
+        </sc-if>
+        <sc-if value="{{ isLast }}" hint-placeholder-val="{{ false }}">
+          <a href="Main.dc.html" style="padding: 11px 26px; border-radius: 8px; background: {{accent}}; color: #06231f; font-weight: 600">Open the Harbor</a>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#5eead4';
+    const step = this.state.step ?? 0;
+    const mode = this.state.mode ?? 'sub';
+    const prov = this.state.prov ?? 'self';
+    const sent = !!this.state.sent;
+    const token = this.state.token ?? 'whr_example_token';
+
+    const defs = [
+      { title: 'Sign in', sub: 'Server and access token', lead: 'Connect this browser to your supervisor on the Mac mini. You do this once.' },
+      { title: 'Connect your forge', sub: 'Repository and bot token', lead: 'Agents push branches and open pull requests through a bot identity. What it may do is enforced on the forge.' },
+      { title: 'Agent login', sub: 'Subscription or API key', lead: 'Choose how agents authenticate to the model. You can change this per agent later.' },
+      { title: 'Check the host', sub: 'Runtime and isolation', lead: 'The same checks as whr doctor. Anything not verified yet is marked, not assumed.' },
+      { title: 'Phone notifications', sub: 'ntfy', lead: 'Agents run for 15 to 60 minutes or longer while you are away. Get a push when one needs you.' },
+      { title: 'Ready', sub: 'Summary', lead: 'Your harbor is set up.' },
+    ];
+    const steps = defs.map((d, i) => {
+      const cur = i === step;
+      const done = i < step;
+      return {
+        title: d.title, sub: d.sub,
+        mark: done ? '✓' : String(i + 1),
+        bg: cur ? '#13294a' : 'transparent', border: cur ? accent : 'transparent', fg: cur ? '#ffffff' : '#c7d3e6',
+        dotBg: done ? '#11331f' : (cur ? accent : '#1b2a42'), dotFg: done ? '#4ade80' : (cur ? '#06231f' : '#9fb3c8'),
+        go: () => this.setState({ step: i }),
+      };
+    });
+
+    const modeDefs = [
+      { key: 'sub', title: 'Subscription login', text: 'Use your Claude or ChatGPT plan through the agent CLI. No API key to manage.', note: 'The login lives inside the agent environment, in a dedicated auth folder. It is long-lived, so an accepted risk for a personal, watched setup. Runs pause and ask you when it expires or the usage window runs out.' },
+      { key: 'key', title: 'API key', text: 'The key stays on the host, in the proxy, and is issued per run.', note: 'Stronger isolation: the agent never sees the key. Billed per use.' },
+    ];
+    const modes = modeDefs.map((m) => {
+      const on = m.key === mode;
+      return { title: m.title, text: m.text, note: m.note, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ mode: m.key }) };
+    });
+
+    const ok = { mark: '✓', bg: '#11331f', fg: '#4ade80' };
+    const warn = { mark: '!', bg: '#3a2d0b', fg: '#fbbf24' };
+    const checks = [
+      Object.assign({ label: 'Server reachable, token valid', note: 'Over your VPN.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Container runtime reachable', note: 'Apple Container on the Mac mini.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Forbidden mounts rejected', note: 'Your home folder, ~/.ssh and runtime sockets cannot be mounted into an agent environment.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Default-deny egress through the logging proxy', note: 'Network isolation controls in Apple Container are not verified yet. Run the conformance suite before trusting this.', state: 'Not verified' }, warn),
+      Object.assign({ label: 'Agent session survives a reboot', note: 'The auth folder and detached sessions are checked in the spike.', state: 'Not tested' }, warn),
+      Object.assign({ label: 'Capacity', note: '16 GB host: plan for 4 concurrent environments, 8 is a stretch.', state: '4 slots' }, ok),
+    ];
+
+    const provDefs = [
+      { key: 'self', title: 'Self-hosted ntfy', note: 'Messages stay on your server. Delivery to an iPhone through a self-hosted server is not verified yet.' },
+      { key: 'public', title: 'ntfy.sh', note: 'Easiest to start. A public relay sees the generic message, never issue text or code.' },
+    ];
+    const providers = provDefs.map((p) => {
+      const on = p.key === prov;
+      return { title: p.title, note: p.note, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ prov: p.key, sent: false }) };
+    });
+
+    const summary = [
+      { k: 'Server', v: 'https://mac-mini.example.net' },
+      { k: 'Forge', v: 'GitHub · wstein/workharbor · bot token' },
+      { k: 'Agent login', v: mode === 'sub' ? 'Claude Code · subscription login' : 'API key held in the host proxy' },
+      { k: 'Host checks', v: '4 passed, 2 not verified yet' },
+      { k: 'Notifications', v: (prov === 'self' ? 'Self-hosted ntfy' : 'ntfy.sh') + (sent ? ' · test push sent' : ' · no test push yet') },
+    ];
+
+    return {
+      accent, steps, modes, checks, providers, summary,
+      stepNo: step + 1,
+      head: { title: defs[step].title, lead: defs[step].lead },
+      s0: step === 0, s1: step === 1, s2: step === 2, s3: step === 3, s4: step === 4, s5: step === 5,
+      isSub: mode === 'sub',
+      token,
+      testText: sent ? 'Sent. Check your phone.' : 'Sends a harmless test message.',
+      testFg: sent ? '#4ade80' : '#9fb3c8',
+      notLast: step < 5, isLast: step === 5,
+      backOpacity: step === 0 ? 0.4 : 1,
+      onToken: (e) => this.setState({ token: e.target.value }),
+      sendTest: () => this.setState({ sent: true }),
+      back: () => this.setState({ step: Math.max(0, step - 1) }),
+      next: () => this.setState({ step: Math.min(5, step + 1) }),
+    };
+  }
+}
+</script>
+</body>
+</html>

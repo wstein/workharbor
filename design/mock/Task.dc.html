@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Task detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+<div style="width: 1360px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <header style="display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 32px; border-bottom: 1px solid #1f3556; background: #0a1322">
+    <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+      <div style="display: flex; align-items: center; gap: 8px; color: #9fb3c8; font-size: 13px"><a href="Main.dc.html" style="color: {{accent}}">Harbor</a><span>/</span><span style="font-family: 'IBM Plex Mono', monospace">wstein/workharbor#15</span></div>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em">Egress allowlist proxy: allow the Go module proxy?</h1>
+        <span style="display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: {{ pill.bg }}; color: {{ pill.fg }}; font-size: 12px; font-weight: 600; white-space: nowrap"><span style="width: 6px; height: 6px; border-radius: 999px; background: {{ pill.fg }}"></span>{{ pill.label }}</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px; flex: none">
+      <button onClick="{{ togglePause }}" style="padding: 9px 16px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">{{ pauseLabel }} <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #0f3733; font-size: 10px">after v0</span></button>
+      <button style="padding: 9px 16px; border-radius: 8px; border: 1px solid #1f3556; background: #0f2038; color: #e6edf7; font: inherit; font-weight: 500; cursor: pointer">Open in editor <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f3556; color: #9fb3c8; font-size: 10px">after v0</span></button>
+      <button style="padding: 9px 16px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #f87171; font: inherit; font-weight: 500; cursor: pointer">Cancel task <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f3556; color: #9fb3c8; font-size: 10px">after v0</span></button>
+    </div>
+  </header>
+
+  <div style="flex-grow: 1; min-height: 0; display: flex; gap: 24px; padding: 24px 32px; box-sizing: border-box">
+    <section style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Activity</h2><span style="color: #9fb3c8; font-size: 12px">Claude Code · claude-sonnet-5-5 · run r-88</span></div>
+      <div style="flex-grow: 1; min-height: 0; overflow: hidden; padding: 6px 20px; border: 1px solid #1f3556; border-radius: 12px; background: #0f2038; display: flex; flex-direction: column">
+        <sc-for list="{{ events }}" as="ev" hint-placeholder-count="7">
+          <div style="display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 12px; align-items: start; padding: 11px 0; border-bottom: 1px solid #172a48">
+            <span style="color: #6b819e; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding-top: 2px">{{ ev.time }}</span>
+            <span style="width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; background: {{ ev.dot }}"></span>
+            <div style="min-width: 0; line-height: 1.5; color: {{ ev.fg }}">{{ ev.text }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <label for="say" style="flex-grow: 1; display: flex; align-items: center; padding: 0 14px; border-radius: 10px; background: #0f2038; border: 1px solid #1f3556">
+          <input id="say" value="{{ draft }}" onInput="{{ onDraft }}" placeholder="Tell the agent something, like whr say t-15" style="flex-grow: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: #e6edf7; font: inherit">
+        </label>
+        <button onClick="{{ send }}" style="padding: 0 20px; height: 46px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ sendOpacity }}">Send</button>
+      </div>
+    </section>
+
+    <aside style="width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+      <div style="padding: 18px; border-radius: 12px; background: {{ decision.bg }}; border: 1px solid {{ decision.border }}; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ decision.head }}">{{ decision.title }}</span><span style="color: #9fb3c8; font-size: 12px">question · blocking</span></div>
+        <div style="line-height: 1.5">Allow proxy.golang.org and sum.golang.org in the default egress allowlist?</div>
+        <sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{ options }}" as="opt" hint-placeholder-count="3">
+              <button onClick="{{ opt.pick }}" style="display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 8px; border: 1px solid {{ opt.border }}; background: {{ opt.bg }}; color: #e6edf7; font: inherit; cursor: pointer"><span style="width: 14px; height: 14px; flex: none; border-radius: 999px; border: 2px solid {{ opt.ring }}; background: {{ opt.dot }}"></span>{{ opt.label }}</button>
+            </sc-for>
+          </div>
+          <button onClick="{{ answer }}" style="padding: 10px 16px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ answerOpacity }}">Send answer</button>
+        </sc-if>
+        <sc-if value="{{ answered }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; color: #c7d3e6">You answered: <strong style="color: #ffffff">{{ chosen }}</strong></div>
+        </sc-if>
+      </div>
+
+      <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
+        <span style="font-weight: 600">Review candidate</span>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
+          <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/egress-proxy</span>
+          <span style="color: #9fb3c8">Commit</span><span style="font-family: 'IBM Plex Mono', monospace">8e2f1c4</span>
+          <span style="color: #9fb3c8">Changes</span><span><span style="color: #4ade80; font-family: 'IBM Plex Mono', monospace">+214</span> <span style="color: #f87171; font-family: 'IBM Plex Mono', monospace">-18</span> in 6 files</span>
+          <span style="color: #9fb3c8">Tests</span><span style="color: #4ade80">41 passed</span>
+          <span style="color: #9fb3c8">CI (Drone)</span><span style="color: #4ade80">passed for 8e2f1c4, the current commit</span>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">View diff</button>
+          <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Open PR #22</button>
+        </div>
+        <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Merging stays with you, on the forge.</div>
+      </div>
+
+      <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
+        <span style="font-weight: 600">Workspace ws-2c9e</span>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
+          <span style="color: #9fb3c8">Environment</span><span>Running · Apple Container</span>
+          <span style="color: #9fb3c8">Resources</span><span style="font-family: 'IBM Plex Mono', monospace">2 CPU · 1.4 of 2 GiB</span>
+          <span style="color: #9fb3c8">Lock</span><span style="color: {{ lock.fg }}; font-weight: 500">{{ lock.label }}</span>
+          <span style="color: #9fb3c8">Session</span><span>{{ session }}</span>
+          <span style="color: #9fb3c8">Agent login</span><span>Claude Code · subscription · <span style="color: #4ade80">signed in</span></span>
+          <span style="color: #9fb3c8">Connect</span><span style="font-family: 'IBM Plex Mono', monospace">whr ssh ws-2c9e</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#5eead4';
+    const s = this.state;
+    const paused = !!s.paused;
+    const answered = !!s.answered;
+    const picked = s.picked ?? null;
+    const draft = s.draft ?? '';
+    const extra = s.extra ?? [];
+    const opts = ['Allow both, and log every request', 'Allow only sum.golang.org', 'Deny for now and ask me per dependency'];
+
+    const base = [
+      { time: '09:12', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Task created from issue #15 by you.' },
+      { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started in ws-2c9e (Apple Container, 2 GiB).' },
+      { time: '09:21', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Read design section 7: default-deny egress through a logging proxy.' },
+      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Pushed agent/egress-proxy (8e2f1c4) and opened draft PR #22.' },
+      { time: '09:41', dot: '#fbbf24', fg: '#fde68a', text: 'Asked you: allow proxy.golang.org and sum.golang.org in the default allowlist?' },
+      { time: '09:41', dot: '#a78bfa', fg: '#c7d3e6', text: 'Sent a push to your phone through ntfy: task ID, event kind and a link only. You were detached; the agent kept working until it needed you.' },
+    ];
+    const events = base.slice();
+    let n = 0;
+    const stamp = () => '09:' + String(43 + n++);
+    if (answered) {
+      events.push({ time: stamp(), dot: '#4ade80', fg: '#c7d3e6', text: 'You answered: ' + opts[picked] + '.' });
+      events.push({ time: stamp(), dot: '#60a5fa', fg: '#c7d3e6', text: 'Run resumed. Updating the proxy config and its tests.' });
+    }
+    if (paused) events.push({ time: stamp(), dot: '#fbbf24', fg: '#fde68a', text: 'Paused by you. The workspace lock is yours; the agent will not change files.' });
+    extra.forEach((t) => events.push({ time: stamp(), dot: '#a78bfa', fg: '#e6edf7', text: 'You: ' + t }));
+
+    let pill = { label: 'Awaiting guidance', bg: '#3a2d0b', fg: '#fbbf24' };
+    if (paused) pill = { label: 'Paused by you', bg: '#1b2a42', fg: '#9fb3c8' };
+    else if (answered) pill = { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
+
+    const options = opts.map((label, i) => {
+      const on = picked === i;
+      return {
+        label,
+        bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556',
+        ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent',
+        pick: () => this.setState({ picked: i }),
+      };
+    });
+
+    const decision = answered
+      ? { title: 'Decision answered', head: '#4ade80', bg: '#0f2038', border: '#1f3556' }
+      : { title: 'Needs you', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' };
+
+    return {
+      accent, pill, events, options, decision, draft,
+      open: !answered, answered, chosen: picked === null ? '' : opts[picked],
+      answerOpacity: picked === null ? 0.4 : 1,
+      sendOpacity: draft.trim() ? 1 : 0.4,
+      pauseLabel: paused ? 'Resume agent' : 'Pause and take over',
+      lock: paused ? { label: 'You', fg: '#fbbf24' } : { label: 'Agent', fg: '#60a5fa' },
+      session: paused ? 'You are attached; the agent is paused' : (answered ? 'Detached; the agent is working' : 'Detached; waiting for your answer'),
+      togglePause: () => this.setState({ paused: !paused }),
+      answer: () => { if (picked !== null) this.setState({ answered: true }); },
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      send: () => { const t = draft.trim(); if (t) this.setState({ extra: extra.concat([t]), draft: '' }); },
+    };
+  }
+}
+</script>
+</body>
+</html>
