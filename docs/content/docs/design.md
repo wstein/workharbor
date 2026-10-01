@@ -203,6 +203,23 @@ Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`
 
 Enforcement is outside the agent: forge branch protection, required human review, and a bot identity that cannot bypass them. Approval is per commit SHA (ties to ReviewCandidate). Every approval is a Decision record.
 
+**Agent permission modes.** The agent CLIs have their own coarse modes. In the spike with Claude Code (a fixed allowlist of `Read` and a few harmless shell prefixes) they behaved as follows for a file write:
+
+| Mode | Behaviour |
+| --- | --- |
+| `manual` | Asks (an approval Decision, §4.2) |
+| `acceptEdits` | Writes without asking |
+| `dontAsk` | Denies silently |
+| `plan` | Plans read-only, then asks the human to approve the plan |
+| `auto` | Asked in the one test; what it approves by itself is untested |
+
+Rules for using them:
+
+- Offer them as per-session presets over the action table, never as the policy itself. The table is per action and enforced outside the agent; the modes are coarser and live inside it.
+- `bypassPermissions`, which switches every prompt off, is never offered by default and never outside an isolated environment.
+- A mode is fixed when the agent process starts. Changing it on a running session restarts the process with `--resume` and keeps the session and transcript.
+- Prefix allow rules such as `Bash(ls:*)` do not match a compound command like `a && b`; the CLI asks about the whole command. An allowlist needs a rule for compound commands (match each part, or ask).
+
 ## 7. Security
 
 Threat model and autonomy policy are written before the build.
