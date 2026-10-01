@@ -108,6 +108,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] API-key mode as a full peer (D41, #83): the host-side key proxy that issues a key per run (§7.3) instead of the configuration's key file, spend budgets (#37) and per-key usage (#48)
 - [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
 - [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
+- [ ] Firecracker as a runtime target (#85): a microVM with its own guest kernel per environment, the isolation model of Apple Container, on a Linux host with KVM (remote, or a Linux VM on the Mac if nested virtualization allows it, {{< status unverified >}}). It boots a kernel and a root filesystem rather than an OCI image, so stock and devcontainer images need a conversion or Kata Containers or firecracker-containerd underneath; the spike decides, and the runtime conformance suite is the gate
 - [ ] Antigravity adapter in degraded mode (`agy` print mode, §5.2, §12) and additional runners
 - [ ] Out-of-process adapter plugin loader with conformance checks (§5.5, §7.8)
 - [ ] Drone CI with revision-aware feedback
