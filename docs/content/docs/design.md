@@ -78,6 +78,13 @@ Task, run and environment each get their own small FSM with explicit legal trans
 
 Fields: ID, task, kind (`question | approval | review`), blocking flag, options, created/answered timestamps, answering actor. The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision is open.
 
+**Approvals are live and blocking.** Spike #1 showed the pattern with Claude Code: the agent's permission prompt is routed to the supervisor, which opens an `approval` Decision carrying the tool name and a capped copy of its input. The agent stays blocked until a human answers allow or deny, with an optional reason that is passed back to the agent. Rules:
+
+- **Fail closed.** Deny on timeout (the spike used 10 minutes) and when the supervisor is unreachable.
+- **No silent survival.** A pending approval does not survive a supervisor restart, because the agent process does not. The reconciler marks the run `interrupted` and the ask is raised again on resume.
+- **Plan approval.** In plan mode the agent's `ExitPlanMode` arrives as an approval whose subject is the plan.
+- **Capped input.** Tool inputs in a Decision are capped (the spike used 2,000 characters); the full input stays with the agent. All of it is untrusted data.
+
 ### 4.3 Lifecycle rules
 
 - IDE/SSH disconnect does not pause the agent or stop the environment.
