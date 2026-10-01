@@ -86,18 +86,18 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 `make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
 
-Never push: pushing is human-in-the-loop work (see the workflow below). Merge only as that workflow describes, and not into `main` otherwise. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
+Push only when the human asks for it in the session; never push on your own initiative, and a request covers that push only. Merge into `main` only as the workflow below describes. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
-**Issues.** When work on an issue is done (its closing commit is on `main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
+**Issues.** When work on an issue is done (its closing commit is pushed to `origin/main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
 
 **Working on an issue, start to finish.** Several sessions share this repository, so each issue gets its own worktree and branch, and finishes the same way:
 
 1. **Start.** Read the issue and the design sections it names, then `git worktree add ../workharbor-<topic> -b <type>/<topic> main` and work only there. Do not switch branches in the shared checkout.
 2. **Commit** as above: atomic commits by topic, specification (design) before code, each with its trailers (`Refs: #N`, and `Closes: #N` on the last one). Run `make check` first, and confirm each commit landed (`git log -1`).
-3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then, in the shared checkout, `git checkout main` and `git merge --ff-only <branch>`.
-4. **Tick and comment.** Update the issue as described under **Issues**, with a comment that names the commits and anything left undone.
+3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then fast-forward `main` from the worktree without switching branches: `git -C <shared checkout> merge --ff-only <branch>` (the shared checkout stays on `main`). If another session moved `main` meanwhile, rebase again and retry.
+4. **Comment.** Add a comment to the issue that names the commits and anything left undone.
 5. **Clean up.** `git worktree remove <path>`, then delete the branch. If `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`.
-6. **Hand over; the human pushes.** Pushing is human-in-the-loop work: agents never push, even at the end of an issue. It publishes the commits, runs CI and closes the issue through its `Closes:` trailer, so the human reviews first. Leave `main` fast-forwarded and say what is ready: the commits (`git log --oneline origin/main..main`) and the issues that will close.
+6. **Hand over.** Leave `main` fast-forwarded and say what is ready: the commits (`git log --oneline origin/main..main`) and the issues that will close. Pushing publishes the commits, runs CI and closes the issue through its `Closes:` trailer, so push only when the human asks (`git fetch` first, and never force). After a push, tick the criteria as described under **Issues**.
 
 ## License
 
