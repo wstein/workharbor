@@ -33,7 +33,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | Capacity | **4 concurrent instances realistic, 8 a stretch goal** (see §8) |
 | Overhead | Light operational and resource cost |
 | Access | VPN, temporary SSH, VS Code / JetBrains via SSH; code-server optional and later |
-| Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: one) |
+| Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: GitHub, D15) |
 | CI | Drone medium/long term, behind an adapter |
 | Auth | OAuth for the five forges (release 1: static token) |
 
@@ -55,6 +55,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D12 | **Release 1 starts with a CLI-only vertical slice:** `whr run <issue-url>`, then `whr logs -f`, `whr say` and `whr cancel`, and `whr approve` pushes the prepared `agent/*` branch and opens the PR, with Claude Code in Apple Container on one forge. The web UI, PWA, SSH, notifications and the Codex CLI adapter follow in the rest of release 1 | Proves the service layer, adapters and policy end to end before any UI, and gives D8 a working API to check against |
 | D13 | **Task state machine** (§4.1): a terminal `failed` state, rework from `ready_for_review` back to `running`, and `awaiting_guidance` only for blocking Decisions raised by a live run, so "Ready to push?" leaves the task in `ready_for_review` | Gives exit code 10 a state, makes the rework path explicit, and keeps the review gate from looking like a stalled run in the inbox |
 | D14 | **CLI framework: `spf13/cobra`**, without viper (issue #46). The root command silences cobra's own error and usage output, sets stdout and stderr explicitly, and `main` maps errors to `internal/exitcode` (§9.2) | The design needs generated shell completion with dynamic task and workspace IDs and a noun-verb grammar with aliases (§9.1, §9.2); cobra provides both and can generate the CLI reference. Rated above kong, urfave/cli and the standard library `flag` |
+| D15 | **Release 1 forge: GitHub, through a GitHub App installation** (issue #6). The App is the bot identity: its installation tokens last about an hour and are scoped to the repositories it is installed on and to the permissions it asks for (contents and pull requests write, issues write, metadata read). Its private key lives in the credential service. A ruleset on the default branch requires a human review and lists no bypass for the App, so it cannot merge (§6). Gitea, Forgejo and GitLab follow behind the same forge adapter | The repository and its CI already live on GitHub, so the limits can be checked against a real ruleset at once. Short-lived, repo-scoped tokens match §7.3 better than a long-lived PAT, and an App is a separate identity that commits and audit entries can name. That an App's installation token cannot bypass a ruleset without being listed as a bypass actor is **unverified** until #27 tests it |
 
 ## 4. Domain model
 
@@ -506,7 +507,7 @@ Push when a blocking Decision stops a task: the value of a supervisor is not hav
 First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI is scoped to remote control of running tasks (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
 
 1. **Sign in.** Server URL (reached over the VPN, never public) and the single static access token, stored encrypted. OAuth sign-in comes later (§10).
-2. **Connect the forge.** One forge in release 1 through a bot token, GitHub or Gitea (§10, §12 item 6); the others later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
+2. **Connect the forge.** GitHub in release 1 (D15): install the workharbor GitHub App on the chosen repositories; Gitea, Forgejo and GitLab later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
 3. **Choose the agent login.** `subscription` (device-code sign-in; nothing typed into the web page) or `api-key` (kept in the host proxy), per §5.2. The subscription option states the accepted risk of §7.3.
 4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (spike #2 measured Apple Container isolation and egress; reboot survival is still unverified, §12).
 5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
@@ -514,7 +515,7 @@ First run is a guided sequence of six steps. The steps are the contract; the sur
 
 ## 10. Forge, CI and identity integrations
 
-Keep Git transport separate from forge API operations. Release 1 ships **one forge** (Gitea or GitHub) with a PAT or bot token and no manual-handoff half-state.
+Keep Git transport separate from forge API operations. Release 1 ships **one forge, GitHub** (D15), through a GitHub App installation, with no manual-handoff half-state.
 
 | Provider | Login | Automation |
 | --- | --- | --- |
@@ -574,7 +575,7 @@ Ordered by what is cheap and blocks the most work.
     - [ ] Repositories mounted from the host (§4.5): fetching an agent's branch into a supervisor-owned repository, partial `.git` mounts, and bind-mount speed with `node_modules`-style trees and much larger repositories
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
 5. **Persistence semantics** (§4.4).
-6. **Primary forge and login provider** for release 1.
+6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
 8. Confirm stack (§3 D3, D8) and finalize the `whr` grammar.
 
@@ -595,7 +596,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
 - [ ] Installable PWA as the phone client: web app manifest and a service worker for the app shell, so the remote-control UI (§9.3) installs to the Home Screen. Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and uses per-device revocable tokens
 - [ ] Single static-token login
-- [ ] One forge via PAT/bot token
+- [ ] GitHub through a GitHub App installation (D15)
 - [ ] Runtime and forge adapters as interfaces with one implementation each
 
 **Explicitly out of release 1:** code-server, JetBrains validation, OAuth, editor launch and takeover in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
