@@ -53,6 +53,20 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 			return
 		}
 		f.logLine(id, strings.Join(req.Cmd, " "))
+		if f.OnExec != nil {
+			if out, errText, code, ok := f.OnExec(id, req.Cmd); ok {
+				for len(out) > 0 {
+					n := min(len(out), 32<<10)
+					send(runtime.Stdout, string(out[:n]))
+					out = out[n:]
+				}
+				if errText != "" {
+					send(runtime.Stderr, errText)
+				}
+				st.code = code
+				return
+			}
+		}
 		switch req.Cmd[0] {
 		case "echo":
 			send(runtime.Stdout, strings.Join(req.Cmd[1:], " ")+"\n")

@@ -154,8 +154,9 @@ func (p *pubRig) allow(sha string) error {
 	return p.svc.AnswerDecision(bg, "review-1", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: sha, At: p.clock.now})
 }
 
-func (p *pubRig) remoteHas(branch string) bool {
-	_, err := p.forge.BranchSHA(bg, "", branch)
+// remoteHas reports whether the remote has the topic branch.
+func (p *pubRig) remoteHas() bool {
+	_, err := p.forge.BranchSHA(bg, "", "agent/topic")
 	return err == nil
 }
 
@@ -182,7 +183,7 @@ func TestPrepareStopsTheEnvironmentThenPinsAndAsks(t *testing.T) {
 	if p.checks != 1 {
 		t.Errorf("the checks ran %d times, want once", p.checks)
 	}
-	if p.remoteHas("agent/topic") {
+	if p.remoteHas() {
 		t.Error("nothing may be pushed before the human approves")
 	}
 }
@@ -241,7 +242,7 @@ func TestPublishNeedsTheApprovalOfExactlyThePinnedCommit(t *testing.T) {
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotApproved) {
 		t.Errorf("a denied decision = %v, want ErrNotApproved", err)
 	}
-	if p.remoteHas("agent/topic") || len(p.forge.PRs) != 0 {
+	if p.remoteHas() || len(p.forge.PRs) != 0 {
 		t.Fatal("a refused publish reached the forge")
 	}
 	_ = prepared
@@ -382,7 +383,7 @@ func TestCancelledTaskDoesNotPublish(t *testing.T) {
 	if !errors.Is(err, forge.ErrNotApproved) {
 		t.Errorf("the guard with a cancelled task's approval = %v, want ErrNotApproved", err)
 	}
-	if p.remoteHas("agent/topic") {
+	if p.remoteHas() {
 		t.Fatal("a cancelled task's commit reached the remote")
 	}
 }

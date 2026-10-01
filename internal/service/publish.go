@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
@@ -35,6 +36,14 @@ type PublishConfig struct {
 	// ForgeRepo is the repository name on the forge ("owner/name").
 	ForgeRepo string
 	Deepen    hostgit.DeepenOptions
+	// Workspaces lets Prepare and OpenCopy export an agent's branch out of its
+	// environment as a bundle (D42). Without it only the older fetch from a
+	// stopped environment's checkout works.
+	Workspaces *Workspaces
+	// MaxBundle and ExportTimeout bound an export; they default to
+	// DefaultMaxBundle and DefaultExportTimeout.
+	MaxBundle     int64
+	ExportTimeout time.Duration
 }
 
 // Publisher prepares topics for push and publishes the approved ones. The
@@ -49,8 +58,12 @@ func NewPublisher(s *Service, cfg PublishConfig) *Publisher { return &Publisher{
 
 // Request names the task's checkout.
 type Request struct {
-	Task     domain.ID
-	Checkout string // the agent's checkout on the host
+	Task domain.ID
+	// Agent, when set, exports the branch out of the agent's environment as a
+	// bundle (D42, §4.5): the host runs git in no workspace and the environment
+	// keeps running. Checkout is then unused.
+	Agent    domain.ID
+	Checkout string // the agent's checkout on the host: the older path, for a topic clone
 	Branch   string // the topic branch, agent/<topic>
 	Target   string // the branch the topic is rebased onto
 	// DecisionID is the ID for the "Ready to push?" Decision.
@@ -82,18 +95,34 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 		return hostgit.Prepared{}, ErrNotReadyYet
 	}
 	last := runs[len(runs)-1]
-	if err := s.stopEnvironment(ctx, req.Task, last.EnvID); err != nil {
-		return hostgit.Prepared{}, err
-	}
-
-	if _, err := p.cfg.Repo.FetchBranch(ctx, req.Checkout, req.Branch); err != nil {
-		return hostgit.Prepared{}, err
-	}
-	if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
-		return hostgit.Prepared{}, err
-	}
-	if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
-		return hostgit.Prepared{}, err
+	_, pushed := agg.LastPushed()
+	if req.Agent != "" {
+		// The bundle's prerequisite is a commit of the target's history, so the
+		// target comes first. A rebase before the export is only for the first
+		// round: later rounds are fast-forwards and pushed commits are never
+		// rewritten (§4.5).
+		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
+			return hostgit.Prepared{}, err
+		}
+		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
+			return hostgit.Prepared{}, err
+		}
+		if err := p.exportBranch(ctx, req, last.ID, !pushed); err != nil {
+			return hostgit.Prepared{}, err
+		}
+	} else {
+		if err := s.stopEnvironment(ctx, req.Task, last.EnvID); err != nil {
+			return hostgit.Prepared{}, err
+		}
+		if _, err := p.cfg.Repo.FetchBranch(ctx, req.Checkout, req.Branch); err != nil {
+			return hostgit.Prepared{}, err
+		}
+		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
+			return hostgit.Prepared{}, err
+		}
+		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
+			return hostgit.Prepared{}, err
+		}
 	}
 	if _, err := p.cfg.Cache.EnsureMergeBase(ctx, p.cfg.Repo, req.Target, req.Branch, p.cfg.Deepen); err != nil {
 		return hostgit.Prepared{}, err
@@ -249,6 +278,20 @@ type EditorCopy struct {
 // fast-forward; with the environment running it offers the last copy as stale,
 // and fails if there is none yet (ErrEnvRunning).
 func (p *Publisher) OpenCopy(ctx context.Context, req Request, dir string) (EditorCopy, error) {
+	if req.Agent != "" {
+		// From a bundle the copy is fresh whether the environment runs or not.
+		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
+			return EditorCopy{}, err
+		}
+		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
+			return EditorCopy{}, err
+		}
+		if err := p.exportBranch(ctx, req, "", false); err != nil {
+			return EditorCopy{}, err
+		}
+		warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)
+		return EditorCopy{Path: dir, Warnings: warn}, err
+	}
 	agg, err := p.svc.store.LoadTask(ctx, req.Task)
 	if err != nil {
 		return EditorCopy{}, err
