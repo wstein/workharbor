@@ -9,12 +9,12 @@ A checklist for the host, in order. Each step says why. Steps marked **unverifie
 
 ## 1. Hardware and macOS
 
-- An Apple-silicon Mac mini. **Recommended: M6 with 32 GB memory and 512 GB storage**, for about ten concurrent agent environments; **24 GB / 512 GB** on a budget, for about six. The minimum is 16 GB (about four environments) and 256 GB plus an external SSD (D32, [design §8](../design.md#8-resources)).
+- An Apple-silicon Mac mini. **Recommended: M6 with 32 GB memory and 512 GB storage**, for about ten concurrent agent environments. **On a budget: 16 GB**, for about four, with 512 GB or with 256 GB plus an external SSD. 24 GB / 512 GB sits in between, for about six (D32, [design §8](../design.md#8-resources)).
 
   | M6 configuration | US price, 1 October 2026 | Environments (estimate) |
   | --- | --- | --- |
-  | 16 GB / 256 GB | $899 | about 4 (storage tight) |
-  | 16 GB / 512 GB | $1,099 | about 4 |
+  | 16 GB / 256 GB, budget with an external SSD | $899 | about 4 |
+  | 16 GB / 512 GB, budget | $1,099 | about 4 |
   | 24 GB / 512 GB | $1,299 | about 6 |
   | **32 GB / 512 GB** | **$1,499** | **about 10** |
 
