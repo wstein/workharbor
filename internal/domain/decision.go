@@ -77,7 +77,8 @@ type Decision struct {
 
 	Status     DecisionStatus
 	CreatedAt  time.Time
-	Deadline   time.Time // zero means none; every approval has one
+	Timeout    time.Duration // how long it waits; kept so a re-raise uses the same
+	Deadline   time.Time     // zero means none; every approval has one
 	AnsweredAt *time.Time
 	Answer     string
 	Reason     string // optional, passed back to the agent
@@ -107,6 +108,9 @@ var (
 	ErrDecisionKind = errors.New("unknown decision kind")
 	ErrDecisionRun  = errors.New("a review decision has no run, and any other decision needs one")
 	ErrDecisionSHA  = errors.New("a review decision needs the commit SHA it is about")
+
+	ErrDecisionTimeout = errors.New("a decision timeout cannot be negative")
+	ErrDecisionTime    = errors.New("a time is needed and it is zero")
 )
 
 // Raise creates an open Decision. It caps the input, gives an approval a
@@ -115,6 +119,12 @@ var (
 func Raise(spec NewDecision) (*Decision, error) {
 	if spec.ID == "" || spec.TaskID == "" {
 		return nil, ErrDecisionID
+	}
+	if spec.Timeout < 0 {
+		return nil, ErrDecisionTimeout
+	}
+	if spec.Now.IsZero() {
+		return nil, ErrDecisionTime
 	}
 	switch spec.Kind {
 	case DecisionQuestion, DecisionApproval:
@@ -153,6 +163,7 @@ func Raise(spec NewDecision) (*Decision, error) {
 		timeout = DefaultApprovalTimeout
 	}
 	if timeout > 0 {
+		d.Timeout = timeout
 		d.Deadline = spec.Now.Add(timeout)
 	}
 	return d, nil

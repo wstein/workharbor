@@ -133,3 +133,43 @@ func TestRaisesGuidance(t *testing.T) {
 		})
 	}
 }
+
+// #49: an approval must never be raised without a deadline.
+func TestRaiseRejectsNegativeTimeoutAndZeroNow(t *testing.T) {
+	for _, kind := range []DecisionKind{DecisionApproval, DecisionQuestion} {
+		spec := NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: kind, Timeout: -time.Hour, Now: t0}
+		if _, err := Raise(spec); !errors.Is(err, ErrDecisionTimeout) {
+			t.Errorf("%s with a negative timeout: error = %v, want ErrDecisionTimeout", kind, err)
+		}
+		spec = NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: kind, Now: time.Time{}}
+		if _, err := Raise(spec); !errors.Is(err, ErrDecisionTime) {
+			t.Errorf("%s with a zero Now: error = %v, want ErrDecisionTime", kind, err)
+		}
+	}
+}
+
+func TestEveryApprovalHasADeadline(t *testing.T) {
+	for _, timeout := range []time.Duration{0, time.Nanosecond, time.Minute, 24 * time.Hour} {
+		d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
+		if err != nil {
+			t.Fatalf("timeout %v: %v", timeout, err)
+		}
+		if d.Deadline.IsZero() || !d.Deadline.After(t0) {
+			t.Errorf("timeout %v: deadline = %v, want a deadline after the start", timeout, d.Deadline)
+		}
+	}
+}
+
+// A year-late allow must not count, whatever timeout the approval was raised with.
+func TestAYearLateAllowNeverCounts(t *testing.T) {
+	for _, timeout := range []time.Duration{0, time.Minute} {
+		d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = d.Respond(Response{By: "werner", Option: AnswerAllow, At: t0.AddDate(1, 0, 0)})
+		if !errors.Is(err, ErrDecisionExpired) || d.Allows("") {
+			t.Errorf("timeout %v: late allow gave %v, allows %v", timeout, err, d.Allows(""))
+		}
+	}
+}
