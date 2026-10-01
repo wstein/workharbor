@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D34 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D35 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks; hardened host git with checkout checks, the repository cache and the editor copy; redaction at ingest; runtime and agent contracts with fakes and conformance suites; the SQLite store; the service layer and DB-first reconciler; the Claude Code adapter in degraded mode; the `whr-shim` launcher; `whr version` | `internal/domain`, `internal/policy`, `internal/runtime`, `internal/hostgit`, `internal/redact`, `internal/agent`, `internal/store`, `internal/service`, `cmd/whr`, `cmd/whr-shim`; issues #4, #8, #15–#23, #45, #49–#52, #55–#60, #63, #64; open follow-ups #66–#69; #25 partly |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container; host cancel with `whr-shim`; approvals over stdio (evidence pending) | Issues #1, #2, #10 and #7 (reopened); results in §4.2, §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
@@ -82,6 +82,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D32 | **Recommended host: Mac mini M6 with 32 GB memory and 512 GB storage; on a budget 16 GB** (§2, §8), with 512 GB, or with 256 GB plus an external SSD for repositories, workspaces and backups; 24 GB / 512 GB sits in between. Spend on memory before storage, and add an external SSD rather than paying for 1 TB internal. The M5 Pro is not worth its premium for API-backed agents | US Apple Store prices on 1 October 2026: M6 16 GB / 256 GB $899, 16 / 512 $1,099, 24 / 512 $1,299, 32 / 512 $1,499, 24 GB / 1 TB $1,599, 32 GB / 1 TB $1,799; M5 Pro 24 / 512 $1,699 (Germany: M6 from €1,049). Each memory step costs $200 and buys about four more concurrent environments; memory cannot be upgraded later, while storage can be added externally. That makes 32 GB about $150 per environment against about $215 for 24 GB and $275 for 16 / 512. Environment counts are estimates until issue #39; whether Apple Container's storage can move to an external SSD is **unverified** (issue #54) |
 | D33 | **Web app previews go through a preview proxy in `whr`** (§9.3, issue #72). When an agent runs a dev server in its environment, `whr` proxies a preview of one declared port through the proxy sidecar, the only container on both networks, and `tailscale serve` (or the router-VPN forwarder of D29) carries it to the developer. Each preview has its own origin, never the web UI's; it needs a per-preview token, lives only while the environment runs, forwards only to that port, and passes WebSocket upgrades for hot reload | The developer's phone or laptop cannot reach an `--internal` environment, and should not; the supervisor already knows which task, environment and port belong together. A preview serves untrusted, agent-written code in the developer's browser, so sharing the UI's origin would let it read the session and answer Decisions. Port publishing straight to the host, Traefik or Caddy, Tailscale inside each guest, and Tailscale Funnel were rejected: they bypass the supervisor, need routing data it already has, put a key in the guest, or publish unreviewed code. That the sidecar can relay inbound traffic to the internal network is **unverified** (issues #69, #72) |
 | D34 | **Dogfood first: workharbor develops workharbor as early as possible** (§13). A Dogfood milestone holds the smallest set that runs one real workharbor issue through `whr` end to end: `whr serve` and the core commands (#24), the Claude Code adapter in degraded mode (#25, `dontAsk` with a fixed allowlist; host approvals follow with #7), the Apple Container adapter (#26), push after approval (#27), the reconciler fixes (#66) and the adapter's permission fix (#68), on a Mac mini M4 with 16 GB (#73). The supervisor always runs an **installed binary built from an approved commit on `main`** (`make install` until the first release, then the tap), never a topic's working tree. From the first green run, new issues start with `whr run`, and each manual workaround becomes an issue labelled `dogfood` | Today the human supervises three agent sessions by hand: relaying messages, pushing, ticking criteria, keeping the board, and catching duplicated work and a leaked token, which are all workharbor features. Degraded mode works now and takes #7 off the critical path; the push stays human-approved (D18). Agents working on workharbor edit the code that constrains them, including the policy, so the running supervisor must come from reviewed code. A host process runtime was rejected: it would be faster but would normalise unisolated agents |
+| D35 | **The phone and a 12-inch tablet are the primary clients** (§9.6). The phone serves short, urgent interactions (answer, approve a tool, stop a run, glance at the harbor); the tablet replaces the laptop for reviewing a topic before push, supervising several tasks and planning with an agent. One server-rendered UI with a phone layout and a two-pane tablet layout, installed as a PWA. Approving "Ready to push?" asks for a passkey on any device | The developer detaches while agents work and returns when one needs them (§1), which happens away from a desk; a 12-inch tablet with a keyboard covers the review that the phone's screen cannot. Publishing code is the one irreversible step a lost or unlocked phone could take, so it alone needs a fresh check of who is approving. That a passkey prompt works in an installed PWA on both devices is **unverified** |
 
 ## 4. Domain model
 
@@ -642,6 +643,46 @@ First run is a guided sequence of six steps. The steps are the contract; the sur
 4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (spike #2 measured Apple Container isolation and egress; reboot survival is still unverified, §12).
 5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
 6. **Ready.** Summary of what was configured and what is not yet verified, then the first command: `whr run <issue-url>`.
+
+### 9.6 Mobile clients: phone and 12-inch tablet
+
+The phone and a 12-inch tablet are the **primary** clients (D35); a laptop browser is a larger tablet. Both run the installed PWA (§13) over the VPN and its forwarder (D29). The phone is for short, urgent interactions; the tablet replaces the laptop for reviewing and longer supervision.
+
+**Phone** (about 6 inches, one hand, seconds to a few minutes):
+
+| # | Use case | Needs | When |
+| --- | --- | --- | --- |
+| P1 | A push says a task needs you; open it straight in the inbox | ntfy link to the Decision (§9.4), deep links, fast cold start | R1 |
+| P2 | Answer a question: pick a fixed option or type or dictate a short answer | Option buttons, a text field, idempotent submit (§9.2) | R1 |
+| P3 | Approve or deny a tool request before its deadline | Tool name, capped input, countdown to the fail-closed deadline (§4.2), one tap each | R1 |
+| P4 | Handle an expired login or exhausted quota | "Signed in again, resume", "Resume at reset" or "Cancel" (D23); the vendor's sign-in link or device code | R1 |
+| P5 | Check the harbor at a glance | Counts by state, tasks needing you first, usage-window meter (§5.7) | R1 |
+| P6 | Send the running agent a short instruction | Message box, delivery shown as injected, next turn or resumed turn | R1 |
+| P7 | Stop a runaway run | Pause or cancel per task; `kill-all` behind a confirmation | R1 |
+| P8 | Start a task from an issue seen elsewhere | Share an issue link to the PWA (Web Share Target), pick the agent | Later |
+| P9 | Follow the live transcript for a minute | Tail mode, the last events only, collapsed tool output | R1 |
+
+**12-inch tablet** (landscape, often with a keyboard, minutes to an hour):
+
+| # | Use case | Needs | When |
+| --- | --- | --- | --- |
+| T1 | Review a topic and answer "Ready to push?" | Commit list, side-by-side diff in landscape, checks and CI for the pinned SHA (§4.5) | R1 |
+| T2 | Supervise several tasks at once | Two panes: task list and transcript; switch tasks without losing scroll | R1 |
+| T3 | Plan with the agent, approve its plan | Long messages with a hardware keyboard, plan approval (§6) | R1 |
+| T4 | Preview the web app the agent builds next to its transcript | The preview on its own origin (D33) in a second window or Split View | R1 Complete |
+| T5 | Start tasks deliberately | Pick an issue, the agent, the permission mode and instructions | R1 |
+| T6 | Watch usage and budgets, and the planning board | Usage per task and window (§5.7), a link to the forge board (D30) | R1 Complete |
+| T7 | Audit and housekeeping | Event log, purge a transcript with its confirmation (§5.4) | R1 Complete |
+| T8 | Take over or edit by hand | Editor launch on the supervisor's copy (§4.5) | Later |
+
+**What follows for the web UI and the PWA:**
+
+- **Two layouts from one server-rendered page** (D8): a single column with actions in thumb reach on the phone; two panes in landscape on the tablet, with keyboard shortcuts and pointer hover. No separate mobile app (§13).
+- **Touch first:** targets of at least 44 points, no hover-only controls, readable with large text settings, light and dark.
+- **Flaky networks:** live views resume with `Last-Event-ID` (§9.2), and every answer carries an idempotency key, so a double tap or a retry never answers twice.
+- **Approving a push needs a fresh check of who you are:** on any device, "Ready to push?" asks for a passkey (WebAuthn) before it accepts the approval, because a phone left unlocked must not be able to publish code. Tool approvals and questions do not, as their deadlines are short and they publish nothing.
+- **Per-device tokens**, revocable from the other device (§13), and a short idle timeout on the phone.
+- **Nothing sensitive leaves the server:** notifications stay generic (§9.4); diffs and transcripts are rendered on demand and not cached for offline use by the service worker.
 
 ## 10. Forge, CI and identity integrations
 
