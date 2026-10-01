@@ -1,10 +1,15 @@
 package domain
 
+import "fmt"
+
 // Rules of design §4.1 that couple the task, run and environment machines.
 const (
 	RuleOneLiveRun Rule = "one-live-run" // a task has at most one run that is not stopped or failed
 	RuleEnvRunning Rule = "env-running"  // a run is created or started only in a running environment
 	RuleEnvInUse   Rule = "env-in-use"   // an environment is not stopped under a starting or running run
+	RuleStoppedRun Rule = "stopped-run"  // ready_for_review needs the task's latest run to be stopped
+	RulePinnedSHA  Rule = "pinned-sha"   // ready_for_review needs a pinned commit
+	RuleCIPassed   Rule = "ci-passed"    // where CI is required, the current commit must have passed
 )
 
 // TaskAggregate is a task with the runs, environments and review candidates
@@ -125,4 +130,89 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 		}
 	}
 	return env.Transition(EnvStopped)
+}
+
+// PinRevision records a prepared revision: the commit SHA that cleanup pinned
+// on a branch, before it is pushed (design §4.5). It becomes the current
+// revision. A SHA is pinned once.
+func (a *TaskAggregate) PinRevision(branch, sha string) (*ReviewCandidate, error) {
+	if sha == "" {
+		return nil, conflict(RulePinnedSHA, "a revision needs a commit SHA")
+	}
+	for _, c := range a.Candidates {
+		if c.SHA == sha {
+			return nil, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
+		}
+	}
+	c := &ReviewCandidate{TaskID: a.Task.ID, Branch: branch, SHA: sha, CI: CIPending}
+	a.Candidates = append(a.Candidates, c)
+	return c, nil
+}
+
+// CurrentCandidate returns the current revision, the most recently pinned one,
+// or nil.
+func (a *TaskAggregate) CurrentCandidate() *ReviewCandidate {
+	if len(a.Candidates) == 0 {
+		return nil
+	}
+	return a.Candidates[len(a.Candidates)-1]
+}
+
+// RecordCI stores a pipeline result on the candidate of its own commit. A
+// result for an earlier commit never changes the current revision.
+func (a *TaskAggregate) RecordCI(sha string, state CIState) error {
+	switch state {
+	case CIPending, CIPassed, CIFailed:
+	default:
+		return fmt.Errorf("unknown CI state %q", state)
+	}
+	for _, c := range a.Candidates {
+		if c.SHA == sha {
+			c.CI = state
+			return nil
+		}
+	}
+	return &NotFoundError{Kind: "commit", ID: sha}
+}
+
+// CIPassed reports whether the pipeline passed for the current revision. A pass
+// on an earlier commit does not count.
+func (a *TaskAggregate) CIPassed() bool {
+	c := a.CurrentCandidate()
+	return c != nil && c.CI == CIPassed
+}
+
+// MarkReady moves the task to ready_for_review. It requires that the task's
+// latest run is stopped (not failed, not live) and that a commit SHA is
+// pinned. Where requireCI is set, the current revision must also have passed
+// CI: a pass on an earlier SHA is not enough.
+func (a *TaskAggregate) MarkReady(requireCI bool) error {
+	if len(a.Runs) == 0 {
+		return conflict(RuleStoppedRun, "task %s has no run", a.Task.ID)
+	}
+	if last := a.Runs[len(a.Runs)-1]; last.State != RunStopped {
+		return conflict(RuleStoppedRun, "task %s is not ready: its latest run %s is %s, not stopped", a.Task.ID, last.ID, last.State)
+	}
+	cur := a.CurrentCandidate()
+	if cur == nil || cur.SHA == "" {
+		return conflict(RulePinnedSHA, "task %s is not ready: no commit is pinned", a.Task.ID)
+	}
+	if requireCI && cur.CI != CIPassed {
+		msg := fmt.Sprintf("task %s is not ready: CI is %s for the current commit %s", a.Task.ID, orPending(cur.CI), cur.SHA)
+		for _, c := range a.Candidates[:len(a.Candidates)-1] {
+			if c.CI == CIPassed {
+				msg += fmt.Sprintf(" (it passed for the earlier commit %s, which does not count)", c.SHA)
+				break
+			}
+		}
+		return conflict(RuleCIPassed, "%s", msg)
+	}
+	return a.Task.Transition(TaskReadyForReview)
+}
+
+func orPending(s CIState) CIState {
+	if s == "" {
+		return CIPending
+	}
+	return s
 }

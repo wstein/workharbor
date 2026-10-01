@@ -83,8 +83,17 @@ type ReviewCandidate struct {
 	Branch string
 	SHA    string
 	PRURL  string
-	CI     string
+	CI     CIState // the pipeline result for SHA; empty means pending
 }
+
+// CIState is the result of a CI pipeline for one commit.
+type CIState string
+
+const (
+	CIPending CIState = "pending"
+	CIPassed  CIState = "passed"
+	CIFailed  CIState = "failed"
+)
 
 // Event is an append-only record: the audit trail, UI feed and CLI stream.
 type Event struct {
