@@ -39,7 +39,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Isolated by default"
-    subtitle="Apple Container on an Apple-silicon Mac mini comes first, with default-deny networking and per-run credentials."
+    subtitle="Apple Container on an Apple-silicon Mac mini comes first, with default-deny networking and short-lived, per-run forge credentials."
     icon="shield-check"
   >}}
   {{< hextra/feature-card
