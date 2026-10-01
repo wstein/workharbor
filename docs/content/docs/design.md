@@ -443,18 +443,21 @@ Ordered by what is cheap and blocks the most work.
 
 1. **Runner scorecard** (value 10, effort 3). Target agents are Claude Code, Codex CLI and Google Antigravity; Aider, OpenHands, Goose and others are scored for reference. Claude Code ships first and Codex CLI second. Antigravity ships a CLI (`agy`) with a headless print mode, so the gate is met: spike #1 drove it headless with typed events and resume. It has no mid-run injection and no approval channel in print mode, so it is a second-tier adapter in degraded mode (§5.2). Its account requirements and vendor terms for headless use are **unverified**. Spike #1 (issue #1) measured Claude Code, and Codex CLI and Antigravity in part; the results are in §5.2, and still open are a real Codex run (usage limit until 3 October), a login that expires mid-session, what the usage-limit `status` reads once exhausted, and approvals for Codex and Antigravity. One page comparing them on: headless mode, permission/approval bypass, session-ID resume after process or VM kill, mid-run message injection (stdin vs resumed turn; a release 1 requirement, §5.2), structured event output (also required), how "blocked, needs human" is reported. Also score subscription sign-in for Claude Code and Codex CLI (all **unverified**): headless or device-code login, where the token is stored, whether it survives a container restart and a Mac reboot, refresh behaviour inside a container, what happens when two environments share one login, how an expired login or exhausted usage window is signalled, current vendor terms for this kind of use, and whether a run keeps going with no client attached. Pause via SIGSTOP or stop-after-turn is not a resumed session; most CLIs resume only between turns.
 2. **Adopt-or-extend spike** (value 9, effort 3). Time-box 1–2 days on two of OpenHands, Vibe Kanban, Sculptor, Coder Tasks before committing to a build.
-3. **Apple Container native spike**, merged with benchmarking. Compatibility checklist:
-    - [ ] Create/start/stop/delete representative workspaces
-    - [ ] Enforce explicit CPU/memory
-    - [ ] Preserve project data across stop/start and rebuild
-    - [ ] SSH, VS Code, selected JetBrains IDE (code-server optional)
-    - [ ] Recover after runtime/manager restart and Mac reboot (LaunchAgent vs LaunchDaemon; auto-login/FileVault implications; `container system start` on boot)
-    - [ ] Private registry pulls and credential handling
-    - [ ] Agent auth directory and detached session survive environment stop/start and Mac reboot
-    - [ ] VPN reachability, forwarding or jump host
-    - [ ] **Default-deny egress and network isolation controls**
-    - [ ] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected**
-    - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap
+3. **Apple Container native spike**, merged with benchmarking. Run as spike #2 (issue #2, branch `spike/apple-container`, `RESULTS.md`); measured on Apple Container 1.5.0, macOS 26.6.2. Compatibility checklist:
+    - [x] Create/start/stop/delete representative workspaces (start about 1.1 s; use `--init`, §5.1)
+    - [x] Enforce explicit CPU/memory (vCPU count and a cgroup limit inside the VM)
+    - [x] Preserve project data across stop/start and rebuild (volumes and bind mounts; §4.4)
+    - [ ] SSH, VS Code, selected JetBrains IDE (code-server optional). Not tested; `exec` works
+    - [x] Recover after runtime/manager restart (§5.3): every container comes back `stopped` with its data
+    - [ ] Recover after a Mac reboot (LaunchAgent vs LaunchDaemon; auto-login/FileVault implications). Not triggered; no plist for the services exists on disk, so `container system start` has to run after login
+    - [ ] Private registry pulls and credential handling. Public pulls from Docker Hub worked; private registries not tested
+    - [ ] Agent auth directory and detached session survive environment stop/start and Mac reboot. Partly: a marker in the agent home volume survived stop, start and delete; a real login and a detached run were not tested
+    - [ ] VPN reachability, forwarding or jump host. Not tested
+    - [x] **Default-deny egress and network isolation controls** (`--internal` network plus a proxy sidecar; §7.2)
+    - [x] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected** (mounted unix sockets unusable; mount rejection is the adapter's job; §7.4)
+    - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap. Not started; an idle agent in a container used about 277 MiB
+    - [x] Stock images with a shared read-only tool store (§5.6)
+    - [ ] Agent run inside a container with a real login, and approvals from inside it (the guest has no path to the supervisor on an internal network; an HTTP MCP server through the sidecar, or a relay, is the open option)
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
 5. **Persistence semantics** (§4.4).
 6. **Primary forge and login provider** for release 1.
