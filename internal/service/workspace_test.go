@@ -39,6 +39,7 @@ type wsRig struct {
 	failAg bool
 	issues *forgetest.Fake
 	egress bool // give the environments an egress sidecar
+	home   bool // give the environments an agent home volume
 }
 
 func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
@@ -114,8 +115,11 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		Issues: r.issues,
 		Config: &config.Config{Roots: config.Roots{Workspaces: []string{r.root}}},
 		Git:    g,
-		Spec: func(domain.Workspace) runtime.Spec {
+		Spec: func(w domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
+			if r.home {
+				spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-" + string(w.ID), Target: "/home/agent"})
+			}
 			if r.egress {
 				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"api.anthropic.com"}}
 			}
@@ -453,5 +457,22 @@ func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
 		if !have[k] {
 			t.Errorf("no %s in %v", k, spec.Env)
 		}
+	}
+}
+
+// A Create that fails after the environment was made takes back its home volume
+// too: a volume outlives its environment, so deleting the environment is not
+// enough (found by the serve integration run).
+func TestAFailedCreateDoesNotLeakTheHomeVolume(t *testing.T) {
+	r := newWsRig(t)
+	r.home = true
+	r.fake.GitExit = 128 // the worktree fails after the environment and its volume exist
+	_, _, err := r.ws.Create(bg, CreateRequest{Name: "leak", Path: r.folder("leak"), Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
+	if err == nil {
+		t.Fatal("the worktree should fail")
+	}
+	inv, err := r.rt.Adapter.Inventory(bg)
+	if err != nil || len(inv.Volumes) != 0 || len(inv.Networks) != 0 || len(inv.Sidecars) != 0 {
+		t.Errorf("left behind: %+v, %v", inv, err)
 	}
 }

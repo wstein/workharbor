@@ -120,8 +120,15 @@ func (w *Workspaces) Create(ctx context.Context, req CreateRequest) (domain.Work
 	}
 	undo = append(undo, func() {
 		bg := context.WithoutCancel(ctx)
+		// A volume outlives its environment (design §4.4), so the home volume
+		// this call made is removed here, or a failed Create would leak it (found
+		// by the serve integration run).
+		res, _ := w.svc.rt.Resources(bg, env)
 		_ = w.svc.rt.Stop(bg, env)
 		_ = w.svc.rt.Delete(bg, env)
+		for _, v := range res.Volumes {
+			_ = w.svc.rt.RemoveVolume(bg, v)
+		}
 	})
 	if err := w.svc.store.SetWorkspaceEnv(ctx, ws.ID, domain.ID(env)); err != nil {
 		return fail(err)
