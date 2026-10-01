@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D22 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D23 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks | `internal/domain`, `internal/policy`, `internal/runtime`; issues #4, #8, #15, #16, #17, #18 |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container | Issues #1 and #2; results in §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
@@ -70,6 +70,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D20 | **Adapters are built in for release 1 and out-of-process plugins later** (§5.5), never Go's in-process `plugin` package | Two built-in adapters prove the contract first; third-party code stays out of the supervisor process |
 | D21 | **Task state machine, amending D13** (§4.1): a run paused by `auth_expired` or `quota_exhausted` moves its task to `awaiting_guidance`; a task fails only from `running` or `awaiting_guidance`, and a lost workspace in `ready_for_review` opens a review Decision (rework or cancel) | Settles the gaps found in the review of the D13 implementation without new transitions, so the code in `internal/domain` already agrees |
 | D22 | **Build the supervision layer; adopt none of the agent-task supervisors** (issue #5, confirms D1). OpenHands, Vibe Kanban, Sculptor and Coder Agents were assessed from their docs and repositories (§11). Borrow: ACP as a candidate generic agent-adapter protocol (§5.5) and OpenHands' confirmation states; Sculptor's Claude control-protocol integration and editable message queue; Claude Remote Control's phone UX as a reference and a fallback for Claude | None meets the non-negotiable parts of release 1 together: Apple Container, default-deny egress per environment, approvals routed to a human for Claude Code and Codex under subscription logins, an agent that never pushes, more than one forge. Adapting one would replace its runtime, policy and forge layers, which is most of workharbor. Vendor remotes cover one vendor and push to GitHub only. Desk research only: the claims marked **unverified** in §11 were not tried |
+| D23 | **Decisions around pauses** (§4.2): `auth_expired` and `quota_exhausted` are blocking `question` Decisions with fixed options (re-login and resume, resume now or at the reset, cancel) and no deadline; pausing a run supersedes its open approvals, which are raised again on resume | Nothing is permitted by a login or quota answer, so it is a question, and waiting on it is safe, so it does not fail closed. A paused agent's process is gone (D11), so an answer could only reach a dead process or the wrong request; superseding reuses the restart rule |
 
 ## 4. Domain model
 
@@ -146,6 +147,8 @@ Fields: ID, task, run (empty for a review Decision, which no live run raised), k
 
 - **Fail closed.** Deny on timeout (the spike used 10 minutes) and when the supervisor is unreachable.
 - **No silent survival.** A pending approval does not survive a supervisor restart, because the agent process does not. The reconciler marks the run `interrupted` and the ask is raised again on resume.
+- **Login and quota stops are questions** (D23). `auth_expired` and `quota_exhausted` open a blocking `question` Decision with fixed options: for `auth_expired`, "Signed in again, resume" or "Cancel"; for `quota_exhausted`, "Resume now", "Resume at reset" (with the reset time when the agent reports it) or "Cancel". The run is paused and the task moves to `awaiting_guidance` (D21). The Decision has no deadline: unlike an approval, waiting is safe, because nothing runs until it is answered.
+- **Pause ends open approvals** (D23). Pause is a hard interrupt (D11), so the agent process ends and cannot receive an answer. Pausing a run supersedes its open approval Decisions, the same as a supervisor restart; on resume the agent asks again and a new approval is raised. An answer sent to a superseded approval is refused as a conflict (§9.2, exit code 5).
 - **Plan approval.** In plan mode the agent's `ExitPlanMode` arrives as an approval whose subject is the plan.
 - **Capped input.** Tool inputs in a Decision are capped (the spike used 2,000 characters); the full input stays with the agent. All of it is untrusted data.
 - **Status.** `open` becomes `answered`, `expired` (the deadline passed) or `superseded` (the supervisor restarted or the run was paused); each is terminal. Only `answered` with `allow` ever permits anything: an open, expired or superseded approval is a denial.
