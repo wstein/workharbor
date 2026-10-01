@@ -14,7 +14,14 @@ import (
 // plainEnv is the environment of the control runs: plain git with no host
 // config, so the planted settings are the only ones in play.
 func plainEnv(home string) []string {
-	return append(os.Environ(),
+	var env []string
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "GIT_PAGER=") || strings.HasPrefix(e, "PAGER=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env,
 		"HOME="+home, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.test", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test",
 	)
