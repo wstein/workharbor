@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -158,4 +160,24 @@ func AgentCredentials(c *config.Config) (env []string, mode agent.AuthMode, err 
 		return nil, "", err
 	}
 	return env, agent.AuthAPIKey, nil
+}
+
+// InstalledProxy returns the egress proxy `make install` put next to the whr
+// binary, `<prefix>/libexec/whr/whr-proxy-linux-arm64` (issue #78), given the
+// path of the running whr (os.Executable). It must be a regular file: the
+// sidecar mounts it read-only into the environment.
+func InstalledProxy(exe string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("find the installed proxy: %w", err)
+	}
+	p := filepath.Join(filepath.Dir(filepath.Dir(resolved)), "libexec", "whr", "whr-proxy-linux-arm64")
+	info, err := os.Lstat(p)
+	if err != nil {
+		return "", fmt.Errorf("the egress proxy is not installed at %s (run make install): %w", p, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("the egress proxy at %s is not a regular file", p)
+	}
+	return p, nil
 }

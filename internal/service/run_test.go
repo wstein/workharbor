@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -253,5 +255,46 @@ func TestAStartInterruptedAfterTheSaveIsPickedUpByTheReconciler(t *testing.T) {
 	run, err := r.ws.Answer(bg, q.ID, domain.Response{By: "w", Option: domain.AnswerRetry, At: r.svc.clock.Now()})
 	if err != nil || run == "" {
 		t.Errorf("retry = %q, %v", run, err)
+	}
+}
+
+func TestInstalledProxy(t *testing.T) {
+	prefix := t.TempDir()
+	for _, d := range []string{"bin", "libexec/whr"} {
+		if err := os.MkdirAll(filepath.Join(prefix, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exe := filepath.Join(prefix, "bin", "whr")
+	if err := os.WriteFile(exe, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
+		t.Fatal(err)
+	}
+	if _, err := InstalledProxy(exe); err == nil || !strings.Contains(err.Error(), "make install") {
+		t.Errorf("a missing proxy = %v", err)
+	}
+	proxy := filepath.Join(prefix, "libexec", "whr", "whr-proxy-linux-arm64")
+	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
+		t.Fatal(err)
+	}
+	got, err := InstalledProxy(exe)
+	want, _ := filepath.EvalSymlinks(proxy)
+	if got2, _ := filepath.EvalSymlinks(got); err != nil || got2 != want {
+		t.Errorf("proxy = %q, %v; want %q", got, err, want)
+	}
+	// Through a symlink to the binary, as Homebrew lays it out.
+	link := filepath.Join(t.TempDir(), "whr")
+	if err := os.Symlink(exe, link); err == nil {
+		if got, err := InstalledProxy(link); err != nil || got == "" {
+			t.Errorf("through a link: %q, %v", got, err)
+		}
+	}
+	// A symlinked proxy is refused: it could lead anywhere.
+	if err := os.Remove(proxy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/hosts", proxy); err == nil {
+		if _, err := InstalledProxy(exe); err == nil {
+			t.Error("a proxy that is a link was accepted")
+		}
 	}
 }
