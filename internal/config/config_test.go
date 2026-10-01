@@ -21,7 +21,7 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	r := &rig{dir: dir}
-	for _, d := range []string{"cache", "workspaces", "store", "secrets"} {
+	for _, d := range []string{"workspaces", "store", "secrets"} {
 		if err := os.MkdirAll(filepath.Join(dir, d), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +36,7 @@ func newRig(t *testing.T) *rig {
 	r.cfg = Config{
 		Listen:             "127.0.0.1:8787",
 		Repositories:       []Repository{{Name: "wstein/workharbor", CloneDepth: 0}},
-		Roots:              Roots{Cache: filepath.Join(dir, "cache"), Workspaces: filepath.Join(dir, "workspaces"), ToolStore: filepath.Join(dir, "store")},
+		Roots:              Roots{Workspaces: []string{filepath.Join(dir, "workspaces")}, ToolStore: filepath.Join(dir, "store")},
 		GitHub:             GitHub{AppID: 12345, KeyFile: secret("app.pem")},
 		AgentAPIKeyEnvFile: secret("agent.env"), APITokenFile: secret("api.token"),
 	}
@@ -90,7 +90,7 @@ func TestEveryProblemIsReportedWithItsKey(t *testing.T) {
 	r := newRig(t)
 	r.cfg.Listen = "0.0.0.0:8787"
 	r.cfg.Repositories = []Repository{{Name: "no-slash"}, {Name: "Wstein/Workharbor"}, {Name: "wstein/workharbor"}, {Name: "a/b", CloneDepth: -1}}
-	r.cfg.Roots.Cache = "relative/cache"
+	r.cfg.Roots.Workspaces = []string{"relative/ws"}
 	r.cfg.Roots.ToolStore = filepath.Join(r.dir, "nope")
 	r.cfg.GitHub.AppID = 0
 	r.cfg.APITokenFile = ""
@@ -101,7 +101,7 @@ func TestEveryProblemIsReportedWithItsKey(t *testing.T) {
 		"repositories[0].name: \"no-slash\"",
 		"repositories[2].name: \"wstein/workharbor\" is the same repository as repositories[1]",
 		"repositories[3].clone_depth: -1",
-		"roots.cache: \"relative/cache\" must be an absolute",
+		"roots.workspaces[0]: \"relative/ws\" must be an absolute",
 		"roots.tool_store:",
 		"github.app_id",
 		"api_token_file: a file path is needed",
@@ -173,9 +173,9 @@ func err2(t *testing.T) error {
 
 func TestTheRootsAreSeparateAndSecretsAreOutOfTheWorkspace(t *testing.T) {
 	r := newRig(t)
-	r.cfg.Roots.Cache = filepath.Join(r.dir, "workspaces") // the cache is where an agent writes
+	r.cfg.Roots.ToolStore = filepath.Join(r.dir, "workspaces") // the tool store is where an agent writes
 	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "overlap") {
-		t.Errorf("the cache in the workspace root = %v", err)
+		t.Errorf("the tool store in the workspace root = %v", err)
 	}
 	r = newRig(t)
 	nested := filepath.Join(r.dir, "workspaces", "store")
@@ -192,7 +192,7 @@ func TestTheRootsAreSeparateAndSecretsAreOutOfTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.cfg.APITokenFile = inside
-	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "inside the workspace root") {
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "inside a workspace root") {
 		t.Errorf("a secret in the workspace root = %v", err)
 	}
 	// A link that leads into the workspace root is judged by where it leads.
@@ -201,7 +201,7 @@ func TestTheRootsAreSeparateAndSecretsAreOutOfTheWorkspace(t *testing.T) {
 	if err := os.Symlink(filepath.Join(r.dir, "workspaces"), link); err != nil {
 		t.Skip(err)
 	}
-	r.cfg.Roots.Cache = link
+	r.cfg.Roots.ToolStore = link
 	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "overlap") {
 		t.Errorf("a link to the workspace root = %v", err)
 	}

@@ -31,9 +31,12 @@ type Repository struct {
 
 // Roots are the directories workharbor owns on the host.
 type Roots struct {
-	Cache      string `json:"cache"`      // the bare repository caches
-	Workspaces string `json:"workspaces"` // the topics' checkouts: agent-writable
-	ToolStore  string `json:"tool_store"` // the shared read-only tool store (§5.6)
+	// Workspaces are the folders workspaces may live under (D42): on the
+	// internal disk or an external SSD. An agent writes them, so nothing
+	// workharbor trusts lives in or contains one, and none is inside a git
+	// repository of the human's.
+	Workspaces []string `json:"workspaces"`
+	ToolStore  string   `json:"tool_store"` // the shared read-only tool store (§5.6)
 }
 
 // GitHub is the App the forge adapter acts as (D31).
@@ -127,7 +130,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	roots := map[string]string{"roots.cache": c.Roots.Cache, "roots.workspaces": c.Roots.Workspaces, "roots.tool_store": c.Roots.ToolStore}
+	roots := map[string]string{"roots.tool_store": c.Roots.ToolStore}
+	if len(c.Roots.Workspaces) == 0 {
+		add("roots.workspaces: at least one workspace root is needed")
+	}
+	for i, w := range c.Roots.Workspaces {
+		roots[fmt.Sprintf("roots.workspaces[%d]", i)] = w
+	}
 	resolved := map[string]string{}
 	for _, key := range sortedKeys(roots) {
 		dir, msg := checkDir(roots[key])
@@ -136,9 +145,12 @@ func (c *Config) Validate() error {
 			continue
 		}
 		resolved[key] = dir
+		if repo := enclosingRepo(dir); repo != "" {
+			add("%s: %s is inside the git repository %s, which is not workharbor's to mount", key, dir, repo)
+		}
 	}
 	// An agent writes its workspace, so nothing workharbor trusts may live in or
-	// contain it, and the three roots are three places.
+	// contain it, and the roots are separate places.
 	keys := sortedKeys(resolved)
 	for i, a := range keys {
 		for _, b := range keys[i+1:] {
@@ -168,15 +180,16 @@ func (c *Config) Validate() error {
 	// workspaces, every environment mounts the tool store, and checkouts share
 	// the cache's objects. Directories are compared by identity, so a case
 	// variant of a path on APFS is caught too.
-	why := map[string]string{
-		"roots.workspaces": "the workspace root, where an agent can read it",
-		"roots.tool_store": "the tool store, which every environment mounts",
-		"roots.cache":      "the cache root, which the checkouts share",
+	why := func(root string) string {
+		if root == "roots.tool_store" {
+			return "the tool store, which every environment mounts"
+		}
+		return "a workspace root, where an agent can read it"
 	}
 	for key, path := range secrets {
 		for _, root := range sortedKeys(resolved) {
 			if within(path, resolved[root]) {
-				add("%s: %s is inside %s", key, path, why[root])
+				add("%s: %s is inside %s", key, path, why(root))
 			}
 		}
 	}
@@ -361,3 +374,55 @@ func (c *Config) AgentAPIKey() ([]string, error) {
 var subscriptionKey = regexp.MustCompile(`(?i)oauth|session`)
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// enclosingRepo returns the nearest directory at or above dir that holds a
+// .git, or "". A workspace root there would put a human's repository around
+// the agents' clones, and a human's own repository is never mounted (D42).
+func enclosingRepo(dir string) string {
+	for p := filepath.Clean(dir); ; p = filepath.Dir(p) {
+		if _, err := os.Lstat(filepath.Join(p, ".git")); err == nil {
+			return p
+		}
+		if filepath.Dir(p) == p {
+			return ""
+		}
+	}
+}
+
+// CheckWorkspacePath says whether a folder may become a workspace (design
+// §4.4, D42) and returns its resolved path. It must be absolute and clean, an
+// existing empty directory, strictly below one of the workspace roots, and not
+// inside a git repository: the human's own repositories are never mounted, and
+// a clone of one is not a workspace. Everything is compared by identity, so a
+// link or a case variant cannot hide where the folder really is.
+func (c *Config) CheckWorkspacePath(path string) (string, error) {
+	resolved, msg := checkDir(path)
+	if msg != "" {
+		return "", fmt.Errorf("workspace path: %s", msg)
+	}
+	under := false
+	for _, root := range c.Roots.Workspaces {
+		if rd, err := os.Stat(root); err == nil {
+			if pd, err := os.Stat(resolved); err == nil && os.SameFile(rd, pd) {
+				return "", fmt.Errorf("workspace path: %s is a workspace root itself: use a folder below it", resolved)
+			}
+		}
+		if within(resolved, root) {
+			under = true
+		}
+	}
+	if !under {
+		return "", fmt.Errorf("workspace path: %s is not below a workspace root (roots.workspaces)", resolved)
+	}
+	if repo := enclosingRepo(resolved); repo != "" {
+		return "", fmt.Errorf("workspace path: %s is inside the git repository %s: a human's own repository is never mounted", resolved, repo)
+	}
+	entries, err := os.ReadDir(resolved)
+	if err != nil {
+		return "", fmt.Errorf("workspace path: %w", err)
+	}
+	if len(entries) > 0 {
+		return "", fmt.Errorf("workspace path: %s is not empty: the agent clone is created in it", resolved)
+	}
+	return resolved, nil
+}

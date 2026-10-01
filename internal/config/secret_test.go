@@ -10,7 +10,7 @@ import (
 
 func TestSecretsMayNotLieInsideAnyRoot(t *testing.T) {
 	for root, want := range map[string]string{
-		"store": "inside the tool store", "cache": "inside the cache root", "workspaces": "inside the workspace root",
+		"store": "inside the tool store", "workspaces": "inside a workspace root",
 	} {
 		r := newRig(t)
 		p := filepath.Join(r.dir, root, "key.pem")
