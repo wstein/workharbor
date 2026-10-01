@@ -31,11 +31,21 @@ type Guard struct {
 	pusher   Pusher
 	table    policy.Table
 	verifier Verifier
+	context  policy.Context // what the run being guarded is (design §6, issue #53)
 }
 
 // NewGuard returns a Guard.
 func NewGuard(inner Adapter, pusher Pusher, table policy.Table, v Verifier) *Guard {
 	return &Guard{inner: inner, pusher: pusher, table: table, verifier: v}
+}
+
+// For returns a Guard that decides with the context of one run: when its input
+// is untrusted, an action with an outward effect that the table lets run on its
+// own asks instead (never looser than the table).
+func (g *Guard) For(c policy.Context) *Guard {
+	cp := *g
+	cp.context = c
+	return &cp
 }
 
 // Name returns the wrapped adapter's name.
@@ -61,7 +71,7 @@ func (g *Guard) CommentIssue(ctx context.Context, repo string, number int, body 
 
 // allow refuses unless the table says the action runs on its own.
 func (g *Guard) allow(a policy.Action) error {
-	if m := g.table.Decide(a); m != policy.Auto {
+	if m := g.table.DecideIn(a, g.context); m != policy.Auto {
 		return fmt.Errorf("%w: %s is %s", ErrForbidden, a, m)
 	}
 	return nil
@@ -71,7 +81,7 @@ func (g *Guard) allow(a policy.Action) error {
 // of a commit: forbid refuses, and auto or ask both need the approval, because
 // the review Decision is what approves the commit.
 func (g *Guard) approve(ctx context.Context, a policy.Action, ap Approval) error {
-	if g.table.Decide(a) == policy.Forbid {
+	if g.table.DecideIn(a, g.context) == policy.Forbid {
 		return fmt.Errorf("%w: %s", ErrForbidden, a)
 	}
 	if ap.SHA == "" || ap.DecisionID == "" || !g.verifier.Approved(ctx, ap) {

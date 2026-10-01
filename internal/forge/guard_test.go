@@ -180,3 +180,35 @@ func TestPullRequestsAreOnlyForAgentBranches(t *testing.T) {
 		t.Errorf("a refused request reached the forge: %v", f.Calls)
 	}
 }
+
+// The guard decides with the context of the run: an untrusted input asks where
+// the table lets an outward action run on its own, and a trusted run is as it
+// was.
+func TestAGuardForAnUntrustedRunAsksWhereTheTableAllowed(t *testing.T) {
+	g, f := newGuard(policy.Default()) // comment_issue is auto
+	if err := g.CommentIssue(bg, "r", 1, "hello"); err != nil {
+		t.Fatalf("a trusted run may comment: %v", err)
+	}
+	untrusted := g.For(policy.Context{UntrustedInput: true})
+	if err := untrusted.CommentIssue(bg, "r", 1, "hello"); !errors.Is(err, forge.ErrForbidden) {
+		t.Errorf("an untrusted run's comment = %v, want it refused (ask)", err)
+	}
+	if n := len(f.Comments); n != 1 {
+		t.Errorf("%d comments reached the forge, want only the trusted one", n)
+	}
+	// The original guard is not changed by For.
+	if err := g.CommentIssue(bg, "r", 1, "again"); err != nil {
+		t.Errorf("For changed the guard it was called on: %v", err)
+	}
+	// An approved push still needs the approval, trusted or not; nothing loosens.
+	ap := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	if err := untrusted.Push(bg, "r", "agent/x", ap); err != nil {
+		t.Errorf("an approved push of an untrusted run: %v", err)
+	}
+	if err := untrusted.Push(bg, "r", "agent/x", forge.Approval{DecisionID: "d1", SHA: "bbb"}); !errors.Is(err, forge.ErrNotApproved) {
+		t.Errorf("an unapproved push = %v", err)
+	}
+	if err := untrusted.Merge(bg, "r", 1); !errors.Is(err, forge.ErrForbidden) {
+		t.Errorf("merge = %v", err)
+	}
+}

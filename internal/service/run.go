@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/policy"
 )
 
 // IssueSource loads an issue from the forge. forge.Adapter and forge.Guard both
@@ -99,43 +101,146 @@ type RunRequest struct {
 	Prompt   string // optional text after the issue
 }
 
+// RunResult is what `whr run` started. A run on an issue by an untrusted author
+// is not started: the task is held for a human's answer (design §6, issue
+// #53), and Held is set with the Decision to answer.
+type RunResult struct {
+	Task, Run, Decision domain.ID
+	Held                bool
+}
+
 // Run starts a task from an issue on a named agent (design §5.3, D42): the
 // issue URL is parsed and must belong to the workspace's repository, the issue
-// is loaded through the forge, the trust tier is applied, and the task starts
-// on the agent. It returns the task and run IDs.
-func (w *Workspaces) Run(ctx context.Context, req RunRequest) (domain.ID, domain.ID, error) {
+// is loaded through the forge, the trust tier of its author is read, and a
+// trusted issue starts the task on the agent. An issue by an author who is not
+// trusted starts nothing: the task is held, queued, with a blocking question
+// that shows the author and the issue text as untrusted data.
+func (w *Workspaces) Run(ctx context.Context, req RunRequest) (RunResult, error) {
 	if w.cfg.Issues == nil {
-		return "", "", fmt.Errorf("run: no forge to load the issue from")
+		return RunResult{}, fmt.Errorf("run: no forge to load the issue from")
 	}
 	repo, number, err := ParseIssueURL(req.IssueURL)
 	if err != nil {
-		return "", "", err
+		return RunResult{}, err
 	}
 	wsName, role, ok := strings.Cut(req.Agent, "/")
 	if !ok {
-		return "", "", &domain.InvalidError{Msg: fmt.Sprintf("agent %q must be <workspace>/<role>", req.Agent)}
+		return RunResult{}, &domain.InvalidError{Msg: fmt.Sprintf("agent %q must be <workspace>/<role>", req.Agent)}
 	}
 	ws, err := w.svc.store.Workspace(ctx, wsName)
 	if err != nil {
-		return "", "", err
+		return RunResult{}, err
 	}
 	if !strings.EqualFold(ws.Repo, repo) {
-		return "", "", &domain.InvalidError{Msg: fmt.Sprintf("the issue is in %s but workspace %s is for %s", repo, ws.Name, ws.Repo)}
+		return RunResult{}, &domain.InvalidError{Msg: fmt.Sprintf("the issue is in %s but workspace %s is for %s", repo, ws.Name, ws.Repo)}
 	}
 	a, err := w.svc.store.AgentByRole(ctx, ws.ID, role)
 	if err != nil {
-		return "", "", err
+		return RunResult{}, err
 	}
 	issue, err := w.cfg.Issues.GetIssue(ctx, repo, number)
 	if err != nil {
-		return "", "", fmt.Errorf("load issue %s#%d: %w", repo, number, err)
+		return RunResult{}, fmt.Errorf("load issue %s#%d: %w", repo, number, err)
 	}
 	if w.cfg.Trust != nil {
 		if err := w.cfg.Trust(issue); err != nil {
-			return "", "", fmt.Errorf("issue %s#%d is not trusted to start a run: %w", repo, number, err)
+			return RunResult{}, fmt.Errorf("issue %s#%d is not trusted to start a run: %w", repo, number, err)
 		}
 	}
-	return w.StartTask(ctx, StartRequest{AgentID: a.ID, Issue: "#" + strconv.Itoa(number), Prompt: IssuePrompt(issue, req.Prompt)})
+	if policy.TierOf(issue.AuthorAssociation) != policy.Trusted {
+		return w.hold(ctx, a, ws, issue, number)
+	}
+	task, run, err := w.StartTask(ctx, StartRequest{AgentID: a.ID, Issue: "#" + strconv.Itoa(number), Prompt: IssuePrompt(issue, req.Prompt)})
+	return RunResult{Task: task, Run: run}, err
+}
+
+// heldText is the exact text a human is asked about and a later start compares.
+func heldText(issue forge.Issue) string { return issue.Title + "\n\n" + issue.Body }
+
+// hold records a queued task for an issue by an untrusted author, with the
+// question that asks the human to start it or cancel it.
+func (w *Workspaces) hold(ctx context.Context, a domain.Agent, ws domain.Workspace, issue forge.Issue, number int) (RunResult, error) {
+	task, dec := w.cfg.NewID(), w.cfg.NewID()
+	agg := domain.NewTaskAggregate(domain.Task{
+		ID: task, Repo: ws.Repo, Issue: "#" + strconv.Itoa(number), State: domain.TaskQueued, AgentID: a.ID, CreatedAt: w.svc.clock.Now(),
+	})
+	if _, err := agg.RaiseUntrustedHold(dec, issue.Author, issue.AuthorAssociation, heldText(issue), w.svc.clock.Now()); err != nil {
+		return RunResult{}, err
+	}
+	saved, err := w.svc.store.SaveTask(ctx, agg)
+	if err != nil {
+		return RunResult{}, err
+	}
+	w.svc.publish(saved)
+	w.svc.notify(ctx, saved)
+	return RunResult{Task: task, Decision: dec, Held: true}, nil
+}
+
+// startHeld starts the run of a held task after the human answered `start`. The
+// issue is loaded again and must be what the human was asked about (its hash is
+// in the audit trail), or the task is cancelled and the human runs it again:
+// text that changed after the answer is text nobody approved. A start that fails
+// before a run exists cancels the task for the same reason: nothing is left
+// queued with an answer that no longer holds.
+func (w *Workspaces) startHeld(ctx context.Context, d *domain.Decision) (domain.ID, error) {
+	cancel := func(why error) (domain.ID, error) {
+		_ = w.svc.Cancel(context.WithoutCancel(ctx), d.TaskID)
+		return "", fmt.Errorf("the task was cancelled, run it again: %w", why)
+	}
+	agg, err := w.svc.store.LoadTask(ctx, d.TaskID)
+	if err != nil {
+		return "", err
+	}
+	t := agg.Task()
+	if t.State != domain.TaskQueued || t.AgentID == "" {
+		return "", domain.NewConflict(domain.RuleTaskState, "task %s is %s: only a held task is started", t.ID, t.State)
+	}
+	events, err := w.svc.store.EventsSince(ctx, t.ID, 0, 1000)
+	if err != nil {
+		return "", err
+	}
+	var held domain.TaskHeld
+	found := false
+	for _, e := range events {
+		var h domain.TaskHeld
+		if e.Kind == domain.EventTaskHeld && json.Unmarshal(e.Payload, &h) == nil && h.DecisionID == d.ID {
+			held, found = h, true
+		}
+	}
+	if !found {
+		return "", fmt.Errorf("task %s has no record of what its hold was about", t.ID)
+	}
+	number, err := strconv.Atoi(strings.TrimPrefix(t.Issue, "#"))
+	if err != nil || w.cfg.Issues == nil {
+		return cancel(fmt.Errorf("issue %q cannot be loaded again", t.Issue))
+	}
+	issue, err := w.cfg.Issues.GetIssue(ctx, t.Repo, number)
+	if err != nil {
+		return cancel(fmt.Errorf("load issue %s%s again: %w", t.Repo, t.Issue, err))
+	}
+	if domain.TextHash(heldText(issue)) != held.TextSHA256 || issue.Author != held.Author {
+		return cancel(errors.New("the issue changed after you were asked about it"))
+	}
+	a, ws, err := w.agentAndWorkspace(ctx, t.AgentID)
+	if err != nil {
+		return cancel(err)
+	}
+	if err := w.ensureEnvironment(ctx, ws); err != nil {
+		return cancel(err)
+	}
+	if _, ok := agg.Environment(ws.EnvID); !ok {
+		agg.AddEnvironment(domain.Environment{ID: ws.EnvID, Backend: w.svc.rt.Name(), State: domain.EnvRunning})
+	}
+	run := w.cfg.NewID()
+	if err := w.launch(ctx, agg, ws, a, run, IssuePrompt(issue, "")); err != nil {
+		if again, lerr := w.svc.store.LoadTask(ctx, t.ID); lerr == nil {
+			if _, saved := again.Run(run); !saved { // no run was made: nothing else will pick the task up
+				return cancel(err)
+			}
+		}
+		return "", err
+	}
+	return run, nil
 }
 
 // Answer records the human's answer to a Decision and does what follows from
@@ -156,6 +261,8 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	case d.Cause == domain.CauseRunFailed && r.Option == domain.AnswerRetry:
 		run, err := w.NewRun(ctx, d.TaskID, "", "")
 		return run, w.askAgain(ctx, d, err)
+	case d.Cause == domain.CauseUntrustedInput && r.Option == domain.AnswerStart:
+		return w.startHeld(ctx, d)
 	case d.Cause == domain.CauseRebaseConflict && r.Option == domain.AnswerRework:
 		run, err := w.NewRun(ctx, d.TaskID, "Your branch did not rebase onto the integration branch. Rebase it yourself and resolve the conflicts.", d.Input)
 		return run, w.askAgain(ctx, d, err)

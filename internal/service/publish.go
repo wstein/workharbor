@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/policy"
 )
 
 // Errors of preparing and publishing a topic.
@@ -168,17 +169,21 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 		return forge.PullRequest{}, fmt.Errorf("%w: decision %s does not allow the current revision", forge.ErrNotApproved, decision)
 	}
 	ap := forge.Approval{DecisionID: string(decision), SHA: cand.SHA}
-	if err := p.cfg.Guard.Push(ctx, p.cfg.ForgeRepo, cand.Branch, ap); err != nil {
+	// The guard decides with the run's context: an untrusted input asks where the
+	// table would let an action run on its own. The supervisor does not know
+	// whether the repository is private, so it assumes it is (design §7.1).
+	guard := p.cfg.Guard.For(policy.Context{UntrustedInput: agg.Task().Untrusted, PrivateData: true, Egress: true})
+	if err := guard.Push(ctx, p.cfg.ForgeRepo, cand.Branch, ap); err != nil {
 		return forge.PullRequest{}, err
 	}
 	var pr forge.PullRequest
 	if cand.PRURL != "" {
 		pr = forge.PullRequest{Repo: p.cfg.ForgeRepo, Branch: cand.Branch, URL: cand.PRURL, SHA: cand.SHA}
 		pr.Number = parsePRNumber(cand.PRURL)
-		if err := p.cfg.Guard.UpdatePR(ctx, pr, ap, title, body); err != nil {
+		if err := guard.UpdatePR(ctx, pr, ap, title, body); err != nil {
 			return forge.PullRequest{}, err
 		}
-	} else if pr, err = p.cfg.Guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body); err != nil {
+	} else if pr, err = guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body); err != nil {
 		return forge.PullRequest{}, err
 	}
 	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
