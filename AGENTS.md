@@ -87,6 +87,8 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 Do not push or merge without being asked. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
+**Issues.** When work on an issue is done (its closing commit is on `main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
+
 ## License
 
 EUPL-1.2. New files need no header; contributions are accepted under the same licence.
