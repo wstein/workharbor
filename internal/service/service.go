@@ -85,6 +85,7 @@ type Service struct {
 	wg       sync.WaitGroup
 	mu       sync.Mutex
 	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
+	closing  bool                // set by Shutdown: no session joins the wait group any more
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent
@@ -120,6 +121,7 @@ func (s *Service) Wait() { s.wg.Wait() }
 // from the database (design §5.3).
 func (s *Service) Shutdown() {
 	s.mu.Lock()
+	s.closing = true // from now on attach stops a session instead of adding it
 	live := make([]agent.Session, 0, len(s.sessions))
 	for _, sl := range s.sessions {
 		if sl.sess != nil {
@@ -227,9 +229,18 @@ func (s *Service) attached(run domain.ID) bool {
 // result ends, fails or interrupts it. Everything goes through the aggregate.
 func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 	s.mu.Lock()
+	if s.closing {
+		// Shutdown has begun: the session never joins the wait group, so
+		// wg.Add cannot race wg.Wait. It is stopped and stays resumable; the
+		// next start reconciles the run (design §5.3).
+		s.mu.Unlock()
+		_ = sess.Stop(context.Background())
+		s.end(run, sl)
+		return
+	}
 	sl.sess = sess
+	s.wg.Add(1) // under s.mu, so it happens before Shutdown sets closing or not at all
 	s.mu.Unlock()
-	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer s.end(run, sl)

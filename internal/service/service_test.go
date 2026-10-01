@@ -659,3 +659,36 @@ func TestAFailedRunNotifies(t *testing.T) {
 		t.Errorf("pushes = %+v, want run_failed", rec.got)
 	}
 }
+
+// #79: a session attached after Shutdown began is stopped at once and never
+// joins the wait group, so Shutdown neither misses it nor races wg.Wait.
+func TestSessionAttachedDuringShutdownIsStopped(t *testing.T) {
+	r := newRig(t)
+	r.agent.Block()
+	sess, err := r.agent.Start(bg, spec())
+	must(t, err)
+	r.svc.Shutdown() // no sessions yet: returns at once, and the service is closing
+	sl := r.svc.begin("r1")
+	r.svc.attach("t1", "r1", sl, sess)
+
+	done := make(chan agent.Result, 1)
+	go func() { res, _ := sess.Wait(); done <- res }()
+	select {
+	case res := <-done:
+		if res.Status != agent.ResultStopped {
+			t.Fatalf("the late session ended %s, want stopped", res.Status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a session attached during shutdown kept running")
+	}
+	waited := make(chan struct{})
+	go func() { r.svc.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wait blocked on a session attached during shutdown")
+	}
+	if r.svc.attached("r1") {
+		t.Error("the late session is still registered")
+	}
+}
