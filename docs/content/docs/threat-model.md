@@ -5,7 +5,7 @@ weight: 2
 toc: true
 ---
 
-**Status:** updated 1 October 2026 after the review of `main` at 26ce0d4, for release 1 (issue #11). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
+**Status:** updated 1 October 2026 for release 1 (issue #11): after the review of `main` at 26ce0d4 and its fixes (#78, #79), and for the vendor terms of subscription logins (D40, T17). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
 
 ## Scope and assumptions
 

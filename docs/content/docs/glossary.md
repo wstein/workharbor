@@ -49,7 +49,10 @@ Degraded mode
 : An agent adapter with structured events and headless operation only. A message to the running agent becomes a resumed turn, labelled in the UI, and tools run from a fixed allowlist (`dontAsk`) instead of asking the host ([§5.2](design/architecture.md#52-agent-adapter)).
 
 Auth modes
-: How an agent signs in, reported by its adapter and never assumed. `api-key`: the key stays in a host-side proxy and is issued per run. `subscription`: a consumer-plan login kept in a dedicated auth directory per environment, refreshed by the CLI itself ([§5.2](design/architecture.md#52-agent-adapter), [§7.3](design/security.md#7-security)).
+: How an agent signs in, reported by its adapter and never assumed. `api-key`: the key stays in a host-side proxy and is issued per run. `subscription`: a consumer-plan login the human signs in to inside each environment, kept in a dedicated auth directory there and refreshed by the CLI itself; `whr` never reads, stores or passes it on (D40, [§5.2](design/architecture.md#52-agent-adapter), [§7.3](design/security.md#7-security)). Release 1 starts with subscriptions; API keys become a full peer later (D41).
+
+Usage window
+: A subscription's rolling allowance (for example five hours and seven days). Every run on one account draws on the same window, so the UI shows it as one figure; a run that exhausts it pauses with a Decision ([§5.7](design/architecture.md#57-usage-and-cost)).
 
 ## Host and environment
 

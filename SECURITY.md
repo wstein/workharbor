@@ -2,7 +2,7 @@
 
 ## Status
 
-workharbor is in the design phase and has no released versions, so there are no supported releases yet. Security-relevant material today is the [design](docs/content/docs/design/_index.md) (threat model, autonomy policy, credential handling), the CI workflows and the project tooling.
+workharbor has no released versions yet, so there are no supported releases. Security-relevant material today is the [design](docs/content/docs/design/_index.md) and the [threat model](docs/content/docs/threat-model.md), the code that enforces them (the runtime adapter and its mount checks, the egress proxy, hardened host git, the policy guard, redaction, the configuration's secret handling), the CI workflows and the build tooling.
 
 ## Reporting a vulnerability
 
@@ -16,7 +16,8 @@ This is a small project maintained by one person. Reports are handled on a best-
 
 In scope:
 
-- flaws in the design that would let an agent escape isolation, obtain credentials it should not have, or bypass the approval policy
+- flaws in the design or the code that would let an agent escape isolation, reach the host or the LAN, obtain credentials it should not have, or bypass the approval policy
+- a way for `whr` to read, store or pass on a subscription login, against D40
 - vulnerabilities in the repository's code, CI workflows and build or release tooling
 - secrets committed to the repository
 

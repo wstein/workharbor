@@ -4,7 +4,7 @@ layout: hextra-home
 ---
 
 {{< hextra/hero-badge link="docs/design/" >}}
-  <span>Design phase</span>
+  <span>Building release 1</span>
   {{< icon name="arrow-circle-right" attributes="height=14" >}}
 {{< /hextra/hero-badge >}}
 
@@ -34,12 +34,12 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Human in the loop"
-    subtitle="Agents raise decisions: questions, approvals and reviews. You answer them from the CLI or the web UI."
+    subtitle="Agents raise decisions: questions, approvals and reviews. You answer them from your phone, the web app or the CLI."
     icon="chat-alt"
   >}}
   {{< hextra/feature-card
     title="Isolated by default"
-    subtitle="Apple Container on an Apple-silicon Mac mini comes first, with default-deny networking and short-lived, per-run forge credentials."
+    subtitle="Apple Container on an Apple-silicon Mac mini comes first: each agent in its own lightweight VM, out to the internet only through an allowlist proxy, with short-lived, per-run forge credentials."
     icon="shield-check"
   >}}
   {{< hextra/feature-card
