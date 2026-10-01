@@ -232,3 +232,22 @@ func TestTheAgentsObservationsAreStoredInTheTranscriptTier(t *testing.T) {
 }
 
 func asConflict(err error, target **domain.ConflictError) bool { return errors.As(err, target) }
+
+func TestInboxAndWorkspaceList(t *testing.T) {
+	r := newWsRigBlocking(t, false)
+	r.agent.Finish("done")
+	_, a := r.create("inbox")
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+		t.Fatal(err)
+	}
+	r.svc.Wait()
+	if in, err := r.svc.Inbox(bg); err != nil || len(in) != 0 {
+		t.Errorf("inbox = %+v, %v", in, err)
+	}
+	// An approval raised for the running run shows up in the inbox, a finished
+	// task's does not.
+	list, err := r.svc.WorkspaceList(bg)
+	if err != nil || len(list) != 1 || list[0].Workspace.Name != "inbox" || len(list[0].Agents) != 1 || list[0].Agents[0].Role != "docs" {
+		t.Errorf("workspaces = %+v, %v", list, err)
+	}
+}

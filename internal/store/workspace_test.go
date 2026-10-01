@@ -212,3 +212,34 @@ func TestTasksListsNewestFirstAndFiltersTheFinished(t *testing.T) {
 		t.Errorf("active = %+v, %v", active, err)
 	}
 }
+
+func TestInboxHoldsOpenDecisionsOfUnfinishedTasks(t *testing.T) {
+	s := openTemp(t)
+	mk := func(id domain.ID, finish bool) {
+		agg := domain.NewTaskAggregate(domain.Task{ID: id, Repo: "a/b", Issue: "1", State: domain.TaskQueued, CreatedAt: wsNow})
+		agg.AddEnvironment(domain.Environment{ID: "e-" + id, Backend: "fake", State: domain.EnvRunning})
+		if err := agg.StartRun(domain.Run{ID: "r-" + id, EnvID: "e-" + id}); err != nil {
+			t.Fatal(err)
+		}
+		if err := agg.MarkRunning("r-" + id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := agg.RaiseDecision(domain.NewDecision{ID: "d-" + id, RunID: "r-" + id, Kind: domain.DecisionQuestion, Blocking: true, Subject: "which?", Options: []string{"a", "b"}, Now: wsNow}); err != nil {
+			t.Fatal(err)
+		}
+		if finish {
+			if err := agg.Cancel(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := s.SaveTask(bg, agg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("t1", false)
+	mk("t2", true) // cancelled: its Decision was superseded, and the task is over
+	in, err := s.InboxDecisions(bg)
+	if err != nil || len(in) != 1 || in[0].ID != "d-t1" || in[0].Subject != "which?" {
+		t.Errorf("inbox = %+v, %v", in, err)
+	}
+}

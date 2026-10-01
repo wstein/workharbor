@@ -453,3 +453,22 @@ func (s *Store) OpenDecisions(ctx context.Context, task domain.ID) ([]*domain.De
 	}
 	return out, rows.Err()
 }
+
+// InboxDecisions returns every open Decision of every unfinished task, oldest
+// first: what is waiting for the human (design §9.3).
+func (s *Store) InboxDecisions(ctx context.Context) ([]*domain.Decision, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+decisionColumns+` FROM decisions WHERE status = 'open' AND task_id IN (SELECT id FROM tasks WHERE state NOT IN ('completed', 'cancelled', 'failed')) ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: inbox: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []*domain.Decision
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: inbox: %w", err)
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}

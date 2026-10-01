@@ -216,3 +216,39 @@ func (s *Service) Show(ctx context.Context, task domain.ID) (TaskView, error) {
 	}
 	return v, nil
 }
+
+// Inbox returns the Decisions waiting for the human, oldest first.
+func (s *Service) Inbox(ctx context.Context) ([]domain.Decision, error) {
+	rows, err := s.store.InboxDecisions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Decision, len(rows))
+	for i, d := range rows {
+		out[i] = *d
+	}
+	return out, nil
+}
+
+// WorkspaceView is a workspace with its agents, for lists and completion.
+type WorkspaceView struct {
+	Workspace domain.Workspace
+	Agents    []domain.Agent
+}
+
+// WorkspaceList returns every workspace with its agents.
+func (s *Service) WorkspaceList(ctx context.Context) ([]WorkspaceView, error) {
+	list, err := s.store.Workspaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WorkspaceView, 0, len(list))
+	for _, w := range list {
+		agents, err := s.store.Agents(ctx, w.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, WorkspaceView{Workspace: w, Agents: agents})
+	}
+	return out, nil
+}
