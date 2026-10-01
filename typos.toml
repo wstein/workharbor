@@ -5,5 +5,6 @@ extend-exclude = [
   "CODE_OF_CONDUCT.md", # third-party text
   "CHANGELOG.md",       # generated
   "go.sum",
-  "**/testdata/**",     # recorded transcripts and test fixtures
+  "**/testdata/*.jsonl",       # agent stream fixtures
+  "**/testdata/*.golden.json", # outputs generated from them
 ]
