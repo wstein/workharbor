@@ -1,0 +1,8 @@
+# The workharbor base image on Fedora (design D44, D43): the stock image pinned
+# by digest, plus git and CA certificates, and nothing else. The agent CLIs stay
+# in the tool store. Changing the digest changes the image's tag, so the next
+# start builds it again.
+FROM docker.io/library/fedora@sha256:498c452f32a739b61f0ef215bce9924ebc4866cbe44710f58157d77723b7a6d2
+RUN dnf -y --setopt=install_weak_deps=False install git-core ca-certificates \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf /var/log/dnf*

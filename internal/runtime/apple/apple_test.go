@@ -261,3 +261,25 @@ func TestANewVolumeIsOwnedWithoutRunningTheImageAsRoot(t *testing.T) {
 		t.Errorf("a writable mount for the launcher = %v, want ErrNoLauncher", err)
 	}
 }
+
+func TestHasImageTellsAMissingImageFromAFailure(t *testing.T) {
+	cases := map[string]struct {
+		err  error
+		want bool
+		fail bool
+	}{
+		"present":           {nil, true, false},
+		"missing":           {&ExitError{Args: []string{"image", "inspect"}, Err: errors.New("exit status 1"), Stderr: "Error: image not found: whr-base/x:1"}, false, false},
+		"the CLI is broken": {&ExitError{Args: []string{"image", "inspect"}, Err: errors.New("exit status 1"), Stderr: "Error: the system service is not running"}, false, true},
+	}
+	for name, c := range cases {
+		a := &Adapter{owner: "o1", run: func(context.Context, io.Reader, ...string) ([]byte, []byte, error) { return nil, nil, c.err }}
+		got, err := a.HasImage(context.Background(), "whr-base/fedora:abc")
+		if got != c.want || (err != nil) != c.fail {
+			t.Errorf("%s: got %v, err %v", name, got, err)
+		}
+	}
+	if _, err := (&Adapter{}).HasImage(context.Background(), "--all"); !errors.Is(err, runtime.ErrInvalidBuild) {
+		t.Errorf("a tag that looks like an option: err = %v", err)
+	}
+}

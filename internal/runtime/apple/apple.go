@@ -778,3 +778,21 @@ func (a *Adapter) ownVolumeArgs(env string, spec runtime.Spec, volume string) ([
 	args = append(args, a.labelArgs(roleVolume, env, nil)...)
 	return append(args, spec.Image, "chown", "-owner", spec.User, "/v"), nil
 }
+
+// HasImage reports whether the runtime has an image with this tag, with
+// `container image inspect`, which exits 1 for an image that is not there
+// ("image not found", container 1.5.0). Any other failure is an error: a runtime
+// that cannot be asked must not read as "no image" and trigger a build.
+func (a *Adapter) HasImage(ctx context.Context, tag string) (bool, error) {
+	if !runtime.ValidImage(tag) {
+		return false, &runtime.BuildError{Problems: []string{"tag " + `"` + tag + `"` + " is not an image reference"}}
+	}
+	_, errOut, err := a.run(ctx, nil, "image", "inspect", "--", tag)
+	if err == nil {
+		return true, nil
+	}
+	if strings.Contains(string(errOut)+stderrOf(err), "image not found") {
+		return false, nil
+	}
+	return false, err
+}
