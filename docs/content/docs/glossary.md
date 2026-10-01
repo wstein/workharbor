@@ -69,7 +69,7 @@ Egress sidecar
 : A container next to each environment that runs `whr-proxy`, the logging allowlist proxy. It is the environment's only way out: hosts by name, ports 443 and 80, public addresses only ([§7](design/security.md#7-security), threat model T5).
 
 Repository cache
-: The per-task clone layout of D17: a bare repository per forge repository on the host, with each topic a shared clone of it. Replaced by workspaces (D42); kept until #90 and #91 land ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+: The per-task clone layout of D17: a bare repository per forge repository on the host, with each topic a shared clone of it. Replaced by workspaces (D42) and removed (issue #95); only the forge mirror remains ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
 
 Console
 : An environment without an agent for the human's shell work: zsh or fish and the usual tools, the workspaces mounted read-only by default, no credentials. `whr console` and SSH land there, so only the admin logs in to the host (D43).

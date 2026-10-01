@@ -36,7 +36,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 - `internal/domain/`: Task, Workspace and Agent (D42), Run, Environment, Decision, ReviewCandidate, Event, state machines and the task aggregate
 - `internal/policy/`: autonomy table (action -> auto | ask | forbid) with a fixed floor
 - `internal/store/`: SQLite store, event log and idempotency
-- `internal/hostgit/`: the only way the host runs git on agent-writable repositories; it seeds a workspace's agent clone (D42), and the repository cache and per-task clones stay only until the bundle export (#91) replaces them
+- `internal/hostgit/`: the only way the host runs git on agent-writable repositories; it seeds a workspace's agent clone (D42), imports an agent's branch from a bundle, and keeps the forge mirror (the repository cache)
 - `internal/service/`: the service layer the JSON API and web UI share: runs, Decisions, prepare and push, the reconciler
 - `internal/config/`: the configuration file and safe reading of secret files; `internal/toolstore/`: the content-addressed tool store; `internal/egress/`: the allowlist proxy; `internal/notify/`: notifications (ntfy); `internal/docscheck/`: tests that fail when the design and the code disagree
 - `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts; `runtime/runtimetest/` and `agent/agenttest/` hold the fakes and conformance suites; `runtime/apple/` is the Apple Container adapter (its live suite runs with `-tags applecontainer`); `agent/claude/` is the Claude Code adapter; `forge/` holds the policy `Guard`
