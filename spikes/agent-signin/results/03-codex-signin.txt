@@ -1,0 +1,58 @@
+
+== 1. Setup hardened container environment with egress proxy sidecar
+Proxy sidecar IP: 192.168.128.2
+
+== 2. Test Codex CLI sign-in flow: 'codex login --device-auth'
+Executing 'codex login --device-auth' with timeout 6 to capture device code and URL:
+
+Welcome to Codex [v[90m0.159.2[0m]
+[90mOpenAI's command-line coding agent[0m
+
+Follow these steps to sign in with ChatGPT using device code authorization:
+
+1. Open this link in your browser and sign in to your account
+   [94mhttps://auth.openai.com/codex/device[0m
+
+2. Enter this one-time code [90m(expires in 15 minutes)[0m
+   [94m8W3N-RMYQ8[0m
+
+[90mContinue only if you started this login in Codex. If a website or another person gave you this code, cancel.[0m
+
+
+== 3. Test Codex CLI sign-in flow: plain 'codex login'
+Executing 'codex login' with timeout 5 to observe local server fallback:
+Starting local login server on http://localhost:1455.
+If your browser did not open, navigate to this URL to authenticate:
+
+https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&code_challenge=-PgIJvxQfcCDUijwy7Bfv8RVff4TspxKwpT0tf_uEkQ&code_challenge_method=S256&state=r6dTwLT2uxcNbuxWE9pk-aEwuQTLi7KgDw849786DNc&scope=openid+profile+email+offline_access+api.connectors.read+api.connectors.invoke&id_token_add_organizations=true&codex_cli_simplified_flow=true&originator=codex_cli_rs
+
+On a remote or headless machine? Use `codex login --device-auth` instead.
+
+== 4. Proxy access logs during Codex login attempt:
+egress proxy on 0.0.0.0:3128 allowing auth.openai.com,api.openai.com,chatgpt.com,chat.openai.com,cdn.oaistatic.com,oaistatic.com
+20:11:46.471 ALLOW CONNECT auth.openai.com:443 from 192.168.128.3:58386
+20:11:46.725 ALLOW CONNECT auth.openai.com:443 from 192.168.128.3:42056
+
+== 5. Verify credential storage location when simulated token is written to ~/.codex/auth.json
+Creating test session on agent-home volume:
+Checking permissions on auth.json:
+-rw------- 1 root root 269 Oct  1 20:11 /root/.codex/auth.json
+Testing 'codex login status':
+Error checking login status: invalid ID token format at line 5 column 31
+
+== 6. Stop, start, and rebuild test on the same agent-home volume
+Stopping container whspike-asin-agent...
+Starting container whspike-asin-agent...
+Checking auth file after stop & start:
+test-id-token
+test-access-token
+test-refresh-token
+test-account-id
+Deleting container whspike-asin-agent and recreating with SAME volume whspike-asin-home...
+Checking auth file after container recreate:
+-rw------- 1 root root 269 Oct  1 20:11 /root/.codex/auth.json
+test-id-token
+test-access-token
+test-refresh-token
+test-account-id
+Codex test complete.

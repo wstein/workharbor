@@ -1,0 +1,15 @@
+Creating internal network whspike-asin-net and volume whspike-asin-home...
+Starting egress proxy sidecar whspike-asin-proxy...
+Proxy IP on internal network: 192.168.128.2
+Starting agent container whspike-asin-agent...
+Checking tool versions inside agent container:
+2.1.285 (Claude Code)
+codex-cli 0.159.2
+Testing egress proxy from guest (curl to auth.openai.com):
+code=302
+Testing egress proxy denial from guest (curl to example.com):
+code=000
+Proxy logs so far:
+egress proxy on 0.0.0.0:3128 allowing claude.ai,claude.com,platform.claude.com,auth.anthropic.com,api.anthropic.com,auth.openai.com,api.openai.com,chatgpt.com
+20:11:22.275 ALLOW CONNECT auth.openai.com:443 from 192.168.128.3:33030
+20:11:22.468 DENY  CONNECT example.com:443 from 192.168.128.3:33042
