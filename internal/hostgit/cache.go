@@ -447,3 +447,10 @@ func (c *Cache) EnsureMergeBase(ctx context.Context, r *Repo, target, topic stri
 		}
 	}
 }
+
+// ValidRepoName reports whether a repository name, "owner/name", is accepted by
+// CachePath: a configuration is checked with it at start.
+func ValidRepoName(repo string) bool {
+	owner, name, ok := strings.Cut(repo, "/")
+	return ok && nameRe.MatchString(owner) && nameRe.MatchString(name)
+}
