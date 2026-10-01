@@ -50,7 +50,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 6 || name != "0006_shared_environments.sql" || applied != fixed.UnixNano() {
+	if n != 7 || name != "0007_egress_hosts.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -63,6 +63,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		"idempotency":  `SELECT 1 FROM idempotency LIMIT 1`,
 		"workspaces":   `SELECT 1 FROM workspaces LIMIT 1`,
 		"agents":       `SELECT 1 FROM agents LIMIT 1`,
+		"egress_hosts": `SELECT 1 FROM egress_hosts LIMIT 1`,
 	} {
 		rows, err := s.db.QueryContext(bg, query)
 		if err != nil {
@@ -81,8 +82,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 6 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 6", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 7 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 7", n, err)
 	}
 }
 
