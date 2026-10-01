@@ -1,0 +1,29 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": [
+    {
+      "seq": 5,
+      "task_id": "t2",
+      "kind": "run.started",
+      "tier": "audit",
+      "at": "2026-10-01T09:00:00Z",
+      "data": {
+        "run_id": "r1"
+      }
+    },
+    {
+      "seq": 6,
+      "task_id": "t2",
+      "kind": "transcript",
+      "tier": "transcript",
+      "at": "2026-10-01T09:00:00Z",
+      "data": {
+        "kind": "message",
+        "text": "hello"
+      }
+    }
+  ]
+}
+

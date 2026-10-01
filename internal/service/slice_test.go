@@ -251,3 +251,18 @@ func TestInboxAndWorkspaceList(t *testing.T) {
 		t.Errorf("workspaces = %+v, %v", list, err)
 	}
 }
+
+func TestLogReturnsTheStoredEventsAfterASequenceNumber(t *testing.T) {
+	r := newRig(t)
+	all, err := r.svc.Log(bg, "t1", 0, 0)
+	if err != nil || len(all) < 2 {
+		t.Fatalf("log = %+v, %v", all, err)
+	}
+	rest, err := r.svc.Log(bg, "t1", all[0].Seq, 1)
+	if err != nil || len(rest) != 1 || rest[0].Seq != all[1].Seq {
+		t.Errorf("after the first, limit 1 = %+v, %v", rest, err)
+	}
+	if _, err := r.svc.Log(bg, "nope", 0, 0); err == nil {
+		t.Error("an unknown task was accepted")
+	}
+}

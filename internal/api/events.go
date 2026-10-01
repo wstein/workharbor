@@ -113,3 +113,37 @@ func sanitizeField(s string) string {
 	}
 	return string(out)
 }
+
+// log returns the stored events of a task as one JSON response, for `whr logs`
+// without -f: the same events the stream replays, without waiting for more.
+func (s *Server) log(w http.ResponseWriter, r *http.Request) {
+	task, err := idParam(r, "task")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	since, err := sinceOf(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	limit := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, perr := strconv.Atoi(v)
+		if perr != nil || n < 1 || n > 1000 {
+			writeError(w, usageError{"limit must be between 1 and 1000"})
+			return
+		}
+		limit = n
+	}
+	evs, err := s.be.Log(r.Context(), task, since, limit)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	out := make([]eventView, 0, len(evs))
+	for _, e := range evs {
+		out = append(out, eventOf(e))
+	}
+	writeOK(w, http.StatusOK, out)
+}

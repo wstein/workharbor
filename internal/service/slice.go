@@ -252,3 +252,17 @@ func (s *Service) WorkspaceList(ctx context.Context) ([]WorkspaceView, error) {
 	}
 	return out, nil
 }
+
+// Log returns the durable events of a task after sequence number since, at
+// most limit of them (1 to 1000), oldest first. It is the non-streaming form of
+// Subscribe: ephemeral events are not in it. An unknown task is a
+// *domain.NotFoundError.
+func (s *Service) Log(ctx context.Context, task domain.ID, since int64, limit int) ([]domain.Event, error) {
+	if _, err := s.store.LoadTask(ctx, task); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	return s.store.EventsSince(ctx, task, since, limit)
+}

@@ -35,10 +35,11 @@ var t0 = time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
 // fake is a Backend whose answers a test sets.
 type fake struct {
-	mu     sync.Mutex
-	runs   int
-	since  []int64
-	events chan domain.Event
+	mu       sync.Mutex
+	runs     int
+	since    []int64
+	logCalls [][2]int64
+	events   chan domain.Event
 
 	onRun    func(service.RunRequest) (domain.ID, domain.ID, error)
 	onShow   func(domain.ID) (service.TaskView, error)
@@ -113,6 +114,19 @@ func (f *fake) WorkspaceList(context.Context) ([]service.WorkspaceView, error) {
 		Workspace: domain.Workspace{ID: "w1", Name: "docs-ws", Repo: "wstein/workharbor", Integration: "main"},
 		Agents:    []domain.Agent{{ID: "a1", Role: "docs", Branch: "agent/docs"}},
 	}}, nil
+}
+
+func (f *fake) Log(_ context.Context, id domain.ID, since int64, limit int) ([]domain.Event, error) {
+	if id != "t2" {
+		return nil, &domain.NotFoundError{Kind: "task", ID: string(id)}
+	}
+	f.mu.Lock()
+	f.logCalls = append(f.logCalls, [2]int64{since, int64(limit)})
+	f.mu.Unlock()
+	return []domain.Event{
+		{Seq: since + 1, TaskID: "t2", Kind: domain.EventRunStarted, Tier: domain.TierAudit, At: t0, Payload: []byte(`{"run_id":"r1"}`)},
+		{Seq: since + 2, TaskID: "t2", Kind: domain.EventTranscript, Tier: domain.TierTranscript, At: t0, Payload: []byte(`{"kind":"message","text":"hello"}`)},
+	}, nil
 }
 
 func (f *fake) Subscribe(_ context.Context, _ domain.ID, since int64) (<-chan domain.Event, error) {
@@ -399,6 +413,9 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"empty-message": {"POST", "/v1/tasks/t2/say", `{"message":"  "}`},
 		"empty-option":  {"POST", "/v1/decisions/d1/answer", `{"option":""}`},
 		"bad-since":     {"GET", "/v1/tasks/t2/events?since=abc", ""},
+		"log":           {"GET", "/v1/tasks/t2/log?since=4&limit=10", ""},
+		"log-not-found": {"GET", "/v1/tasks/nope/log", ""},
+		"log-bad-limit": {"GET", "/v1/tasks/t2/log?limit=0", ""},
 	} {
 		status, _, body := r.do(tc.method, tc.path, tc.body)
 		golden(t, name, status, body)
@@ -656,7 +673,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 11 {
+	if got := Routes(); len(got) != 12 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

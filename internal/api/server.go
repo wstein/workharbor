@@ -41,6 +41,7 @@ type Backend interface {
 	Inbox(ctx context.Context) ([]domain.Decision, error)
 	WorkspaceList(ctx context.Context) ([]service.WorkspaceView, error)
 	Subscribe(ctx context.Context, task domain.ID, since int64) (<-chan domain.Event, error)
+	Log(ctx context.Context, task domain.ID, since int64, limit int) ([]domain.Event, error)
 }
 
 type backend struct {
@@ -132,6 +133,7 @@ var routes = []route{
 	{http.MethodPost, "/v1/tasks/{task}/say", (*Server).say},
 	{http.MethodPost, "/v1/tasks/{task}/cancel", (*Server).cancel},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
+	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},
 	{http.MethodGet, "/v1/inbox", (*Server).inbox},
 	{http.MethodPost, "/v1/decisions/{decision}/answer", (*Server).answer},
 	{http.MethodGet, "/v1/workspaces", (*Server).workspaces},
