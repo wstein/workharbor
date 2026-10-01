@@ -1,0 +1,38 @@
+package domain
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/wstein/workharbor/internal/exitcode"
+)
+
+func TestIllegalTransitionsAreConflicts(t *testing.T) {
+	errs := map[string]error{
+		"task":        (&Task{ID: "t1", State: TaskCompleted}).Transition(TaskRunning),
+		"run":         (&Run{ID: "r1", State: RunStopped}).Transition(RunRunning),
+		"environment": (&Environment{ID: "e1", State: EnvDeleted}).Transition(EnvStopped),
+	}
+	for name, err := range errs {
+		if err == nil {
+			t.Fatalf("%s: illegal transition was allowed", name)
+		}
+		if got := exitcode.From(err); got != exitcode.Conflict {
+			t.Errorf("%s: exit code = %d, want Conflict (%d)", name, got, exitcode.Conflict)
+		}
+		var ce *ConflictError
+		if !errors.As(err, &ce) || ce.Rule != RuleTransition {
+			t.Errorf("%s: error = %v, want a transition conflict", name, err)
+		}
+	}
+}
+
+func TestNotFoundMapsToNotFound(t *testing.T) {
+	err := error(&NotFoundError{Kind: "run", ID: "r9"})
+	if got := exitcode.From(err); got != exitcode.NotFound {
+		t.Errorf("exit code = %d, want NotFound (%d)", got, exitcode.NotFound)
+	}
+	if err.Error() != "run r9 not found" {
+		t.Errorf("message = %q", err)
+	}
+}

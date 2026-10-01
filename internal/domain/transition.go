@@ -1,7 +1,5 @@
 package domain
 
-import "fmt"
-
 // taskTransitions is the task state machine of design §4.1. Completed,
 // cancelled and failed are terminal.
 var taskTransitions = map[TaskState][]TaskState{
@@ -24,7 +22,7 @@ func (s TaskState) Terminal() bool {
 // Transition validates a task state change.
 func (t *Task) Transition(to TaskState) error {
 	if !t.State.CanTransition(to) {
-		return fmt.Errorf("task %s: illegal transition %s -> %s", t.ID, t.State, to)
+		return conflict(RuleTransition, "task %s: illegal transition %s -> %s", t.ID, t.State, to)
 	}
 	t.State = to
 	return nil
@@ -57,7 +55,7 @@ func (s RunState) Terminal() bool {
 // Transition validates a run state change.
 func (r *Run) Transition(to RunState) error {
 	if !r.State.CanTransition(to) {
-		return fmt.Errorf("run %s: illegal transition %s -> %s", r.ID, r.State, to)
+		return conflict(RuleTransition, "run %s: illegal transition %s -> %s", r.ID, r.State, to)
 	}
 	r.State = to
 	return nil
@@ -86,7 +84,7 @@ func (s EnvState) Terminal() bool {
 // Transition validates an environment state change.
 func (e *Environment) Transition(to EnvState) error {
 	if !e.State.CanTransition(to) {
-		return fmt.Errorf("environment %s: illegal transition %s -> %s", e.ID, e.State, to)
+		return conflict(RuleTransition, "environment %s: illegal transition %s -> %s", e.ID, e.State, to)
 	}
 	e.State = to
 	return nil
