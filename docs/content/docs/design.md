@@ -149,10 +149,29 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
 - session persistence and resume
 - PR/issue tooling
 - "awaiting guidance" signal (how the agent raises a blocking Decision)
+- **approval prompts routed to the host (required for release 1)**: the agent blocks on a permission request and the supervisor answers it with a human's allow or deny and a reason (§4.2). An agent without it can only run with a fixed allowlist and every other action denied
 - **auth modes**, reported explicitly and never assumed:
     - `api-key`: the key stays in the host-side proxy and is issued per run (§7.3).
     - `subscription`: a consumer-plan login (for example Claude or ChatGPT sign-in) kept in a dedicated per-environment auth directory. The CLI refreshes the token itself, so it cannot sit behind the proxy.
 - **auth and quota blocking states**: the adapter reports `auth_expired` and `quota_exhausted` (with the reset time when known). Each opens a blocking Decision and pauses the run instead of failing or retrying. Re-login is a UI action through a browser or device-code flow.
+
+**Measured in spike #1** (issue #1; branch `spike/transcript`, `RESULTS.md`), with Claude Code 2.1.285, Codex CLI 0.159.2 and Antigravity `agy` 1.1.12 on one machine:
+
+| Capability | Claude Code | Codex CLI | Antigravity |
+| --- | --- | --- | --- |
+| Headless, typed events | Yes (`stream-json` in and out) | `exec --json`; only start and error events seen | Yes (`--output-format stream-json`) |
+| Mid-run message | Yes, picked up at the next model step | Not found in `exec` (unverified) | No: one prompt per run |
+| Resume | Yes (`--resume`), same session ID | `exec resume` exists, untested | `--conversation <id>`, untested |
+| Approvals to the host | Yes, through an MCP prompt tool | Untested | None found in print mode; the run ends in `ERROR` on a denial |
+| Usage window | Structured: five-hour and seven-day windows with reset time | Text only, reset time inside the message | Not observed |
+| Cancel | Hard interrupt only, session stays resumable | Untested | Untested |
+
+Findings that shape the contract:
+
+- A user message sent mid-run is delivered at the next model step, after the running tool finishes, not by interrupting it. The UI says so.
+- The session ID only appears after the first user message, and user messages are not echoed in the output, so the supervisor logs its own.
+- There is no cooperative pause; cancel is a hard interrupt.
+- Agents without streaming input (Codex `exec`, `agy` print mode) run in the degraded mode: a message becomes a resumed turn, labelled in the UI.
 
 ### 5.3 Reconciler
 
