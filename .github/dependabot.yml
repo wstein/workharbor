@@ -1,4 +1,6 @@
-# Dependabot version updates. Tool versions pinned in the Makefile and the
+# Dependabot version updates. A 7-day cooldown keeps brand-new releases (and any
+# compromised ones) out until they have had time to be noticed; security updates
+# are not delayed. Tool versions pinned in the Makefile and the
 # workflows are handled by Renovate (renovate.json), which Dependabot cannot read.
 version: 2
 updates:
@@ -7,6 +9,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
       include: scope
@@ -20,6 +24,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: build
       include: scope
@@ -34,6 +40,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: build
       include: scope
