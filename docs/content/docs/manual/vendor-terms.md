@@ -18,7 +18,12 @@ workharbor runs the agent CLIs you already use: Claude Code with a Claude subscr
 
 **OpenAI** ([Codex authentication](https://developers.openai.com/codex/auth), [Codex with a ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)): signing in to Codex with ChatGPT uses your plan's included usage and the ChatGPT terms; an API key is recommended for automated use such as CI/CD.
 
-**Google Antigravity**: not yet checked. Treat it like the others until it is.
+**Google Antigravity and Gemini API** ([Google Terms of Service](https://policies.google.com/terms), [Generative AI Additional Terms](https://policies.google.com/terms/generative-ai), [Gemini API Additional Terms](https://ai.google.dev/gemini-api/terms), read 1 October 2026) {{< status unverified >}}, in short:
+
+- Signing in with a Google account (including Google One AI Premium / Gemini Advanced) covers personal interactive use of Antigravity and official developer tools.
+- Automated or programmatic pipelines must use the Gemini API (with `GEMINI_API_KEY`) or Vertex AI rather than driving consumer account sessions.
+- Under the Gemini API and Generative AI Terms, automated agent workflows must not automatically bypass any requests for human confirmation: human-in-the-loop oversight is an explicit requirement for agentic actions, matching workharbor's policy table and blocking Decisions.
+- Credentials and session tokens (`jetski-standalone-oauth-token`) must not be collected, passed on, or shared across users. Under D40, signing in with the user's own account inside an isolated environment respects individual seat boundaries.
 
 ## What workharbor does in subscription mode
 
