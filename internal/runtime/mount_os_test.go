@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -224,12 +223,18 @@ func TestCheckMountComparesByFileIdentityOnTheRealFilesystem(t *testing.T) {
 }
 
 func TestCheckMountComparesCaseVariantsOnTheRealFilesystem(t *testing.T) {
-	home := realDir(t)
-	mkdirs(t, filepath.Join(home, ".ssh"))
-	upper := filepath.Join(filepath.Dir(home), strings.ToUpper(filepath.Base(home)))
-	if _, err := os.Stat(upper); err != nil {
+	base := realDir(t)
+	probe := filepath.Join(base, "case-probe")
+	if err := os.WriteFile(probe, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "CASE-PROBE")); err != nil {
 		t.Skip("this filesystem is case-sensitive")
 	}
+
+	home := filepath.Join(base, "home")
+	mkdirs(t, filepath.Join(home, ".ssh"))
+	upper := filepath.Join(base, "HOME")
 	for source, want := range map[string]Reason{
 		upper:                        ReasonHome,
 		filepath.Join(upper, ".SSH"): ReasonSecrets,
