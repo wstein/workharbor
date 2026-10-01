@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 )
@@ -48,6 +50,8 @@ const (
 	// EventTranscript is one observation of the agent (a message, a tool call or
 	// result, a diff, a test result, usage), stored in the transcript tier.
 	EventTranscript EventKind = "transcript"
+	// EventTaskHeld records why a task waits for a human before its run starts.
+	EventTaskHeld EventKind = "task.held"
 )
 
 // Event is an append-only record: the audit trail, the UI feed and the CLI
@@ -181,4 +185,20 @@ func NewInstructionEvent(task, run ID, delivery, text string, at time.Time) Even
 // agent's observation as JSON. The domain does not know the agent's types.
 func NewTranscriptEvent(task ID, payload []byte, at time.Time) Event {
 	return Event{TaskID: task, Kind: EventTranscript, Tier: TierTranscript, Payload: payload, At: at}
+}
+
+// TaskHeld is the payload of EventTaskHeld: who wrote the issue and a hash of
+// the exact text the human is asked about, so a later start can check that the
+// issue has not changed since (the Decision shows only a capped copy).
+type TaskHeld struct {
+	DecisionID  ID     `json:"decision_id"`
+	Author      string `json:"author"`
+	Association string `json:"association"`
+	TextSHA256  string `json:"text_sha256"`
+}
+
+// TextHash is the hash recorded for held text.
+func TextHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
 }

@@ -315,6 +315,7 @@ func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, t
 	}
 	a.task.Untrusted = true
 	a.addDecision(d)
+	a.record(EventTaskHeld, TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text)})
 	return *d, nil
 }
 
