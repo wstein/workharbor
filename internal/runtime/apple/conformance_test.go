@@ -212,3 +212,37 @@ func TestACancelledExecEndsWithAnOpenStdinPipe(t *testing.T) {
 		t.Fatal("a cancelled exec did not end while its stdin pipe was open")
 	}
 }
+
+// A new volume is writable by the environment's unprivileged user, so the agent
+// can use its home (found by the serve integration run: the volume was root's).
+func TestANewVolumeIsWritableByTheEnvironmentsUser(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	spec := h.NewSpec()
+	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-home", Target: "/home/agent"})
+	prep, err := h.Prepare(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := h.Adapter.Provision(ctx, prep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = h.Adapter.Stop(context.Background(), id)
+		_ = h.Adapter.Delete(context.Background(), id)
+		_ = h.Adapter.RemoveVolume(context.Background(), "wh-conformance-home")
+	})
+	if err := h.Adapter.Start(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: []string{"sh", "-c", "id -u && mkdir /home/agent/.claude && touch /home/agent/.claude/x && echo writable"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, code, _ := runtime.Collect(st)
+	if code != 0 || !strings.Contains(string(out), "writable") || !strings.HasPrefix(string(out), "1000") {
+		t.Errorf("exit %d, stdout %q, stderr %q: the user cannot write its home volume", code, out, errOut)
+	}
+}

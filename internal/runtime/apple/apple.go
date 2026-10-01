@@ -320,6 +320,12 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 		// unless this call created it, which is the case in this branch.
 		name := m.Source
 		undo = append(undo, func() { _, _, _ = a.run(bg, nil, "volume", "delete", name) })
+		// A new volume is an empty ext4 filesystem owned by root. The agent runs
+		// as an unprivileged user, so its home would be unwritable (found by the
+		// serve integration run): hand the volume to that user once, at creation.
+		if err := a.ownVolume(ctx, id, spec, name); err != nil {
+			return fail(err)
+		}
 	}
 
 	create := a.createArgs(id, spec)
@@ -717,3 +723,22 @@ func (a *Adapter) Build(ctx context.Context, b runtime.BuildSpec) ([]byte, error
 }
 
 var _ runtime.Builder = (*Adapter)(nil)
+
+// ownVolume gives a new volume to the environment's user: a short container as
+// root runs chown on it and is deleted. It is the only place the adapter runs
+// anything as root, it has no network of the environment's and no other mount.
+func (a *Adapter) ownVolume(ctx context.Context, env string, spec runtime.Spec, volume string) error {
+	helper := env + "-own-" + volume
+	if len(helper) > 100 {
+		helper = helper[:100]
+	}
+	args := []string{"run", "--name", helper, "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--read-only", "-v", volume + ":/v"}
+	args = append(args, a.labelArgs(roleVolume, env, nil)...)
+	args = append(args, spec.Image, "chown", spec.User, "/v")
+	_, _, err := a.run(ctx, nil, args...)
+	_, _, _ = a.run(context.WithoutCancel(ctx), nil, "delete", helper)
+	if err != nil {
+		return fmt.Errorf("give volume %s to user %s: %w", volume, spec.User, err)
+	}
+	return nil
+}
