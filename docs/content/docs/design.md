@@ -203,6 +203,13 @@ A **topic** is one line of work: one branch (`agent/<topic>`) with its own check
 
 **The host treats every agent-writable checkout as hostile** (§7.4). It never runs plain git there: cleanup and push use hardened git, or fetch the branch into a supervisor-owned repository first.
 
+**`hostgit`** (issue #19) is the only way the host runs git on anything an agent can write:
+
+- **Fetch, then work on the copy.** `FetchBranch` fetches one `agent/*` branch from the agent's checkout into a bare repository the supervisor owns, with no tags, no submodules, object checks on (`fsckObjects`) and only the file transport. Cleanup (rebase, fold, sign) and push run only on that supervisor-owned repository; the agent's checkout is never rebased, committed in or pushed from.
+- **No git commands in the agent's tree, except read-only plumbing.** A handle on an agent's checkout (`Untrusted`) accepts only `rev-parse`, `rev-list`, `cat-file`, `for-each-ref`, `ls-tree`, `merge-base` and `show-ref`. `status`, `add`, `commit`, `checkout`, `diff`, `log -p`, `rebase`, `push` and `fetch` are refused, as are `--textconv` and `--filters`: they can run filters, textconv drivers, hooks or the file-system monitor from the agent's repository config, which no command-line override can list in advance.
+- **A hardened floor on every host git command.** Git starts with an empty environment (no `GIT_*` from the host, a minimal `PATH`, an empty `HOME`, no system or global config, no terminal prompt, no optional locks, no replace objects) and `-c` overrides that disable hooks (`core.hooksPath`), the file-system monitor, the pager and editor, credential helpers, signing, submodule recursion, and every transport except `file` for a fetch from an agent.
+- **Tested.** Tests plant a hook, `core.fsmonitor`, `core.sshCommand`, `core.pager`, a clean and smudge filter and `uploadpack.packObjectsHook` in an agent checkout. Control runs of plain git prove each one fires; none runs through `hostgit`.
+
 ## 5. Architecture
 
 Logical components live in one Go binary on the Mac; boundaries are package interfaces, not microservices.
