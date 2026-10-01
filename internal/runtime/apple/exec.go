@@ -5,9 +5,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +30,55 @@ func sortedKeys(m map[string]string) []string {
 }
 
 func sortStrings(s []string) { sort.Strings(s) }
+
+// ErrBadEnv is returned for an environment entry that is not KEY=VALUE with a
+// plain key and a single-line value. The message names the key, never the value.
+var ErrBadEnv = errors.New("apple: bad environment entry")
+
+var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// envFile writes the entries to a fresh 0600 file for --env-file, so no value
+// is on a command line, where `ps` and an ExitError would show it. An entry
+// without "=" is refused: for the CLI it means inheriting whr's own variable.
+// The CLI takes each value verbatim up to the end of the line (checked with
+// container 1.5.0), so a value may not span lines. The returned function
+// removes the file.
+func envFile(env []string) (string, func(), error) {
+	var b strings.Builder
+	for i, e := range env {
+		k, v, ok := strings.Cut(e, "=")
+		switch {
+		case !ok:
+			return "", nil, fmt.Errorf("%w: entry %d has no '=', which would copy a variable from whr's own environment", ErrBadEnv, i)
+		case !envKey.MatchString(k):
+			return "", nil, fmt.Errorf("%w: entry %d has a key that is not a plain name", ErrBadEnv, i)
+		case strings.ContainsAny(v, "\n\r\x00"):
+			return "", nil, fmt.Errorf("%w: the value of %s spans lines or holds NUL", ErrBadEnv, k)
+		}
+		b.WriteString(e)
+		b.WriteByte('\n')
+	}
+	f, err := os.CreateTemp("", "whr-env-*") // mode 0600, in the user's own temp directory
+	if err != nil {
+		return "", nil, err
+	}
+	remove := func() { _ = os.Remove(f.Name()) }
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		remove()
+		return "", nil, err
+	}
+	if _, err := f.WriteString(b.String()); err != nil {
+		_ = f.Close()
+		remove()
+		return "", nil, err
+	}
+	if err := f.Close(); err != nil {
+		remove()
+		return "", nil, err
+	}
+	return f.Name(), remove, nil
+}
 
 // killGrace is how long whr-shim waits after SIGINT before SIGKILL.
 const killGrace = 2 * time.Second
@@ -64,14 +118,21 @@ func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) 
 	if req.Dir != "" {
 		args = append(args, "-w", req.Dir)
 	}
-	for _, e := range req.Env {
-		args = append(args, "-e", e)
+	cleanup := func() {}
+	if len(req.Env) > 0 {
+		path, remove, err := envFile(req.Env)
+		if err != nil {
+			return nil, err
+		}
+		cleanup = remove
+		args = append(args, "--env-file", path)
 	}
 	args = append(args, id)
 	pidfile := ""
 	if a.shim != "" {
 		b := make([]byte, 6)
 		if _, err := rand.Read(b); err != nil {
+			cleanup()
 			return nil, err
 		}
 		pidfile = "/tmp/whr-exec-" + hex.EncodeToString(b) + ".pid"
@@ -86,15 +147,18 @@ func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		stop()
+		cleanup()
 		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		stop()
+		cleanup()
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
 		stop()
+		cleanup()
 		return nil, err
 	}
 
@@ -124,7 +188,7 @@ func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) 
 	go pump(stderr, runtime.Stderr)
 
 	waited := make(chan error, 1)
-	go func() { pumps.Wait(); waited <- cmd.Wait() }()
+	go func() { pumps.Wait(); err := cmd.Wait(); cleanup(); waited <- err }()
 	go func() {
 		defer close(st.done)
 		defer close(st.chunks)
