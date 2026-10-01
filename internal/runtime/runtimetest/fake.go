@@ -25,6 +25,8 @@ type Defects struct {
 	TouchForeign    bool // ID methods act on environments it does not own
 	DeleteRunning   bool // Delete removes a running environment
 	RestartKeepsRun bool // Restart leaves running environments running
+	IgnoreStdin     bool // Exec never reads the request's Stdin
+	CancelLeavesRun bool // cancelling an exec returns, but the process in the guest keeps running
 }
 
 // Fake is an in-memory runtime.Adapter acting for one owner.
@@ -50,6 +52,7 @@ type fakeEnv struct {
 	state  domain.EnvState
 	addr   string
 	logs   []byte
+	procs  int // sleep commands running in the guest
 }
 
 // NewFake returns a fake that acts for owner. Bind mounts are vetted against

@@ -6,6 +6,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/wstein/workharbor/internal/domain"
 )
@@ -57,6 +58,11 @@ type ExecRequest struct {
 	Cmd []string
 	Env []string
 	Dir string
+	// Stdin is copied into the command's standard input, which is closed when
+	// the reader ends or the context is cancelled. A caller that keeps writing
+	// to a pipe while the command runs can send it input as it goes (a
+	// stream-json agent, design §5.2). Nil means the command's stdin is closed.
+	Stdin io.Reader
 }
 
 // Stream names a chunk's source.

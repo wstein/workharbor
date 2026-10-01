@@ -15,6 +15,8 @@ import (
 //	err WORDS...    writes them to stderr, exit 0
 //	exit N          exit code N
 //	sleep           blocks until the context is cancelled
+//	cat             copies stdin to stdout until stdin ends
+//	alive           exit 0 while a sleep runs in the environment, 1 when none does
 //
 // Anything else exits 127.
 func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (runtime.ExecStream, error) {
@@ -28,6 +30,11 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 		f.mu.Unlock()
 		return nil, runtime.ErrNotRunning
 	}
+	sleeping := len(req.Cmd) > 0 && req.Cmd[0] == "sleep"
+	if sleeping {
+		e.procs++ // the process exists before Exec returns
+	}
+	alive := e.procs > 0
 	f.mu.Unlock()
 
 	st := &fakeStream{chunks: make(chan runtime.Chunk, 8), done: make(chan struct{})}
@@ -56,8 +63,19 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 			}
 		case "sleep":
 			<-ctx.Done()
+			if !f.Defects.CancelLeavesRun {
+				f.mu.Lock()
+				e.procs--
+				f.mu.Unlock()
+			}
 			st.err = ctx.Err()
 			st.code = 130
+		case "alive":
+			if !alive {
+				st.code = 1
+			}
+		case "cat":
+			f.cat(ctx, req, send)
 		default:
 			st.code = 127
 		}
@@ -77,4 +95,42 @@ func (s *fakeStream) Chunks() <-chan runtime.Chunk { return s.chunks }
 func (s *fakeStream) Wait() (int, error) {
 	<-s.done
 	return s.code, s.err
+}
+
+// cat copies the request's stdin to stdout as it arrives. The reader is read
+// in its own goroutine, so a cancelled context ends the command even while a
+// read blocks.
+func (f *Fake) cat(ctx context.Context, req runtime.ExecRequest, send func(runtime.Stream, string)) {
+	if req.Stdin == nil || f.Defects.IgnoreStdin {
+		return
+	}
+	data := make(chan []byte)
+	go func() {
+		defer close(data)
+		buf := make([]byte, 4096)
+		for {
+			n, err := req.Stdin.Read(buf)
+			if n > 0 {
+				select {
+				case data <- append([]byte(nil), buf[:n]...):
+				case <-ctx.Done():
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	for {
+		select {
+		case b, ok := <-data:
+			if !ok {
+				return
+			}
+			send(runtime.Stdout, string(b))
+		case <-ctx.Done():
+			return
+		}
+	}
 }

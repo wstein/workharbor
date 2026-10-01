@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,12 @@ type Commands struct {
 	Stderr func(text string) []string // writes text and a newline to stderr
 	Exit   func(code int) []string    // exits with code
 	Sleep  []string                   // runs until cancelled
+	// Cat copies its standard input to stdout until the input ends.
+	Cat []string
+	// Alive exits 0 while the Sleep command runs in the environment and
+	// non-zero when it does not, for example `pgrep -x sleep`. The suite uses
+	// it to prove that a cancelled exec killed the process in the guest.
+	Alive []string
 }
 
 // Harness is what a backend gives the suite.
@@ -62,6 +69,8 @@ func Checks() []Check {
 		{"list returns only the owner's environments", checkListByOwner},
 		{"foreign environments are off limits", checkForeign},
 		{"exec streams output, errors and the exit code", checkExec},
+		{"exec passes stdin to the command, also while it runs", checkStdin},
+		{"cancelling an exec ends the process in the guest", checkCancelKillsGuestProcess},
 		{"delete is by exact ID only", checkDeleteExact},
 		{"a service restart leaves every environment stopped", checkRestart},
 	}
@@ -367,6 +376,117 @@ func checkExec(ctx context.Context, h Harness) error {
 	return nil
 }
 
+// startRunning provisions and starts an environment.
+func startRunning(ctx context.Context, h Harness) (string, error) {
+	id, err := h.Adapter.Provision(ctx, h.NewSpec())
+	if err != nil {
+		return "", err
+	}
+	if err := h.Adapter.Start(ctx, id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func checkStdin(ctx context.Context, h Harness) error {
+	if len(h.Commands.Cat) == 0 {
+		return errors.New("the harness has no Commands.Cat, which the stdin check needs")
+	}
+	a := h.Adapter
+	id, err := startRunning(ctx, h)
+	if err != nil {
+		return err
+	}
+
+	// Input in the request reaches the command, and its end closes stdin.
+	ectx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	st, err := a.Exec(ectx, id, runtime.ExecRequest{Cmd: h.Commands.Cat, Stdin: strings.NewReader("hello\n")})
+	if err != nil {
+		return err
+	}
+	if out, _, code, err := runtime.Collect(st); err != nil || code != 0 || string(out) != "hello\n" {
+		return fmt.Errorf("cat with stdin: stdout %q exit %d err %s, want %q", out, code, show(err), "hello\n")
+	}
+
+	// No Stdin means a closed stdin: the command ends and does not wait.
+	if st, err = a.Exec(ectx, id, runtime.ExecRequest{Cmd: h.Commands.Cat}); err != nil {
+		return err
+	}
+	if out, _, code, err := runtime.Collect(st); err != nil || code != 0 || len(out) != 0 {
+		return fmt.Errorf("cat without stdin: stdout %q exit %d err %s, want it to end at once with no output", out, code, show(err))
+	}
+
+	// Input written while the command runs arrives while it runs.
+	pr, pw := io.Pipe()
+	defer func() { _ = pr.Close() }()
+	if st, err = a.Exec(ectx, id, runtime.ExecRequest{Cmd: h.Commands.Cat, Stdin: pr}); err != nil {
+		return err
+	}
+	go func() { _, _ = pw.Write([]byte("one\n")) }()
+	select {
+	case c, ok := <-st.Chunks():
+		if !ok || c.Stream != runtime.Stdout || string(c.Data) != "one\n" {
+			return fmt.Errorf("first live chunk = %+v (open %v), want stdout %q", c, ok, "one\n")
+		}
+	case <-time.After(5 * time.Second):
+		return errors.New("input written while the command runs did not reach it")
+	}
+	go func() { _, _ = pw.Write([]byte("two\n")); _ = pw.Close() }()
+	if out, _, code, err := runtime.Collect(st); err != nil || code != 0 || string(out) != "two\n" {
+		return fmt.Errorf("after the live input: stdout %q exit %d err %s, want %q and exit 0", out, code, show(err), "two\n")
+	}
+	return nil
+}
+
+// alive runs the probe and reports whether the process is still there.
+func alive(ctx context.Context, h Harness, id string) (bool, error) {
+	st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: h.Commands.Alive})
+	if err != nil {
+		return false, err
+	}
+	_, _, code, err := runtime.Collect(st)
+	return code == 0, err
+}
+
+func checkCancelKillsGuestProcess(ctx context.Context, h Harness) error {
+	if len(h.Commands.Alive) == 0 {
+		return errors.New("the harness has no Commands.Alive, which the cancel check needs")
+	}
+	a := h.Adapter
+	id, err := startRunning(ctx, h)
+	if err != nil {
+		return err
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	st, err := a.Exec(cctx, id, runtime.ExecRequest{Cmd: h.Commands.Sleep})
+	if err != nil {
+		return err
+	}
+	// The probe has to see the process first, or it proves nothing.
+	if up, err := alive(ctx, h, id); err != nil || !up {
+		return fmt.Errorf("the Alive probe does not see the running command (alive %v, %s)", up, show(err))
+	}
+	cancel()
+	_, _ = st.Wait()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		up, err := alive(ctx, h, id)
+		if err != nil {
+			return err
+		}
+		if !up {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return errors.New("the exec returned after the cancel but the process in the guest is still running (spike #2: SIGINT is not forwarded)")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func checkDeleteExact(ctx context.Context, h Harness) error {
 	a := h.Adapter
 	var ids []string
@@ -468,6 +588,8 @@ func fakeHarness(t *testing.T, defects Defects) Harness {
 			Stderr: func(s string) []string { return []string{"err", s} },
 			Exit:   func(n int) []string { return []string{"exit", fmt.Sprint(n)} },
 			Sleep:  []string{"sleep"},
+			Cat:    []string{"cat"},
+			Alive:  []string{"alive"},
 		},
 		Restart:    func(context.Context) error { f.Restart(); return nil },
 		NewForeign: func(context.Context) (string, error) { return f.AddForeign("another-tool"), nil },

@@ -24,6 +24,8 @@ func TestSuiteNoticesDefectiveAdapters(t *testing.T) {
 		{"lists every owner's environments", Defects{ListAll: true}, "list returns only the owner's environments"},
 		{"acts on foreign environments", Defects{TouchForeign: true}, "foreign environments are off limits"},
 		{"deletes a running environment", Defects{DeleteRunning: true}, "delete needs a stopped environment"},
+		{"ignores stdin", Defects{IgnoreStdin: true}, "exec passes stdin to the command, also while it runs"},
+		{"leaves the guest process running after a cancel", Defects{CancelLeavesRun: true}, "cancelling an exec ends the process in the guest"},
 		{"keeps environments running through a restart", Defects{RestartKeepsRun: true}, "a service restart leaves every environment stopped"},
 	}
 	for _, tc := range tests {
