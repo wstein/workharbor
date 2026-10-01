@@ -64,3 +64,26 @@ main :not(pre) > code {
     padding-inline: 0.75rem;
   }
 }
+
+/* Status markers ({{< status >}}): how firm a claim is. */
+.whr-status {
+  display: inline-block;
+  padding: 0 0.4em;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.whr-status-verified { color: #047857; }
+.whr-status-unverified { color: #b45309; }
+.whr-status-decided { color: #1d4ed8; }
+.whr-status-open { color: #6b7280; }
+
+.dark .whr-status-verified { color: #6ee7b7; }
+.dark .whr-status-unverified { color: #fcd34d; }
+.dark .whr-status-decided { color: #93c5fd; }
+.dark .whr-status-open { color: #d1d5db; }

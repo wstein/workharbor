@@ -85,7 +85,7 @@ These are accepted for a single-developer, watched personal tool. Each has a lim
 
 - **Data can leave through an allowed host.** The sidecar matches on the hostname in `CONNECT`, so `api.anthropic.com` can carry data out, and domain fronting is not stopped. Limit: the allowlist is minimal, every request is logged, and the logs are reviewable.
 - **The sidecar is trusted and has full egress.** Limit: it runs only the proxy, from a pinned image, with no access to secrets.
-- **A subscription login sits inside the environment.** Any process in the guest can read it while a run is active. Limit: one dedicated auth directory per environment, never the host's, and revocation at the vendor when the environment is deleted. That vendor revocation works as expected is **unverified**.
+- **A subscription login sits inside the environment.** Any process in the guest can read it while a run is active. Limit: one dedicated auth directory per environment, never the host's, and revocation at the vendor when the environment is deleted. That vendor revocation works as expected is {{< status unverified >}}.
 - **Host git on agent trees is limited, not eliminated.** `hostgit` checks the checkout, isolates the configuration and allows only read-only plumbing there, and fetching into a supervisor-owned copy is the default. The push flow fetches only from a stopped environment (#27), so no guest process can change the files between the checks and the fetch.
 - **The agent sees what it is given.** Repository contents go to the LLM vendor. That is the developer's choice per repository.
 

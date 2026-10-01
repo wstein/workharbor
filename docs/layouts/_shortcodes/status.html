@@ -1,0 +1,19 @@
+{{- /*
+  status marks how firm a claim is: {{< status verified >}} (measured on the
+  target setup), unverified (from documentation or the original sources, not
+  measured), decided (settled in the decision table) or open (not decided).
+  An unknown status fails the build.
+*/ -}}
+{{- $s := .Get 0 -}}
+{{- $titles := dict
+  "verified" "Measured on the target setup"
+  "unverified" "Not measured: taken from documentation or the original sources"
+  "decided" "Settled in the decision table"
+  "open" "Not decided yet"
+-}}
+{{- $title := index $titles $s -}}
+{{- if not $title -}}
+  {{- errorf "status: unknown status %q at %s; use verified, unverified, decided or open" $s .Position -}}
+{{- end -}}
+<span class="whr-status whr-status-{{ $s }}" title="{{ $title }}">{{ $s }}</span>
+{{- /* trim */ -}}

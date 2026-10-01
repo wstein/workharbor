@@ -5,7 +5,7 @@ weight: 1
 toc: true
 ---
 
-A checklist for the host, in order. Each step says why. Steps marked **unverified** have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design.md).
+A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design.md).
 
 ## 1. Hardware and macOS
 
@@ -19,7 +19,7 @@ A checklist for the host, in order. Each step says why. Steps marked **unverifie
   | **32 GB / 512 GB** | **$1,499** | **about 10** |
 
   Each memory step costs $200 and adds about four environments; prices change, so check the Apple Store for your country (Germany: from €1,049).
-- Spend on memory before storage: memory cannot be upgraded later, storage can be added externally. An external SSD holds repositories, workspaces and backups well; whether Apple Container's own storage (images, volumes with the agents' build caches) can live there is **unverified** (issue #54).
+- Spend on memory before storage: memory cannot be upgraded later, storage can be added externally. An external SSD holds repositories, workspaces and backups well; whether Apple Container's own storage (images, volumes with the agents' build caches) can live there is {{< status unverified >}} (issue #54).
 - macOS 26. The Apple Container measurements were made on macOS 26.6.2.
 - Keep automatic security updates on, but **install macOS updates that restart the Mac yourself**: a restart stops every running agent until the supervisor resumes them.
 
@@ -38,7 +38,7 @@ sudo sysadminctl -addUser whr -fullName "workharbor" -password -
 Keep **FileVault on**. That rules out automatic login, which is the right trade-off for a machine that holds agent logins.
 
 - **Planned restarts:** `sudo fdesetup authrestart` restarts once without the unlock prompt.
-- **After a power cut:** the Mac stops at the FileVault unlock screen. Nobody is logged in yet, so the Tailscale app (step 7) is not running and Screen Sharing is not available: unlock it with a keyboard and display, then log in as `whr` so its services start. Whether macOS 26 accepts a remote unlock over SSH at that screen is **unverified**. A small UPS makes this rare.
+- **After a power cut:** the Mac stops at the FileVault unlock screen. Nobody is logged in yet, so the Tailscale app (step 7) is not running and Screen Sharing is not available: unlock it with a keyboard and display, then log in as `whr` so its services start. Whether macOS 26 accepts a remote unlock over SSH at that screen is {{< status unverified >}}. A small UPS makes this rare.
 - Whether workharbor runs as a LaunchAgent of `whr` or as a LaunchDaemon is still open (issue #38).
 
 ## 4. Power
@@ -96,20 +96,20 @@ The quickest option. The Mac gets its own VPN interface and a stable name, and T
 1. Install the Tailscale app on the Mac (step 5) and on the phone, and sign in on both.
 2. Forward the Mac's Tailscale name to workharbor on loopback with HTTPS: `tailscale serve --bg <port>` (check the exact syntax with `tailscale serve --help`). workharbor itself stays on loopback.
 3. Optional: limit the phone to that port with a Tailscale access rule.
-4. Whether a guest container can reach the Mac's Tailscale address is **unverified** (issue #69); the API token guards it either way.
+4. Whether a guest container can reach the Mac's Tailscale address is {{< status unverified >}} (issue #69); the API token guards it either way.
 
 Tailscale's coordination server is a third party. [Headscale](https://github.com/juanfont/headscale) replaces it with a self-hosted one.
 
 ### Option B: WireGuard on your router (FRITZ!Box)
 
-No VPN software on the Mac and no third party. A FRITZ!Box offers WireGuard from FRITZ!OS 7.50 (**unverified**: check your version).
+No VPN software on the Mac and no third party. A FRITZ!Box offers WireGuard from FRITZ!OS 7.50 ({{< status unverified >}}: check your version).
 
 1. On the FRITZ!Box: *Internet → Permit Access → VPN (WireGuard)*, add a connection for your phone, and import it into the WireGuard app with the QR code.
 2. The phone then reaches the Mac at its LAN address. There is no VPN interface on the Mac, so the address alone does not tell your phone from any other device on the LAN.
-3. So workharbor stays on loopback, and a small HTTPS proxy on the Mac's LAN address forwards to it. Guest containers can reach that proxy too, so a `pf` packet-filter rule admits only the addresses the FRITZ!Box gives VPN clients to its port, and the API token guards every request. The macOS firewall in System Settings cannot do this: it filters by app, not by address. The `pf` rule and how the FRITZ!Box numbers VPN clients are **unverified** (issue #69): check the address your phone gets.
+3. So workharbor stays on loopback, and a small HTTPS proxy on the Mac's LAN address forwards to it. Guest containers can reach that proxy too, so a `pf` packet-filter rule admits only the addresses the FRITZ!Box gives VPN clients to its port, and the API token guards every request. The macOS firewall in System Settings cannot do this: it filters by app, not by address. The `pf` rule and how the FRITZ!Box numbers VPN clients are {{< status unverified >}} (issue #69): check the address your phone gets.
 4. The phone app needs HTTPS: use your own certificate authority (installed on the phone) or a certificate for a domain you own.
 
-A line without a public IPv4 address (DS-Lite, carrier-grade NAT) may not accept inbound WireGuard (**unverified**); Tailscale works there.
+A line without a public IPv4 address (DS-Lite, carrier-grade NAT) may not accept inbound WireGuard ({{< status unverified >}}); Tailscale works there.
 
 ### Option C: WireGuard on the Mac
 
@@ -120,7 +120,7 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 - macOS firewall on, in stealth mode: *System Settings → Network → Firewall*.
 - **Every guest container can reach the Mac's services that listen on all interfaces**, even from an isolated network (issue #69). Turn off what you do not need in *System Settings → General → Sharing* (File Sharing, Screen Sharing, AirPlay Receiver, Media Sharing).
 - Remote Login (SSH) only for your administrator account (*Allow access for*), with **keys only**: set `PasswordAuthentication no` and `KbdInteractiveAuthentication no` in a file under `/etc/ssh/sshd_config.d/`. Otherwise an agent could guess passwords. Keep it until workharbor's short-lived SSH certificates exist (issue #32).
-- A `pf` rule that blocks the container subnets (`192.168.64.0/24` for the default network, and the `--internal` networks') from the Mac's own addresses closes this for every service; it is **unverified** and comes with issue #69.
+- A `pf` rule that blocks the container subnets (`192.168.64.0/24` for the default network, and the `--internal` networks') from the Mac's own addresses closes this for every service; it is {{< status unverified >}} and comes with issue #69.
 - Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3).
 
 ## 9. Backups
