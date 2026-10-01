@@ -9,7 +9,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 1. Lifecycle and limits | Measured | Each container is its own VM. CPU and memory limits are enforced. Use `--init`, or a stop takes 5 s |
 | 2. Storage | Measured | Volumes and bind mounts survive a rebuild; the rootfs does not. Bind mounts are about 5x slower for many small files. A volume attached read-write is exclusive to one container |
 | 3. Isolation | Measured | Mounted unix sockets are unusable. The runtime accepts any host path, so the adapter must reject. The default network reaches the LAN, the internet, other containers and host services |
-| 4. Default-deny egress | Measured | `--internal` networks block everything. A dual-homed proxy sidecar gives a logging allowlist |
+| 4. Default-deny egress | Measured, corrected | `--internal` networks block the internet, the LAN and other containers, but not the host (issue #69). A dual-homed proxy sidecar gives a logging allowlist |
 | 5. Agent in a container | Measured | A real, authenticated run works: the harness on the host drives Claude Code in a container on an internal network, through the proxy. Streaming, mid-run messages and resume after a container restart all work. Cancel and approvals need work |
 | 6. Recovery | Measured, except a reboot | No restart policy. After a crash or a `system stop` and `start`, containers come back `stopped` with their data. Volumes, networks and images survive. A reboot was not triggered |
 | 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
@@ -57,6 +57,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 ## 4. Default-deny egress
 
 - `container network create --internal NAME` ("host-only") blocks **everything** from a container on it: the internet, DNS (names do not resolve), the LAN, the host through every address, IPv6, and containers on other networks. Nothing leaks.
+  - **Corrected by issue #69** (branch `spike/host-reachability`): an `--internal` guest does reach host listeners bound to the Mac's LAN address or to all interfaces, through the network's gateway. Only loopback-only listeners are unreachable. This spike's "the host through every address" did not test a listener on the LAN address; design §7.2 and D29 follow #69.
 - **The host cannot serve it.** The host gets no interface on an internal network, so a proxy on the host cannot bind to its gateway address or be reached.
 - **Working design:** a **sidecar** container attached to both networks (`--network default --network NAME`, the flag repeats) runs the logging allowlist proxy. Agent containers live only on the internal network and reach the sidecar's internal IP on port 3128. Measured with the probe's proxy:
   - allowed hosts returned 200 (`example.com`, `proxy.golang.org`); denied hosts got 403 (HTTPS through CONNECT and plain HTTP); a CONNECT to a raw IP was denied too;
