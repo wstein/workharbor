@@ -133,13 +133,13 @@ Do not pretend backends share Docker semantics. One **runtime conformance suite*
 
 ### 5.2 Agent adapter
 
-Specified as explicitly as the runtime contract. Capability flags:
+Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Capability flags:
 
 - headless / unattended operation
-- mid-run instruction injection
+- **mid-run message injection (required for release 1)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
+- **structured event stream (required for release 1)**: messages, tool calls, diffs and test results as typed events, which feed the live transcript (§9.3)
 - cooperative pause (e.g. stop after current turn)
 - session persistence and resume
-- structured event stream
 - PR/issue tooling
 - "awaiting guidance" signal (how the agent raises a blocking Decision)
 - **auth modes**, reported explicitly and never assumed:
