@@ -4,10 +4,11 @@ cascade:
   type: docs
 ---
 
-Design and reference documentation for workharbor. The project is in the design phase; there is no working implementation yet.
+Design and reference documentation for workharbor. The project is in the design phase: the domain layer is implemented test first, and there is no runnable service yet.
 
 {{< cards >}}
   {{< card link="design" title="Design" subtitle="Architecture, domain model, security, CLI and delivery plan." icon="book-open" >}}
+  {{< card link="threat-model" title="Threat model" subtitle="Assets, trust boundaries, threats, controls and accepted risks." icon="shield-check" >}}
 {{< /cards >}}
 
 ## Planned CLI
