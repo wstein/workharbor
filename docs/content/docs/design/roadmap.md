@@ -108,6 +108,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] API-key mode as a full peer (D41, #83): the host-side key proxy that issues a key per run (§7.3) instead of the configuration's key file, spend budgets (#37) and per-key usage (#48)
 - [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
 - [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
+- [ ] Alpine as a first-class console base (#93): a small image and a fast package manager for the human's console (D43); no agent runs there, so musl only affects the human's own tools
 - [ ] Firecracker as a runtime target (#85): a microVM with its own guest kernel per environment, the isolation model of Apple Container, on a Linux host with KVM (remote, or a Linux VM on the Mac if nested virtualization allows it, {{< status unverified >}}). It boots a kernel and a root filesystem rather than an OCI image, so stock and devcontainer images need a conversion or Kata Containers or firecracker-containerd underneath; the spike decides, and the runtime conformance suite is the gate
 - [ ] Antigravity adapter in degraded mode (`agy` print mode, §5.2, §12) and additional runners
 - [ ] Out-of-process adapter plugin loader with conformance checks (§5.5, §7.8)
@@ -121,6 +122,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 
 - [ ] An enterprise offering: several developers on one supervisor under the vendors' commercial terms (Team or Enterprise plans, API keys or a cloud provider), with per-user identity and audit. D40's one-human rule is for consumer subscriptions; this needs its own decision (D41)
 - [ ] Proxmox VE and VMware vSphere/ESXi as runtime targets (#86): environments as full VMs on an existing virtualization cluster, each with its own kernel (a Proxmox LXC container shares the host kernel and does not meet §7's bar), driven through their APIs with credentials scoped to one pool or folder, an isolated network per environment with the egress sidecar, and the runtime conformance suite as the gate. A full VM boots far slower than Apple Container's 1.1 s (spike #2), which may call for pooled environments
+- [ ] Alpine as a first-class base for agent environments (#93), once each agent CLI has a musl build that passes `agenttest` and the common toolchains work on musl (Python wheels, Node native modules); the tool store then pins musl builds next to the glibc ones (D19)
 - [ ] A Windows host with Hyper-V VMs (#87): the supervisor on Windows, each environment a Hyper-V VM with its own kernel. A host port, not only a runtime: the Windows counterparts of Homebrew (D28), the `pf` rules (D29), launchd and `0600` secret files are needed, and whether Firecracker (#85) can run inside WSL2 is {{< status unverified >}}
 - [ ] Other microVM/VM platforms, Kubernetes where useful
 - [ ] Multiple hosts and placement policies
