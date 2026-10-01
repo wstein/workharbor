@@ -34,7 +34,7 @@ func OpenAPI() []byte { return append([]byte(nil), openAPI...) }
 type Backend interface {
 	List(ctx context.Context, onlyActive bool) ([]store.TaskSummary, error)
 	Show(ctx context.Context, task domain.ID) (service.TaskView, error)
-	Run(ctx context.Context, req service.RunRequest) (task, run domain.ID, err error)
+	Run(ctx context.Context, req service.RunRequest) (service.RunResult, error)
 	Say(ctx context.Context, task domain.ID, message string) (agent.Delivery, error)
 	Cancel(ctx context.Context, task domain.ID) error
 	Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error)
@@ -354,11 +354,14 @@ func (s *Server) runTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		task, run, err := s.be.Run(r.Context(), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
+		res, err := s.be.Run(r.Context(), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, map[string]string{"task_id": string(task), "run_id": string(run)}, nil
+		if res.Held { // an issue by an untrusted author: nothing started, a question waits (202)
+			return http.StatusAccepted, map[string]any{"task_id": string(res.Task), "held": true, "decision_id": string(res.Decision)}, nil
+		}
+		return http.StatusCreated, map[string]any{"task_id": string(res.Task), "run_id": string(res.Run), "held": false}, nil
 	})
 }
 

@@ -222,6 +222,34 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "The issue is by an untrusted author: the task is held, queued, with a blocking question (design \u00a76)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Started"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -1388,13 +1416,21 @@
         "type": "object",
         "required": [
           "task_id",
-          "run_id"
+          "held"
         ],
         "properties": {
           "task_id": {
             "type": "string"
           },
           "run_id": {
+            "type": "string",
+            "description": "absent when the task is held"
+          },
+          "held": {
+            "type": "boolean",
+            "description": "true when the issue's author is not trusted: nothing was started and decision_id is a question for the human (start or cancel)"
+          },
+          "decision_id": {
             "type": "string"
           }
         }

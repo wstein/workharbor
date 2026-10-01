@@ -3,6 +3,7 @@ HTTP Created (201)
   "schema_version": 1,
   "ok": true,
   "data": {
+    "held": false,
     "run_id": "r3",
     "task_id": "t3"
   }

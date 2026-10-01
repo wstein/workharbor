@@ -42,7 +42,7 @@ type fake struct {
 	created  []service.CreateRequest
 	events   chan domain.Event
 
-	onRun    func(service.RunRequest) (domain.ID, domain.ID, error)
+	onRun    func(service.RunRequest) (service.RunResult, error)
 	onShow   func(domain.ID) (service.TaskView, error)
 	onSay    func(domain.ID, string) (agent.Delivery, error)
 	onCancel func(domain.ID) error
@@ -75,14 +75,17 @@ func (f *fake) Show(_ context.Context, id domain.ID) (service.TaskView, error) {
 	}, nil
 }
 
-func (f *fake) Run(_ context.Context, req service.RunRequest) (domain.ID, domain.ID, error) {
+func (f *fake) Run(_ context.Context, req service.RunRequest) (service.RunResult, error) {
 	f.mu.Lock()
 	f.runs++
 	f.mu.Unlock()
 	if f.onRun != nil {
 		return f.onRun(req)
 	}
-	return "t3", "r3", nil
+	if strings.Contains(req.IssueURL, "/issues/666") {
+		return service.RunResult{Task: "t4", Decision: "d4", Held: true}, nil
+	}
+	return service.RunResult{Task: "t3", Run: "r3"}, nil
 }
 
 func (f *fake) Say(_ context.Context, id domain.ID, m string) (agent.Delivery, error) {
@@ -434,6 +437,7 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"inbox":                          {"GET", "/v1/inbox", ""},
 		"workspaces":                     {"GET", "/v1/workspaces", ""},
 		"run":                            {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/7","agent":"docs-ws/docs"}`},
+		"run-held":                       {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/666","agent":"docs-ws/docs"}`},
 		"say":                            {"POST", "/v1/tasks/t2/say", `{"message":"use the helper"}`},
 		"cancel":                         {"POST", "/v1/tasks/t2/cancel", ``},
 		"answer":                         {"POST", "/v1/decisions/d1/answer", `{"option":"allow","sha":"abc123"}`},
@@ -556,12 +560,12 @@ func TestTwoRequestsWithOneKeyRunOnce(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var runs atomic.Int32
-	r.be.onRun = func(service.RunRequest) (domain.ID, domain.ID, error) {
+	r.be.onRun = func(service.RunRequest) (service.RunResult, error) {
 		if runs.Add(1) == 1 {
 			close(started)
 			<-release
 		}
-		return "t9", "r9", nil
+		return service.RunResult{Task: "t9", Run: "r9"}, nil
 	}
 	body := `{"issue_url":"https://github.com/wstein/workharbor/issues/7","agent":"docs-ws/docs"}`
 	var wg sync.WaitGroup
