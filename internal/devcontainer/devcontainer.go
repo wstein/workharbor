@@ -13,9 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/runtime"
 )
 
 // Paths are where a devcontainer.json is looked for, in the order of the
@@ -31,8 +34,18 @@ type Config struct {
 	// relative to the devcontainer.json's directory as written in the file.
 	Dockerfile string
 	Context    string
+	BuildArgs  map[string]string // build.args
 
 	Env map[string]string // containerEnv
+
+	// Features are the ids of the devcontainer features the file asks for,
+	// sorted. They are a request only: building them on Apple Container is
+	// unverified (D38), so the builder does not apply them yet.
+	Features []string
+
+	// ForwardPorts are the ports the file forwards, which become the preview
+	// ports of D33. Only plain port numbers are read.
+	ForwardPorts []int
 
 	// PostCreate are the commands to run inside the environment after it is
 	// created, in order. A string runs through a shell; an array is one command.
@@ -42,8 +55,20 @@ type Config struct {
 	// becomes a Decision for the human; none is allowed by being listed.
 	EgressRequests []string
 
+	// Hints are the other customizations.workharbor values. They suggest, and
+	// the supervisor's configuration decides.
+	Hints Hints
+
 	// Notes say which keys were ignored.
 	Notes []string
+}
+
+// Hints are what customizations.workharbor may suggest besides egress hosts.
+type Hints struct {
+	Check        string   // the command that checks the work
+	PreviewPorts []int    // ports to preview, as in D33
+	Agent        string   // the name of the agent to prefer
+	Tools        []string // the tools to allow the agent, by name
 }
 
 // Command is one post-create command.
@@ -76,34 +101,7 @@ var refused = map[string]string{
 	"workspaceMount":    "mounts come only from the supervisor's configuration",
 }
 
-// reservedEnv are environment variables the supervisor sets or relies on. A
-// repository may not set them through containerEnv: it could point the agent's
-// traffic past the egress proxy's settings, move the agent's home, replace the
-// agent binary through PATH, or preload a library (D38: request, never grant).
-var reservedEnv = map[string]bool{
-	"HTTP_PROXY": true, "HTTPS_PROXY": true, "NO_PROXY": true, "ALL_PROXY": true,
-	"PATH": true, "HOME": true, "LD_PRELOAD": true, "LD_LIBRARY_PATH": true,
-}
-
-// reservedEnvPrefix are prefixes of variables the agent CLIs and workharbor read.
-var reservedEnvPrefix = []string{"WHR_", "CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_", "GEMINI_", "GOOGLE_"}
-
-func isReservedEnv(name string) bool {
-	u := strings.ToUpper(name)
-	if reservedEnv[u] {
-		return true
-	}
-	for _, p := range reservedEnvPrefix {
-		if strings.HasPrefix(u, p) {
-			return true
-		}
-	}
-	return false
-}
-
-// ignoredLater are keys D38 names as honoured but that this reader does not
-// read yet (the full support is issue #76).
-var ignoredLater = map[string]bool{"features": true, "forwardPorts": true}
+func isReservedEnv(name string) bool { return runtime.ReservedEnv(name) }
 
 // Parse reads devcontainer.json (JSON with comments and trailing commas).
 func Parse(data []byte) (Config, error) {
@@ -141,14 +139,16 @@ func Parse(data []byte) (Config, error) {
 		}
 	}
 	if v, ok := raw["build"]; ok {
-		var b struct {
-			Dockerfile string `json:"dockerfile"`
-			Context    string `json:"context"`
-		}
+		var b buildSection
 		if json.Unmarshal(v, &b) == nil {
 			for key, p := range map[string]string{"build.dockerfile": b.Dockerfile, "build.context": b.Context} {
 				if p != "" && (path.IsAbs(p) || strings.Contains(p, "\\")) {
 					problems = append(problems, key+" (an absolute path is refused)")
+				}
+			}
+			for name := range b.Args {
+				if isReservedEnv(name) {
+					problems = append(problems, "build.args."+name+" (the supervisor sets it)")
 				}
 			}
 		}
@@ -167,14 +167,11 @@ func Parse(data []byte) (Config, error) {
 				return Config{}, fmt.Errorf("devcontainer.json: image: %w", err)
 			}
 		case "build":
-			var b struct {
-				Dockerfile string `json:"dockerfile"`
-				Context    string `json:"context"`
-			}
+			var b buildSection
 			if err := json.Unmarshal(v, &b); err != nil {
 				return Config{}, fmt.Errorf("devcontainer.json: build: %w", err)
 			}
-			c.Dockerfile, c.Context = b.Dockerfile, b.Context
+			c.Dockerfile, c.Context, c.BuildArgs = b.Dockerfile, b.Context, b.Args
 		case "containerEnv":
 			if err := json.Unmarshal(v, &c.Env); err != nil {
 				return Config{}, fmt.Errorf("devcontainer.json: containerEnv: %w", err)
@@ -190,14 +187,24 @@ func Parse(data []byte) (Config, error) {
 			}
 			c.PostCreate = cmds
 		case "customizations":
-			c.EgressRequests, notes = customizations(v, notes)
+			c.EgressRequests, c.Hints, notes = customizations(v, notes)
+		case "features":
+			var f map[string]json.RawMessage
+			if err := json.Unmarshal(v, &f); err != nil {
+				return Config{}, fmt.Errorf("devcontainer.json: features: %w", err)
+			}
+			for id := range f {
+				c.Features = append(c.Features, id)
+			}
+			sort.Strings(c.Features)
+			if len(c.Features) > 0 {
+				notes = append(notes, "features: requested, not applied yet (building them on Apple Container is unverified)")
+			}
+		case "forwardPorts":
+			c.ForwardPorts, notes = ports("forwardPorts", v, notes)
 		case "name", "$schema":
 		default:
-			if ignoredLater[key] {
-				notes = append(notes, key+": honoured by the full support (#76), ignored for now")
-			} else {
-				notes = append(notes, key+": not in the supported subset, ignored")
-			}
+			notes = append(notes, key+": not in the supported subset, ignored")
 		}
 	}
 	if c.Image == "" && c.Dockerfile == "" {
@@ -206,6 +213,7 @@ func Parse(data []byte) (Config, error) {
 	if c.Image != "" && c.Dockerfile != "" {
 		return Config{}, errors.New("devcontainer.json: image and build.dockerfile are both set")
 	}
+	sort.Ints(c.ForwardPorts)
 	sort.Strings(notes)
 	c.Notes = notes
 	return c, nil
@@ -241,27 +249,97 @@ func commands(v json.RawMessage) ([]Command, error) {
 	return nil, errors.New("want a string or an array of strings")
 }
 
-func customizations(v json.RawMessage, notes []string) ([]string, []string) {
+// buildSection is the build object.
+type buildSection struct {
+	Dockerfile string            `json:"dockerfile"`
+	Context    string            `json:"context"`
+	Args       map[string]string `json:"args"`
+}
+
+// ports reads a list of port numbers. A port may be a number or a string of
+// digits; "host:port" forms and anything out of range are noted and dropped.
+func ports(key string, v json.RawMessage, notes []string) ([]int, []string) {
+	var list []json.RawMessage
+	if json.Unmarshal(v, &list) != nil {
+		return nil, append(notes, key+": not a list, ignored")
+	}
+	var out []int
+	seen := map[int]bool{}
+	for _, item := range list {
+		var n int
+		var s string
+		switch {
+		case json.Unmarshal(item, &n) == nil:
+		case json.Unmarshal(item, &s) == nil:
+			var err error
+			if n, err = strconv.Atoi(s); err != nil {
+				notes = append(notes, key+": "+strconv.Quote(s)+" is not a plain port number, ignored")
+				continue
+			}
+		default:
+			notes = append(notes, key+": an entry is not a port number, ignored")
+			continue
+		}
+		if n < 1 || n > 65535 {
+			notes = append(notes, key+": "+strconv.Itoa(n)+" is out of range, ignored")
+			continue
+		}
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out, notes
+}
+
+// hostRe is a DNS name: lower-case labels, at least two of them. A wildcard,
+// a port, a path and an address are not hosts a repository may request.
+var hostRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
+
+// ValidHost reports whether name can be requested as an egress host.
+func ValidHost(name string) bool { return len(name) <= 253 && hostRe.MatchString(name) }
+
+func customizations(v json.RawMessage, notes []string) ([]string, Hints, []string) {
 	var c map[string]json.RawMessage
 	if json.Unmarshal(v, &c) != nil {
-		return nil, append(notes, "customizations: not an object, ignored")
+		return nil, Hints{}, append(notes, "customizations: not an object, ignored")
 	}
 	var egress []string
+	var hints Hints
 	for tool, body := range c {
 		if tool != "workharbor" {
 			notes = append(notes, "customizations."+tool+": ignored")
 			continue
 		}
 		var w struct {
-			Egress []string `json:"egress"`
+			Egress       []string        `json:"egress"`
+			Check        string          `json:"check"`
+			PreviewPorts json.RawMessage `json:"previewPorts"`
+			Agent        string          `json:"agent"`
+			Tools        []string        `json:"tools"`
 		}
 		if err := json.Unmarshal(body, &w); err != nil {
 			notes = append(notes, "customizations.workharbor: unreadable, ignored")
 			continue
 		}
-		egress = w.Egress
+		seen := map[string]bool{}
+		for _, h := range w.Egress {
+			h = strings.ToLower(strings.TrimSpace(h))
+			switch {
+			case !ValidHost(h):
+				notes = append(notes, "customizations.workharbor.egress: "+strconv.Quote(h)+" is not a host name, ignored")
+			case !seen[h]:
+				seen[h] = true
+				egress = append(egress, h)
+			}
+		}
+		hints.Check, hints.Agent, hints.Tools = strings.TrimSpace(w.Check), strings.TrimSpace(w.Agent), w.Tools
+		if len(w.PreviewPorts) > 0 {
+			hints.PreviewPorts, notes = ports("customizations.workharbor.previewPorts", w.PreviewPorts, notes)
+			sort.Ints(hints.PreviewPorts)
+		}
 	}
-	return egress, notes
+	return egress, hints, notes
 }
 
 // Runner runs git on the repository, as hostgit.Repo does.
@@ -279,35 +357,33 @@ var ErrBadRef = errors.New("devcontainer: not a usable ref")
 // a regular blob: a symbolic link is refused. build.dockerfile and
 // build.context must stay inside the repository.
 func Read(ctx context.Context, r Runner, ref string) (c Config, found bool, err error) {
-	if ref == "" || strings.HasPrefix(ref, "-") || strings.ContainsAny(ref, ": \t\n\r\x00") || strings.Contains(ref, "..") {
-		return Config{}, false, fmt.Errorf("%w: %q", ErrBadRef, ref)
+	c, _, found, err = read(ctx, r, ref)
+	return c, found, err
+}
+
+// read is Read that also says which of Paths the file was found at.
+func read(ctx context.Context, r Runner, ref string) (c Config, at string, found bool, err error) {
+	if err := checkRef(ref); err != nil {
+		return Config{}, "", false, err
 	}
 	for _, p := range Paths {
-		out, err := r.Run(ctx, "ls-tree", "--end-of-options", ref, "--", p)
-		if err != nil {
-			return Config{}, false, fmt.Errorf("devcontainer: list %s at %s: %w", p, ref, err)
-		}
-		line := strings.TrimSpace(string(out))
-		if line == "" {
+		data, err := file(ctx, r, ref, p)
+		if errors.Is(err, ErrNotFound) {
 			continue // not there at this path
 		}
-		if mode, _, _ := strings.Cut(line, " "); mode != "100644" && mode != "100755" {
-			return Config{}, true, fmt.Errorf("%w: %s at %s is not a regular file (mode %s)", ErrRefused, p, ref, mode)
-		}
-		data, err := r.Run(ctx, "show", "--end-of-options", ref+":"+p)
 		if err != nil {
-			return Config{}, true, fmt.Errorf("devcontainer: read %s at %s: %w", p, ref, err)
+			return Config{}, "", errors.Is(err, ErrRefused), err
 		}
 		c, err := Parse(bytes.TrimSpace(data))
 		if err != nil {
-			return Config{}, true, err
+			return Config{}, p, true, err
 		}
 		if err := c.checkPaths(path.Dir(p)); err != nil {
-			return Config{}, true, err
+			return Config{}, p, true, err
 		}
-		return c, true, nil
+		return c, p, true, nil
 	}
-	return Config{}, false, nil
+	return Config{}, "", false, nil
 }
 
 // checkPaths refuses a build.dockerfile or build.context that, resolved against

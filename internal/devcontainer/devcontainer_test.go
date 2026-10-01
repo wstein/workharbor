@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -32,8 +34,11 @@ func TestParseHonoursTheSubset(t *testing.T) {
 	if !reflect.DeepEqual(c.EgressRequests, []string{"proxy.golang.org"}) {
 		t.Errorf("EgressRequests = %v", c.EgressRequests)
 	}
+	if !reflect.DeepEqual(c.ForwardPorts, []int{3000}) {
+		t.Errorf("ForwardPorts = %v", c.ForwardPorts)
+	}
 	notes := strings.Join(c.Notes, "|")
-	for _, want := range []string{"forwardPorts", "remoteEnv", "customizations.vscode"} {
+	for _, want := range []string{"remoteEnv", "customizations.vscode"} {
 		if !strings.Contains(notes, want) {
 			t.Errorf("no note for %s: %v", want, c.Notes)
 		}
@@ -83,9 +88,9 @@ func TestPostCreateForms(t *testing.T) {
 	}
 }
 
-// fakeGit answers ls-tree and show for "ref:path" keys, the way git does:
-// ls-tree prints nothing for a missing path and fails only for a broken
-// repository or an unknown ref.
+// fakeGit answers rev-parse, ls-tree and cat-file the way git does: ls-tree
+// prints nothing for a missing path and fails only for a broken repository or
+// an unknown ref. A blob's object id is its "ref:path" key.
 type fakeGit struct {
 	files  map[string]string // "ref:path" -> content
 	modes  map[string]string // "ref:path" -> mode, 100644 by default
@@ -99,17 +104,44 @@ func (g *fakeGit) Run(_ context.Context, args ...string) ([]byte, error) {
 		return nil, errors.New("fatal: not a git repository")
 	}
 	switch args[0] {
-	case "ls-tree": // ls-tree --end-of-options <ref> -- <path>
-		key := args[2] + ":" + args[4]
-		if _, ok := g.files[key]; !ok {
-			return nil, nil
+	case "rev-parse": // rev-parse --verify --quiet --end-of-options <ref>^{commit}
+		return []byte(strings.Repeat("a", 40) + "\n"), nil
+	case "ls-tree": // ls-tree -z --full-tree [-r] --end-of-options <ref> [-- <path>]
+		rest := args[3:]
+		recursive := rest[0] == "-r"
+		if recursive {
+			rest = rest[1:]
 		}
-		mode := g.modes[key]
-		if mode == "" {
-			mode = "100644"
+		ref, prefix := rest[1], ""
+		if len(rest) > 3 {
+			prefix = rest[3]
 		}
-		return []byte(mode + " blob 0123456789abcdef\t" + args[4] + "\n"), nil
-	case "show": // show --end-of-options <ref>:<path>
+		var out []byte
+		keys := make([]string, 0, len(g.files))
+		for k := range g.files {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			kref, p, _ := strings.Cut(key, ":")
+			if kref != ref {
+				continue
+			}
+			switch {
+			case prefix == "" && recursive, p == prefix:
+			case recursive && strings.HasPrefix(p, prefix+"/"):
+			case prefix == "" && !strings.Contains(p, "/"):
+			default:
+				continue
+			}
+			mode := g.modes[key]
+			if mode == "" {
+				mode = "100644"
+			}
+			out = append(out, mode+" blob "+key+"\t"+p+"\x00"...)
+		}
+		return out, nil
+	case "cat-file": // cat-file blob <oid>
 		if v, ok := g.files[args[2]]; ok {
 			return []byte(v), nil
 		}
@@ -124,7 +156,7 @@ func TestReadUsesTheRefNotTheWorkingTree(t *testing.T) {
 		t.Fatalf("Read = %+v %v %v", c, found, err)
 	}
 	for _, call := range g.calls {
-		if call[1] != "--end-of-options" {
+		if !slices.Contains(call, "--end-of-options") && call[0] != "cat-file" {
 			t.Errorf("git %v: the ref must follow --end-of-options", call)
 		}
 	}
@@ -234,5 +266,61 @@ func TestThisRepositoryDevcontainer(t *testing.T) {
 	}
 	if !strings.Contains(string(dockerfile), "FROM golang:"+goVersion+"-") {
 		t.Errorf("the Dockerfile does not start from go.mod's Go %s", goVersion)
+	}
+}
+
+func TestBuildArgsAndFeatures(t *testing.T) {
+	c, err := Parse([]byte(`{"build":{"dockerfile":"Dockerfile","args":{"GO_VERSION":"1.27"}},
+		"features":{"ghcr.io/devcontainers/features/node:1":{"version":"22"},"ghcr.io/devcontainers/features/git:1":{}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BuildArgs["GO_VERSION"] != "1.27" {
+		t.Errorf("BuildArgs = %v", c.BuildArgs)
+	}
+	want := []string{"ghcr.io/devcontainers/features/git:1", "ghcr.io/devcontainers/features/node:1"}
+	if !reflect.DeepEqual(c.Features, want) {
+		t.Errorf("Features = %v", c.Features)
+	}
+	if !strings.Contains(strings.Join(c.Notes, "|"), "features: requested, not applied") {
+		t.Errorf("features need a note: %v", c.Notes)
+	}
+	// A build argument may not carry what the supervisor sets: HTTPS_PROXY is a
+	// predefined build argument, so it would redirect the build's traffic.
+	_, err = Parse([]byte(`{"build":{"dockerfile":"D","args":{"HTTPS_PROXY":"http://evil"}}}`))
+	if !errors.Is(err, ErrRefused) {
+		t.Errorf("build.args.HTTPS_PROXY: err = %v, want ErrRefused", err)
+	}
+}
+
+func TestForwardPorts(t *testing.T) {
+	c, err := Parse([]byte(`{"image":"x","forwardPorts":[8080, "3000", "db:5432", 0, 70000, 8080]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(c.ForwardPorts, []int{3000, 8080}) {
+		t.Errorf("ForwardPorts = %v", c.ForwardPorts)
+	}
+	if got := len(c.Notes); got != 3 {
+		t.Errorf("want 3 notes (host:port, 0, 70000), got %v", c.Notes)
+	}
+}
+
+func TestWorkharborHints(t *testing.T) {
+	c, err := Parse([]byte(`{"image":"x","customizations":{"workharbor":{
+		"check":"make check","previewPorts":[3000],"agent":"claude","tools":["Read","Edit"],
+		"egress":["Proxy.Golang.org","proxy.golang.org","*.evil.com","10.0.0.1","host:443","localhost"]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Hints{Check: "make check", PreviewPorts: []int{3000}, Agent: "claude", Tools: []string{"Read", "Edit"}}
+	if !reflect.DeepEqual(c.Hints, want) {
+		t.Errorf("Hints = %+v", c.Hints)
+	}
+	if !reflect.DeepEqual(c.EgressRequests, []string{"proxy.golang.org"}) {
+		t.Errorf("only a real host name may be requested, once: %v", c.EgressRequests)
+	}
+	if n := strings.Count(strings.Join(c.Notes, "|"), "is not a host name"); n != 4 {
+		t.Errorf("want 4 refused hosts noted, got %d: %v", n, c.Notes)
 	}
 }
