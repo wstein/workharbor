@@ -1,0 +1,80 @@
+---
+title: Security
+description: "Policy and autonomy, and the security rules: isolation, egress, credentials, host git and access."
+weight: 4
+toc: true
+---
+
+## 6. Policy and autonomy
+
+Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`**.
+
+| Action | Default |
+| --- | --- |
+| Commit in the topic's own checkout | auto |
+| Push an `agent/*` branch | **after cleanup**: the supervisor pushes the prepared branch once you approve it (§4.5); the agent never pushes |
+| Open/update PR, comment on issue | auto, after the push |
+| Merge, tag, release, deploy | **forbid** for the agent; human-gated |
+| Sensitive actions triggered by untrusted input | ask |
+
+Two limits hold whatever a repository's table says (issue #51). Merge, tag, release and deploy are `forbid`, and an agent push is at most `ask`: the supervisor pushes only after approval (§4.5), so an override can tighten these but never loosen them. A mode other than `auto`, `ask` or `forbid`, and an action the table does not list, is `forbid`.
+
+Enforcement is outside the agent: forge branch protection, required human review, and a bot identity that cannot bypass them. Approval is per commit SHA (ties to ReviewCandidate). Every approval is a Decision record.
+
+**Agent permission modes.** The agent CLIs have their own coarse modes. In the spike with Claude Code (a fixed allowlist of `Read` and a few harmless shell prefixes) they behaved as follows for a file write:
+
+| Mode | Behaviour |
+| --- | --- |
+| `manual` | Asks (an approval Decision, §4.2) |
+| `acceptEdits` | Writes without asking |
+| `dontAsk` | Denies silently |
+| `plan` | Plans read-only, then asks the human to approve the plan |
+| `auto` | Identical to `manual` in the test: read-only commands such as `pwd` and `git status` ran, and a file write, `touch`, `curl` and `rm` were all asked |
+
+Rules for using them:
+
+- Offer them as per-session presets over the action table, never as the policy itself. The table is per action and enforced outside the agent; the modes are coarser and live inside it.
+- Do not count on `auto` to reduce prompts: in headless mode it asked exactly as often as `manual`. Whatever it is meant to do is not visible there.
+- `bypassPermissions`, which switches every prompt off, is never offered by default and never outside an isolated environment.
+- A mode is fixed when the agent process starts. Changing it on a running session restarts the process with `--resume` and keeps the session and transcript.
+- Prefix allow rules such as `Bash(ls:*)` do not match a compound command like `a && b`; the CLI asks about the whole command. An allowlist needs a rule for compound commands (match each part, or ask).
+
+## 7. Security
+
+The rules below are the security requirements. The [threat model](../threat-model.md) says what each defends against, where it is enforced and tested, and which risks are accepted (issue #11).
+
+1. **Untrusted input.** Issue text, PR comments and CI logs are untrusted. Use trust tiers by author (owner vs external); hold or flag runs on issues from unknown authors. A run that combines private data, untrusted input and outbound network requires approval.
+2. **Default-deny egress** through a logging allowlist proxy: forge, package registries, LLM API only. Block LAN, host, other workspaces and cloud-metadata addresses.
+
+    Verified on Apple Container in spike #2 (issue #2). The default network gives none of this: a guest reaches the internet, the LAN, other containers and any host service bound to all interfaces. What works:
+
+    - **One `--internal` network per environment.** It blocks the internet, DNS (names do not resolve), other LAN devices, IPv6 and containers on other networks. It does **not** block the host: issue #69 measured that an internal guest reaches host listeners bound to the Mac's LAN address or to all interfaces, through the network's gateway; spike #2's earlier "blocks the host through every address" was wrong. Listeners bound only to loopback stayed unreachable. Agents on the same internal network can reach each other, so a network is never shared between tasks.
+    - **The proxy runs in a sidecar container**, attached to the default and the internal network (`--network` repeats). The host cannot serve an internal network because it gets no interface on it, so a host-side proxy cannot bind to its gateway.
+    - **Allowlist by hostname, with the name resolved by the proxy.** Allowed hosts returned 200, denied hosts and a raw-IP CONNECT got 403, and every decision was logged with time, verdict, method, host and source. The guest needs no DNS, which closes DNS exfiltration. The proxy allows only port 443 for CONNECT and port 80 for plain HTTP, refuses a name if any of its addresses is loopback, private, link-local, CGNAT, multicast or otherwise reserved, and dials the address it checked, so a rebinding DNS answer is never used (#78). A tunnel closes after five idle minutes, and the sidecar runs with one CPU and 256 MB. Limits: the match is on the name in CONNECT, so it does not defeat domain fronting, and the sidecar has full egress and is trusted.
+    - **Minimal allowlist for Claude Code:** `api.anthropic.com` alone. In an authenticated run inside a container the proxy also saw a telemetry host (`http-intake.logs.us5.datadoghq.com`) and denied it; nothing broke. Installing needs `claude.ai` and `downloads.claude.ai`, which the tool store (§5.6) removes. A client that obeys proxy variables, such as `curl`, tests the proxy and not the network; test the direct path with the proxy variables ignored.
+3. **Credentials.** Run-scoped, short-lived, single-repo, non-extractable. GitHub App installation tokens (~1 h); per-repo bot tokens or deploy keys for Gitea/Forgejo/GitLab. Inject through a git credential helper or host-side proxy so raw tokens never reach env vars, disk or logs. In `api-key` mode the LLM API key stays in the proxy. In `subscription` mode the consumer-plan login lives inside the environment (§5.2), is long-lived and not scoped to a repo, and leaks if the agent is compromised. **Accepted risk** for a single-developer, watched personal tool; limit it with a dedicated auth directory per environment (never `$HOME`), the egress allowlist, and revocation at the vendor when an environment is deleted. Revoke run-scoped credentials at run end. Redact secrets at ingest, before anything is stored (§5.4). Agent and CI credentials are separate.
+4. **Isolation policy, testable.** Reject mounts of `$HOME`, `~/.ssh` and runtime sockets. Non-root agents, read-only rootfs where feasible, hard CPU/memory/disk quotas, per-run timeout and token/cost budget. Escape tests (guest cannot reach host or Socktainer socket) in the conformance suite. The VM boundary does not protect what is deliberately exposed.
+
+    Measured in spike #2:
+
+    - **The runtime does not reject mounts.** It mounted `/etc` without complaint, so the adapter enforces the deny-list. It resolves symlinks first (a symlink to `$HOME` is rejected), then rejects `$HOME`, its parents, secrets directories, unix sockets and runtime socket directories. The spike's `check_mount` was the seed; the rules now live in `runtime.CheckMount` (issue #18):
+        - A source must be an absolute path that resolves; otherwise it is rejected. Read-only makes no difference.
+        - Rejected: a unix socket; the home directory and every parent of it (`/Users`, `/`); the secrets under the home directory (`.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.config/gh`, `.config/gcloud`, `.config/op`, `.netrc`, `.gitconfig`, `.git-credentials`, `.npmrc`, `.pypirc`, `.password-store`, `.claude`, `.codex`, `Library/Keychains`, `Library/Containers`, `Library/Group Containers` (the 1Password agent socket) and `Library/Application Support` (browser cookies)) **and any directory that contains one**, such as `~/.config` or `~/Library`; the runtime socket directories (`~/.socktainer`, `~/.docker/run`, `~/.orbstack`, `~/.colima`, `~/.lima`, `~/.local/share/containers`, `/var/run`, `/private/var/run`, `/run`) and their parents; the system roots `/`, `/Users`, `/Users/Shared`, `/home`, `/private`, `/var`, `/private/var`, `/private/var/folders`, `/tmp`, `/private/tmp`, `/Volumes` and `/Library`; and the system trees `/etc`, `/private/etc`, `/System`, `/dev`, `/proc`, `/sys`, `/boot`, `/root`, `/private/var/root`, `/Library/Keychains` and `/private/var/db`. Everything below `/Volumes` (another disk can hold a copy of the home directory) and below `/private/var/folders` (the user's `$TMPDIR`) is rejected too, unless it lies inside the home directory. A subdirectory of `/tmp` is not rejected.
+        - **A secrets path is resolved too.** `~/.config/gh` or `~/.ssh` is often a symlink into a dotfiles directory (stow, chezmoi). Each secrets path is checked as written and after resolving it, so a mount that equals or contains either is rejected, and mounting the dotfiles directory is refused.
+        - **Links inside a secrets directory are followed one level.** GNU stow links `~/.ssh/id_ed25519` to `~/keys/id_ed25519` when `~/.ssh` is a real directory. The direct entries of each secrets directory that are symbolic links are resolved and their targets are protected like the secrets themselves, so mounting `~/keys` is refused. Links deeper in the tree, and hard links, are out of scope.
+        - **Mounts below workspace roots (decided, #58).** As a second layer, the supervisor passes the workspace roots it owns (the directories it creates checkouts in), and `CheckMountsWithin` accepts a bind mount only if it lies inside one of them. With no roots configured the deny-list above is all there is. A mount outside every root is refused with the reason `outside the workspace roots`. The deny-list stays first, so a root cannot widen it.
+        - **Paths are compared by file identity, not by string.** A path equals, lies below or contains another when the filesystem says it is the same file, so case differences on a case-insensitive volume and a precomposed against a decomposed Unicode name (a home such as `jürgen` is stored decomposed on macOS) are the same path. A path that cannot be examined (it does not exist) is compared by its lower-cased string.
+        - A missing home directory fails closed with an error that is not a forbidden-mount error, because it is a caller bug.
+    - **Mounted unix sockets are unusable.** A host socket in a bind-mounted directory could not be listed or connected to, including the real Socktainer socket, and the host listener saw no connection.
+    - **Hardening flags work:** `--read-only --cap-drop ALL --user 1000:1000 --tmpfs /tmp` gave an empty capability set, a read-only root filesystem, a writable `/tmp` and a failing `mount`. Use them where the agent allows.
+    - **Never `--ssh`**, which forwards the host ssh-agent. Never `container rm --all`.
+    - **Host services are reachable from every guest**, default-network and `--internal` alike, when bound to the LAN address or to all interfaces; a service bound only to loopback was not (issue #69). That includes macOS's own services (Remote Login, Screen Sharing, File Sharing). So: supervisor listeners bind to loopback only (D29); host services that listen on all interfaces are turned off or hardened (SSH without passwords); and a `pf` rule blocks the container subnets from the host's addresses (to be measured, issue #69). The macOS Application Firewall's effect was not measured.
+    - **Not probed:** the vsock and vfio device nodes in the guest, `--publish-socket`, `--virtualization` and Rosetta.
+    - **Agent-writable repositories are hostile input to the host** (spike #2, item 9). A pre-commit hook and a `core.fsmonitor` command planted from inside a guest ran on the host when the host later ran plain `git commit` and `git status`. The host therefore runs git on agent-writable trees only through `hostgit` (§4.5): read-only plumbing in the agent's tree, an isolated configuration, and cleanup and push only on a supervisor-owned copy fetched from it. The alternates and `.git` redirect checks are still open (issue #19).
+    - **Do not mount a shared `.git` read-write into an environment.** It exposes every branch, the shared hooks and config and the other worktrees' metadata. Agent topics get a per-task clone whose object cache is mounted read-only (§4.5).
+5. **Supervisor identity.** Login allowlist of forge users, PKCE and `state`, short-lived sessions, scoped revocable CLI tokens, CSRF protection, API bound to loopback only and reached remotely through a forwarder, never on all interfaces (D29), forge tokens encrypted at rest, webhook signature verification. Link accounts by provider instance + stable user ID, never by email.
+6. **SSH/IDE access.** Short-lived per-session SSH certificates or keys, no password auth, jump host only over VPN, code-server never public and always authenticated, treat Open VSX extensions as supply-chain risk.
+7. **Audit and kill switch.** Tamper-evident append-only log stored outside the workspace, linked to commit SHA. `whr kill-all` stops all runs and revokes tokens. Alert on anomalous egress or token spikes. Bot commits are signed with the bot key before push (§4.5).
+8. **Plugins.** A plugin handles sessions, credentials and workspace access, so it is a supply-chain risk. Default deny: plugins are installed only by explicit developer action, from a pinned version or hash, and run out of process with the same isolation as any agent environment. They never receive host credentials, `$HOME`, `~/.ssh` or runtime sockets; they get only the per-run credentials a built-in adapter would. Their capabilities are checked by the conformance suite, and every plugin action appears in the audit log.
+
+Separate identities: login identity, connected forge accounts, agent (bot) identity, supervisor sessions.

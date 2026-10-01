@@ -4,7 +4,7 @@ Guidance for AI coding agents working on workharbor (CLI: `whr`).
 
 ## Project
 
-A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/content/docs/design.md](docs/content/docs/design.md) and is the source of truth; read it before changing architecture. The project is in the build-up to release 1: the domain layer, the store, hostgit and the adapter contracts exist, and the first adapters are being built; there is no runnable service yet.
+A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/content/docs/design/](docs/content/docs/design/_index.md), one page per topic with the § numbers kept, and is the source of truth; read it before changing architecture. The project is in the build-up to release 1: the domain layer, the store, hostgit and the adapter contracts exist, and the first adapters are being built; there is no runnable service yet.
 
 ## Commands
 
@@ -28,7 +28,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Layout
 
-- `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design.md` is the design document, `threat-model.md` the threat model
+- `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design/` holds the design (start at `_index.md`; §3 is `decisions.md`, §4 `domain.md`, §5 and §8 `architecture.md`, §6 and §7 `security.md`, §9 and §10 `interfaces.md`, §11 to §13 `roadmap.md`), `threat-model.md` the threat model
 - `design/mock/`: the app mock (Claude Design canvas sources)
 - `cmd/whr/`: single binary entrypoint (CLI now, `whr serve` later); `cmd/commitlint/`: the commit message linter
 - `internal/domain/`: Task, Workspace, Run, Environment, Decision, ReviewCandidate, Event, state machines and the task aggregate
@@ -94,7 +94,7 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Dogfooding** (D34). Work on the Dogfood milestone first. The supervisor that runs agents is an installed binary built from an approved commit on `main`, never your topic's working tree. Once workharbor has run its first issue end to end, new issues start with `whr run`; when you have to work around something workharbor cannot do yet, open an issue labelled `dogfood`.
 
-**Design decisions.** One session at a time owns the design's decisions; the human says which, and it is currently the **Claude Code Opus** session. It alone writes the decision table (§3) and the rule sections: §4.1 and §4.2 (state machines, Decisions), §6 (policy) and §7 (security), plus the threat model. Other sessions propose decision text in their issue and may describe what they built in the other sections. A decision that rests on a spike cites committed evidence (a script and its results on a spike branch); comments alone are not evidence. Reserve the next D-row number in the decision issue before writing it, cite D-rows as `D16`, never as `#16`, and run `git log -p main -- docs/content/docs/design.md` (local `main` holds merged but unpushed work) before editing the design.
+**Design decisions.** One session at a time owns the design's decisions; the human says which, and it is currently the **Claude Code Opus** session. It alone writes the decision table (§3) and the rule sections: §4.1 and §4.2 (state machines, Decisions), §6 (policy) and §7 (security), plus the threat model. Other sessions propose decision text in their issue and may describe what they built in the other sections. A decision that rests on a spike cites committed evidence (a script and its results on a spike branch); comments alone are not evidence. Reserve the next D-row number in the decision issue before writing it, cite D-rows as `D16`, never as `#16`, and run `git log -p main -- docs/content/docs/design/ docs/content/docs/design.md` (local `main` holds merged but unpushed work; `design.md` is the single page from before the split) before editing the design.
 
 **Project board.** All issues are on the [workharbor project](https://github.com/users/wstein/projects/6) (number 6, owner `wstein`), which shows who works on what. `Status` is `Todo`, `In progress`, `Blocked` (waiting on another issue or a decision), `Ready to push` (merged into local `main`) or `Done`; `Session` is `Claude Code Sonnet`, `Claude Code Opus`, `Antigravity` or `Human`. Move your own cards only. New issues are added with `gh project item-add 6 --owner wstein --url <issue-url>`. To set a field, find the item and option IDs with `gh project item-list 6 --owner wstein --format json` and `gh project field-list 6 --owner wstein --format json`, then `gh project item-edit --project-id PVT_kwHNjWrOAZVCuA --id <item-id> --field-id <field-id> --single-select-option-id <option-id>`. A closed issue goes to `Done`.
 

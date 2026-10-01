@@ -1,6 +1,6 @@
 // Package policy holds the autonomy table: action -> auto | ask | forbid.
 // Enforcement belongs to the forge adapter, never to agent prompts.
-// See docs/content/docs/design.md §6.
+// See docs/content/docs/design/security.md §6.
 package policy
 
 import (

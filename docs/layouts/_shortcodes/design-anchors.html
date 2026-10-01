@@ -1,0 +1,27 @@
+{{- /*
+  design-anchors keeps links into the single-page design working after the
+  split (issue #43): the overview kept the old URL, so an old link such as
+  /docs/design/#51-runtime-adapter lands here. The map is built from the
+  heading IDs of the section's pages, so it follows the headings; an ID the
+  overview has itself is never redirected.
+*/ -}}
+{{- $own := .Page.Fragments.Identifiers -}}
+{{- $map := dict -}}
+{{- range .Page.Pages -}}
+  {{- $p := . -}}
+  {{- range $p.Fragments.Identifiers -}}
+    {{- if and (not (in $own .)) (not (isset $map .)) -}}
+      {{- $map = merge $map (dict . $p.RelPermalink) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+<script>
+(function () {
+  var pages = {{ $map | jsonify | safeJS }};
+  var id = decodeURIComponent(location.hash.slice(1));
+  if (id && Object.prototype.hasOwnProperty.call(pages, id)) {
+    location.replace(pages[id] + "#" + encodeURIComponent(id));
+  }
+})();
+</script>
+{{- /* trim */ -}}

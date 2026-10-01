@@ -1,4 +1,4 @@
-// Package exitcode defines the stable whr exit codes. See docs/content/docs/design.md §9.2.
+// Package exitcode defines the stable whr exit codes. See docs/content/docs/design/interfaces.md §9.2.
 package exitcode
 
 import "errors"

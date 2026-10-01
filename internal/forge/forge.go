@@ -2,7 +2,7 @@
 // reviews, metadata and webhooks. Git transport is separate (hostgit); the
 // adapter is wrapped in a Guard that enforces the autonomy policy, because
 // policy belongs in the adapter and never in a prompt.
-// See docs/content/docs/design.md §10.
+// See docs/content/docs/design/interfaces.md §10.
 package forge
 
 import (

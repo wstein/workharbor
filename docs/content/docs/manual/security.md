@@ -9,7 +9,7 @@ The short version of the [threat model](../threat-model.md) for whoever runs wor
 
 ## What workharbor is built to enforce
 
-workharbor has no runnable service yet: these are the design's guarantees. Each says whether it is implemented; the [design's status table](../design.md) and the threat model track the rest.
+workharbor has no runnable service yet: these are the design's guarantees. Each says whether it is implemented; the [design's status table](../design/_index.md) and the threat model track the rest.
 
 - **Agents never push, merge, tag, release or deploy.** They commit in their own checkout. workharbor pushes a branch only after you approve its exact commit in a "Ready to push?" decision, and a GitHub ruleset makes a human review the pull request (D15, D18). *Policy table implemented; the push flow and the ruleset check come with issue #27.*
 - **Approvals fail closed.** A request nobody answers in time, an approval for different code, or a lost connection to the agent ends in a denial (design §4.2). *Implemented in the domain; the agent's approval channel is being verified (issue #7).*

@@ -4,7 +4,7 @@ description: "The measured results behind the design: what each spike ran, on wh
 weight: 5
 ---
 
-Each spike measured one question on the Mac mini (Apple silicon, macOS 26.6.2; Apple `container` 1.5.0 where a container was involved) and wrote its results, scripts and raw output on a `spike/*` branch. They are published here as recorded; where a later measurement or decision changed a conclusion, a note at the top of the page says so, and the [design](../design.md) is authoritative.
+Each spike measured one question on the Mac mini (Apple silicon, macOS 26.6.2; Apple `container` 1.5.0 where a container was involved) and wrote its results, scripts and raw output on a `spike/*` branch. They are published here as recorded; where a later measurement or decision changed a conclusion, a note at the top of the page says so, and the [design](../design/_index.md) is authoritative.
 
 | Spike | Question | Issue |
 | --- | --- | --- |

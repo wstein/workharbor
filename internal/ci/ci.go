@@ -1,5 +1,5 @@
 // Package ci defines the CI adapter contract. It is an interface only in
-// release 1. See docs/content/docs/design.md §10.
+// release 1. See docs/content/docs/design/interfaces.md §10.
 package ci
 
 import "context"

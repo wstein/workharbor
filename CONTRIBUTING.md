@@ -1,6 +1,6 @@
 # Contributing to workharbor
 
-Thank you for your interest. workharbor is in the **design phase**: the most valuable contributions right now are reviews of the [design](docs/content/docs/design.md), spikes against the open decisions in section 12, and bug reports against the existing skeleton and tooling.
+Thank you for your interest. workharbor is in the **design phase**: the most valuable contributions right now are reviews of the [design](docs/content/docs/design/_index.md), spikes against the open decisions in section 12, and bug reports against the existing skeleton and tooling.
 
 Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. [AGENTS.md](AGENTS.md) holds the full conventions and applies to humans as well as AI agents.
 

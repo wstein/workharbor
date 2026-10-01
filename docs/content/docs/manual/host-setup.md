@@ -5,11 +5,11 @@ weight: 1
 toc: true
 ---
 
-A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design.md).
+A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design/_index.md).
 
 ## 1. Hardware and macOS
 
-- An Apple-silicon Mac mini. **Recommended: M6 with 32 GB memory and 512 GB storage**, for about ten concurrent agent environments. **On a budget: 16 GB**, for about four, with 512 GB or with 256 GB plus an external SSD. 24 GB / 512 GB sits in between, for about six (D32, [design §8](../design.md#8-resources)).
+- An Apple-silicon Mac mini. **Recommended: M6 with 32 GB memory and 512 GB storage**, for about ten concurrent agent environments. **On a budget: 16 GB**, for about four, with 512 GB or with 256 GB plus an external SSD. 24 GB / 512 GB sits in between, for about six (D32, [design §8](../design/architecture.md#8-resources)).
 
   | M6 configuration | US price, 1 October 2026 | Environments (estimate) |
   | --- | --- | --- |
@@ -130,11 +130,11 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 
 ## 10. Phone notifications (optional)
 
-Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor generates during onboarding ([design §9.4](../design.md#94-notifications)). A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7.
+Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor generates during onboarding ([design §9.4](../design/interfaces.md#94-notifications)). A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7.
 
 ## 11. Build and configure whr (dogfood)
 
-Three steps, as the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design.md)):
+Three steps, as the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
 
 1. **Install.** `make install` builds `whr`, the launcher `whr-shim` and the egress proxy `whr-proxy` (both for the guest, linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`; the guest binaries go to `libexec/whr`). It refuses a dirty tree and a commit that is not on `origin/main` (run `git fetch origin` first), so the supervisor always runs approved, committed code (D34). It builds with `GOWORK=off` and an empty `GOFLAGS`, so a parent `go.work` or your environment cannot change the build. `whr version` shows the version and whether the tree was clean.
 2. **Fill the tool store.** `whr tools build -store <tool store> -shim ~/.local/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.

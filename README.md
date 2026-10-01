@@ -4,11 +4,11 @@
 
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
-[![Status: design phase](https://img.shields.io/badge/status-design%20phase-orange.svg)](docs/content/docs/design.md)
-[![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design.md)
+[![Status: design phase](https://img.shields.io/badge/status-design%20phase-orange.svg)](docs/content/docs/design/_index.md)
+[![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
 > [!WARNING]
-> **Work in progress: design phase.** workharbor has no working implementation yet. The repository currently holds the [design](docs/content/docs/design.md), the skeleton of the Go module and the project tooling. Interfaces, command names and the architecture are provisional and will change. Do not use it to supervise real work. Documentation: <https://wstein.github.io/workharbor/>.
+> **Work in progress: design phase.** workharbor has no working implementation yet. The repository currently holds the [design](docs/content/docs/design/_index.md), the skeleton of the Go module and the project tooling. Interfaces, command names and the architecture are provisional and will change. Do not use it to supervise real work. Documentation: <https://wstein.github.io/workharbor/>.
 
 A self-hosted supervisor for AI coding agents. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
@@ -49,7 +49,7 @@ Design phase, with the domain model being built test first. The plan is tracked 
 3. [R1 Complete](https://github.com/wstein/workharbor/milestone/3): the rest of release 1, including the web UI and phone client
 4. [Later](https://github.com/wstein/workharbor/milestone/4): medium and long term
 
-See [all milestones](https://github.com/wstein/workharbor/milestones), [open issues](https://github.com/wstein/workharbor/issues) and the [delivery plan](docs/content/docs/design.md#13-delivery) in the design.
+See [all milestones](https://github.com/wstein/workharbor/milestones), [open issues](https://github.com/wstein/workharbor/issues) and the [delivery plan](docs/content/docs/design/roadmap.md#13-delivery) in the design.
 
 ## Contributing
 

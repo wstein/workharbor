@@ -6,6 +6,7 @@ package docscheck
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -17,15 +18,27 @@ import (
 	"github.com/wstein/workharbor/internal/policy"
 )
 
-const designPath = "../../docs/content/docs/design.md"
+// designDir holds the design, one page per topic (issue #43).
+const designDir = "../../docs/content/docs/design"
 
+// readDesign returns every page of the design, joined in file-name order. A
+// check reads between markers of one section, so the order does not matter.
 func readDesign(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(designPath)
-	if err != nil {
-		t.Fatal(err)
+	pages, err := filepath.Glob(filepath.Join(designDir, "*.md"))
+	if err != nil || len(pages) == 0 {
+		t.Fatalf("no design pages in %s (%v)", designDir, err)
 	}
-	return string(b)
+	var doc strings.Builder
+	for _, p := range pages {
+		b, err := os.ReadFile(p) //nolint:gosec // a page of the design
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc.Write(b)
+		doc.WriteString("\n")
+	}
+	return doc.String()
 }
 
 // between returns the text from the first start marker to the next end marker.

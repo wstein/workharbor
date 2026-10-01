@@ -2,7 +2,7 @@
 
 ## Status
 
-workharbor is in the design phase and has no released versions, so there are no supported releases yet. Security-relevant material today is the [design](docs/content/docs/design.md) (threat model, autonomy policy, credential handling), the CI workflows and the project tooling.
+workharbor is in the design phase and has no released versions, so there are no supported releases yet. Security-relevant material today is the [design](docs/content/docs/design/_index.md) (threat model, autonomy policy, credential handling), the CI workflows and the project tooling.
 
 ## Reporting a vulnerability
 

@@ -1,0 +1,80 @@
+---
+title: Design
+description: Architecture, security model and delivery plan for workharbor.
+weight: 1
+toc: true
+---
+
+**CLI:** `whr` · **Status:** Revised design, updated 1 October 2026 · The domain layer is implemented test first; there is no runnable service yet. Spikes #1 (agent contract) and #2 (Apple Container) are measured with committed scripts; #10 (cancel) and #7 (approvals) are reported in issue comments, and #7 is reopened for reproducible evidence. Results are marked in the sections they affect.
+
+| Status | What | Where |
+| --- | --- | --- |
+| Decided | D1 to D38 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Implemented | The domain (state machines, Decisions, the aggregate and its guards), the policy table, the SQLite store with redaction at ingest, the service layer and reconciler, hostgit (checkout checks, the repository cache, prepare and push, the editor copy), the runtime and agent contracts with their conformance suites, the Apple Container adapter with the egress proxy sidecar, the tool store, the config file and `make install`, the Claude Code adapter in degraded mode, ntfy notifications, `whr version`, the `whr-shim` launcher, and the design-drift test | Packages under `internal/` and `cmd/`; what remains for the first dogfood run is the [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5), the rest of release 1 the [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
+| Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container; host cancel with `whr-shim`; approvals over stdio (evidence pending) | Issues #1, #2, #10 and #7 (reopened); results in §4.2, §4.4, §5.1 to §5.3, §5.6, §7 |
+| Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
+
+Revision of the original discussion summary (`agent-work-supervisor-summary.md`) after a four-role team review (architecture, security, product/CLI, feasibility/ops). Review ratings are value/effort out of 10. Claims about Apple Container that spike #2 measured are stated as measured in §4.4, §5.1, §5.3, §5.6, §7 and §12. Claims about Socktainer, Coder and Portainer, and anything marked {{< status unverified >}}, still come from the original sources and are unverified until the remaining spikes in §12 are done.
+
+The design is split by topic. Section numbers (§) are the same on every page, so a reference such as §4.5 finds its page here:
+
+| Page | Sections |
+| --- | --- |
+| This page | §1 Goal, §2 Requirements, §14 Review log, §15 References |
+| [Decisions](decisions.md) | §3 Key decisions (D1 onwards) |
+| [Domain model](domain.md) | §4 State machines, Decisions, lifecycle, persistence, topics and cleanup before push |
+| [Architecture](architecture.md) | §5 Adapters, reconciler, events, plugins, tool store, usage; §8 Resources |
+| [Security](security.md) | §6 Policy and autonomy, §7 Security |
+| [Interfaces](interfaces.md) | §9 CLI, scripting contract, web UI, notifications, onboarding, mobile clients; §10 Forge, CI and identity |
+| [Roadmap](roadmap.md) | §11 Existing platforms, §12 Open decisions and spikes, §13 Delivery |
+
+{{< design-anchors >}}
+
+## 1. Goal
+
+A self-hosted service in which AI coding agents carry out project work independently while one developer acts as human-in-the-loop (HitL): intervening, answering questions, reviewing and approving.
+
+- Agents work repository issues, modify code, run tests and commit in their own checkouts. After a cleanup step and the developer's approval the supervisor pushes the branch and opens or updates the PR (§4.5).
+- Usage is a live coding assistant, not an automation pipeline: the developer chats with an agent about the work, then detaches while it works for 15 to 60 minutes or longer, and returns when it needs them. A personal tool with one developer and a handful of concurrent sessions.
+- The developer attaches via chat, SSH or an editor temporarily. Disconnecting never interrupts the agent.
+- Web UI and `whr` CLI are two front ends over one service layer: the CLI calls the JSON API, the web UI is server-rendered HTML (see D8).
+- First host: Apple-silicon Mac mini on Apple Container, recommended M6 with 32 GB memory and 512 GB storage (D32). Other runtimes later via adapters.
+
+The central concept is an **agent task supervisor with managed workspaces**, not an editor-centred dev environment.
+
+**Positioning.** workharbor is a self-hosted, agent-agnostic remote for coding agents. From a phone or a browser the developer starts a task, chats with the agent, watches progress, answers its questions and pauses or cancels it, with Claude Code, Codex CLI and later other agents behind one interface (§5.2). It runs on the developer's own machine with their existing agent logins, so there is no hosted service in the middle. Hosted remote offerings from the agent vendors cover one vendor each; where they fall short for a given agent (for example a missing mobile or remote client) is {{< status unverified >}} and is checked in the §12 spike. The boundary stays: agents never merge, tag, release or deploy (§6).
+
+## 2. Requirements
+
+| Area | Requirement |
+| --- | --- |
+| Deployment | On-premises, one developer |
+| Hardware | Apple-silicon Mac mini: M6 with 32 GB memory and 512 GB storage recommended; on a budget 16 GB, with 512 GB or with 256 GB plus an external SSD; 24 GB / 512 GB in between (D32, §8) |
+| Runtime | Apple Container (per-container VM isolation); Docker/Podman/other microVMs later |
+| Capacity | **4 concurrent instances realistic, 8 a stretch goal** (see §8) |
+| Overhead | Light operational and resource cost |
+| Access | VPN, temporary SSH, VS Code / JetBrains via SSH; code-server optional and later |
+| Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: GitHub, D15) |
+| CI | Drone medium/long term, behind an adapter |
+| Auth | OAuth for the five forges (release 1: static token) |
+
+## 14. Review log
+
+Reviewers disagreed on three points; the resolutions adopted here:
+
+- **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge, no half-state; since D15 that forge is GitHub through a GitHub App, not a PAT.
+- **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted then: a minimal read-mostly UI with inbox, since decisions are answered there. Since superseded by the remote-control scope of §9.3 (D8, D12).
+- **UI stack (D8):** `templ` + htmx (option 1 of 7 weighed) over Svelte, Preact, React and others. The cost is that the UI does not consume the JSON API directly; the shared service layer keeps the two front ends consistent.
+
+Skipped for now: separate identity service, Kubernetes, multi-host placement, Portainer/Coder UI integration.
+
+## 15. References
+
+Carried over from the original summary; compatibility claims require testing against pinned versions.
+
+- Apple Container: [README](https://github.com/apple/container), [technical overview](https://github.com/apple/container/blob/main/docs/technical-overview.md), [container machine](https://github.com/apple/container/blob/main/docs/container-machine.md), [VS Code Remote-SSH example](https://github.com/apple/container/blob/main/examples/container-machine-vscode/README.md)
+- Socktainer: [repository](https://github.com/socktainer/socktainer)
+- Editors: [code-server FAQ](https://github.com/coder/code-server/blob/main/docs/FAQ.md), [JetBrains remote development](https://www.jetbrains.com/help/idea/remote-development-overview.html)
+- Platforms: [Coder](https://coder.com/docs/about), [external provisioners](https://coder.com/docs/admin/provisioners), [DevPod](https://devpod.sh/docs/what-is-devpod), [Eclipse Che](https://eclipse.dev/che/docs/)
+- Portainer: [Add-ons](https://docs.portainer.io/admin/add-ons), [custom templates](https://docs.portainer.io/user/docker/templates/custom), [REST API](https://docs.portainer.io/api/access)
+- OAuth: [GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Gitea](https://docs.gitea.com/development/oauth2-provider/), [Forgejo](https://forgejo.org/docs/latest/admin/advanced/oauth2-provider/), [Codeberg](https://docs.codeberg.org/integrations/keycloak/), [GitLab](https://docs.gitlab.com/api/oauth2/)
