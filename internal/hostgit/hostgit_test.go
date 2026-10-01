@@ -347,6 +347,16 @@ func TestUntrustedRefusesEverythingElse(t *testing.T) {
 		{"rev-parse", "--git-dir=/etc"},
 		{"for-each-ref", "--exec-path=/tmp"},
 		{"cat-file", "--ext-diff"},
+		// git accepts an unambiguous prefix of a long option.
+		{"cat-file", "--textc", "HEAD:main.go"},
+		{"cat-file", "--filter", "HEAD:main.go"},
+		{"cat-file", "--text", "HEAD:main.go"},
+		{"rev-parse", "--git-d=/etc"},
+		{"rev-parse", "--git-dir"},
+		{"rev-parse", "--resolve-git-dir=/etc"},
+		{"rev-list", "--ext", "HEAD"},
+		{"ls-tree", "--format=%(path)", "HEAD"},
+		{"for-each-ref", "--shell", "--format=x"},
 	}
 	for _, args := range refused {
 		if _, err := u.Run(context.Background(), args...); !errors.Is(err, ErrNotAllowed) {
@@ -364,5 +374,26 @@ func TestUntrustedNeedsARealAbsoluteDirectory(t *testing.T) {
 		if _, err := g.Untrusted(path); !errors.Is(err, ErrBadPath) {
 			t.Errorf("Untrusted(%q) = %v, want ErrBadPath", path, err)
 		}
+	}
+}
+
+// The control for the abbreviation hole: plain git takes --textc for
+// --textconv and runs the configured driver, so the refusals above are what
+// stands between an agent's repository config and a program on the host.
+func TestControlAbbreviatedOptionRunsTextconv(t *testing.T) {
+	p := newPlant(t)
+	env := plainEnv(filepath.Join(filepath.Dir(p.canary), "home"))
+	driver := filepath.Join(filepath.Dir(p.canary), "evil", "textconv")
+	body := "#!/bin/sh\n: > '" + filepath.Join(p.canary, "textconv") + "'\ncat \"$1\"\n"
+	if err := os.WriteFile(driver, []byte(body), 0o700); err != nil { //nolint:gosec // an executable test script
+		t.Fatal(err)
+	}
+	mustGit(t, env, p.repo, "config", "diff.evil.textconv", driver)
+	if err := os.WriteFile(filepath.Join(p.repo, ".git", "info", "attributes"), []byte("*.go diff=evil\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, env, p.repo, "cat-file", "--textc", "HEAD:main.go")
+	if got := p.fired(); !contains(got, "textconv") {
+		t.Fatalf("the control did not run the textconv driver: fired %v", got)
 	}
 }

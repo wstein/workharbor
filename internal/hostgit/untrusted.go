@@ -7,24 +7,63 @@ import (
 	"strings"
 )
 
-// readOnlyPlumbing are the commands that may run in an agent's checkout. None
-// of them updates the index, runs a hook, or applies a filter, textconv or
-// file-system monitor.
-var readOnlyPlumbing = map[string]bool{
-	"rev-parse":    true,
-	"rev-list":     true,
-	"cat-file":     true,
-	"for-each-ref": true,
-	"ls-tree":      true,
-	"merge-base":   true,
-	"show-ref":     true,
+// options lists what one plumbing command accepts. None of the commands runs
+// the index, a hook, a filter, a textconv driver or the file-system monitor.
+// Options are matched exactly: git accepts any unambiguous prefix of a long
+// option, so a list of refused options is not enough (`--textc` runs a
+// textconv driver). Anything not listed is refused.
+type options struct {
+	flags  map[string]bool // exact options, such as "--verify"
+	values []string        // options that carry a value, such as "--format="
 }
 
-// refusedFlags are options that would turn an allowed command into one that
-// runs configured programs or leaves the repository.
-var refusedFlags = []string{
-	"--textconv", "--filters", "--ext-diff", "--exec-path",
-	"--upload-pack", "--receive-pack", "--git-dir", "--work-tree", "--namespace",
+func newOptions(flags []string, values ...string) options {
+	o := options{flags: map[string]bool{}, values: values}
+	for _, f := range flags {
+		o.flags[f] = true
+	}
+	return o
+}
+
+func (o options) allows(arg string) bool {
+	if o.flags[arg] {
+		return true
+	}
+	for _, v := range o.values {
+		if strings.HasPrefix(arg, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// readOnlyPlumbing are the commands that may run in an agent's checkout and
+// the options each accepts.
+var readOnlyPlumbing = map[string]options{
+	"rev-parse": newOptions([]string{
+		"--verify", "-q", "--quiet", "--short", "--abbrev-ref", "--symbolic-full-name",
+		"--is-bare-repository", "--show-toplevel", "--end-of-options",
+	}, "--short=", "--abbrev-ref="),
+	"rev-list": newOptions([]string{
+		"--count", "--first-parent", "--reverse", "--no-merges", "--merges", "--parents",
+		"--all", "--branches", "--end-of-options",
+	}, "--max-count=", "--skip="),
+	"cat-file": newOptions([]string{
+		"-t", "-s", "-e", "-p", "--batch", "--batch-check", "--end-of-options",
+	}, "--batch=", "--batch-check="),
+	"for-each-ref": newOptions([]string{"--end-of-options"},
+		"--format=", "--count=", "--sort="),
+	"ls-tree": newOptions([]string{
+		"-r", "-t", "-d", "-l", "--long", "--name-only", "--full-name", "--full-tree", "-z",
+		"--end-of-options",
+	}, "--abbrev="),
+	"merge-base": newOptions([]string{
+		"--is-ancestor", "--all", "--octopus", "--end-of-options",
+	}),
+	"show-ref": newOptions([]string{
+		"--verify", "--head", "--heads", "--tags", "-q", "--quiet", "-s", "--hash",
+		"-d", "--dereference", "--exists", "--end-of-options",
+	}, "--hash=", "--abbrev="),
 }
 
 // Untrusted is a checkout an agent can write. Only read-only plumbing runs in
@@ -49,18 +88,20 @@ func (g *Git) Untrusted(path string) (*Untrusted, error) {
 // Run runs an allowed plumbing command and returns its output. The first
 // argument must be the command itself, with no option before it.
 func (u *Untrusted) Run(ctx context.Context, args ...string) ([]byte, error) {
-	if len(args) == 0 || !readOnlyPlumbing[args[0]] {
-		name := "(none)"
-		if len(args) > 0 {
-			name = args[0]
-		}
+	name := "(none)"
+	if len(args) > 0 {
+		name = args[0]
+	}
+	allowed, ok := readOnlyPlumbing[name]
+	if !ok {
 		return nil, fmt.Errorf("%w: %q", ErrNotAllowed, name)
 	}
 	for _, a := range args[1:] {
-		for _, f := range refusedFlags {
-			if a == f || strings.HasPrefix(a, f+"=") {
-				return nil, fmt.Errorf("%w: option %s", ErrNotAllowed, a)
-			}
+		if a == "--" || a == "--end-of-options" {
+			break // everything after is a path or a revision
+		}
+		if strings.HasPrefix(a, "-") && !allowed.allows(a) {
+			return nil, fmt.Errorf("%w: option %s for %s", ErrNotAllowed, a, name)
 		}
 	}
 	// Git is pointed at the verified directory and never searches upward.
