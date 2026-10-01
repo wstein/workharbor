@@ -143,7 +143,28 @@ func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) 
 	bin := a.binary()
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx)) // the client is ended by us, after the guest process
 	cmd := exec.CommandContext(runCtx, bin, args...)               //nolint:gosec // the container CLI with arguments built from checked values
-	cmd.Stdin = req.Stdin
+	// The client's stdin is a pipe of our own, fed from the caller's reader by a
+	// goroutine of ours. Handing the caller's reader to exec would make Wait
+	// wait for exec's copy goroutine, which never ends while the caller keeps
+	// its pipe open (an agent's stream-json input): a cancelled exec would
+	// never finish and the supervisor could not shut down with a session
+	// attached (found by the serve integration run). With our pipe, ending the
+	// client closes it and Wait does not depend on the caller.
+	var stdinW *os.File
+	if req.Stdin != nil {
+		pr, pw, perr := os.Pipe()
+		if perr != nil {
+			stop()
+			cleanup()
+			return nil, perr
+		}
+		cmd.Stdin, stdinW = pr, pw
+		defer func() { _ = pr.Close() }() // the child has its own copy once started
+		go func() {
+			_, _ = io.Copy(pw, req.Stdin) // ends when the caller's reader ends or the client is gone
+			_ = pw.Close()
+		}()
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		stop()
@@ -188,7 +209,15 @@ func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) 
 	go pump(stderr, runtime.Stderr)
 
 	waited := make(chan error, 1)
-	go func() { pumps.Wait(); err := cmd.Wait(); cleanup(); waited <- err }()
+	go func() {
+		pumps.Wait()
+		err := cmd.Wait()
+		if stdinW != nil {
+			_ = stdinW.Close() // a copy blocked on a write to a client that is gone ends
+		}
+		cleanup()
+		waited <- err
+	}()
 	go func() {
 		defer close(st.done)
 		defer close(st.chunks)

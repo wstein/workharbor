@@ -5,6 +5,7 @@ package apple
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -170,4 +171,44 @@ func mustPrepare(t *testing.T, h runtimetest.Harness, spec runtime.Spec) runtime
 		t.Fatal(err)
 	}
 	return p
+}
+
+// A cancelled exec ends even when the caller keeps its stdin pipe open, as an
+// agent's stream-json input does: Wait must not wait for the pipe (found by the
+// serve integration run, where `whr serve` could not shut down).
+func TestACancelledExecEndsWithAnOpenStdinPipe(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	prep, err := h.Prepare(h.NewSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := h.Adapter.Provision(ctx, prep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = h.Adapter.Stop(context.Background(), id)
+		_ = h.Adapter.Delete(context.Background(), id)
+	})
+	if err := h.Adapter.Start(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	pr, pw := io.Pipe()
+	defer func() { _ = pw.Close() }()
+	execCtx, stop := context.WithCancel(ctx)
+	st, err := h.Adapter.Exec(execCtx, id, runtime.ExecRequest{Cmd: h.Commands.Sleep, Stdin: pr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Second)
+	stop()
+	done := make(chan struct{})
+	go func() { _, _, _, _ = runtime.Collect(st); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("a cancelled exec did not end while its stdin pipe was open")
+	}
 }
