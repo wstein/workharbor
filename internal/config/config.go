@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -43,6 +44,9 @@ type Roots struct {
 type GitHub struct {
 	AppID   int64  `json:"app_id"`
 	KeyFile string `json:"key_file"` // the App's private key
+	// APIURL is the API's base URL. Optional: https://api.github.com. It must
+	// be https, or http to a loopback address for a test double.
+	APIURL string `json:"api_url,omitempty"`
 }
 
 // Config is the whole file.
@@ -237,6 +241,9 @@ func (c *Config) Validate() error {
 
 	if c.GitHub.AppID <= 0 {
 		add("github.app_id: a positive App ID is needed")
+	}
+	if msg := checkAPIURL(c.GitHub.APIURL); msg != "" {
+		add("github.api_url: %s", msg)
 	}
 	secrets := map[string]string{"github.key_file": c.GitHub.KeyFile, "api_token_file": c.APITokenFile}
 	if c.AgentAPIKeyEnvFile != "" {
@@ -520,4 +527,29 @@ func validEgressHost(h string) bool {
 		}
 	}
 	return true
+}
+
+// checkAPIURL accepts an https URL, or an http URL to a loopback address (a test
+// double of the API), with no credentials. Empty means GitHub's own.
+func checkAPIURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Sprintf("%q is not a plain URL", raw)
+	}
+	switch u.Scheme {
+	case "https":
+		return ""
+	case "http":
+		host, _, herr := net.SplitHostPort(u.Host)
+		if herr != nil {
+			host = u.Host
+		}
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%q must be https, or http to a loopback address", raw)
 }

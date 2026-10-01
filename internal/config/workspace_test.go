@@ -153,3 +153,17 @@ func TestEnvironmentAndStateDirAreChecked(t *testing.T) {
 		t.Errorf("defaults = %+v", got)
 	}
 }
+
+func TestTheGitHubAPIURLIsHTTPSOrLoopback(t *testing.T) {
+	for url, ok := range map[string]bool{
+		"": true, "https://api.github.com": true, "https://ghe.example.com/api/v3": true, "http://127.0.0.1:8081": true, "http://[::1]:9": true,
+		"http://api.github.com": false, "http://localhost:8081": false, "ftp://x": false, "https://u:p@x.com": false, "https://x.com?a=b": false, "not a url": false,
+	} {
+		r := newRig(t)
+		r.cfg.GitHub.APIURL = url
+		_, err := r.parse(t)
+		if (err == nil) != ok {
+			t.Errorf("api_url %q: err = %v, want ok=%v", url, err, ok)
+		}
+	}
+}

@@ -228,5 +228,5 @@ func newGitHub(c *config.Config, rd *redact.Redactor) (*github.Client, error) {
 	for i, r := range c.Repositories {
 		repos[i] = r.Name
 	}
-	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd})
+	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd, BaseURL: c.GitHub.APIURL})
 }
