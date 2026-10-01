@@ -16,7 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/policy"
-	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 )
 
 func plainGit(t *testing.T, home, dir string, args ...string) {
@@ -62,6 +62,12 @@ type pubRig struct {
 	req      Request
 	checks   int
 	checkErr error
+
+	// the agent's side: a workspace and agent record, and the fake guest that
+	// answers the git commands of an export with real git in checkout
+	agent domain.Agent
+	guest func(cmd []string) (stdout []byte, stderr string, code int, handled bool)
+	cmds  []string
 }
 
 // newPubRig builds the chain: a forge repository, the cache, an agent
@@ -101,13 +107,13 @@ func newPubRig(t *testing.T) *pubRig {
 	must(t, err)
 	must(t, cache.Refresh(bg, "main"))
 	pr.checkout = filepath.Join(root, "ws1")
-	_, err = cache.CloneTopic(bg, pr.checkout, "main", "agent/topic")
-	must(t, err)
+	plainGit(t, pr.home, root, "clone", "--quiet", "--no-tags", "--shared", "--branch", "main", cache.Path(), pr.checkout)
+	plainGit(t, pr.home, pr.checkout, "checkout", "--quiet", "-b", "agent/topic")
 	must(t, os.WriteFile(filepath.Join(pr.checkout, "a.txt"), []byte("a\n"), 0o600))
 	plainGit(t, pr.home, pr.checkout, "add", "a.txt")
 	plainGit(t, pr.home, pr.checkout, "commit", "--quiet", "-m", "docs: add a")
 
-	g, err := hostgit.New(hostgit.WithWorkspaceRoot(root), hostgit.WithAlternates(cache.ObjectsDir()))
+	g, err := hostgit.New(hostgit.WithWorkspaceRoot(root))
 	must(t, err)
 	t.Cleanup(func() { _ = g.Close() })
 	pr.repo, err = g.InitBare(bg, filepath.Join(root, "supervisor.git"))
@@ -134,13 +140,28 @@ func newPubRig(t *testing.T) *pubRig {
 		},
 		Checks: func(context.Context, domain.ID, string) error { pr.checks++; return pr.checkErr },
 	})
-	pr.req = Request{Task: "t1", Checkout: pr.checkout, Branch: "agent/topic", Target: "main", DecisionID: "review-1"}
+	pr.req = Request{Task: "t1", Branch: "agent/topic", Target: "main", DecisionID: "review-1"}
 
 	// The run stops (the agent finished), but the environment still runs.
 	a := r.load()
 	must(t, a.StopRun("r1"))
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
+
+	// The agent lives in a workspace whose environment is the task's; the fake
+	// runtime answers the git commands an export sends.
+	ws, wev, err := domain.NewWorkspace("w1", "docs-ws", "/ws/docs", "wstein/workharbor", "main", t0)
+	must(t, err)
+	ws.EnvID = pr.env
+	must(t, r.store.AddWorkspace(bg, ws, wev))
+	must(t, r.store.SetWorkspaceEnv(bg, ws.ID, pr.env))
+	ag, aev, err := domain.NewAgent("a1", ws.ID, "topic", "", "", t0) // branch agent/topic, as the checkout
+	must(t, err)
+	must(t, r.store.AddAgent(bg, ag, aev))
+	pr.agent = ag
+	pr.req.Agent = ag.ID
+	pr.pub.cfg.Workspaces = NewWorkspaces(r.svc, WorkspaceConfig{NewID: func() domain.ID { return "x" }})
+	pr.rt.Adapter.(*runtimetest.Fake).OnExec = pr.onExec
 	return pr
 }
 
@@ -160,35 +181,7 @@ func (p *pubRig) remoteHas() bool {
 	return err == nil
 }
 
-func TestPrepareStopsTheEnvironmentThenPinsAndAsks(t *testing.T) {
-	p := newPubRig(t)
-	if p.envState() != domain.EnvRunning {
-		t.Fatal("setup: the environment should still run")
-	}
-	prepared, err := p.pub.Prepare(bg, p.req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.envState() != domain.EnvStopped {
-		t.Error("the environment was not stopped before the checkout was read")
-	}
-	a := p.load()
-	cand, ok := a.CurrentCandidate()
-	d, _ := a.Decision("review-1")
-	env, _ := a.Environment(p.env)
-	if !ok || cand.SHA != prepared.SHA || cand.CI != domain.CIPending || d.Kind != domain.DecisionReview || d.SHA != prepared.SHA ||
-		a.Task().State != domain.TaskReadyForReview || env.State != domain.EnvStopped {
-		t.Errorf("candidate %+v, decision %+v, task %s, env %s", cand, d, a.Task().State, env.State)
-	}
-	if p.checks != 1 {
-		t.Errorf("the checks ran %d times, want once", p.checks)
-	}
-	if p.remoteHas() {
-		t.Error("nothing may be pushed before the human approves")
-	}
-}
-
-func TestPrepareRefusesALiveRunAndAStillRunningEnvironment(t *testing.T) {
+func TestPrepareRefusesALiveRun(t *testing.T) {
 	p := newPubRig(t)
 	// A live run.
 	a := p.load()
@@ -198,22 +191,7 @@ func TestPrepareRefusesALiveRunAndAStillRunningEnvironment(t *testing.T) {
 	if _, err := p.pub.Prepare(bg, p.req); !errors.Is(err, ErrNotReadyYet) {
 		t.Errorf("a live run = %v, want ErrNotReadyYet", err)
 	}
-
-	// A runtime that does not stop the environment: the checkout is not read.
-	p2 := newPubRig(t)
-	p2.svc.rt = stuckRuntime{p2.rt.Adapter}
-	if _, err := p2.pub.Prepare(bg, p2.req); !errors.Is(err, ErrEnvRunning) {
-		t.Errorf("an environment that keeps running = %v, want ErrEnvRunning", err)
-	}
-	if _, err := p2.repo.Run(bg, "rev-parse", "--verify", "--quiet", "refs/heads/agent/topic"); err == nil {
-		t.Error("the checkout was fetched while the environment still ran")
-	}
 }
-
-// stuckRuntime ignores Stop.
-type stuckRuntime struct{ runtime.Adapter }
-
-func (stuckRuntime) Stop(context.Context, string) error { return nil }
 
 func TestFailingChecksStopTheFlowBeforeAnyDecision(t *testing.T) {
 	p := newPubRig(t)
@@ -279,40 +257,6 @@ func TestPublishPushesTheApprovedCommitAndOpensThePR(t *testing.T) {
 	h.Set("X-Signature", "s")
 	if err := g.VerifyWebhook(h, nil); err != nil {
 		t.Errorf("webhook: %v", err)
-	}
-}
-
-func TestOpenCopyOffersACopyNeverTheCheckout(t *testing.T) {
-	p := newPubRig(t)
-	dir := filepath.Join(t.TempDir(), "editor")
-
-	// While the environment runs and no copy exists, nothing is offered.
-	if _, err := p.pub.OpenCopy(bg, p.req, dir); !errors.Is(err, ErrEnvRunning) {
-		t.Fatalf("a running environment and no copy = %v, want ErrEnvRunning", err)
-	}
-	if _, err := os.Stat(dir); err == nil {
-		t.Fatal("a copy was made from a running environment")
-	}
-
-	must(t, p.svc.stopEnvironment(bg, "t1", p.env))
-	got, err := p.pub.OpenCopy(bg, p.req, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Path != dir || got.Stale || got.Path == p.checkout {
-		t.Errorf("copy = %+v; the editor must get its own directory", got)
-	}
-	// The agent's checkout is refused as a destination.
-	if _, err := p.pub.OpenCopy(bg, p.req, p.checkout); !errors.Is(err, hostgit.ErrInsideWorkspace) {
-		t.Errorf("the agent's checkout as the copy = %v, want ErrInsideWorkspace", err)
-	}
-
-	// The environment runs again: the last copy is offered as stale and the
-	// checkout is not read.
-	must(t, p.rt.Adapter.Start(bg, string(p.env)))
-	stale, err := p.pub.OpenCopy(bg, p.req, dir)
-	if err != nil || !stale.Stale {
-		t.Errorf("copy while running = %+v, %v; want the last copy marked stale", stale, err)
 	}
 }
 

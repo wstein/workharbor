@@ -11,44 +11,10 @@ import (
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
-	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 )
 
-// bundleRig is a pubRig whose agent lives in a workspace: the fake runtime
-// answers the git commands an export sends, with real git run in the agent's
-// checkout on the host standing in for the guest.
-type bundleRig struct {
-	*pubRig
-	agent domain.Agent
-	// guest, when set, may answer a command first (a test of a failing guest).
-	guest func(cmd []string) (stdout []byte, stderr string, code int, handled bool)
-	cmds  []string
-}
-
-func newBundleRig(t *testing.T) *bundleRig {
-	t.Helper()
-	p := newPubRig(t)
-	b := &bundleRig{pubRig: p}
-
-	ws, wev, err := domain.NewWorkspace("w1", "docs-ws", "/ws/docs", "wstein/workharbor", "main", t0)
-	must(t, err)
-	ws.EnvID = p.env
-	must(t, p.store.AddWorkspace(bg, ws, wev))
-	must(t, p.store.SetWorkspaceEnv(bg, ws.ID, p.env))
-	ag, aev, err := domain.NewAgent("a1", ws.ID, "topic", "", "", t0) // branch agent/topic, as the rig's checkout
-	must(t, err)
-	must(t, p.store.AddAgent(bg, ag, aev))
-	b.agent = ag
-
-	p.pub.cfg.Workspaces = NewWorkspaces(p.svc, WorkspaceConfig{NewID: func() domain.ID { return "x" }})
-	p.req.Agent, p.req.Checkout = ag.ID, ""
-
-	p.rt.Adapter.(*runtimetest.Fake).OnExec = b.onExec
-	return b
-}
-
 // guestGit runs git in the agent's checkout, as the guest would.
-func (b *bundleRig) guestGit(args ...string) (string, error) {
+func (b *pubRig) guestGit(args ...string) (string, error) {
 	cmd := exec.CommandContext(bg, "git", args...) //nolint:gosec // test helper
 	cmd.Dir = b.checkout
 	cmd.Env = append(os.Environ(), "HOME="+b.home, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1",
@@ -62,7 +28,7 @@ func (b *bundleRig) guestGit(args ...string) (string, error) {
 	return out.String(), nil
 }
 
-func (b *bundleRig) onExec(_ string, cmd []string) ([]byte, string, int, bool) {
+func (b *pubRig) onExec(_ string, cmd []string) ([]byte, string, int, bool) {
 	b.cmds = append(b.cmds, strings.Join(cmd, " "))
 	if b.guest != nil {
 		if out, e, c, ok := b.guest(cmd); ok {
@@ -73,7 +39,7 @@ func (b *bundleRig) onExec(_ string, cmd []string) ([]byte, string, int, bool) {
 }
 
 // defaultExec is the guest that works: git run in the agent's checkout.
-func (b *bundleRig) defaultExec(cmd []string) ([]byte, string, int, bool) {
+func (b *pubRig) defaultExec(cmd []string) ([]byte, string, int, bool) {
 	if len(cmd) < 5 || cmd[0] != "git" || cmd[1] != "-C" || cmd[2] != b.agent.Worktree {
 		return nil, "", 0, false
 	}
@@ -98,7 +64,7 @@ func (b *bundleRig) defaultExec(cmd []string) ([]byte, string, int, bool) {
 	return nil, "", 0, false
 }
 
-func (b *bundleRig) ran(substr string) bool {
+func (b *pubRig) ran(substr string) bool {
 	for _, c := range b.cmds {
 		if strings.Contains(c, substr) {
 			return true
@@ -111,7 +77,7 @@ func (b *bundleRig) ran(substr string) bool {
 // is not stopped, no git runs on the checkout from the host, and what follows
 // is as it was.
 func TestPrepareFromABundleLeavesTheEnvironmentRunning(t *testing.T) {
-	b := newBundleRig(t)
+	b := newPubRig(t)
 	if b.envState() != domain.EnvRunning {
 		t.Fatal("setup: the environment should run")
 	}
@@ -141,7 +107,7 @@ func TestPrepareFromABundleLeavesTheEnvironmentRunning(t *testing.T) {
 
 func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 	t.Run("larger than the limit", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		b.pub.cfg.MaxBundle = 10
 		if _, err := b.pub.Prepare(bg, b.req); !errors.Is(err, hostgit.ErrBundleTooLarge) {
 			t.Errorf("err = %v", err)
@@ -151,7 +117,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 		}
 	})
 	t.Run("cut in half", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		b.guest = func(cmd []string) ([]byte, string, int, bool) {
 			out, e, c, ok := b.defaultExec(cmd)
 			if ok && len(cmd) > 3 && cmd[3] == "bundle" {
@@ -167,7 +133,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 		}
 	})
 	t.Run("the guest command fails", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		b.guest = func(cmd []string) ([]byte, string, int, bool) {
 			if len(cmd) > 3 && cmd[3] == "bundle" {
 				return nil, "fatal: bad object", 128, true
@@ -180,7 +146,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 		}
 	})
 	t.Run("nothing to export", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		b.guest = func(cmd []string) ([]byte, string, int, bool) {
 			if len(cmd) > 3 && cmd[3] == "bundle" {
 				return nil, "error: Refusing to create empty bundle.", 128, true
@@ -192,7 +158,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 		}
 	})
 	t.Run("a branch that is not the agent's", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		req := b.req
 		req.Branch = "agent/other"
 		if _, err := b.pub.Prepare(bg, req); err == nil || !strings.Contains(err.Error(), "is not agent") {
@@ -200,7 +166,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 		}
 	})
 	t.Run("a publisher without workspaces", func(t *testing.T) {
-		b := newBundleRig(t)
+		b := newPubRig(t)
 		b.pub.cfg.Workspaces = nil
 		if _, err := b.pub.Prepare(bg, b.req); !errors.Is(err, ErrNoWorkspaces) {
 			t.Errorf("err = %v", err)
@@ -211,7 +177,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 // A rebase that conflicts raises the question of design §4.2 for the stopped
 // run, with the paths as untrusted input, and exports nothing.
 func TestARebaseConflictRaisesAQuestionForTheStoppedRun(t *testing.T) {
-	b := newBundleRig(t)
+	b := newPubRig(t)
 	b.guest = func(cmd []string) ([]byte, string, int, bool) {
 		if len(cmd) < 5 {
 			return nil, "", 0, false
@@ -262,7 +228,7 @@ func TestARebaseConflictRaisesAQuestionForTheStoppedRun(t *testing.T) {
 // After a push the next round is a fast-forward: no rebase before the export, and
 // a branch that rewrote the pushed commits is refused.
 func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
-	b := newBundleRig(t)
+	b := newPubRig(t)
 	first, err := b.pub.Prepare(bg, b.req)
 	must(t, err)
 	must(t, b.allow(first.SHA))
@@ -300,15 +266,21 @@ func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
 	}
 }
 
-func TestOpenCopyFromABundleIsFreshWhileTheEnvironmentRuns(t *testing.T) {
-	b := newBundleRig(t)
+// The editor copy is made from a bundle whether or not the environment runs,
+// in a directory of its own, and never from the agent's checkout.
+func TestOpenCopyIsFreshWhileTheEnvironmentRunsAndNeverTheCheckout(t *testing.T) {
+	b := newPubRig(t)
 	dir := filepath.Join(t.TempDir(), "copy")
 	cp, err := b.pub.OpenCopy(bg, b.req, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cp.Stale {
-		t.Error("a copy made from a bundle is not stale")
+	if cp.Path != dir || cp.Path == b.checkout {
+		t.Errorf("copy = %+v: the editor must get its own directory", cp)
+	}
+	// The agent's checkout is refused as a destination.
+	if _, err := b.pub.OpenCopy(bg, b.req, b.checkout); !errors.Is(err, hostgit.ErrInsideWorkspace) {
+		t.Errorf("the agent's checkout as the copy = %v, want ErrInsideWorkspace", err)
 	}
 	if b.envState() != domain.EnvRunning {
 		t.Error("the environment was stopped")

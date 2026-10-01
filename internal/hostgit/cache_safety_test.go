@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -108,70 +107,6 @@ func TestTheCacheLockHonoursTheContext(t *testing.T) {
 	}
 }
 
-// After a force-push on the forge the old tip is gone from the cache. A shared
-// topic cloned from it must keep working through maintenance.
-func TestMaintenanceKeepsTheObjectsOfALiveTopic(t *testing.T) {
-	ctx := context.Background()
-	g := newGit(t)
-	base := t.TempDir()
-	f := newForge(t, base, 5)
-	c := openCache(t, g, base, f, 0)
-	if err := c.Refresh(ctx, "main"); err != nil {
-		t.Fatal(err)
-	}
-	dest := filepath.Join(base, "t1")
-	if _, err := c.CloneTopic(ctx, dest, "main", "agent/topic"); err != nil {
-		t.Fatal(err)
-	}
-	oldTip := mustGit(t, f.env, dest, "rev-parse", "HEAD")
-
-	// The forge rewrites history: the old tip is no longer reachable from main.
-	mustGit(t, f.env, f.dir, "reset", "--quiet", "--hard", "HEAD~3")
-	f.commit(2)
-	if err := c.Refresh(ctx, "main"); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.Maintain(ctx); err != nil {
-		t.Fatal(err)
-	}
-	env := plainEnv(filepath.Join(base, "home"))
-	mustGit(t, env, dest, "fsck", "--full", "--no-dangling")
-	if got := mustGit(t, env, dest, "log", "--oneline", oldTip); got == "" {
-		t.Error("the topic lost its history")
-	}
-
-	// Releasing the topic lets maintenance drop what only it needed.
-	if err := c.ReleaseTopic(ctx, dest); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.ReleaseTopic(ctx, dest); err != nil {
-		t.Errorf("releasing twice: %v", err)
-	}
-}
-
-// The control: plain git with default settings, the same history rewrite, and
-// an immediate prune. The shared topic loses its objects, which is the bug.
-func TestControlPlainGcBreaksASharedTopic(t *testing.T) {
-	base := t.TempDir()
-	f := newForge(t, base, 5)
-	env := plainEnv(filepath.Join(base, "home"))
-	cache := filepath.Join(base, "plain.git")
-	mustGit(t, env, base, "clone", "--quiet", "--bare", f.dir, cache)
-	dest := filepath.Join(base, "t1")
-	mustGit(t, env, base, "clone", "--quiet", "--shared", cache, dest)
-	oldTip := mustGit(t, env, dest, "rev-parse", "HEAD")
-
-	mustGit(t, f.env, f.dir, "reset", "--quiet", "--hard", "HEAD~3")
-	f.commit(2)
-	mustGit(t, env, cache, "fetch", "--quiet", "--force", f.dir, "+refs/heads/main:refs/heads/main")
-	mustGit(t, env, cache, "reflog", "expire", "--expire=now", "--all")
-	mustGit(t, env, cache, "gc", "--quiet", "--prune=now")
-
-	if err := gitErr(env, dest, "cat-file", "-e", oldTip+"^{commit}"); err == nil {
-		t.Skip("plain gc kept the object: this git behaves differently, so the control proves nothing")
-	}
-}
-
 func TestRepositoryNamesMapToSafeDirectories(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -252,12 +187,4 @@ func TestCachePathsMustBeAbsoluteAndInsideTheCacheRoot(t *testing.T) {
 	if _, err := strict.OpenCache(ctx, good+"-2", CacheConfig{Source: inside}); !errors.Is(err, ErrBadSource) {
 		t.Errorf("a source inside the workspace root = %v, want ErrBadSource", err)
 	}
-}
-
-// gitErr runs plain git and returns its error.
-func gitErr(env []string, dir string, args ...string) error {
-	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // test helper
-	cmd.Dir = dir
-	cmd.Env = env
-	return cmd.Run()
 }

@@ -51,6 +51,9 @@ func (p *Publisher) exportBranch(ctx context.Context, req Request, run domain.ID
 	if w == nil {
 		return ErrNoWorkspaces
 	}
+	if req.Agent == "" {
+		return &domain.InvalidError{Msg: "a request needs an agent: the branch leaves its environment as a bundle"}
+	}
 	a, err := p.svc.store.Agent(ctx, req.Agent)
 	if err != nil {
 		return err

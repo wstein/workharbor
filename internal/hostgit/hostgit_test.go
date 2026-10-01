@@ -2,7 +2,6 @@ package hostgit
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,17 +54,6 @@ func (p plant) fired() []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// clearCanary forgets what fired so far, for a test whose own setup ran plain
-// git in the planted checkout.
-func (p plant) clearCanary(t *testing.T) {
-	t.Helper()
-	for _, name := range p.fired() {
-		if err := os.Remove(filepath.Join(p.canary, name)); err != nil {
-			t.Fatal(err)
-		}
-	}
 }
 
 // newPlant builds an agent checkout on branch agent/topic with a hook, a
@@ -197,12 +185,14 @@ func contains(list []string, want string) bool {
 	return false
 }
 
-// newGit returns a Git whose workspace root is the directory that holds every
-// t.TempDir of this test run; options after it override that.
+// newGit returns a Git. Without options its workspace root is the directory
+// that holds every t.TempDir of this test run; with options, only those are set.
 func newGit(t *testing.T, opts ...Option) *Git {
 	t.Helper()
-	root := filepath.Dir(t.TempDir())
-	g, err := New(append([]Option{WithWorkspaceRoot(root)}, opts...)...)
+	if len(opts) == 0 {
+		opts = []Option{WithWorkspaceRoot(filepath.Dir(t.TempDir()))}
+	}
+	g, err := New(opts...)
 	if err != nil {
 		t.Skipf("git is not available: %v", err)
 	}
@@ -269,138 +259,4 @@ func TestTheFloorStopsTheKnownKeys(t *testing.T) {
 			}
 		}
 	})
-}
-
-// The floor cannot name a filter driver, because its name comes from the
-// repository's .gitattributes. This is why a hardened command is not enough in
-// an agent's tree, and why only read-only plumbing runs there.
-func TestTheFloorCannotStopFilters(t *testing.T) {
-	g := newGit(t)
-	p := newPlant(t)
-	if err := os.WriteFile(filepath.Join(p.repo, "new.go"), []byte("package main\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := hardened(t, g, p.repo, "add", "-A"); err != nil {
-		t.Fatal(err)
-	}
-	if !contains(p.fired(), "filter-clean") {
-		t.Skip("this git did not run the clean filter; the allowlist stays regardless")
-	}
-	// The hardened command above ran the filter, so a handle on an agent's
-	// tree must not offer it.
-	u, err := g.Untrusted(p.repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := u.Run(context.Background(), "add", "-A"); !errors.Is(err, ErrNotAllowed) {
-		t.Errorf("Untrusted.Run(add) = %v, want ErrNotAllowed", err)
-	}
-}
-
-func TestUntrustedRunsOnlyReadOnlyPlumbing(t *testing.T) {
-	g := newGit(t)
-	p := newPlant(t)
-	u, err := g.Untrusted(p.repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-
-	out, err := u.Run(ctx, "rev-parse", "HEAD")
-	if err != nil || strings.TrimSpace(string(out)) != p.sha {
-		t.Fatalf("rev-parse HEAD = %q, %v; want %s", out, err, p.sha)
-	}
-	if out, err := u.Run(ctx, "for-each-ref", "--format=%(refname)"); err != nil || !strings.Contains(string(out), "refs/heads/agent/topic") {
-		t.Fatalf("for-each-ref = %q, %v", out, err)
-	}
-	if out, err := u.Run(ctx, "cat-file", "-t", "HEAD"); err != nil || strings.TrimSpace(string(out)) != "commit" {
-		t.Fatalf("cat-file -t = %q, %v", out, err)
-	}
-	if got := p.fired(); len(got) != 0 {
-		t.Errorf("read-only plumbing ran %v on the host", got)
-	}
-}
-
-func TestUntrustedRefusesEverythingElse(t *testing.T) {
-	g := newGit(t)
-	p := newPlant(t)
-	u, err := g.Untrusted(p.repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	refused := [][]string{
-		{},
-		{"status"},
-		{"add", "-A"},
-		{"commit", "--allow-empty", "-m", "x"},
-		{"checkout", "main"},
-		{"diff"},
-		{"log", "-p"},
-		{"show", "HEAD"},
-		{"rebase", "main"},
-		{"merge", "main"},
-		{"push", "origin"},
-		{"fetch", "origin"},
-		{"pull"},
-		{"config", "--get", "core.pager"},
-		{"gc"},
-		{"reset", "--hard"},
-		{"-c", "core.pager=cat", "rev-parse", "HEAD"},
-		{"--paginate", "rev-parse"},
-		{"filter-branch"},
-		{"ls-remote", "ssh://x/y"},
-		{"cat-file", "--textconv", "HEAD:main.go"},
-		{"cat-file", "--filters", "HEAD:main.go"},
-		{"rev-parse", "--git-dir=/etc"},
-		{"for-each-ref", "--exec-path=/tmp"},
-		{"cat-file", "--ext-diff"},
-		// git accepts an unambiguous prefix of a long option.
-		{"cat-file", "--textc", "HEAD:main.go"},
-		{"cat-file", "--filter", "HEAD:main.go"},
-		{"cat-file", "--text", "HEAD:main.go"},
-		{"rev-parse", "--git-d=/etc"},
-		{"rev-parse", "--git-dir"},
-		{"rev-parse", "--resolve-git-dir=/etc"},
-		{"rev-list", "--ext", "HEAD"},
-		{"ls-tree", "--format=%(path)", "HEAD"},
-		{"for-each-ref", "--shell", "--format=x"},
-	}
-	for _, args := range refused {
-		if _, err := u.Run(context.Background(), args...); !errors.Is(err, ErrNotAllowed) {
-			t.Errorf("Run(%v) = %v, want ErrNotAllowed", args, err)
-		}
-	}
-	if got := p.fired(); len(got) != 0 {
-		t.Errorf("refused commands still ran %v", got)
-	}
-}
-
-func TestUntrustedNeedsARealAbsoluteDirectory(t *testing.T) {
-	g := newGit(t)
-	for _, path := range []string{"", "relative/dir", filepath.Join(t.TempDir(), "missing")} {
-		if _, err := g.Untrusted(path); !errors.Is(err, ErrBadPath) {
-			t.Errorf("Untrusted(%q) = %v, want ErrBadPath", path, err)
-		}
-	}
-}
-
-// The control for the abbreviation hole: plain git takes --textc for
-// --textconv and runs the configured driver, so the refusals above are what
-// stands between an agent's repository config and a program on the host.
-func TestControlAbbreviatedOptionRunsTextconv(t *testing.T) {
-	p := newPlant(t)
-	env := plainEnv(filepath.Join(filepath.Dir(p.canary), "home"))
-	driver := filepath.Join(filepath.Dir(p.canary), "evil", "textconv")
-	body := "#!/bin/sh\n: > '" + filepath.Join(p.canary, "textconv") + "'\ncat \"$1\"\n"
-	if err := os.WriteFile(driver, []byte(body), 0o700); err != nil { //nolint:gosec // an executable test script
-		t.Fatal(err)
-	}
-	mustGit(t, env, p.repo, "config", "diff.evil.textconv", driver)
-	if err := os.WriteFile(filepath.Join(p.repo, ".git", "info", "attributes"), []byte("*.go diff=evil\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, env, p.repo, "cat-file", "--textc", "HEAD:main.go")
-	if got := p.fired(); !contains(got, "textconv") {
-		t.Fatalf("the control did not run the textconv driver: fired %v", got)
-	}
 }

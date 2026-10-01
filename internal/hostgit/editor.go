@@ -44,10 +44,8 @@ func (r *Repo) EditorCopy(ctx context.Context, dest, branch string) ([]string, e
 		return nil, err
 	}
 	dest = filepath.Join(parent, filepath.Base(dest))
-	if r.g.root != "" {
-		if rel, err := filepath.Rel(r.g.root, dest); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("%w: %q", ErrInsideWorkspace, dest)
-		}
+	if r.g.inWorkspace(dest) {
+		return nil, fmt.Errorf("%w: %q", ErrInsideWorkspace, dest)
 	}
 
 	if _, err := os.Lstat(dest); errors.Is(err, os.ErrNotExist) {

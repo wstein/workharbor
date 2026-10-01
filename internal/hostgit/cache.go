@@ -33,9 +33,10 @@ type CacheConfig struct {
 	CloneDepth int
 }
 
-// Cache is the bare repository the supervisor keeps per repository. Topics are
-// cloned from it, so one object store serves every task. The agent never
-// writes it: its objects are mounted read-only where a topic needs them.
+// Cache is the supervisor's mirror of a forge repository (design D42, §4.5): one
+// bare repository per forge repository, fed only from the forge and never from
+// a workspace, never mounted into an environment. It supplies the target branch,
+// its history for a merge base, and the base the imported bundles build on.
 type Cache struct {
 	g    *Git
 	path string
@@ -53,11 +54,9 @@ func (g *Git) OpenCache(ctx context.Context, path string, cfg CacheConfig) (*Cac
 	}
 	// A local source inside the workspace root is agent-writable: the cache is
 	// fed from the forge, never from something an agent can change.
-	if g.root != "" && strings.HasPrefix(cfg.Source, "/") {
-		if src, err := resolveDir(cfg.Source); err == nil {
-			if rel, err := filepath.Rel(g.root, src); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return nil, fmt.Errorf("%w: %q is inside the workspace root", ErrBadSource, cfg.Source)
-			}
+	if strings.HasPrefix(cfg.Source, "/") {
+		if src, err := resolveDir(cfg.Source); err == nil && g.inWorkspace(src) {
+			return nil, fmt.Errorf("%w: %q is inside a workspace root", ErrBadSource, cfg.Source)
 		}
 	}
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -77,8 +76,8 @@ func (g *Git) OpenCache(ctx context.Context, path string, cfg CacheConfig) (*Cac
 		return nil, err
 	}
 	c := &Cache{g: g, path: path, cfg: cfg}
-	// Nothing in the cache expires: a shared topic may need an object the forge
-	// no longer has, and only ReleaseTopic lets it go (design §4.5). The writes
+	// Nothing in the cache expires: an agent's branch may build on an object the
+	// forge no longer has (design §4.5). The writes
 	// take the cache's lock: handles opened in parallel on one cache would
 	// otherwise collide on git's config lock.
 	unlock, err := c.lock(ctx)
@@ -234,110 +233,9 @@ func (c *Cache) deepen(ctx context.Context, branch string, by int) error {
 	return c.fetch(ctx, "--deepen="+strconv.Itoa(by), "--", c.cfg.Source, refspec(branch))
 }
 
-// Topic is a checkout the supervisor created for one line of work.
-type Topic struct {
-	Path   string // the checkout
-	Branch string // the topic branch, checked out
-	// Alternates are the cache directories the checkout borrows objects from:
-	// the cache's objects directory at full depth, none for a shallow clone.
-	// The runtime mounts them read-only at their host path.
-	Alternates []string
-}
-
-// CloneTopic creates the checkout of a topic: a clone of the cache at base
-// with its own .git (config, refs) and an empty template, so no hooks are
-// copied, on a new branch topic. At full depth it is a shared clone whose
-// alternates name the cache's objects directory; with a positive clone_depth
-// it is a self-contained shallow clone, because --shared is ignored for a
-// shallow source (design §4.5). dest must not exist yet.
-func (c *Cache) CloneTopic(ctx context.Context, dest, base, topic string) (*Topic, error) {
-	unlock, err := c.lock(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	return c.cloneTopic(ctx, dest, base, topic)
-}
-
-func (c *Cache) cloneTopic(ctx context.Context, dest, base, topic string) (*Topic, error) {
-	if !validBranch(base) || !validBranch(topic) {
-		return nil, fmt.Errorf("%w: %q or %q", ErrBadBranch, base, topic)
-	}
-	parent := filepath.Dir(dest)
-	if err := checkDir(parent); err != nil {
-		return nil, err
-	}
-	if _, err := os.Lstat(dest); err == nil {
-		return nil, fmt.Errorf("%w: %q already exists", ErrBadPath, dest)
-	}
-	shallow, err := c.IsShallow(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if c.cfg.CloneDepth == 0 && shallow {
-		return nil, ErrShallowCache
-	}
-
-	args := []string{"clone", "--quiet", "--no-tags", "--template=", "--branch", base}
-	source := c.path
-	if c.cfg.CloneDepth > 0 {
-		args = append(args, "--depth="+strconv.Itoa(c.cfg.CloneDepth))
-		source = "file://" + c.path // a plain path ignores --depth
-	} else {
-		args = append(args, "--shared")
-	}
-	if _, err := c.g.run(ctx, parent, true, nil, append(args, "--", source, dest)...); err != nil {
-		return nil, err
-	}
-	if _, err := c.g.run(ctx, dest, false, nil, "checkout", "--quiet", "-b", topic); err != nil {
-		return nil, err
-	}
-
-	t := &Topic{Path: dest, Branch: topic}
-	if c.cfg.CloneDepth == 0 {
-		// A shared clone must borrow from the cache and nothing else; if git
-		// ignored --shared the topic would hold a private copy and the mount
-		// would be the wrong thing to hand out.
-		data, err := os.ReadFile(filepath.Join(dest, ".git", "objects", "info", "alternates")) //nolint:gosec // inside the clone just made
-		if err != nil || strings.TrimSpace(string(data)) != c.ObjectsDir() {
-			return nil, fmt.Errorf("%w: the clone does not borrow from %s", ErrBadPath, c.ObjectsDir())
-		}
-		t.Alternates = []string{c.ObjectsDir()}
-		// Pin the commit the topic was cloned at, so that neither a force-push on
-		// the forge nor maintenance can drop objects the topic borrows.
-		sha, err := c.g.run(ctx, c.path, false, nil, "rev-parse", "--verify", "refs/heads/"+base+"^{commit}")
-		if err != nil {
-			return nil, err
-		}
-		if _, err := c.g.run(ctx, c.path, false, nil, "update-ref", keepRef(dest), strings.TrimSpace(string(sha))); err != nil {
-			return nil, err
-		}
-	}
-	return t, nil
-}
-
-// keepRef names the ref that keeps a topic's objects alive in the cache.
-func keepRef(dest string) string {
-	sum := sha256.Sum256([]byte(filepath.Clean(dest)))
-	return "refs/whr/keep/" + hex.EncodeToString(sum[:8])
-}
-
-// ReleaseTopic lets the cache drop what only the topic at dest needed, once the
-// topic is removed (design §4.4). Releasing twice is fine.
-func (c *Cache) ReleaseTopic(ctx context.Context, dest string) error {
-	unlock, err := c.lock(ctx)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	_, err = c.g.run(ctx, c.path, false, nil, "update-ref", "-d", keepRef(dest))
-	return err
-}
-
 // Maintain packs the cache: the only explicit maintenance, since background gc
-// and maintenance are off. It runs under the cache lock, and nothing a live
-// topic needs is pruned: topics are pinned by keep refs and the cache expires
-// nothing.
+// and maintenance are off. It runs under the cache lock, and the cache
+// expires nothing.
 func (c *Cache) Maintain(ctx context.Context) error {
 	unlock, err := c.lock(ctx)
 	if err != nil {

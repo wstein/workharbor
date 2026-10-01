@@ -15,7 +15,7 @@ import (
 func editorRig(t *testing.T) (*prep, *Repo) {
 	t.Helper()
 	p := newPrep(t)
-	strict := newGit(t, WithWorkspaceRoot(p.base), WithAlternates(p.cache.ObjectsDir()))
+	strict := newGit(t, WithWorkspaceRoot(p.base))
 	r, err := strict.OpenBare(context.Background(), p.repo.Path())
 	if err != nil {
 		t.Fatal(err)

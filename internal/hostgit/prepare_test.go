@@ -49,9 +49,8 @@ func newPrep(t *testing.T) *prep {
 	}
 
 	p.topic = filepath.Join(p.base, "t1")
-	if _, err := p.cache.CloneTopic(ctx, p.topic, "main", p.topicBr); err != nil {
-		t.Fatal(err)
-	}
+	mustGit(t, p.env, p.base, "clone", "--quiet", "--no-tags", "--shared", "--branch", "main", p.cache.Path(), p.topic)
+	mustGit(t, p.env, p.topic, "checkout", "--quiet", "-b", p.topicBr)
 	p.commitFile("a.txt", "docs: add a")
 	first := mustGit(t, p.env, p.topic, "rev-parse", "HEAD")
 	p.commitFile("b.txt", "docs: add b")
@@ -62,10 +61,8 @@ func newPrep(t *testing.T) *prep {
 	mustGit(t, p.env, p.topic, "add", "a.txt")
 	mustGit(t, p.env, p.topic, "commit", "--quiet", "--fixup="+first)
 
-	listed := newGit(t, WithAlternates(p.cache.ObjectsDir()))
-	p.g = listed
 	var err error
-	if p.repo, err = listed.InitBare(ctx, filepath.Join(p.base, "supervisor.git")); err != nil {
+	if p.repo, err = p.g.InitBare(ctx, filepath.Join(p.base, "supervisor.git")); err != nil {
 		t.Fatal(err)
 	}
 	p.fetch()
@@ -87,9 +84,7 @@ func (p *prep) commitFile(name, msg string) {
 func (p *prep) fetch() {
 	p.t.Helper()
 	ctx := context.Background()
-	if _, err := p.repo.FetchBranch(ctx, p.topic, p.topicBr); err != nil {
-		p.t.Fatal(err)
-	}
+	importBranch(p.t, p.repo, p.topic, p.topicBr)
 	if err := p.repo.FetchTarget(ctx, p.cache, "main", 0); err != nil {
 		p.t.Fatal(err)
 	}

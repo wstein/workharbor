@@ -13,7 +13,6 @@ import (
 
 // Errors of preparing and publishing a topic.
 var (
-	ErrEnvRunning  = errors.New("the environment is still running")
 	ErrNotReadyYet = errors.New("the task has no stopped run to prepare")
 	ErrNoChecks    = errors.New("the repository's checks are not configured")
 	ErrNotReview   = errors.New("the task is not ready for review")
@@ -56,27 +55,25 @@ type Publisher struct {
 // NewPublisher returns a publisher for a service.
 func NewPublisher(s *Service, cfg PublishConfig) *Publisher { return &Publisher{svc: s, cfg: cfg} }
 
-// Request names the task's checkout.
+// Request names the task and the agent whose branch is prepared or opened.
 type Request struct {
 	Task domain.ID
-	// Agent, when set, exports the branch out of the agent's environment as a
-	// bundle (D42, §4.5): the host runs git in no workspace and the environment
-	// keeps running. Checkout is then unused.
-	Agent    domain.ID
-	Checkout string // the agent's checkout on the host: the older path, for a topic clone
-	Branch   string // the topic branch, agent/<topic>
-	Target   string // the branch the topic is rebased onto
+	// Agent is the agent whose branch leaves its environment as a bundle (D42,
+	// §4.5): the host runs git in no workspace and the environment keeps running.
+	Agent  domain.ID
+	Branch string // the agent's branch, agent/<role>
+	Target string // the branch the branch is rebased onto
 	// DecisionID is the ID for the "Ready to push?" Decision.
 	DecisionID domain.ID
 }
 
-// Prepare gets a task ready for review (design §4.5): the environment is
-// stopped first, not merely the run, so nothing in the guest can change the
-// checkout between the checks and the fetch; the branch is fetched into the
-// supervisor's copy; the target and a merge base are made available; the topic
-// is rebased, folded, linted and signed; the repository's checks run in an
-// environment; the commit is pinned and a "Ready to push?" Decision is raised
-// for exactly that SHA. It returns the prepared commit.
+// Prepare gets a task ready for review (design §4.5): the target is refreshed
+// into the supervisor's repository, the agent's branch is exported from its
+// environment as a bundle and imported (a first round is rebased first), a merge
+// base is made available, the branch is rebased, folded, linted and signed, the
+// repository's checks run in an environment, the commit is pinned and a "Ready
+// to push?" Decision is raised for exactly that SHA. It returns the prepared
+// commit.
 func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared, error) {
 	s := p.svc
 	if p.cfg.Checks == nil {
@@ -96,33 +93,15 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 	}
 	last := runs[len(runs)-1]
 	_, pushed := agg.LastPushed()
-	if req.Agent != "" {
-		// The bundle's prerequisite is a commit of the target's history, so the
-		// target comes first. A rebase before the export is only for the first
-		// round: later rounds are fast-forwards and pushed commits are never
-		// rewritten (§4.5).
-		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
-			return hostgit.Prepared{}, err
-		}
-		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
-			return hostgit.Prepared{}, err
-		}
-		if err := p.exportBranch(ctx, req, last.ID, !pushed); err != nil {
-			return hostgit.Prepared{}, err
-		}
-	} else {
-		if err := s.stopEnvironment(ctx, req.Task, last.EnvID); err != nil {
-			return hostgit.Prepared{}, err
-		}
-		if _, err := p.cfg.Repo.FetchBranch(ctx, req.Checkout, req.Branch); err != nil {
-			return hostgit.Prepared{}, err
-		}
-		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
-			return hostgit.Prepared{}, err
-		}
-		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
-			return hostgit.Prepared{}, err
-		}
+	// The bundle's prerequisite is a commit of the target's history, so the
+	// target comes first. A rebase before the export is only for the first
+	// round: later rounds are fast-forwards and pushed commits are never
+	// rewritten (§4.5).
+	if err := p.fetchTarget(ctx, req.Target); err != nil {
+		return hostgit.Prepared{}, err
+	}
+	if err := p.exportBranch(ctx, req, last.ID, !pushed); err != nil {
+		return hostgit.Prepared{}, err
 	}
 	if _, err := p.cfg.Cache.EnsureMergeBase(ctx, p.cfg.Repo, req.Target, req.Branch, p.cfg.Deepen); err != nil {
 		return hostgit.Prepared{}, err
@@ -161,20 +140,13 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 	return prepared, err
 }
 
-// stopEnvironment stops a task's environment and records it, so that the
-// checkout is read only when nothing can run in the guest.
-func (s *Service) stopEnvironment(ctx context.Context, task, env domain.ID) error {
-	if err := s.rt.Stop(ctx, string(env)); err != nil {
-		return fmt.Errorf("stop environment %s: %w", env, err)
-	}
-	info, err := s.rt.Inspect(ctx, string(env))
-	if err != nil {
+// fetchTarget refreshes the mirror from the forge and brings the target into
+// the supervisor's repository.
+func (p *Publisher) fetchTarget(ctx context.Context, target string) error {
+	if err := p.cfg.Cache.Refresh(ctx, target); err != nil {
 		return err
 	}
-	if info.State != domain.EnvStopped {
-		return fmt.Errorf("%w: %s is %s", ErrEnvRunning, env, info.State)
-	}
-	return s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvStopped) })
+	return p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, target, 0)
 }
 
 // Publish pushes the approved commit and opens or updates the pull request
@@ -262,60 +234,23 @@ func (r RepoPusher) Push(ctx context.Context, _, branch, sha string) error {
 }
 
 // EditorCopy is what `whr open` and the web UI's editor launch return: the path
-// of a supervisor-owned copy of the topic, never the agent's checkout, and the
+// of a supervisor-owned copy of the branch, never the agent's worktree, and the
 // files in it that an editor may act on by itself, for the UI to warn about.
 type EditorCopy struct {
 	Path     string
 	Warnings []string
-	// Stale is set when the environment still runs: the copy is the last one
-	// made from a stopped environment and was not refreshed, because hostgit
-	// reads an agent's checkout only once nothing can run in the guest.
-	Stale bool
 }
 
-// OpenCopy prepares the editor copy of a task's topic in dir. With the
-// environment stopped it fetches the agent's branch and refreshes the copy by
-// fast-forward; with the environment running it offers the last copy as stale,
-// and fails if there is none yet (ErrEnvRunning).
+// OpenCopy prepares the editor copy of an agent's branch in dir: the branch is
+// exported from the environment, which keeps running, so the copy is fresh, and
+// the copy is cloned from the supervisor's repository, never from the workspace;
+// a later call refreshes it by fast-forward and never overwrites the
+// developer's edits.
 func (p *Publisher) OpenCopy(ctx context.Context, req Request, dir string) (EditorCopy, error) {
-	if req.Agent != "" {
-		// From a bundle the copy is fresh whether the environment runs or not.
-		if err := p.cfg.Cache.Refresh(ctx, req.Target); err != nil {
-			return EditorCopy{}, err
-		}
-		if err := p.cfg.Repo.FetchTarget(ctx, p.cfg.Cache, req.Target, 0); err != nil {
-			return EditorCopy{}, err
-		}
-		if err := p.exportBranch(ctx, req, "", false); err != nil {
-			return EditorCopy{}, err
-		}
-		warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)
-		return EditorCopy{Path: dir, Warnings: warn}, err
-	}
-	agg, err := p.svc.store.LoadTask(ctx, req.Task)
-	if err != nil {
+	if err := p.fetchTarget(ctx, req.Target); err != nil {
 		return EditorCopy{}, err
 	}
-	runs := agg.Runs()
-	if len(runs) == 0 {
-		return EditorCopy{}, ErrNotReadyYet
-	}
-	env, ok := agg.Environment(runs[len(runs)-1].EnvID)
-	if !ok {
-		return EditorCopy{}, ErrNotReadyYet
-	}
-	info, err := p.svc.rt.Inspect(ctx, string(env.ID))
-	if err != nil {
-		return EditorCopy{}, err
-	}
-	if info.State == domain.EnvRunning {
-		if _, err := p.cfg.Repo.Run(ctx, "rev-parse", "--verify", "--quiet", "refs/heads/"+req.Branch); err != nil {
-			return EditorCopy{}, fmt.Errorf("%w: no copy has been made yet", ErrEnvRunning)
-		}
-		warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)
-		return EditorCopy{Path: dir, Warnings: warn, Stale: true}, err
-	}
-	if _, err := p.cfg.Repo.FetchBranch(ctx, req.Checkout, req.Branch); err != nil {
+	if err := p.exportBranch(ctx, req, "", false); err != nil {
 		return EditorCopy{}, err
 	}
 	warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)

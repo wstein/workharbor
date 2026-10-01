@@ -27,11 +27,6 @@ var (
 	ErrNotAllowed = errors.New("git command not allowed in an agent-writable repository")
 	ErrBadPath    = errors.New("path must be absolute and name an existing directory")
 	ErrBadBranch  = errors.New("not a valid branch name")
-
-	ErrNoRoot      = errors.New("hostgit needs a workspace root (WithWorkspaceRoot) before it touches an agent checkout")
-	ErrOutsideRoot = errors.New("the checkout is not under the workspace root")
-	ErrCheckout    = errors.New("the checkout is not a plain git directory")
-	ErrAlternates  = errors.New("the checkout borrows objects from somewhere that is not a listed cache")
 )
 
 // Git runs git with the hardening described in the package comment.
@@ -39,26 +34,35 @@ type Git struct {
 	bin  string // absolute path of the git binary
 	home string // an empty directory used as HOME and TMPDIR
 
-	cacheRoot  string   // resolved directory the repository caches live in
-	root       string   // resolved workspace root; agent checkouts must lie under it
-	alternates []string // resolved read-only caches a checkout may borrow objects from
+	cacheRoot string   // resolved directory the repository caches live in
+	roots     []string // resolved workspace roots: agent-writable, so nothing the supervisor trusts is read from or written to them
 }
 
 // Option configures New.
 type Option func(*Git) error
 
-// WithWorkspaceRoot sets the directory under which agent checkouts live. An
-// agent checkout elsewhere is refused. It is required before Untrusted or
-// FetchBranch touch a checkout.
+// WithWorkspaceRoot adds a directory under which agents write (a workspace
+// root, D42); it can be given more than once. A repository cache is never fed
+// from a path below one, and an editor copy is never made in one.
 func WithWorkspaceRoot(root string) Option {
 	return func(g *Git) error {
 		resolved, err := resolveDir(root)
 		if err != nil {
 			return fmt.Errorf("workspace root: %w", err)
 		}
-		g.root = resolved
+		g.roots = append(g.roots, resolved)
 		return nil
 	}
+}
+
+// inWorkspace reports whether a resolved path lies in a workspace root.
+func (g *Git) inWorkspace(path string) bool {
+	for _, root := range g.roots {
+		if rel, err := filepath.Rel(root, path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // WithCacheRoot sets the directory the repository caches live in. A cache must
@@ -70,21 +74,6 @@ func WithCacheRoot(root string) Option {
 			return fmt.Errorf("cache root: %w", err)
 		}
 		g.cacheRoot = resolved
-		return nil
-	}
-}
-
-// WithAlternates lists the read-only object caches an agent checkout may name
-// in objects/info/alternates (design §4.5). Any other alternate is refused.
-func WithAlternates(caches ...string) Option {
-	return func(g *Git) error {
-		for _, c := range caches {
-			resolved, err := resolveDir(c)
-			if err != nil {
-				return fmt.Errorf("alternates cache: %w", err)
-			}
-			g.alternates = append(g.alternates, resolved)
-		}
 		return nil
 	}
 }
