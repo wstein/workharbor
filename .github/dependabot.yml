@@ -1,0 +1,43 @@
+# Dependabot version updates. Tool versions pinned in the Makefile and the
+# workflows are handled by Renovate (renovate.json), which Dependabot cannot read.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+      include: scope
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+    labels: [dependencies]
+    groups:
+      go:
+        patterns: ["*"]
+
+  # The documentation site is its own Go module (the Hextra theme).
+  - package-ecosystem: gomod
+    directory: /docs
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+    labels: [dependencies]
+    groups:
+      docs:
+        patterns: ["*"]
