@@ -20,6 +20,12 @@ const RuleStale domain.Rule = "stale"
 // decides again. It is a conflict (exit code 5).
 var ErrStale = domain.NewConflict(RuleStale, "the record was changed by someone else since it was loaded")
 
+// ErrNoDeadline is returned for an approval without a deadline, which is
+// never written and never read back: every approval has one, so a missing one
+// is a lost value, and acting on it could let a late allow through (design
+// §4.2). It is an ordinary error (exit code 1), not a conflict.
+var ErrNoDeadline = errors.New("store: an approval has no deadline")
+
 func toNano(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
@@ -194,6 +200,9 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 // SaveTask does for a task: a compare-and-swap on its Version, so an answer
 // and an expiry of the same Decision cannot both win.
 func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Event, error) {
+	if d.Kind == domain.DecisionApproval && d.Deadline.IsZero() {
+		return nil, fmt.Errorf("decision %s: %w", d.ID, ErrNoDeadline)
+	}
 	rd := tx.s.redactor
 	redactedOptions := make([]string, len(d.Options))
 	for i, o := range d.Options {
@@ -278,6 +287,9 @@ func scanDecision(r rowScanner) (*domain.Decision, error) {
 	if len(d.Options) == 0 {
 		d.Options = nil
 	}
+	if d.Kind == domain.DecisionApproval && d.Deadline.IsZero() {
+		return nil, fmt.Errorf("decision %s: %w", d.ID, ErrNoDeadline)
+	}
 	return &d, nil
 }
 
@@ -335,6 +347,41 @@ func (s *Store) LoadDecision(ctx context.Context, id domain.ID) (*domain.Decisio
 		return err
 	})
 	return d, err
+}
+
+// RespondDecision loads a Decision, records an answer and saves the result in
+// one transaction. A refusal that changed the Decision is saved too: a late
+// answer expires it, and an allow for another commit is stored as a denial,
+// although both return an error (design §4.2). Without this, a caller that
+// stopped at the error would lose the change and the Decision would stay open.
+// The Decision and the events are returned with the error when something was
+// saved. A refusal that changed nothing, such as bad input or a closed
+// Decision, returns only the error and writes nothing.
+func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Response) (*domain.Decision, []domain.Event, error) {
+	var (
+		d       *domain.Decision
+		events  []domain.Event
+		respond error
+	)
+	err := s.Update(ctx, func(tx *Tx) error {
+		var err error
+		if d, err = tx.LoadDecision(ctx, id); err != nil {
+			return err
+		}
+		respond = d.Respond(r)
+		if len(d.PendingEvents()) == 0 {
+			return nil // nothing changed, so nothing to save
+		}
+		events, err = tx.SaveDecision(ctx, d)
+		return err
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(events) == 0 {
+		d = nil
+	}
+	return d, events, respond
 }
 
 // OpenDecisions returns the open Decisions of a task, oldest first. After a

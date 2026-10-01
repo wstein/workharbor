@@ -331,3 +331,135 @@ func TestADecisionNeedsItsTaskAndUnknownOnesAreNotFound(t *testing.T) {
 		t.Errorf("saving a loaded decision that is gone = %v, want not-found", err)
 	}
 }
+
+// #57: an approval without a deadline is never written and never read back.
+func TestAnApprovalWithoutADeadlineIsRefused(t *testing.T) {
+	s := openTemp(t)
+	if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
+		t.Fatal(err)
+	}
+
+	lost := raiseApproval(t, "d-lost")
+	lost.Deadline = time.Time{}
+	if _, err := s.SaveDecision(bg, lost); !errors.Is(err, ErrNoDeadline) {
+		t.Errorf("SaveDecision without a deadline = %v, want ErrNoDeadline", err)
+	}
+	if _, err := s.LoadDecision(bg, "d-lost"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("a refused approval must not be stored: %v", err)
+	}
+
+	// A row that lost its deadline after it was written (a bad migration, a hand edit).
+	if _, err := s.SaveDecision(bg, raiseApproval(t, "d1")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.ExecContext(bg, `UPDATE decisions SET deadline = 0 WHERE id = 'd1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LoadDecision(bg, "d1"); !errors.Is(err, ErrNoDeadline) {
+		t.Errorf("LoadDecision of a row without a deadline = %v, want ErrNoDeadline", err)
+	}
+	if _, err := s.OpenDecisions(bg, "t1"); !errors.Is(err, ErrNoDeadline) {
+		t.Errorf("OpenDecisions with such a row = %v, want ErrNoDeadline", err)
+	}
+
+	// A question and a review decision may have none.
+	q, err := domain.Raise(domain.NewDecision{ID: "q1", TaskID: "t1", RunID: "r-t1", Kind: domain.DecisionQuestion, Blocking: true, Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveDecision(bg, q); err != nil {
+		t.Errorf("a question without a deadline was refused: %v", err)
+	}
+	if _, err := s.LoadDecision(bg, "q1"); err != nil {
+		t.Errorf("a question without a deadline did not load: %v", err)
+	}
+}
+
+// #57: a refusal that changed the Decision is saved with the error.
+func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
+	setup := func(t *testing.T, d *domain.Decision) *Store {
+		t.Helper()
+		s := openTemp(t)
+		if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SaveDecision(bg, d); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+
+	t.Run("an answer after the deadline expires the decision for good", func(t *testing.T) {
+		d := raiseApproval(t, "d1")
+		s := setup(t, d)
+		got, events, err := s.RespondDecision(bg, "d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: d.Deadline})
+		if !errors.Is(err, domain.ErrDecisionExpired) {
+			t.Fatalf("error = %v, want ErrDecisionExpired", err)
+		}
+		if got == nil || got.Status != domain.DecisionExpired || len(events) != 1 || events[0].Kind != domain.EventDecisionExpired {
+			t.Errorf("decision %+v, events %v", got, eventKinds(events))
+		}
+		stored, _ := s.LoadDecision(bg, "d1")
+		if stored.Status != domain.DecisionExpired || stored.Allows("") {
+			t.Errorf("stored status = %s, Allows = %v; the expiry was lost", stored.Status, stored.Allows(""))
+		}
+		// And it stays refused.
+		if _, _, err := s.RespondDecision(bg, "d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Second)}); !errors.Is(err, domain.ErrDecisionClosed) {
+			t.Errorf("a second answer = %v, want ErrDecisionClosed", err)
+		}
+	})
+
+	t.Run("an allow for another commit is stored as a denial", func(t *testing.T) {
+		review, err := domain.Raise(domain.NewDecision{ID: "d2", TaskID: "t1", Kind: domain.DecisionReview, Blocking: true, SHA: "aaa111", Now: t0})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := setup(t, review)
+		_, events, err := s.RespondDecision(bg, "d2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: "bbb222", At: t0.Add(time.Second)})
+		if !errors.Is(err, domain.ErrSHAMismatch) {
+			t.Fatalf("error = %v, want ErrSHAMismatch", err)
+		}
+		if len(events) != 1 || events[0].Kind != domain.EventDecisionAnswered {
+			t.Errorf("events = %v", eventKinds(events))
+		}
+		stored, _ := s.LoadDecision(bg, "d2")
+		if stored.Status != domain.DecisionAnswered || stored.Answer != domain.AnswerDeny || stored.Allows("aaa111") || stored.Allows("bbb222") {
+			t.Errorf("stored = %+v; the denial was lost", stored)
+		}
+	})
+
+	t.Run("bad input changes nothing", func(t *testing.T) {
+		d := raiseApproval(t, "d3")
+		s := setup(t, d)
+		got, events, err := s.RespondDecision(bg, "d3", domain.Response{Option: domain.AnswerAllow, At: t0})
+		if !errors.Is(err, domain.ErrDecisionActor) || exitcode.From(err) != exitcode.Usage {
+			t.Fatalf("error = %v, want ErrDecisionActor with exit code 2", err)
+		}
+		if got != nil || len(events) != 0 {
+			t.Errorf("got %v, events %v", got, eventKinds(events))
+		}
+		stored, _ := s.LoadDecision(bg, "d3")
+		if stored.Version != 1 || stored.Status != domain.DecisionOpen {
+			t.Errorf("version %d, status %s; a rejected answer must not touch the row", stored.Version, stored.Status)
+		}
+	})
+
+	t.Run("an allowed answer is saved and returned", func(t *testing.T) {
+		d := raiseApproval(t, "d4")
+		s := setup(t, d)
+		got, events, err := s.RespondDecision(bg, "d4", domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Minute)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.Allows("") || got.Version != 2 || len(events) != 1 {
+			t.Errorf("decision %+v, events %v", got, eventKinds(events))
+		}
+	})
+
+	t.Run("an unknown decision", func(t *testing.T) {
+		s := setup(t, raiseApproval(t, "d5"))
+		if _, _, err := s.RespondDecision(bg, "nope", domain.Response{By: "w", Option: domain.AnswerAllow, At: t0}); !errors.Is(err, domain.ErrNotFound) {
+			t.Errorf("error = %v, want ErrNotFound", err)
+		}
+	})
+}
