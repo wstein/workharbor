@@ -64,8 +64,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 	t := &snap.Task
 	expected := t.Version
 	if expected == 0 {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, created_at) VALUES (?, 1, ?, ?, ?, ?)`,
-			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), toNano(t.CreatedAt)); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, agent_id, created_at) VALUES (?, 1, ?, ?, ?, ?, ?)`,
+			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.AgentID), toNano(t.CreatedAt)); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM tasks WHERE id = ?`, string(t.ID)).Scan(&exists) == nil {
 				return nil, fmt.Errorf("task %s: %w", t.ID, ErrStale)
@@ -108,8 +108,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 	for i, r := range snap.Runs {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, session_id, resume_attempts, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.AgentID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
@@ -147,17 +147,17 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 // candidates. An unknown task is a *domain.NotFoundError.
 func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error) {
 	var t domain.Task
-	var state string
+	var state, agent string
 	var created int64
-	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, created_at FROM tasks WHERE id = ?`, string(id)).
-		Scan(&t.Version, &t.Repo, &t.Issue, &state, &created)
+	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, agent_id, created_at FROM tasks WHERE id = ?`, string(id)).
+		Scan(&t.Version, &t.Repo, &t.Issue, &state, &agent, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Kind: "task", ID: string(id)}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
-	t.ID, t.State, t.CreatedAt = id, domain.TaskState(state), fromNano(created)
+	t.ID, t.State, t.AgentID, t.CreatedAt = id, domain.TaskState(state), domain.ID(agent), fromNano(created)
 	snap := domain.Snapshot{Task: t}
 
 	envs, err := tx.tx.QueryContext(ctx, `SELECT id, backend, state FROM environments WHERE task_id = ? ORDER BY id`, string(id))
@@ -178,18 +178,18 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, env_id, state, session_id, resume_attempts FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
+	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, agent_id, env_id, state, session_id, resume_attempts FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	for runs.Next() {
 		var r domain.Run
-		var rid, ws, env, st string
-		if err := runs.Scan(&rid, &ws, &env, &st, &r.SessionID, &r.ResumeAttempts); err != nil {
+		var rid, ws, ag, env, st string
+		if err := runs.Scan(&rid, &ws, &ag, &env, &st, &r.SessionID, &r.ResumeAttempts); err != nil {
 			_ = runs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
-		r.ID, r.TaskID, r.WorkspaceID, r.EnvID, r.State = domain.ID(rid), id, domain.ID(ws), domain.ID(env), domain.RunState(st)
+		r.ID, r.TaskID, r.WorkspaceID, r.AgentID, r.EnvID, r.State = domain.ID(rid), id, domain.ID(ws), domain.ID(ag), domain.ID(env), domain.RunState(st)
 		snap.Runs = append(snap.Runs, r)
 	}
 	if err := runs.Close(); err != nil {
