@@ -9,3 +9,29 @@ useDefault = true
 [[allowlists]]
 description = "synthetic canary tokens in the redaction tests"
 paths = ['''internal/redact/redact_test\.go''']
+
+# A value assigned to a variable that carries an agent or forge credential, in
+# any form (an env file, a script, a command line): tonight's key reached a
+# commit as `-e GEMINI_API_KEY=<value>` (see SECURITY.md). Placeholders such
+# as `...`, `<value>` or `$VAR` are not 12 plain characters and do not match.
+[[rules]]
+id = "workharbor-credential-variable"
+description = "A credential variable of an agent or forge assigned a literal value"
+regex = '''(?i)\b(?:GEMINI|GOOGLE|ANTHROPIC|OPENAI|CODEX|GITHUB|GH)_(?:API_KEY|KEY|TOKEN|SECRET)\s*[:=]\s*["']?([A-Za-z0-9_\-./+]{12,})'''
+secretGroup = 1
+keywords = ["_api_key", "_key", "_token", "_secret"]
+[[rules.allowlists]]
+description = "synthetic values in tests start with test-"
+regexTarget = "secret"
+regexes = ['''^test-''']
+
+[[rules]]
+id = "workharbor-claude-oauth-token"
+description = "A Claude subscription token, which whr never handles (D40)"
+regex = '''(?i)\bCLAUDE_CODE_OAUTH_TOKEN\s*[:=]\s*["']?([A-Za-z0-9_\-./+]{12,})'''
+secretGroup = 1
+keywords = ["claude_code_oauth_token"]
+[[rules.allowlists]]
+description = "synthetic values in tests start with test-"
+regexTarget = "secret"
+regexes = ['''^test-''']
