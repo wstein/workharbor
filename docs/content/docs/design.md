@@ -348,6 +348,16 @@ Per-task append-only event log doubles as audit trail, UI feed and CLI stream. E
 - **Redaction at ingest.** Secrets are redacted before anything is written: events, Decision inputs and audit entries alike (§7.3). Audit entries are never purged, so redacting later would be too late. What remains is treated as untrusted data when shown.
 - **Live-only events.** Token deltas and heartbeats go to connected clients through an in-memory fan-out and are never written. `--since` (§9.2) replays durable events only; a client that reconnects mid-message gets the final message when it is written.
 
+**The store** (issue #21, `internal/store`):
+
+- **SQLite in WAL mode** through the pure-Go driver `modernc.org/sqlite`, so the supervisor stays one static binary (D3) that cross-compiles to Linux. Foreign keys are on. Migrations are embedded SQL applied in order and recorded in `schema_migrations`; a database newer than the binary is refused.
+- **Tables:** tasks (saved together with their runs, environments and review candidates), decisions, events and idempotency keys.
+- **Versions and compare-and-swap.** A task aggregate and a Decision each carry an integer version. A save writes `WHERE version = expected` and bumps it; no row updated means another writer got there first, reported as a conflict (exit code 5). An answer and an expiry of one Decision cannot both win, and neither can two commands on one task.
+- **One transaction.** The domain methods record the events a change produced (`TakeEvents`), and the store writes the new state and those events together, so there is never a state without its audit entry or an audit entry without its state.
+- **Events are append-only** with a monotonic, never reused sequence number, which is what `--since` (§9.2) replays. Each has a tier. Triggers refuse any update and any delete of an audit row; the only way rows leave is `Purge`, which deletes transcript rows and appends one audit entry (who, when, how many events and bytes) in the same transaction.
+- **Idempotency.** A mutating command runs under its key: the response is stored in the same transaction as the changes, so a replay of the same key and request returns the stored response without doing anything again, and the same key with a different request is refused as a conflict.
+- Redaction at ingest is a separate layer (#22); the store writes what it is given.
+
 ### 5.5 Adapter plugins
 
 New agents (and later runtime or forge backends) are added as **out-of-process plugins**, not in-process code. A plugin is a separate executable that speaks the versioned adapter contract (§5.2) over stdio or a local socket (JSON-RPC style). Go's in-process `plugin` package is not used: it is fragile and would put third-party code inside the supervisor.
