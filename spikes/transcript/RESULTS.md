@@ -11,7 +11,7 @@ Measured on 1 October 2026 on the Mac mini, with Claude Code 2.1.285 (model alia
 | 3. Mid-run message injection | Pass | Not tested; `exec` takes its prompt once (unverified) |
 | 4. Live page over SSE, send and cancel | Pass | Not tested |
 | 5. Reconnect replay, restart and resume | Pass | Not tested (`exec resume` exists) |
-| 6. Auth, quota, approval signals | Approvals pass (round-trip, modes); auth expiry untested | Quota seen as text only |
+| 6. Auth, quota, approval signals | Pass: approvals (round-trip, modes), missing-login signal, token streaming. A mid-session expiry was not reproduced | Quota seen as text only |
 
 Antigravity (`agy` 1.1.12) is covered in its own section below: headless works, there is no streaming input.
 
@@ -36,7 +36,9 @@ Invocation: `claude -p --input-format stream-json --output-format stream-json --
 
 **Usage and quota.** `rate_limit_event.rate_limit_info` has `status`, `rateLimitType`, `resetsAt`, `overageStatus`, and `unifiedWindows.five_hour` and `seven_day`, each with `utilization` (0 to 1) and `resetsAt`. That feeds the usage meter and `quota_exhausted`. What `status` reads when the window is exhausted was not observed.
 
-**Auth.** `init.apiKeySource` tells the auth mode. How an expired login shows up was not tested.
+**Token-level streaming.** `--include-partial-messages` adds `stream_event` records: `message_start`, `content_block_start`, `content_block_delta` (`text_delta` and `thinking_delta`, plus a `signature_delta`), `content_block_stop`, `message_delta`, `message_stop`. The full `assistant` message still follows. The harness coalesces deltas (about every 150 ms, always before any other event) into one `delta` event, and the page shows them in a live bubble that the final `text` event replaces. A 12-number answer arrived as 3 deltas over about 240 ms. The cost is more events in the log and on the wire; a real service may want to keep deltas out of the durable log and replay only the final text.
+
+**Auth and an expired login.** `init.apiKeySource` is `none` for a subscription login, and it is also `none` when nobody is logged in, so it cannot tell the two apart. Tested with an empty throwaway `CLAUDE_CONFIG_DIR` (the real login was never touched): the stream carries an `assistant` event with `error: "authentication_failed"`, then a `result` with `is_error: true`, `result: "Not logged in · Please run /login"` and, oddly, `subtype: "success"`, and the process exits 1. So `auth_expired` must be detected from the assistant event's `error` field or `is_error`, never from `subtype` or the init event. The harness maps it to an `auth_expired` event and an `auth expired` status, and the page shows a "log in again" card. A login that expires mid-session (rather than missing from the start) was not reproduced.
 
 **Approvals (round-trip works, no restart).** `--permission-prompts host --permission-prompt-tool mcp__workharbor__approve --mcp-config <file> --strict-mcp-config` makes the agent call a small MCP server (the harness binary in `-mcp-permission` mode, stdio) whenever a tool needs permission. The helper forwards `{tool_name, input, tool_use_id}` to the supervisor, which publishes an `approval` event and holds the call open until a human answers on the page. The helper returns `{"behavior":"allow","updatedInput":...}` or `{"behavior":"deny","message":...}`.
 
@@ -54,9 +56,22 @@ Invocation: `claude -p --input-format stream-json --output-format stream-json --
 | `manual` | Approval requested |
 | `acceptEdits` | Written with no prompt |
 | `dontAsk` | Denied silently, no approval event |
-| `auto` | Approval still requested. What "auto" decides on its own is untested beyond this |
+| `auto` | Approval requested, same as `manual` in every case below |
 | `plan` | Agent writes a plan, then `ExitPlanMode` raises an approval |
 | `bypassPermissions` | Not offered: it switches every prompt off and the spike runs on the host |
+
+**`auto` versus `manual`, six actions** (every approval was denied, so only what the CLI allowed by itself ran; all of it harmless in the scratch repo):
+
+| Action | `auto` | `manual` |
+| --- | --- | --- |
+| `Bash: pwd` | Ran, no prompt | Ran, no prompt |
+| `Bash: git status` | Ran, no prompt | Ran, no prompt |
+| `Bash: touch t1.txt` | Asked | Asked |
+| `Write` a file | Asked | Asked |
+| `Bash: curl -sI https://example.com` | Asked | Asked |
+| `Bash: rm a.txt` | Asked | Asked |
+
+In headless mode `auto` behaved exactly like `manual`: read-only commands are allowed by the CLI itself in both, and anything that writes, reaches the network or deletes was asked in both. Whatever `auto` is meant to do (a classifier, or something tied to an account tier) is not visible here, so do not rely on it to reduce prompts.
 
 These map onto the design's autonomy table (§6): `acceptEdits` and the allowlist are `auto`, `manual` is `ask`, `dontAsk` is `forbid`. The table is per action; the CLI's modes are coarser, so the supervisor still has to enforce the real policy outside the agent.
 
@@ -97,4 +112,4 @@ Installed here. `agy -p "<prompt>" --output-format stream-json` ran headless wit
 
 ## Not tested
 
-Partial token streaming (`--include-partial-messages`), expired-login behaviour, multi-session concurrency, running inside Apple Container, what the `auto` mode approves by itself, approvals for Codex and Antigravity, and a real Codex run (usage limit).
+A login that expires in the middle of a session, what `rate_limit_event.status` reads when the usage window is exhausted, multi-session concurrency, running inside Apple Container, approvals for Codex and Antigravity, and a real Codex run (usage limit).
