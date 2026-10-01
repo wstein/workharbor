@@ -5,7 +5,7 @@ weight: 2
 toc: true
 ---
 
-**Status:** first version, 1 October 2026, for release 1 (issue #11). It refines [design §7](design.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
+**Status:** updated 1 October 2026 after the review of `main` at 6a48473, for release 1 (issue #11). It refines [design §7](design.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
 
 ## Scope and assumptions
 
@@ -63,20 +63,20 @@ phone / laptop ──VPN──▶ supervisor (host, trusted) ──▶ GitHub AP
 | # | Threat | Source | Controls | Enforced and tested in | Status |
 | --- | --- | --- | --- | --- | --- |
 | T1 | Injected instructions make the agent do something harmful | A1 | Untrusted input is data, never instructions; runs on issues by untrusted authors wait for a Decision; sensitive actions on untrusted input ask (§6, §7.1) | #53 | Open |
-| T2 | The guest reads or writes host secrets through a mount | A2, A3 | The adapter rejects `$HOME` and its parents, secrets directories, sockets and system directories, after resolving symlinks (§4.4, §7.4) | #18; gaps in #50; resolved-path mounting in #26 | Measured, with known gaps |
-| T3 | The host runs code planted in an agent checkout (hooks, `core.fsmonitor`, filters, `core.sshCommand`) | A2 | Host git runs hardened, or fetches the branch into a supervisor-owned repository first (§4.5, §7.4) | #19 | Measured for hooks and fsmonitor; planned |
+| T2 | The guest reads or writes host secrets through a mount | A2, A3 | The adapter rejects `$HOME` and its parents, secrets directories, sockets and system directories, after resolving symlinks (§4.4, §7.4) | #18, #50; remaining gaps in #58; resolved-path mounting in #26 | Implemented; known gaps in #58 |
+| T3 | The host runs code planted in an agent checkout (hooks, `core.fsmonitor`, filters, `core.sshCommand`) | A2 | Host git runs only through `hostgit`: read-only plumbing in the agent's tree, isolated configuration, and cleanup and push on a supervisor-owned copy (§4.5, §7.4) | #19 (reopened: alternates and `.git` redirect checks) | Implemented and tested for hooks, `core.fsmonitor`, `core.sshCommand`, `core.pager`, filters and `packObjectsHook`; alternates open |
 | T4 | The guest reaches the host, the LAN or other environments | A2, A3 | One `--internal` network per environment; supervisor listeners on loopback; the sidecar is the only way out (§7.2) | Egress conformance in #26 | Measured in spike #2 |
 | T5 | Data leaves through the network | A2, A3 | Default-deny allowlist by hostname in the sidecar, every decision logged; no DNS in the guest (§7.2) | #26 | Measured; limits under accepted risks |
 | T6 | The agent pushes, merges, tags or releases unreviewed code | A1, A2 | The agent never pushes (D18); the supervisor pushes after a "Ready to push?" Decision per commit SHA; the policy floor forbids merge, tag, release and deploy; a GitHub ruleset requires human review and lists no bypass for the App (§6, D15) | #4, #17, #49, #51, #27 | Partly implemented |
 | T7 | An approval is granted by mistake, late or for different code | A1, A2, A4 | Approvals fail closed on timeout and when the supervisor is unreachable; they are tied to a commit SHA; input is capped and shown as untrusted (§4.2) | #17, #49 | Implemented |
 | T8 | Forge credentials leak | A2, A3 | Installation tokens last about an hour, are scoped to the installed repositories, reach git through a credential helper or the proxy, and never sit in the guest's environment, on disk or in logs (§7.3, D15) | #27, #22 | Planned |
-| T9 | Secrets end up in logs, transcripts or notifications | A2, A4 | Redaction of retained transcripts; generic notification payloads with no content (§5.4, §9.4) | #22, #31 | Planned |
+| T9 | Secrets end up in logs, transcripts or notifications | A2, A4 | Redaction at ingest, before events, Decision inputs and audit entries are written; generic notification payloads with no content (§5.4, §9.4) | #22, #31 | Planned |
 | T10 | The agent login is stolen from the environment | A2, A3 | Dedicated auth directory per environment, never `$HOME`; egress allowlist; revocation at the vendor when an environment is deleted (§7.3) | #26 | Accepted risk |
 | T11 | Someone else drives the supervisor | A4 | API on loopback or VPN only; a static token in release 1, per-device revocable tokens for the phone app; CSRF protection (§7.5) | #24, #33 | Planned |
 | T12 | The record of what happened is altered | A2, A5 | Append-only audit log outside the workspace, hash-linked to transcript content; purges record themselves (§5.4, §7.7) | #21, #37 | Planned |
 | T13 | An agent exhausts the host or the budget | A2 | CPU and memory limits per environment, admission control, time and cost budgets, `whr kill-all` (§7.4, §8, §5.7) | #37, #48 | Measured limits; budgets planned |
 | T14 | A tampered tool or plugin runs in an environment or in the supervisor | A5 | Agent CLIs come from a content-addressed, read-only store verified against the vendor's checksums; plugins run out of process with the same isolation (D19, D20, §7.8); CI actions pinned by SHA | Tool store measured in spike #2; plugins later | Partly measured |
-| T15 | The developer's editor runs planted repository config when opening an agent checkout | A2 | Open a copy fetched into a supervisor-owned repository, not the agent's own tree (§4.5) | #19 | Open |
+| T15 | The developer's editor runs planted repository config when opening an agent checkout | A2 | Open a copy fetched into a supervisor-owned repository, not the agent's own tree (§4.5) | #59 | Open |
 | T16 | SSH or IDE access into an environment is abused or left open | A4, A5 | Short-lived per-session certificates, no passwords, reachable only over the VPN; code-server never public; editor extensions treated as a supply-chain risk (§7.6) | #32 | Planned, after the slice |
 
 ## Accepted risks
@@ -86,12 +86,12 @@ These are accepted for a single-developer, watched personal tool. Each has a lim
 - **Data can leave through an allowed host.** The sidecar matches on the hostname in `CONNECT`, so `api.anthropic.com` can carry data out, and domain fronting is not stopped. Limit: the allowlist is minimal, every request is logged, and the logs are reviewable.
 - **The sidecar is trusted and has full egress.** Limit: it runs only the proxy, from a pinned image, with no access to secrets.
 - **A subscription login sits inside the environment.** Any process in the guest can read it while a run is active. Limit: one dedicated auth directory per environment, never the host's, and revocation at the vendor when the environment is deleted. That vendor revocation works as expected is **unverified**.
-- **The hardened-git list is a floor.** Only hooks and `core.fsmonitor` were tested; other config keys and filters that run commands are covered by fetching into a supervisor-owned repository, which #19 makes the default.
+- **Host git on agent trees is limited, not eliminated.** `hostgit` isolates the configuration and allows only read-only plumbing there, and fetching into a supervisor-owned copy is the default. Until the alternates and `.git` redirect checks land (issue #19), a fetch can still be pointed at another host repository.
 - **The agent sees what it is given.** Repository contents go to the LLM vendor. That is the developer's choice per repository.
 
 ## Open items
 
-- T1 and T15 have no implemented control yet: #53 and #19.
-- The known `CheckMount` gaps (symlinked secrets, missing locations, decomposed Unicode names) are in #50; accepting mounts only below workspace roots that workharbor owns, as a second layer, is proposed there.
+- T1 and T15 have no implemented control yet: #53 and #59. T3's fetch is open to an alternates or `.git` redirect until #19 is fixed.
+- The `CheckMount` gaps found in review (symlinked secret files inside a secrets directory, a few more locations) are in #58, which also decides whether mounts are accepted only below workspace roots that workharbor owns.
 - Webhook signature verification and the author association used for trust tiers are part of the forge adapter, #27.
 - This page is reviewed whenever a D-row changes a boundary, and before release 1.
