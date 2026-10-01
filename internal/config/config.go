@@ -66,6 +66,13 @@ type Config struct {
 	StateDir string `json:"state_dir,omitempty"`
 	// Environment shapes the environments `whr serve` provisions. Optional.
 	Environment Environment `json:"environment,omitzero"`
+	// ToolProfile names the profile of the tool store the environments use
+	// (`profiles/<name>`). Optional when the store has exactly one.
+	ToolProfile string `json:"tool_profile,omitempty"`
+	// AgentAllowedTools are the tools the agent may use without asking, while
+	// it runs in the degraded dontAsk mode (design §5.2): the supervisor's own
+	// choice, never the repository's. Required to run an agent for now.
+	AgentAllowedTools []string `json:"agent_allowed_tools,omitempty"`
 }
 
 // Environment is the supervisor's choice of what an agent environment looks

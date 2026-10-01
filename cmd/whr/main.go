@@ -36,7 +36,7 @@ func execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	}
 	return cli.Execute(ctx, cli.Env{
 		Stdin: stdin, Stdout: stdout, Stderr: stderr, Getenv: os.Getenv,
-		Extra: []*cobra.Command{versionCommand(stdout, stderr), toolsCommand(stdout, stderr)},
+		Extra: []*cobra.Command{versionCommand(stdout, stderr), toolsCommand(stdout, stderr), serveCommand(stderr)},
 	}, args)
 }
 
