@@ -64,8 +64,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 	t := &snap.Task
 	expected := t.Version
 	if expected == 0 {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, agent_id, created_at) VALUES (?, 1, ?, ?, ?, ?, ?)`,
-			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.AgentID), toNano(t.CreatedAt)); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, agent_id, untrusted, created_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
+			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.AgentID), boolInt(t.Untrusted), toNano(t.CreatedAt)); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM tasks WHERE id = ?`, string(t.ID)).Scan(&exists) == nil {
 				return nil, fmt.Errorf("task %s: %w", t.ID, ErrStale)
@@ -82,8 +82,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 				return nil, fmt.Errorf("task %s: %w", t.ID, ErrNoEvents)
 			}
 		}
-		res, err := tx.tx.ExecContext(ctx, `UPDATE tasks SET repo = ?, issue = ?, state = ?, version = version + 1 WHERE id = ? AND version = ?`,
-			rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.ID), expected)
+		res, err := tx.tx.ExecContext(ctx, `UPDATE tasks SET repo = ?, issue = ?, state = ?, untrusted = ?, version = version + 1 WHERE id = ? AND version = ?`,
+			rd.String(t.Repo), rd.String(t.Issue), string(t.State), boolInt(t.Untrusted), string(t.ID), expected)
 		if err != nil {
 			return nil, fmt.Errorf("store: save task %s: %w", t.ID, err)
 		}
@@ -148,16 +148,17 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error) {
 	var t domain.Task
 	var state, agent string
+	var untrusted bool
 	var created int64
-	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, agent_id, created_at FROM tasks WHERE id = ?`, string(id)).
-		Scan(&t.Version, &t.Repo, &t.Issue, &state, &agent, &created)
+	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, agent_id, untrusted, created_at FROM tasks WHERE id = ?`, string(id)).
+		Scan(&t.Version, &t.Repo, &t.Issue, &state, &agent, &untrusted, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Kind: "task", ID: string(id)}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
-	t.ID, t.State, t.AgentID, t.CreatedAt = id, domain.TaskState(state), domain.ID(agent), fromNano(created)
+	t.ID, t.State, t.AgentID, t.Untrusted, t.CreatedAt = id, domain.TaskState(state), domain.ID(agent), untrusted, fromNano(created)
 	snap := domain.Snapshot{Task: t}
 
 	envs, err := tx.tx.QueryContext(ctx, `SELECT id, backend, state FROM environments WHERE task_id = ? ORDER BY id`, string(id))

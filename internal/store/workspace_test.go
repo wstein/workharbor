@@ -243,3 +243,25 @@ func TestInboxHoldsOpenDecisionsOfUnfinishedTasks(t *testing.T) {
 		t.Errorf("inbox = %+v, %v", in, err)
 	}
 }
+
+func TestTheUntrustedMarkOfATaskIsStored(t *testing.T) {
+	s := openTemp(t)
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t1", Repo: "a/b", Issue: "#1", State: domain.TaskQueued, CreatedAt: wsNow})
+	if _, err := agg.RaiseUntrustedHold("d1", "m", "NONE", "text", wsNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, agg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadTask(bg, "t1")
+	if err != nil || !got.Task().Untrusted {
+		t.Fatalf("untrusted = %v, %v", got.Task().Untrusted, err)
+	}
+	// An older task row has no mark.
+	if _, err := s.db.ExecContext(bg, `INSERT INTO tasks (id, version, repo, issue, state, created_at) VALUES ('old', 1, 'a/b', '1', 'queued', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if old, _ := s.LoadTask(bg, "old"); old.Task().Untrusted {
+		t.Error("an old task is untrusted")
+	}
+}

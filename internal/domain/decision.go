@@ -52,6 +52,9 @@ const (
 	AnswerCancel        = "cancel"
 	// AnswerRework starts a new run on the agent after a rebase conflict.
 	AnswerRework = "rework"
+	// AnswerStart starts a run that was held for a human's say-so (an issue by
+	// an untrusted author, design §6, issue #53).
+	AnswerStart = "start"
 )
 
 // DecisionCause says why a run blocked on a question that nothing waits on:
@@ -65,6 +68,9 @@ const (
 	// CauseRebaseConflict is raised for a stopped run whose branch does not
 	// rebase onto the integration branch before the export (design §4.2).
 	CauseRebaseConflict DecisionCause = "rebase_conflict"
+	// CauseUntrustedInput holds a run before it starts, on an issue by an
+	// author who is not trusted.
+	CauseUntrustedInput DecisionCause = "untrusted_input"
 )
 
 const (
@@ -163,7 +169,10 @@ func raise(spec NewDecision) (*Decision, error) {
 	}
 	switch spec.Kind {
 	case DecisionQuestion, DecisionApproval:
-		if spec.RunID == "" {
+		// A run raises its questions; the one hold before a run starts (an issue
+		// by an untrusted author) has none yet.
+		heldBeforeARun := spec.Kind == DecisionQuestion && spec.Cause == CauseUntrustedInput
+		if spec.RunID == "" && !heldBeforeARun {
 			return nil, ErrDecisionRun
 		}
 	case DecisionReview:

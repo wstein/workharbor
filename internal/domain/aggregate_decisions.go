@@ -291,6 +291,33 @@ func (a *TaskAggregate) RaiseRunFailedAgain(runID, decisionID ID, now time.Time)
 	return *d, nil
 }
 
+// RaiseUntrustedHold holds a task that has no run yet because its issue is by
+// an author who is not trusted (design §6, issue #53): a blocking question asks
+// the human to start it or cancel it. The author and the issue text are in the
+// input, as untrusted data, capped like any agent input. The task stays queued:
+// the state machines do not change, and no run exists until the human says
+// start. The task is marked as having untrusted input.
+func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, text string, now time.Time) (Decision, error) {
+	if a.task.State != TaskQueued || len(a.runs) > 0 {
+		return Decision{}, conflict(RuleTaskState, "task %s is %s: only a queued task with no run is held", a.task.ID, a.task.State)
+	}
+	if _, err := a.decision(decisionID); err == nil {
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", decisionID, a.task.ID)
+	}
+	d, err := raise(NewDecision{
+		ID: decisionID, TaskID: a.task.ID, Kind: DecisionQuestion, Blocking: true,
+		Subject: "Start a run on an issue by an untrusted author?",
+		Input:   "author: " + author + " (" + association + ")\n" + text,
+		Options: []string{AnswerStart, AnswerCancel}, Cause: CauseUntrustedInput, Now: now,
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	a.task.Untrusted = true
+	a.addDecision(d)
+	return *d, nil
+}
+
 // MarkRunning moves a starting run to running once the agent is up.
 func (a *TaskAggregate) MarkRunning(runID ID) error {
 	run, err := a.run(runID)

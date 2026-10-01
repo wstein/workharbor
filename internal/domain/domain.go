@@ -54,7 +54,10 @@ type Task struct {
 	State   TaskState
 	// AgentID is the agent the task is assigned to (design D42); empty for a
 	// task made before agents existed.
-	AgentID   ID
+	AgentID ID
+	// Untrusted is set when text from an untrusted author is part of the task
+	// (design §6): the policy decides with that context.
+	Untrusted bool
 	CreatedAt time.Time
 }
 
