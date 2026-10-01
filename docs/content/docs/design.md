@@ -213,11 +213,12 @@ Enforcement is outside the agent: forge branch protection, required human review
 | `acceptEdits` | Writes without asking |
 | `dontAsk` | Denies silently |
 | `plan` | Plans read-only, then asks the human to approve the plan |
-| `auto` | Asked in the one test; what it approves by itself is untested |
+| `auto` | Identical to `manual` in the test: read-only commands such as `pwd` and `git status` ran, and a file write, `touch`, `curl` and `rm` were all asked |
 
 Rules for using them:
 
 - Offer them as per-session presets over the action table, never as the policy itself. The table is per action and enforced outside the agent; the modes are coarser and live inside it.
+- Do not count on `auto` to reduce prompts: in headless mode it asked exactly as often as `manual`. Whatever it is meant to do is not visible there.
 - `bypassPermissions`, which switches every prompt off, is never offered by default and never outside an isolated environment.
 - A mode is fixed when the agent process starts. Changing it on a running session restarts the process with `--resume` and keeps the session and transcript.
 - Prefix allow rules such as `Bash(ls:*)` do not match a compound command like `a && b`; the CLI asks about the whole command. An allowlist needs a rule for compound commands (match each part, or ask).
