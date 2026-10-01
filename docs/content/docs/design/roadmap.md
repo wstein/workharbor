@@ -103,9 +103,9 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 
 ### Medium term
 
-**Auth-mode phasing** (product direction, 1 October 2026): subscription logins first, with the guardrails of D40 (quota stops, the shared usage window, the agent's permission mode; #36, #48, #82); API keys as a full peer in the medium term; an enterprise offering in the long term.
+**Auth-mode phasing** (D41): subscription logins first, with the guardrails of D40 (quota stops, the shared usage window, the agent's permission mode; #36, #48, #82); API keys as a full peer in the medium term (#83); an enterprise offering in the long term.
 
-- [ ] API-key mode as a full peer: the host-side key proxy that issues a key per run (§7.3) instead of the configuration's key file, spend budgets (#37) and per-key usage (#48)
+- [ ] API-key mode as a full peer (D41, #83): the host-side key proxy that issues a key per run (§7.3) instead of the configuration's key file, spend budgets (#37) and per-key usage (#48)
 - [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
 - [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
 - [ ] Antigravity adapter in degraded mode (`agy` print mode, §5.2, §12) and additional runners
@@ -118,7 +118,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 
 ### Long term
 
-- [ ] An enterprise offering: several developers on one supervisor under the vendors' commercial terms (Team or Enterprise plans, API keys or a cloud provider), with per-user identity and audit. D40's one-human rule is for consumer subscriptions; this needs its own decision
+- [ ] An enterprise offering: several developers on one supervisor under the vendors' commercial terms (Team or Enterprise plans, API keys or a cloud provider), with per-user identity and audit. D40's one-human rule is for consumer subscriptions; this needs its own decision (D41)
 - [ ] Other microVM/VM platforms, Kubernetes where useful
 - [ ] Multiple hosts and placement policies
 - [ ] Wider forge/CI coverage
