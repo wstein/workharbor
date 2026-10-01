@@ -251,3 +251,37 @@ func TestRespondValidation(t *testing.T) {
 		t.Error("a second answer must not change the first")
 	}
 }
+
+// #49: an answer without a time used to skip the deadline check, so a late
+// allow counted and AnsweredAt was year 1.
+func TestRespondNeedsTheTimeOfTheAnswer(t *testing.T) {
+	d := newApproval(t)
+	err := d.Respond(Response{By: "werner", Option: AnswerAllow})
+	if !errors.Is(err, ErrDecisionTime) {
+		t.Fatalf("Respond without a time = %v, want ErrDecisionTime", err)
+	}
+	if d.Status != DecisionOpen || d.AnsweredAt != nil || d.Answer != "" || d.Allows("") {
+		t.Errorf("a refused answer changed the decision: %+v", d)
+	}
+
+	at := t0.Add(time.Minute)
+	if err := d.Respond(Response{By: "werner", Option: AnswerAllow, At: at}); err != nil {
+		t.Fatal(err)
+	}
+	if d.AnsweredAt == nil || !d.AnsweredAt.Equal(at) || d.AnsweredAt.Year() == 1 {
+		t.Errorf("AnsweredAt = %v, want %v", d.AnsweredAt, at)
+	}
+}
+
+func TestZeroTimeNeverReachesTheDeadlineCheck(t *testing.T) {
+	// Even when the decision is long past its deadline, an answer without a
+	// time is refused rather than counted.
+	d := newApproval(t)
+	d.Deadline = t0.Add(-time.Hour)
+	if err := d.Respond(Response{By: "werner", Option: AnswerAllow}); !errors.Is(err, ErrDecisionTime) {
+		t.Fatalf("Respond = %v, want ErrDecisionTime", err)
+	}
+	if d.Allows("") {
+		t.Error("an answer without a time must not allow")
+	}
+}

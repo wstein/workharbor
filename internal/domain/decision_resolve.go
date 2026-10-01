@@ -29,6 +29,7 @@ type Response struct {
 
 // Respond records an answer. It fails closed:
 //
+//   - an answer without the time it arrived is refused with ErrDecisionTime;
 //   - an answer that arrives at or after the deadline is refused with
 //     ErrDecisionExpired and the Decision expires, so a late allow never counts;
 //   - an allow for a different commit than the Decision's SHA is recorded as a
@@ -40,6 +41,9 @@ func (d *Decision) Respond(r Response) error {
 	}
 	if r.By == "" {
 		return ErrDecisionActor
+	}
+	if r.At.IsZero() {
+		return ErrDecisionTime
 	}
 	if !d.Deadline.IsZero() && !r.At.Before(d.Deadline) {
 		d.Status = DecisionExpired
