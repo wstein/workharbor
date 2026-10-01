@@ -148,10 +148,11 @@ Fields: ID, task, run (empty for a review Decision, which no live run raised), k
 - **No silent survival.** A pending approval does not survive a supervisor restart, because the agent process does not. The reconciler marks the run `interrupted` and the ask is raised again on resume.
 - **Plan approval.** In plan mode the agent's `ExitPlanMode` arrives as an approval whose subject is the plan.
 - **Capped input.** Tool inputs in a Decision are capped (the spike used 2,000 characters); the full input stays with the agent. All of it is untrusted data.
-- **Status.** `open` becomes `answered`, `expired` (the deadline passed) or `superseded` (the supervisor restarted); each is terminal. Only `answered` with `allow` ever permits anything: an open, expired or superseded approval is a denial.
+- **Status.** `open` becomes `answered`, `expired` (the deadline passed) or `superseded` (the supervisor restarted or the run was paused); each is terminal. Only `answered` with `allow` ever permits anything: an open, expired or superseded approval is a denial.
 - **Deadline.** An approval always has one (default 10 minutes). An answer that arrives after it is refused and the Decision expires, so a late "allow" does not count.
 - **Commit SHA.** A review Decision such as "Ready to push?" carries the pinned SHA of its ReviewCandidate (§4.5, §6). An allow is tied to that SHA: an allow given for a different SHA is recorded as a denial, and the supervisor asks `Allows(sha)` against the commit it is about to push, so an approval for an earlier revision never covers a later one.
-- **Restart.** A Decision raised by a live run (a question or an approval) is `superseded` when the supervisor restarts, and the reconciler raises a new one for the resumed run (§5.3). A review Decision belongs to no run, so it survives a restart.
+- **Pause and restart.** A Decision raised by a live run (a question or an approval) is `superseded` when the supervisor restarts or the run is paused; an approval open when a run is paused gets superseded because the process is gone (D11). The reconciler raises a new one for the resumed run (§5.3). A review Decision belongs to no run, so it survives a restart.
+- **Expired auth and quota.** An expired login or exhausted quota is a `question` Decision (such as "log in again in the web UI") raised for the paused run, not an approval: it offers guidance options, leaves the run paused, and moves the task to `awaiting_guidance` (§4.1, D21).
 - **Task state (D13).** Only a blocking Decision raised by a live run moves its task to `awaiting_guidance`; a review Decision leaves the task in `ready_for_review`.
 
 ### 4.3 Lifecycle rules
