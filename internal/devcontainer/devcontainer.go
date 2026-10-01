@@ -12,7 +12,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -74,6 +76,31 @@ var refused = map[string]string{
 	"workspaceMount":    "mounts come only from the supervisor's configuration",
 }
 
+// reservedEnv are environment variables the supervisor sets or relies on. A
+// repository may not set them through containerEnv: it could point the agent's
+// traffic past the egress proxy's settings, move the agent's home, replace the
+// agent binary through PATH, or preload a library (D38: request, never grant).
+var reservedEnv = map[string]bool{
+	"HTTP_PROXY": true, "HTTPS_PROXY": true, "NO_PROXY": true, "ALL_PROXY": true,
+	"PATH": true, "HOME": true, "LD_PRELOAD": true, "LD_LIBRARY_PATH": true,
+}
+
+// reservedEnvPrefix are prefixes of variables the agent CLIs and workharbor read.
+var reservedEnvPrefix = []string{"WHR_", "CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_", "GEMINI_", "GOOGLE_"}
+
+func isReservedEnv(name string) bool {
+	u := strings.ToUpper(name)
+	if reservedEnv[u] {
+		return true
+	}
+	for _, p := range reservedEnvPrefix {
+		if strings.HasPrefix(u, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // ignoredLater are keys D38 names as honoured but that this reader does not
 // read yet (the full support is issue #76).
 var ignoredLater = map[string]bool{"features": true, "forwardPorts": true}
@@ -100,6 +127,29 @@ func Parse(data []byte) (Config, error) {
 			var user string
 			if json.Unmarshal(v, &user) != nil || isRoot(user) {
 				problems = append(problems, key+" (a root user is refused)")
+			}
+		}
+	}
+	if v, ok := raw["containerEnv"]; ok {
+		var env map[string]string
+		if json.Unmarshal(v, &env) == nil {
+			for name := range env {
+				if isReservedEnv(name) {
+					problems = append(problems, "containerEnv."+name+" (the supervisor sets it)")
+				}
+			}
+		}
+	}
+	if v, ok := raw["build"]; ok {
+		var b struct {
+			Dockerfile string `json:"dockerfile"`
+			Context    string `json:"context"`
+		}
+		if json.Unmarshal(v, &b) == nil {
+			for key, p := range map[string]string{"build.dockerfile": b.Dockerfile, "build.context": b.Context} {
+				if p != "" && (path.IsAbs(p) || strings.Contains(p, "\\")) {
+					problems = append(problems, key+" (an absolute path is refused)")
+				}
 			}
 		}
 	}
@@ -161,9 +211,16 @@ func Parse(data []byte) (Config, error) {
 	return c, nil
 }
 
+// isRoot reports a root user: the name root, or a numeric uid of 0 in any
+// spelling ("0", "00"). A group is not judged here; the runtime spec refuses
+// gid 0.
 func isRoot(user string) bool {
-	u, _, _ := strings.Cut(user, ":")
-	return u == "root" || u == "0"
+	u, _, _ := strings.Cut(strings.TrimSpace(user), ":")
+	if u == "root" {
+		return true
+	}
+	n, err := strconv.Atoi(u)
+	return err == nil && n == 0
 }
 
 var errObjectForm = errors.New("object form")
@@ -212,19 +269,64 @@ type Runner interface {
 	Run(ctx context.Context, args ...string) ([]byte, error)
 }
 
+// ErrBadRef is returned for a ref that could be read as an option or a path.
+var ErrBadRef = errors.New("devcontainer: not a usable ref")
+
 // Read reads the devcontainer.json of ref (the default branch) from the
 // repository, never from a working tree. found is false when the repository has
-// none.
+// none. A failure to read the repository is an error, never "not found", so a
+// broken repository cannot silently drop the requested image. The file must be
+// a regular blob: a symbolic link is refused. build.dockerfile and
+// build.context must stay inside the repository.
 func Read(ctx context.Context, r Runner, ref string) (c Config, found bool, err error) {
+	if ref == "" || strings.HasPrefix(ref, "-") || strings.ContainsAny(ref, ": \t\n\r\x00") || strings.Contains(ref, "..") {
+		return Config{}, false, fmt.Errorf("%w: %q", ErrBadRef, ref)
+	}
 	for _, p := range Paths {
-		data, err := r.Run(ctx, "show", ref+":"+p)
+		out, err := r.Run(ctx, "ls-tree", "--end-of-options", ref, "--", p)
 		if err != nil {
+			return Config{}, false, fmt.Errorf("devcontainer: list %s at %s: %w", p, ref, err)
+		}
+		line := strings.TrimSpace(string(out))
+		if line == "" {
 			continue // not there at this path
 		}
+		if mode, _, _ := strings.Cut(line, " "); mode != "100644" && mode != "100755" {
+			return Config{}, true, fmt.Errorf("%w: %s at %s is not a regular file (mode %s)", ErrRefused, p, ref, mode)
+		}
+		data, err := r.Run(ctx, "show", "--end-of-options", ref+":"+p)
+		if err != nil {
+			return Config{}, true, fmt.Errorf("devcontainer: read %s at %s: %w", p, ref, err)
+		}
 		c, err := Parse(bytes.TrimSpace(data))
-		return c, true, err
+		if err != nil {
+			return Config{}, true, err
+		}
+		if err := c.checkPaths(path.Dir(p)); err != nil {
+			return Config{}, true, err
+		}
+		return c, true, nil
 	}
 	return Config{}, false, nil
+}
+
+// checkPaths refuses a build.dockerfile or build.context that, resolved against
+// the directory of the devcontainer.json, leaves the repository.
+func (c Config) checkPaths(dir string) error {
+	var problems []string
+	for key, p := range map[string]string{"build.dockerfile": c.Dockerfile, "build.context": c.Context} {
+		if p == "" {
+			continue
+		}
+		if j := path.Join(dir, p); j == ".." || strings.HasPrefix(j, "../") {
+			problems = append(problems, key+" (it leads outside the repository)")
+		}
+	}
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return &RefusedError{Keys: problems}
+	}
+	return nil
 }
 
 // stripJSONC removes // and /* */ comments and trailing commas, outside strings.

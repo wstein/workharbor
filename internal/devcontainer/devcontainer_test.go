@@ -83,26 +83,128 @@ func TestPostCreateForms(t *testing.T) {
 	}
 }
 
-type fakeGit map[string]string
+// fakeGit answers ls-tree and show for "ref:path" keys, the way git does:
+// ls-tree prints nothing for a missing path and fails only for a broken
+// repository or an unknown ref.
+type fakeGit struct {
+	files  map[string]string // "ref:path" -> content
+	modes  map[string]string // "ref:path" -> mode, 100644 by default
+	broken bool
+	calls  [][]string
+}
 
-func (g fakeGit) Run(_ context.Context, args ...string) ([]byte, error) {
-	if v, ok := g[args[1]]; ok {
-		return []byte(v), nil
+func (g *fakeGit) Run(_ context.Context, args ...string) ([]byte, error) {
+	g.calls = append(g.calls, args)
+	if g.broken {
+		return nil, errors.New("fatal: not a git repository")
+	}
+	switch args[0] {
+	case "ls-tree": // ls-tree --end-of-options <ref> -- <path>
+		key := args[2] + ":" + args[4]
+		if _, ok := g.files[key]; !ok {
+			return nil, nil
+		}
+		mode := g.modes[key]
+		if mode == "" {
+			mode = "100644"
+		}
+		return []byte(mode + " blob 0123456789abcdef\t" + args[4] + "\n"), nil
+	case "show": // show --end-of-options <ref>:<path>
+		if v, ok := g.files[args[2]]; ok {
+			return []byte(v), nil
+		}
 	}
 	return nil, errors.New("not found")
 }
 
 func TestReadUsesTheRefNotTheWorkingTree(t *testing.T) {
-	g := fakeGit{"main:.devcontainer.json": `{"image":"b"}`}
+	g := &fakeGit{files: map[string]string{"main:.devcontainer.json": `{"image":"b"}`}}
 	c, found, err := Read(context.Background(), g, "main")
 	if err != nil || !found || c.Image != "b" {
 		t.Fatalf("Read = %+v %v %v", c, found, err)
 	}
-	if _, found, err := Read(context.Background(), fakeGit{}, "main"); found || err != nil {
+	for _, call := range g.calls {
+		if call[1] != "--end-of-options" {
+			t.Errorf("git %v: the ref must follow --end-of-options", call)
+		}
+	}
+	if _, found, err := Read(context.Background(), &fakeGit{}, "main"); found || err != nil {
 		t.Errorf("a repository without the file: found=%v err=%v", found, err)
 	}
-	if _, _, err := Read(context.Background(), fakeGit{"main:.devcontainer/devcontainer.json": `{"privileged":true,"image":"x"}`}, "main"); !errors.Is(err, ErrRefused) {
+	refused := &fakeGit{files: map[string]string{"main:.devcontainer/devcontainer.json": `{"privileged":true,"image":"x"}`}}
+	if _, _, err := Read(context.Background(), refused, "main"); !errors.Is(err, ErrRefused) {
 		t.Errorf("err = %v, want ErrRefused", err)
+	}
+}
+
+// A repository that cannot be read is an error, never "no devcontainer", or
+// the environment would silently be built without the requested image.
+func TestReadReportsABrokenRepository(t *testing.T) {
+	if _, found, err := Read(context.Background(), &fakeGit{broken: true}, "main"); err == nil || found {
+		t.Errorf("a broken repository: found=%v err=%v", found, err)
+	}
+}
+
+func TestReadRefusesALinkAndABadRef(t *testing.T) {
+	g := &fakeGit{
+		files: map[string]string{"main:.devcontainer/devcontainer.json": `{"image":"x"}`},
+		modes: map[string]string{"main:.devcontainer/devcontainer.json": "120000"},
+	}
+	if _, _, err := Read(context.Background(), g, "main"); !errors.Is(err, ErrRefused) {
+		t.Errorf("a symbolic link: err = %v, want ErrRefused", err)
+	}
+	for _, ref := range []string{"", "-p", "--output=/tmp/x", "main:x", "a..b", "main branch", "main\n"} {
+		if _, _, err := Read(context.Background(), &fakeGit{}, ref); !errors.Is(err, ErrBadRef) {
+			t.Errorf("ref %q: err = %v, want ErrBadRef", ref, err)
+		}
+	}
+}
+
+// build.dockerfile and build.context are resolved against the directory of
+// the devcontainer.json and must stay inside the repository.
+func TestBuildPathsStayInsideTheRepository(t *testing.T) {
+	for in, ok := range map[string]bool{
+		`{"build":{"dockerfile":"Dockerfile","context":".."}}`:             true,
+		`{"build":{"dockerfile":"../tools/Dockerfile"}}`:                   true,
+		`{"build":{"dockerfile":"Dockerfile","context":"../.."}}`:          false,
+		`{"build":{"dockerfile":"../../etc/Dockerfile"}}`:                  false,
+		`{"build":{"dockerfile":"a/../../../x"}}`:                          false,
+		`{"build":{"dockerfile":"/etc/Dockerfile"}}`:                       false,
+		`{"build":{"dockerfile":"Dockerfile","context":"/Users/someone"}}`: false,
+	} {
+		g := &fakeGit{files: map[string]string{"main:.devcontainer/devcontainer.json": in}}
+		_, _, err := Read(context.Background(), g, "main")
+		if ok != (err == nil) {
+			t.Errorf("%s: err = %v", in, err)
+		} else if !ok && !errors.Is(err, ErrRefused) {
+			t.Errorf("%s: err = %v, want ErrRefused", in, err)
+		}
+	}
+	// At the repository root, .devcontainer.json may not reach above it at all.
+	g := &fakeGit{files: map[string]string{"main:.devcontainer.json": `{"build":{"dockerfile":"Dockerfile","context":".."}}`}}
+	if _, _, err := Read(context.Background(), g, "main"); !errors.Is(err, ErrRefused) {
+		t.Errorf("a root-level file with context ..: err = %v, want ErrRefused", err)
+	}
+}
+
+// containerEnv may not set what the supervisor sets or the agent reads (D38).
+func TestReservedEnvironmentIsRefused(t *testing.T) {
+	for _, name := range []string{"HTTPS_PROXY", "https_proxy", "NO_PROXY", "PATH", "LD_PRELOAD", "HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "WHR_TASK", "OPENAI_API_KEY"} {
+		_, err := Parse([]byte(`{"image":"x","containerEnv":{"` + name + `":"v"}}`))
+		if !errors.Is(err, ErrRefused) {
+			t.Errorf("containerEnv.%s: err = %v, want ErrRefused", name, err)
+		}
+	}
+	if _, err := Parse([]byte(`{"image":"x","containerEnv":{"GOFLAGS":"-mod=mod","NODE_ENV":"test"}}`)); err != nil {
+		t.Errorf("ordinary variables must be honoured: %v", err)
+	}
+}
+
+func TestRootIsRefusedInAnySpelling(t *testing.T) {
+	for user, root := range map[string]bool{"root": true, "0": true, "00": true, " 0 ": true, "0:1000": true, "root:root": true, "1000": false, "vscode": false, "rootless": false} {
+		if got := isRoot(user); got != root {
+			t.Errorf("isRoot(%q) = %v, want %v", user, got, root)
+		}
 	}
 }
 
