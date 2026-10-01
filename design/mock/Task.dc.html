@@ -15,7 +15,7 @@ body{margin:0}
 a{color:inherit;text-decoration:none}
 </style>
 </helmet>
-<div style="width: 1360px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+<div style="width: 1360px; height: 1320px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
   <header style="display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 32px; border-bottom: 1px solid #1f3556; background: #0a1322">
     <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
       <div style="display: flex; align-items: center; gap: 8px; color: #9fb3c8; font-size: 13px"><a href="Main.dc.html" style="color: {{accent}}">Harbor</a><span>/</span><span style="font-family: 'IBM Plex Mono', monospace">wstein/workharbor#15</span></div>
@@ -25,33 +25,70 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
     <div style="display: flex; gap: 10px; flex: none">
-      <button onClick="{{ togglePause }}" style="padding: 9px 16px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">{{ pauseLabel }} <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #0f3733; font-size: 10px">after v0</span></button>
+      <button onClick="{{ togglePause }}" style="padding: 9px 16px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">{{ pauseLabel }}</button>
       <button style="padding: 9px 16px; border-radius: 8px; border: 1px solid #1f3556; background: #0f2038; color: #e6edf7; font: inherit; font-weight: 500; cursor: pointer">Open in editor <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f3556; color: #9fb3c8; font-size: 10px">after v0</span></button>
-      <button style="padding: 9px 16px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #f87171; font: inherit; font-weight: 500; cursor: pointer">Cancel task <span style="margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f3556; color: #9fb3c8; font-size: 10px">after v0</span></button>
+      <button style="padding: 9px 16px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #f87171; font: inherit; font-weight: 500; cursor: pointer">Cancel task</button>
     </div>
   </header>
 
   <div style="flex-grow: 1; min-height: 0; display: flex; gap: 24px; padding: 24px 32px; box-sizing: border-box">
     <section style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
-      <div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Activity</h2><span style="color: #9fb3c8; font-size: 12px">Claude Code · claude-sonnet-5-5 · run r-88</span></div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 600">Chat with the agent</h2>
+        <span style="color: #9fb3c8; font-size: 12px">Claude Code · claude-sonnet-5-5 · run r-88 · live messages</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+        <span style="color: #9fb3c8; font-size: 12px">Permission mode</span>
+        <sc-for list="{{ modes }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.pick }}" style="padding: 5px 12px; border-radius: 999px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: {{ m.fg }}; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer">{{ m.label }}</button>
+        </sc-for>
+      </div>
+      <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ modeHint }} Bypassing all prompts is not offered.</div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px; background: #0f2038; border: 1px solid #1f3556">
+        <span style="color: #c7d3e6; font-size: 13px">{{ history.line }}</span>
+        <span style="display: flex; gap: 8px">
+          <button onClick="{{ clearView }}" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #c7d3e6; font: inherit; font-size: 12px; cursor: pointer; opacity: {{ history.viewOpacity }}">{{ history.viewLabel }}</button>
+          <button onClick="{{ askPurge }}" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #f87171; background: transparent; color: #f87171; font: inherit; font-size: 12px; cursor: pointer; opacity: {{ history.purgeOpacity }}">Purge transcript…</button>
+        </span>
+      </div>
+      <sc-if value="{{ confirming }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 14px 16px; border-radius: 10px; background: #2a1013; border: 1px solid #7f1d1d; display: flex; flex-direction: column; gap: 10px">
+          <div style="font-weight: 600; color: #fca5a5">Purge the transcript of this task?</div>
+          <div style="color: #e6edf7; line-height: 1.6; font-size: 13px">Removes <strong>1,142 events (4.1 MB)</strong>: messages, tool inputs and results, diffs and thinking. <strong>Kept for good:</strong> the audit entries (state changes, decisions, approvals, commits, PR links) and one entry recording this purge. The agent's own session is not changed, so it can still resume, and this cannot be undone.</div>
+          <div style="display: flex; gap: 8px">
+            <button onClick="{{ doPurge }}" style="padding: 8px 14px; border: 0; border-radius: 8px; background: #f87171; color: #2a1013; font: inherit; font-weight: 600; cursor: pointer">Purge transcript</button>
+            <button onClick="{{ cancelPurge }}" style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Cancel</button>
+          </div>
+        </div>
+      </sc-if>
+
       <div style="flex-grow: 1; min-height: 0; overflow: hidden; padding: 6px 20px; border: 1px solid #1f3556; border-radius: 12px; background: #0f2038; display: flex; flex-direction: column">
-        <sc-for list="{{ events }}" as="ev" hint-placeholder-count="7">
+        <sc-for list="{{ events }}" as="ev" hint-placeholder-count="9">
           <div style="display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 12px; align-items: start; padding: 11px 0; border-bottom: 1px solid #172a48">
             <span style="color: #6b819e; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding-top: 2px">{{ ev.time }}</span>
             <span style="width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; background: {{ ev.dot }}"></span>
-            <div style="min-width: 0; line-height: 1.5; color: {{ ev.fg }}">{{ ev.text }}</div>
+            <div style="min-width: 0; display: flex; flex-direction: column; gap: 3px"><div style="line-height: 1.5; color: {{ ev.fg }}">{{ ev.text }}</div><div style="color: #6b819e; font-size: 12px">{{ ev.note }}</div></div>
           </div>
         </sc-for>
+        <div style="display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 12px; align-items: start; padding: 11px 0">
+          <span style="color: #6b819e; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding-top: 2px">now</span>
+          <span style="width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; background: {{ tail.dot }}"></span>
+          <div style="color: #9fb3c8; line-height: 1.5">{{ tail.text }}</div>
+        </div>
       </div>
+
       <div style="display: flex; gap: 10px">
         <label for="say" style="flex-grow: 1; display: flex; align-items: center; padding: 0 14px; border-radius: 10px; background: #0f2038; border: 1px solid #1f3556">
-          <input id="say" value="{{ draft }}" onInput="{{ onDraft }}" placeholder="Tell the agent something, like whr say t-15" style="flex-grow: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: #e6edf7; font: inherit">
+          <input id="say" value="{{ draft }}" onInput="{{ onDraft }}" placeholder="Message the agent, like whr say t-15" style="flex-grow: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: #e6edf7; font: inherit">
         </label>
         <button onClick="{{ send }}" style="padding: 0 20px; height: 46px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ sendOpacity }}">Send</button>
       </div>
+      <div style="color: #6b819e; font-size: 12px">Claude Code reads a message at its next step, after the running tool finishes. Agents without live input (Codex CLI, Antigravity) get it as a resumed turn, and this line says so.</div>
     </section>
 
-    <aside style="width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+    <aside style="width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px">
       <div style="padding: 18px; border-radius: 12px; background: {{ decision.bg }}; border: 1px solid {{ decision.border }}; display: flex; flex-direction: column; gap: 12px">
         <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ decision.head }}">{{ decision.title }}</span><span style="color: #9fb3c8; font-size: 12px">question · blocking</span></div>
         <div style="line-height: 1.5">Allow proxy.golang.org and sum.golang.org in the default egress allowlist?</div>
@@ -65,6 +102,22 @@ a{color:inherit;text-decoration:none}
         </sc-if>
         <sc-if value="{{ answered }}" hint-placeholder-val="{{ false }}">
           <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; color: #c7d3e6">You answered: <strong style="color: #ffffff">{{ chosen }}</strong></div>
+        </sc-if>
+      </div>
+
+      <div style="padding: 18px; border-radius: 12px; background: {{ appr.bg }}; border: 1px solid {{ appr.border }}; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">approval · blocking</span></div>
+        <div style="line-height: 1.5">The agent wants to use <strong style="font-family: 'IBM Plex Mono', monospace">Write</strong> on a file inside the workspace.</div>
+        <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; color: #c7d3e6">file_path: internal/proxy/allowlist.go<br>content: 2,184 characters, first 120 shown:<br>package proxy // Allowlist holds the hosts an environment may reach through the sidecar…</div>
+        <sc-if value="{{ apprOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; gap: 8px">
+            <button onClick="{{ approve }}" style="flex: 1; padding: 10px 14px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve once</button>
+            <button onClick="{{ deny }}" style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #f87171; background: transparent; color: #f87171; font: inherit; font-weight: 600; cursor: pointer">Deny</button>
+          </div>
+          <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Fails closed after 10 minutes with no answer: 08:42 left. The input is capped here; the agent keeps the full text.</div>
+        </sc-if>
+        <sc-if value="{{ apprDone }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; color: #c7d3e6; line-height: 1.5">{{ apprResult }}</div>
         </sc-if>
       </div>
 
@@ -87,8 +140,11 @@ a{color:inherit;text-decoration:none}
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
         <span style="font-weight: 600">Workspace ws-2c9e</span>
         <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
-          <span style="color: #9fb3c8">Environment</span><span>Running · Apple Container</span>
+          <span style="color: #9fb3c8">Environment</span><span>Running · Apple Container, one VM</span>
           <span style="color: #9fb3c8">Resources</span><span style="font-family: 'IBM Plex Mono', monospace">2 CPU · 1.4 of 2 GiB</span>
+          <span style="color: #9fb3c8">Storage</span><span>Volume ws-2c9e-vol, one writer</span>
+          <span style="color: #9fb3c8">Network</span><span>Internal, through the egress proxy</span>
+          <span style="color: #9fb3c8">Tools</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">claude 2.1.286 · store 0292fa22</span>
           <span style="color: #9fb3c8">Lock</span><span style="color: {{ lock.fg }}; font-weight: 500">{{ lock.label }}</span>
           <span style="color: #9fb3c8">Session</span><span>{{ session }}</span>
           <span style="color: #9fb3c8">Agent login</span><span>Claude Code · subscription · <span style="color: #4ade80">signed in</span></span>
@@ -99,7 +155,7 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1000}}'>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1320}}'>
 class Component extends DCLogic {
   renderVals() {
     const accent = this.props.accent ?? '#5eead4';
@@ -109,54 +165,116 @@ class Component extends DCLogic {
     const picked = s.picked ?? null;
     const draft = s.draft ?? '';
     const extra = s.extra ?? [];
+    const mode = s.mode ?? 'manual';
+    const verdict = s.verdict ?? null; // null, 'allow' or 'deny'
     const opts = ['Allow both, and log every request', 'Allow only sum.golang.org', 'Deny for now and ask me per dependency'];
 
-    const base = [
-      { time: '09:12', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Task created from issue #15 by you.' },
-      { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started in ws-2c9e (Apple Container, 2 GiB).' },
-      { time: '09:21', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Read design section 7: default-deny egress through a logging proxy.' },
-      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Pushed agent/egress-proxy (8e2f1c4) and opened draft PR #22.' },
-      { time: '09:41', dot: '#fbbf24', fg: '#fde68a', text: 'Asked you: allow proxy.golang.org and sum.golang.org in the default allowlist?' },
-      { time: '09:41', dot: '#a78bfa', fg: '#c7d3e6', text: 'Sent a push to your phone through ntfy: task ID, event kind and a link only. You were detached; the agent kept working until it needed you.' },
+    const modeDefs = [
+      { key: 'manual', label: 'Manual', hint: 'Manual: the agent asks for everything it is not already allowed to do.' },
+      { key: 'acceptEdits', label: 'Accept edits', hint: 'Accept edits: file edits go through without asking; everything else still asks.' },
+      { key: 'plan', label: 'Plan', hint: 'Plan: read-only planning first, then you approve the plan.' },
+      { key: 'dontAsk', label: "Don't ask", hint: "Don't ask: anything not allowed is denied silently, nothing is ever asked." },
+      { key: 'auto', label: 'Auto', hint: 'Auto: in headless runs it asked as often as Manual, so do not count on it to ask less.' },
     ];
-    const events = base.slice();
+    const modes = modeDefs.map((m) => {
+      const on = m.key === mode;
+      return { label: m.label, bg: on ? '#13294a' : 'transparent', border: on ? accent : '#1f3556', fg: on ? '#ffffff' : '#9fb3c8', pick: () => this.setState({ mode: m.key, modeChanged: m.key !== 'manual' }) };
+    });
+    const modeHint = modeDefs.find((m) => m.key === mode).hint;
+
+    // The write approval depends on the mode: it is asked, auto-accepted or denied.
+    const autoAccept = mode === 'acceptEdits';
+    const autoDeny = mode === 'dontAsk';
+    let apprState = verdict;
+    if (!apprState && autoAccept) apprState = 'allow';
+    if (!apprState && autoDeny) apprState = 'deny';
+    const apprOpen = !apprState;
+
+    const base = [
+      { time: '09:12', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Task created from issue #15 by you.', audit: true },
+      { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started in ws-2c9e (Apple Container, 2 GiB), tools from the shared store: claude 2.1.286.', audit: true },
+      { time: '09:21', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Read design section 7: default-deny egress through a logging proxy.' },
+      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Pushed agent/egress-proxy (8e2f1c4) and opened draft PR #22.', audit: true },
+      { time: '09:41', dot: '#fbbf24', fg: '#fde68a', text: 'Asked you: allow proxy.golang.org and sum.golang.org in the default allowlist?', audit: true },
+      { time: '09:41', dot: '#a78bfa', fg: '#c7d3e6', text: 'Sent a push to your phone through ntfy: task ID, event kind and a link only.', note: 'You were detached; the agent kept working until it needed you.', audit: true },
+      { time: '09:44', dot: '#fbbf24', fg: '#fde68a', text: 'Wants to Write internal/proxy/allowlist.go.', note: apprState ? '' : 'Waiting for your approval, the run is blocked.', audit: true },
+    ];
+    let events = base.slice();
     let n = 0;
-    const stamp = () => '09:' + String(43 + n++);
+    const stamp = () => '09:' + String(46 + n++);
+    if (apprState === 'allow') events.push({ time: stamp(), dot: '#4ade80', fg: '#c7d3e6', text: autoAccept ? 'Write allowed automatically (Accept edits mode).' : 'You approved Write once.', audit: true });
+    if (apprState === 'deny') events.push({ time: stamp(), dot: '#f87171', fg: '#c7d3e6', text: autoDeny ? "Write denied silently (Don't ask mode)." : 'You denied Write: "Not now, ask me again after the question above."', note: autoDeny ? '' : 'The agent was told why and carries on without that file.', audit: true });
     if (answered) {
-      events.push({ time: stamp(), dot: '#4ade80', fg: '#c7d3e6', text: 'You answered: ' + opts[picked] + '.' });
-      events.push({ time: stamp(), dot: '#60a5fa', fg: '#c7d3e6', text: 'Run resumed. Updating the proxy config and its tests.' });
+      events.push({ time: stamp(), dot: '#4ade80', fg: '#c7d3e6', text: 'You answered: ' + opts[picked] + '.', audit: true });
+      events.push({ time: stamp(), dot: '#60a5fa', fg: '#c7d3e6', text: 'Run resumed. Updating the proxy config and its tests.', audit: true });
     }
-    if (paused) events.push({ time: stamp(), dot: '#fbbf24', fg: '#fde68a', text: 'Paused by you. The workspace lock is yours; the agent will not change files.' });
-    extra.forEach((t) => events.push({ time: stamp(), dot: '#a78bfa', fg: '#e6edf7', text: 'You: ' + t }));
+    if (s.modeChanged) events.push({ time: stamp(), dot: '#9fb3c8', fg: '#c7d3e6', text: 'Permission mode set to ' + modeDefs.find((m) => m.key === mode).label + '.', note: 'The agent process restarted with its session kept; the transcript carries on.', audit: true });
+    if (paused) events.push({ time: stamp(), dot: '#fbbf24', fg: '#fde68a', text: 'Paused by you. The workspace lock is yours; the agent will not change files.', audit: true });
+
+    // Chat history. A purge removes transcript content and keeps the audit entries
+    // plus one record of the purge. Clear view only hides older events.
+    const purged = !!s.purged;
+    const cleared = !!s.cleared && !purged;
+    const totalEvents = 1184 + extra.length;
+    let shown = events;
+    let keptCount = events.filter((e) => e.audit).length + 1;
+    if (purged) {
+      shown = events.filter((e) => e.audit);
+      shown.push({ time: '09:58', dot: '#f87171', fg: '#fca5a5', text: 'You purged the transcript: 1,142 events (4.1 MB) removed. Audit entries kept.' });
+    } else if (cleared) {
+      shown = events.slice(-3);
+    }
+    extra.forEach((t) => shown.push({ time: stamp(), dot: '#a78bfa', fg: '#e6edf7', text: 'You: ' + t, note: 'Delivered: Claude Code reads it at its next step.' }));
+    events = shown;
+    const history = purged
+      ? { line: 'Transcript purged · ' + keptCount + ' audit entries kept · 42 KB', viewLabel: 'Clear view', viewOpacity: 0.4, purgeOpacity: 0.4 }
+      : cleared
+        ? { line: 'Showing the latest 3 of ' + totalEvents.toLocaleString('en-US') + ' events · earlier ones are hidden, not deleted', viewLabel: 'Show all', viewOpacity: 1, purgeOpacity: 1 }
+        : { line: 'History: ' + totalEvents.toLocaleString('en-US') + ' events · 4.2 MB', viewLabel: 'Clear view', viewOpacity: 1, purgeOpacity: 1 };
 
     let pill = { label: 'Awaiting guidance', bg: '#3a2d0b', fg: '#fbbf24' };
     if (paused) pill = { label: 'Paused by you', bg: '#1b2a42', fg: '#9fb3c8' };
-    else if (answered) pill = { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
+    else if (!apprOpen && answered) pill = { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
+    else if (apprOpen) pill = { label: 'Awaiting approval', bg: '#3a2d0b', fg: '#fbbf24' };
 
     const options = opts.map((label, i) => {
       const on = picked === i;
-      return {
-        label,
-        bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556',
-        ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent',
-        pick: () => this.setState({ picked: i }),
-      };
+      return { label, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ picked: i }) };
     });
 
     const decision = answered
       ? { title: 'Decision answered', head: '#4ade80', bg: '#0f2038', border: '#1f3556' }
       : { title: 'Needs you', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' };
+    const appr = apprState
+      ? { title: 'Approval answered', head: apprState === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556' }
+      : { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' };
+    const apprResult = apprState === 'allow'
+      ? (autoAccept ? 'Allowed automatically by the mode. Nothing was asked.' : 'You allowed this Write once. The agent continues in the same live session.')
+      : (autoDeny ? 'Denied silently by the mode. Nothing was asked.' : 'You denied this Write with a reason. The agent was told and continues without it.');
+
+    let tail = { dot: '#60a5fa', text: 'The agent is writing the answer ▍' };
+    if (paused) tail = { dot: '#fbbf24', text: 'Paused. Resume to let the agent continue.' };
+    else if (apprOpen) tail = { dot: '#fbbf24', text: 'Blocked: waiting for your approval.' };
+    else if (!answered) tail = { dot: '#fbbf24', text: 'Waiting for your answer to the question.' };
 
     return {
-      accent, pill, events, options, decision, draft,
+      accent, pill, events, options, decision, appr, apprResult, draft, modes, modeHint, tail, history,
+      confirming: !!s.confirming && !purged,
       open: !answered, answered, chosen: picked === null ? '' : opts[picked],
+      apprOpen, apprDone: !apprOpen,
       answerOpacity: picked === null ? 0.4 : 1,
       sendOpacity: draft.trim() ? 1 : 0.4,
-      pauseLabel: paused ? 'Resume agent' : 'Pause and take over',
+      pauseLabel: paused ? 'Resume agent' : 'Pause agent',
       lock: paused ? { label: 'You', fg: '#fbbf24' } : { label: 'Agent', fg: '#60a5fa' },
-      session: paused ? 'You are attached; the agent is paused' : (answered ? 'Detached; the agent is working' : 'Detached; waiting for your answer'),
+      session: paused ? 'You are attached; the agent is paused' : (apprOpen || !answered ? 'Detached; waiting for you' : 'Detached; the agent is working'),
       togglePause: () => this.setState({ paused: !paused }),
+      clearView: () => { if (!purged) this.setState({ cleared: !s.cleared }); },
+      askPurge: () => { if (!purged) this.setState({ confirming: true }); },
+      cancelPurge: () => this.setState({ confirming: false }),
+      doPurge: () => this.setState({ purged: true, confirming: false, cleared: false }),
       answer: () => { if (picked !== null) this.setState({ answered: true }); },
+      approve: () => this.setState({ verdict: 'allow' }),
+      deny: () => this.setState({ verdict: 'deny' }),
       onDraft: (e) => this.setState({ draft: e.target.value }),
       send: () => { const t = draft.trim(); if (t) this.setState({ extra: extra.concat([t]), draft: '' }); },
     };

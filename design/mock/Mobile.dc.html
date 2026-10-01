@@ -24,7 +24,8 @@ a{color:inherit;text-decoration:none}
     <span style="display: inline-flex; align-items: center; gap: 6px; color: #9fb3c8; font-size: 12px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #4ade80"></span>mac-mini online</span>
   </header>
 
-  <div style="padding: 4px 20px 12px; color: #9fb3c8; font-size: 13px">{{ subtitle }}</div>
+  <div style="padding: 4px 20px 8px; color: #9fb3c8; font-size: 13px">{{ subtitle }}</div>
+  <div style="margin: 0 16px 10px; padding: 8px 12px; border-radius: 10px; background: #0f2038; border: 1px solid #1f3556; color: #9fb3c8; font-size: 12px; line-height: 1.5">Installable app: Share, then Add to Home Screen. On iOS, Web Push needs it installed (unverified).</div>
 
   <div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 16px 12px; display: flex; flex-direction: column; gap: 12px">
     <div style="padding: 16px; border-radius: 14px; background: {{ first.bg }}; border: 1px solid {{ first.border }}; display: flex; flex-direction: column; gap: 12px">
@@ -49,12 +50,24 @@ a{color:inherit;text-decoration:none}
     <div style="padding: 16px; border-radius: 14px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 10px">
       <div style="display: flex; justify-content: space-between; align-items: center">
         <span style="padding: 3px 9px; border-radius: 999px; background: #10294d; color: #60a5fa; font-size: 12px; font-weight: 600">Approval</span>
+        <span style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">#15 · 2m</span>
+      </div>
+      <div style="font-weight: 500; line-height: 1.4">Write internal/proxy/allowlist.go?</div>
+      <div style="display: flex; gap: 8px">
+        <button style="flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve once</button>
+        <button style="flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Deny</button>
+      </div>
+    </div>
+
+    <div style="padding: 16px; border-radius: 14px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="padding: 3px 9px; border-radius: 999px; background: #2a1f4a; color: #a78bfa; font-size: 12px; font-weight: 600">Plan</span>
         <span style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">#12 · 6m</span>
       </div>
-      <div style="font-weight: 500; line-height: 1.4">Add the dependency golang.org/x/sync?</div>
+      <div style="font-weight: 500; line-height: 1.4">Approve the plan for the run interrupted state?</div>
       <div style="display: flex; gap: 8px">
-        <button style="flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve</button>
-        <button style="flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Reject</button>
+        <button style="flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve plan</button>
+        <button style="flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Changes</button>
       </div>
     </div>
 
@@ -80,7 +93,7 @@ a{color:inherit;text-decoration:none}
   <nav style="display: flex; justify-content: space-around; align-items: center; padding: 10px 12px 26px; border-top: 1px solid #1f3556; background: #0a1322">
     <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; min-height: 44px; justify-content: center; color: #9fb3c8; font-size: 12px">Harbor</a>
     <a href="Mobile.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; min-height: 44px; justify-content: center; color: {{accent}}; font-size: 12px; font-weight: 600">Inbox · {{ openCount }}</a>
-    <div style="display: flex; flex-direction: column; align-items: center; min-width: 64px; color: #9fb3c8; font-size: 12px">Tasks</div>
+    <a href="Chat.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; min-height: 44px; justify-content: center; color: #9fb3c8; font-size: 12px">Chat</a>
     <div style="display: flex; flex-direction: column; align-items: center; min-width: 64px; color: #9fb3c8; font-size: 12px">More</div>
   </nav>
 </div>
@@ -96,7 +109,7 @@ class Component extends DCLogic {
       const on = picked === i;
       return { label, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ picked: i }) };
     });
-    const openCount = answered ? 3 : 4;
+    const openCount = answered ? 4 : 5;
     return {
       accent, options, openCount,
       first: answered ? { bg: '#0f2038', border: '#1f3556' } : { bg: '#2a2209', border: '#6b4f0a' },

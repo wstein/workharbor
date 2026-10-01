@@ -80,6 +80,20 @@ a{color:inherit;text-decoration:none}
 
         <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 12px; max-width: 760px">
+            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr) 150px; gap: 8px 14px; padding: 14px 16px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556; font-size: 13px">
+              <span style="font-weight: 600">Claude Code</span><span style="color: #c7d3e6">Live messages, approvals, token streaming</span><span style="color: #4ade80; text-align: right">Release 1</span>
+              <span style="font-weight: 600">Codex CLI</span><span style="color: #c7d3e6">Messages arrive as a resumed turn; approvals untested</span><span style="color: #4ade80; text-align: right">Release 1</span>
+              <span style="font-weight: 600">Antigravity</span><span style="color: #c7d3e6">Headless print mode, no approval channel</span><span style="color: #9fb3c8; text-align: right">After the scorecard</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-weight: 600">Default permission mode</span>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <sc-for list="{{ presets }}" as="pr" hint-placeholder-count="4">
+                  <button onClick="{{ pr.pick }}" style="padding: 7px 14px; border-radius: 999px; border: 1px solid {{ pr.border }}; background: {{ pr.bg }}; color: {{ pr.fg }}; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer">{{ pr.label }}</button>
+                </sc-for>
+              </div>
+              <span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ presetNote }} Bypassing all prompts is never offered here.</span>
+            </div>
             <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
               <button onClick="{{ m.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 16px; border-radius: 12px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: #e6edf7; font: inherit; cursor: pointer">
                 <span style="width: 16px; height: 16px; margin-top: 3px; flex: none; border-radius: 999px; border: 2px solid {{ m.ring }}; background: {{ m.dot }}"></span>
@@ -165,12 +179,13 @@ class Component extends DCLogic {
     const mode = this.state.mode ?? 'sub';
     const prov = this.state.prov ?? 'self';
     const sent = !!this.state.sent;
+    const pm = this.state.pm ?? 'manual';
     const token = this.state.token ?? 'whr_example_token';
 
     const defs = [
       { title: 'Sign in', sub: 'Server and access token', lead: 'Connect this browser to your supervisor on the Mac mini. You do this once.' },
       { title: 'Connect your forge', sub: 'Repository and bot token', lead: 'Agents push branches and open pull requests through a bot identity. What it may do is enforced on the forge.' },
-      { title: 'Agent login', sub: 'Subscription or API key', lead: 'Choose how agents authenticate to the model. You can change this per agent later.' },
+      { title: 'Agents and login', sub: 'Agents, sign-in, default mode', lead: 'Choose the agents, how they sign in and the default permission mode. Claude Code takes live messages and approvals; Codex CLI and Antigravity run in a degraded mode. You can change all of this per agent later.' },
       { title: 'Check the host', sub: 'Runtime and isolation', lead: 'The same checks as whr doctor. Anything not verified yet is marked, not assumed.' },
       { title: 'Phone notifications', sub: 'ntfy', lead: 'Agents run for 15 to 60 minutes or longer while you are away. Get a push when one needs you.' },
       { title: 'Ready', sub: 'Summary', lead: 'Your harbor is set up.' },
@@ -196,15 +211,27 @@ class Component extends DCLogic {
       return { title: m.title, text: m.text, note: m.note, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ mode: m.key }) };
     });
 
+    const presetDefs = [
+      { key: 'manual', label: 'Manual', note: 'Manual: the agent asks for everything it is not already allowed to do.' },
+      { key: 'acceptEdits', label: 'Accept edits', note: 'Accept edits: file edits go through, everything else asks.' },
+      { key: 'plan', label: 'Plan', note: 'Plan: read-only planning first, then you approve the plan.' },
+      { key: 'dontAsk', label: "Don't ask", note: "Don't ask: anything not allowed is denied silently." },
+    ];
+    const presets = presetDefs.map((d) => {
+      const on = d.key === pm;
+      return { label: d.label, bg: on ? '#13294a' : 'transparent', border: on ? accent : '#1f3556', fg: on ? '#ffffff' : '#9fb3c8', pick: () => this.setState({ pm: d.key }) };
+    });
+    const presetNote = presetDefs.find((d) => d.key === pm).note;
     const ok = { mark: '✓', bg: '#11331f', fg: '#4ade80' };
     const warn = { mark: '!', bg: '#3a2d0b', fg: '#fbbf24' };
     const checks = [
-      Object.assign({ label: 'Server reachable, token valid', note: 'Over your VPN.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Container runtime reachable', note: 'Apple Container on the Mac mini.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Forbidden mounts rejected', note: 'Your home folder, ~/.ssh and runtime sockets cannot be mounted into an agent environment.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Default-deny egress through the logging proxy', note: 'Network isolation controls in Apple Container are not verified yet. Run the conformance suite before trusting this.', state: 'Not verified' }, warn),
-      Object.assign({ label: 'Agent session survives a reboot', note: 'The auth folder and detached sessions are checked in the spike.', state: 'Not tested' }, warn),
-      Object.assign({ label: 'Capacity', note: '16 GB host: plan for 4 concurrent environments, 8 is a stretch.', state: '4 slots' }, ok),
+      Object.assign({ label: 'Container services running', note: 'Apple Container on the Mac mini. After a login or reboot, container system start has to run; the supervisor does it.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Limits enforced, one VM per environment', note: 'CPU and memory limits hold; a runaway allocation is killed and the environment survives.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Forbidden mounts rejected', note: 'The adapter rejects your home folder, ~/.ssh and runtime sockets. The runtime alone would accept them.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Default-deny egress', note: 'An internal network plus a proxy sidecar: allowed hosts pass, everything else is blocked and logged.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Tool store', note: 'Read-only store mounted: claude 2.1.286, codex 0.159.3.', state: 'Passed' }, ok),
+      Object.assign({ label: 'Recovery after a Mac reboot', note: 'After a service restart every environment comes back stopped with its data, and the reconciler starts it again. A reboot itself was not tested.', state: 'Not tested' }, warn),
+      Object.assign({ label: 'Agent session survives a reboot', note: 'Not tested yet.', state: 'Not tested' }, warn),
     ];
 
     const provDefs = [
@@ -219,13 +246,13 @@ class Component extends DCLogic {
     const summary = [
       { k: 'Server', v: 'https://mac-mini.example.net' },
       { k: 'Forge', v: 'GitHub · wstein/workharbor · bot token' },
-      { k: 'Agent login', v: mode === 'sub' ? 'Claude Code · subscription login' : 'API key held in the host proxy' },
-      { k: 'Host checks', v: '4 passed, 2 not verified yet' },
+      { k: 'Agents', v: (mode === 'sub' ? 'Claude Code, subscription login' : 'API key held in the host proxy') + ' · default mode ' + presetDefs.find((d) => d.key === pm).label },
+      { k: 'Host checks', v: '5 passed, 2 not tested yet' },
       { k: 'Notifications', v: (prov === 'self' ? 'Self-hosted ntfy' : 'ntfy.sh') + (sent ? ' · test push sent' : ' · no test push yet') },
     ];
 
     return {
-      accent, steps, modes, checks, providers, summary,
+      accent, steps, modes, checks, providers, summary, presets, presetNote,
       stepNo: step + 1,
       head: { title: defs[step].title, lead: defs[step].lead },
       s0: step === 0, s1: step === 1, s2: step === 2, s3: step === 3, s4: step === 4, s5: step === 5,

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px">
+  <header style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid #1f3556; background: #0a1322">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <a href="Mobile.dc.html" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: -10px; color: {{accent}}; font-size: 22px" aria-label="Back to the inbox">‹</a>
+      <div style="min-width: 0; flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Egress allowlist proxy</span>
+        <span style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">#15 · ws-2c9e</span>
+      </div>
+      <span style="padding: 3px 10px; border-radius: 999px; background: {{ pill.bg }}; color: {{ pill.fg }}; font-size: 12px; font-weight: 600; white-space: nowrap">{{ pill.label }}</span>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #9fb3c8; font-size: 12px">
+      <span>Claude Code · mode Manual · live messages</span>
+      <span style="font-family: 'IBM Plex Mono', monospace">5h window 62%</span>
+    </div>
+  </header>
+
+  <div style="padding: 8px 16px; color: #9fb3c8; font-size: 12px; border-bottom: 1px solid #172a48; display: flex; justify-content: space-between; gap: 8px">
+    <span>1,184 events · 4.2 MB</span>
+    <span><span style="color: {{accent}}">Clear view</span> · <span style="color: #f87171">Purge…</span></span>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="align-self: flex-end; max-width: 86%; padding: 10px 14px; border-radius: 14px; background: #13294a; border: 1px solid {{accent}}; line-height: 1.45">Use the existing retry helper where you can.</div>
+    <div style="color: #6b819e; font-size: 12px; align-self: flex-end">Delivered: read at the agent's next step</div>
+    <div style="align-self: flex-start; max-width: 90%; padding: 10px 14px; border-radius: 14px; background: #0f2038; border: 1px solid #1f3556; line-height: 1.45">I'll add the allowlist type in its own package and reuse the retry helper for the CONNECT dial. Writing the file now.</div>
+    <div style="align-self: flex-start; padding: 6px 12px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; color: #9fb3c8; font-size: 13px">tool: Write internal/proxy/allowlist.go</div>
+
+    <div style="align-self: stretch; padding: 14px; border-radius: 14px; background: {{ appr.bg }}; border: 1px solid {{ appr.border }}; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">blocking</span></div>
+      <div style="line-height: 1.4">Write <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">internal/proxy/allowlist.go</span></div>
+      <div style="padding: 8px 10px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #c7d3e6; line-height: 1.5">2,184 characters, first 120 shown: package proxy // Allowlist holds the hosts…</div>
+      <sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; gap: 8px">
+          <button onClick="{{ approve }}" style="flex: 1; min-height: 48px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve once</button>
+          <button onClick="{{ deny }}" style="flex: 1; min-height: 48px; border-radius: 10px; border: 1px solid #f87171; background: transparent; color: #f87171; font: inherit; font-weight: 600; cursor: pointer">Deny</button>
+        </div>
+        <div style="color: #6b819e; font-size: 12px">Fails closed in 08:42.</div>
+      </sc-if>
+      <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+        <div style="color: #c7d3e6; line-height: 1.4">{{ result }}</div>
+      </sc-if>
+    </div>
+
+    <sc-for list="{{ extras }}" as="m" hint-placeholder-count="1">
+      <div style="align-self: flex-end; max-width: 86%; padding: 10px 14px; border-radius: 14px; background: #13294a; border: 1px solid {{accent}}; line-height: 1.45">{{ m.text }}</div>
+    </sc-for>
+    <div style="color: #9fb3c8; font-size: 13px">{{ tail }}</div>
+  </div>
+
+  <div style="padding: 10px 16px; border-top: 1px solid #1f3556; background: #0a1322; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; gap: 8px">
+      <label for="say" style="flex-grow: 1; display: flex; align-items: center; padding: 0 14px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556">
+        <input id="say" value="{{ draft }}" onInput="{{ onDraft }}" placeholder="Message the agent" style="flex-grow: 1; min-width: 0; height: 46px; border: 0; outline: 0; background: transparent; color: #e6edf7; font: inherit">
+      </label>
+      <button onClick="{{ send }}" style="min-width: 64px; min-height: 48px; border: 0; border-radius: 12px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ sendOpacity }}">Send</button>
+    </div>
+    <div style="color: #6b819e; font-size: 12px">Seen at the agent's next step. Pause, resume and cancel are in the menu.</div>
+  </div>
+
+  <nav style="display: flex; justify-content: space-around; align-items: center; padding: 8px 12px 24px; border-top: 1px solid #1f3556; background: #0a1322">
+    <a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; color: #9fb3c8; font-size: 12px">Harbor</a>
+    <a href="Mobile.dc.html" style="display: flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; color: #9fb3c8; font-size: 12px">Inbox</a>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; color: {{accent}}; font-size: 12px; font-weight: 600">Chat</span>
+    <span style="display: flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; color: #9fb3c8; font-size: 12px">Menu</span>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#5eead4';
+    const verdict = this.state.verdict ?? null;
+    const draft = this.state.draft ?? '';
+    const extra = this.state.extra ?? [];
+    const open = !verdict;
+    const pill = open
+      ? { label: 'Awaiting approval', bg: '#3a2d0b', fg: '#fbbf24' }
+      : { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
+    const appr = open
+      ? { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' }
+      : { title: 'Approval answered', head: verdict === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556' };
+    return {
+      accent, pill, appr, open, done: !open, draft,
+      result: verdict === 'allow' ? 'You allowed this Write once. The agent continues in the same live session.' : 'You denied this Write. The agent was told and continues without it.',
+      extras: extra.map((t) => ({ text: t })),
+      tail: open ? 'Blocked: waiting for your approval.' : 'The agent is working ▍',
+      sendOpacity: draft.trim() ? 1 : 0.4,
+      approve: () => this.setState({ verdict: 'allow' }),
+      deny: () => this.setState({ verdict: 'deny' }),
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      send: () => { const t = draft.trim(); if (t) this.setState({ extra: extra.concat([t]), draft: '' }); },
+    };
+  }
+}
+</script>
+</body>
+</html>

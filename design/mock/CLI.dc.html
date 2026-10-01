@@ -14,7 +14,7 @@
 body{margin:0}
 </style>
 </helmet>
-<div style="width: 900px; height: 640px; box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #07111f; border: 1px solid #1f3556; color: #c7d3e6; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px">
+<div style="width: 900px; height: 780px; box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #07111f; border: 1px solid #1f3556; color: #c7d3e6; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px">
   <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: #0a1322; border-bottom: 1px solid #1f3556; color: #9fb3c8; font-size: 12px">
     <span>whr on mac-mini</span><span>zsh</span>
   </div>
@@ -30,15 +30,23 @@ body{margin:0}
 <div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr inbox</div>
 <div><span style="color: #fbbf24">1</span>  question  t-15  Allow proxy.golang.org and sum.golang.org in the default allowlist?</div>
-<div><span style="color: #60a5fa">2</span>  approval  t-12  Add the dependency golang.org/x/sync?</div>
-<div><span style="color: #5eead4">3</span>  review    t-9   Reconciler: orphaned runs (CI passed for 3c71a9e)</div>
-<div><span style="color: #f87171">4</span>  login     t-16  Claude Code login expired (run r-91 paused, log in again in the web UI)</div>
+<div><span style="color: #60a5fa">2</span>  approval  t-15  Write internal/proxy/allowlist.go (blocking, fails closed in 08:42)</div>
+<div><span style="color: #a78bfa">3</span>  plan      t-12  Approve the plan for the run interrupted state?</div>
+<div><span style="color: #5eead4">4</span>  review    t-9   Reconciler: orphaned runs (CI passed for 3c71a9e)</div>
+<div><span style="color: #f87171">5</span>  login     t-16  Claude Code login expired (run r-91 paused, log in again in the web UI)</div>
 <div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr approve 1 --option allow-both-log</div>
 <div><span style="color: #4ade80">ok</span>  decision d-31 answered, run r-88 resumed</div>
 <div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr reject 2 --reason "ask me again after question 1"</div>
+<div><span style="color: #4ade80">ok</span>  approval denied, the agent was told why and continues</div>
+<div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr say t-12 "prefer the standard library where you can"</div>
-<div><span style="color: #4ade80">ok</span>  instruction delivered at the next turn</div>
+<div><span style="color: #4ade80">ok</span>  delivered: Claude Code reads it at its next step</div>
+<div style="height: 10px"></div>
+<div><span style="color: #5eead4">$</span> whr pause t-12 &amp;&amp; whr purge t-9 --transcript</div>
+<div><span style="color: #4ade80">ok</span>  t-12 paused</div>
+<div><span style="color: #4ade80">ok</span>  t-9 transcript purged: 1,142 events (4.1 MB) removed, 42 audit entries kept</div>
 <div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr wait t-15 --for decision; echo $?</div>
 <div>6</div>
@@ -48,7 +56,7 @@ body{margin:0}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":640}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":780}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};
