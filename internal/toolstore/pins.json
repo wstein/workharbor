@@ -1,0 +1,11 @@
+{
+  "tools": [
+    {
+      "name": "claude",
+      "version": "2.1.285",
+      "platform": "linux-arm64",
+      "base_url": "https://downloads.claude.ai/claude-code-releases",
+      "sha256": "24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d"
+    }
+  ]
+}

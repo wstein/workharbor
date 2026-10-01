@@ -18,6 +18,7 @@ Usage:
 
 Commands:
   version   print version
+  tools     build the shared tool store (whr tools build)
   help      show this help
 
 Not yet implemented: serve, login, run, ls, show, logs, watch, say, pause,
@@ -40,6 +41,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "version", "--version":
 		return runVersion(args[1:], stdout, stderr)
+	case "tools":
+		return runTools(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return exitcode.OK
