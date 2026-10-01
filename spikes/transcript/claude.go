@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Claude drives Claude Code headless over its stream-json protocol.
@@ -21,6 +22,9 @@ type Claude struct {
 	// MCPConfig, when set, routes permission prompts to the supervisor through
 	// an MCP "approve" tool, so a human answers them on the page.
 	MCPConfig string
+	// Partial streams the answer token by token (stream_event deltas) instead of
+	// one message at the end.
+	Partial bool
 }
 
 // Session is one running agent process. The process stays alive across turns.
@@ -30,6 +34,11 @@ type Session struct {
 	hub   *Hub
 	mu    sync.Mutex
 	done  chan struct{}
+
+	// Touched only by the stdout pump goroutine.
+	delta      strings.Builder
+	lastFlush  time.Time
+	authFailed bool
 }
 
 // Start launches the agent. A non-empty resumeID resumes that agent session,
@@ -43,6 +52,9 @@ func (c Claude) Start(hub *Hub, resumeID string) (*Session, error) {
 			"--permission-prompt-tool", "mcp__workharbor__approve")
 	} else {
 		args = append(args, "--permission-prompts", "none")
+	}
+	if c.Partial {
+		args = append(args, "--include-partial-messages")
 	}
 	if c.Mode != "" {
 		args = append(args, "--permission-mode", c.Mode)
@@ -156,6 +168,8 @@ type rawEvent struct {
 	TotalCostUSD float64         `json:"total_cost_usd"`
 	NumTurns     int             `json:"num_turns"`
 	RateLimit    json.RawMessage `json:"rate_limit_info"`
+	Event        json.RawMessage `json:"event"` // stream_event payload
+	Error        json.RawMessage `json:"error"` // a short code on assistant events, such as authentication_failed
 }
 
 type contentItem struct {
@@ -173,7 +187,24 @@ func (s *Session) normalize(line []byte) {
 		s.hub.Publish(Event{Kind: "error", Text: "unparsable output: " + truncate(string(line), 200)})
 		return
 	}
+	if ev.Type != "stream_event" {
+		s.flushDelta() // keep deltas in order relative to every other event
+	}
 	switch ev.Type {
+	case "stream_event":
+		var se struct {
+			Type  string `json:"type"`
+			Delta struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"delta"`
+		}
+		if json.Unmarshal(ev.Event, &se) == nil && se.Type == "content_block_delta" && se.Delta.Type == "text_delta" {
+			s.delta.WriteString(se.Delta.Text)
+			if time.Since(s.lastFlush) > 150*time.Millisecond {
+				s.flushDelta()
+			}
+		}
 	case "system":
 		switch ev.Subtype {
 		case "init":
@@ -187,6 +218,9 @@ func (s *Session) normalize(line []byte) {
 			s.hub.Publish(Event{Kind: "permission", Tool: ev.ToolName, Text: "approval needed"})
 		}
 	case "assistant", "user":
+		if code := errorCode(ev.Error); code != "" && ev.Type == "assistant" {
+			s.agentError(code)
+		}
 		var msg struct {
 			Content json.RawMessage `json:"content"`
 		}
@@ -217,8 +251,43 @@ func (s *Session) normalize(line []byte) {
 	case "result":
 		d, _ := json.Marshal(map[string]any{"cost_usd": ev.TotalCostUSD, "turns": ev.NumTurns, "is_error": ev.IsError, "subtype": ev.Subtype})
 		s.hub.Publish(Event{Kind: "result", Text: ev.Result, Data: d})
+		if s.authFailed {
+			s.authFailed = false // a failed login ends the turn but the run is not "idle"
+			return
+		}
 		s.hub.Publish(Event{Kind: "status", Text: "idle"})
 	}
+}
+
+func (s *Session) flushDelta() {
+	if s.delta.Len() == 0 {
+		return
+	}
+	s.hub.Publish(Event{Kind: "delta", Text: s.delta.String()})
+	s.delta.Reset()
+	s.lastFlush = time.Now()
+}
+
+// errorCode returns the error code of an assistant event, or "" when there is none.
+func errorCode(raw json.RawMessage) string {
+	var code string
+	if json.Unmarshal(raw, &code) == nil {
+		return code
+	}
+	return ""
+}
+
+// agentError maps an error code from the stream to an event. A missing or
+// expired login is the case the design calls auth_expired (5.2): the run
+// pauses and a Decision asks the human to log in again.
+func (s *Session) agentError(code string) {
+	if code == "authentication_failed" {
+		s.authFailed = true
+		s.hub.Publish(Event{Kind: "auth_expired", Text: "Not logged in or the login expired"})
+		s.hub.Publish(Event{Kind: "status", Text: "auth expired"})
+		return
+	}
+	s.hub.Publish(Event{Kind: "error", Text: "agent error: " + code})
 }
 
 // flatten renders tool-result content, which is a string or a list of blocks.

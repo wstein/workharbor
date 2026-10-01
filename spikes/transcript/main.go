@@ -284,6 +284,7 @@ func main() {
 	model := flag.String("model", "haiku", "model alias passed to the agent")
 	tools := flag.String("tools", "Read,Bash(sleep:*),Bash(ls:*),Bash(cat:*)", "allowed tools; anything else is denied")
 	bin := flag.String("claude", "claude", "claude binary")
+	partial := flag.Bool("partial", true, "stream the answer token by token")
 	approve := flag.Bool("approvals", true, "route permission prompts to the page through an MCP approve tool")
 	mcp := flag.Bool("mcp-permission", false, "internal: run as the MCP approve server the agent starts")
 	supervisor := flag.String("supervisor", "http://127.0.0.1:8787", "internal: supervisor URL for -mcp-permission")
@@ -301,7 +302,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := &server{hub: hub, approvals: newApprovals(), agent: Claude{Bin: *bin, Dir: *dir, Model: *model, Tools: *tools}}
+	s := &server{hub: hub, approvals: newApprovals(), agent: Claude{Bin: *bin, Dir: *dir, Model: *model, Tools: *tools, Partial: *partial}}
 	if *approve {
 		cfg, err := writeMCPConfig(*data, "http://"+*addr, s.approvals.token)
 		if err != nil {

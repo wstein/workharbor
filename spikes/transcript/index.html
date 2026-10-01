@@ -69,7 +69,21 @@ function setStatus(s) {
   status = s;
   const p = document.getElementById('status');
   p.textContent = s;
-  p.className = 'pill ' + (s === 'working' ? 'working' : s === 'idle' ? 'idle' : s === 'awaiting approval' ? 'ask' : s.startsWith('exited') ? 'bad' : '');
+  p.className = 'pill ' + (s === 'working' ? 'working' : s === 'idle' ? 'idle' : s === 'awaiting approval' ? 'ask' : (s.startsWith('exited') || s === 'auth expired') ? 'bad' : '');
+}
+// The answer streams in as deltas; the final message then replaces the live bubble.
+let live = null;
+function appendDelta(text) {
+  const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  if (!live) { live = el('div', 'msg text'); log.appendChild(live); }
+  live.textContent += text;
+  if (near) log.scrollTop = log.scrollHeight;
+}
+function authCard() {
+  const c = el('div', 'approval');
+  c.appendChild(el('b', '', 'Login expired or missing'));
+  c.appendChild(el('div', '', 'The agent could not authenticate. The run is paused and nothing is lost. Log in again on the host (claude /login), then send a message to resume.'));
+  return c;
 }
 // apiKeySource is "none" when no API key is in use, which means a subscription login.
 const authLabel = (a) => a === 'none' ? 'subscription (no API key)' : (a || '?');
@@ -105,7 +119,9 @@ function render(e) {
       break;
     }
     case 'user': add(el('div', 'msg user', e.text)); break;
-    case 'text': add(el('div', 'msg text', e.text)); break;
+    case 'delta': appendDelta(e.text); break;
+    case 'text': if (live) { live.remove(); live = null; } add(el('div', 'msg text', e.text)); break;
+    case 'auth_expired': add(authCard()); break;
     case 'thinking': break;
     case 'tool_call': add(details('tool: ' + e.tool, JSON.stringify(e.data, null, 2))); break;
     case 'tool_result': add(details('result', e.text)); break;
