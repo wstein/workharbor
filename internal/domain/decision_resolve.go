@@ -6,16 +6,29 @@ import (
 	"time"
 )
 
-// Errors returned when a Decision is resolved.
+// Rules a Decision's state can break, reported as conflicts (exit code 5).
+const (
+	RuleDecisionClosed  Rule = "decision-closed"
+	RuleDecisionExpired Rule = "decision-expired"
+	RuleSHAMismatch     Rule = "sha-mismatch"
+	RuleNotRunBound     Rule = "not-run-bound"
+	RuleNotSuperseded   Rule = "not-superseded"
+	RuleAlreadyRaised   Rule = "already-raised"
+)
+
+// Errors returned when a Decision is resolved. The first group are
+// conflicts: they exit with Conflict and match with errors.Is. The second
+// group is bad input.
 var (
-	ErrDecisionClosed  = errors.New("decision is not open")
-	ErrDecisionExpired = errors.New("decision expired before it was answered")
-	ErrDecisionOption  = errors.New("answer is not one of the options")
-	ErrDecisionActor   = errors.New("an answer needs the actor who gave it")
-	ErrSHAMismatch     = errors.New("allow was given for a different commit, so it is a denial")
-	ErrNotRunBound     = errors.New("only a decision raised by a run is superseded by a restart")
-	ErrNotSuperseded   = errors.New("only a superseded decision can be raised again")
-	ErrAlreadyRaised   = errors.New("decision was already raised again")
+	ErrDecisionClosed  = conflict(RuleDecisionClosed, "decision is not open")
+	ErrDecisionExpired = conflict(RuleDecisionExpired, "decision expired before it was answered")
+	ErrSHAMismatch     = conflict(RuleSHAMismatch, "allow was given for a different commit, so it is a denial")
+	ErrNotRunBound     = conflict(RuleNotRunBound, "only a decision raised by a run is superseded by a restart")
+	ErrNotSuperseded   = conflict(RuleNotSuperseded, "only a superseded decision can be raised again")
+	ErrAlreadyRaised   = conflict(RuleAlreadyRaised, "decision was already raised again")
+
+	ErrDecisionOption = errors.New("answer is not one of the options")
+	ErrDecisionActor  = errors.New("an answer needs the actor who gave it")
 )
 
 // Response is a human's answer to a Decision.

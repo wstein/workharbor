@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wstein/workharbor/internal/exitcode"
 )
 
 func newApproval(t *testing.T) *Decision {
@@ -331,5 +333,42 @@ func TestReraiseOfAQuestionHasNoDeadline(t *testing.T) {
 	}
 	if !n.Deadline.IsZero() {
 		t.Errorf("a question must stay without a deadline, got %v", n.Deadline)
+	}
+}
+
+// #49: state errors are conflicts (exit code 5) and still match their sentinels.
+func TestDecisionStateErrorsAreConflicts(t *testing.T) {
+	answered := newApproval(t)
+	if err := answered.Respond(allow(t0.Add(time.Second), "")); err != nil {
+		t.Fatal(err)
+	}
+	late := newApproval(t)
+	mismatch := newPushReview(t, "aaa111")
+	open := newApproval(t)
+	raised := newApproval(t)
+	_ = raised.Supersede()
+	_, _ = raised.Reraise("d1b", t0.Add(time.Minute))
+
+	tests := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"answering a closed decision", answered.Respond(allow(t0.Add(2*time.Second), "")), ErrDecisionClosed},
+		{"answering after the deadline", late.Respond(allow(late.Deadline, "")), ErrDecisionExpired},
+		{"allow for another commit", mismatch.Respond(allow(t0.Add(time.Second), "bbb222")), ErrSHAMismatch},
+		{"superseding a review decision", newPushReview(t, "aaa111").Supersede(), ErrNotRunBound},
+		{"raising an open decision again", func() error { _, err := open.Reraise("x", t0); return err }(), ErrNotSuperseded},
+		{"raising twice", func() error { _, err := raised.Reraise("y", t0); return err }(), ErrAlreadyRaised},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !errors.Is(tc.err, tc.want) {
+				t.Fatalf("error = %v, want it to match %v", tc.err, tc.want)
+			}
+			if got := exitcode.From(tc.err); got != exitcode.Conflict {
+				t.Errorf("exit code = %d, want Conflict (%d)", got, exitcode.Conflict)
+			}
+		})
 	}
 }
