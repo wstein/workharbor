@@ -80,6 +80,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] Apple Container backend, one host, native adapter
 - [ ] Built-in agent adapters for Claude Code (first) and Codex CLI (§5.2, §5.5), with observed progress and validated recovery
 - [ ] Task/workspace/run/decision model with durable state, event log, reconciler
+- [ ] Workspaces with named agents (D42) in two steps: the dogfood slice runs one named agent per workspace, with its agent clone and the bundle export (#90, #91); several agents in one environment at once follow in R1 Complete (#94)
 - [ ] `whr` CLI (scripting contract, completion, `doctor`)
 - [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel, transcript purge (§9.3, §5.4)
 - [ ] SSH access (certificates, `whr ssh --config`)
