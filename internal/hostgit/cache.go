@@ -78,7 +78,14 @@ func (g *Git) OpenCache(ctx context.Context, path string, cfg CacheConfig) (*Cac
 	}
 	c := &Cache{g: g, path: path, cfg: cfg}
 	// Nothing in the cache expires: a shared topic may need an object the forge
-	// no longer has, and only ReleaseTopic lets it go (design §4.5).
+	// no longer has, and only ReleaseTopic lets it go (design §4.5). The writes
+	// take the cache's lock: handles opened in parallel on one cache would
+	// otherwise collide on git's config lock.
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	for _, kv := range [][2]string{{"gc.pruneExpire", "never"}, {"gc.reflogExpire", "never"}, {"gc.reflogExpireUnreachable", "never"}} {
 		if _, err := g.run(ctx, path, false, nil, "config", kv[0], kv[1]); err != nil {
 			return nil, err
