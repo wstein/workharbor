@@ -358,6 +358,15 @@ Measured in spike #2 (issue #2):
 - **After a Mac reboot** nothing starts the services either: there is no LaunchAgent or LaunchDaemon plist for them on disk. The supervisor's own launchd job must run `container system start --disable-kernel-install` (the flag avoids the interactive kernel-install prompt, which was not exercised) and then reconcile. A reboot itself was not triggered.
 - **Recovery loop.** List containers, start those that should be running, wait for `exec` to answer (about 100 ms after start), then resume the agent from its session. Container IPs change on every start, so they are read again each time and never stored.
 
+**The Go service** (issue #23, `internal/service`) is the one layer the JSON API and the web UI call (D8). Its reconciler is DB-first (D6) and takes the clock and the runtime and agent adapters as parameters, so tests run it on the fakes with an injected clock. One pass, per active task:
+
+1. List the environments the runtime reports for this owner (`List(owner)`, never every container).
+2. For each environment of the task, `ObserveEnv` with what the runtime says; an environment the runtime no longer knows is observed as gone. Live runs in an environment seen stopped or gone become `interrupted` and their open questions and approvals are superseded.
+3. For each `interrupted` run: start its environment if it is stopped, wait until `exec` answers (polling with the injected clock, bounded), observe the environment `running`, move the run to `starting` with `Resume` and relaunch the agent with `Resume(sessionID)`. The session ID is recorded on the run when the agent reports it (the `session` event), because the session, not the environment, is what survives. On success the run is `running`. A session the agent no longer knows (`ErrNoSession`), or a run that never reported one, ends `failed`, which opens a blocking retry-or-cancel Decision (§4.1). Any other error leaves the run `interrupted` for the next pass.
+4. Resume the runs whose `resume_at_reset` Decision is due.
+
+Only the container's state and the agent session ID are stored; the address `Info.Addr` is read for use and never written. Nothing in the reconciler sets a state by itself: it calls the aggregate.
+
 ### 5.4 Events, idempotency and retention
 
 Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
