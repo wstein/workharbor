@@ -97,13 +97,18 @@ Fields: ID, task, kind (`question | approval | review`), blocking flag, options,
 - **Worker recycling** (recreate the environment, keep the workspace) is a first-class lifecycle action because freed guest memory is not returned to macOS.
 - Only validated runner × backend pairs may claim resumability.
 
-### 4.4 Persistence semantics (to decide before coding)
+### 4.4 Persistence semantics
 
-- Volume vs bind-mounted checkout.
-- Which paths survive stop, rebuild and delete: repo, caches, agent session directory.
-- Git worktree per task vs full clone.
-- Retention and garbage collection of completed tasks and workspaces on the 1 TB disk.
-- Forbid the `$HOME` mount by default; enforce in adapter tests.
+Decided from spike #2 (Apple Container, issue #2; confirm on other backends):
+
+- **One writable volume per environment** holds the repository checkout and the agent home (auth directory and session). A named volume survives stop, start, delete and rebuild, and was about 5x faster than a bind mount for many small files (3000 files in 198 ms against 1172 ms).
+- **A writable volume is exclusive.** While one container has it read-write, no other container can attach it, not even read-only (the second start fails with "The storage device attachment is invalid"). A rebuild stops the old container before the new one starts. A volume can be shared read-only by several containers.
+- **Bind mounts only for hand-over to the host.** They sync both ways at once, and files the guest root writes appear owned by the host user. Expect git-heavy work on them to be slow.
+- **The root filesystem is disposable.** It survives stop and start and is lost on delete, so nothing that matters lives there.
+- **Mounts are rejected by the adapter, not the runtime.** The runtime accepts any host path. The adapter resolves symlinks first, then rejects `$HOME` and its parents, `~/.ssh`, other secrets directories and runtime sockets, and enforces it in the conformance suite (§7.4).
+- **Tools are not part of the workspace.** Agent CLIs come from a shared read-only store (§5.6).
+
+Still open: git worktree per task versus full clone, and retention and garbage collection of completed tasks and workspaces on the 1 TB disk. A named volume is a sparse image (virtual size 512 GiB), so quotas need their own decision.
 
 ## 5. Architecture
 
