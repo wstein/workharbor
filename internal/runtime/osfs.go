@@ -14,3 +14,6 @@ func (OSFS) EvalSymlinks(path string) (string, error) { return filepath.EvalSyml
 
 // Stat implements FS.
 func (OSFS) Stat(path string) (fs.FileInfo, error) { return os.Stat(path) }
+
+// SameFile implements FS.
+func (OSFS) SameFile(a, b fs.FileInfo) bool { return os.SameFile(a, b) }

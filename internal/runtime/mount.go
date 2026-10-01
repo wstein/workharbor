@@ -57,6 +57,8 @@ type FS interface {
 	EvalSymlinks(path string) (string, error)
 	// Stat returns file information, following symbolic links.
 	Stat(path string) (fs.FileInfo, error)
+	// SameFile reports whether two FileInfo values describe the same file.
+	SameFile(a, b fs.FileInfo) bool
 }
 
 // secretsUnderHome are directories and files under the home directory that
@@ -112,8 +114,8 @@ var (
 //   - the directories where container runtimes keep their sockets,
 //   - system roots such as / and /Users, and system trees such as /etc.
 //
-// Paths are compared without regard to case, as on a default APFS volume,
-// even on a case-sensitive filesystem: rejecting too much is the safe side.
+// Paths are compared by file identity, not by string, so case variants and
+// Unicode normalization forms of one name are the same path (see identities).
 // home is the user's home directory.
 func CheckMount(fsys FS, home, source string) error {
 	if !filepath.IsAbs(source) {
@@ -141,39 +143,40 @@ func CheckMount(fsys FS, home, source string) error {
 		return fmt.Errorf("check mount %q: resolve home directory: %w", source, err)
 	}
 
+	ids := &identities{fsys: fsys, info: map[string]fs.FileInfo{}}
 	switch {
-	case same(resolved, realHome):
+	case ids.same(resolved, realHome):
 		return reject(ReasonHome)
-	case within(realHome, resolved):
+	case ids.within(realHome, resolved):
 		return reject(ReasonHomeParent)
 	}
 	for _, root := range systemRoots {
-		if same(resolved, root) {
+		if ids.same(resolved, root) {
 			return reject(ReasonSystem)
 		}
 	}
 	for _, tree := range systemTrees {
-		if within(resolved, tree) {
+		if ids.within(resolved, tree) {
 			return reject(ReasonSystem)
 		}
 	}
 	for _, rel := range secretsUnderHome {
 		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
-			if overlaps(resolved, target) {
+			if ids.overlaps(resolved, target) {
 				return reject(ReasonSecrets)
 			}
 		}
 	}
 	for _, rel := range runtimeSocketDirsUnderHome {
 		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
-			if overlaps(resolved, target) {
+			if ids.overlaps(resolved, target) {
 				return reject(ReasonRuntimeSocket)
 			}
 		}
 	}
 	for _, dir := range runtimeSocketDirs {
 		for _, target := range withResolved(fsys, dir) {
-			if overlaps(resolved, target) {
+			if ids.overlaps(resolved, target) {
 				return reject(ReasonRuntimeSocket)
 			}
 		}
@@ -206,17 +209,51 @@ func withResolved(fsys FS, path string) []string {
 // fold normalizes a path for comparison: cleaned and lower-cased.
 func fold(p string) string { return strings.ToLower(filepath.Clean(p)) }
 
-// same reports whether two paths are equal, ignoring case.
-func same(a, b string) bool { return fold(a) == fold(b) }
+// identities compares paths by file identity: two paths are the same when the
+// filesystem says they are the same file, so a case variant on a
+// case-insensitive volume and a precomposed against a decomposed Unicode name
+// are equal. A path that cannot be examined, such as one that does not exist,
+// is compared by its lower-cased string instead.
+type identities struct {
+	fsys FS
+	info map[string]fs.FileInfo // nil for a path that could not be examined
+}
 
-// within reports whether path is dir or lies below it, ignoring case.
-func within(path, dir string) bool {
-	path, dir = fold(path), fold(dir)
-	if path == dir {
-		return true
+func (c *identities) stat(path string) fs.FileInfo {
+	if fi, ok := c.info[path]; ok {
+		return fi
 	}
-	return strings.HasPrefix(path, strings.TrimSuffix(dir, "/")+"/")
+	fi, err := c.fsys.Stat(path)
+	if err != nil {
+		fi = nil
+	}
+	c.info[path] = fi
+	return fi
+}
+
+// same reports whether two paths are the same file.
+func (c *identities) same(a, b string) bool {
+	ia, ib := c.stat(a), c.stat(b)
+	if ia != nil && ib != nil {
+		return c.fsys.SameFile(ia, ib)
+	}
+	return fold(a) == fold(b)
+}
+
+// within reports whether path is dir or lies below it: some ancestor of path,
+// or path itself, is the same file as dir.
+func (c *identities) within(path, dir string) bool {
+	for p := filepath.Clean(path); ; {
+		if c.same(p, dir) {
+			return true
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }
 
 // overlaps reports whether either path is inside the other.
-func overlaps(a, b string) bool { return within(a, b) || within(b, a) }
+func (c *identities) overlaps(a, b string) bool { return c.within(a, b) || c.within(b, a) }

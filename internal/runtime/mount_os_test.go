@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -184,6 +185,61 @@ func TestCheckMountRejectsADotfilesDirectoryHoldingSecrets(t *testing.T) {
 	for _, source := range []string{filepath.Join(dotfiles, "vim"), filepath.Join(home, "proj")} {
 		if err := CheckMount(OSFS{}, home, source); err != nil {
 			t.Errorf("CheckMount(%q) = %v, want it allowed", source, err)
+		}
+	}
+}
+
+// #50 on a real APFS volume: a home with a decomposed (NFD) name, reached
+// through its precomposed (NFC) spelling, and a case variant. On a filesystem
+// that treats the spellings as different files these cases do not apply.
+func TestCheckMountComparesByFileIdentityOnTheRealFilesystem(t *testing.T) {
+	base := realDir(t)
+	homeNFD := filepath.Join(base, "ju\u0308rgen")
+	mkdirs(t, filepath.Join(homeNFD, ".ssh"), filepath.Join(homeNFD, "proj"))
+
+	homeNFC := filepath.Join(base, "j\u00fcrgen")
+	if _, err := os.Stat(homeNFC); err != nil {
+		t.Skip("this filesystem treats precomposed and decomposed names as different")
+	}
+	for source, want := range map[string]Reason{
+		homeNFC:                        ReasonHome,
+		filepath.Join(homeNFC, ".ssh"): ReasonSecrets,
+		filepath.Join(homeNFD, ".ssh"): ReasonSecrets,
+		filepath.Join(homeNFC, "proj"): "",
+		filepath.Join(homeNFD, "proj"): "",
+	} {
+		err := CheckMount(OSFS{}, homeNFD, source)
+		if want == "" {
+			if err != nil {
+				t.Errorf("CheckMount(%q) = %v, want it allowed", source, err)
+			}
+			continue
+		}
+		if err == nil {
+			t.Errorf("CheckMount(%q) allowed, want %q", source, want)
+		} else if got := reasonOf(t, err); got != want {
+			t.Errorf("CheckMount(%q) reason = %q, want %q", source, got, want)
+		}
+	}
+}
+
+func TestCheckMountComparesCaseVariantsOnTheRealFilesystem(t *testing.T) {
+	home := realDir(t)
+	mkdirs(t, filepath.Join(home, ".ssh"))
+	upper := filepath.Join(filepath.Dir(home), strings.ToUpper(filepath.Base(home)))
+	if _, err := os.Stat(upper); err != nil {
+		t.Skip("this filesystem is case-sensitive")
+	}
+	for source, want := range map[string]Reason{
+		upper:                        ReasonHome,
+		filepath.Join(upper, ".SSH"): ReasonSecrets,
+		filepath.Join(home, ".SSH"):  ReasonSecrets,
+	} {
+		err := CheckMount(OSFS{}, home, source)
+		if err == nil {
+			t.Errorf("CheckMount(%q) allowed, want %q", source, want)
+		} else if got := reasonOf(t, err); got != want {
+			t.Errorf("CheckMount(%q) reason = %q, want %q", source, got, want)
 		}
 	}
 }

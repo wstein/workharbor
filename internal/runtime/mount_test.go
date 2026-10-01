@@ -13,12 +13,13 @@ import (
 // fakeFS is an in-memory filesystem. Lookups ignore case, like a default APFS
 // volume, and links are followed the way EvalSymlinks does.
 type fakeFS struct {
-	links map[string]string      // link path -> absolute target
-	nodes map[string]fs.FileMode // existing paths (lower-cased)
+	links   map[string]string      // link path -> absolute target
+	nodes   map[string]fs.FileMode // existing paths (lower-cased)
+	aliases map[string]string      // lower-cased path -> the path it is the same file as
 }
 
 func newFakeFS() *fakeFS {
-	return &fakeFS{links: map[string]string{}, nodes: map[string]fs.FileMode{"/": fs.ModeDir}}
+	return &fakeFS{links: map[string]string{}, nodes: map[string]fs.FileMode{"/": fs.ModeDir}, aliases: map[string]string{}}
 }
 
 // add creates path with mode, and every directory above it.
@@ -34,6 +35,14 @@ func (f *fakeFS) add(path string, mode fs.FileMode) {
 func (f *fakeFS) dir(path string)    { f.add(path, fs.ModeDir) }
 func (f *fakeFS) file(path string)   { f.add(path, 0o644) }
 func (f *fakeFS) socket(path string) { f.add(path, fs.ModeSocket|0o600) }
+
+// alias makes two paths the same file, as a precomposed and a decomposed
+// spelling of one name are on APFS.
+func (f *fakeFS) alias(a, b string, mode fs.FileMode) {
+	f.add(a, mode)
+	f.add(b, mode)
+	f.aliases[strings.ToLower(b)] = strings.ToLower(a)
+}
 
 func (f *fakeFS) link(path, target string) {
 	f.add(path, fs.ModeSymlink)
@@ -73,12 +82,23 @@ func (f *fakeFS) Stat(path string) (fs.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fakeInfo{name: filepath.Base(resolved), mode: f.nodes[strings.ToLower(resolved)]}, nil
+	id := strings.ToLower(resolved)
+	if canonical, ok := f.aliases[id]; ok {
+		id = canonical
+	}
+	return fakeInfo{name: filepath.Base(resolved), mode: f.nodes[strings.ToLower(resolved)], id: id}, nil
+}
+
+func (f *fakeFS) SameFile(a, b fs.FileInfo) bool {
+	ia, okA := a.(fakeInfo)
+	ib, okB := b.(fakeInfo)
+	return okA && okB && ia.id == ib.id
 }
 
 type fakeInfo struct {
 	name string
 	mode fs.FileMode
+	id   string // equal for two paths that are the same file
 }
 
 func (i fakeInfo) Name() string       { return i.name }
@@ -384,6 +404,49 @@ func TestCheckMountRejectsMoreSecretsAndRuntimeLocations(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := CheckMount(fsys, testHome, tc.source)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("CheckMount(%q) = %v, want it allowed", tc.source, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("CheckMount(%q) allowed, want %q", tc.source, tc.want)
+			}
+			if got := reasonOfErr(t, err); got != tc.want {
+				t.Errorf("CheckMount(%q) reason = %q, want %q (%v)", tc.source, got, tc.want, err)
+			}
+		})
+	}
+}
+
+// #50: a home stored decomposed (NFD) compared unequal to the same path
+// written precomposed, so the home and ~/.ssh passed.
+func TestCheckMountComparesByFileIdentity(t *testing.T) {
+	const (
+		homeNFD = "/Users/ju\u0308rgen"
+		homeNFC = "/Users/j\u00fcrgen"
+	)
+	f := newFakeFS()
+	f.alias(homeNFD, homeNFC, fs.ModeDir)
+	f.alias(homeNFD+"/.ssh", homeNFC+"/.ssh", fs.ModeDir)
+	f.alias(homeNFD+"/src", homeNFC+"/src", fs.ModeDir)
+
+	tests := []struct {
+		name   string
+		source string
+		want   Reason
+	}{
+		{"the home as it is stored", homeNFD, ReasonHome},
+		{"the home precomposed", homeNFC, ReasonHome},
+		{"ssh precomposed", homeNFC + "/.ssh", ReasonSecrets},
+		{"ssh decomposed", homeNFD + "/.ssh", ReasonSecrets},
+		{"a project either way", homeNFC + "/src", ""},
+		{"a project, decomposed", homeNFD + "/src", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckMount(f, homeNFD, tc.source)
 			if tc.want == "" {
 				if err != nil {
 					t.Fatalf("CheckMount(%q) = %v, want it allowed", tc.source, err)
