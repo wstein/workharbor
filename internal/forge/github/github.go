@@ -231,9 +231,9 @@ func (c *Client) do(ctx context.Context, bearer, method, path string, body, out 
 	}
 	resp, err := c.cfg.HTTP.Do(req)
 	if err != nil {
-		var ue *url.Error
-		if errors.As(err, &ue) {
-			err = ue.Err // the URL is not needed and a request error must never carry a header
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err // the URL is not needed and a request error must never carry a header
 		}
 		return fmt.Errorf("github: %s %s: %w", method, path, err)
 	}
