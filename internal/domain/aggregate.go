@@ -7,6 +7,7 @@ import (
 
 // Rules of design §4.1 that couple the task, run and environment machines.
 const (
+	RuleRunAgent     Rule = "run-agent"     // a run uses the agent its task is assigned to (design D42)
 	RuleOneLiveRun   Rule = "one-live-run"  // a task has at most one run that is not stopped or failed
 	RuleRunReused    Rule = "run-reused"    // StartRun takes a run that has not started
 	RuleRunID        Rule = "run-id"        // a run has a non-empty ID that is unique in the task
@@ -155,6 +156,9 @@ func (a *TaskAggregate) StartRun(r Run) error {
 		if r.ID == run.ID {
 			return conflict(RuleRunID, "run %s already exists in task %s", run.ID, a.task.ID)
 		}
+	}
+	if a.task.AgentID != run.AgentID {
+		return conflict(RuleRunAgent, "task %s is assigned to agent %q, so run %s cannot use agent %q", a.task.ID, a.task.AgentID, run.ID, run.AgentID)
 	}
 	switch a.task.State {
 	case TaskQueued, TaskRunning, TaskReadyForReview: // the last is rework

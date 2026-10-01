@@ -35,6 +35,10 @@ const (
 	EventDecisionSuperseded EventKind = "decision.superseded"
 	EventDecisionReraised   EventKind = "decision.reraised"
 	EventPurged             EventKind = "store.purged"
+	EventWorkspaceAdded     EventKind = "workspace.added"
+	EventWorkspaceRemoved   EventKind = "workspace.removed"
+	EventAgentAdded         EventKind = "agent.added"
+	EventAgentRemoved       EventKind = "agent.removed"
 )
 
 // Event is an append-only record: the audit trail, the UI feed and the CLI

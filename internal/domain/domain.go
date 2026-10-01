@@ -47,19 +47,15 @@ const (
 type Task struct {
 	// Version is the aggregate's version: the store saves with
 	// compare-and-swap on it, so two writers cannot both win (design §5.4).
-	Version   int64
-	ID        ID
-	Repo      string
-	Issue     string
-	State     TaskState
+	Version int64
+	ID      ID
+	Repo    string
+	Issue   string
+	State   TaskState
+	// AgentID is the agent the task is assigned to (design D42); empty for a
+	// task made before agents existed.
+	AgentID   ID
 	CreatedAt time.Time
-}
-
-// Workspace holds the checkout, branch and caches; it may span several runs.
-type Workspace struct {
-	ID     ID
-	TaskID ID
-	Branch string
 }
 
 // Run is one execution of an agent in an environment.
@@ -67,6 +63,7 @@ type Run struct {
 	ID          ID
 	TaskID      ID
 	WorkspaceID ID
+	AgentID     ID // the agent that runs it; the task's agent
 	EnvID       ID
 	State       RunState
 	// SessionID is the agent's session ID, recorded when the agent reports it.
