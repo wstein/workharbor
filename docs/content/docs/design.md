@@ -10,7 +10,7 @@ toc: true
 | Status | What | Where |
 | --- | --- | --- |
 | Decided | D1 to D23 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
-| Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks | `internal/domain`, `internal/policy`, `internal/runtime`; issues #4, #8, #15, #16, #17, #18 |
+| Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks; hardened host git (alternates check open); runtime and agent contracts with fakes and conformance suites; the SQLite store | `internal/domain`, `internal/policy`, `internal/runtime`, `internal/hostgit`, `internal/agent`, `internal/store`; issues #4, #8, #15–#18, #19 (reopened), #20, #21, #49–#52; open follow-ups #55–#58 |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container | Issues #1 and #2; results in §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
 
@@ -98,7 +98,7 @@ Task, run and environment each get their own small FSM with explicit legal trans
     | `ready_for_review` | `running` (rework), `completed`, `cancelled` |
     | `completed`, `cancelled`, `failed` | none (terminal) |
 
-    - `awaiting_guidance` is for blocking Decisions raised by a live run: a question, a tool approval, `auth_expired` or `quota_exhausted`. The review Decisions of `ready_for_review` ("Ready to push?", §4.5) leave the task in `ready_for_review`.
+    - `awaiting_guidance` is for blocking Decisions raised by a run: a question or a tool approval from a live run, or `auth_expired` or `quota_exhausted` for a paused one (D23). The review Decisions of `ready_for_review` ("Ready to push?", §4.5) leave the task in `ready_for_review`.
     - **Rework** (`ready_for_review → running`) happens when the push is declined or the PR needs changes. It starts a new run on the same workspace and topic.
     - **`completed`** is set when the pushed PR is merged on the forge.
     - **`failed`** is terminal and maps to exit code 10 (§9.2). A failed run does not fail its task: it opens a blocking Decision (retry or cancel). A task fails only when a hard limit ends it (time or cost budget, a lost workspace) or the human answers that Decision with "give up". Both happen while the task is `running` or `awaiting_guidance`. In `ready_for_review` a lost workspace opens a review Decision instead (rework or cancel), so no other state needs a way into `failed` (D21).
@@ -146,15 +146,14 @@ Fields: ID, task, run (empty for a review Decision, which no live run raised), k
 **Approvals are live and blocking.** Spike #1 showed the pattern with Claude Code: the agent's permission prompt is routed to the supervisor, which opens an `approval` Decision carrying the tool name and a capped copy of its input. The agent stays blocked until a human answers allow or deny, with an optional reason that is passed back to the agent. Rules:
 
 - **Fail closed.** Deny on timeout (the spike used 10 minutes) and when the supervisor is unreachable.
-- **No silent survival.** A pending approval does not survive a supervisor restart, because the agent process does not. The reconciler marks the run `interrupted` and the ask is raised again on resume.
 - **Plan approval.** In plan mode the agent's `ExitPlanMode` arrives as an approval whose subject is the plan.
 - **Capped input.** Tool inputs in a Decision are capped (the spike used 2,000 characters); the full input stays with the agent. All of it is untrusted data.
 - **Status.** `open` becomes `answered`, `expired` (the deadline passed) or `superseded` (the supervisor restarted or the run was paused); each is terminal. Only `answered` with `allow` ever permits anything: an open, expired or superseded approval is a denial.
 - **Deadline.** An approval always has one (default 10 minutes). An answer that arrives after it is refused and the Decision expires, so a late "allow" does not count.
 - **Commit SHA.** A review Decision such as "Ready to push?" carries the pinned SHA of its ReviewCandidate (§4.5, §6). An allow is tied to that SHA: an allow given for a different SHA is recorded as a denial, and the supervisor asks `Allows(sha)` against the commit it is about to push, so an approval for an earlier revision never covers a later one.
-- **Pause and restart** (D23). A Decision raised by a live run (a question or an approval) is `superseded` when the supervisor restarts or the run is paused: pause is a hard interrupt (D11), so the agent process that asked is gone and could not receive the answer. The reconciler, or the resume, raises a new one when the agent asks again (§5.3). An answer sent to a superseded Decision is refused as a conflict (§9.2, exit code 5). A review Decision belongs to no run, so it survives both.
+- **Pause and restart** (D23). A Decision raised by a live run (a question or an approval) is `superseded` when the supervisor restarts or the run is paused: pause is a hard interrupt (D11), so the agent process that asked is gone and could not receive the answer. The reconciler, or the resume, raises a new one when the agent asks again (§5.3). An answer sent to a superseded Decision is refused as a conflict (§9.2, exit code 5). A review Decision belongs to no run, so it survives both, and so do the login and quota questions below: they are raised for a run that is already paused, and nothing waits on them. This is the one restart rule; §4.1 and §5.3 refer to it.
 - **Expired auth and quota** (D23). `auth_expired` and `quota_exhausted` are blocking `question` Decisions raised for the paused run, not approvals, because nothing is being permitted. Their options are fixed: for `auth_expired`, "Signed in again, resume" or "Cancel"; for `quota_exhausted`, "Resume now", "Resume at reset" (with the reset time when the agent reports it) or "Cancel". The run stays paused and the task moves to `awaiting_guidance` (§4.1, D21). They have no deadline: waiting is safe, because nothing runs until they are answered.
-- **Task state (D13).** Only a blocking Decision raised by a live run moves its task to `awaiting_guidance`; a review Decision leaves the task in `ready_for_review`.
+- **Task state (D13, D23).** Only a blocking Decision raised by a run moves its task to `awaiting_guidance`: a question or approval from a live run, or a login or quota question for a paused one. A review Decision belongs to no run and leaves the task in `ready_for_review`.
 
 ### 4.3 Lifecycle rules
 
@@ -197,11 +196,11 @@ A **topic** is one line of work: one branch (`agent/<topic>`) with its own check
 **Cleanup before push:**
 
 - **Agents do not push.** The agent commits in its topic's checkout. Nothing leaves the host until a cleanup step has run and been approved.
-- **Prepare for push.** The supervisor, or the agent at its request, rebases the topic onto its target, folds attempts into one commit per finished change (fixup and autosquash of unpushed commits only), checks the commit messages (conventional commits and the repository's commit linter), signs the commits with the bot key (§7.7) and runs the repository's checks. Several finished topics can be merged into one integration branch first.
+- **Prepare for push.** The supervisor, on its own copy of the topic (`hostgit`, below), rebases it onto its target, folds attempts into one commit per finished change (fixup and autosquash of unpushed commits only), checks the commit messages (conventional commits and the repository's commit linter), signs the commits with the bot key (§7.7) and runs the repository's checks. Several finished topics can be merged into one integration branch first.
 - **Approval.** The result is a ReviewCandidate (a pinned commit SHA) and a Decision, "Ready to push?", that shows the commit list and the diff stat. Approval is per commit SHA, as for any review (§6).
 - **Push and PR.** On approval the supervisor pushes the prepared `agent/*` branch with the run's scoped credentials and opens or updates the PR. Merging stays human, on the forge.
 - **Pushed commits are never rewritten.** After a push a topic is only extended; rewriting pushed history needs an explicit request.
-- **Done or cancelled topics.** The checkout and its branch are removed by the retention rules (§4.4, §5.4) after the push is merged or the topic is cancelled. Unpushed work is kept until the owner discards it.
+- **Done or cancelled topics.** The checkout and its branch are removed by the retention rules (§4.4, issue #54) after the push is merged or the topic is cancelled. Unpushed work is kept until the owner discards it.
 
 **The host treats every agent-writable checkout as hostile** (§7.4). It never runs plain git there: cleanup and push use hardened git, or fetch the branch into a supervisor-owned repository first.
 
@@ -211,6 +210,7 @@ A **topic** is one line of work: one branch (`agent/<topic>`) with its own check
 - **No git commands in the agent's tree, except read-only plumbing.** A handle on an agent's checkout (`Untrusted`) accepts only `rev-parse`, `rev-list`, `cat-file`, `for-each-ref`, `ls-tree`, `merge-base` and `show-ref`. `status`, `add`, `commit`, `checkout`, `diff`, `log -p`, `rebase`, `push` and `fetch` are refused, as are `--textconv` and `--filters`: they can run filters, textconv drivers, hooks or the file-system monitor from the agent's repository config, which no command-line override can list in advance.
 - **A hardened floor on every host git command.** Git starts with an empty environment (no `GIT_*` from the host, a minimal `PATH`, an empty `HOME`, no system or global config, no terminal prompt, no optional locks, no replace objects) and `-c` overrides that disable hooks (`core.hooksPath`), the file-system monitor, the pager and editor, credential helpers, signing, submodule recursion, and every transport except `file` for a fetch from an agent.
 - **Tested.** Tests plant a hook, `core.fsmonitor`, `core.sshCommand`, `core.pager`, a clean and smudge filter and `uploadpack.packObjectsHook` in an agent checkout. Control runs of plain git prove each one fires; none runs through `hostgit`.
+- **Open** (issue #19, reopened after review): `FetchBranch` must refuse an `objects/info/alternates` that names anything but the expected read-only cache (an agent could otherwise pull a blob from another host repository by its hash into the supervisor's copy and on to the forge) and a `.git` that is a file or a symlink (a `gitdir:` redirect to another repository); abbreviated long options (`--textc`) must not slip past the refused-flag list.
 
 ## 5. Architecture
 
@@ -320,7 +320,7 @@ Findings that shape the contract:
 - The session ID only appears after the first user message, and user messages are not echoed in the output, so the supervisor logs its own.
 - There is no cooperative pause; cancel is a hard interrupt.
 - Agents without streaming input (Codex `exec`, `agy` print mode) run in the degraded mode: a message becomes a resumed turn, labelled in the UI.
-- Token-level streaming is available from Claude Code (`--include-partial-messages` adds `text_delta` chunks, and the full message still follows). Coalesce deltas (about 150 ms) and let the final message replace them; consider keeping deltas out of the durable event log.
+- Token-level streaming is available from Claude Code (`--include-partial-messages` adds `text_delta` chunks, and the full message still follows). Coalesce deltas (about 150 ms) and let the final message replace them; deltas are live-only and never stored (§5.4).
 - A missing or expired login is signalled by an `assistant` event with `error: "authentication_failed"`, then a `result` with `is_error: true` and `subtype: "success"`. Detect `auth_expired` from the error code, never from `subtype`, and never from `apiKeySource`, which reads `none` both for a subscription login and for no login at all. A login that expires mid-session was not reproduced.
 
 ### 5.3 Reconciler
@@ -445,7 +445,7 @@ The rules below are the security requirements. The [threat model](threat-model.m
     - **The proxy runs in a sidecar container**, attached to the default and the internal network (`--network` repeats). The host cannot serve an internal network because it gets no interface on it, so a host-side proxy cannot bind to its gateway.
     - **Allowlist by hostname, with the name resolved by the proxy.** Allowed hosts returned 200, denied hosts and a raw-IP CONNECT got 403, and every decision was logged with time, verdict, method, host and source. The guest needs no DNS, which closes DNS exfiltration. Limits: the match is on the name in CONNECT, so it does not defeat domain fronting, and the sidecar has full egress and is trusted.
     - **Minimal allowlist for Claude Code:** `api.anthropic.com` alone. In an authenticated run inside a container the proxy also saw a telemetry host (`http-intake.logs.us5.datadoghq.com`) and denied it; nothing broke. Installing needs `claude.ai` and `downloads.claude.ai`, which the tool store (§5.6) removes. A client that obeys proxy variables, such as `curl`, tests the proxy and not the network; test the direct path with the proxy variables ignored.
-3. **Credentials.** Run-scoped, short-lived, single-repo, non-extractable. GitHub App installation tokens (~1 h); per-repo bot tokens or deploy keys for Gitea/Forgejo/GitLab. Inject through a git credential helper or host-side proxy so raw tokens never reach env vars, disk or logs. In `api-key` mode the LLM API key stays in the proxy. In `subscription` mode the consumer-plan login lives inside the environment (§5.2), is long-lived and not scoped to a repo, and leaks if the agent is compromised. **Accepted risk** for a single-developer, watched personal tool; limit it with a dedicated auth directory per environment (never `$HOME`), the egress allowlist, and revocation at the vendor when an environment is deleted. Revoke run-scoped credentials at run end. Redact retained transcripts. Agent and CI credentials are separate.
+3. **Credentials.** Run-scoped, short-lived, single-repo, non-extractable. GitHub App installation tokens (~1 h); per-repo bot tokens or deploy keys for Gitea/Forgejo/GitLab. Inject through a git credential helper or host-side proxy so raw tokens never reach env vars, disk or logs. In `api-key` mode the LLM API key stays in the proxy. In `subscription` mode the consumer-plan login lives inside the environment (§5.2), is long-lived and not scoped to a repo, and leaks if the agent is compromised. **Accepted risk** for a single-developer, watched personal tool; limit it with a dedicated auth directory per environment (never `$HOME`), the egress allowlist, and revocation at the vendor when an environment is deleted. Revoke run-scoped credentials at run end. Redact secrets at ingest, before anything is stored (§5.4). Agent and CI credentials are separate.
 4. **Isolation policy, testable.** Reject mounts of `$HOME`, `~/.ssh` and runtime sockets. Non-root agents, read-only rootfs where feasible, hard CPU/memory/disk quotas, per-run timeout and token/cost budget. Escape tests (guest cannot reach host or Socktainer socket) in the conformance suite. The VM boundary does not protect what is deliberately exposed.
 
     Measured in spike #2:
@@ -461,7 +461,7 @@ The rules below are the security requirements. The [threat model](threat-model.m
     - **Never `--ssh`**, which forwards the host ssh-agent. Never `container rm --all`.
     - **Host services are reachable from guests** when bound to all interfaces (by the gateway address or the Mac's LAN address); a service bound only to loopback was not. Bind supervisor listeners to loopback, and give guests a path only through the sidecar.
     - **Not probed:** the vsock and vfio device nodes in the guest, `--publish-socket`, `--virtualization` and Rosetta.
-    - **Agent-writable repositories are hostile input to the host** (spike #2, item 9). A pre-commit hook and a `core.fsmonitor` command planted from inside a guest ran on the host when the host later ran plain `git commit` and `git status`. Host-side git on an agent's checkout therefore runs with `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, which stopped both. Other repository-config keys that run commands (`core.sshCommand`, `core.pager`, `core.editor`, `credential.helper`, `diff.external`, `gpg.program`, aliases, clean and smudge filters) were not tested, so the list is a floor. Safer: do not run git in agent-writable trees; `git fetch` the branch into a supervisor-owned repository and work there.
+    - **Agent-writable repositories are hostile input to the host** (spike #2, item 9). A pre-commit hook and a `core.fsmonitor` command planted from inside a guest ran on the host when the host later ran plain `git commit` and `git status`. The host therefore runs git on agent-writable trees only through `hostgit` (§4.5): read-only plumbing in the agent's tree, an isolated configuration, and cleanup and push only on a supervisor-owned copy fetched from it. The alternates and `.git` redirect checks are still open (issue #19).
     - **Do not mount a shared `.git` read-write into an environment.** It exposes every branch, the shared hooks and config and the other worktrees' metadata. Agent topics get a per-task clone whose object cache is mounted read-only (§4.5).
 5. **Supervisor identity.** Login allowlist of forge users, PKCE and `state`, short-lived sessions, scoped revocable CLI tokens, CSRF protection, API bound to loopback/VPN, forge tokens encrypted at rest, webhook signature verification. Link accounts by provider instance + stable user ID, never by email.
 6. **SSH/IDE access.** Short-lived per-session SSH certificates or keys, no password auth, jump host only over VPN, code-server never public and always authenticated, treat Open VSX extensions as supply-chain risk.
@@ -535,7 +535,7 @@ v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Dec
 Because the app is a remote for coding agents (§1), v0 also carries the core remote-control loop:
 
 - **Live transcript.** A structured, streamed view of the agent session (messages, tool calls, diffs, test results) over SSE. Not a raw terminal mirror, which reads badly on a phone.
-- **Send a message** to the running agent (mid-run instruction injection, §5.2). Delivery is reported honestly: injected now, or delivered at the next turn.
+- **Send a message** to the running agent (mid-run instruction injection, §5.2). Delivery is reported honestly: injected now, delivered at the next turn, or, for an agent in degraded mode, as a resumed turn.
 - **Start a task** from an issue or a repo, choosing the agent.
 - **Pause, resume and cancel** a run.
 - **Answer Decisions**, as before.
@@ -640,7 +640,7 @@ Ordered by what is cheap and blocks the most work.
     - [ ] Approvals from inside the container: the guest has no path to the supervisor on an internal network. An HTTP MCP server reached through the sidecar, or a relay in the sidecar to a supervisor listener bound to the bridge address, is the open option
     - [ ] A reliable cancel from the host (§5.1)
     - [ ] Repositories mounted from the host (§4.5): fetching an agent's branch into a supervisor-owned repository (#19) and bind-mount speed with `node_modules`-style trees and much larger repositories
-4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
+4. **Autonomy and approval policy** (§6) and threat model (§7): the policy table is implemented with a fixed floor (issues #4, #51), and the [threat model](threat-model.md) is written (issue #11). Trust tiers for untrusted input remain (issue #53).
 5. **Persistence semantics** (§4.4): decided (D16).
 6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
