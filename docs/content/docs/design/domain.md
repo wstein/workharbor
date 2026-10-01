@@ -31,6 +31,26 @@ Task, run and environment each get their own small FSM with explicit legal trans
     | `ready_for_review` | `running` (rework), `completed`, `cancelled` |
     | `completed`, `cancelled`, `failed` | none (terminal) |
 
+    ```mermaid
+    stateDiagram-v2
+        [*] --> queued
+        queued --> running
+        queued --> cancelled
+        running --> awaiting_guidance
+        running --> ready_for_review
+        running --> failed
+        running --> cancelled
+        awaiting_guidance --> running
+        awaiting_guidance --> failed
+        awaiting_guidance --> cancelled
+        ready_for_review --> running: rework
+        ready_for_review --> completed
+        ready_for_review --> cancelled
+        completed --> [*]
+        cancelled --> [*]
+        failed --> [*]
+    ```
+
     - `awaiting_guidance` is for blocking Decisions raised by a run: a question or a tool approval from a live run, or `auth_expired` or `quota_exhausted` for a paused one (D23). The review Decisions of `ready_for_review` ("Ready to push?", §4.5) leave the task in `ready_for_review`.
     - **Rework** (`ready_for_review → running`) happens when the push is declined or the PR needs changes. It starts a new run on the same workspace and topic.
     - **`completed`** is set when the pushed PR is merged on the forge.
@@ -46,6 +66,28 @@ Task, run and environment each get their own small FSM with explicit legal trans
     | `interrupted` | `starting` (resume), `stopped`, `failed` |
     | `stopped`, `failed` | none (terminal) |
 
+    ```mermaid
+    stateDiagram-v2
+        [*] --> starting
+        starting --> running
+        starting --> stopped
+        starting --> failed
+        starting --> interrupted
+        running --> paused
+        running --> stopped
+        running --> failed
+        running --> interrupted
+        paused --> starting: relaunch
+        paused --> running: cooperative pause
+        paused --> stopped
+        paused --> interrupted
+        interrupted --> starting: resume
+        interrupted --> stopped
+        interrupted --> failed
+        stopped --> [*]
+        failed --> [*]
+    ```
+
     - **Pause is a run state.** Pausing never changes the environment (§4.3).
     - **Resuming a paused run.** None of the measured agents has a cooperative pause (D11), so pause is a hard interrupt: the agent process is gone while the run is paused, and resume relaunches it from the session. That is `paused → starting`, like a resume from `interrupted`, so a failed relaunch can end in `failed`. `paused → running` is for an agent that reports cooperative pause, whose process stays alive. If the process of a paused run is lost anyway, the run goes to `interrupted`. Every resume after a pause, a cancel or an interruption starts with a briefing from the supervisor (D27).
     - **`stopped`** is a normal end: the agent finished, or the run was cancelled. **`failed`** is an agent crash, a failed start or a failed resume.
@@ -60,6 +102,17 @@ Task, run and environment each get their own small FSM with explicit legal trans
     | `stopped` | `running`, `deleted` |
     | `running` | `stopped` |
     | `deleted` | none (terminal) |
+
+    ```mermaid
+    stateDiagram-v2
+        [*] --> provisioning
+        provisioning --> stopped: created
+        provisioning --> deleted: failed or abandoned
+        stopped --> running
+        stopped --> deleted
+        running --> stopped
+        deleted --> [*]
+    ```
 
     - **Start and stop** move between `stopped` and `running`. After a service or host restart every environment is `stopped` (spike #2, §5.3), so the reconciler observes `running → stopped` and starts the ones that should run.
     - **Delete only from `stopped`.** A running environment is stopped first.
@@ -139,6 +192,34 @@ A **topic** is one line of work: one branch (`agent/<topic>`) with its own check
 - **Done or cancelled topics.** The checkout and its branch are removed by the retention rules (§4.4, issue #54) after the push is merged or the topic is cancelled. Unpushed work is kept until the owner discards it.
 
 **Prepare and push in code** (issue #27). The steps above run in this order, on the supervisor's own copy: the environment is stopped (not only the run), the branch is fetched with `FetchBranch`, the target comes from the cache, `EnsureMergeBase` finds a base, and `Prepare` rebases the topic onto the target in a temporary worktree with `--autosquash` (hooks off, the bot as committer, commits signed with the bot key), then lints every commit message and returns the new tip. Running the repository's own checks is not done by `hostgit`: they are the repository's code, so a `Checker` runs them in an environment, never on the host. The tip is pinned (`PinRevision`) and a review Decision "Ready to push?" is raised for that SHA. `Push` sends one `agent/*` branch, fast-forward only, as the exact approved commit (`<sha>:refs/heads/<branch>`), never with force and never tags.
+
+```mermaid
+sequenceDiagram
+    participant A as Agent (environment)
+    participant S as Supervisor (hostgit)
+    participant C as Checker (environment)
+    participant D as Developer
+    participant F as Forge
+    A->>A: commits on agent/<topic>
+    A-->>S: the run stops
+    S->>S: stop the environment
+    S->>S: FetchBranch into its own copy
+    S->>S: EnsureMergeBase with the cached target
+    S->>S: Prepare: rebase --autosquash, sign, lint messages
+    S->>C: run the repository's checks
+    C-->>S: result
+    S->>S: PinRevision (ReviewCandidate for the SHA)
+    S->>D: Decision "Ready to push?" (commits, diff stat)
+    alt approved for this SHA
+        D-->>S: allow
+        S->>F: push <sha>:refs/heads/agent/<topic>, fast-forward only
+        S->>F: open or update the PR
+        F-->>D: review and merge, by the human
+    else declined, or the PR needs changes
+        D-->>S: deny
+        S->>A: rework: a new run on the same topic
+    end
+```
 
 **The editor copy** (issue #59). The developer's editor is never pointed at an agent's checkout: opening it runs planted repository config on the host (VS Code and its git extension, direnv, `.vscode/tasks.json`; threat model T15). `EditorCopy` clones the supervisor's own bare copy of the topic (which `FetchBranch` filled from the stopped environment) into a directory outside the workspace root, with an empty template and none of the agent's config, hooks or alternates, and refreshes it later with a fast-forward only, so the developer's edits are never overwritten. It refuses a destination inside the workspace root, so the agent's checkout cannot be handed out by mistake. The commits themselves are the agent's work and may contain files an editor acts on (`.vscode/tasks.json`, `.envrc`, `.devcontainer`), so the copy lists them and the UI warns before the folder is trusted. The copy is refreshed only from a stopped environment; while the environment runs, the last copy is offered as stale.
 

@@ -52,6 +52,23 @@ The rules below are the security requirements. The [threat model](../threat-mode
     - **The proxy runs in a sidecar container**, attached to the default and the internal network (`--network` repeats). The host cannot serve an internal network because it gets no interface on it, so a host-side proxy cannot bind to its gateway.
     - **Allowlist by hostname, with the name resolved by the proxy.** Allowed hosts returned 200, denied hosts and a raw-IP CONNECT got 403, and every decision was logged with time, verdict, method, host and source. The guest needs no DNS, which closes DNS exfiltration. The proxy allows only port 443 for CONNECT and port 80 for plain HTTP, refuses a name if any of its addresses is loopback, private, link-local, CGNAT, multicast or otherwise reserved, and dials the address it checked, so a rebinding DNS answer is never used (#78). A tunnel closes after five idle minutes, and the sidecar runs with one CPU and 256 MB. Limits: the match is on the name in CONNECT, so it does not defeat domain fronting, and the sidecar has full egress and is trusted.
     - **Minimal allowlist for Claude Code:** `api.anthropic.com` alone. In an authenticated run inside a container the proxy also saw a telemetry host (`http-intake.logs.us5.datadoghq.com`) and denied it; nothing broke. Installing needs `claude.ai` and `downloads.claude.ai`, which the tool store (§5.6) removes. A client that obeys proxy variables, such as `curl`, tests the proxy and not the network; test the direct path with the proxy variables ignored.
+    ```mermaid
+    flowchart LR
+        phone["Phone or tablet"] -->|"tailnet, API token"| fwd
+        subgraph host["Mac mini"]
+            fwd["tailscale serve"] -->|"loopback"| whr["whr serve on 127.0.0.1"]
+            pf["pf: container subnets blocked from the host's addresses"]
+        end
+        subgraph internal["--internal network, one per environment"]
+            env["Environment: agent, no DNS"]
+        end
+        whr -->|"container exec, stdio"| env
+        env -->|"HTTPS_PROXY"| sidecar["Egress sidecar: whr-proxy, on both networks"]
+        sidecar -->|"allowlisted names, ports 443 and 80, public addresses"| net["Forge, LLM API, registries"]
+        env -.->|"no route"| lan["Internet, LAN, other environments"]
+        env -.->|"loopback not reachable"| whr
+    ```
+
 3. **Credentials.** Run-scoped, short-lived, single-repo, non-extractable. GitHub App installation tokens (~1 h); per-repo bot tokens or deploy keys for Gitea/Forgejo/GitLab. Inject through a git credential helper or host-side proxy so raw tokens never reach env vars, disk or logs. In `api-key` mode the LLM API key stays in the proxy. In `subscription` mode the consumer-plan login lives inside the environment (§5.2), is long-lived and not scoped to a repo, and leaks if the agent is compromised. **Accepted risk** for a single-developer, watched personal tool; limit it with a dedicated auth directory per environment (never `$HOME`), the egress allowlist, and revocation at the vendor when an environment is deleted. Revoke run-scoped credentials at run end. Redact secrets at ingest, before anything is stored (§5.4). Agent and CI credentials are separate.
 4. **Isolation policy, testable.** Reject mounts of `$HOME`, `~/.ssh` and runtime sockets. Non-root agents, read-only rootfs where feasible, hard CPU/memory/disk quotas, per-run timeout and token/cost budget. Escape tests (guest cannot reach host or Socktainer socket) in the conformance suite. The VM boundary does not protect what is deliberately exposed.
 

@@ -217,6 +217,85 @@ func stateProblems(doc string) []string {
 	return problems
 }
 
+// ---- §4.1 state diagrams ----
+
+var arrow = regexp.MustCompile(`^\s*(\[\*\]|[a-z_]+)\s*-->\s*(\[\*\]|[a-z_]+)\s*(?::.*)?$`)
+
+// stateDiagram reads the mermaid stateDiagram in a machine's block: its moves
+// and its terminal states (those with an arrow to [*]). The start arrow from
+// [*] names no transition and is skipped.
+func stateDiagram(doc, heading, next string) (moves map[string]map[string]bool, terminal map[string]bool, err error) {
+	block, ok := between(doc, heading, next)
+	if !ok {
+		return nil, nil, fmt.Errorf("§4.1 has no %q", heading)
+	}
+	i := strings.Index(block, "stateDiagram-v2")
+	if i < 0 {
+		return nil, nil, fmt.Errorf("§4.1 %q has no state diagram", heading)
+	}
+	body := block[i:]
+	if j := strings.Index(body, "```"); j >= 0 {
+		body = body[:j]
+	}
+	moves, terminal = map[string]map[string]bool{}, map[string]bool{}
+	for _, line := range strings.Split(body, "\n")[1:] {
+		m := arrow.FindStringSubmatch(line)
+		switch {
+		case m == nil:
+			if strings.TrimSpace(line) != "" {
+				return nil, nil, fmt.Errorf("§4.1 %q diagram: cannot read %q", heading, strings.TrimSpace(line))
+			}
+		case m[1] == "[*]":
+		case m[2] == "[*]":
+			terminal[m[1]] = true
+		default:
+			if moves[m[1]] == nil {
+				moves[m[1]] = map[string]bool{}
+			}
+			moves[m[1]][m[2]] = true
+		}
+	}
+	return moves, terminal, nil
+}
+
+func diagramProblems(doc string) []string {
+	var problems []string
+	for _, m := range machines() {
+		moves, terminal, err := stateDiagram(doc, m.heading, m.next)
+		if err != nil {
+			problems = append(problems, err.Error())
+			continue
+		}
+		for _, from := range m.states {
+			for _, to := range m.states {
+				drawn, code := moves[from][to], m.can(from, to)
+				switch {
+				case drawn && !code:
+					problems = append(problems, fmt.Sprintf("the %s diagram draws %s -> %s, the code does not allow it", m.name, from, to))
+				case !drawn && code:
+					problems = append(problems, fmt.Sprintf("the code allows %s %s -> %s, the diagram does not draw it", m.name, from, to))
+				}
+			}
+			if terminal[from] != m.terminal(from) {
+				problems = append(problems, fmt.Sprintf("%s state %s: the diagram terminal=%v, the code says %v", m.name, from, terminal[from], m.terminal(from)))
+			}
+		}
+		known := map[string]bool{}
+		for _, st := range m.states {
+			known[st] = true
+		}
+		for from, tos := range moves {
+			for to := range tos {
+				if !known[from] || !known[to] {
+					problems = append(problems, fmt.Sprintf("the %s diagram draws %s -> %s, a state the code does not have", m.name, from, to))
+				}
+			}
+		}
+	}
+	sort.Strings(problems)
+	return problems
+}
+
 // ---- §6 policy defaults ----
 
 // policyRows maps a row of the §6 table to the actions it covers.
@@ -307,6 +386,12 @@ func TestStateMachinesMatchTheDesign(t *testing.T) {
 	}
 }
 
+func TestStateDiagramsMatchTheCode(t *testing.T) {
+	if p := diagramProblems(readDesign(t)); len(p) > 0 {
+		t.Errorf("the §4.1 diagrams and internal/domain disagree:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
 func TestPolicyDefaultsMatchTheDesign(t *testing.T) {
 	if p := policyProblems(readDesign(t)); len(p) > 0 {
 		t.Errorf("§6 and internal/policy disagree:\n  %s", strings.Join(p, "\n  "))
@@ -336,6 +421,9 @@ func TestTheChecksNoticeDrift(t *testing.T) {
 		{"a task transition removed", stateProblems, edit("`awaiting_guidance`, `ready_for_review`, `failed`, `cancelled`", "`awaiting_guidance`, `ready_for_review`, `cancelled`"), "running -> failed"},
 		{"a run state renamed", stateProblems, edit("| `interrupted` | `starting` (resume)", "| `lost` | `starting` (resume)"), "lost"},
 		{"a terminal state made live", stateProblems, edit("| `stopped`, `failed` | none (terminal) |", "| `stopped` | none (terminal) |"), "failed"},
+		{"a diagram arrow added", diagramProblems, edit("    queued --> cancelled\n", "    queued --> cancelled\n    queued --> completed\n"), "queued -> completed"},
+		{"a diagram arrow removed", diagramProblems, edit("running --> failed\n", ""), "running -> failed"},
+		{"a diagram terminal dropped", diagramProblems, edit("    deleted --> [*]\n", ""), "deleted"},
 		{"a policy default loosened", policyProblems, edit("| Merge, tag, release, deploy | **forbid**", "| Merge, tag, release, deploy | auto"), "merge defaults to auto"},
 		{"a policy default tightened", policyProblems, edit("| Commit in the topic's own checkout | auto |", "| Commit in the topic's own checkout | ask |"), "commit defaults to ask"},
 		{"a policy row removed", policyProblems, edit("| Open/update PR, comment on issue | auto, after the push |\n", ""), "has no row"},
