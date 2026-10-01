@@ -107,6 +107,18 @@ type Event struct {
 	Tool      string
 	Input     string    // capped
 	ResetAt   time.Time // for quota_exhausted, when known
+	// Approval is set on an approval event: the record the audit entry is
+	// written from (design §5.4).
+	Approval *ApprovalRecord
+}
+
+// ApprovalRecord is what happened to one permission prompt: the request that
+// was put to the host and the answer the agent was given. A prompt that no
+// human answered is a denial with the reason why.
+type ApprovalRecord struct {
+	ID     string // the ApprovalRequest ID
+	Allow  bool
+	Reason string
 }
 
 // ResultStatus is how a session ended.

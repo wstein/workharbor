@@ -24,9 +24,9 @@ func TestDegradedFakeSkipsOnlyWhatItDoesNotClaim(t *testing.T) {
 			skipped++
 		}
 	}
-	// The five approval checks need HostApprovals, which a degraded agent does not claim.
-	if skipped != 5 {
-		t.Errorf("%d checks skipped, want the 5 that need host approvals", skipped)
+	// The six approval checks need HostApprovals, which a degraded agent does not claim.
+	if skipped != 6 {
+		t.Errorf("%d checks skipped, want the 6 that need host approvals", skipped)
 	}
 }
 
@@ -46,6 +46,7 @@ func TestSuiteNoticesDefectiveAgents(t *testing.T) {
 		{"offers a Pauser without the flag", Defects{PauserWithoutFlag: true}, "cooperative pause is a capability flag"},
 		{"loses the session ID on stop", Defects{StopLosesSession: true}, "stop is a hard interrupt and the session is resumable"},
 		{"never reports its session ID", Defects{NoSessionEvent: true}, "the session ID arrives with the session event"},
+		{"leaves a pending approval waiting on stop", Defects{StopLeavesApproval: true}, "stop cancels a pending approval"},
 		{"implements another contract version", Defects{WrongContractVersion: true}, "capabilities are reported"},
 	}
 	for _, tc := range tests {

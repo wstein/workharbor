@@ -128,25 +128,44 @@ func (s *session) drainInstructions() {
 func (s *session) ask(ctx context.Context, sc scenario) {
 	s.emit(agent.Event{Kind: agent.EventToolCall, Tool: sc.tool, Input: sc.input})
 	req := agent.ApprovalRequest{ID: "approval-1", Tool: sc.tool, Input: sc.input}
+
+	// Stop cancels a prompt that waits for a human (D23).
+	actx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if !s.f.Defects.StopLeavesApproval {
+		go func() {
+			select {
+			case <-s.stop:
+				cancel()
+			case <-actx.Done():
+			}
+		}()
+	}
+
 	var ap agent.Approval
 	switch {
 	case s.f.Defects.FailOpenOnError:
 		var err error
-		if ap, err = s.spec.Approver.Approve(ctx, req); err != nil {
+		if ap, err = s.spec.Approver.Approve(actx, req); err != nil {
 			ap = agent.Approval{Allow: true}
 		}
 	case s.f.Defects.FailOpenOnTimeout:
 		ap, _ = s.spec.Approver.Approve(context.Background(), req) // waits for as long as the approver does
 	default:
-		ap = agent.Ask(ctx, s.spec.Approver, s.spec.ApprovalTimeout, req)
+		ap = agent.Ask(actx, s.spec.Approver, s.spec.ApprovalTimeout, req)
 	}
-	s.emit(agent.Event{Kind: agent.EventApproval, Tool: sc.tool})
+	s.emit(agent.Event{Kind: agent.EventApproval, Tool: sc.tool, Input: sc.input, Approval: &agent.ApprovalRecord{ID: req.ID, Allow: ap.Allow, Reason: ap.Reason}})
 	text := "denied: " + ap.Reason
 	if ap.Allow {
 		text = "allowed"
 	}
 	s.emit(agent.Event{Kind: agent.EventToolResult, Tool: sc.tool, Text: text})
-	s.finish(agent.Result{Status: agent.ResultCompleted})
+	select {
+	case <-s.stop:
+		s.finish(agent.Result{Status: agent.ResultStopped})
+	default:
+		s.finish(agent.Result{Status: agent.ResultCompleted})
+	}
 }
 
 // bind makes the session ID known, as the first message does for Claude Code.

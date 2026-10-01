@@ -51,6 +51,7 @@ type Defects struct {
 	StopLosesSession     bool // Stop returns a result without the session ID
 	WrongContractVersion bool // capabilities report another version
 	NoSessionEvent       bool // the session never reports its ID
+	StopLeavesApproval   bool // Stop does not cancel a pending approval
 }
 
 type scenarioKind int

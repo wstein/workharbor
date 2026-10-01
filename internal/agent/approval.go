@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 	"unicode/utf8"
 
@@ -71,7 +72,10 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 		}
 		return r.a
 	case <-ctx.Done():
-		return Approval{Reason: "no answer in time: denied"}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return Approval{Reason: "no answer in time: denied"}
+		}
+		return Approval{Reason: "cancelled: denied"} // the session was stopped
 	}
 }
 

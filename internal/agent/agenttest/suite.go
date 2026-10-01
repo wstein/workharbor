@@ -54,6 +54,7 @@ func Checks() []Check {
 		{"a denial reaches the agent with its reason", checkApprovalDenied},
 		{"an approver error denies", checkApprovalError},
 		{"an approver that does not answer in time denies", checkApprovalTimeout},
+		{"stop cancels a pending approval", checkStopCancelsApproval},
 		{"the input of an approval is capped", checkApprovalCap},
 		{"instruction delivery is honest", checkInstruct},
 		{"stop is a hard interrupt and the session is resumable", checkStopAndResume},
@@ -188,6 +189,28 @@ func hasText(events []agent.Event, kind agent.EventKind, sub string) bool {
 	return false
 }
 
+// approvalOf returns the record of the approval event, or an error if there is
+// not exactly one with a request ID. The suite asserts on this record and not
+// on text the agent prints.
+func approvalOf(events []agent.Event) (agent.ApprovalRecord, error) {
+	var found []agent.ApprovalRecord
+	for _, e := range events {
+		if e.Kind == agent.EventApproval {
+			if e.Approval == nil {
+				return agent.ApprovalRecord{}, fmt.Errorf("an approval event carries no record: %+v", e)
+			}
+			found = append(found, *e.Approval)
+		}
+	}
+	if len(found) != 1 {
+		return agent.ApprovalRecord{}, fmt.Errorf("want one approval event, got %d: %+v", len(found), events)
+	}
+	if found[0].ID == "" {
+		return found[0], errors.New("the approval event has no request ID")
+	}
+	return found[0], nil
+}
+
 func hasKind(events []agent.Event, kind agent.EventKind) bool {
 	return hasText(events, kind, "")
 }
@@ -306,22 +329,37 @@ func checkApprovalAllowed(ctx context.Context, h Harness) error {
 	if got.Tool != "Bash" || got.Input != "ls -la" {
 		return fmt.Errorf("the approver saw %+v, want the tool and its input", got)
 	}
-	if !hasText(events, agent.EventToolResult, "allowed") {
-		return fmt.Errorf("an allowed approval did not let the agent go on: %+v", events)
+	rec, err := approvalOf(events)
+	if err != nil {
+		return err
+	}
+	if !rec.Allow || rec.ID != got.ID {
+		return fmt.Errorf("approval record %+v, want an allow for request %q", rec, got.ID)
 	}
 	return nil
 }
 
 func checkApprovalDenied(ctx context.Context, h Harness) error {
-	ap := agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.Approval, error) {
+	var mu sync.Mutex
+	var id string
+	ap := agent.ApproverFunc(func(_ context.Context, req agent.ApprovalRequest) (agent.Approval, error) {
+		mu.Lock()
+		id = req.ID
+		mu.Unlock()
 		return agent.Approval{Reason: "not in this repository"}, nil
 	})
 	events, err := approvalRun(ctx, h, "rm -rf build", ap, 2*time.Second, 5*time.Second)
 	if err != nil {
 		return err
 	}
-	if !hasText(events, agent.EventToolResult, "denied") || !hasText(events, agent.EventToolResult, "not in this repository") {
-		return fmt.Errorf("the denial and its reason must reach the agent: %+v", events)
+	rec, err := approvalOf(events)
+	if err != nil {
+		return err
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if rec.Allow || rec.ID != id || !strings.Contains(rec.Reason, "not in this repository") {
+		return fmt.Errorf("approval record %+v, want a denial of request %q with the human's reason", rec, id)
 	}
 	return nil
 }
@@ -334,8 +372,12 @@ func checkApprovalError(ctx context.Context, h Harness) error {
 	if err != nil {
 		return err
 	}
-	if !hasText(events, agent.EventToolResult, "denied") || hasText(events, agent.EventToolResult, "allowed") {
-		return fmt.Errorf("an approver error must deny: %+v", events)
+	rec, err := approvalOf(events)
+	if err != nil {
+		return err
+	}
+	if rec.Allow {
+		return fmt.Errorf("an approver error must deny: %+v", rec)
 	}
 	return nil
 }
@@ -352,8 +394,60 @@ func checkApprovalTimeout(ctx context.Context, h Harness) error {
 	if err != nil {
 		return err
 	}
-	if !hasText(events, agent.EventToolResult, "denied") || hasText(events, agent.EventToolResult, "allowed") {
-		return fmt.Errorf("no answer within the timeout must deny, and quickly: %+v", events)
+	rec, err := approvalOf(events)
+	if err != nil {
+		return fmt.Errorf("no answer within the timeout must end in a recorded denial, and quickly: %w", err)
+	}
+	if rec.Allow {
+		return fmt.Errorf("no answer within the timeout must deny: %+v", rec)
+	}
+	return nil
+}
+
+func checkStopCancelsApproval(ctx context.Context, h Harness) error {
+	if !h.Adapter.Capabilities().HostApprovals {
+		return ErrSkip
+	}
+	asked := make(chan struct{})
+	cancelled := make(chan struct{})
+	ap := agent.ApproverFunc(func(ctx context.Context, _ agent.ApprovalRequest) (agent.Approval, error) {
+		close(asked)
+		select {
+		case <-ctx.Done():
+			close(cancelled)
+		case <-time.After(20 * time.Second):
+		}
+		return agent.Approval{Allow: true}, nil // would allow, but the session is gone
+	})
+	h.Scenarios.AskApproval("Bash", "make deploy")
+	spec := newSpec(h)
+	spec.Approver, spec.ApprovalTimeout = ap, 20*time.Second
+	s, err := h.Adapter.Start(ctx, spec)
+	if err != nil {
+		return err
+	}
+	select {
+	case <-asked:
+	case <-time.After(5 * time.Second):
+		return errors.New("the approver was never asked")
+	}
+	if err := s.Stop(ctx); err != nil {
+		return fmt.Errorf("Stop: %w", err)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		return errors.New("Stop left the approval waiting: the approver's context was not cancelled (D23)")
+	}
+	events, err := collect(s, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	if rec, err := approvalOf(events); err != nil || rec.Allow {
+		return fmt.Errorf("a stopped session must record the pending approval as a denial: %+v (%s)", rec, show(err))
+	}
+	if res, err := s.Wait(); err != nil || res.Status != agent.ResultStopped {
+		return fmt.Errorf("result after Stop = %+v (%s), want stopped", res, show(err))
 	}
 	return nil
 }
