@@ -85,7 +85,7 @@ func Lint(msg string, opt Options) []string {
 	}
 
 	trailers := parseTrailers(lines)
-	var issues, assisted, tasks, runs, signoffs int
+	var issues, assisted, tasks, runs, signoffs, changelogs int
 	for _, t := range trailers {
 		switch {
 		case issueKeys[t.key]:
@@ -110,6 +110,11 @@ func Lint(msg string, opt Options) []string {
 			}
 		case t.key == "Signed-off-by":
 			signoffs++
+		case t.key == "Changelog":
+			changelogs++
+			if t.value != "skip" && t.value != "highlight" {
+				add("Changelog: %q must be skip or highlight", t.value)
+			}
 		}
 	}
 
@@ -118,6 +123,9 @@ func Lint(msg string, opt Options) []string {
 	}
 	if tasks > 1 {
 		add("at most one Whr-Task trailer is allowed")
+	}
+	if changelogs > 1 {
+		add("at most one Changelog trailer is allowed")
 	}
 	if runs > 0 && tasks == 0 {
 		add("Whr-Run requires a Whr-Task trailer")

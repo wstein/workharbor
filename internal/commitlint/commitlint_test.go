@@ -45,6 +45,11 @@ func TestLint(t *testing.T) {
 		{"scissors cut", "docs: a\n# ------------------------ >8 ------------------------\ndiff --git", human, ""},
 		{"body not trailers", "docs: a\n\nsome body\nRefs: #1 in prose", human, ""},
 		{"breaking footer", "feat!: drop api\n\nBREAKING CHANGE: gone\nRefs: #7", human, ""},
+		{"changelog skip", "feat: tiny\n\nRefs: #1\nChangelog: skip", human, ""},
+		{"changelog highlight", "docs: install guide\n\nChangelog: highlight", human, ""},
+		{"changelog bad value", "docs: a\n\nChangelog: hide", human, "Changelog: \"hide\""},
+		{"changelog wrong case", "docs: a\n\nChangelog: Skip", human, "Changelog: \"Skip\""},
+		{"two changelog trailers", "docs: a\n\nChangelog: skip\nChangelog: highlight", human, "at most one Changelog"},
 		{"empty", "\n# only comment", human, "empty"},
 	}
 	for _, tc := range tests {

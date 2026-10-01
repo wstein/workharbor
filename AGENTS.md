@@ -82,6 +82,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 | `Assisted-by: <tool>:<model-id>` | Add it when an AI tool wrote or substantially shaped the change, using the exact model ID you run as (for example `Claude Code:claude-sonnet-5-5`); extra tools go in brackets. One line per tool. Use this instead of `Co-authored-by` for AI. |
 | `Signed-off-by` | **Humans only.** It certifies origin, so agents and bot identities must never add it. The hook rejects it for bot authors, except Dependabot and Renovate. |
 | `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` when it commits for an agent run. `Whr-Run` requires `Whr-Task`. |
+| `Changelog: skip`, `Changelog: highlight` | Optional, at most one. The changelog lists only `feat`, `fix`, `perf`, `revert` and breaking changes; `skip` leaves a commit out, `highlight` lists it under Highlights whatever its type. Neither hides or moves a breaking change. |
 
 `make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
 
