@@ -3,6 +3,7 @@ package hostgit
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -29,16 +30,20 @@ var refusedFlags = []string{
 // Untrusted is a checkout an agent can write. Only read-only plumbing runs in
 // it; cleanup and push belong to a Repo the supervisor owns.
 type Untrusted struct {
-	g    *Git
-	path string
+	g        *Git
+	checkout string // the verified checkout
+	gitDir   string // its verified .git directory
 }
 
-// Untrusted returns a handle on an agent's checkout.
+// Untrusted returns a handle on an agent's checkout after verifying it: under
+// the workspace root, a real .git directory, no redirected object store and
+// no alternates but the listed caches (see verifyCheckout).
 func (g *Git) Untrusted(path string) (*Untrusted, error) {
-	if err := checkDir(path); err != nil {
+	checkout, gitDir, err := g.verifyCheckout(path)
+	if err != nil {
 		return nil, err
 	}
-	return &Untrusted{g: g, path: path}, nil
+	return &Untrusted{g: g, checkout: checkout, gitDir: gitDir}, nil
 }
 
 // Run runs an allowed plumbing command and returns its output. The first
@@ -58,5 +63,7 @@ func (u *Untrusted) Run(ctx context.Context, args ...string) ([]byte, error) {
 			}
 		}
 	}
-	return u.g.run(ctx, u.path, false, args...)
+	// Git is pointed at the verified directory and never searches upward.
+	env := []string{"GIT_DIR=" + u.gitDir, "GIT_CEILING_DIRECTORIES=" + filepath.Dir(u.checkout)}
+	return u.g.run(ctx, u.checkout, false, env, args...)
 }

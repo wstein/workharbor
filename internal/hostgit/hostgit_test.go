@@ -190,9 +190,12 @@ func contains(list []string, want string) bool {
 	return false
 }
 
-func newGit(t *testing.T) *Git {
+// newGit returns a Git whose workspace root is the directory that holds every
+// t.TempDir of this test run; options after it override that.
+func newGit(t *testing.T, opts ...Option) *Git {
 	t.Helper()
-	g, err := New()
+	root := filepath.Dir(t.TempDir())
+	g, err := New(append([]Option{WithWorkspaceRoot(root)}, opts...)...)
 	if err != nil {
 		t.Skipf("git is not available: %v", err)
 	}
@@ -204,7 +207,7 @@ func newGit(t *testing.T) *Git {
 // would refuse, to test the floor on its own.
 func hardened(t *testing.T, g *Git, dir string, args ...string) (string, error) {
 	t.Helper()
-	cmd := g.command(context.Background(), dir, false, args...)
+	cmd := g.command(context.Background(), dir, false, nil, args...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }

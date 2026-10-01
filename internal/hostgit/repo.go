@@ -21,7 +21,7 @@ func (g *Git) InitBare(ctx context.Context, path string) (*Repo, error) {
 	if err := checkDir(parent); err != nil {
 		return nil, err
 	}
-	if _, err := g.run(ctx, parent, false, "init", "--bare", "--quiet", "--", path); err != nil {
+	if _, err := g.run(ctx, parent, false, nil, "init", "--bare", "--quiet", "--", path); err != nil {
 		return nil, err
 	}
 	return &Repo{g: g, path: path}, nil
@@ -32,7 +32,7 @@ func (g *Git) OpenBare(ctx context.Context, path string) (*Repo, error) {
 	if err := checkDir(path); err != nil {
 		return nil, err
 	}
-	out, err := g.run(ctx, path, false, "rev-parse", "--is-bare-repository")
+	out, err := g.run(ctx, path, false, nil, "rev-parse", "--is-bare-repository")
 	if err != nil {
 		return nil, err
 	}
@@ -54,13 +54,15 @@ func (r *Repo) FetchBranch(ctx context.Context, agentCheckout, branch string) (s
 	if !validBranch(branch) {
 		return "", fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
-	if err := checkDir(agentCheckout); err != nil {
+	_, gitDir, err := r.g.verifyCheckout(agentCheckout)
+	if err != nil {
 		return "", err
 	}
 	ref := "refs/heads/" + branch
-	if _, err := r.g.run(ctx, r.path, true,
+	// The source is the verified .git directory, never the path as given.
+	if _, err := r.g.run(ctx, r.path, true, nil,
 		"fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--force",
-		"--", agentCheckout, "+"+ref+":"+ref); err != nil {
+		"--", gitDir, "+"+ref+":"+ref); err != nil {
 		return "", err
 	}
 	out, err := r.Run(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
@@ -74,7 +76,7 @@ func (r *Repo) FetchBranch(ctx context.Context, agentCheckout, branch string) (s
 // no transport but the local one disabled. The caller adds the options of the
 // command (for example the remote and refspec of a push).
 func (r *Repo) Run(ctx context.Context, args ...string) ([]byte, error) {
-	return r.g.run(ctx, r.path, false, args...)
+	return r.g.run(ctx, r.path, false, nil, args...)
 }
 
 func dirOf(path string) string {

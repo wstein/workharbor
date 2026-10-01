@@ -27,16 +27,71 @@ var (
 	ErrNotAllowed = errors.New("git command not allowed in an agent-writable repository")
 	ErrBadPath    = errors.New("path must be absolute and name an existing directory")
 	ErrBadBranch  = errors.New("not a valid branch name")
+
+	ErrNoRoot      = errors.New("hostgit needs a workspace root (WithWorkspaceRoot) before it touches an agent checkout")
+	ErrOutsideRoot = errors.New("the checkout is not under the workspace root")
+	ErrCheckout    = errors.New("the checkout is not a plain git directory")
+	ErrAlternates  = errors.New("the checkout borrows objects from somewhere that is not a listed cache")
 )
 
 // Git runs git with the hardening described in the package comment.
 type Git struct {
 	bin  string // absolute path of the git binary
 	home string // an empty directory used as HOME and TMPDIR
+
+	root       string   // resolved workspace root; agent checkouts must lie under it
+	alternates []string // resolved read-only caches a checkout may borrow objects from
+}
+
+// Option configures New.
+type Option func(*Git) error
+
+// WithWorkspaceRoot sets the directory under which agent checkouts live. An
+// agent checkout elsewhere is refused. It is required before Untrusted or
+// FetchBranch touch a checkout.
+func WithWorkspaceRoot(root string) Option {
+	return func(g *Git) error {
+		resolved, err := resolveDir(root)
+		if err != nil {
+			return fmt.Errorf("workspace root: %w", err)
+		}
+		g.root = resolved
+		return nil
+	}
+}
+
+// WithAlternates lists the read-only object caches an agent checkout may name
+// in objects/info/alternates (design §4.5). Any other alternate is refused.
+func WithAlternates(caches ...string) Option {
+	return func(g *Git) error {
+		for _, c := range caches {
+			resolved, err := resolveDir(c)
+			if err != nil {
+				return fmt.Errorf("alternates cache: %w", err)
+			}
+			g.alternates = append(g.alternates, resolved)
+		}
+		return nil
+	}
+}
+
+// resolveDir returns the symlink-free form of an absolute, existing directory.
+func resolveDir(path string) (string, error) {
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("%w: %q", ErrBadPath, path)
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: %q", ErrBadPath, path)
+	}
+	if info, err := os.Stat(resolved); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("%w: %q", ErrBadPath, path)
+	}
+	return resolved, nil
 }
 
 // New finds git and prepares an empty HOME for it. Call Close when done.
-func New() (*Git, error) {
+func New(opts ...Option) (*Git, error) {
 	bin, err := exec.LookPath("git")
 	if err != nil {
 		return nil, fmt.Errorf("hostgit: %w", err)
@@ -49,7 +104,14 @@ func New() (*Git, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hostgit: %w", err)
 	}
-	return &Git{bin: bin, home: home}, nil
+	g := &Git{bin: bin, home: home}
+	for _, o := range opts {
+		if err := o(g); err != nil {
+			_ = os.RemoveAll(home)
+			return nil, fmt.Errorf("hostgit: %w", err)
+		}
+	}
+	return g, nil
 }
 
 // Close removes the empty HOME.
@@ -58,8 +120,16 @@ func (g *Git) Close() error { return os.RemoveAll(g.home) }
 // Env returns the whole environment git runs in. It starts empty: nothing is
 // inherited from the host, so no GIT_* variable, askpass program, proxy or
 // pager can reach git.
-func (g *Git) Env() []string {
-	return []string{
+func (g *Git) Env() []string { return g.envFor(false) }
+
+// envFor is Env with the file protocol allowed when fileTransport is set and
+// no protocol allowed otherwise, plus any extra variables.
+func (g *Git) envFor(fileTransport bool, extra ...string) []string {
+	allow := "GIT_ALLOW_PROTOCOL="
+	if fileTransport {
+		allow = "GIT_ALLOW_PROTOCOL=file"
+	}
+	env := []string{
 		"PATH=" + filepath.Dir(g.bin) + ":/usr/bin:/bin",
 		"HOME=" + g.home,
 		"TMPDIR=" + g.home,
@@ -73,7 +143,9 @@ func (g *Git) Env() []string {
 		"GIT_NO_REPLACE_OBJECTS=1",
 		"GIT_PAGER=cat",
 		"GIT_EDITOR=:",
+		allow,
 	}
+	return append(env, extra...)
 }
 
 // Config returns the -c overrides every command starts with. They disable
@@ -114,18 +186,18 @@ func (g *Git) Config(fileTransport bool) []string {
 
 // command builds a git process: the floor of overrides, then args, in dir,
 // with the hardened environment.
-func (g *Git) command(ctx context.Context, dir string, fileTransport bool, args ...string) *exec.Cmd {
+func (g *Git) command(ctx context.Context, dir string, fileTransport bool, extraEnv []string, args ...string) *exec.Cmd {
 	argv := append(g.Config(fileTransport), args...)
 	cmd := exec.CommandContext(ctx, g.bin, argv...) //nolint:gosec // g.bin is the git found by LookPath; args are built here, not taken from the repository
 	cmd.Dir = dir
-	cmd.Env = g.Env()
+	cmd.Env = g.envFor(fileTransport, extraEnv...)
 	return cmd
 }
 
 // run runs git with args in dir and returns its standard output. An error
 // names the git command and its standard error, not the floor of overrides.
-func (g *Git) run(ctx context.Context, dir string, fileTransport bool, args ...string) ([]byte, error) {
-	cmd := g.command(ctx, dir, fileTransport, args...)
+func (g *Git) run(ctx context.Context, dir string, fileTransport bool, extraEnv []string, args ...string) ([]byte, error) {
+	cmd := g.command(ctx, dir, fileTransport, extraEnv, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
