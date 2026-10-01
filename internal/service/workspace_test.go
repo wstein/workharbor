@@ -228,7 +228,12 @@ func TestCreateRefusesABadFolderAndLeavesNothing(t *testing.T) {
 
 func TestCreateTakesBackWhatItMadeWhenTheWorktreeFails(t *testing.T) {
 	r := newWsRig(t)
-	r.fake.GitExit = 128
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+		if len(cmd) > 3 && cmd[0] == "git" && cmd[3] == "worktree" {
+			return nil, "fatal: invalid reference", 128, true
+		}
+		return nil, "", 0, false
+	}
 	folder := r.folder("fail")
 	_, _, err := r.ws.Create(bg, CreateRequest{Name: "fail", Path: folder, Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
 	if err == nil || !strings.Contains(err.Error(), "git exited 128") {
@@ -248,7 +253,7 @@ func TestCreateTakesBackWhatItMadeWhenTheWorktreeFails(t *testing.T) {
 		t.Errorf("environments left behind: %+v", envs)
 	}
 	// The folder is free to try again.
-	r.fake.GitExit = 0
+	r.fake.OnExec = nil
 	if _, _, err := r.ws.Create(bg, CreateRequest{Name: "fail", Path: folder, Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"}); err != nil {
 		t.Errorf("a second try: %v", err)
 	}
@@ -466,7 +471,12 @@ func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
 func TestAFailedCreateDoesNotLeakTheHomeVolume(t *testing.T) {
 	r := newWsRig(t)
 	r.home = true
-	r.fake.GitExit = 128 // the worktree fails after the environment and its volume exist
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) { // the worktree fails after the environment and its volume exist
+		if len(cmd) > 3 && cmd[0] == "git" && cmd[3] == "worktree" {
+			return nil, "fatal: invalid reference", 128, true
+		}
+		return nil, "", 0, false
+	}
 	_, _, err := r.ws.Create(bg, CreateRequest{Name: "leak", Path: r.folder("leak"), Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
 	if err == nil {
 		t.Fatal("the worktree should fail")
@@ -542,5 +552,38 @@ func TestTasksAndShowCarryTheAgentAsWorkspaceSlashRole(t *testing.T) {
 	v, _ := r.svc.Show(bg, task)
 	if len(list) != 1 || list[0].Agent != "named/docs" || v.Agent != "named/docs" {
 		t.Errorf("list %+v, show agent %q", list, v.Agent)
+	}
+}
+
+// An image without git is refused when the workspace is created, with a message
+// that says git is missing, not later in `git worktree add` (design D44).
+func TestCreateRefusesAnImageWithoutGit(t *testing.T) {
+	r := newWsRig(t)
+	r.home = true // the refusal also takes back the home volume
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+		if len(cmd) == 2 && cmd[0] == "git" && cmd[1] == "--version" {
+			return nil, `exec: "git": executable file not found in $PATH`, 1, true
+		}
+		return nil, "", 0, false
+	}
+	folder := r.folder("nogit")
+	_, _, err := r.ws.Create(bg, CreateRequest{Name: "nogit", Path: folder, Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
+	var bad *domain.InvalidError
+	if !errors.As(err, &bad) {
+		t.Fatalf("err = %v, want an invalid request", err)
+	}
+	for _, want := range []string{"has no git", "executable file not found", "environment.image", "D44"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the message lacks %q: %v", want, err)
+		}
+	}
+	if list, _ := r.store.Workspaces(bg); len(list) != 0 {
+		t.Errorf("workspace left behind: %+v", list)
+	}
+	if entries, _ := os.ReadDir(folder); len(entries) != 0 {
+		t.Errorf("the clone was left in the folder: %v", entries)
+	}
+	if inv, err := r.rt.Adapter.Inventory(bg); err != nil || len(inv.Networks)+len(inv.Sidecars)+len(inv.Volumes) != 0 {
+		t.Errorf("runtime resources left behind: %+v, %v", inv, err)
 	}
 }

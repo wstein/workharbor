@@ -169,7 +169,39 @@ func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string
 		_ = w.svc.rt.Delete(bg, env)
 		return "", err
 	}
+	if err := w.checkGit(ctx, env, spec.Image); err != nil {
+		// Like Create's own undo: a volume outlives its environment (§4.4).
+		bg := context.WithoutCancel(ctx)
+		res, _ := w.svc.rt.Resources(bg, env)
+		_ = w.svc.rt.Stop(bg, env)
+		_ = w.svc.rt.Delete(bg, env)
+		for _, v := range res.Volumes {
+			_ = w.svc.rt.RemoveVolume(bg, v)
+		}
+		return "", err
+	}
 	return env, nil
+}
+
+// checkGit refuses an environment whose image has no git (design D44). The
+// agents' worktrees and the bundle export run git inside the environment, so an
+// image without it would fail later in `git worktree add` with an exec error;
+// this says what is missing, when the workspace is created. The image may be
+// the workharbor base image, which has git, or a repository's own.
+func (w *Workspaces) checkGit(ctx context.Context, env, image string) error {
+	out, code, err := w.svc.exec(ctx, env, runtime.ExecRequest{Cmd: []string{"git", "--version"}, Env: gitEnv()})
+	if err != nil {
+		return fmt.Errorf("check git in environment %s: %w", env, err)
+	}
+	if code == 0 {
+		return nil
+	}
+	if len(out) > 200 {
+		out = out[:200]
+	}
+	return &domain.InvalidError{Msg: fmt.Sprintf(
+		"the environment image %q has no git (`git --version` exited %d: %q): agents need git for their worktrees and for the bundle export, so use an image that has it, or leave environment.image unset for the workharbor base image (D44)",
+		image, code, strings.TrimSpace(out))}
 }
 
 // addWorktree makes the agent's worktree and branch inside the environment. The
