@@ -89,6 +89,15 @@ Do not push or merge without being asked. The repository allows only **rebase me
 
 **Issues.** When work on an issue is done (its closing commit is on `main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
 
+**Working on an issue, start to finish.** Several sessions share this repository, so each issue gets its own worktree and branch, and finishes the same way:
+
+1. **Start.** Read the issue and the design sections it names, then `git worktree add ../workharbor-<topic> -b <type>/<topic> main` and work only there. Do not switch branches in the shared checkout.
+2. **Commit** as above: atomic commits by topic, specification (design) before code, each with its trailers (`Refs: #N`, and `Closes: #N` on the last one). Run `make check` first, and confirm each commit landed (`git log -1`).
+3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then, in the shared checkout, `git checkout main` and `git merge --ff-only <branch>`.
+4. **Tick and comment.** Update the issue as described under **Issues**, with a comment that names the commits and anything left undone.
+5. **Clean up.** `git worktree remove <path>`, then delete the branch. If `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`.
+6. **Push only when asked.** The fast-forward is local; pushing publishes the commits, runs CI and closes the issue through its `Closes:` trailer. Ask at the end of an issue whether to push.
+
 ## License
 
 EUPL-1.2. New files need no header; contributions are accepted under the same licence.
