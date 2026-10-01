@@ -205,6 +205,13 @@ Findings that shape the contract:
 
 Desired state lives in the database. A loop compares it with actual runtime state, marks orphaned runs `interrupted`, and resumes from the agent session rather than the VM. This is the answer to Apple Container's missing restart-policy recovery.
 
+Measured in spike #2 (issue #2):
+
+- **No restart policy.** After the host-side runtime process of a container was killed, it stayed `stopped`, with its volume state intact, until started again.
+- **A service restart ends everything.** `container system stop` took 0.4 s and ended every container VM at once; after `container system start` (0.4 s) every container was `stopped`, including those that had been running. Nothing came back by itself. Root filesystems, volumes, bind-mounted data, networks (also custom `--internal` ones) and images survived; every process inside the containers was gone.
+- **After a Mac reboot** nothing starts the services either: there is no LaunchAgent or LaunchDaemon plist for them on disk. The supervisor's own launchd job must run `container system start --disable-kernel-install` (the flag avoids the interactive kernel-install prompt, which was not exercised) and then reconcile. A reboot itself was not triggered.
+- **Recovery loop.** List containers, start those that should be running, wait for `exec` to answer (about 100 ms after start), then resume the agent from its session. Container IPs change on every start, so they are read again each time and never stored.
+
 ### 5.4 Events and idempotency
 
 Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
