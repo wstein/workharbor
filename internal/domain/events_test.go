@@ -192,3 +192,27 @@ func TestDecisionRecordsDenialExpiryAndSupersession(t *testing.T) {
 		t.Errorf("refused answers recorded %v", kinds(events))
 	}
 }
+
+func TestPendingEventsDoNotForget(t *testing.T) {
+	a, _, _ := newRunningAggregate(t)
+	first := a.PendingEvents()
+	if len(first) != 1 || len(a.PendingEvents()) != 1 {
+		t.Fatalf("PendingEvents must not drain: %d then %d", len(first), len(a.PendingEvents()))
+	}
+	first[0].Kind = "tampered"
+	if a.PendingEvents()[0].Kind == "tampered" {
+		t.Error("PendingEvents must return a copy")
+	}
+	if got := a.TakeEvents(); len(got) != 1 || len(a.PendingEvents()) != 0 {
+		t.Errorf("TakeEvents drains: %d taken, %d pending after", len(got), len(a.PendingEvents()))
+	}
+
+	d, _ := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Now: t0})
+	if first, second := len(d.PendingEvents()), len(d.PendingEvents()); first != 1 || second != 1 {
+		t.Errorf("a Decision's PendingEvents must not drain: %d then %d", first, second)
+	}
+	d.TakeEvents()
+	if len(d.PendingEvents()) != 0 {
+		t.Error("TakeEvents drains a Decision too")
+	}
+}

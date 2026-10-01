@@ -221,6 +221,10 @@ func (d *Decision) record(kind EventKind, payload any, at time.Time) {
 	d.events = append(d.events, newEvent(d.TaskID, kind, payload, at))
 }
 
+// PendingEvents returns the recorded events without forgetting them, so a
+// store can write them and forget them only once the write has committed.
+func (d *Decision) PendingEvents() []Event { return append([]Event(nil), d.events...) }
+
 // TakeEvents returns the events the changes since the last call produced and
 // forgets them. The store writes the new state and these events in one
 // transaction (design §5.4).
