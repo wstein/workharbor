@@ -19,7 +19,7 @@ func usageEvent(t *testing.T, task, run, repo, auth string, tok *domain.UsageTok
 	return ev
 }
 
-func TestUsageTotalsKeepAuthSourceAndUnknownsApart(t *testing.T) {
+func TestUsageTotalsKeepAuthAndUnknownsApart(t *testing.T) {
 	s := openTemp(t)
 	day1 := time.Date(2026, 10, 1, 23, 0, 0, 0, time.UTC)
 	day2 := day1.Add(2 * time.Hour)
@@ -27,10 +27,9 @@ func TestUsageTotalsKeepAuthSourceAndUnknownsApart(t *testing.T) {
 		return &domain.UsageTokens{Input: i, Output: o, CacheRead: r, CacheWrite: w}
 	}
 	rep := func(n int64) *domain.UsageCost { return &domain.UsageCost{MicroUSD: n, Source: domain.CostReported} }
-	est := &domain.UsageCost{MicroUSD: 50, Source: domain.CostEstimated, PriceTable: "v1"}
 	for _, e := range []domain.Event{
 		usageEvent(t, "t1", "r1", "a/b", "subscription", tok(10, 20, 30, 40), rep(100), day1),
-		usageEvent(t, "t1", "r1", "a/b", "subscription", tok(1, 2, 3, 4), est, day2),
+		usageEvent(t, "t1", "r1", "a/b", "subscription", tok(1, 2, 3, 4), rep(50), day2),
 		usageEvent(t, "t1", "r2", "a/b", "api-key", nil, nil, day2), // nothing reported
 		usageEvent(t, "t2", "r3", "c/d", "api-key", tok(5, 5, 5, 5), rep(7), day2),
 	} {
@@ -51,7 +50,7 @@ func TestUsageTotalsKeepAuthSourceAndUnknownsApart(t *testing.T) {
 		t.Errorf("api-key row = %+v: an unreported turn is counted, not read as zero spend", api)
 	}
 	want := domain.UsageTokens{Input: 11, Output: 22, CacheRead: 33, CacheWrite: 44}
-	if sub.Auth != "subscription" || sub.Turns != 2 || sub.Tokens != want || sub.ReportedMicroUSD != 100 || sub.EstimatedMicroUSD != 50 || sub.TurnsWithoutCost != 0 {
+	if sub.Auth != "subscription" || sub.Turns != 2 || sub.Tokens != want || sub.ReportedMicroUSD != 150 || sub.TurnsWithoutCost != 0 {
 		t.Errorf("subscription row = %+v: reported and estimated are separate columns", sub)
 	}
 	if !sub.First.Equal(day1) || !sub.Last.Equal(day2) {
@@ -152,5 +151,43 @@ func TestAppendUsageRefusesOtherEvents(t *testing.T) {
 	s := openTemp(t)
 	if _, err := s.AppendUsage(bg, "claude", audit("t1", domain.EventTaskState)); err == nil {
 		t.Error("only a usage audit entry may be appended here")
+	}
+}
+
+func TestLatestBalanceIsAReadingFromTheAudit(t *testing.T) {
+	s := openTemp(t)
+	t0 := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	if b, err := s.LatestBalance(bg, "claude"); err != nil || b != nil {
+		t.Fatalf("no balance reported yet: %+v %v", b, err)
+	}
+	with := func(task string, at time.Time, micro int64) domain.Event {
+		ev, err := domain.NewUsageEvent(domain.ID(task), domain.UsageRecorded{
+			RunID: "r1", Agent: "claude", Auth: "api-key", Model: "m", Balance: &domain.UsageBalance{RemainingMicroUSD: micro},
+		}, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ev
+	}
+	for _, e := range []domain.Event{
+		with("t1", t0, 9_000_000), with("t2", t0.Add(time.Hour), 8_500_000),
+		usageEvent(t, "t1", "r1", "a/b", "api-key", nil, nil, t0.Add(2*time.Hour)), // reports no balance: not a zero balance
+	} {
+		if _, err := s.AppendUsage(bg, "claude", e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, err := s.LatestBalance(bg, "claude")
+	if err != nil || b == nil || b.RemainingMicroUSD != 8_500_000 || !b.At.Equal(t0.Add(time.Hour)) {
+		t.Errorf("latest balance = %+v, %v", b, err)
+	}
+	if _, err := s.Purge(bg, PurgeSpec{TaskID: "t2", Actor: "werner", All: true}); err != nil {
+		t.Fatal(err)
+	}
+	if b2, _ := s.LatestBalance(bg, "claude"); b2 == nil || b2.RemainingMicroUSD != 8_500_000 {
+		t.Errorf("a purge changed the balance: %+v", b2)
+	}
+	if other, _ := s.LatestBalance(bg, "codex"); other != nil {
+		t.Errorf("another agent has no balance: %+v", other)
 	}
 }

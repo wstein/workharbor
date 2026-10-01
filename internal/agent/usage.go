@@ -6,15 +6,14 @@ import (
 	"time"
 )
 
-// CostSource says where a cost figure comes from (design §5.7).
+// CostSource says where a cost figure comes from (design §5.7). workharbor
+// never prices tokens itself, because a price table in the supervisor goes
+// stale: a cost exists only when the agent reports it.
 type CostSource string
 
 const (
 	// CostReported is the agent's own figure.
 	CostReported CostSource = "reported"
-	// CostEstimated is computed by workharbor from a pinned, dated price table
-	// and is labelled as an estimate wherever it is shown.
-	CostEstimated CostSource = "estimated"
 )
 
 // Names of the usage windows Claude Code reports (spike #1).
@@ -22,6 +21,13 @@ const (
 	WindowFiveHour = "five_hour"
 	WindowSevenDay = "seven_day"
 )
+
+// Balance is what the account has left, as the agent reports it with a turn,
+// in millionths of a US dollar. It is streamed like the token counts and is
+// nil when the agent reports none, which is not zero.
+type Balance struct {
+	RemainingMicroUSD int64 `json:"remaining_micro_usd"`
+}
 
 // Cost is an amount and where it comes from. In api-key mode it is real
 // spend; in subscription mode it is notional (design §5.7).
@@ -53,6 +59,7 @@ type Usage struct {
 	Model   string        `json:"model"`
 	Tokens  *TokenCounts  `json:"tokens,omitempty"`
 	Cost    *Cost         `json:"cost,omitempty"`
+	Balance *Balance      `json:"balance,omitempty"`
 	Windows []UsageWindow `json:"windows,omitempty"`
 }
 
@@ -73,9 +80,12 @@ func (u Usage) Validate() error {
 		if u.Cost.MicroUSD < 0 {
 			return fmt.Errorf("%w: a negative cost", ErrBadUsage)
 		}
-		if u.Cost.Source != CostReported && u.Cost.Source != CostEstimated {
-			return fmt.Errorf("%w: cost source %q is neither reported nor estimated", ErrBadUsage, u.Cost.Source)
+		if u.Cost.Source != CostReported {
+			return fmt.Errorf("%w: cost source %q is not reported", ErrBadUsage, u.Cost.Source)
 		}
+	}
+	if u.Balance != nil && u.Balance.RemainingMicroUSD < 0 {
+		return fmt.Errorf("%w: a negative balance", ErrBadUsage)
 	}
 	for _, w := range u.Windows {
 		if w.Name == "" {

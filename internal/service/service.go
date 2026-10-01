@@ -18,7 +18,6 @@ import (
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/store"
-	"github.com/wstein/workharbor/internal/usage"
 )
 
 // Clock is time as the service sees it, so tests run on an injected clock.
@@ -70,9 +69,6 @@ type Config struct {
 	// or failed (design §9.4). It is best effort: a failure is reported through
 	// OnError and never fails the change. Optional.
 	Notifier notify.Notifier
-	// Prices estimates the cost of a turn whose agent reported tokens and no
-	// cost (design §5.7). The zero table estimates nothing. Optional.
-	Prices usage.PriceTable
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)

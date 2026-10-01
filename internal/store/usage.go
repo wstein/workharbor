@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -109,9 +111,8 @@ type UsageFilter struct {
 
 // UsageRow is the total of the turns of one group and one auth mode. Rows of
 // different auth modes are never added together: the same cost is real spend
-// with an API key and notional on a subscription. Reported and estimated costs
-// are kept apart for the same reason, and a turn whose tokens or cost the agent
-// did not report is counted, not read as zero.
+// with an API key and notional on a subscription. A turn whose tokens or cost
+// the agent did not report is counted, not read as zero.
 type UsageRow struct {
 	Key  string `json:"key"`
 	Auth string `json:"auth"`
@@ -120,9 +121,8 @@ type UsageRow struct {
 	Tokens            domain.UsageTokens `json:"tokens"`
 	TurnsWithoutToken int64              `json:"turns_without_tokens"`
 
-	ReportedMicroUSD  int64 `json:"reported_micro_usd"`
-	EstimatedMicroUSD int64 `json:"estimated_micro_usd"`
-	TurnsWithoutCost  int64 `json:"turns_without_cost"`
+	ReportedMicroUSD int64 `json:"reported_micro_usd"`
+	TurnsWithoutCost int64 `json:"turns_without_cost"`
 
 	First time.Time `json:"first"`
 	Last  time.Time `json:"last"`
@@ -135,7 +135,6 @@ const usageTemplate = `SELECT {KEY} AS k, COALESCE(json_extract(CAST(payload AS 
 	COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.tokens.cache_write')), 0),
 	SUM(json_extract(CAST(payload AS TEXT), '$.tokens') IS NULL),
 	COALESCE(SUM(CASE WHEN json_extract(CAST(payload AS TEXT), '$.cost.source') = 'reported' THEN json_extract(CAST(payload AS TEXT), '$.cost.micro_usd') END), 0),
-	COALESCE(SUM(CASE WHEN json_extract(CAST(payload AS TEXT), '$.cost.source') = 'estimated' THEN json_extract(CAST(payload AS TEXT), '$.cost.micro_usd') END), 0),
 	SUM(json_extract(CAST(payload AS TEXT), '$.cost') IS NULL), MIN(at), MAX(at)
 	FROM events WHERE {WHERE} GROUP BY k, auth ORDER BY k, auth`
 
@@ -183,11 +182,35 @@ func (s *Store) UsageTotals(ctx context.Context, f UsageFilter, group UsageGroup
 		var r UsageRow
 		var first, last int64
 		if err := rows.Scan(&r.Key, &r.Auth, &r.Turns, &r.Tokens.Input, &r.Tokens.Output, &r.Tokens.CacheRead, &r.Tokens.CacheWrite,
-			&r.TurnsWithoutToken, &r.ReportedMicroUSD, &r.EstimatedMicroUSD, &r.TurnsWithoutCost, &first, &last); err != nil {
+			&r.TurnsWithoutToken, &r.ReportedMicroUSD, &r.TurnsWithoutCost, &first, &last); err != nil {
 			return nil, err
 		}
 		r.First, r.Last = fromNano(first), fromNano(last)
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// BalanceReading is the latest balance an agent reported.
+type BalanceReading struct {
+	Agent             string    `json:"agent"`
+	RemainingMicroUSD int64     `json:"remaining_micro_usd"`
+	At                time.Time `json:"at"`
+}
+
+// LatestBalance returns the latest balance the agent reported with a turn, or
+// nil when it never reported one. Like the windows it is a reading, never a
+// total: it is read from the usage audit entries, so a purge does not change it.
+func (s *Store) LatestBalance(ctx context.Context, agent string) (*BalanceReading, error) {
+	var remaining, at int64
+	err := s.db.QueryRowContext(ctx, `SELECT json_extract(CAST(payload AS TEXT), '$.balance.remaining_micro_usd'), at FROM events
+		WHERE kind = ? AND json_extract(CAST(payload AS TEXT), '$.agent') = ? AND json_extract(CAST(payload AS TEXT), '$.balance') IS NOT NULL
+		ORDER BY at DESC, seq DESC LIMIT 1`, string(domain.EventUsage), agent).Scan(&remaining, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil //nolint:nilnil // no reading is not an error
+	}
+	if err != nil {
+		return nil, fmt.Errorf("store: latest balance: %w", err)
+	}
+	return &BalanceReading{Agent: agent, RemainingMicroUSD: remaining, At: fromNano(at)}, nil
 }

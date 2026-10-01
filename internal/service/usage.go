@@ -12,11 +12,10 @@ import (
 )
 
 // recordUsage turns an agent's usage report into an audit entry (design §5.7)
-// and keeps the usage windows it carries. The agent's own cost is stored as
-// reported. When the agent reports tokens and no cost, the cost is estimated
-// from the configured price table and stored as estimated with the table's
-// version, never as reported; with no price for the model there is no cost. A
-// report that is not well formed is reported and dropped: the run goes on.
+// and keeps the usage windows it carries. Tokens, cost, balance and windows are
+// the agent's own figures, stored as it reported them: a figure the agent did
+// not report is absent, and workharbor never prices tokens itself. A report
+// that is not well formed is reported and dropped: the run goes on.
 func (s *Service) recordUsage(ctx context.Context, task, run domain.ID, e agent.Event) {
 	if e.Usage == nil {
 		return
@@ -40,13 +39,11 @@ func (s *Service) recordUsage(ctx context.Context, task, run domain.ID, e agent.
 	if t := e.Usage.Tokens; t != nil {
 		rec.Tokens = &domain.UsageTokens{Input: t.Input, Output: t.Output, CacheRead: t.CacheRead, CacheWrite: t.CacheWrite}
 	}
-	switch {
-	case e.Usage.Cost != nil:
-		rec.Cost = &domain.UsageCost{MicroUSD: e.Usage.Cost.MicroUSD, Source: domain.CostSource(e.Usage.Cost.Source)}
-	case rec.Tokens != nil:
-		if c, ok := s.cfg.Prices.Estimate(rec.Model, *rec.Tokens); ok {
-			rec.Cost = &c
-		}
+	if c := e.Usage.Cost; c != nil {
+		rec.Cost = &domain.UsageCost{MicroUSD: c.MicroUSD, Source: domain.CostSource(c.Source)}
+	}
+	if b := e.Usage.Balance; b != nil {
+		rec.Balance = &domain.UsageBalance{RemainingMicroUSD: b.RemainingMicroUSD}
 	}
 	for _, w := range e.Usage.Windows {
 		rec.Windows = append(rec.Windows, domain.UsageWindow{Name: w.Name, Utilization: w.Utilization, ResetsAt: w.ResetsAt})
@@ -80,8 +77,7 @@ type UsageQuery struct {
 // UsageRow is one row of a usage report. Notional is true for a subscription:
 // the plan is paid flat, so the cost is what the turns would have cost and the
 // usage window is the number that limits the developer (design §5.2). A
-// reported and an estimated cost are separate figures, and a turn without
-// tokens or without a cost is counted, not read as zero.
+// turn without tokens or without a cost is counted, not read as zero.
 type UsageRow struct {
 	store.UsageRow
 	Notional bool `json:"notional"`
@@ -96,6 +92,8 @@ type UsageReport struct {
 	Until   time.Time             `json:"until,omitzero"`
 	Rows    []UsageRow            `json:"rows"`
 	Windows []store.WindowReading `json:"windows"`
+	// Balance is the latest balance the agent reported, or nil.
+	Balance *store.BalanceReading `json:"balance,omitempty"`
 }
 
 // Usage totals usage by group. It reads the audit entries, so it is the same
@@ -113,7 +111,11 @@ func (s *Service) Usage(ctx context.Context, q UsageQuery) (UsageReport, error) 
 	if err != nil {
 		return UsageReport{}, err
 	}
-	rep := UsageReport{Group: q.Group, Since: q.Since, Until: q.Until, Rows: make([]UsageRow, 0, len(rows)), Windows: windows}
+	balance, err := s.store.LatestBalance(ctx, s.ag.Name())
+	if err != nil {
+		return UsageReport{}, err
+	}
+	rep := UsageReport{Balance: balance, Group: q.Group, Since: q.Since, Until: q.Until, Rows: make([]UsageRow, 0, len(rows)), Windows: windows}
 	if rep.Windows == nil {
 		rep.Windows = []store.WindowReading{}
 	}
@@ -133,14 +135,14 @@ func (s *Service) UsageLine(ctx context.Context, task domain.ID) (string, error)
 }
 
 // FormatUsageLine writes a report as one line. In subscription mode the window
-// comes first and the cost is called notional; a cost always says whether it
-// is reported or estimated.
+// comes first and the cost is called notional; a cost is always the agent's
+// reported figure, and a balance is shown when the agent reported one.
 func FormatUsageLine(rep UsageReport) string {
 	if len(rep.Rows) == 0 {
 		return ""
 	}
 	var turns, in, out, unknown int64
-	var reported, estimated int64
+	var reported int64
 	subscription := false
 	for _, r := range rep.Rows {
 		turns += r.Turns
@@ -148,7 +150,6 @@ func FormatUsageLine(rep UsageReport) string {
 		out += r.Tokens.Output
 		unknown += r.TurnsWithoutCost
 		reported += r.ReportedMicroUSD
-		estimated += r.EstimatedMicroUSD
 		subscription = subscription || r.Notional
 	}
 	var parts []string
@@ -158,22 +159,15 @@ func FormatUsageLine(rep UsageReport) string {
 		}
 	}
 	parts = append(parts, fmt.Sprintf("%d turns, %s in, %s out", turns, Compact(in), Compact(out)))
-	var cost []string
-	if reported > 0 {
-		cost = append(cost, FormatMicroUSD(reported)+" reported")
+	c := "cost not reported"
+	if reported > 0 || unknown == 0 {
+		c = FormatMicroUSD(reported) + " reported"
 	}
-	if estimated > 0 {
-		cost = append(cost, FormatMicroUSD(estimated)+" estimated")
-	}
-	switch {
-	case len(cost) == 0 && unknown > 0:
-		cost = append(cost, "cost not reported")
-	case len(cost) == 0:
-		cost = append(cost, "$0.0000 reported")
-	}
-	c := strings.Join(cost, " + ")
 	if subscription {
 		c += ", notional (subscription)"
+	}
+	if rep.Balance != nil {
+		c += "; balance " + FormatMicroUSD(rep.Balance.RemainingMicroUSD) + " left"
 	}
 	return "usage: " + strings.Join(parts, "; ") + "; " + c
 }

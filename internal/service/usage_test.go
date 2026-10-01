@@ -12,7 +12,6 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/store"
-	"github.com/wstein/workharbor/internal/usage"
 )
 
 var updateUsage = flag.Bool("update-usage", false, "rewrite the usage golden file")
@@ -71,7 +70,7 @@ func TestUsageFromRecordedRunsAddsUpAndSurvivesAPurge(t *testing.T) {
 			t.Fatalf("%s: %+v, %v", when, rep, err)
 		}
 		row := rep.Rows[0]
-		if row.Turns != int64(len(events)) || row.Tokens != wantTokens || row.ReportedMicroUSD != wantCost || row.EstimatedMicroUSD != 0 {
+		if row.Turns != int64(len(events)) || row.Tokens != wantTokens || row.ReportedMicroUSD != wantCost {
 			t.Errorf("%s: row = %+v, want %d turns, %+v tokens, %d reported", when, row, len(events), wantTokens, wantCost)
 		}
 		if row.Auth != "subscription" || !row.Notional || row.Key != "t1" {
@@ -84,50 +83,40 @@ func TestUsageFromRecordedRunsAddsUpAndSurvivesAPurge(t *testing.T) {
 	}
 	check("after a purge")
 	line, err := r.svc.UsageLine(bg, "t1")
-	if err != nil || !strings.Contains(line, "reported") || !strings.Contains(line, "notional (subscription)") || strings.Contains(line, "estimated") {
+	if err != nil || !strings.Contains(line, "reported") || !strings.Contains(line, "notional (subscription)") {
 		t.Errorf("usage line = %q, %v", line, err)
 	}
 }
 
-func TestACostTheAgentDidNotReportIsEstimatedAndLabelled(t *testing.T) {
+// workharbor never prices tokens itself: a turn the agent reported without a
+// cost has tokens and no cost, and the balance is the agent's own reading.
+func TestNothingIsEstimatedAndTheBalanceIsTheAgents(t *testing.T) {
 	r := newRig(t)
-	at := t0.Add(time.Minute)
-	turn := agent.Event{Kind: agent.EventUsage, At: at, Usage: &agent.Usage{
-		Model: "m", Tokens: &agent.TokenCounts{Input: 1_000_000, Output: 1_000_000},
-	}}
-	// No price table: tokens are recorded, no cost is invented.
-	r.svc.recordUsage(bg, "t1", "r1", turn)
+	tokens := &agent.TokenCounts{Input: 1_000_000, Output: 1_000_000}
+	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, At: t0.Add(time.Minute), Usage: &agent.Usage{Model: "m", Tokens: tokens}})
 	rows, _ := r.store.UsageTotals(bg, store.UsageFilter{}, store.GroupAll)
-	if len(rows) != 1 || rows[0].ReportedMicroUSD != 0 || rows[0].EstimatedMicroUSD != 0 || rows[0].TurnsWithoutCost != 1 || rows[0].Tokens.Input != 1_000_000 {
-		t.Fatalf("without prices: %+v", rows)
+	if len(rows) != 1 || rows[0].ReportedMicroUSD != 0 || rows[0].TurnsWithoutCost != 1 || rows[0].Tokens.Input != 1_000_000 {
+		t.Fatalf("rows = %+v: tokens are recorded and no cost is invented", rows)
 	}
-	r.svc.cfg.Prices = usage.PriceTable{Version: "2026-10-01", Models: map[string]usage.Price{"m": {Input: 3_000_000, Output: 15_000_000}}}
-	r.svc.recordUsage(bg, "t1", "r1", turn)
-	// A cost the agent reports is never replaced by an estimate.
-	reported := turn
-	reported.Usage = &agent.Usage{Model: "m", Tokens: turn.Usage.Tokens, Cost: &agent.Cost{MicroUSD: 7, Source: agent.CostReported}}
-	r.svc.recordUsage(bg, "t1", "r1", reported)
-	rows, _ = r.store.UsageTotals(bg, store.UsageFilter{}, store.GroupAll)
-	if rows[0].EstimatedMicroUSD != 18_000_000 || rows[0].ReportedMicroUSD != 7 || rows[0].TurnsWithoutCost != 1 {
-		t.Errorf("rows = %+v", rows[0])
-	}
-	evs, _ := r.store.EventsSince(bg, "t1", 0, 50)
-	var est *domain.UsageCost
-	for _, e := range evs {
-		var u domain.UsageRecorded
-		if e.Kind == domain.EventUsage && json.Unmarshal(e.Payload, &u) == nil && u.Cost != nil && u.Cost.Source == domain.CostEstimated {
-			est = u.Cost
-			if e.Tier != domain.TierAudit {
-				t.Errorf("a usage entry is audit tier, got %s", e.Tier)
-			}
-		}
-	}
-	if est == nil || est.PriceTable != "2026-10-01" {
-		t.Errorf("an estimate must name its price table: %+v", est)
-	}
-	line := FormatUsageLine(UsageReport{Rows: []UsageRow{{UsageRow: rows[0]}}})
-	if !strings.Contains(line, "$0.0000 reported") && !strings.Contains(line, "estimated") {
+	line, _ := r.svc.UsageLine(bg, "t1")
+	if !strings.Contains(line, "cost not reported") || strings.Contains(line, "balance") {
 		t.Errorf("line = %q", line)
+	}
+	// A cost and a balance the agent reports are stored as reported.
+	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, At: t0.Add(2 * time.Minute), Usage: &agent.Usage{
+		Model: "m", Tokens: tokens, Cost: &agent.Cost{MicroUSD: 7, Source: agent.CostReported}, Balance: &agent.Balance{RemainingMicroUSD: 12_340_000},
+	}})
+	rep, err := r.svc.Usage(bg, UsageQuery{TaskID: "t1"})
+	if err != nil || rep.Balance == nil || rep.Balance.RemainingMicroUSD != 12_340_000 || rep.Rows[0].ReportedMicroUSD != 7 {
+		t.Fatalf("report = %+v, %v", rep, err)
+	}
+	if line := FormatUsageLine(rep); !strings.Contains(line, "balance $12.3400 left") || !strings.Contains(line, "reported") {
+		t.Errorf("line = %q", line)
+	}
+	// A source other than reported is refused: there is no estimate to label.
+	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{Model: "m", Cost: &agent.Cost{MicroUSD: 1, Source: "estimated"}}})
+	if len(r.errs) != 1 {
+		t.Errorf("errors = %v, want one for the estimated source", r.errs)
 	}
 }
 
@@ -191,10 +180,11 @@ func TestUsageReportJSONIsStable(t *testing.T) {
 		Group: store.GroupTask,
 		Since: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
 		Rows: []UsageRow{
-			{UsageRow: store.UsageRow{Key: "t1", Auth: "api-key", Turns: 2, Tokens: domain.UsageTokens{Input: 18, Output: 194, CacheRead: 43502, CacheWrite: 233}, ReportedMicroUSD: 5804, EstimatedMicroUSD: 120, TurnsWithoutCost: 1, First: d, Last: d.Add(time.Hour)}},
+			{UsageRow: store.UsageRow{Key: "t1", Auth: "api-key", Turns: 2, Tokens: domain.UsageTokens{Input: 18, Output: 194, CacheRead: 43502, CacheWrite: 233}, ReportedMicroUSD: 5804, TurnsWithoutCost: 1, First: d, Last: d.Add(time.Hour)}},
 			{UsageRow: store.UsageRow{Key: "t1", Auth: "subscription", Turns: 1, TurnsWithoutToken: 1, ReportedMicroUSD: 1, First: d, Last: d}, Notional: true},
 		},
 		Windows: []store.WindowReading{{Account: "claude", Name: "five_hour", Utilization: 0.42, ResetsAt: d.Add(3 * time.Hour), At: d}},
+		Balance: &store.BalanceReading{Agent: "claude", RemainingMicroUSD: 12_340_000, At: d},
 	}
 	got, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {

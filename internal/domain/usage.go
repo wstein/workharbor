@@ -10,14 +10,12 @@ import (
 const EventUsage EventKind = "usage.recorded"
 
 // CostSource says where a cost figure comes from. A reported cost is the
-// agent's own figure; an estimated one is computed by workharbor from a pinned,
-// dated price table, and is never shown as a reported one.
+// agent's own figure. workharbor does not price tokens itself, because a price
+// table in the supervisor goes stale, so there is no other source.
 type CostSource string
 
-const (
-	CostReported  CostSource = "reported"
-	CostEstimated CostSource = "estimated"
-)
+// CostReported is the agent's own figure.
+const CostReported CostSource = "reported"
 
 // UsageTokens are the tokens of one turn.
 type UsageTokens struct {
@@ -28,11 +26,16 @@ type UsageTokens struct {
 }
 
 // UsageCost is an amount in millionths of a US dollar, so no float holds money,
-// and where it comes from. An estimate names the price table it used.
+// and where it comes from.
 type UsageCost struct {
-	MicroUSD   int64      `json:"micro_usd"`
-	Source     CostSource `json:"source"`
-	PriceTable string     `json:"price_table,omitempty"`
+	MicroUSD int64      `json:"micro_usd"`
+	Source   CostSource `json:"source"`
+}
+
+// UsageBalance is what the account has left as of a turn, in millionths of a US
+// dollar, as the agent reports it.
+type UsageBalance struct {
+	RemainingMicroUSD int64 `json:"remaining_micro_usd"`
 }
 
 // UsageWindow is how much of a rolling usage limit is used, as of a turn.
@@ -54,6 +57,7 @@ type UsageRecorded struct {
 	Model   string        `json:"model"`
 	Tokens  *UsageTokens  `json:"tokens,omitempty"`
 	Cost    *UsageCost    `json:"cost,omitempty"`
+	Balance *UsageBalance `json:"balance,omitempty"`
 	Windows []UsageWindow `json:"windows,omitempty"`
 }
 
@@ -61,7 +65,7 @@ type UsageRecorded struct {
 var (
 	ErrUsageRun   = invalid("a usage record needs a task, a run, an agent and a model")
 	ErrUsageValue = invalid("a usage record has a negative count or cost, or a utilization outside 0 to 1")
-	ErrUsageCost  = invalid("a cost needs the source reported or estimated, and an estimate names its price table")
+	ErrUsageCost  = invalid("a cost needs the source reported")
 )
 
 // NewUsageEvent checks a usage record and returns its audit event.
@@ -76,9 +80,12 @@ func NewUsageEvent(task ID, u UsageRecorded, at time.Time) (Event, error) {
 		if c.MicroUSD < 0 {
 			return Event{}, ErrUsageValue
 		}
-		if c.Source != CostReported && (c.Source != CostEstimated || c.PriceTable == "") {
+		if c.Source != CostReported {
 			return Event{}, ErrUsageCost
 		}
+	}
+	if b := u.Balance; b != nil && b.RemainingMicroUSD < 0 {
+		return Event{}, ErrUsageValue
 	}
 	for _, w := range u.Windows {
 		if w.Name == "" || w.Utilization < 0 || w.Utilization > 1 {
