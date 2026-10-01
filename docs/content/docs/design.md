@@ -48,7 +48,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D5 | Approval boundaries are **data** (a policy table), enforced at the forge adapter, never by prompts | Prompt rules are not a security boundary |
 | D6 | Supervisor is a **DB-first reconciler**, not a process tree | Only realistic answer to reboot/restart gaps |
 | D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
-| D8 | **Web UI: server-rendered Go with `templ` templates, htmx and SSE**, embedded in the binary. No Node toolchain and no CSS framework in release 1. The JSON API and the HTML handlers call the **same service layer**, so nothing is implemented twice | Release 1 is a read-mostly UI whose only write is answering Decisions. One language, one binary, fewer dependencies and a smaller attack surface on the same origin. Revisit (Svelte) if the UI needs rich client-side state such as inline diff review or a takeover panel |
+| D8 | **Web UI: server-rendered Go with `templ` templates, htmx and SSE**, embedded in the binary. No Node toolchain and no CSS framework in release 1. The JSON API and the HTML handlers call the **same service layer**, so nothing is implemented twice | Release 1 is a small remote-control UI: live transcript, messages, start and pause/cancel, and answering Decisions (§9.3). One language, one binary, fewer dependencies and a smaller attack surface on the same origin. Revisit (Svelte) if the UI needs rich client-side state such as inline diff review or a takeover panel |
 | D9 | **Documentation site: Hugo with the Hextra theme** (Go module, pinned version), deployed to GitHub Pages, dark by default with a light toggle | Go toolchain only, no Ruby or Node. Fast builds, built-in search and dark mode. Replaces the earlier Jekyll setup |
 
 ## 4. Domain model
@@ -240,7 +240,17 @@ Avoid `review` as a verb (ambiguous). Task refs accept a short ID, a prefix or `
 
 ### 9.3 Web UI
 
-v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Decisions and resource use, with a single summary card per task. Sections "Harbor" (overview) and "Inbox". Writes: answering Decisions only. Pause/resume and editor launch come after v0.
+v0 shows task/issue, repo, branch, PR, recent actions, test results, pending Decisions and resource use, with a single summary card per task. Sections "Harbor" (overview) and "Inbox".
+
+Because the app is a remote for coding agents (§1), v0 also carries the core remote-control loop:
+
+- **Live transcript.** A structured, streamed view of the agent session (messages, tool calls, diffs, test results) over SSE. Not a raw terminal mirror, which reads badly on a phone.
+- **Send a message** to the running agent (mid-run instruction injection, §5.2). Delivery is reported honestly: injected now, or delivered at the next turn.
+- **Start a task** from an issue or a repo, choosing the agent.
+- **Pause, resume and cancel** a run.
+- **Answer Decisions**, as before.
+
+Writes in v0 are therefore: answer Decisions, send messages, start tasks, pause/resume/cancel. Editor launch and takeover (`whr ssh --takeover`) come after v0.
 
 **Stack (D8).** `templ` templates rendered by the Go server, htmx for partial updates and form posts, and the htmx SSE extension for live event and inbox updates. htmx is vendored and version-pinned; styling is plain CSS with design tokens shared with the documentation site (navy and teal, light and dark). Pages are semantic HTML first, so they work without JavaScript for reading. Handlers stay thin: they call the same service layer as the JSON API. Diffs are server-rendered (or use a small library such as diff2html); an interactive terminal (xterm.js) is out of scope for v0.
 
@@ -259,7 +269,7 @@ Push when a blocking Decision stops a task: the value of a supervisor is not hav
 
 ### 9.5 Onboarding
 
-First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI only answers Decisions (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
+First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI is scoped to remote control of running tasks (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
 
 1. **Sign in.** Server URL (reached over the VPN, never public) and the single static access token, stored encrypted. OAuth sign-in comes later (§10).
 2. **Connect the forge.** One forge in release 1, GitHub through a bot token; Gitea, Forgejo and GitLab later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
@@ -338,14 +348,14 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] One agent runner with observed progress and validated recovery
 - [ ] Task/workspace/run/decision model with durable state, event log, reconciler
 - [ ] `whr` CLI (scripting contract, completion, `doctor`)
-- [ ] Read-mostly web UI with inbox
+- [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel (§9.3)
 - [ ] SSH access (certificates, `whr ssh --config`)
 - [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
 - [ ] Single static-token login
 - [ ] One forge via PAT/bot token
 - [ ] Runtime and forge adapters as interfaces with one implementation each
 
-**Explicitly out of release 1:** code-server, JetBrains validation, OAuth, pause/resume and editor launch in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
+**Explicitly out of release 1:** code-server, JetBrains validation, OAuth, editor launch and takeover in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
 
 ### Medium term
 
@@ -354,7 +364,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Additional runners
 - [ ] Drone CI with revision-aware feedback
 - [ ] Resource-aware scheduling, recovery improvements
-- [ ] code-server, UI pause/resume and editor launch, `whr top`
+- [ ] code-server, UI editor launch and takeover, `whr top`
 - [ ] Web onboarding wizard over the same service layer (§9.5); release 1 uses `whr login` and `whr doctor`
 - [ ] Installable PWA for phone use: web app manifest, service worker for the app shell and Web Push alongside ntfy (§9.4). Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and iOS Web Push needs the app installed to the Home Screen (**unverified**). Per-device revocable tokens.
 
