@@ -7,6 +7,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -160,12 +161,33 @@ const (
 	DeliveryResumedTurn Delivery = "resumed_turn"
 )
 
+// PermissionMode says what happens when the agent wants to use a tool. The
+// agent CLIs have coarser modes of their own (design §6); these are the two the
+// supervisor needs, and an adapter maps them. `bypassPermissions` and `auto`
+// are not offered.
+type PermissionMode string
+
+const (
+	// PermissionManual routes every permission prompt to the host. It needs an
+	// adapter with HostApprovals.
+	PermissionManual PermissionMode = "manual"
+	// PermissionDontAsk never asks: a tool on AllowedTools runs and every other
+	// is denied, and the approver is not consulted. A degraded agent runs in it.
+	PermissionDontAsk PermissionMode = "dontAsk"
+)
+
 // StartSpec describes a session to start or resume.
 type StartSpec struct {
 	EnvID   string
 	Workdir string
 	Prompt  string
 	Auth    AuthMode
+	// PermissionMode is fixed when the agent process starts. Empty means
+	// PermissionManual.
+	PermissionMode PermissionMode
+	// AllowedTools are the tools that run without asking in PermissionDontAsk,
+	// and must be empty in any other mode.
+	AllowedTools []string
 	// Approver answers the agent's permission prompts. An adapter that reports
 	// HostApprovals needs one.
 	Approver Approver
@@ -181,7 +203,42 @@ var (
 	ErrNoApprover      = errors.New("this agent routes approvals to the host and needs an Approver")
 	ErrNoSession       = errors.New("no such session")
 	ErrNotRunning      = errors.New("the session is not running")
+	ErrBadSpec         = errors.New("the start spec is not valid")
 )
+
+// Mode returns the permission mode, with the empty value read as manual.
+func (s StartSpec) Mode() PermissionMode {
+	if s.PermissionMode == "" {
+		return PermissionManual
+	}
+	return s.PermissionMode
+}
+
+// CheckSpec checks a StartSpec against what an agent supports, in the order
+// every adapter must report: the auth mode (ErrUnsupportedAuth), the
+// permission mode (ErrUnsupported when the agent cannot honour it, ErrBadSpec
+// when the spec contradicts itself) and the approver (ErrNoApprover).
+func (c Capabilities) CheckSpec(s StartSpec) error {
+	if !c.Supports(s.Auth) {
+		return ErrUnsupportedAuth
+	}
+	switch s.Mode() {
+	case PermissionManual:
+		if len(s.AllowedTools) > 0 {
+			return fmt.Errorf("%w: an allowlist needs the %s mode", ErrBadSpec, PermissionDontAsk)
+		}
+		if !c.HostApprovals {
+			return fmt.Errorf("%w: this agent cannot route approvals to the host, so %s is not available", ErrUnsupported, PermissionManual)
+		}
+		if s.Approver == nil {
+			return ErrNoApprover
+		}
+	case PermissionDontAsk:
+	default:
+		return fmt.Errorf("%w: permission mode %q", ErrUnsupported, s.PermissionMode)
+	}
+	return nil
+}
 
 // Adapter starts and resumes sessions of one coding agent.
 type Adapter interface {

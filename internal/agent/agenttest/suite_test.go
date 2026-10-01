@@ -49,6 +49,7 @@ func TestSuiteNoticesDefectiveAgents(t *testing.T) {
 		{"never reports its session ID", Defects{NoSessionEvent: true}, "the session ID arrives with the session event"},
 		{"leaves a pending approval waiting on stop", Defects{StopLeavesApproval: true}, "stop cancels a pending approval"},
 		{"emits usage events without a payload", Defects{UntypedUsage: true}, "usage events carry a typed payload"},
+		{"asks the approver in dontAsk mode", Defects{AllowlistAsks: true}, "dontAsk runs only the allowlist and never asks"},
 		{"implements another contract version", Defects{WrongContractVersion: true}, "capabilities are reported"},
 	}
 	for _, tc := range tests {

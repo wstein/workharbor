@@ -2,6 +2,7 @@ package agenttest
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -164,6 +165,11 @@ func (s *session) ask(ctx context.Context, sc scenario) {
 
 	var ap agent.Approval
 	switch {
+	case s.spec.Mode() == agent.PermissionDontAsk && !s.f.Defects.AllowlistAsks:
+		ap = agent.Approval{Reason: "not on the allowlist: denied"}
+		if slices.Contains(s.spec.AllowedTools, sc.tool) {
+			ap = agent.Approval{Allow: true}
+		}
 	case s.f.Defects.FailOpenOnError:
 		var err error
 		if ap, err = s.spec.Approver.Approve(actx, req); err != nil {

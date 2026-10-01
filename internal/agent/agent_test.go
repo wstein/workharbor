@@ -125,3 +125,32 @@ func TestAskCapsTheInput(t *testing.T) {
 		t.Errorf("a short input changed: %q", seen)
 	}
 }
+
+func TestCheckSpec(t *testing.T) {
+	full := Capabilities{Headless: true, StructuredEvents: true, MidRunInstruction: true, HostApprovals: true, AuthModes: []AuthMode{AuthSubscription}}
+	degraded := Capabilities{Headless: true, StructuredEvents: true, AuthModes: []AuthMode{AuthSubscription}}
+	ap := ApproverFunc(func(context.Context, ApprovalRequest) (Approval, error) { return Approval{}, nil })
+
+	tests := []struct {
+		name string
+		caps Capabilities
+		spec StartSpec
+		want error
+	}{
+		{"manual with an approver", full, StartSpec{Auth: AuthSubscription, Approver: ap}, nil},
+		{"the empty mode is manual", full, StartSpec{Auth: AuthSubscription, PermissionMode: PermissionManual, Approver: ap}, nil},
+		{"manual without an approver", full, StartSpec{Auth: AuthSubscription}, ErrNoApprover},
+		{"manual on an agent without host approvals", degraded, StartSpec{Auth: AuthSubscription, Approver: ap}, ErrUnsupported},
+		{"dontAsk needs no approver", degraded, StartSpec{Auth: AuthSubscription, PermissionMode: PermissionDontAsk, AllowedTools: []string{"Read"}}, nil},
+		{"dontAsk on a full agent", full, StartSpec{Auth: AuthSubscription, PermissionMode: PermissionDontAsk}, nil},
+		{"an allowlist with manual", full, StartSpec{Auth: AuthSubscription, Approver: ap, AllowedTools: []string{"Read"}}, ErrBadSpec},
+		{"bypassPermissions is not offered", full, StartSpec{Auth: AuthSubscription, PermissionMode: "bypassPermissions", Approver: ap}, ErrUnsupported},
+		{"auto is not offered", full, StartSpec{Auth: AuthSubscription, PermissionMode: "auto", Approver: ap}, ErrUnsupported},
+		{"an auth mode the agent lacks", full, StartSpec{Auth: AuthAPIKey, Approver: ap}, ErrUnsupportedAuth},
+	}
+	for _, tc := range tests {
+		if err := tc.caps.CheckSpec(tc.spec); !errors.Is(err, tc.want) {
+			t.Errorf("%s: CheckSpec = %v, want %v", tc.name, err, tc.want)
+		}
+	}
+}

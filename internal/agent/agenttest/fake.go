@@ -54,6 +54,7 @@ type Defects struct {
 	NoSessionEvent       bool // the session never reports its ID
 	StopLeavesApproval   bool // Stop does not cancel a pending approval
 	UntypedUsage         bool // usage events carry no payload
+	AllowlistAsks        bool // dontAsk still asks the approver, and trusts the answer
 }
 
 type scenarioKind int
@@ -141,15 +142,7 @@ func (f *Fake) Capabilities() agent.Capabilities {
 	return c
 }
 
-func (f *Fake) check(spec agent.StartSpec) error {
-	if !f.caps.Supports(spec.Auth) {
-		return agent.ErrUnsupportedAuth
-	}
-	if f.caps.HostApprovals && spec.Approver == nil {
-		return agent.ErrNoApprover
-	}
-	return nil
-}
+func (f *Fake) check(spec agent.StartSpec) error { return f.caps.CheckSpec(spec) }
 
 // Start implements agent.Adapter.
 func (f *Fake) Start(ctx context.Context, spec agent.StartSpec) (agent.Session, error) {

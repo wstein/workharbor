@@ -54,6 +54,7 @@ func Checks() []Check {
 		{"a denial reaches the agent with its reason", checkApprovalDenied},
 		{"an approver error denies", checkApprovalError},
 		{"an approver that does not answer in time denies", checkApprovalTimeout},
+		{"dontAsk runs only the allowlist and never asks", checkAllowlist},
 		{"stop cancels a pending approval", checkStopCancelsApproval},
 		{"the input of an approval is capped", checkApprovalCap},
 		{"usage events carry a typed payload", checkUsage},
@@ -242,10 +243,16 @@ func approveAll() agent.Approver {
 	})
 }
 
+// newSpec returns the harness's spec with an approver that allows everything,
+// in the mode the adapter can offer: manual for an agent with host approvals,
+// and dontAsk with a one-tool allowlist for one without.
 func newSpec(h Harness) agent.StartSpec {
 	s := h.Spec()
 	s.Approver = approveAll()
 	s.ApprovalTimeout = 2 * time.Second
+	if !h.Adapter.Capabilities().HostApprovals {
+		s.PermissionMode, s.AllowedTools = agent.PermissionDontAsk, []string{"Read"}
+	}
 	return s
 }
 
@@ -254,6 +261,23 @@ func checkStart(ctx context.Context, h Harness) error {
 	bad.Auth = "oauth-from-nowhere"
 	if _, err := h.Adapter.Start(ctx, bad); !errors.Is(err, agent.ErrUnsupportedAuth) {
 		return fmt.Errorf("an auth mode the adapter does not offer: %s, want ErrUnsupportedAuth", show(err))
+	}
+	unknown := newSpec(h)
+	unknown.PermissionMode = "bypassPermissions"
+	if _, err := h.Adapter.Start(ctx, unknown); !errors.Is(err, agent.ErrUnsupported) {
+		return fmt.Errorf("a permission mode outside the contract: %s, want ErrUnsupported", show(err))
+	}
+	mixed := newSpec(h)
+	mixed.PermissionMode, mixed.AllowedTools = agent.PermissionManual, []string{"Read"}
+	if _, err := h.Adapter.Start(ctx, mixed); !errors.Is(err, agent.ErrBadSpec) && !errors.Is(err, agent.ErrUnsupported) {
+		return fmt.Errorf("an allowlist in manual mode: %s, want ErrBadSpec", show(err))
+	}
+	if !h.Adapter.Capabilities().HostApprovals {
+		manual := newSpec(h)
+		manual.PermissionMode, manual.AllowedTools = agent.PermissionManual, nil
+		if _, err := h.Adapter.Start(ctx, manual); !errors.Is(err, agent.ErrUnsupported) {
+			return fmt.Errorf("manual mode on an agent without host approvals: %s, want ErrUnsupported", show(err))
+		}
 	}
 	if h.Adapter.Capabilities().HostApprovals {
 		noApprover := newSpec(h)
@@ -401,6 +425,43 @@ func checkApprovalTimeout(ctx context.Context, h Harness) error {
 	}
 	if rec.Allow {
 		return fmt.Errorf("no answer within the timeout must deny: %+v", rec)
+	}
+	return nil
+}
+
+func checkAllowlist(ctx context.Context, h Harness) error {
+	var mu sync.Mutex
+	asked := 0
+	ap := agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.Approval, error) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		return agent.Approval{Allow: true}, nil // would allow everything
+	})
+	run := func(tool string) (agent.ApprovalRecord, error) {
+		h.Scenarios.AskApproval(tool, "x")
+		spec := newSpec(h)
+		spec.PermissionMode, spec.AllowedTools, spec.Approver = agent.PermissionDontAsk, []string{"Read"}, ap
+		s, err := h.Adapter.Start(ctx, spec)
+		if err != nil {
+			return agent.ApprovalRecord{}, err
+		}
+		events, err := collect(s, 5*time.Second)
+		if err != nil {
+			return agent.ApprovalRecord{}, err
+		}
+		return approvalOf(events)
+	}
+	if rec, err := run("Read"); err != nil || !rec.Allow {
+		return fmt.Errorf("a tool on the allowlist must run: %+v (%s)", rec, show(err))
+	}
+	if rec, err := run("Bash"); err != nil || rec.Allow {
+		return fmt.Errorf("a tool off the allowlist must be denied: %+v (%s)", rec, show(err))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if asked != 0 {
+		return fmt.Errorf("dontAsk asked the approver %d times, want never", asked)
 	}
 	return nil
 }

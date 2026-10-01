@@ -19,6 +19,13 @@ func spec() agent.StartSpec {
 	return agent.StartSpec{EnvID: "e1", Workdir: "/work", Prompt: "fix it", Auth: agent.AuthSubscription, Approver: allowAll(), ApprovalTimeout: time.Second}
 }
 
+// dontAskSpec is the spec for an agent without host approvals.
+func dontAskSpec() agent.StartSpec {
+	s := spec()
+	s.PermissionMode, s.AllowedTools = agent.PermissionDontAsk, []string{"Read"}
+	return s
+}
+
 func drain(s agent.Session) []agent.Event {
 	var events []agent.Event
 	for e := range s.Events() {
@@ -93,7 +100,7 @@ func TestDegradedAgentTurnsAMessageIntoAResumedTurn(t *testing.T) {
 	ctx := context.Background()
 	f := NewFake(DegradedCaps())
 	f.Block()
-	s, _ := f.Start(ctx, spec())
+	s, _ := f.Start(ctx, dontAskSpec())
 	if d, err := s.Instruct(ctx, "hello"); err != nil || d != agent.DeliveryResumedTurn {
 		t.Errorf("Instruct = %q, %v; want resumed_turn", d, err)
 	}
@@ -146,7 +153,7 @@ func TestAuthAndQuotaEndTheRunWithoutAnError(t *testing.T) {
 
 	degraded := NewFake(DegradedCaps())
 	degraded.QuotaExhausted(reset)
-	s, _ = degraded.Start(ctx, spec())
+	s, _ = degraded.Start(ctx, dontAskSpec())
 	drain(s)
 	if res, _ := s.Wait(); !res.ResetAt.IsZero() {
 		t.Errorf("an agent that does not report quota gave a reset time: %v", res.ResetAt)
