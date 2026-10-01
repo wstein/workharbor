@@ -171,6 +171,8 @@ func (g *Git) Config(fileTransport bool) []string {
 		"tag.gpgSign=false",
 		"protocol.allow=never",
 		"protocol.file.allow=" + file,
+		"gc.auto=0",              // no background gc after a fetch: it outlives the command
+		"maintenance.auto=false", // and no background maintenance
 		"submodule.recurse=false",
 		"fetch.recurseSubmodules=false",
 		"transfer.fsckObjects=true",
