@@ -274,3 +274,67 @@ func TestReadOnlyDoesNotMakeASecretMountable(t *testing.T) {
 		t.Fatal("a read-only mount of ~/.ssh must be rejected")
 	}
 }
+
+// dotfilesFS is a home whose secrets are symbolic links into a dotfiles
+// directory, as stow and chezmoi leave them.
+func dotfilesFS() *fakeFS {
+	f := newFakeFS()
+	f.dir("/Users/me/src/app")
+	f.dir("/Users/me/dotfiles/ssh")
+	f.file("/Users/me/dotfiles/ssh/id_ed25519")
+	f.dir("/Users/me/dotfiles/gh")
+	f.file("/Users/me/dotfiles/gh/hosts.yml")
+	f.dir("/Users/me/dotfiles/vim")
+	f.dir("/Users/me/.config")
+	f.link("/Users/me/.ssh", "/Users/me/dotfiles/ssh")
+	f.link("/Users/me/.config/gh", "/Users/me/dotfiles/gh")
+	return f
+}
+
+// #50: secrets paths were never resolved, so mounting the directory they link
+// into passed.
+func TestCheckMountResolvesSymlinkedSecrets(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   Reason
+	}{
+		{"the dotfiles directory that holds the secrets", "/Users/me/dotfiles", ReasonSecrets},
+		{"the linked ssh directory", "/Users/me/dotfiles/ssh", ReasonSecrets},
+		{"a key inside it", "/Users/me/dotfiles/ssh/id_ed25519", ReasonSecrets},
+		{"the linked gh directory", "/Users/me/dotfiles/gh", ReasonSecrets},
+		{"a file inside it", "/Users/me/dotfiles/gh/hosts.yml", ReasonSecrets},
+		{"the link itself", "/Users/me/.ssh", ReasonSecrets},
+		{"a directory containing the gh link", "/Users/me/.config", ReasonSecrets},
+
+		{"a dotfiles directory without secrets", "/Users/me/dotfiles/vim", ""},
+		{"a project", "/Users/me/src/app", ""},
+	}
+	fsys := dotfilesFS()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckMount(fsys, testHome, tc.source)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("CheckMount(%q) = %v, want it allowed", tc.source, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("CheckMount(%q) allowed, want %q", tc.source, tc.want)
+			}
+			if got := reasonOfErr(t, err); got != tc.want {
+				t.Errorf("CheckMount(%q) reason = %q, want %q (%v)", tc.source, got, tc.want, err)
+			}
+		})
+	}
+}
+
+func reasonOfErr(t *testing.T, err error) Reason {
+	t.Helper()
+	var me *MountError
+	if !errors.As(err, &me) {
+		t.Fatalf("error %v is not a *MountError", err)
+	}
+	return me.Reason
+}

@@ -155,3 +155,35 @@ func TestCheckMountRejectsTheRealHomeAndRoot(t *testing.T) {
 		t.Error("the filesystem root must be rejected")
 	}
 }
+
+// #50: with ~/.ssh and ~/.config/gh linked into a dotfiles directory, mounting
+// that directory used to pass.
+func TestCheckMountRejectsADotfilesDirectoryHoldingSecrets(t *testing.T) {
+	home := realDir(t)
+	dotfiles := filepath.Join(home, "dotfiles")
+	mkdirs(t, filepath.Join(dotfiles, "ssh"), filepath.Join(dotfiles, "gh"), filepath.Join(dotfiles, "vim"), filepath.Join(home, ".config"), filepath.Join(home, "proj"))
+	symlink(t, filepath.Join(dotfiles, "ssh"), filepath.Join(home, ".ssh"))
+	symlink(t, filepath.Join(dotfiles, "gh"), filepath.Join(home, ".config", "gh"))
+
+	for _, source := range []string{
+		dotfiles,
+		filepath.Join(dotfiles, "ssh"),
+		filepath.Join(dotfiles, "gh"),
+		filepath.Join(home, ".ssh"),
+		filepath.Join(home, ".config"),
+	} {
+		err := CheckMount(OSFS{}, home, source)
+		if err == nil {
+			t.Errorf("CheckMount(%q) allowed", source)
+			continue
+		}
+		if got := reasonOf(t, err); got != ReasonSecrets {
+			t.Errorf("CheckMount(%q) reason = %q, want %q", source, got, ReasonSecrets)
+		}
+	}
+	for _, source := range []string{filepath.Join(dotfiles, "vim"), filepath.Join(home, "proj")} {
+		if err := CheckMount(OSFS{}, home, source); err != nil {
+			t.Errorf("CheckMount(%q) = %v, want it allowed", source, err)
+		}
+	}
+}

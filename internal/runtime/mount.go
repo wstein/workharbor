@@ -155,18 +155,24 @@ func CheckMount(fsys FS, home, source string) error {
 		}
 	}
 	for _, rel := range secretsUnderHome {
-		if overlaps(resolved, filepath.Join(realHome, rel)) {
-			return reject(ReasonSecrets)
+		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
+			if overlaps(resolved, target) {
+				return reject(ReasonSecrets)
+			}
 		}
 	}
 	for _, rel := range runtimeSocketDirsUnderHome {
-		if overlaps(resolved, filepath.Join(realHome, rel)) {
-			return reject(ReasonRuntimeSocket)
+		for _, target := range withResolved(fsys, filepath.Join(realHome, rel)) {
+			if overlaps(resolved, target) {
+				return reject(ReasonRuntimeSocket)
+			}
 		}
 	}
 	for _, dir := range runtimeSocketDirs {
-		if overlaps(resolved, dir) {
-			return reject(ReasonRuntimeSocket)
+		for _, target := range withResolved(fsys, dir) {
+			if overlaps(resolved, target) {
+				return reject(ReasonRuntimeSocket)
+			}
 		}
 	}
 	return nil
@@ -181,6 +187,17 @@ func CheckMounts(fsys FS, home string, mounts []Mount) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// withResolved returns a path and, when it is a symbolic link that resolves,
+// the place it leads to. A secrets directory is often a link into a dotfiles
+// directory, so both must be kept out of an environment.
+func withResolved(fsys FS, path string) []string {
+	resolved, err := fsys.EvalSymlinks(path)
+	if err != nil || fold(resolved) == fold(path) {
+		return []string{path}
+	}
+	return []string{path, resolved}
 }
 
 // fold normalizes a path for comparison: cleaned and lower-cased.
