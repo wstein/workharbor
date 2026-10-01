@@ -114,3 +114,24 @@ func TestCompletionOffersWorkspacesAndAgents(t *testing.T) {
 		}
 	}
 }
+
+// `whr completion <shell>` prints the completion script, as data on stdout, for
+// each shell cobra supports; it needs no configuration or server.
+func TestCompletionScriptsAreGeneratedForEveryShell(t *testing.T) {
+	s := newStub(t)
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		code, out, errOut := s.runCLI("", "completion", shell)
+		if code != 0 || errOut != "" || !strings.Contains(out, "whr") || len(out) < 500 {
+			t.Errorf("%s: exit %d, %d bytes, stderr %q", shell, code, len(out), errOut)
+		}
+	}
+	if n := len(s.req); n != 0 {
+		t.Errorf("generating a script sent %d requests", n)
+	}
+	if _, out, _ := s.runCLI("", "help"); !strings.Contains(out, "completion") {
+		t.Error("whr help does not list the completion command")
+	}
+	if code, _, _ := s.runCLI("", "completion", "nonsense"); code != exitcode.Usage {
+		t.Errorf("an unknown shell: exit %d, want usage", code)
+	}
+}

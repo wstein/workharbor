@@ -97,7 +97,6 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.SetErr(env.Stderr)
 	root.SetIn(env.Stdin)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err.Error()} })
-	root.CompletionOptions.HiddenDefaultCmd = true
 	root.PersistentFlags().StringVar(&st.configPath, "config", "", "the configuration file (default $WHR_CONFIG or ~/.config/whr/config.json)")
 	root.PersistentFlags().BoolVar(&st.asJSON, "json", false, "print the API's envelope (or one JSON event per line for logs -f) instead of text")
 
