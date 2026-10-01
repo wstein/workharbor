@@ -5,6 +5,8 @@ extend-exclude = [
   "CODE_OF_CONDUCT.md", # third-party text
   "CHANGELOG.md",       # generated
   "go.sum",
-  "**/testdata/*.jsonl",       # agent stream fixtures
-  "**/testdata/*.golden.json", # outputs generated from them
+  "**/testdata/**/*.jsonl",       # agent stream fixtures (in testdata/ and subdirectories)
+  "**/testdata/*.jsonl",
+  "**/testdata/**/*.golden.json", # outputs generated from them
+  "**/testdata/*.golden.json",
 ]
