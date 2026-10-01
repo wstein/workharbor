@@ -1,0 +1,24 @@
+// The environment workharbor builds to work on this repository (D34, D38), and
+// the one a human gets in VS Code or Codespaces. The Go version matches go.mod.
+{
+  "name": "workharbor",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "remoteUser": "agent",
+  "containerEnv": {
+    "GOFLAGS": "-buildvcs=false"
+  },
+  "postCreateCommand": "go mod download",
+  "customizations": {
+    "workharbor": {
+      // Hosts the build needs, for the human to confirm (D38): the Go module
+      // proxy and the checksum database. A request, never a grant.
+      "egress": ["proxy.golang.org", "sum.golang.org"]
+    },
+    "vscode": {
+      "extensions": ["golang.go"]
+    }
+  }
+}
