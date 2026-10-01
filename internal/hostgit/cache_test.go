@@ -19,10 +19,17 @@ type forgeRepo struct {
 	next int
 }
 
-func newForge(t *testing.T, base string, commits int) *forgeRepo {
+func newForge(t *testing.T, _ string, commits int) *forgeRepo {
 	t.Helper()
-	f := &forgeRepo{t: t, dir: filepath.Join(base, "forge"), env: plainEnv(filepath.Join(base, "forge-home"))}
-	for _, d := range []string{f.dir, filepath.Join(base, "forge-home")} {
+	// The forge lives outside the workspace root: a cache is never fed from
+	// something an agent can write.
+	outside, err := os.MkdirTemp("", "forge-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(outside) })
+	f := &forgeRepo{t: t, dir: filepath.Join(outside, "forge"), env: plainEnv(filepath.Join(outside, "forge-home"))}
+	for _, d := range []string{f.dir, filepath.Join(outside, "forge-home")} {
 		if err := os.MkdirAll(d, 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -214,6 +221,11 @@ func TestSourcesAndNamesAreValidated(t *testing.T) {
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
+	outside, err := os.MkdirTemp("", "src-") // not under the workspace root
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(outside) })
 	for _, src := range []string{
 		"", "relative/dir", "-uhttps://x", "--upload-pack=touch /tmp/x", "ssh://git@host/repo", "git@host:repo.git",
 		"ext::sh -c touch% /tmp/x", "file:///tmp/repo", "http://insecure.example/r.git", "https://user:secret@example.test/r.git",
@@ -223,10 +235,10 @@ func TestSourcesAndNamesAreValidated(t *testing.T) {
 			t.Errorf("OpenCache(%q) = %v, want ErrBadSource", src, err)
 		}
 	}
-	if _, err := g.OpenCache(ctx, filepath.Join(base, "c.git"), CacheConfig{Source: base, CloneDepth: -1}); !errors.Is(err, ErrBadSource) {
+	if _, err := g.OpenCache(ctx, filepath.Join(base, "c.git"), CacheConfig{Source: outside, CloneDepth: -1}); !errors.Is(err, ErrBadSource) {
 		t.Errorf("a negative clone_depth = %v", err)
 	}
-	if _, err := g.OpenCache(ctx, filepath.Join(base, "c.git"), CacheConfig{Source: base}); err != nil {
+	if _, err := g.OpenCache(ctx, filepath.Join(base, "c.git"), CacheConfig{Source: outside}); err != nil {
 		t.Fatalf("a good source: %v", err)
 	}
 

@@ -3,6 +3,7 @@ package hostgit
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -17,6 +18,9 @@ type Repo struct {
 // InitBare creates a bare repository at path, which must not exist yet and
 // whose parent must.
 func (g *Git) InitBare(ctx context.Context, path string) (*Repo, error) {
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("%w: %q must be absolute", ErrBadPath, path)
+	}
 	parent := dirOf(path)
 	if err := checkDir(parent); err != nil {
 		return nil, err

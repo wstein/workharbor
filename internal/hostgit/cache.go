@@ -2,12 +2,15 @@ package hostgit
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -48,6 +51,24 @@ func (g *Git) OpenCache(ctx context.Context, path string, cfg CacheConfig) (*Cac
 	if err := validSource(cfg.Source); err != nil {
 		return nil, err
 	}
+	// A local source inside the workspace root is agent-writable: the cache is
+	// fed from the forge, never from something an agent can change.
+	if g.root != "" && strings.HasPrefix(cfg.Source, "/") {
+		if src, err := resolveDir(cfg.Source); err == nil {
+			if rel, err := filepath.Rel(g.root, src); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return nil, fmt.Errorf("%w: %q is inside the workspace root", ErrBadSource, cfg.Source)
+			}
+		}
+	}
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, fmt.Errorf("%w: cache path %q must be absolute and clean", ErrBadPath, path)
+	}
+	if g.cacheRoot != "" {
+		parent, err := resolveDir(filepath.Dir(path))
+		if err != nil || parent != g.cacheRoot || filepath.Base(path) == "." || filepath.Base(path) == string(filepath.Separator) {
+			return nil, fmt.Errorf("%w: cache %q is not a direct child of the cache root", ErrBadPath, path)
+		}
+	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if _, err := g.InitBare(ctx, path); err != nil {
 			return nil, err
@@ -55,7 +76,36 @@ func (g *Git) OpenCache(ctx context.Context, path string, cfg CacheConfig) (*Cac
 	} else if _, err := g.OpenBare(ctx, path); err != nil {
 		return nil, err
 	}
-	return &Cache{g: g, path: path, cfg: cfg}, nil
+	c := &Cache{g: g, path: path, cfg: cfg}
+	// Nothing in the cache expires: a shared topic may need an object the forge
+	// no longer has, and only ReleaseTopic lets it go (design §4.5).
+	for _, kv := range [][2]string{{"gc.pruneExpire", "never"}, {"gc.reflogExpire", "never"}, {"gc.reflogExpireUnreachable", "never"}} {
+		if _, err := g.run(ctx, path, false, nil, "config", kv[0], kv[1]); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
+
+// CachePath maps a repository name, "owner/name", to its cache directory. Only
+// ASCII letters, digits, ".", "_" and "-" are accepted (each part starting with
+// a letter or digit, at most 100 characters), so no separator, "..", option or
+// Unicode form can leave the cache root. The name is lower-cased and a short
+// hash of it is appended: on a case-insensitive disk Foo/x and foo/x are one
+// cache, and the mapping is stable.
+func (g *Git) CachePath(repo string) (string, error) {
+	if g.cacheRoot == "" {
+		return "", ErrNoCacheRoot
+	}
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || !nameRe.MatchString(owner) || !nameRe.MatchString(name) {
+		return "", fmt.Errorf("%w: %q", ErrBadName, repo)
+	}
+	lower := strings.ToLower(owner) + "/" + strings.ToLower(name)
+	sum := sha256.Sum256([]byte(lower))
+	return filepath.Join(g.cacheRoot, strings.ToLower(owner)+"__"+strings.ToLower(name)+"-"+hex.EncodeToString(sum[:4])+".git"), nil
 }
 
 // Path returns where the cache lives.
@@ -132,6 +182,15 @@ func isShallow(ctx context.Context, g *Git, dir string) (bool, error) {
 // every object is checked. A positive clone_depth fetches with --depth; with 0
 // an earlier shallow cache is made complete.
 func (c *Cache) Refresh(ctx context.Context, branch string) error {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return c.refresh(ctx, branch)
+}
+
+func (c *Cache) refresh(ctx context.Context, branch string) error {
 	if !validBranch(branch) {
 		return fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
@@ -150,6 +209,15 @@ func (c *Cache) Refresh(ctx context.Context, branch string) error {
 // Deepen fetches the branch again with a history that reaches by more
 // commits past the cache's shallow boundary.
 func (c *Cache) Deepen(ctx context.Context, branch string, by int) error {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return c.deepen(ctx, branch, by)
+}
+
+func (c *Cache) deepen(ctx context.Context, branch string, by int) error {
 	if !validBranch(branch) {
 		return fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
@@ -176,6 +244,15 @@ type Topic struct {
 // it is a self-contained shallow clone, because --shared is ignored for a
 // shallow source (design §4.5). dest must not exist yet.
 func (c *Cache) CloneTopic(ctx context.Context, dest, base, topic string) (*Topic, error) {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	return c.cloneTopic(ctx, dest, base, topic)
+}
+
+func (c *Cache) cloneTopic(ctx context.Context, dest, base, topic string) (*Topic, error) {
 	if !validBranch(base) || !validBranch(topic) {
 		return nil, fmt.Errorf("%w: %q or %q", ErrBadBranch, base, topic)
 	}
@@ -219,14 +296,64 @@ func (c *Cache) CloneTopic(ctx context.Context, dest, base, topic string) (*Topi
 			return nil, fmt.Errorf("%w: the clone does not borrow from %s", ErrBadPath, c.ObjectsDir())
 		}
 		t.Alternates = []string{c.ObjectsDir()}
+		// Pin the commit the topic was cloned at, so that neither a force-push on
+		// the forge nor maintenance can drop objects the topic borrows.
+		sha, err := c.g.run(ctx, c.path, false, nil, "rev-parse", "--verify", "refs/heads/"+base+"^{commit}")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := c.g.run(ctx, c.path, false, nil, "update-ref", keepRef(dest), strings.TrimSpace(string(sha))); err != nil {
+			return nil, err
+		}
 	}
 	return t, nil
+}
+
+// keepRef names the ref that keeps a topic's objects alive in the cache.
+func keepRef(dest string) string {
+	sum := sha256.Sum256([]byte(filepath.Clean(dest)))
+	return "refs/whr/keep/" + hex.EncodeToString(sum[:8])
+}
+
+// ReleaseTopic lets the cache drop what only the topic at dest needed, once the
+// topic is removed (design §4.4). Releasing twice is fine.
+func (c *Cache) ReleaseTopic(ctx context.Context, dest string) error {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	_, err = c.g.run(ctx, c.path, false, nil, "update-ref", "-d", keepRef(dest))
+	return err
+}
+
+// Maintain packs the cache: the only explicit maintenance, since background gc
+// and maintenance are off. It runs under the cache lock, and nothing a live
+// topic needs is pruned: topics are pinned by keep refs and the cache expires
+// nothing.
+func (c *Cache) Maintain(ctx context.Context) error {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	_, err = c.g.run(ctx, c.path, false, nil, "gc", "--quiet")
+	return err
 }
 
 // FetchTarget copies the target branch from the cache into this repository,
 // so that the supervisor's copy of a topic and its target can be compared and
 // rebased. A shallow history is accepted.
 func (r *Repo) FetchTarget(ctx context.Context, c *Cache, branch string, deepen int) error {
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return r.fetchTarget(ctx, c, branch, deepen)
+}
+
+func (r *Repo) fetchTarget(ctx context.Context, c *Cache, branch string, deepen int) error {
 	if !validBranch(branch) {
 		return fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
@@ -273,6 +400,11 @@ func (c *Cache) EnsureMergeBase(ctx context.Context, r *Repo, target, topic stri
 	if !validBranch(target) || !validBranch(topic) {
 		return "", fmt.Errorf("%w: %q or %q", ErrBadBranch, target, topic)
 	}
+	unlock, err := c.lock(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	if o.Step <= 0 {
 		o.Step = 50
 	}
@@ -299,11 +431,11 @@ func (c *Cache) EnsureMergeBase(ctx context.Context, r *Repo, target, topic stri
 			return "", fmt.Errorf("%w: %s and %s after deepening by %d", ErrNoMergeBase, target, topic, deepened)
 		}
 		if cacheShallow {
-			if err := c.Deepen(ctx, target, o.Step); err != nil {
+			if err := c.deepen(ctx, target, o.Step); err != nil {
 				return "", err
 			}
 		}
-		if err := r.FetchTarget(ctx, c, target, o.Step); err != nil {
+		if err := r.fetchTarget(ctx, c, target, o.Step); err != nil {
 			return "", err
 		}
 	}

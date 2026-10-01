@@ -76,10 +76,15 @@ func newPubRig(t *testing.T) *pubRig {
 	pr := &pubRig{rig: r}
 	base := t.TempDir()
 	pr.home = filepath.Join(base, "home")
-	for _, d := range []string{pr.home, filepath.Join(base, "src")} {
+	// The forge's repository lives outside the workspace root: a cache is never
+	// fed from something an agent can write.
+	outside, err := os.MkdirTemp("", "forge-")
+	must(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(outside) })
+	src := filepath.Join(outside, "src")
+	for _, d := range []string{pr.home, src} {
 		must(t, os.MkdirAll(d, 0o750))
 	}
-	src := filepath.Join(base, "src")
 	plainGit(t, pr.home, src, "init", "--quiet", "-b", "main")
 	for i, name := range []string{"one", "two", "three"} {
 		must(t, os.WriteFile(filepath.Join(src, "file.txt"), []byte(name+"\n"), 0o600))
@@ -92,7 +97,7 @@ func newPubRig(t *testing.T) *pubRig {
 	g0, err := hostgit.New(hostgit.WithWorkspaceRoot(root))
 	must(t, err)
 	t.Cleanup(func() { _ = g0.Close() })
-	cache, err := g0.OpenCache(bg, filepath.Join(root, "cache.git"), hostgit.CacheConfig{Source: filepath.Join(root, "src")})
+	cache, err := g0.OpenCache(bg, filepath.Join(root, "cache.git"), hostgit.CacheConfig{Source: src})
 	must(t, err)
 	must(t, cache.Refresh(bg, "main"))
 	pr.checkout = filepath.Join(root, "ws1")

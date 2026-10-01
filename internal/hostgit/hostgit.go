@@ -39,6 +39,7 @@ type Git struct {
 	bin  string // absolute path of the git binary
 	home string // an empty directory used as HOME and TMPDIR
 
+	cacheRoot  string   // resolved directory the repository caches live in
 	root       string   // resolved workspace root; agent checkouts must lie under it
 	alternates []string // resolved read-only caches a checkout may borrow objects from
 }
@@ -56,6 +57,19 @@ func WithWorkspaceRoot(root string) Option {
 			return fmt.Errorf("workspace root: %w", err)
 		}
 		g.root = resolved
+		return nil
+	}
+}
+
+// WithCacheRoot sets the directory the repository caches live in. A cache must
+// be a direct child of it, and CachePath maps repository names into it.
+func WithCacheRoot(root string) Option {
+	return func(g *Git) error {
+		resolved, err := resolveDir(root)
+		if err != nil {
+			return fmt.Errorf("cache root: %w", err)
+		}
+		g.cacheRoot = resolved
 		return nil
 	}
 }
@@ -217,3 +231,9 @@ func checkDir(path string) error {
 	}
 	return nil
 }
+
+// Errors of the repository cache's names and root.
+var (
+	ErrNoCacheRoot = errors.New("hostgit needs a cache root (WithCacheRoot) to map a repository name")
+	ErrBadName     = errors.New("not an accepted repository name")
+)
