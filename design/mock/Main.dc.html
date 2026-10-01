@@ -55,7 +55,7 @@ a{color:inherit;text-decoration:none}
     <div style="display: flex; gap: 24px; align-items: flex-start; min-height: 0">
       <section style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
         <div style="display: flex; gap: 8px">
-          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="5">
+          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="6">
             <button onClick="{{ tab.pick }}" style="display: flex; gap: 8px; align-items: center; padding: 7px 14px; border-radius: 999px; border: 1px solid {{ tab.border }}; background: {{ tab.bg }}; color: {{ tab.fg }}; font: inherit; font-weight: 500; cursor: pointer">{{ tab.label }}<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; opacity: 0.8">{{ tab.count }}</span></button>
           </sc-for>
         </div>
@@ -77,54 +77,69 @@ a{color:inherit;text-decoration:none}
             </a>
           </sc-for>
         </div>
-        <div style="color: #6b819e; font-size: 12px">Example data for the mock.</div>
+        <div style="padding: 16px 20px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">Usage today</span><span style="color: #9fb3c8; font-size: 12px">subscription login · cost is notional · example data</span></div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 20px; font-size: 13px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; justify-content: space-between"><span>Five-hour window</span><span style="font-family: 'IBM Plex Mono', monospace">62%</span></div>
+              <div style="height: 8px; border-radius: 4px; background: #1f3556; overflow: hidden"><div style="width: 62%; height: 100%; background: {{accent}}"></div></div>
+              <div style="color: #9fb3c8; font-size: 12px">Claude Code · resets 14:05</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; justify-content: space-between"><span>Seven-day window</span><span style="font-family: 'IBM Plex Mono', monospace">38%</span></div>
+              <div style="height: 8px; border-radius: 4px; background: #1f3556; overflow: hidden"><div style="width: 38%; height: 100%; background: {{accent}}"></div></div>
+              <div style="color: #9fb3c8; font-size: 12px">Claude Code · resets Mon 09:00</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #c7d3e6">9.91M in · 524k out · 58.8M cache read</div>
+              <div><span style="font-family: 'IBM Plex Mono', monospace">$23.10</span> <span style="color: #9fb3c8">notional</span></div>
+              <div style="color: #9fb3c8; font-size: 12px">$21.40 reported by the agents · $1.70 estimated (Codex CLI)</div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <aside style="width: 300px; flex: none; display: flex; flex-direction: column; gap: 16px">
         <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 14px">
           <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">Capacity</span><span style="color: #9fb3c8; font-size: 12px">pressure normal</span></div>
           <div style="display: flex; flex-direction: column; gap: 6px">
-            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Environments</span><span style="font-family: 'IBM Plex Mono', monospace">3 of 4 running</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Environments</span><span style="font-family: 'IBM Plex Mono', monospace">4 of 4 running</span></div>
             <div style="display: flex; gap: 4px">
               <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: {{accent}}"></div>
               <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: {{accent}}"></div>
               <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: {{accent}}"></div>
-              <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: #1f3556"></div>
+              <div style="flex-grow: 1; height: 8px; border-radius: 4px; background: {{accent}}"></div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 6px">
-            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Guest memory</span><span style="font-family: 'IBM Plex Mono', monospace">6.1 of 9 GiB</span></div>
-            <div style="height: 8px; border-radius: 4px; background: #1f3556; overflow: hidden"><div style="width: 68%; height: 100%; background: {{accent}}"></div></div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Guest memory</span><span style="font-family: 'IBM Plex Mono', monospace">7.6 of 9 GiB</span></div>
+            <div style="height: 8px; border-radius: 4px; background: #1f3556; overflow: hidden"><div style="width: 84%; height: 100%; background: {{accent}}"></div></div>
           </div>
-          <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">One heavy build at a time. The queued task starts when a slot frees up.</div>
+          <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">All slots are taken. The queued task starts when a slot frees up.</div>
         </div>
         <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
-          <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">Agents</span><span style="color: #9fb3c8; font-size: 12px">logins and limits</span></div>
-          <div style="display: flex; flex-direction: column; gap: 6px">
-            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Claude Code <span style="color: #6b819e">live messages</span></span><span style="color: #4ade80">signed in</span></div>
-            <div style="height: 8px; border-radius: 4px; background: #1f3556; overflow: hidden"><div style="width: 62%; height: 100%; background: {{accent}}"></div></div>
-            <div style="display: flex; justify-content: space-between; color: #9fb3c8; font-size: 12px"><span>Usage window 62%</span><span style="font-family: 'IBM Plex Mono', monospace">resets 14:05</span></div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">Agents</span><span style="color: #9fb3c8; font-size: 12px">logins and modes</span></div>
+          <div style="display: flex; flex-direction: column; gap: 3px; font-size: 13px">
+            <div style="display: flex; justify-content: space-between"><span>Claude Code <span style="color: #6b819e">live messages</span></span><span style="color: #4ade80">signed in</span></div>
+            <div style="color: #9fb3c8; font-size: 12px">Subscription · approvals routed to you</div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 3px; font-size: 13px">
-            <div style="display: flex; justify-content: space-between"><span>Codex CLI <span style="color: #6b819e">resumed turns</span></span><span style="color: #fbbf24">usage limit</span></div>
-            <div style="color: #9fb3c8; font-size: 12px">Back on 3 Oct, 19:12. Messages arrive as a resumed turn.</div>
+            <div style="display: flex; justify-content: space-between"><span>Codex CLI <span style="color: #6b819e">degraded mode</span></span><span style="color: #4ade80">signed in</span></div>
+            <div style="color: #9fb3c8; font-size: 12px">Messages become resumed turns; no host approvals, fixed allowlist only.</div>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 3px; font-size: 13px">
-            <div style="display: flex; justify-content: space-between"><span>Antigravity <span style="color: #6b819e">resumed turns</span></span><span style="color: #9fb3c8; white-space: nowrap">no approvals</span></div>
-          </div>
-          <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">A run pauses and asks you when a login expires or the usage window runs out.</div>
+          <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">Pause is a hard interrupt; resume relaunches the agent from its session. An expired login or a used-up usage window pauses the run and asks you.</div>
         </div>
         <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
           <span style="font-weight: 600">What agents may do</span>
           <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
             <div style="display: flex; justify-content: space-between"><span>Commit in its own checkout</span><span style="color: #4ade80">auto</span></div>
-            <div style="display: flex; justify-content: space-between"><span>Push a cleaned-up branch</span><span style="color: #fbbf24">after your approval</span></div>
-            <div style="display: flex; justify-content: space-between"><span>Open pull requests</span><span style="color: #4ade80">auto</span></div>
-            <div style="display: flex; justify-content: space-between"><span>Write or run outside the allowlist</span><span style="color: #fbbf24">ask you</span></div>
-            <div style="display: flex; justify-content: space-between"><span>Add a dependency</span><span style="color: #fbbf24">ask you</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 10px"><span>Push an agent/* branch</span><span style="color: #fbbf24; text-align: right">ask · supervisor pushes</span></div>
+            <div style="display: flex; justify-content: space-between"><span>Open PR, comment on issue</span><span style="color: #4ade80">auto, after the push</span></div>
+            <div style="display: flex; justify-content: space-between"><span>Write or run outside the allowlist</span><span style="color: #fbbf24">ask</span></div>
             <div style="display: flex; justify-content: space-between"><span>Reach hosts not on the allowlist</span><span style="color: #f87171">blocked</span></div>
-            <div style="display: flex; justify-content: space-between"><span>Merge, release, deploy</span><span style="color: #f87171">never</span></div>
+            <div style="display: flex; justify-content: space-between"><span>Merge, tag, release, deploy</span><span style="color: #f87171">forbid · fixed</span></div>
           </div>
+          <div style="color: #9fb3c8; font-size: 12px; line-height: 1.5">Fixed floor: merge, tag, release and deploy stay forbidden and a push is at most ask. A repository can tighten these, never loosen them.</div>
         </div>
       </aside>
     </div>
@@ -137,34 +152,35 @@ class Component extends DCLogic {
     const accent = this.props.accent ?? '#5eead4';
     const filter = this.state.filter ?? 'all';
     const states = {
-      awaiting: { label: 'Awaiting you', bg: '#3a2d0b', fg: '#fbbf24' },
-      auth: { label: 'Login expired', bg: '#3a1518', fg: '#f87171' },
+      guidance: { label: 'Awaiting guidance', bg: '#3a2d0b', fg: '#fbbf24' },
       running: { label: 'Running', bg: '#10294d', fg: '#60a5fa' },
       review: { label: 'Ready for review', bg: '#0f3733', fg: '#5eead4' },
       queued: { label: 'Queued', bg: '#1b2a42', fg: '#9fb3c8' },
-      quota: { label: 'Usage limit', bg: '#3a2d0b', fg: '#fbbf24' },
+      failed: { label: 'Failed', bg: '#3a1518', fg: '#f87171' },
       done: { label: 'Completed', bg: '#11331f', fg: '#4ade80' },
     };
     const all = [
-      { state: 'awaiting', title: 'Egress allowlist proxy: allow the Go module proxy?', ref: 'wstein/workharbor#15', agent: 'Claude Code', env: 'ws-2c9e', age: '18m' },
-      { state: 'auth', title: 'Audit log export: paused until you log in again', ref: 'wstein/workharbor#16', agent: 'Claude Code', env: 'ws-4d1c', age: '31m' },
-      { state: 'running', title: 'Add run interrupted state', ref: 'wstein/workharbor#12', agent: 'Claude Code', env: 'ws-7f3a', age: '42m' },
-      { state: 'running', title: 'Policy table: table-driven tests', ref: 'wstein/workharbor#11', agent: 'Claude Code', env: 'ws-91b0', age: '9m' },
-      { state: 'review', title: 'Reconciler: mark orphaned runs interrupted', ref: 'wstein/workharbor#9 · PR #21', agent: 'Claude Code', env: 'stopped', age: '2h' },
-      { state: 'quota', title: 'Reconciler: restart stopped containers, resume sessions', ref: 'wstein/workharbor#20', agent: 'Codex CLI', env: 'ws-5d10', age: '12m' },
-      { state: 'queued', title: 'Persistence semantics: volume or bind mount', ref: 'wstein/workharbor#18', agent: 'waiting for a slot', env: '-', age: '4m' },
-      { state: 'done', title: 'Runner scorecard: headless and resume', ref: 'wstein/workharbor#7 · PR #19', agent: 'Claude Code', env: 'deleted', age: '1d' },
+      { state: 'guidance', title: 'Egress allowlist proxy: a question and a Write approval', ref: 'wstein/workharbor#15', agent: 'Claude Code', env: 'ws-2c9e', age: '18m' },
+      { state: 'guidance', title: 'Audit log export: login expired, log in again', ref: 'wstein/workharbor#16', agent: 'Claude Code', env: 'ws-4d1c', age: '31m' },
+      { state: 'guidance', title: 'Add run interrupted state: approve the plan', ref: 'wstein/workharbor#12', agent: 'Claude Code', env: 'ws-7f3a', age: '42m' },
+      { state: 'running', title: 'Policy table: table-driven tests', ref: 'wstein/workharbor#11', agent: 'Codex CLI · degraded', env: 'ws-91b0', age: '9m' },
+      { state: 'review', title: 'Reconciler: mark orphaned runs interrupted', ref: 'wstein/workharbor#9 · Ready to push? 3c71a9e', agent: 'Claude Code', env: 'stopped', age: '2h' },
+      { state: 'queued', title: 'Workspace retention on the 1 TB disk', ref: 'wstein/workharbor#18', agent: 'waiting for a slot', env: '-', age: '4m' },
+      { state: 'failed', title: 'Tool store garbage collection: cost budget exceeded', ref: 'wstein/workharbor#22 · budget $12.00', agent: 'Claude Code', env: 'stopped', age: '3h' },
+      { state: 'done', title: 'Runner scorecard: headless and resume', ref: 'wstein/workharbor#7 · PR #19 merged', agent: 'Claude Code', env: 'deleted', age: '1d' },
     ];
-    const match = (r) => filter === 'all' || (filter === 'needs' && (r.state === 'awaiting' || r.state === 'review' || r.state === 'auth')) || filter === r.state;
+    const needs = (r) => r.state === 'guidance' || r.state === 'review';
+    const match = (r) => filter === 'all' || (filter === 'needs' && needs(r)) || filter === r.state;
     const rows = all.filter(match).map((r) => ({
       title: r.title, ref: r.ref, agent: r.agent, env: r.env, age: r.age,
       stateLabel: states[r.state].label, pillBg: states[r.state].bg, pillFg: states[r.state].fg,
     }));
     const defs = [
       { key: 'all', label: 'All', count: all.length },
-      { key: 'needs', label: 'Needs you', count: all.filter((r) => r.state === 'awaiting' || r.state === 'review' || r.state === 'auth').length },
+      { key: 'needs', label: 'Needs you', count: all.filter(needs).length },
       { key: 'running', label: 'Running', count: all.filter((r) => r.state === 'running').length },
       { key: 'queued', label: 'Queued', count: all.filter((r) => r.state === 'queued').length },
+      { key: 'failed', label: 'Failed', count: all.filter((r) => r.state === 'failed').length },
       { key: 'done', label: 'Completed', count: all.filter((r) => r.state === 'done').length },
     ];
     const tabs = defs.map((d) => {

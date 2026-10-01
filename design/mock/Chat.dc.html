@@ -27,7 +27,7 @@ a{color:inherit;text-decoration:none}
     </div>
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #9fb3c8; font-size: 12px">
       <span>Claude Code · mode Manual · live messages</span>
-      <span style="font-family: 'IBM Plex Mono', monospace">5h window 62%</span>
+      <span style="font-family: 'IBM Plex Mono', monospace">5h 62% · 7d 38%</span>
     </div>
   </header>
 
@@ -43,15 +43,16 @@ a{color:inherit;text-decoration:none}
     <div style="align-self: flex-start; padding: 6px 12px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; color: #9fb3c8; font-size: 13px">tool: Write internal/proxy/allowlist.go</div>
 
     <div style="align-self: stretch; padding: 14px; border-radius: 14px; background: {{ appr.bg }}; border: 1px solid {{ appr.border }}; display: flex; flex-direction: column; gap: 10px">
-      <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">blocking</span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">blocking · {{ appr.status }}</span></div>
       <div style="line-height: 1.4">Write <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">internal/proxy/allowlist.go</span></div>
-      <div style="padding: 8px 10px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #c7d3e6; line-height: 1.5">2,184 characters, first 120 shown: package proxy // Allowlist holds the hosts…</div>
+      <div style="display: flex; align-items: center; gap: 8px"><span style="padding: 2px 8px; border-radius: 999px; background: #3a2d0b; color: #fbbf24; font-size: 11px; font-weight: 600">input truncated</span><span style="color: #9fb3c8; font-size: 12px">2,000 of 2,184 characters</span></div>
+      <div style="padding: 8px 10px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #c7d3e6; line-height: 1.5">package proxy // Allowlist holds the hosts…</div>
       <sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
         <div style="display: flex; gap: 8px">
           <button onClick="{{ approve }}" style="flex: 1; min-height: 48px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve once</button>
           <button onClick="{{ deny }}" style="flex: 1; min-height: 48px; border-radius: 10px; border: 1px solid #f87171; background: transparent; color: #f87171; font: inherit; font-weight: 600; cursor: pointer">Deny</button>
         </div>
-        <div style="color: #6b819e; font-size: 12px">Fails closed in 08:42.</div>
+        <div style="color: #6b819e; font-size: 12px"><span style="color: #fbbf24; font-family: 'IBM Plex Mono', monospace">08:42 left</span> · then expired, counts as deny</div>
       </sc-if>
       <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
         <div style="color: #c7d3e6; line-height: 1.4">{{ result }}</div>
@@ -71,7 +72,7 @@ a{color:inherit;text-decoration:none}
       </label>
       <button onClick="{{ send }}" style="min-width: 64px; min-height: 48px; border: 0; border-radius: 12px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ sendOpacity }}">Send</button>
     </div>
-    <div style="color: #6b819e; font-size: 12px">Seen at the agent's next step. Pause, resume and cancel are in the menu.</div>
+    <div style="color: #6b819e; font-size: 12px">Seen at the agent's next step. Pause interrupts the agent; resume relaunches it from its session.</div>
   </div>
 
   <nav style="display: flex; justify-content: space-around; align-items: center; padding: 8px 12px 24px; border-top: 1px solid #1f3556; background: #0a1322">
@@ -91,11 +92,11 @@ class Component extends DCLogic {
     const extra = this.state.extra ?? [];
     const open = !verdict;
     const pill = open
-      ? { label: 'Awaiting approval', bg: '#3a2d0b', fg: '#fbbf24' }
+      ? { label: 'Awaiting guidance', bg: '#3a2d0b', fg: '#fbbf24' }
       : { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
     const appr = open
-      ? { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' }
-      : { title: 'Approval answered', head: verdict === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556' };
+      ? { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a', status: 'open' }
+      : { title: 'Approval answered', head: verdict === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556', status: 'answered' };
     return {
       accent, pill, appr, open, done: !open, draft,
       result: verdict === 'allow' ? 'You allowed this Write once. The agent continues in the same live session.' : 'You denied this Write. The agent was told and continues without it.',

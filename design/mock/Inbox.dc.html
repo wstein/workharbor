@@ -39,14 +39,14 @@ a{color:inherit;text-decoration:none}
 
     <div style="flex-grow: 1; min-height: 0; display: flex; gap: 24px">
       <section style="width: 420px; flex: none; display: flex; flex-direction: column; gap: 10px">
-        <sc-for list="{{ items }}" as="it" hint-placeholder-count="3">
+        <sc-for list="{{ items }}" as="it" hint-placeholder-count="6">
           <button onClick="{{ it.pick }}" style="text-align: left; display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; border: 1px solid {{ it.border }}; background: {{ it.bg }}; color: #e6edf7; font: inherit; cursor: pointer; opacity: {{ it.opacity }}">
             <div style="display: flex; justify-content: space-between; align-items: center">
               <span style="padding: 3px 9px; border-radius: 999px; background: {{ it.kindBg }}; color: {{ it.kindFg }}; font-size: 12px; font-weight: 600">{{ it.kind }}</span>
               <span style="color: #9fb3c8; font-size: 12px; font-family: 'IBM Plex Mono', monospace">{{ it.ref }}</span>
             </div>
             <div style="font-weight: 500; line-height: 1.4">{{ it.title }}</div>
-            <div style="color: #9fb3c8; font-size: 12px">{{ it.status }}</div>
+            <div style="color: {{ it.statusFg }}; font-size: 12px">{{ it.status }}</div>
           </button>
         </sc-for>
       </section>
@@ -55,6 +55,11 @@ a{color:inherit;text-decoration:none}
         <div style="display: flex; flex-direction: column; gap: 6px">
           <span style="color: #9fb3c8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">{{ cur.kindLong }}</span>
           <h2 style="margin: 0; font-size: 20px; font-weight: 600; line-height: 1.35">{{ cur.title }}</h2>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <sc-for list="{{ cur.tags }}" as="tg" hint-placeholder-count="2">
+            <span style="padding: 3px 9px; border-radius: 999px; background: {{ tg.bg }}; color: {{ tg.fg }}; font-size: 12px; font-weight: 600">{{ tg.label }}</span>
+          </sc-for>
         </div>
         <div style="line-height: 1.6; color: #c7d3e6">{{ cur.body }}</div>
         <div style="padding: 14px 16px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; font-size: 13px; line-height: 1.6; color: #9fb3c8">{{ cur.context }}</div>
@@ -72,9 +77,12 @@ a{color:inherit;text-decoration:none}
         </sc-if>
         <sc-if value="{{ cur.isDone }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 10px">
-            <div style="padding: 14px 16px; border-radius: 10px; background: #11331f; color: #86efac">Answered: <strong style="color: #ffffff">{{ cur.answerLabel }}</strong>. The agent has been told and continues.</div>
+            <div style="padding: 14px 16px; border-radius: 10px; background: #11331f; color: #86efac">Answered: <strong style="color: #ffffff">{{ cur.answerLabel }}</strong>. {{ cur.doneText }}</div>
             <button onClick="{{ cur.undo }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #c7d3e6; font: inherit; cursor: pointer">Change answer</button>
           </div>
+        </sc-if>
+        <sc-if value="{{ cur.isClosed }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 14px 16px; border-radius: 10px; background: #3a1518; color: #fca5a5; line-height: 1.6">{{ cur.closedText }}</div>
         </sc-if>
       </section>
     </div>
@@ -93,41 +101,53 @@ class Component extends DCLogic {
         kind: 'Question', kindLong: 'Question from the agent', kindBg: '#3a2d0b', kindFg: '#fbbf24', ref: '#15',
         title: 'Allow proxy.golang.org and sum.golang.org in the default egress allowlist?',
         body: 'The egress proxy needs to fetch Go modules to run the tests. The default policy blocks everything except the forge, the package registries you configured and the LLM API.',
-        context: 'Task: Egress allowlist proxy · Run r-88 · Claude Code · claude-sonnet-5-5. Blocking: the agent waits for your answer.',
+        context: 'Decision d-31 · task t-15 awaiting guidance · run r-88 · Claude Code · claude-sonnet-5-5. Blocking: the agent waits for your answer.',
         options: ['Allow both, and log every request', 'Allow only sum.golang.org', 'Deny for now and ask me per dependency'],
-        hint: 'Sent to the agent as an instruction.',
+        hint: 'Sent to the agent as an instruction.', doneText: 'The agent has been told and continues.', waiting: 'Open · waiting for you',
       },
       {
         kind: 'Approval', kindLong: 'Tool approval, the agent is blocked', kindBg: '#10294d', kindFg: '#60a5fa', ref: '#15',
         title: 'Write internal/proxy/allowlist.go?',
-        body: 'The agent wants to use Write on a file inside the workspace. Only the first 120 characters of the 2,184 it will write are shown here; the agent keeps the full text.',
-        context: 'Task: Egress allowlist proxy · Run r-88 · Claude Code · mode Manual. Fails closed after 10 minutes with no answer. Your answer goes back to the agent in the same live session.',
+        body: 'The agent wants to use Write on a file inside the workspace. Its input is 2,184 characters; the Decision keeps the first 2,000 and the agent keeps the full text. All of it is untrusted data.',
+        context: 'Decision d-32 · task t-15 · run r-88 · Claude Code · mode Manual. Deadline 09:54, 08:42 left: with no answer the approval expires and counts as deny. A late allow is refused.',
+        tags: [{ label: 'input truncated', bg: '#3a2d0b', fg: '#fbbf24' }, { label: 'fails closed in 08:42', bg: '#3a1518', fg: '#f87171' }],
         options: ['Approve once', 'Deny with a reason'],
-        hint: 'Recorded in the audit log with the commit.',
+        hint: 'Recorded in the audit log.', doneText: 'The agent continues in the same live session.', waiting: 'Open · fails closed in 08:42',
       },
       {
         kind: 'Plan', kindLong: 'Plan approval', kindBg: '#2a1f4a', kindFg: '#a78bfa', ref: '#12',
         title: 'Approve the plan for the run interrupted state?',
         body: 'The agent worked in Plan mode and finished its plan: add the state, adjust the reconciler to set it on orphaned runs, add table-driven tests for the transitions. It changes nothing until you approve.',
-        context: 'Task: Add run interrupted state · Run r-91 · Claude Code · mode Plan. Approving moves the agent out of Plan mode and lets it start the work.',
+        context: 'Decision d-33 · task t-12 awaiting guidance · run r-91 · Claude Code · mode Plan. Deadline 10:06, 6:10 left, then it counts as deny. Approving moves the agent out of Plan mode.',
+        tags: [{ label: 'fails closed in 6:10', bg: '#3a1518', fg: '#f87171' }],
         options: ['Approve the plan', 'Ask for changes'],
-        hint: 'The plan is the subject of this approval.',
+        hint: 'The plan is the subject of this approval.', doneText: 'The agent leaves Plan mode and starts the work.', waiting: 'Open · fails closed in 6:10',
       },
       {
-        kind: 'Review', kindLong: 'Ready for your review', kindBg: '#0f3733', kindFg: '#5eead4', ref: '#9',
-        title: 'Reconciler: mark orphaned runs interrupted',
-        body: 'PR #21 at 3c71a9e: 312 lines added, 41 removed in 9 files. Tests pass (58) and CI passed for this commit. Merging stays with you, on the forge.',
-        context: 'CI result is tied to commit 3c71a9e, the current revision. A newer commit would reset it to pending.',
-        options: ['Mark as reviewed, task completed', 'Request changes'],
-        hint: 'Approving does not merge the pull request.',
+        kind: 'Review', kindLong: 'Review: ready to push?', kindBg: '#0f3733', kindFg: '#5eead4', ref: '#9',
+        title: 'Ready to push? Reconciler: orphaned runs at 3c71a9e',
+        body: 'Cleanup is done on agent/reconciler-orphans: rebased onto main, folded into 2 commits, messages checked, signed with the bot key, make check passed. 312 lines added, 41 removed in 9 files.',
+        context: 'Decision d-29 · task t-9 ready for review. This approval covers commit 3c71a9e only; a newer commit needs a new one. On approval the supervisor, not the agent, pushes as the workharbor GitHub App and opens the PR; CI then runs on 3c71a9e.',
+        tags: [{ label: 'commit 3c71a9e', bg: '#0f3733', fg: '#5eead4' }],
+        options: ['Push and open the pull request', 'Decline and ask for rework'],
+        hint: 'Approving does not merge. Merging stays with you, on GitHub.', doneText: 'The supervisor pushes 3c71a9e and opens the PR.', waiting: 'Open · no deadline',
       },
       {
         kind: 'Login', kindLong: 'Agent login expired', kindBg: '#3a1518', kindFg: '#f87171', ref: '#16',
         title: 'Claude Code login expired in ws-4d1c',
-        body: 'The subscription login in this environment can no longer refresh, so run r-91 is paused. The workspace, session and all files are kept. Log in again and the agent continues where it stopped.',
-        context: 'Task: Audit log export · state auth_expired · paused at 09:58. Usage window not affected. A device-code login opens in a new tab.',
-        options: ['Log in again with a device code', 'Cancel the run and keep the workspace'],
-        hint: 'No credentials pass through this page.',
+        body: 'The subscription login in this environment can no longer refresh, so run r-90 is paused and task t-16 awaits guidance. The workspace, session and all files are kept. Log in again and the agent continues where it stopped.',
+        context: 'Decision d-30 · auth_expired · paused at 09:58. Usage window not affected. A device-code login opens in a new tab.',
+        options: ['Log in again with a device code', 'Cancel the task and keep the workspace'],
+        hint: 'No credentials pass through this page.', doneText: 'The run resumes from its session.', waiting: 'Open · waiting for you',
+      },
+      {
+        kind: 'Approval', kindLong: 'Tool approval, expired', kindBg: '#1b2a42', kindFg: '#9fb3c8', ref: '#11',
+        title: 'Bash: go test ./internal/policy/... -count=50',
+        body: 'Nobody answered within 10 minutes, so this approval expired at 08:51 and counted as deny. The agent was told and carried on without running the command.',
+        context: 'Decision d-27 · task t-11 · run r-89. Statuses: open, answered, expired (deadline passed) and superseded (the supervisor restarted). Only answered with allow permits anything.',
+        tags: [{ label: 'expired', bg: '#1b2a42', fg: '#9fb3c8' }],
+        options: [], closed: 'Expired at 08:51 with no answer: denied. Nothing to answer; it stays in the audit log.',
+        hint: '', doneText: '', waiting: '',
       },
     ];
     const items = defs.map((d, i) => {
@@ -135,8 +155,9 @@ class Component extends DCLogic {
       const on = i === sel;
       return {
         kind: d.kind, kindBg: d.kindBg, kindFg: d.kindFg, ref: d.ref, title: d.title,
-        status: isDone ? 'Answered: ' + d.options[done[i]] : 'Waiting for you',
-        bg: on ? '#13294a' : '#0f2038', border: on ? accent : '#1f3556', opacity: isDone ? 0.6 : 1,
+        status: d.closed ? 'Expired · denied' : (isDone ? 'Answered: ' + d.options[done[i]] : d.waiting),
+        statusFg: d.closed ? '#6b819e' : (isDone ? '#9fb3c8' : (d.tags && d.kind !== 'Review' ? '#fbbf24' : '#9fb3c8')),
+        bg: on ? '#13294a' : '#0f2038', border: on ? accent : '#1f3556', opacity: (isDone || d.closed) ? 0.6 : 1,
         pick: () => this.setState({ sel: i }),
       };
     });
@@ -144,8 +165,9 @@ class Component extends DCLogic {
     const p = picks[sel] ?? null;
     const isDone = done[sel] !== undefined;
     const cur = {
-      kindLong: d.kindLong, title: d.title, body: d.body, context: d.context, hint: d.hint,
-      isOpen: !isDone, isDone,
+      kindLong: d.kindLong, title: d.title, body: d.body, context: d.context, hint: d.hint, doneText: d.doneText,
+      tags: d.tags ?? [],
+      isOpen: !isDone && !d.closed, isDone, isClosed: !!d.closed, closedText: d.closed ?? '',
       answerLabel: isDone ? d.options[done[sel]] : '',
       submitOpacity: p === null ? 0.4 : 1,
       options: d.options.map((label, i) => {
@@ -155,11 +177,11 @@ class Component extends DCLogic {
       submit: () => { if (p !== null) this.setState({ done: Object.assign({}, done, { [sel]: p }) }); },
       undo: () => { const next = Object.assign({}, done); delete next[sel]; this.setState({ done: next }); },
     };
-    const openCount = defs.filter((x, i) => done[i] === undefined).length;
+    const openCount = defs.filter((x, i) => !x.closed && done[i] === undefined).length;
     return {
       accent, items, cur, openCount,
       badge: openCount ? { bg: '#fbbf24', fg: '#1a1305' } : { bg: '#1f3556', fg: '#9fb3c8' },
-      subtitle: openCount ? openCount + ' waiting for you. Agents pause on blocking questions.' : 'All caught up. Agents are working.',
+      subtitle: openCount ? openCount + ' open. A run waits on its blocking questions and approvals; approvals fail closed at their deadline.' : 'All caught up. Agents are working.',
     };
   }
 }

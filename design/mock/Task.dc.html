@@ -15,7 +15,7 @@ body{margin:0}
 a{color:inherit;text-decoration:none}
 </style>
 </helmet>
-<div style="width: 1360px; height: 1320px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+<div style="width: 1360px; height: 1380px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
   <header style="display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 32px; border-bottom: 1px solid #1f3556; background: #0a1322">
     <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
       <div style="display: flex; align-items: center; gap: 8px; color: #9fb3c8; font-size: 13px"><a href="Main.dc.html" style="color: {{accent}}">Harbor</a><span>/</span><span style="font-family: 'IBM Plex Mono', monospace">wstein/workharbor#15</span></div>
@@ -36,6 +36,24 @@ a{color:inherit;text-decoration:none}
       <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px">
         <h2 style="margin: 0; font-size: 16px; font-weight: 600">Chat with the agent</h2>
         <span style="color: #9fb3c8; font-size: 12px">Claude Code · claude-sonnet-5-5 · run r-88 · live messages</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 18px; align-items: start; padding: 12px 16px; border-radius: 10px; background: #0f2038; border: 1px solid #1f3556; font-size: 13px">
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="display: flex; justify-content: space-between"><span>Five-hour window</span><span style="font-family: 'IBM Plex Mono', monospace">62%</span></div>
+          <div style="height: 6px; border-radius: 3px; background: #1f3556; overflow: hidden"><div style="width: 62%; height: 100%; background: {{accent}}"></div></div>
+          <span style="color: #9fb3c8; font-size: 12px">resets 14:05</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="display: flex; justify-content: space-between"><span>Seven-day window</span><span style="font-family: 'IBM Plex Mono', monospace">38%</span></div>
+          <div style="height: 6px; border-radius: 3px; background: #1f3556; overflow: hidden"><div style="width: 38%; height: 100%; background: {{accent}}"></div></div>
+          <span style="color: #9fb3c8; font-size: 12px">resets Mon 09:00</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="font-weight: 500">This task</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #c7d3e6">1.82M in · 96k out · 11.4M cache read · 640k cache write</span>
+          <span><span style="font-family: 'IBM Plex Mono', monospace">$4.17</span> <span style="padding: 1px 6px; border-radius: 999px; background: #11331f; color: #4ade80; font-size: 11px">reported</span> <span style="color: #9fb3c8; font-size: 12px">notional on a subscription · budget $12.00</span></span>
+        </div>
       </div>
 
       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
@@ -85,12 +103,12 @@ a{color:inherit;text-decoration:none}
         </label>
         <button onClick="{{ send }}" style="padding: 0 20px; height: 46px; border: 0; border-radius: 10px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer; opacity: {{ sendOpacity }}">Send</button>
       </div>
-      <div style="color: #6b819e; font-size: 12px">Claude Code reads a message at its next step, after the running tool finishes. Agents without live input (Codex CLI, Antigravity) get it as a resumed turn, and this line says so.</div>
+      <div style="color: #6b819e; font-size: 12px">Claude Code reads a message at its next step, after the running tool finishes. Agents in degraded mode (Codex CLI) get it as a resumed turn, and this line says so.</div>
     </section>
 
     <aside style="width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px">
       <div style="padding: 18px; border-radius: 12px; background: {{ decision.bg }}; border: 1px solid {{ decision.border }}; display: flex; flex-direction: column; gap: 12px">
-        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ decision.head }}">{{ decision.title }}</span><span style="color: #9fb3c8; font-size: 12px">question · blocking</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ decision.head }}">{{ decision.title }}</span><span style="color: #9fb3c8; font-size: 12px">question · blocking · {{ decision.status }}</span></div>
         <div style="line-height: 1.5">Allow proxy.golang.org and sum.golang.org in the default egress allowlist?</div>
         <sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
           <div style="display: flex; flex-direction: column; gap: 8px">
@@ -106,15 +124,16 @@ a{color:inherit;text-decoration:none}
       </div>
 
       <div style="padding: 18px; border-radius: 12px; background: {{ appr.bg }}; border: 1px solid {{ appr.border }}; display: flex; flex-direction: column; gap: 12px">
-        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">approval · blocking</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-weight: 600; color: {{ appr.head }}">{{ appr.title }}</span><span style="color: #9fb3c8; font-size: 12px">approval · blocking · {{ appr.status }}</span></div>
         <div style="line-height: 1.5">The agent wants to use <strong style="font-family: 'IBM Plex Mono', monospace">Write</strong> on a file inside the workspace.</div>
-        <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; color: #c7d3e6">file_path: internal/proxy/allowlist.go<br>content: 2,184 characters, first 120 shown:<br>package proxy // Allowlist holds the hosts an environment may reach through the sidecar…</div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span style="padding: 2px 8px; border-radius: 999px; background: #3a2d0b; color: #fbbf24; font-size: 11px; font-weight: 600">input truncated</span><span style="color: #9fb3c8; font-size: 12px">2,000 of 2,184 characters kept; the agent has the full text</span></div>
+        <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; color: #c7d3e6">file_path: internal/proxy/allowlist.go<br>content: package proxy // Allowlist holds the hosts an environment may reach through the sidecar…</div>
         <sc-if value="{{ apprOpen }}" hint-placeholder-val="{{ true }}">
           <div style="display: flex; gap: 8px">
             <button onClick="{{ approve }}" style="flex: 1; padding: 10px 14px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Approve once</button>
             <button onClick="{{ deny }}" style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #f87171; background: transparent; color: #f87171; font: inherit; font-weight: 600; cursor: pointer">Deny</button>
           </div>
-          <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Fails closed after 10 minutes with no answer: 08:42 left. The input is capped here; the agent keeps the full text.</div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px"><span style="color: #fbbf24; font-family: 'IBM Plex Mono', monospace">08:42 left</span><span style="color: #6b819e">deadline 09:54 · then expired, counts as deny</span></div>
         </sc-if>
         <sc-if value="{{ apprDone }}" hint-placeholder-val="{{ false }}">
           <div style="padding: 10px 12px; border-radius: 8px; background: #0b1626; color: #c7d3e6; line-height: 1.5">{{ apprResult }}</div>
@@ -122,19 +141,19 @@ a{color:inherit;text-decoration:none}
       </div>
 
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
-        <span style="font-weight: 600">Review candidate</span>
+        <span style="font-weight: 600">Branch and push</span>
         <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
           <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/egress-proxy · not pushed</span>
-          <span style="color: #9fb3c8">Commit</span><span style="font-family: 'IBM Plex Mono', monospace">8e2f1c4</span>
+          <span style="color: #9fb3c8">Last commit</span><span><span style="font-family: 'IBM Plex Mono', monospace">8e2f1c4</span> <span style="color: #9fb3c8">by the agent, not pinned yet</span></span>
           <span style="color: #9fb3c8">Changes</span><span><span style="color: #4ade80; font-family: 'IBM Plex Mono', monospace">+214</span> <span style="color: #f87171; font-family: 'IBM Plex Mono', monospace">-18</span> in 6 files</span>
           <span style="color: #9fb3c8">Tests</span><span style="color: #4ade80">41 passed</span>
-          <span style="color: #9fb3c8">CI (Drone)</span><span style="color: #9fb3c8">runs after the push</span>
+          <span style="color: #9fb3c8">CI (GitHub)</span><span style="color: #9fb3c8">runs on the pushed SHA</span>
         </div>
         <div style="display: flex; gap: 8px">
           <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">View diff</button>
           <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Prepare for push</button>
         </div>
-        <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Cleanup first (rebase, one commit per change, checks), then you approve the push. Merging stays with you, on the forge.</div>
+        <div style="color: #6b819e; font-size: 12px; line-height: 1.5">The agent never pushes. Cleanup pins a SHA and asks you "Ready to push?"; on approval the supervisor pushes as the workharbor GitHub App and opens the PR. Merging stays with you.</div>
       </div>
 
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
@@ -148,14 +167,14 @@ a{color:inherit;text-decoration:none}
           <span style="color: #9fb3c8">Lock</span><span style="color: {{ lock.fg }}; font-weight: 500">{{ lock.label }}</span>
           <span style="color: #9fb3c8">Session</span><span>{{ session }}</span>
           <span style="color: #9fb3c8">Agent login</span><span>Claude Code · subscription · <span style="color: #4ade80">signed in</span></span>
-          <span style="color: #9fb3c8">Connect</span><span style="font-family: 'IBM Plex Mono', monospace">whr ssh ws-2c9e</span>
+          <span style="color: #9fb3c8">Pause</span><span>Hard interrupt; resume relaunches from the session</span>
         </div>
       </div>
     </aside>
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1320}}'>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1380}}'>
 class Component extends DCLogic {
   renderVals() {
     const accent = this.props.accent ?? '#5eead4';
@@ -209,7 +228,7 @@ class Component extends DCLogic {
       events.push({ time: stamp(), dot: '#60a5fa', fg: '#c7d3e6', text: 'Run resumed. Updating the proxy config and its tests.', audit: true });
     }
     if (s.modeChanged) events.push({ time: stamp(), dot: '#9fb3c8', fg: '#c7d3e6', text: 'Permission mode set to ' + modeDefs.find((m) => m.key === mode).label + '.', note: 'The agent process restarted with its session kept; the transcript carries on.', audit: true });
-    if (paused) events.push({ time: stamp(), dot: '#fbbf24', fg: '#fde68a', text: 'Paused by you. The workspace lock is yours; the agent will not change files.', audit: true });
+    if (paused) events.push({ time: stamp(), dot: '#fbbf24', fg: '#fde68a', text: 'Paused by you: the agent process was interrupted. The workspace lock is yours; the environment keeps running.', note: 'Claude Code has no cooperative pause. Resume relaunches it from its session.', audit: true });
 
     // Chat history. A purge removes transcript content and keeps the audit entries
     // plus one record of the purge. Clear view only hides older events.
@@ -232,10 +251,11 @@ class Component extends DCLogic {
         ? { line: 'Showing the latest 3 of ' + totalEvents.toLocaleString('en-US') + ' events · earlier ones are hidden, not deleted', viewLabel: 'Show all', viewOpacity: 1, purgeOpacity: 1 }
         : { line: 'History: ' + totalEvents.toLocaleString('en-US') + ' events · 4.2 MB', viewLabel: 'Clear view', viewOpacity: 1, purgeOpacity: 1 };
 
+    // Task state: a blocking Decision raised by the live run keeps the task in
+    // awaiting_guidance; pause is a run state, so the task stays running.
     let pill = { label: 'Awaiting guidance', bg: '#3a2d0b', fg: '#fbbf24' };
-    if (paused) pill = { label: 'Paused by you', bg: '#1b2a42', fg: '#9fb3c8' };
-    else if (!apprOpen && answered) pill = { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
-    else if (apprOpen) pill = { label: 'Awaiting approval', bg: '#3a2d0b', fg: '#fbbf24' };
+    if (!apprOpen && answered) pill = { label: 'Running', bg: '#10294d', fg: '#60a5fa' };
+    if (paused) pill = { label: pill.label + ' · run paused', bg: '#1b2a42', fg: '#9fb3c8' };
 
     const options = opts.map((label, i) => {
       const on = picked === i;
@@ -243,17 +263,17 @@ class Component extends DCLogic {
     });
 
     const decision = answered
-      ? { title: 'Decision answered', head: '#4ade80', bg: '#0f2038', border: '#1f3556' }
-      : { title: 'Needs you', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' };
+      ? { title: 'Decision answered', head: '#4ade80', bg: '#0f2038', border: '#1f3556', status: 'answered' }
+      : { title: 'Needs you', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a', status: 'open' };
     const appr = apprState
-      ? { title: 'Approval answered', head: apprState === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556' }
-      : { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a' };
+      ? { title: 'Approval answered', head: apprState === 'allow' ? '#4ade80' : '#f87171', bg: '#0f2038', border: '#1f3556', status: 'answered' }
+      : { title: 'Approval needed', head: '#fbbf24', bg: '#2a2209', border: '#6b4f0a', status: 'open' };
     const apprResult = apprState === 'allow'
       ? (autoAccept ? 'Allowed automatically by the mode. Nothing was asked.' : 'You allowed this Write once. The agent continues in the same live session.')
       : (autoDeny ? 'Denied silently by the mode. Nothing was asked.' : 'You denied this Write with a reason. The agent was told and continues without it.');
 
     let tail = { dot: '#60a5fa', text: 'The agent is writing the answer ▍' };
-    if (paused) tail = { dot: '#fbbf24', text: 'Paused. Resume to let the agent continue.' };
+    if (paused) tail = { dot: '#fbbf24', text: 'Paused. Resume relaunches the agent from its session.' };
     else if (apprOpen) tail = { dot: '#fbbf24', text: 'Blocked: waiting for your approval.' };
     else if (!answered) tail = { dot: '#fbbf24', text: 'Waiting for your answer to the question.' };
 
@@ -264,9 +284,9 @@ class Component extends DCLogic {
       apprOpen, apprDone: !apprOpen,
       answerOpacity: picked === null ? 0.4 : 1,
       sendOpacity: draft.trim() ? 1 : 0.4,
-      pauseLabel: paused ? 'Resume agent' : 'Pause agent',
+      pauseLabel: paused ? 'Resume from session' : 'Pause (interrupt)',
       lock: paused ? { label: 'You', fg: '#fbbf24' } : { label: 'Agent', fg: '#60a5fa' },
-      session: paused ? 'You are attached; the agent is paused' : (apprOpen || !answered ? 'Detached; waiting for you' : 'Detached; the agent is working'),
+      session: paused ? 'Agent process stopped; session kept for resume' : (apprOpen || !answered ? 'Detached; waiting for you' : 'Detached; the agent is working'),
       togglePause: () => this.setState({ paused: !paused }),
       clearView: () => { if (!purged) this.setState({ cleared: !s.cleared }); },
       askPurge: () => { if (!purged) this.setState({ confirming: true }); },

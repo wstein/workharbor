@@ -14,7 +14,7 @@
 body{margin:0}
 </style>
 </helmet>
-<div style="width: 900px; height: 780px; box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #07111f; border: 1px solid #1f3556; color: #c7d3e6; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px">
+<div style="width: 900px; height: 1060px; box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: #07111f; border: 1px solid #1f3556; color: #c7d3e6; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px">
   <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: #0a1322; border-bottom: 1px solid #1f3556; color: #9fb3c8; font-size: 12px">
     <span>whr on mac-mini</span><span>zsh</span>
   </div>
@@ -22,41 +22,47 @@ body{margin:0}
 <div><span style="color: #5eead4">$</span> whr ls</div>
 <div style="color: #6b819e">ID    STATE              ISSUE  TITLE                                    AGE</div>
 <div>t-15  <span style="color: #fbbf24">awaiting_guidance</span>  #15    Egress allowlist proxy                   18m</div>
-<div>t-16  <span style="color: #f87171">auth_expired     </span>  #16    Audit log export                         31m</div>
-<div>t-12  <span style="color: #60a5fa">running          </span>  #12    Add run interrupted state                42m</div>
-<div>t-11  <span style="color: #60a5fa">running          </span>  #11    Policy table: table-driven tests          9m</div>
+<div>t-16  <span style="color: #fbbf24">awaiting_guidance</span>  #16    Audit log export (auth_expired)          31m</div>
+<div>t-12  <span style="color: #fbbf24">awaiting_guidance</span>  #12    Add run interrupted state                42m</div>
+<div>t-11  <span style="color: #60a5fa">running          </span>  #11    Policy table tests (Codex, degraded)      9m</div>
 <div>t-9   <span style="color: #5eead4">ready_for_review </span>  #9     Reconciler: orphaned runs                 2h</div>
-<div>t-18  <span style="color: #9fb3c8">queued           </span>  #18    Persistence semantics                     4m</div>
+<div>t-18  <span style="color: #9fb3c8">queued           </span>  #18    Workspace retention                       4m</div>
+<div>t-22  <span style="color: #f87171">failed           </span>  #22    Tool store GC (cost budget exceeded)      3h</div>
 <div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr inbox</div>
-<div><span style="color: #fbbf24">1</span>  question  t-15  Allow proxy.golang.org and sum.golang.org in the default allowlist?</div>
-<div><span style="color: #60a5fa">2</span>  approval  t-15  Write internal/proxy/allowlist.go (blocking, fails closed in 08:42)</div>
-<div><span style="color: #a78bfa">3</span>  plan      t-12  Approve the plan for the run interrupted state?</div>
-<div><span style="color: #5eead4">4</span>  review    t-9   Reconciler: orphaned runs (CI passed for 3c71a9e)</div>
-<div><span style="color: #f87171">5</span>  login     t-16  Claude Code login expired (run r-91 paused, log in again in the web UI)</div>
+<div><span style="color: #fbbf24">d-31</span>  question  t-15  Allow proxy.golang.org and sum.golang.org in the allowlist?</div>
+<div><span style="color: #60a5fa">d-32</span>  approval  t-15  Write internal/proxy/allowlist.go (input truncated, deny in 08:42)</div>
+<div><span style="color: #a78bfa">d-33</span>  approval  t-12  Plan: the run interrupted state (deny in 6:10)</div>
+<div><span style="color: #5eead4">d-29</span>  review    t-9   Ready to push? 3c71a9e, 2 commits, checks passed</div>
+<div><span style="color: #f87171">d-30</span>  question  t-16  auth_expired: log in again in the web UI (run r-90 paused)</div>
 <div style="height: 10px"></div>
-<div><span style="color: #5eead4">$</span> whr approve 1 --option allow-both-log</div>
-<div><span style="color: #4ade80">ok</span>  decision d-31 answered, run r-88 resumed</div>
+<div><span style="color: #5eead4">$</span> whr approve d-31 --option allow-both-log</div>
+<div><span style="color: #4ade80">ok</span>  d-31 answered, run r-88 continues</div>
 <div style="height: 10px"></div>
-<div><span style="color: #5eead4">$</span> whr reject 2 --reason "ask me again after question 1"</div>
-<div><span style="color: #4ade80">ok</span>  approval denied, the agent was told why and continues</div>
+<div><span style="color: #5eead4">$</span> whr approve d-29</div>
+<div><span style="color: #4ade80">ok</span>  pushed agent/reconciler-orphans at 3c71a9e as workharbor[bot], opened PR #21</div>
 <div style="height: 10px"></div>
-<div><span style="color: #5eead4">$</span> whr say t-12 "prefer the standard library where you can"</div>
-<div><span style="color: #4ade80">ok</span>  delivered: Claude Code reads it at its next step</div>
+<div><span style="color: #5eead4">$</span> whr usage --since today</div>
+<div style="color: #6b819e">TASK  RUN   AGENT        IN     OUT    CACHE R  COST    SOURCE</div>
+<div>t-15  r-88  Claude Code  1.82M  96k    11.4M    $4.17   reported</div>
+<div>t-16  r-90  Claude Code  1.10M  61k    7.2M     $2.62   reported</div>
+<div>t-12  r-91  Claude Code  1.05M  58k    6.9M     $2.61   reported</div>
+<div>t-11  r-89  Codex CLI    0.74M  41k    2.3M     $1.70   <span style="color: #fbbf24">estimated</span></div>
+<div>t-22  r-85  Claude Code  5.20M  268k   31.0M    $12.00  reported</div>
+<div style="color: #9fb3c8">total 9.91M in, 524k out, $23.10 notional (subscription) · 5h 62% · 7d 38%</div>
 <div style="height: 10px"></div>
-<div><span style="color: #5eead4">$</span> whr pause t-12 &amp;&amp; whr purge t-9 --transcript</div>
-<div><span style="color: #4ade80">ok</span>  t-12 paused</div>
+<div><span style="color: #5eead4">$</span> whr purge t-9 --transcript --before 2026-09-30</div>
 <div><span style="color: #4ade80">ok</span>  t-9 transcript purged: 1,142 events (4.1 MB) removed, 42 audit entries kept</div>
 <div style="height: 10px"></div>
 <div><span style="color: #5eead4">$</span> whr wait t-15 --for decision; echo $?</div>
-<div>6</div>
-<div style="height: 10px"></div>
-<div><span style="color: #5eead4">$</span> whr ssh --config &gt;&gt; ~/.ssh/config <span style="color: #6b819e"># VS Code and JetBrains connect through it</span></div>
+<div>6 <span style="color: #6b819e"># needs human input</span></div>
+<div><span style="color: #5eead4">$</span> whr wait t-22 --for done; echo $?</div>
+<div>10 <span style="color: #6b819e"># task failed</span></div>
 <div><span style="color: #5eead4">$</span> <span style="color: #9fb3c8">_</span></div>
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":780}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":1060}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};

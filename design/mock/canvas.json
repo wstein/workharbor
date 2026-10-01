@@ -22,7 +22,7 @@
       "x": 1440,
       "y": 0,
       "w": 1360,
-      "h": 1320,
+      "h": 1380,
       "title": "Task detail: live chat",
       "is_interactive": true
     },
@@ -54,7 +54,7 @@
       "x": 940,
       "y": 1440,
       "w": 900,
-      "h": 780,
+      "h": 1060,
       "title": "whr CLI"
     },
     "Push.dc.html": {
@@ -66,7 +66,7 @@
     },
     "Onboarding.dc.html": {
       "x": 0,
-      "y": 2404,
+      "y": 2580,
       "w": 1360,
       "h": 1100,
       "title": "Onboarding wizard",
@@ -111,7 +111,7 @@
       "x": 2390,
       "y": 1780,
       "w": 340,
-      "text": "Every action in the web UI has a whr command. Exit code 6 means a task needs human input.",
+      "text": "Every action in the web UI has a whr command. Exit code 6 means a task needs human input, 10 that it failed. whr usage reports tokens and cost; whr purge deletes transcript content and keeps the audit entries.",
       "fill": "blue",
       "size": "m"
     },
@@ -127,7 +127,7 @@
       "x": 2390,
       "y": 2460,
       "w": 340,
-      "text": "In v0 the web UI is a remote for the agent: live chat, send, start, pause, resume, cancel, decisions and approvals. After v0: open in editor and takeover.",
+      "text": "In v0 the web UI is a remote for the agent: live chat, send, start, pause, resume, cancel, decisions and approvals. Pause is a hard interrupt; resume relaunches from the session. After v0: open in editor and takeover.",
       "fill": "orange",
       "size": "m"
     },
@@ -135,16 +135,40 @@
       "x": 2390,
       "y": 2800,
       "w": 340,
-      "text": "auth_expired is a blocking Decision. The run pauses, the workspace and session are kept, and you log in again from the UI.",
+      "text": "auth_expired and quota_exhausted are blocking Decisions. The run pauses, the task awaits guidance, the workspace and session are kept, and you log in again from the UI.",
       "fill": "red",
       "size": "m"
     },
     "onboarding": {
       "x": 1450,
-      "y": 2404,
+      "y": 2580,
       "w": 340,
-      "text": "First-run wizard: sign in, forge, agents and default mode, host checks (untested items are marked), ntfy.",
+      "text": "First-run wizard: sign in, install the workharbor GitHub App and verify the ruleset, agents and default mode, host checks (untested items are marked), ntfy.",
       "fill": "green",
+      "size": "m"
+    },
+    "pushflow": {
+      "x": 420,
+      "y": 960,
+      "w": 340,
+      "text": "Agents never push. Cleanup pins a commit SHA and opens a \"Ready to push?\" review; on approval the supervisor pushes as the workharbor GitHub App and opens the PR. The task stays ready for review until the PR is merged.",
+      "fill": "green",
+      "size": "m"
+    },
+    "usage": {
+      "x": 840,
+      "y": 960,
+      "w": 340,
+      "text": "Usage per run and task: tokens in, out and cache, and cost marked reported or estimated. With a subscription login the five-hour and seven-day windows lead and cost is notional.",
+      "fill": "blue",
+      "size": "m"
+    },
+    "approvals": {
+      "x": 2880,
+      "y": 960,
+      "w": 340,
+      "text": "Approvals have a deadline (10 minutes by default) and fail closed: expired or superseded counts as deny. Input is capped at 2,000 characters and marked as truncated; a review approval names its commit SHA.",
+      "fill": "orange",
       "size": "m"
     }
   },
