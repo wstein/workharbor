@@ -155,6 +155,15 @@ Desired state lives in the database. A loop compares it with actual runtime stat
 
 Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
 
+### 5.5 Adapter plugins
+
+New agents (and later runtime or forge backends) are added as **out-of-process plugins**, not in-process code. A plugin is a separate executable that speaks the versioned adapter contract (§5.2) over stdio or a local socket (JSON-RPC style). Go's in-process `plugin` package is not used: it is fragile and would put third-party code inside the supervisor.
+
+- **Release 1:** the contract is the design; Claude Code and Codex CLI are built-in adapters against it. No loader.
+- **Medium term:** a plugin loader, once two built-in adapters have proved the contract. Whether an existing agent-client protocol (for example Zed's ACP) already covers part of the contract is **unverified**; check it in the §12 scorecard and reuse it if it fits.
+- **Conformance.** A plugin declares its capabilities and must pass the same conformance suite as a built-in adapter, so a capability flag is a verified claim (§5.1).
+- **Trust.** See §7.8: plugins are installed explicitly and run isolated.
+
 ## 6. Policy and autonomy
 
 Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`**.
@@ -179,6 +188,7 @@ Threat model and autonomy policy are written before the build.
 5. **Supervisor identity.** Login allowlist of forge users, PKCE and `state`, short-lived sessions, scoped revocable CLI tokens, CSRF protection, API bound to loopback/VPN, forge tokens encrypted at rest, webhook signature verification. Link accounts by provider instance + stable user ID, never by email.
 6. **SSH/IDE access.** Short-lived per-session SSH certificates or keys, no password auth, jump host only over VPN, code-server never public and always authenticated, treat Open VSX extensions as supply-chain risk.
 7. **Audit and kill switch.** Tamper-evident append-only log stored outside the workspace, linked to commit SHA. `whr kill-all` stops all runs and revokes tokens. Alert on anomalous egress or token spikes. Optional: signed bot commits.
+8. **Plugins.** A plugin handles sessions, credentials and workspace access, so it is a supply-chain risk. Default deny: plugins are installed only by explicit developer action, from a pinned version or hash, and run out of process with the same isolation as any agent environment. They never receive host credentials, `$HOME`, `~/.ssh` or runtime sockets; they get only the per-run credentials a built-in adapter would. Their capabilities are checked by the conformance suite, and every plugin action appears in the audit log.
 
 Separate identities: login identity, connected forge accounts, agent (bot) identity, supervisor sessions.
 
@@ -361,7 +371,8 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 
 - [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
 - [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
-- [ ] Additional runners
+- [ ] Additional runners, including Antigravity if the scorecard allows (§12)
+- [ ] Out-of-process adapter plugin loader with conformance checks (§5.5, §7.8)
 - [ ] Drone CI with revision-aware feedback
 - [ ] Resource-aware scheduling, recovery improvements
 - [ ] code-server, UI editor launch and takeover, `whr top`
