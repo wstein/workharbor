@@ -86,6 +86,7 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
 	closing  bool                // set by Shutdown: no session joins the wait group any more
+	async    *notify.Async       // the queue that delivers cfg.Notifier's messages, when set
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent
@@ -110,7 +111,15 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 	if cfg.ReadyInterval <= 0 {
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
-	return &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}}
+	s := &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}}
+	if cfg.Notifier != nil {
+		// A slow relay must never hold up a reconcile pass or a session
+		// handler: messages go through a bounded queue (design §9.4).
+		s.async = notify.NewAsync(cfg.Notifier, 64, 10*time.Second)
+		s.async.OnError(s.report)
+		s.cfg.Notifier = s.async
+	}
+	return s
 }
 
 // Wait blocks until every attached session's handler has finished.
@@ -133,6 +142,9 @@ func (s *Service) Shutdown() {
 		_ = sess.Stop(context.Background())
 	}
 	s.wg.Wait()
+	if s.async != nil {
+		s.async.Close() // deliver what is queued, then stop
+	}
 }
 
 func (s *Service) report(err error) {
@@ -190,9 +202,7 @@ func (s *Service) notify(ctx context.Context, events []domain.Event) {
 		if cancelled && m.Kind == notify.KindRunEnded {
 			continue // the human cancelled it; they know
 		}
-		nctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		s.report(s.cfg.Notifier.Notify(nctx, m))
-		cancel()
+		s.report(s.cfg.Notifier.Notify(ctx, m)) // queued: returns at once
 	}
 }
 

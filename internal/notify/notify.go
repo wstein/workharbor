@@ -34,6 +34,7 @@ type Message struct {
 	TaskID     domain.ID
 	Kind       Kind
 	DecisionID domain.ID // set for a Decision; part of the dedup key and the link
+	RunID      domain.ID // set for a run that ended; part of the dedup key
 }
 
 // Notifier delivers a message. An implementation must not add anything to it.
@@ -81,7 +82,7 @@ func FromEvents(events []domain.Event) []Message {
 				continue
 			}
 			if p.To == string(domain.RunStopped) {
-				out = append(out, Message{TaskID: e.TaskID, Kind: KindRunEnded})
+				out = append(out, Message{TaskID: e.TaskID, Kind: KindRunEnded, RunID: p.ID})
 			}
 		}
 	}
@@ -118,6 +119,17 @@ func (t *Throttle) Allow(m Message) bool {
 	}
 	if t.seen == nil {
 		t.seen, t.sent = map[Message]time.Time{}, map[domain.ID][]time.Time{}
+	}
+	// Forget what is older than the window, so the maps stay small.
+	for k, at := range t.seen {
+		if now.Sub(at) >= window {
+			delete(t.seen, k)
+		}
+	}
+	for task, times := range t.sent {
+		if len(times) == 0 || now.Sub(times[len(times)-1]) >= window {
+			delete(t.sent, task)
+		}
 	}
 	if at, ok := t.seen[m]; ok && now.Sub(at) < window {
 		return false
