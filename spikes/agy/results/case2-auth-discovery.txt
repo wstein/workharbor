@@ -1,0 +1,16 @@
+Verdict: PASS
+Supported Auth Modes:
+  - AUTH_MODE_PERSONAL_CONSUMER
+  - AUTH_MODE_GEMINI_API_KEY
+  - AUTH_MODE_BUSINESS_LICENSED_ENTERPRISE
+  - AUTH_MODE_BUSINESS_AGENT_PLATFORM_PAYGO
+  - AUTH_MODE_ENTERPRISE_GATEWAY
+
+Credential Storage Analysis:
+  - Consumer OAuth Token Path: ~/.gemini/jetski-standalone-oauth-token (file permission 0600)
+  - Token Schema: {"auth_method":"consumer", "id_token":"...", "token":{"access_token":"...","refresh_token":"...","expiry":"...","token_type":"Bearer"}}
+  - Accounts File: ~/.gemini/google_accounts.json (active account)
+  - Settings File: ~/.gemini/antigravity-cli/settings.json (modelProvider, trustedWorkspaces)
+  - Storage Provider: compositeTokenStorage with KeyringTokenStorage (macOS Keychain / Linux Secret Service D-Bus) falling back to FileTokenStorage
+  - In-Environment Login Flow (D40): Headless print mode prints OAuth URL and accepts code on stdin ('Or, paste the authorization code here and press Enter:') without requiring browser interaction inside container
+  - Headless API Key Mode: export GEMINI_API_KEY with modelProvider: 'gemini' runs directly against generativelanguage.googleapis.com
