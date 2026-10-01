@@ -260,16 +260,16 @@ Adapter rules that follow from it:
 
 ### 5.2 Agent adapter
 
-Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Codex CLI lacks mid-run injection and host-routed approvals in what spike #1 could test, so in release 1 it runs in the degraded mode below, labelled in the UI. Capability flags:
+Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Codex CLI lacks mid-run injection and host-routed approvals in what spike #1 could test, so in release 1 it runs in the degraded mode below, labelled in the UI. *Full mode* needs every capability marked so; an agent without them runs degraded (D12 requires full mode only of Claude Code, the first agent). Capability flags:
 
 - headless / unattended operation
-- **mid-run message injection (required for release 1)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
-- **structured event stream (required for release 1)**: messages, tool calls, diffs and test results as typed events, which feed the live transcript (§9.3)
+- **mid-run message injection (required for full mode)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
+- **structured event stream (required for every adapter)**: messages, tool calls, diffs and test results as typed events, which feed the live transcript (§9.3)
 - cooperative pause (e.g. stop after current turn); reported false by every measured agent (D11)
 - session persistence and resume
 - PR/issue tooling
 - "awaiting guidance" signal (how the agent raises a blocking Decision)
-- **approval prompts routed to the host (required for release 1)**: the agent blocks on a permission request and the supervisor answers it with a human's allow or deny and a reason (§4.2). An agent without it can only run with a fixed allowlist and every other action denied
+- **approval prompts routed to the host (required for full mode)**: the agent blocks on a permission request and the supervisor answers it with a human's allow or deny and a reason (§4.2). An agent without it can only run with a fixed allowlist and every other action denied
 - **auth modes**, reported explicitly and never assumed:
     - `api-key`: the key stays in the host-side proxy and is issued per run (§7.3).
     - `subscription`: a consumer-plan login (for example Claude or ChatGPT sign-in) kept in a dedicated per-environment auth directory. The CLI refreshes the token itself, so it cannot sit behind the proxy.
@@ -317,7 +317,8 @@ Per-task append-only event log doubles as audit trail, UI feed and CLI stream. E
 - **Limits.** A size cap and an age limit per task, with the cap and limit set by policy, and a manual purge from the web UI and `whr purge` (§9.3). Deleting a task purges its transcript.
 - **A purge records itself.** It deletes transcript content and keeps one audit entry: who, when, and what was removed (event count and bytes). Audit entries refer to transcript content by hash, so a purge leaves a verifiable gap and never silently rewrites history (§7.7).
 - **The agent's own session is separate.** A purge does not touch the session the agent resumes from; shrinking the agent's context (compaction or a new session) is a different action with its own consequence, the agent forgetting, and is not offered as a purge.
-- **Redaction.** Retained transcripts are redacted (§7.3) and treated as untrusted data when shown.
+- **Redaction at ingest.** Secrets are redacted before anything is written: events, Decision inputs and audit entries alike (§7.3). Audit entries are never purged, so redacting later would be too late. What remains is treated as untrusted data when shown.
+- **Live-only events.** Token deltas and heartbeats go to connected clients through an in-memory fan-out and are never written. `--since` (§9.2) replays durable events only; a client that reconnects mid-message gets the final message when it is written.
 
 ### 5.5 Adapter plugins
 
@@ -603,7 +604,7 @@ Ordered by what is cheap and blocks the most work.
 5. **Persistence semantics** (§4.4): decided (D16).
 6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
-8. Finalize the `whr` grammar (#9). The stack is decided (D3, D8, D14).
+8. Finalize the `whr` grammar (issue #9). The stack is decided (D3, D8, D14).
 
 Reboot considerations also include power-loss/UPS behaviour and macOS auto-update reboot policy.
 
@@ -653,7 +654,7 @@ Phases are proposals, not a schedule.
 
 Reviewers disagreed on three points; the resolutions adopted here:
 
-- **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge via PAT.
+- **Forge handoff:** manual compare-URL handoff (product) vs one forge, no half-state (architect). Adopted: one forge, no half-state; since D15 that forge is GitHub through a GitHub App, not a PAT.
 - **Web UI:** defer entirely (ops) vs minimal inbox (product, architect). Adopted then: a minimal read-mostly UI with inbox, since decisions are answered there. Since superseded by the remote-control scope of §9.3 (D8, D12).
 - **UI stack (D8):** `templ` + htmx (option 1 of 7 weighed) over Svelte, Preact, React and others. The cost is that the UI does not consume the JSON API directly; the shared service layer keeps the two front ends consistent.
 
