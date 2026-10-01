@@ -1,0 +1,62 @@
+
+== setup: internal network, proxy sidecar (allow: api.anthropic.com), agent container on the store + volumes
+proxy internal ip 192.168.128.2; agent state: running
+agent image: Fedora Linux 44 (Container Image) | tool: 2.1.286 (Claude Code)
+
+== 1. direct headless run inside the container with the login token
+reply: pong
+through the proxy variables (curl obeys HTTPS_PROXY): 404
+direct, ignoring the proxy variables (must fail): 000
+
+== hosts the agent contacted (proxy log)
+  13 ALLOW CONNECT api.anthropic.com
+  1 DENY CONNECT http-intake.logs.us5.datadoghq.com
+
+== 2. the spike #1 harness on the host drives the agent in the container
+start=202
+say (mid-run)=202
+while running: Container ID  Cpu %  Memory Usage           Net Rx/Tx                Block I/O               Pids
+while running: whspike-ag1   4.80%  293.42 MiB / 2.00 GiB  457.20 KiB / 333.67 KiB  40.05 MiB / 500.00 KiB  13
+turn finished
+{"id":1,"kind":"status","tool":null,"text":"starting"}
+{"id":2,"kind":"mode","tool":null,"text":"manual"}
+{"id":3,"kind":"user","tool":null,"text":"Run the shell command `ls /work`, then run `sleep 8`, then reply with "}
+{"id":4,"kind":"status","tool":null,"text":"working"}
+{"id":5,"kind":"session","tool":null,"text":"claude-haiku-4-5-20251001"}
+{"id":6,"kind":"thinking","tool":null,"text":""}
+{"id":7,"kind":"tool_call","tool":"Bash","text":""}
+{"id":8,"kind":"usage","tool":null,"text":""}
+{"id":9,"kind":"tool_result","tool":null,"text":"lost+found"}
+{"id":10,"kind":"thinking","tool":null,"text":""}
+{"id":11,"kind":"user","tool":null,"text":"Also end your reply with the word BANANA."}
+{"id":12,"kind":"status","tool":null,"text":"working"}
+{"id":13,"kind":"tool_call","tool":"Bash","text":""}
+{"id":14,"kind":"tool_result","tool":null,"text":"(Bash completed with no output)"}
+{"id":15,"kind":"thinking","tool":null,"text":""}
+{"id":16,"kind":"delta","tool":null,"text":"done"}
+{"id":17,"kind":"delta","tool":null,"text":"\n\nBANANA"}
+{"id":18,"kind":"text","tool":null,"text":"done\n\nBANANA"}
+{"id":19,"kind":"result","tool":null,"text":"done\n\nBANANA"}
+{"id":20,"kind":"status","tool":null,"text":"idle"}
+
+== 3. stop and start the container, then resume the same session from the volume
+container after stop and start: running, session id kept by the harness: 2bd0a7a8...
+agent session files on the volume: -work
+resume start=202
+resumed turn finished
+{"id":23,"kind":"status","tool":null,"text":"starting"}
+{"id":24,"kind":"mode","tool":null,"text":"manual"}
+{"id":25,"kind":"user","tool":null,"text":"What word did I ask you to end your reply with? Answer with just that "}
+{"id":26,"kind":"status","tool":null,"text":"working"}
+{"id":27,"kind":"session","tool":null,"text":"claude-haiku-4-5-20251001"}
+{"id":28,"kind":"thinking","tool":null,"text":""}
+
+== 4. egress after everything: what the proxy saw, and the direct path
+  32 ALLOW CONNECT api.anthropic.com
+  2 DENY CONNECT http-intake.logs.us5.datadoghq.com
+through the proxy, a host that is not allowed (must be blocked): 000
+direct to a raw IP, ignoring the proxy (must fail): 000
+
+== memory of the agent container now
+Container ID  Cpu %  Memory Usage           Net Rx/Tx                Block I/O               Pids
+whspike-ag1   1.36%  287.96 MiB / 2.00 GiB  209.32 KiB / 119.41 KiB  37.97 MiB / 160.00 KiB  11

@@ -49,12 +49,17 @@ link() {
 }
 
 CL_NEW=$(add_claude 2.1.286 linux-arm64)
-CL_NEW_MUSL=$(add_claude 2.1.286 linux-arm64-musl)
-CL_OLD=$(add_claude 2.1.285 linux-arm64)
-CX=$(add_codex rust-v0.159.3 0.159.3)
-link default   "$CL_NEW" "$CX"
-link musl      "$CL_NEW_MUSL" "$CX"
-link pinned    "$CL_OLD" "$CX"
+if [ "${LIGHT:-}" = 1 ]; then
+  # Only the glibc Claude Code, for tests that need one agent (about 230 MB).
+  link default "$CL_NEW"
+else
+  CL_NEW_MUSL=$(add_claude 2.1.286 linux-arm64-musl)
+  CL_OLD=$(add_claude 2.1.285 linux-arm64)
+  CX=$(add_codex rust-v0.159.3 0.159.3)
+  link default   "$CL_NEW" "$CX"
+  link musl      "$CL_NEW_MUSL" "$CX"
+  link pinned    "$CL_OLD" "$CX"
+fi
 rm -rf "$STORE/.tmp"
 echo "--- store:"; ls -1 "$STORE/store"; du -sh "$STORE/store" | cut -f1 | sed 's/^/total: /'
 echo "--- profiles:"; ls -l "$STORE"/profiles/*/bin/* | awk '{print $9, $10, $11}' | sed "s|$STORE/||"

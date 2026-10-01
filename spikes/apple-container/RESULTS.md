@@ -10,7 +10,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 2. Storage | Measured | Volumes and bind mounts survive a rebuild; the rootfs does not. Bind mounts are about 5x slower for many small files. A volume attached read-write is exclusive to one container |
 | 3. Isolation | Measured | Mounted unix sockets are unusable. The runtime accepts any host path, so the adapter must reject. The default network reaches the LAN, the internet, other containers and host services |
 | 4. Default-deny egress | Measured | `--internal` networks block everything. A dual-homed proxy sidecar gives a logging allowlist |
-| 5. Agent in a container | Partly | Claude Code installs and runs through the proxy; state survives stop, start and rebuild. Not logged in, so no real agent run yet |
+| 5. Agent in a container | Measured | A real, authenticated run works: the harness on the host drives Claude Code in a container on an internal network, through the proxy. Streaming, mid-run messages and resume after a container restart all work. Cancel and approvals need work |
 | 6. Recovery | Measured, except a reboot | No restart policy. After a crash or a `system stop` and `start`, containers come back `stopped` with their data. Volumes, networks and images survive. A reboot was not triggered |
 | 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
 | 8. Memory at 1 and 4 containers | Not started | |
@@ -68,7 +68,14 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 - **Hosts contacted.** An unauthenticated headless run contacted only `api.anthropic.com`. A minimal allowlist for Claude Code is therefore `api.anthropic.com`, `claude.ai` and `downloads.claude.ai`; further hosts may appear once a real login and tools are used.
 - **State survives.** A marker in `/root/.claude` (the volume) survived stop and start and a delete and recreate of the container, so an auth directory and agent session kept on a volume survive the same events.
 - **Memory.** A container with an idle agent in `stream-json` mode used about 277 MiB (including page cache) of a 2 GiB limit, with 11 processes.
-- **Not done yet:** a real run, because it needs a login inside the container (a subscription token the owner must create). Approvals from inside the container also need a path from the guest to the supervisor: the MCP helper of spike #1 runs in the guest and the supervisor is on the host, which an internal network cannot reach. Options: an HTTP MCP server reached through the sidecar, or a relay.
+- **An authenticated run** (`05c-agent-run.sh`; Claude Code 2.1.286 from the tool store, a stock fedora image, an `--internal` network, the allowlist proxy sidecar). The login was a long-lived subscription token from `claude setup-token`, passed per exec with `container exec --env-file`, so it never sat in the container's own configuration, on a command line or in the repository. It was deleted afterwards (and the owner revokes it).
+  - A headless `claude -p` inside the container answered through the proxy.
+  - **Allowlist.** The proxy saw `api.anthropic.com` (allowed) and `http-intake.logs.us5.datadoghq.com` (Claude Code's telemetry, **denied**). The denial broke nothing, so the minimal allowlist is `api.anthropic.com` alone. `curl` inside the container obeys the proxy variables, so a check without `--noproxy` tests the proxy, not the network; the real direct paths (to `api.anthropic.com` and to a raw IP, with `--noproxy '*'`) both failed.
+  - **Harness in the loop.** The spike #1 harness stayed on the host and ran `container exec -i ... claude` as the agent process through a one-line wrapper (`-claude`). Live typed events, token deltas and a message injected 4 s into a running tool (`done` plus `BANANA`) all worked exactly as on the host.
+  - **Memory.** The container used about 293 MiB while the agent ran a tool (13 processes) and about 288 MiB idle, of a 2 GiB limit.
+  - **Resume after a container restart.** After `container stop` and `start`, the same agent session (same session ID) resumed from `/root/.claude` on the home volume and still remembered the earlier instruction. The token is supplied again on each exec, so a stopped and restarted environment recovers fully. The working directory is a second volume (`/work`), since a volume has one writer.
+- **Cancel does not work through `container exec`.** The harness sends SIGINT to its child; here that child is the `container exec` client, which failed to forward it ("failed to send signal ... invalidArgument") and the agent kept running until the container stopped. An adapter needs another cancel route, such as signalling the process from inside the container with `exec`, or running the agent under a small launcher that writes its PID.
+- **Approvals from inside the container are still open.** This run used `-approvals=false`. The MCP approve helper of spike #1 would run in the guest and call the supervisor on the host, which an internal network cannot reach. Options: an HTTP MCP server reached through the sidecar, or a TCP relay in the sidecar to a supervisor listener bound to the bridge address (not loopback).
 
 ## 6. Recovery
 
@@ -145,4 +152,4 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 
 ## Not tested
 
-A reboot, the interactive kernel-install prompt of `container system start`, an authenticated agent run, approvals from inside the container, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
+A reboot, the interactive kernel-install prompt of `container system start`, approvals from inside the container, a working cancel through `container exec`, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
