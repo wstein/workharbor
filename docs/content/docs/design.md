@@ -361,6 +361,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel (§9.3)
 - [ ] SSH access (certificates, `whr ssh --config`)
 - [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
+- [ ] Installable PWA as the phone client: web app manifest and a service worker for the app shell, so the remote-control UI (§9.3) installs to the Home Screen. Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and uses per-device revocable tokens
 - [ ] Single static-token login
 - [ ] One forge via PAT/bot token
 - [ ] Runtime and forge adapters as interfaces with one implementation each
@@ -377,7 +378,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Resource-aware scheduling, recovery improvements
 - [ ] code-server, UI editor launch and takeover, `whr top`
 - [ ] Web onboarding wizard over the same service layer (§9.5); release 1 uses `whr login` and `whr doctor`
-- [ ] Installable PWA for phone use: web app manifest, service worker for the app shell and Web Push alongside ntfy (§9.4). Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and iOS Web Push needs the app installed to the Home Screen (**unverified**). Per-device revocable tokens.
+- [ ] Web Push alongside ntfy (§9.4) for the installed PWA. iOS Web Push needs the app installed to the Home Screen (**unverified**)
 
 ### Long term
 
@@ -385,7 +386,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Multiple hosts and placement policies
 - [ ] Wider forge/CI coverage
 
-**Not planned:** native iOS and Android apps. The installable PWA is the mobile client; the JSON API stays the contract for any client.
+**Not planned:** native iOS and Android apps. The installable PWA (release 1) is the mobile client; the JSON API stays the contract for any client.
 
 Phases are proposals, not a schedule.
 
