@@ -1,4 +1,5 @@
 #!/bin/sh
-# Enforce formatting and linting before each commit. Enable with `make hooks`.
+# Scan the staged change for secrets, then enforce formatting and linting,
+# before each commit. Enable with `make hooks`.
 set -e
-make fmt-check lint editorconfig
+make secrets-staged fmt-check lint editorconfig

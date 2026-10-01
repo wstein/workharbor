@@ -1,0 +1,18 @@
+#!/bin/sh
+# Scan every commit about to be pushed for secrets, before it leaves the
+# machine. Enable with `make hooks`. Git passes one line per ref on stdin:
+# <local ref> <local sha> <remote ref> <remote sha>.
+set -e
+zero=0000000000000000000000000000000000000000
+while read -r _ local_sha _ remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # a branch being deleted carries no commit
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha --not --remotes" # a new branch: what no remote has yet
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  if ! make -s secrets-range RANGE="$range" >&2; then
+    echo "pre-push: a commit about to be pushed holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2
+    exit 1
+  fi
+done

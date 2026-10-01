@@ -3,10 +3,11 @@ GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 # Hugo extended builds with cgo, so a C++ compiler is needed the first time.
 HUGO := go run -tags extended github.com/gohugoio/hugo@v0.167.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
+GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci
+.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -90,12 +91,12 @@ changelog:
 # workflows (actionlint). typos and lychee come from Homebrew
 # (brew install typos-cli lychee); the rest run through pinned `go run`.
 TYPOS_VERSION := 1.50.3
-check-ci: docs
+check-ci: docs check-hooks
 	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
 	typos --config typos.toml .
 	lychee --config lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
-	go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
+	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 # Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
@@ -110,3 +111,23 @@ docs-serve:
 hooks:
 	git config core.hooksPath .githooks
 	git config commit.template .gitmessage
+
+# Fail unless this clone runs the repository's hooks, which scan for secrets
+# before a commit and before a push: a session that never ran `make hooks`
+# would commit and merge unchecked.
+check-hooks:
+	@if [ "$$(git config core.hooksPath)" != ".githooks" ]; then \
+		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
+	fi
+
+# Scan the commits of a git log range for secrets: the pre-push hook runs it
+# with the range about to be pushed.
+secrets-range:
+	@test -n "$(RANGE)" || { echo "secrets-range needs RANGE" >&2; exit 2; }
+	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts="$(RANGE)" .
+
+# Scan what is staged for secrets: the pre-commit hook runs it.
+secrets-staged:
+	@go run $(GITLEAKS) git --pre-commit --staged --no-banner --redact --config .gitleaks.toml . >/dev/null 2>&1 || { \
+		echo "a secret is staged: unstage it, revoke it if it is real, and read it from a 0600 env file instead (AGENTS.md, Secrets)" >&2; \
+		go run $(GITLEAKS) git --pre-commit --staged --no-banner --redact --config .gitleaks.toml . >&2; exit 1; }
