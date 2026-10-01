@@ -24,10 +24,10 @@ SCRATCH=$S ./03-isolation.sh
 SCRATCH=$S ./04-egress.sh && SCRATCH=$S ./04b-egress-sidecar.sh
 SCRATCH=$S ./05a-agent-install.sh && SCRATCH=$S ./05b-agent-persist.sh
 SCRATCH=$S ./06-recovery.sh
-STORE=$S/store ./build-store.sh && STORE=$S/store ./08b-toolstore.sh
+STORE=$S/store ./build-store.sh && STORE=$S/store ./07b-toolstore.sh
 ./cleanup-all.sh
 ```
 
-`08b-toolstore.sh` pulls `debian:bookworm-slim`, `ubuntu:24.04` and `alpine:3` if they are missing and records them in `pulled-images.txt` next to the store, so only those can be removed afterwards (`container image rm`). `build-store.sh` needs `curl`, `jq`, `gh` and `tar`, and downloads about 950 MB.
+`07b-toolstore.sh` pulls `debian:bookworm-slim`, `ubuntu:24.04` and `alpine:3` if they are missing and records them in `pulled-images.txt` next to the store, so only those can be removed afterwards (`container image rm`). `build-store.sh` needs `curl`, `jq`, `gh` and `tar`, and downloads about 950 MB.
 
 `probe/` is a small static Go helper (listeners, dial tests and a logging allowlist proxy) that runs on the host and, cross-compiled, inside the containers, so the guest image needs no extra tools.

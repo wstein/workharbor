@@ -12,8 +12,8 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 4. Default-deny egress | Measured | `--internal` networks block everything. A dual-homed proxy sidecar gives a logging allowlist |
 | 5. Agent in a container | Partly | Claude Code installs and runs through the proxy; state survives stop, start and rebuild. Not logged in, so no real agent run yet |
 | 6. Recovery | Partly | No restart policy. A crashed container stays `stopped`; state survives. Runtime restart and reboot not tested |
-| 7. Memory at 1 and 4 containers | Not started | |
-| 8. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
+| 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
+| 8. Memory at 1 and 4 containers | Not started | |
 
 ## 1. Lifecycle and limits
 
@@ -78,9 +78,9 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 - **Not done:** `container system stop` and `start` (restarts the services; needs the owner's approval first).
 - Killing PID 1 from inside the guest had no effect, because the init process ignores it.
 
-## 8. Stock image plus a shared read-only tool store
+## 7. Stock image plus a shared read-only tool store
 
-Instead of installing an agent in every container (item 5: 11 s and 230 MB each), the agent CLIs live once in a versioned, immutable **tool store** on the host and are mounted read-only into stock images, the way a Nix store is shared. `build-store.sh` builds it; `08b-toolstore.sh` tests it.
+Instead of installing an agent in every container (item 5: 11 s and 230 MB each), the agent CLIs live once in a versioned, immutable **tool store** on the host and are mounted read-only into stock images, the way a Nix store is shared. `build-store.sh` builds it; `07b-toolstore.sh` tests it.
 
 **Layout** (a tiny Nix-like store, 949 MB for four entries):
 
@@ -129,7 +129,7 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 - **§4.4 persistence.** Repository and agent home on a volume; bind mounts for hand-over only; the rootfs is disposable.
 - **§7.2 egress.** Per-environment `--internal` network plus a dual-homed proxy sidecar is a verified way to get default-deny egress with a log.
 - **§7.4 isolation policy.** The adapter rejects mounts (resolve symlinks first); unix sockets cannot be mounted usefully; never pass `--ssh`; use `--init`, `--read-only`, `--cap-drop ALL` and a non-root user where possible.
-- **§5.1 and §5.2, tool store.** Prefer stock images plus a shared read-only, content-addressed tool store mounted into each environment (item 8): one build per libc, profiles for versions, the store hash recorded per run. No per-container install.
+- **§5.1 and §5.2, tool store.** Prefer stock images plus a shared read-only, content-addressed tool store mounted into each environment (item 7): one build per libc, profiles for versions, the store hash recorded per run. No per-container install.
 - **§5.3 reconciler.** Detect `stopped` containers and restart them; state lives on the volume.
 - **§12.** Replace the "Apple Container network isolation controls are unverified" marks with these measurements; keep reboot behaviour, the authenticated agent run and approvals from inside the container open.
 
