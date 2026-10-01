@@ -21,6 +21,7 @@ const (
 	EventTaskState          EventKind = "task.state"
 	EventRunStarted         EventKind = "run.started"
 	EventRunState           EventKind = "run.state"
+	EventRunSession         EventKind = "run.session"
 	EventEnvState           EventKind = "env.state"
 	EventRevisionPinned     EventKind = "revision.pinned"
 	EventCIRecorded         EventKind = "ci.recorded"
@@ -60,6 +61,12 @@ type RunStarted struct {
 	EnvID ID `json:"env_id"`
 }
 
+// RunSession is the payload of EventRunSession.
+type RunSession struct {
+	RunID     ID     `json:"run_id"`
+	SessionID string `json:"session_id"`
+}
+
 // RevisionPinned is the payload of EventRevisionPinned.
 type RevisionPinned struct {
 	RunID  ID     `json:"run_id"`
@@ -77,14 +84,16 @@ type CIRecorded struct {
 // carries the tool and a capped copy of its input, as design §5.4 requires of
 // the audit trail.
 type DecisionRaised struct {
-	ID       ID           `json:"id"`
-	RunID    ID           `json:"run_id,omitempty"`
-	Kind     DecisionKind `json:"kind"`
-	Blocking bool         `json:"blocking"`
-	Subject  string       `json:"subject,omitempty"`
-	Input    string       `json:"input,omitempty"`
-	SHA      string       `json:"sha,omitempty"`
-	Deadline time.Time    `json:"deadline,omitzero"`
+	ID       ID            `json:"id"`
+	RunID    ID            `json:"run_id,omitempty"`
+	Kind     DecisionKind  `json:"kind"`
+	Blocking bool          `json:"blocking"`
+	Subject  string        `json:"subject,omitempty"`
+	Input    string        `json:"input,omitempty"`
+	SHA      string        `json:"sha,omitempty"`
+	Deadline time.Time     `json:"deadline,omitzero"`
+	Cause    DecisionCause `json:"cause,omitempty"`
+	ResumeAt time.Time     `json:"resume_at,omitzero"`
 }
 
 // Reraised is the payload of EventDecisionReraised.

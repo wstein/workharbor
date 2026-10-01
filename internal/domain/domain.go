@@ -69,6 +69,9 @@ type Run struct {
 	WorkspaceID ID
 	EnvID       ID
 	State       RunState
+	// SessionID is the agent's session ID, recorded when the agent reports it.
+	// The session, not the environment, is what survives a restart (§5.3).
+	SessionID string
 }
 
 // Environment is the container or VM backing a run or workspace.

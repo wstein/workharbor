@@ -17,6 +17,12 @@ const (
 	RuleStoppedRun   Rule = "stopped-run"   // ready_for_review needs the task's latest run to be stopped
 	RulePinnedSHA    Rule = "pinned-sha"    // ready_for_review needs a pinned commit
 	RuleCIPassed     Rule = "ci-passed"     // where CI is required, the current commit must have passed
+
+	RuleDecisionID   Rule = "decision-id"   // a Decision has an ID that is unique in the task
+	RuleDecisionTask Rule = "decision-task" // a Decision belongs to the aggregate's task
+	RuleRunLive      Rule = "run-live"      // a run raises Decisions only while it is live
+	RuleDecisionOpen Rule = "decision-open" // a run does not resume under an open login or quota question
+	RuleSessionID    Rule = "session-id"    // a run keeps the session ID it reported
 )
 
 // TaskAggregate is a task with the runs, environments and review candidates
@@ -32,6 +38,9 @@ type TaskAggregate struct {
 	// Candidates are the prepared revisions, oldest first. The last one is the
 	// current revision.
 	Candidates []*ReviewCandidate
+
+	// Decisions are every Decision raised for the task, oldest first.
+	Decisions []*Decision
 
 	events []Event // recorded changes, taken by TakeEvents
 }
@@ -171,27 +180,58 @@ func (a *TaskAggregate) Pause(runID ID) error {
 	if env.State != EnvRunning {
 		return conflict(RuleEnvRunning, "run %s cannot be paused: its environment %s is %s", run.ID, env.ID, env.State)
 	}
-	return a.moveRun(run, RunPaused)
+	if err := a.moveRun(run, RunPaused); err != nil {
+		return err
+	}
+	// The agent process that asked is gone, so nothing could receive an answer (D23).
+	a.supersedeOpen(run.ID)
+	a.settle()
+	return nil
 }
 
 // Resume starts a paused or interrupted run again, which relaunches the agent
-// from its session. The environment must be running.
+// from its session. The environment must be running, and no login or quota
+// question of the run may be open: answer it, or cancel. Resuming supersedes
+// the run's other open Decisions and frees a task that waited for guidance.
 func (a *TaskAggregate) Resume(runID ID) error {
-	run, err := a.run(runID)
+	run, err := a.checkResume(runID)
 	if err != nil {
 		return err
 	}
+	for _, d := range a.Decisions {
+		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" {
+			return conflict(RuleDecisionOpen, "run %s cannot resume: decision %s (%s) is still open", run.ID, d.ID, d.Cause)
+		}
+	}
+	return a.resume(run)
+}
+
+// checkResume checks what a resume needs of the run and its environment.
+func (a *TaskAggregate) checkResume(runID ID) (*Run, error) {
+	run, err := a.run(runID)
+	if err != nil {
+		return nil, err
+	}
 	if !run.State.CanTransition(RunStarting) {
-		return run.Transition(RunStarting) // reports the illegal transition
+		return nil, run.Transition(RunStarting) // reports the illegal transition
 	}
 	env, err := a.env(run.EnvID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if env.State != EnvRunning {
-		return conflict(RuleEnvRunning, "run %s cannot resume: its environment %s is %s", run.ID, env.ID, env.State)
+		return nil, conflict(RuleEnvRunning, "run %s cannot resume: its environment %s is %s", run.ID, env.ID, env.State)
 	}
-	return a.moveRun(run, RunStarting)
+	return run, nil
+}
+
+func (a *TaskAggregate) resume(run *Run) error {
+	if err := a.moveRun(run, RunStarting); err != nil {
+		return err
+	}
+	a.supersedeOpen(run.ID)
+	a.settle()
+	return nil
 }
 
 // StopEnvironment stops an environment. It is refused while a run in it is

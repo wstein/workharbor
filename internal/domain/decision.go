@@ -44,6 +44,24 @@ const (
 	AnswerDeny  = "deny"
 )
 
+// The answers of the login, quota and failed-run questions (design §4.2).
+const (
+	AnswerResume        = "resume"
+	AnswerResumeAtReset = "resume_at_reset"
+	AnswerRetry         = "retry"
+	AnswerCancel        = "cancel"
+)
+
+// DecisionCause says why a run blocked on a question that nothing waits on:
+// the run is already paused, so the question survives a pause and a restart.
+type DecisionCause string
+
+const (
+	CauseAuthExpired    DecisionCause = "auth_expired"
+	CauseQuotaExhausted DecisionCause = "quota_exhausted"
+	CauseRunFailed      DecisionCause = "run_failed"
+)
+
 const (
 	// MaxDecisionInput is the most characters of an agent's input a Decision
 	// keeps; the full input stays with the agent (design §4.2).
@@ -76,6 +94,11 @@ type Decision struct {
 	InputTruncated bool
 	SHA            string // the commit this decision is about; set for review Decisions
 	Options        []string
+	// Cause is set for the login, quota and failed-run questions, which are
+	// raised for a run that is already paused or over.
+	Cause DecisionCause
+	// ResumeAt is the time the agent reports its quota resets, when known.
+	ResumeAt time.Time
 
 	Status     DecisionStatus
 	CreatedAt  time.Time
@@ -102,6 +125,8 @@ type NewDecision struct {
 	Input    string
 	SHA      string
 	Options  []string
+	Cause    DecisionCause
+	ResumeAt time.Time
 	Now      time.Time
 	Timeout  time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
 }
@@ -155,6 +180,8 @@ func Raise(spec NewDecision) (*Decision, error) {
 		Subject:   spec.Subject,
 		SHA:       spec.SHA,
 		Options:   append([]string(nil), spec.Options...),
+		Cause:     spec.Cause,
+		ResumeAt:  spec.ResumeAt,
 		Status:    DecisionOpen,
 		CreatedAt: spec.Now,
 	}
@@ -172,7 +199,7 @@ func Raise(spec NewDecision) (*Decision, error) {
 	}
 	d.record(EventDecisionRaised, DecisionRaised{
 		ID: d.ID, RunID: d.RunID, Kind: d.Kind, Blocking: d.Blocking, Subject: d.Subject,
-		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline,
+		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, ResumeAt: d.ResumeAt,
 	}, spec.Now)
 	return d, nil
 }
