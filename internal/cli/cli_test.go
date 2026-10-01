@@ -212,13 +212,16 @@ func TestSayReadsItsMessageFromAnArgumentAFileOrStandardInput(t *testing.T) {
 	if err := os.WriteFile(file, []byte("from a file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for stdin, args := range map[string][]string{
-		"":           {"say", "t-aaa", "from an argument"},
-		"from std\n": {"say", "t-aaa", "-"},
+	for _, tc := range []struct {
+		stdin string
+		args  []string
+	}{
+		{"", []string{"say", "t-aaa", "from an argument"}},
+		{"from std\n", []string{"say", "t-aaa", "-"}},
 	} {
-		code, out, errOut := s.runCLI(stdin, args...)
+		code, out, errOut := s.runCLI(tc.stdin, tc.args...)
 		if code != 0 || out != "resumed_turn\n" || errOut != "" {
-			t.Errorf("%v: exit %d, stdout %q, stderr %q", args, code, out, errOut)
+			t.Errorf("%v: exit %d, stdout %q, stderr %q", tc.args, code, out, errOut)
 		}
 	}
 	if code, _, _ := s.runCLI("", "say", "t-aaa", "-f", file); code != 0 {
