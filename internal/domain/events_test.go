@@ -27,8 +27,8 @@ func payload[T any](t *testing.T, e Event) T {
 
 func TestAggregateRecordsTheEventsOfItsChanges(t *testing.T) {
 	a, run, env := newRunningAggregate(t)
-	// newRunningAggregate started the run: that is the first event.
-	if got := kinds(a.TakeEvents()); !reflect.DeepEqual(got, []EventKind{EventRunStarted}) {
+	// newRunningAggregate added the environment and started the run.
+	if got := kinds(a.TakeEvents()); !reflect.DeepEqual(got, []EventKind{EventEnvAdded, EventRunStarted}) {
 		t.Fatalf("events after StartRun = %v", got)
 	}
 	if again := a.TakeEvents(); len(again) != 0 {
@@ -196,14 +196,14 @@ func TestDecisionRecordsDenialExpiryAndSupersession(t *testing.T) {
 func TestPendingEventsDoNotForget(t *testing.T) {
 	a, _, _ := newRunningAggregate(t)
 	first := a.PendingEvents()
-	if len(first) != 1 || len(a.PendingEvents()) != 1 {
+	if len(first) != 2 || len(a.PendingEvents()) != 2 {
 		t.Fatalf("PendingEvents must not drain: %d then %d", len(first), len(a.PendingEvents()))
 	}
 	first[0].Kind = "tampered"
 	if a.PendingEvents()[0].Kind == "tampered" {
 		t.Error("PendingEvents must return a copy")
 	}
-	if got := a.TakeEvents(); len(got) != 1 || len(a.PendingEvents()) != 0 {
+	if got := a.TakeEvents(); len(got) != 2 || len(a.PendingEvents()) != 0 {
 		t.Errorf("TakeEvents drains: %d taken, %d pending after", len(got), len(a.PendingEvents()))
 	}
 

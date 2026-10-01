@@ -515,3 +515,106 @@ func TestStopRunEndsTheRun(t *testing.T) {
 	wantConflict(t, a.StopRun("r1"), RuleTransition) // a stopped run stays stopped
 	wantNotFound(t, a.StopRun("nope"))
 }
+
+func TestAddingAnEnvironmentIsRecordedButRestoringIsNot(t *testing.T) {
+	a := NewTaskAggregate(Task{ID: "t1", State: TaskRunning})
+	a.AddEnvironment(Environment{ID: "e1", Backend: "apple", State: EnvRunning})
+	if got := kinds(a.PendingEvents()); len(got) != 1 || got[0] != EventEnvAdded {
+		t.Errorf("events = %v, want env.added", got)
+	}
+	snap := a.Snapshot()
+	b, err := Restore(snap)
+	if err != nil || len(b.PendingEvents()) != 0 {
+		t.Errorf("a restored aggregate has %d events (%v)", len(b.PendingEvents()), err)
+	}
+}
+
+func TestRestoreRefusesAPendingChange(t *testing.T) {
+	a := runningTask(t)
+	askApproval(t, a, "d1") // a changed, unsaved decision
+	if _, err := Restore(a.Snapshot()); err == nil {
+		t.Error("Restore accepted a snapshot with a pending change")
+	}
+}
+
+func TestResumeBlockedAndWaitsForReset(t *testing.T) {
+	reset := tNow.Add(time.Hour)
+	a := runningTask(t)
+	d, err := a.SuspendRun("r1", CauseQuotaExhausted, reset, "q1", tNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantConflict(t, a.ResumeBlocked("r1"), RuleDecisionOpen) // the question is open
+	if a.WaitsForReset("r1", tNow) {
+		t.Error("an open question is not a choice to wait")
+	}
+	must(t, a.Answer(d.ID, Response{By: "w", Option: AnswerResumeAtReset, At: tNow}))
+	must(t, a.ResumeBlocked("r1")) // answered: nothing blocks, but it waits
+	if !a.WaitsForReset("r1", tNow) || a.WaitsForReset("r1", reset) {
+		t.Error("the run waits until the reset time and not after")
+	}
+	// An interrupted run keeps waiting.
+	must(t, a.Interrupt("r1"))
+	if !a.WaitsForReset("r1", tNow.Add(time.Minute)) {
+		t.Error("an interruption must not end the wait")
+	}
+	// A run in a state that cannot resume is blocked too.
+	b := runningTask(t)
+	wantConflict(t, b.ResumeBlocked("r1"), RuleTransition)
+	wantNotFound(t, b.ResumeBlocked("nope"))
+}
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLaunchFailuresAreCountedAndUsedUp(t *testing.T) {
+	a := runningTask(t)
+	must(t, a.Interrupt("r1"))
+	for attempt := 1; attempt <= 3; attempt++ {
+		must(t, a.Resume("r1"))
+		exhausted, err := a.RecordLaunchFailure("r1", 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exhausted != (attempt == 3) || a.runs[0].ResumeAttempts != attempt || a.runs[0].State != RunInterrupted {
+			t.Fatalf("attempt %d: exhausted %v, attempts %d, run %s", attempt, exhausted, a.runs[0].ResumeAttempts, a.runs[0].State)
+		}
+	}
+	// An exhausted run can be failed, which opens the retry or cancel question.
+	if _, err := a.FailRun("r1", "fail1", tNow); err != nil {
+		t.Fatal(err)
+	}
+	// A run that starts running again forgets the failures.
+	b := runningTask(t)
+	must(t, b.Interrupt("r1"))
+	must(t, b.Resume("r1"))
+	_, _ = b.RecordLaunchFailure("r1", 3)
+	must(t, b.Resume("r1"))
+	must(t, b.MarkRunning("r1"))
+	if b.runs[0].ResumeAttempts != 0 {
+		t.Errorf("attempts = %d after the run ran again", b.runs[0].ResumeAttempts)
+	}
+	_, err := b.RecordLaunchFailure("r1", 3)
+	wantConflict(t, err, RuleTransition) // it is running now, not starting
+}
+
+func TestSupersededOfListsWhatTheAgentAsked(t *testing.T) {
+	a := runningTask(t)
+	askApproval(t, a, "d1")
+	must(t, a.Interrupt("r1"))
+	got := a.SupersededOf("r1")
+	if len(got) != 1 || got[0].Subject != "Bash" || got[0].Input != "make" {
+		t.Errorf("superseded = %+v", got)
+	}
+	must(t, a.Resume("r1"))
+	if _, err := a.ReraiseDecision("d1", "d1b", tNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.SupersededOf("r1"); len(got) != 0 {
+		t.Errorf("a decision raised again is not listed: %+v", got)
+	}
+}

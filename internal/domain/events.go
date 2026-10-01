@@ -23,6 +23,8 @@ const (
 	EventRunState           EventKind = "run.state"
 	EventRunSession         EventKind = "run.session"
 	EventEnvState           EventKind = "env.state"
+	EventEnvAdded           EventKind = "env.added"
+	EventRunAttempt         EventKind = "run.attempt"
 	EventRevisionPinned     EventKind = "revision.pinned"
 	EventCIRecorded         EventKind = "ci.recorded"
 	EventPRRecorded         EventKind = "pr.recorded"
@@ -60,6 +62,20 @@ type StateChanged struct {
 type RunStarted struct {
 	RunID ID `json:"run_id"`
 	EnvID ID `json:"env_id"`
+}
+
+// EnvAdded is the payload of EventEnvAdded.
+type EnvAdded struct {
+	ID      ID     `json:"id"`
+	Backend string `json:"backend"`
+	State   string `json:"state"`
+}
+
+// RunAttempt is the payload of EventRunAttempt: a launch of the agent that
+// failed, and how many attempts the run has used.
+type RunAttempt struct {
+	RunID    ID  `json:"run_id"`
+	Attempts int `json:"attempts"`
 }
 
 // RunSession is the payload of EventRunSession.

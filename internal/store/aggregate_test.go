@@ -80,7 +80,7 @@ func TestSaveAndLoadATaskRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.EventKind{
-		domain.EventRunStarted, domain.EventRunState, domain.EventRunState, domain.EventRunState, domain.EventRunState,
+		domain.EventEnvAdded, domain.EventRunStarted, domain.EventRunState, domain.EventRunState, domain.EventRunState, domain.EventRunState,
 		domain.EventRevisionPinned, domain.EventRunState, domain.EventCIRecorded, domain.EventPRRecorded,
 	}
 	if !reflect.DeepEqual(eventKinds(events), want) {
@@ -229,7 +229,7 @@ func TestStateAndEventsAreOneTransaction(t *testing.T) {
 	if events, _ := s.EventsSince(bg, "", 0, 0); len(events) != 0 {
 		t.Errorf("%d events survived a rolled-back transaction", len(events))
 	}
-	if a.Task().Version != 0 || len(a.PendingEvents()) != 1 {
+	if a.Task().Version != 0 || len(a.PendingEvents()) != 2 {
 		t.Errorf("a rolled-back save must leave the aggregate as it was: version %d, %d pending", a.Task().Version, len(a.PendingEvents()))
 	}
 }
@@ -362,6 +362,7 @@ func TestAnApprovalWithoutADeadlineIsRefused(t *testing.T) {
 	approve(t, a, "d-lost")
 	snap := a.Snapshot()
 	snap.Decisions[0].Decision.Deadline = time.Time{}
+	snap.Decisions[0].Changed = false
 	lost, err := domain.Restore(snap)
 	if err != nil {
 		t.Fatal(err)
@@ -636,5 +637,55 @@ func TestNoTableStoresAnAddress(t *testing.T) {
 			}
 		}
 		_ = cols.Close()
+	}
+}
+
+// Restore and Snapshot are exported, so a caller could forge a state. The store
+// refuses to save a change that no event accounts for.
+func TestAStateChangeWithNoEventIsRefused(t *testing.T) {
+	s := openTemp(t)
+	a := newAggregate(t, "t1")
+	approve(t, a, "d1")
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	loaded, _ := s.LoadTask(bg, "t1")
+
+	forge := func(mod func(*domain.Snapshot)) *domain.TaskAggregate {
+		snap := loaded.Snapshot()
+		for i := range snap.Decisions {
+			snap.Decisions[i].Changed = false
+		}
+		mod(&snap)
+		f, err := domain.Restore(snap)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	forgeries := map[string]func(*domain.Snapshot){
+		"an open approval turned into an allow": func(s *domain.Snapshot) {
+			d := &s.Decisions[0].Decision
+			at := d.CreatedAt
+			d.Status, d.Answer, d.AnsweredBy, d.AnsweredAt = domain.DecisionAnswered, domain.AnswerAllow, "mallory", &at
+		},
+		"a task moved to completed": func(s *domain.Snapshot) { s.Task.State = domain.TaskCompleted },
+		"a run forced to stopped":   func(s *domain.Snapshot) { s.Runs[0].State = domain.RunStopped },
+		"an environment added": func(s *domain.Snapshot) {
+			s.Envs = append(s.Envs, domain.Environment{ID: "e-extra", State: domain.EnvRunning})
+		},
+	}
+	for name, mod := range forgeries {
+		if _, err := s.SaveTask(bg, forge(mod)); !errors.Is(err, ErrNoEvents) {
+			t.Errorf("%s: SaveTask = %v, want ErrNoEvents", name, err)
+		}
+	}
+	got, _ := s.LoadDecision(bg, "d1")
+	if got.Status != domain.DecisionOpen || got.Allows("") {
+		t.Errorf("a forged answer reached the store: %+v", got)
+	}
+	// A save with no change at all is still fine.
+	if _, err := s.SaveTask(bg, forge(func(*domain.Snapshot) {})); err != nil {
+		t.Errorf("an unchanged save: %v", err)
 	}
 }

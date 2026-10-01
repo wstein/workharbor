@@ -55,8 +55,12 @@ func NewTaskAggregate(task Task) *TaskAggregate {
 	return &TaskAggregate{task: task, envs: map[ID]*Environment{}}
 }
 
-// AddEnvironment registers an environment the task's runs may use.
-func (a *TaskAggregate) AddEnvironment(e Environment) { a.envs[e.ID] = &e }
+// AddEnvironment registers an environment the task's runs may use. It is
+// recorded, like every change of state.
+func (a *TaskAggregate) AddEnvironment(e Environment) {
+	a.envs[e.ID] = &e
+	a.record(EventEnvAdded, EnvAdded{ID: e.ID, Backend: e.Backend, State: string(e.State)})
+}
 
 // PendingEvents returns the recorded events without forgetting them, so a
 // store can write them and forget them only once the write has committed.

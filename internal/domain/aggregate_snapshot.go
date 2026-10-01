@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 )
 
@@ -52,7 +53,8 @@ func Restore(snap Snapshot) (*TaskAggregate, error) {
 		if _, dup := a.envs[e.ID]; dup || e.ID == "" {
 			return nil, bad("environment %q is empty or repeated", e.ID)
 		}
-		a.AddEnvironment(e)
+		env := e
+		a.envs[e.ID] = &env // a restored environment is not a change
 	}
 	seenRun := map[ID]bool{}
 	for _, r := range snap.Runs {
@@ -86,6 +88,9 @@ func Restore(snap Snapshot) (*TaskAggregate, error) {
 	}
 	seenDec := map[ID]bool{}
 	for _, ds := range snap.Decisions {
+		if ds.Changed {
+			return nil, bad("decision %s has a pending change: a restored aggregate has none", ds.Decision.ID)
+		}
 		d := ds.Decision
 		if d.ID == "" || seenDec[d.ID] || d.TaskID != snap.Task.ID {
 			return nil, bad("decision %q is empty, repeated or for another task", d.ID)
@@ -175,4 +180,22 @@ func (a *TaskAggregate) Decision(id ID) (Decision, bool) {
 		return *d, true
 	}
 	return Decision{}, false
+}
+
+// SameState reports whether two snapshots describe the same state, ignoring
+// versions and what is pending. The store compares a save against what it
+// holds: a change of state with no recorded event is refused, so no state can
+// change without an audit row (design §5.4).
+func (s Snapshot) SameState(o Snapshot) bool {
+	norm := func(in Snapshot) Snapshot {
+		out := Snapshot{Task: in.Task, Runs: in.Runs, Envs: in.Envs, Candidates: in.Candidates}
+		out.Task.Version = 0
+		for _, d := range in.Decisions {
+			c := d.Decision
+			c.Version, c.events, c.changed = 0, nil, false
+			out.Decisions = append(out.Decisions, DecisionState{Decision: c})
+		}
+		return out
+	}
+	return reflect.DeepEqual(norm(s), norm(o))
 }

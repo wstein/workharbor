@@ -240,7 +240,11 @@ func (a *TaskAggregate) MarkRunning(runID ID) error {
 	if err != nil {
 		return err
 	}
-	return a.moveRun(run, RunRunning)
+	if err := a.moveRun(run, RunRunning); err != nil {
+		return err
+	}
+	run.ResumeAttempts = 0
+	return nil
 }
 
 // RecordSession stores the agent's session ID on the run when the agent reports
@@ -401,4 +405,69 @@ func (a *TaskAggregate) StopRun(runID ID) error {
 	a.supersedeOpen(run.ID)
 	a.settle()
 	return nil
+}
+
+// ResumeBlocked says why a run cannot be resumed no matter what its
+// environment does: its state does not allow it, or a login or quota question
+// of the run is still open. The reconciler asks before it starts a container,
+// so a run that waits for the human costs none. nil means Resume's own
+// conditions hold except the environment.
+func (a *TaskAggregate) ResumeBlocked(runID ID) error {
+	run, err := a.run(runID)
+	if err != nil {
+		return err
+	}
+	if !run.State.CanTransition(RunStarting) {
+		return run.transition(RunStarting) // reports the illegal transition
+	}
+	for _, d := range a.decisions {
+		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" {
+			return conflict(RuleDecisionOpen, "run %s cannot resume: decision %s (%s) is still open", run.ID, d.ID, d.Cause)
+		}
+	}
+	return nil
+}
+
+// WaitsForReset reports whether the run's latest quota question was answered
+// "resume at reset" and the reset time has not come, so the run is to stay
+// down, interrupted or paused, until then.
+func (a *TaskAggregate) WaitsForReset(runID ID, now time.Time) bool {
+	var last *Decision
+	for _, d := range a.decisions {
+		if d.RunID == runID && d.Cause == CauseQuotaExhausted && d.Status == DecisionAnswered {
+			last = d
+		}
+	}
+	return last != nil && last.Answer == AnswerResumeAtReset && !last.ResumeAt.IsZero() && now.Before(last.ResumeAt)
+}
+
+// RecordLaunchFailure counts a failed launch of the agent for a starting run,
+// returns it to interrupted so the next pass tries again, and reports whether
+// the attempts are used up. Then the caller ends the run with FailRun.
+func (a *TaskAggregate) RecordLaunchFailure(runID ID, limit int) (exhausted bool, err error) {
+	run, err := a.run(runID)
+	if err != nil {
+		return false, err
+	}
+	if run.State != RunStarting {
+		return false, conflict(RuleTransition, "run %s: a launch fails only for a starting run, not %s", run.ID, run.State)
+	}
+	run.ResumeAttempts++
+	a.record(EventRunAttempt, RunAttempt{RunID: run.ID, Attempts: run.ResumeAttempts})
+	if run.ResumeAttempts >= limit {
+		return true, a.Interrupt(run.ID) // FailRun takes over from interrupted
+	}
+	return false, a.Interrupt(run.ID)
+}
+
+// SupersededOf returns the Decisions of a run that were superseded and not
+// raised again, for the resume briefing (design D27).
+func (a *TaskAggregate) SupersededOf(runID ID) []Decision {
+	var out []Decision
+	for _, d := range a.decisions {
+		if d.RunID == runID && d.Status == DecisionSuperseded && d.SupersededBy == "" {
+			out = append(out, *d)
+		}
+	}
+	return out
 }

@@ -56,8 +56,25 @@ func spec() agent.StartSpec {
 	}
 }
 
-func newRig(t *testing.T) *rig {
+// rigOption changes how newRig sets the task up.
+type rigOption func(*rigSetup)
+
+type rigSetup struct {
+	session    string // the session ID recorded on the run; "" records none
+	setSession bool
+}
+
+// withSession records a session ID on the run other than the real one ("" for none).
+func withSession(id string) rigOption {
+	return func(o *rigSetup) { o.session, o.setSession = id, true }
+}
+
+func newRig(t *testing.T, opts ...rigOption) *rig {
 	t.Helper()
+	var setup rigSetup
+	for _, o := range opts {
+		o(&setup)
+	}
 	r := &rig{t: t, clock: &fakeClock{now: t0}}
 	st, err := store.Open(bg, filepath.Join(t.TempDir(), "workharbor.db"), store.WithClock(func() time.Time { return r.clock.now }))
 	if err != nil {
@@ -97,7 +114,13 @@ func newRig(t *testing.T) *rig {
 	a.AddEnvironment(domain.Environment{ID: r.env, Backend: "fake", State: domain.EnvRunning})
 	must(t, a.StartRun(domain.Run{ID: "r1", WorkspaceID: "w1", EnvID: r.env}))
 	must(t, a.MarkRunning("r1"))
-	must(t, a.RecordSession("r1", r.session))
+	recorded := r.session
+	if setup.setSession {
+		recorded = setup.session
+	}
+	if recorded != "" {
+		must(t, a.RecordSession("r1", recorded))
+	}
 	if _, err := st.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
@@ -233,15 +256,7 @@ func TestAnEnvironmentThatNeverAnswersIsRetriedLater(t *testing.T) {
 }
 
 func TestARunWithoutASessionFailsAndAsksWhatToDo(t *testing.T) {
-	r := newRig(t)
-	a := r.load()
-	// Replace the run's session with nothing, as if the agent never reported one.
-	snap := a.Snapshot()
-	snap.Runs[0].SessionID = ""
-	b, err := domain.Restore(snap)
-	must(t, err)
-	_, err = r.store.SaveTask(bg, b)
-	must(t, err)
+	r := newRig(t, withSession("")) // the agent never reported a session
 	_ = r.rt.Restart(bg)
 
 	rep := r.reconcile()
@@ -257,15 +272,7 @@ func TestARunWithoutASessionFailsAndAsksWhatToDo(t *testing.T) {
 }
 
 func TestASessionTheAgentForgotFailsTheRun(t *testing.T) {
-	r := newRig(t)
-	// The environment survives but the agent no longer knows the session.
-	a := r.load()
-	snap := a.Snapshot()
-	snap.Runs[0].SessionID = "lost-session"
-	b, err := domain.Restore(snap)
-	must(t, err)
-	_, err = r.store.SaveTask(bg, b)
-	must(t, err)
+	r := newRig(t, withSession("lost-session")) // the agent no longer knows it
 	_ = r.rt.Restart(bg)
 
 	rep := r.reconcile()

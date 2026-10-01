@@ -19,6 +19,11 @@ const RuleStale domain.Rule = "stale"
 // decides again. It is a conflict (exit code 5).
 var ErrStale = domain.NewConflict(RuleStale, "the record was changed by someone else since it was loaded")
 
+// ErrNoEvents is returned when a save would change state that no recorded
+// event accounts for. Every change goes through the aggregate, which records
+// it, so such a save is a forgery or a bug, and it is refused (design §5.4).
+var ErrNoEvents = errors.New("store: a change of state with no recorded event")
+
 // ErrNoDeadline is returned for an approval without a deadline, which is
 // never written and never read back: every approval has one, so a missing one
 // is a lost value, and acting on it could let a late allow through (design
@@ -68,6 +73,15 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 			return nil, fmt.Errorf("store: save task %s: %w", t.ID, err)
 		}
 	} else {
+		if len(agg.PendingEvents()) == 0 {
+			stored, err := tx.LoadTask(ctx, t.ID)
+			if err != nil {
+				return nil, err
+			}
+			if stored.Task().Version == expected && !stored.Snapshot().SameState(snap) {
+				return nil, fmt.Errorf("task %s: %w", t.ID, ErrNoEvents)
+			}
+		}
 		res, err := tx.tx.ExecContext(ctx, `UPDATE tasks SET repo = ?, issue = ?, state = ?, version = version + 1 WHERE id = ? AND version = ?`,
 			rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.ID), expected)
 		if err != nil {
@@ -94,8 +108,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 	for i, r := range snap.Runs {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, session_id, ord) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), r.SessionID, i); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, session_id, resume_attempts, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
@@ -164,14 +178,14 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, env_id, state, session_id FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
+	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, env_id, state, session_id, resume_attempts FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	for runs.Next() {
 		var r domain.Run
 		var rid, ws, env, st string
-		if err := runs.Scan(&rid, &ws, &env, &st, &r.SessionID); err != nil {
+		if err := runs.Scan(&rid, &ws, &env, &st, &r.SessionID, &r.ResumeAttempts); err != nil {
 			_ = runs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}

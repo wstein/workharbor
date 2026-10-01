@@ -72,6 +72,9 @@ type Run struct {
 	// SessionID is the agent's session ID, recorded when the agent reports it.
 	// The session, not the environment, is what survives a restart (§5.3).
 	SessionID string
+	// ResumeAttempts counts launches of the agent that failed since the run
+	// last ran; it resets when the run is running again (design §5.3).
+	ResumeAttempts int
 }
 
 // Environment is the container or VM backing a run or workspace.

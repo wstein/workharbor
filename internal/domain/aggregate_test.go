@@ -249,6 +249,7 @@ func TestStartRunMovesTheTaskToRunning(t *testing.T) {
 	for _, from := range []TaskState{TaskQueued, TaskReadyForReview, TaskRunning} {
 		a := NewTaskAggregate(Task{ID: "t1", State: from})
 		a.AddEnvironment(Environment{ID: "e1", State: EnvRunning})
+		a.TakeEvents() // the environment's own event is not under test
 		if err := a.StartRun(Run{ID: "r1", EnvID: "e1"}); err != nil {
 			t.Fatalf("from %s: %v", from, err)
 		}
@@ -273,6 +274,7 @@ func TestStartRunMovesTheTaskToRunning(t *testing.T) {
 func TestRefusedStartRunLeavesTheTask(t *testing.T) {
 	a := NewTaskAggregate(Task{ID: "t1", State: TaskQueued})
 	a.AddEnvironment(Environment{ID: "e1", State: EnvStopped})
+	a.TakeEvents()
 	wantConflict(t, a.StartRun(Run{ID: "r1", EnvID: "e1"}), RuleEnvRunning)
 	if a.task.State != TaskQueued || len(a.PendingEvents()) != 0 {
 		t.Errorf("task %s with %d events after a refused start", a.task.State, len(a.PendingEvents()))
