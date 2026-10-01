@@ -4,7 +4,7 @@ Guidance for AI coding agents working on workharbor (CLI: `whr`).
 
 ## Project
 
-A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/design.md](docs/design.md) and is the source of truth; read it before changing architecture. The project is in the design/skeleton phase: adapters are interfaces only.
+A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/content/docs/design.md](docs/content/docs/design.md) and is the source of truth; read it before changing architecture. The project is in the design/skeleton phase: adapters are interfaces only.
 
 ## Commands
 
@@ -44,6 +44,7 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 - Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output contract: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
+- Dependencies and CI: pin every GitHub Action to a full commit SHA with its version in a comment (`uses: owner/action@<sha> # vX.Y.Z`) and keep job-level least-privilege `permissions`. Never use `pull_request_target`, and pass event data to scripts through `env`, not `${{ }}` in `run`. Dependabot (actions and both Go modules) and Renovate (tool versions pinned with `go run ...@version` in the Makefile and workflows) open update pull requests; their commits are exempt from the subject length and `Signed-off-by` rules. CI runs `actionlint`, `zizmor`, `govulncheck`, dependency review, `lychee` and `typos`.
 - README: keep it a short landing page (what it is, concept bullets, build or usage snippet, key links, contributing, license). Put detail in `docs/`, and mark provisional commands as provisional.
 
 ## Hard rules
@@ -79,7 +80,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 | --- | --- |
 | `Refs: #12`, `Closes: #12` (also `Fixes`, `Resolves`, `Related`; `owner/repo#12` and comma lists work) | **Required for `feat`, `fix`, `perf` and `refactor`**; optional for other types. Put the issue in a trailer, never in the subject. Never invent an issue number: open one first. |
 | `Assisted-by: <tool>:<model-id>` | Add it when an AI tool wrote or substantially shaped the change, using the exact model ID you run as (for example `Claude Code:claude-sonnet-5-5`); extra tools go in brackets. One line per tool. Use this instead of `Co-authored-by` for AI. |
-| `Signed-off-by` | **Humans only.** It certifies origin, so agents and bot identities must never add it. The hook rejects it for bot authors. |
+| `Signed-off-by` | **Humans only.** It certifies origin, so agents and bot identities must never add it. The hook rejects it for bot authors, except Dependabot and Renovate. |
 | `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` when it commits for an agent run. `Whr-Run` requires `Whr-Task`. |
 
 `make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
