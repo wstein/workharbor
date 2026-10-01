@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -32,7 +33,12 @@ var (
 	ErrChecksum = errors.New("the download does not match its checksum")
 	ErrBadName  = errors.New("not an accepted tool name, version or platform")
 	ErrNoPin    = errors.New("no pinned tool with that name and version")
+	ErrInsecure = errors.New("a tool is downloaded over https only")
+	ErrTooLarge = errors.New("the download is larger than the store accepts")
 )
+
+// DefaultMaxBytes caps one download; an agent CLI is a few hundred MB.
+const DefaultMaxBytes = 1 << 30
 
 //go:embed pins.json
 var pinsJSON []byte
@@ -85,6 +91,10 @@ func (e Entry) Path() string { return filepath.Join(e.Dir, "bin", e.Name) }
 type Store struct {
 	Root   string
 	Client *http.Client
+	// MaxBytes caps one download; DefaultMaxBytes when zero.
+	MaxBytes int64
+
+	allowHTTP bool // tests only: httptest serves plain http
 }
 
 var (
@@ -101,11 +111,21 @@ func checkNames(name, version, platform string) error {
 	return nil
 }
 
+// client returns the HTTP client with a redirect check: a redirect to a URL
+// that is not https is refused before it is followed, so no request leaves
+// over plain http. The caller's client is copied, never changed.
 func (s *Store) client() *http.Client {
+	c := http.Client{Timeout: 30 * time.Minute}
 	if s.Client != nil {
-		return s.Client
+		c = *s.Client
 	}
-	return &http.Client{Timeout: 30 * time.Minute}
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("toolstore: too many redirects")
+		}
+		return s.checkScheme(req.URL.String())
+	}
+	return &c
 }
 
 // Download fetches a pinned tool and adds it to the store. The file's SHA-256
@@ -119,6 +139,9 @@ func (s *Store) Download(ctx context.Context, p Pin) (Entry, error) {
 		return Entry{}, fmt.Errorf("%w: the pin has no SHA-256", ErrChecksum)
 	}
 	base := strings.TrimRight(p.BaseURL, "/")
+	if err := s.checkScheme(base); err != nil {
+		return Entry{}, err
+	}
 	manifest, err := s.vendorChecksum(ctx, base, p)
 	if err != nil {
 		return Entry{}, err
@@ -136,14 +159,29 @@ func (s *Store) Download(ctx context.Context, p Pin) (Entry, error) {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	file := filepath.Join(tmp, p.Name)
-	got, err := s.fetch(ctx, fmt.Sprintf("%s/%s/%s/%s", base, p.Version, p.Platform, p.Name), file)
-	if err != nil {
+	if err := s.fetch(ctx, fmt.Sprintf("%s/%s/%s/%s", base, p.Version, p.Platform, p.Name), file); err != nil {
 		return Entry{}, err
 	}
-	if got != p.SHA256 {
-		return Entry{}, fmt.Errorf("%w: downloaded %s, expected %s", ErrChecksum, got, p.SHA256)
+	return s.install(p.Name, p.Version, p.Platform, file, p.SHA256)
+}
+
+// checkScheme refuses a URL that is not https, also after a redirect.
+func (s *Store) checkScheme(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("toolstore: %w", err)
 	}
-	return s.install(p.Name, p.Version, p.Platform, file, got)
+	if u.Scheme == "https" || (s.allowHTTP && u.Scheme == "http") {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrInsecure, u.Redacted())
+}
+
+func (s *Store) maxBytes() int64 {
+	if s.MaxBytes > 0 {
+		return s.MaxBytes
+	}
+	return DefaultMaxBytes
 }
 
 // vendorChecksum reads the vendor's manifest and returns the SHA-256 it lists
@@ -158,6 +196,9 @@ func (s *Store) vendorChecksum(ctx context.Context, base string, p Pin) (string,
 		return "", fmt.Errorf("toolstore: the vendor manifest: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if err := s.checkScheme(resp.Request.URL.String()); err != nil {
+		return "", err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("toolstore: the vendor manifest answered %d", resp.StatusCode)
 	}
@@ -176,65 +217,62 @@ func (s *Store) vendorChecksum(ctx context.Context, base string, p Pin) (string,
 	return sum, nil
 }
 
-// fetch downloads url to path and returns its SHA-256.
-func (s *Store) fetch(ctx context.Context, url, path string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// fetch downloads url to path, at most MaxBytes. The hash is checked when the
+// file is installed, on the bytes that are copied into the store.
+func (s *Store) fetch(ctx context.Context, src, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
 	if err != nil {
-		return "", err
+		return err
 	}
 	resp, err := s.client().Do(req)
 	if err != nil {
-		return "", fmt.Errorf("toolstore: download: %w", err)
+		return fmt.Errorf("toolstore: download: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if err := s.checkScheme(resp.Request.URL.String()); err != nil {
+		return err
+	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("toolstore: download answered %d", resp.StatusCode)
+		return fmt.Errorf("toolstore: download answered %d", resp.StatusCode)
+	}
+	limit := s.maxBytes()
+	if resp.ContentLength > limit {
+		return fmt.Errorf("%w: %d bytes, the limit is %d", ErrTooLarge, resp.ContentLength, limit)
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o700) //nolint:gosec // a fresh file in our own temp directory
 	if err != nil {
-		return "", err
+		return err
 	}
-	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, h), resp.Body); err != nil {
+	n, err := io.Copy(f, io.LimitReader(resp.Body, limit+1))
+	if err != nil {
 		_ = f.Close()
-		return "", fmt.Errorf("toolstore: download: %w", err)
+		return fmt.Errorf("toolstore: download: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		return "", err
+		return err
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	if n > limit {
+		return fmt.Errorf("%w: more than %d bytes", ErrTooLarge, limit)
+	}
+	return nil
 }
 
 // AddFile adds a file the developer built locally (the launcher whr-shim) to
-// the store, content-addressed.
+// the store, content-addressed by the bytes that were copied.
 func (s *Store) AddFile(name, version, platform, path string) (Entry, error) {
 	if err := checkNames(name, version, platform); err != nil {
 		return Entry{}, err
 	}
-	f, err := os.Open(path) //nolint:gosec // the developer names the file
-	if err != nil {
-		return Entry{}, err
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return Entry{}, err
-	}
-	return s.install(name, version, platform, path, hex.EncodeToString(h.Sum(nil)))
+	return s.install(name, version, platform, path, "")
 }
 
-// install places a verified file as store/<hash8>-<name>-<version>-<platform>/bin/<name>,
-// atomically, and makes the entry read-only. An entry that already exists with
-// the same hash is left as it is.
-func (s *Store) install(name, version, platform, file, sum string) (Entry, error) {
-	dir := filepath.Join(s.Root, "store", fmt.Sprintf("%s-%s-%s-%s", sum[:8], name, version, platform))
-	e := Entry{Name: name, Version: version, Platform: platform, SHA256: sum, Dir: dir}
-	if _, err := os.Stat(e.Path()); err == nil {
-		if got, herr := hashFile(e.Path()); herr == nil && got == sum {
-			return e, nil
-		}
-		return Entry{}, fmt.Errorf("%w: %s exists with other content", ErrChecksum, dir)
-	}
+// install copies a file into a staging entry, hashing what it copies, and
+// places it as store/<hash8>-<name>-<version>-<platform>/bin/<name>,
+// atomically and read-only. With want set, a copy of other content is
+// ErrChecksum: the hash is of the bytes stored, so a file changed after an
+// earlier check cannot slip in. An entry that already exists with the same
+// hash is left as it is.
+func (s *Store) install(name, version, platform, file, want string) (Entry, error) {
 	if err := os.MkdirAll(filepath.Join(s.Root, "store"), 0o750); err != nil {
 		return Entry{}, err
 	}
@@ -247,8 +285,20 @@ func (s *Store) install(name, version, platform, file, sum string) (Entry, error
 		return Entry{}, err
 	}
 	dst := filepath.Join(stage, "bin", name)
-	if err := copyFile(file, dst); err != nil {
+	sum, err := copyFile(file, dst)
+	if err != nil {
 		return Entry{}, err
+	}
+	if want != "" && sum != want {
+		return Entry{}, fmt.Errorf("%w: downloaded %s, expected %s", ErrChecksum, sum, want)
+	}
+	dir := filepath.Join(s.Root, "store", fmt.Sprintf("%s-%s-%s-%s", sum[:8], name, version, platform))
+	e := Entry{Name: name, Version: version, Platform: platform, SHA256: sum, Dir: dir}
+	if _, err := os.Stat(e.Path()); err == nil {
+		if got, herr := hashFile(e.Path()); herr == nil && got == sum {
+			return e, nil
+		}
+		return Entry{}, fmt.Errorf("%w: %s exists with other content", ErrChecksum, dir)
 	}
 	for _, p := range []struct {
 		path string
@@ -264,21 +314,26 @@ func (s *Store) install(name, version, platform, file, sum string) (Entry, error
 	return e, nil
 }
 
-func copyFile(src, dst string) error {
+// copyFile copies src to a fresh dst and returns the SHA-256 of what it wrote.
+func copyFile(src, dst string) (string, error) {
 	in, err := os.Open(src) //nolint:gosec // a file we just wrote or the developer named
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o700) //nolint:gosec // a fresh file in our own staging directory
 	if err != nil {
-		return err
+		return "", err
 	}
-	if _, err := io.Copy(out, in); err != nil {
+	h := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(out, h), in); err != nil {
 		_ = out.Close()
-		return err
+		return "", err
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func hashFile(path string) (string, error) {

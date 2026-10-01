@@ -130,7 +130,7 @@ func TestToolsBuild(t *testing.T) {
 	bin := []byte("#!/bin/sh\necho claude\n")
 	sum := sha256.Sum256(bin)
 	hash := hex.EncodeToString(sum[:])
-	vendor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	vendor := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/rel/9.9.9/manifest.json":
 			fmt.Fprintf(w, `{"platforms":{"linux-arm64":{"checksum":%q}}}`, hash)
@@ -141,6 +141,8 @@ func TestToolsBuild(t *testing.T) {
 		}
 	}))
 	defer vendor.Close()
+	toolsClient = vendor.Client() // trusts the test server's certificate
+	t.Cleanup(func() { toolsClient = nil })
 	dir := t.TempDir()
 	pins := filepath.Join(dir, "pins.json")
 	writePins := func(h string) {

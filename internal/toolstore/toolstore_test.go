@@ -22,7 +22,7 @@ func newStore(t *testing.T) *Store {
 	t.Helper()
 	root := t.TempDir()
 	t.Cleanup(func() { makeWritable(root) })
-	return &Store{Root: root}
+	return &Store{Root: root, allowHTTP: true} // httptest serves plain http
 }
 
 func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }

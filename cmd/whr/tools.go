@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os/signal"
 	"syscall"
 
@@ -17,6 +18,11 @@ import (
 // D19) with the pinned agent CLI, checked against the pin and the vendor's
 // manifest, adds the launcher built from this commit, and makes the profile.
 // Stdout is data (one line per entry and the profile), stderr is human text.
+
+// toolsClient is the HTTP client of `whr tools build`; nil uses the store's
+// default. Tests set it to trust their TLS server.
+var toolsClient *http.Client
+
 func runTools(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "build" {
 		fmt.Fprintln(stderr, "usage: whr tools build -store <dir> [-shim <whr-shim linux-arm64 binary>] [-platform linux-arm64]")
@@ -46,7 +52,7 @@ func runTools(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	store := &toolstore.Store{Root: *dir}
+	store := &toolstore.Store{Root: *dir, Client: toolsClient}
 	var entries []toolstore.Entry
 	profile := ""
 	for _, p := range pins {
