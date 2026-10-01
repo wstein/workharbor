@@ -9,4 +9,5 @@ extend-exclude = [
   "**/testdata/*.jsonl",
   "**/testdata/**/*.golden.json", # outputs generated from them
   "**/testdata/*.golden.json",
+  "spikes/**/*.jsonl",            # spike agent stream captures
 ]

@@ -1,0 +1,7 @@
+Case 5: Unanswered Approval (Deadline / Timeout)
+Deadline Duration: 5.0 s
+Tool Executed Prematurely: False (must be False)
+whr-shim Kill Latency: 455.73 ms
+Remaining Guest Orphans: '' (must be empty)
+File Created: False (must be False)
+Verdict: PASS

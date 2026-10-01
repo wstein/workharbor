@@ -1,0 +1,11 @@
+Case 4: Supervisor Crash (Exec Client Killed Mid-Approval)
+Host exec client killed with SIGKILL: Success
+Guest Agent PID: 109
+Guest Agent /proc/109/cmdline: /tools/whr-shim run -pidfile /work/agent.pid -- /tools/claude -p --verbose --output-format stream-json --input-format stream-json --permission-mode manual --permission-prompt-tool stdio --model haiku
+Guest Agent /proc/109/stat: 109 (whr-shim) S 1 109 109 0 -1 4194304 220 0 0 0 0 0 0 0 20 0 1 0 120000 0 0 18446744073709551615 0 0 0 0 0 0 0 2147483647 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+Guest Agent Process State: S (Alive, not Zombie)
+Guest Process Survived Client Death: True
+whr-shim kill latency: 610.80 ms
+Remaining Guest Orphans: '' (must be empty)
+File Created: False (must be False: tool call fail-closed)
+Verdict: PASS

@@ -1,0 +1,7 @@
+Case 2: Deny Roundtrip
+Exit Code: 0
+Total Turn Time: 8.450 s
+Response Dispatch Latency: 0.17 ms
+File Exists: False (must be False)
+Permission Denials: [{"tool_name": "Write", "tool_use_id": "toolu_0184n989fMkWaGjhTgrpsqCV", "tool_input": {"file_path": "/work/deny_test.txt", "content": "DENIED_SECRET"}}]
+Verdict: PASS

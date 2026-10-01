@@ -1,0 +1,5 @@
+Case 3: Stdin EOF / Closed Channel
+Exit Code: 0
+Total Time: 5.475 s
+File Exists: False (must be False: tool call aborted on EOF)
+Verdict: PASS

@@ -1,0 +1,17 @@
+Case 7: Leftover #10 - Mid-Tool-Call Cancel & Resume Inspection
+Session ID: a04ba94f-ea91-4208-b0b7-dd1c2df65aca
+Observed Active Process During Execution:
+  PID: 264 | State: S | Cmd: sleep 1 | Stat: 264 (sleep) S 263 264 264 0 -1 4194304 110 0 0 0 0 0 0 0 20 0 1 0 135000 0 0 18446744073709551615 0 0 0 0 0 0 0 2147483647 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+  PID: 270 | State: S | Cmd: sh -c for i in $(seq 1 30); do sleep 1; done && echo DONE > /work/done.txt | Stat: 270 (sh) S 263 264 264 0 -1 4194304 150 0 0 0 0 0 0 0 20 0 1 0 135000 0 0 18446744073709551615 0 0 0 0 0 0 0 2147483647 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+whr-shim Kill Latency: 557.32 ms
+Remaining Orphan Processes: '' (must be empty)
+File Created: False (must be False)
+Process Group Cancellation: PASS
+Resumed Agent Answer:
+The command was never executed. The Bash tool use was rejected during the permission prompt, so the command never ran. The 30-second sleep loop and file write to `/work/done.txt` did not happen.
+Resume Accuracy Evaluation:
+  Acknowledged interruption: False
+  Falsely claimed never ran: True
+  Finding: Claude Code told the model that the tool was rejected during permission prompt and never executed, even though it was approved and ran for 3 seconds before being cancelled by whr-shim. The resumed session lacks awareness of partial execution.
+  Architectural Remedy: D27 (#66)
+Verdict: FAIL (Cancellation: PASS; Resume Accuracy: FAIL)
