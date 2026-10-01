@@ -106,6 +106,17 @@ func testFS() *fakeFS {
 	f.dir("/Users/me/.claude")
 	f.dir("/Users/me/Library/Keychains")
 	f.dir("/Users/me/Library/Preferences")
+	f.dir("/Users/me/Library/Group Containers/2BUA8C4S2C.com.1password")
+	f.dir("/Users/me/Library/Application Support/Google/Chrome")
+	f.dir("/Users/me/.orbstack/run")
+	f.dir("/Users/me/.colima/default")
+	f.dir("/Users/me/.lima/default")
+	f.dir("/Users/me/.local/share/containers/storage")
+	f.dir("/Users/me/.local/share/other")
+	f.dir("/Users/me/.password-store")
+	f.dir("/private/tmp/proj")
+	f.dir("/private/var/root/.ssh")
+	f.dir("/Users/Shared")
 	f.dir("/Users/other/src")
 	f.dir("/run/user/1000")
 	f.dir("/etc/ssh")
@@ -337,4 +348,54 @@ func reasonOfErr(t *testing.T, err error) Reason {
 		t.Fatalf("error %v is not a *MountError", err)
 	}
 	return me.Reason
+}
+
+// #50: locations that passed before.
+func TestCheckMountRejectsMoreSecretsAndRuntimeLocations(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   Reason
+	}{
+		{"1password agent socket folder", "/Users/me/Library/Group Containers", ReasonSecrets},
+		{"inside it", "/Users/me/Library/Group Containers/2BUA8C4S2C.com.1password", ReasonSecrets},
+		{"browser cookies", "/Users/me/Library/Application Support", ReasonSecrets},
+		{"a browser profile", "/Users/me/Library/Application Support/Google/Chrome", ReasonSecrets},
+		{"password store", "/Users/me/.password-store", ReasonSecrets},
+
+		{"orbstack", "/Users/me/.orbstack", ReasonRuntimeSocket},
+		{"below orbstack", "/Users/me/.orbstack/run", ReasonRuntimeSocket},
+		{"colima", "/Users/me/.colima", ReasonRuntimeSocket},
+		{"lima", "/Users/me/.lima/default", ReasonRuntimeSocket},
+		{"podman storage", "/Users/me/.local/share/containers", ReasonRuntimeSocket},
+		{"below podman storage", "/Users/me/.local/share/containers/storage", ReasonRuntimeSocket},
+
+		{"/tmp", "/tmp", ReasonSystem},
+		{"/private/tmp", "/private/tmp", ReasonSystem},
+		{"user temp base", "/private/var/folders", ReasonSystem},
+		{"root's home on macOS", "/private/var/root", ReasonSystem},
+		{"below root's home", "/private/var/root/.ssh", ReasonSystem},
+		{"shared users folder", "/Users/Shared", ReasonSystem},
+
+		{"a directory below /private/tmp", "/private/tmp/proj", ""},
+		{"a sibling of podman storage", "/Users/me/.local/share/other", ""},
+	}
+	fsys := testFS()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckMount(fsys, testHome, tc.source)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("CheckMount(%q) = %v, want it allowed", tc.source, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("CheckMount(%q) allowed, want %q", tc.source, tc.want)
+			}
+			if got := reasonOfErr(t, err); got != tc.want {
+				t.Errorf("CheckMount(%q) reason = %q, want %q (%v)", tc.source, got, tc.want, err)
+			}
+		})
+	}
 }

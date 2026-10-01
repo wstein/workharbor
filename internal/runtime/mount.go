@@ -75,23 +75,26 @@ var secretsUnderHome = []string{
 	".git-credentials",
 	".npmrc",
 	".pypirc",
+	".password-store",
 	".claude",
 	".codex",
 	"Library/Keychains",
+	"Library/Group Containers",    // holds the 1Password agent socket
+	"Library/Application Support", // browser cookies and other apps' stored logins
 }
 
 // runtimeSocketDirs are directories where container runtimes and daemons keep
 // their sockets, relative to the home directory or absolute.
 var (
-	runtimeSocketDirsUnderHome = []string{".socktainer", ".docker/run"}
+	runtimeSocketDirsUnderHome = []string{".socktainer", ".docker/run", ".orbstack", ".colima", ".lima", ".local/share/containers"}
 	runtimeSocketDirs          = []string{"/var/run", "/private/var/run", "/run"}
 )
 
 // systemRoots are directories that are rejected exactly, because they hold
 // every user or every volume; systemTrees are rejected with everything below.
 var (
-	systemRoots = []string{"/", "/Users", "/home", "/private", "/var", "/private/var", "/Volumes", "/Library"}
-	systemTrees = []string{"/etc", "/private/etc", "/System", "/dev", "/proc", "/sys", "/boot", "/root"}
+	systemRoots = []string{"/", "/Users", "/Users/Shared", "/home", "/private", "/var", "/private/var", "/private/var/folders", "/tmp", "/private/tmp", "/Volumes", "/Library"}
+	systemTrees = []string{"/etc", "/private/etc", "/System", "/dev", "/proc", "/sys", "/boot", "/root", "/private/var/root"}
 )
 
 // CheckMount reports whether source may be bind-mounted into an agent
