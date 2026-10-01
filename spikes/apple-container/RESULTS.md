@@ -7,11 +7,11 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | Item | Status | Headline |
 | --- | --- | --- |
 | 1. Lifecycle and limits | Measured | Each container is its own VM. CPU and memory limits are enforced. Use `--init`, or a stop takes 5 s |
-| 2. Storage | Measured | Volumes and bind mounts survive a rebuild; the rootfs does not. Bind mounts are about 5x slower for many small files |
+| 2. Storage | Measured | Volumes and bind mounts survive a rebuild; the rootfs does not. Bind mounts are about 5x slower for many small files. A volume attached read-write is exclusive to one container |
 | 3. Isolation | Measured | Mounted unix sockets are unusable. The runtime accepts any host path, so the adapter must reject. The default network reaches the LAN, the internet, other containers and host services |
 | 4. Default-deny egress | Measured | `--internal` networks block everything. A dual-homed proxy sidecar gives a logging allowlist |
 | 5. Agent in a container | Partly | Claude Code installs and runs through the proxy; state survives stop, start and rebuild. Not logged in, so no real agent run yet |
-| 6. Recovery | Partly | No restart policy. A crashed container stays `stopped`; state survives. Runtime restart and reboot not tested |
+| 6. Recovery | Measured, except a reboot | No restart policy. After a crash or a `system stop` and `start`, containers come back `stopped` with their data. Volumes, networks and images survive. A reboot was not triggered |
 | 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
 | 8. Memory at 1 and 4 containers | Not started | |
 
@@ -36,6 +36,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 - A named volume is an ext4 image file (`volume.img`, virtual size 512 GiB, sparse) under `~/Library/Application Support/com.apple.container/volumes/`. The host cannot browse it directly.
 - A bind mount syncs both ways at once. Files the guest root writes appear on the host owned by the host user (uid 501) with the mode kept. A symlink to `$HOME` inside a mount is just a dangling link in the guest.
 - **Recommendation for §4.4:** keep the repository checkout and the agent home on a volume; use a bind mount only for hand-over to the host, and expect git-heavy work on it to be slow.
+- **A volume is exclusive while it is writable.** While a container has a named volume read-write, no other container can attach it, not even read-only: the second `run` fails with "The storage device attachment is invalid" (a Virtualization.framework error) and no container is created. Several containers can attach one volume **read-only** at the same time. A volume is free again as soon as its holder stops (`09b-volume-exclusive.sh`). A bind mount has no such limit. So one writable volume per environment, and a rebuild must stop the old container before the new one starts.
 
 ## 3. Isolation and escape tests
 
@@ -75,7 +76,15 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 - **No restart policy.** Among the `run` flags only `--init` matches; nothing restarts a container.
 - **Runtime crash.** Killing the host-side runtime process of one container left it `stopped`; `exec` failed with "not running"; the volume state was intact and `start` brought it back with its files. A reconciler has to detect and restart it (design §5.3).
 - **After a reboot.** No LaunchAgent or LaunchDaemon plist for the container services exists on disk, so nothing starts automatically; `container system start` has to run after login. A reboot was not triggered.
-- **Not done:** `container system stop` and `start` (restarts the services; needs the owner's approval first).
+- **`container system stop` and `start`** (approved by the owner; `09-system-restart.sh`, with a running container, a stopped one, a container on an internal network, a volume, a custom network and a bind mount):
+  - `stop` took 0.4 s and ended every container VM at once (no runtime processes left); the CLI then failed with an XPC "connection invalid" error until `start`.
+  - `start --disable-kernel-install --timeout 90` took 0.4 s and needed no prompt. Without `--disable-kernel-install` it asks about the kernel (the default); that prompt was not exercised, so unattended boot should pass the flag.
+  - **Every container came back `stopped`**, including the ones that were running. Nothing restarted by itself.
+  - **Survived:** all containers and their root filesystems, the volume, the custom internal network (its launchd job was re-created), the images, the bind-mounted directory. A file in the rootfs, one in the volume and one in the bind mount were all intact after starting the containers again.
+  - **Lost:** every process inside a container (a background process was gone), and the container IPs changed (for example `192.168.64.55` to `192.168.64.2`).
+  - **Networks kept their rules:** after the restart the default network reached the internet and the internal network stayed blocked.
+  - The owner's two containers and all five images were untouched.
+- **Still not done:** an actual reboot (documented from the facts above, not triggered).
 - Killing PID 1 from inside the guest had no effect, because the init process ignores it.
 
 ## 7. Stock image plus a shared read-only tool store
@@ -110,7 +119,7 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 | Rootfs copy | 107, 116, 109 | Copying the 230 MB binary took 443 ms per container |
 | ext4 named volume, read-only | 187, 108, 100 | Populating it from the store took 3.5 s, once |
 
-- **No meaningful startup difference.** The bind mount wins on simplicity: nothing to copy, one directory to update. A volume is read-only capable (`-v NAME:/opt/store:ro` works and is enforced) and **one volume can be attached to two running containers at once**, so it is a fallback if bind mounts are ever restricted.
+- **No meaningful startup difference.** The bind mount wins on simplicity: nothing to copy, one directory to update. A volume is read-only capable (`-v NAME:/opt/store:ro` works and is enforced) and a volume can be attached **read-only** to several running containers at once (tested with two). Only a read-only volume can be shared; a volume attached read-write is exclusive to one container (item 2), so a shared tool volume must be read-only everywhere.
 - **Immutable from inside.** `touch`, `rm`, appending to a tool, `chmod` and replacing a symlink all failed with "Read-only file system". Re-hashing every store entry afterwards showed no change.
 - **Several containers, one store.** Four containers started at once, each ran both tools and exited, in 3.0 to 4.5 s total, including VM start.
 - **Two versions side by side.** Environment A (profile `default`) ran Claude Code 2.1.286 and environment B (profile `pinned`) ran 2.1.285 at the same time, each resolving to its own store entry.
@@ -130,9 +139,10 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 - **§7.2 egress.** Per-environment `--internal` network plus a dual-homed proxy sidecar is a verified way to get default-deny egress with a log.
 - **§7.4 isolation policy.** The adapter rejects mounts (resolve symlinks first); unix sockets cannot be mounted usefully; never pass `--ssh`; use `--init`, `--read-only`, `--cap-drop ALL` and a non-root user where possible.
 - **§5.1 and §5.2, tool store.** Prefer stock images plus a shared read-only, content-addressed tool store mounted into each environment (item 7): one build per libc, profiles for versions, the store hash recorded per run. No per-container install.
-- **§5.3 reconciler.** Detect `stopped` containers and restart them; state lives on the volume.
+- **§5.3 reconciler.** Detect `stopped` containers and restart them; state lives on the volume. After `container system start` or a crash, every container is `stopped` and every process is gone, so the reconciler resumes the agent from its session (design §5.3) after starting the container. Container IPs change, so never store them; and run `container system start --disable-kernel-install` when starting the services unattended.
+- **§4.4 persistence.** One writable volume per environment (exclusive); stop the old container before starting a replacement that uses the same volume.
 - **§12.** Replace the "Apple Container network isolation controls are unverified" marks with these measurements; keep reboot behaviour, the authenticated agent run and approvals from inside the container open.
 
 ## Not tested
 
-A reboot, `container system stop` and `start`, an authenticated agent run, approvals from inside the container, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
+A reboot, the interactive kernel-install prompt of `container system start`, an authenticated agent run, approvals from inside the container, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.

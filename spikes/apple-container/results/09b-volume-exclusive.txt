@@ -1,0 +1,18 @@
+
+== A holds the volume read-write
+A: running
+
+== second container, same volume read-write
+B start: The storage device attachment is invalid | state: '' (empty means it was not created)
+
+== second container, same volume read-only, while A has it read-write
+C start: The storage device attachment is invalid | state: ''
+
+== A stops; the volume is free again
+B after A stopped: running
+
+== read-only attach by two running containers (as in the tool store)
+D: running  E: running
+
+== a read-write attach while those two hold it read-only
+rw attach: The storage device attachment is invalid

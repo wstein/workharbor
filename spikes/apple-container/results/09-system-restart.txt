@@ -1,0 +1,79 @@
+
+== setup: volume, internal network, three containers
+bg proc started: 8 procs
+Error: container whspike-r2 is not running
+runtime processes before: 2
+-- BEFORE stop
+    ID                                     STATE     IP               CPUS MEMORY
+    fedora2                                stopped   4                1024 MB
+    whspike-r2                             stopped   4                1024 MB
+    whspike-r3                             running   192.168.128.2/24 4 1024
+    80feef4f-efc9-42d9-a657-65b18406902a   stopped   4                1024 MB
+    whspike-r1                             running   192.168.64.55/24 4 1024
+    networks: default(192.168.64.0/24) whspike-rnet(192.168.128.0/24)
+    volumes : whspike-rv
+    images  : 5 entries
+    status              running
+    client.version      1.5.0
+
+== container system stop
+2026-10-01T03:25:08+0200 info com.apple.container.cli: label=gui/501/com.apple.container.container-core-images [ContainerCommands] stopping service
+2026-10-01T03:25:08+0200 info com.apple.container.cli: label=gui/501/com.apple.container.container-network-vmnet.whspike-rnet [ContainerCommands] stopping service
+2026-10-01T03:25:08+0200 info com.apple.container.cli: label=gui/501/com.apple.container.machine-apiserver [ContainerCommands] stopping service
+stop took 403 ms
+runtime processes right after stop: 0 | launchd container jobs: 1 (before: 8)
+cli while stopped: Error: internalError: "failed to list containers" (cause: "interrupted: "XPC connection error: Connection invalid"") Ensure container system service has been st
+apiserver process: 0 | any container VM processes: 0
+
+== container system start (--disable-kernel-install, non-interactive)
+Launching container-apiserver...
+Testing access to container-apiserver...
+Verifying machine API server is running...
+start took 415 ms
+    status              running
+-- AFTER start
+    ID                                     STATE     IP               CPUS MEMORY
+    80feef4f-efc9-42d9-a657-65b18406902a   stopped   4                1024 MB
+    fedora2                                stopped   4                1024 MB
+    whspike-r3                             stopped   4                1024 MB
+    whspike-r2                             stopped   4                1024 MB
+    whspike-r1                             stopped   4                1024 MB
+    networks: default(192.168.64.0/24) whspike-rnet(192.168.128.0/24)
+    volumes : whspike-rv
+    images  : 5 entries
+launchd container jobs: 6
+
+== what survived?
+whspike-r1 state after restart: stopped
+whspike-r2 state after restart: stopped
+whspike-r3 state after restart: stopped
+
+== start them again and check data
+-- AFTER starting the containers again
+    ID                                     STATE     IP               CPUS MEMORY
+    80feef4f-efc9-42d9-a657-65b18406902a   stopped   4                1024 MB
+    fedora2                                stopped   4                1024 MB
+    whspike-r3                             running   192.168.128.2/24 4 1024
+    whspike-r2                             stopped   4                1024 MB
+    whspike-r1                             running   192.168.64.2/24  4 1024
+    networks: default(192.168.64.0/24) whspike-rnet(192.168.128.0/24)
+    volumes : whspike-rv
+    images  : 5 entries
+R1 rootfs file : rootfs-r1
+R1 volume file : vol-r1
+R1 bind file   : bind-before
+R1 bg process survived? 6 procs now (a fresh container has about 5)
+R2 rootfs file : Error: container whspike-r2 is not running  | R2 sees volume: Error: container whspike-r2 is not running
+R3 rootfs file : rootfs-r3
+R3 still on the internal network: whspike-rnet
+internet from R1 (default network works again): 200
+internet from R3 (internal network stays blocked): 000
+
+== the owner's containers and images
+    80feef4f-efc9-42d9-a657-65b18406902a   stopped
+    fedora2                                stopped
+    fedora:latest
+    hello-world:latest
+    ghcr.io/apple/containerization/vminit:0.12.1
+    ghcr.io/apple/containerization/vminit:0.45.0
+    ghcr.io/apple/containerization/vminit:0.6.2
