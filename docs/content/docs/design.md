@@ -464,13 +464,15 @@ Ordered by what is cheap and blocks the most work.
     - [x] Recover after runtime/manager restart (§5.3): every container comes back `stopped` with its data
     - [ ] Recover after a Mac reboot (LaunchAgent vs LaunchDaemon; auto-login/FileVault implications). Not triggered; no plist for the services exists on disk, so `container system start` has to run after login
     - [ ] Private registry pulls and credential handling. Public pulls from Docker Hub worked; private registries not tested
-    - [ ] Agent auth directory and detached session survive environment stop/start and Mac reboot. Partly: a marker in the agent home volume survived stop, start and delete; a real login and a detached run were not tested
+    - [x] Agent session and its auth directory survive environment stop/start and rebuild: after `container stop` and `start`, the same agent session resumed from the home volume and remembered an earlier instruction, with the login supplied per exec. Surviving a Mac reboot was not tested
     - [ ] VPN reachability, forwarding or jump host. Not tested
     - [x] **Default-deny egress and network isolation controls** (`--internal` network plus a proxy sidecar; §7.2)
     - [x] **Escape tests: guest cannot reach host or sockets; forbidden mounts rejected** (mounted unix sockets unusable; mount rejection is the adapter's job; §7.4)
     - [ ] Memory behaviour at 4 then 8 instances, including pressure and swap. Not started; an idle agent in a container used about 277 MiB
     - [x] Stock images with a shared read-only tool store (§5.6)
-    - [ ] Agent run inside a container with a real login, and approvals from inside it (the guest has no path to the supervisor on an internal network; an HTTP MCP server through the sidecar, or a relay, is the open option)
+    - [x] Agent run inside a container with a real login (spike #2, `05c-agent-run.sh`): a stock image on an `--internal` network, tools from the store, the model reached only through the proxy sidecar, the spike #1 harness on the host driving it with live events, token deltas, a mid-run message and a resume after a container restart. The agent container used about 290 MiB
+    - [ ] Approvals from inside the container: the guest has no path to the supervisor on an internal network. An HTTP MCP server reached through the sidecar, or a relay in the sidecar to a supervisor listener bound to the bridge address, is the open option
+    - [ ] A reliable cancel from the host (§5.1)
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
 5. **Persistence semantics** (§4.4).
 6. **Primary forge and login provider** for release 1.
