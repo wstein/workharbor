@@ -2,8 +2,12 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -156,8 +160,8 @@ func TestTheCLIReadsOnlyWhatTheSupervisorPasses(t *testing.T) {
 		if i < 0 || i+1 >= len(cmd) || cmd[i+1] != "" {
 			t.Errorf("%s: --setting-sources must be present with no source: %v", name, cmd)
 		}
-		if got := argAfter(cmd, "--settings"); got != "{}" {
-			t.Errorf("%s: --settings = %q, want the supervisor's own JSON", name, got)
+		if got := instructionFiles(t, argAfter(cmd, "--settings")); got != "claude-md-or-agents-md" {
+			t.Errorf("%s: instructionFiles = %q, want it set explicitly (D38)", name, got)
 		}
 		for _, flag := range []string{"--strict-mcp-config", "--disable-slash-commands"} {
 			if !slices.Contains(cmd, flag) {
@@ -173,8 +177,49 @@ func TestTheCLIReadsOnlyWhatTheSupervisorPasses(t *testing.T) {
 
 	// The supervisor's own settings replace the default, and are what is passed.
 	ad := New(newStub(), Config{Settings: `{"permissions":{"deny":["WebFetch"]}}`})
-	if got := argAfter(ad.args(dontAsk(h), ""), "--settings"); got != `{"permissions":{"deny":["WebFetch"]}}` {
-		t.Errorf("configured settings = %q", got)
+	got := argAfter(ad.args(dontAsk(h), ""), "--settings")
+	var m map[string]any
+	if err := json.Unmarshal([]byte(got), &m); err != nil || m["permissions"] == nil {
+		t.Errorf("configured settings = %q, want the supervisor's permissions kept", got)
+	}
+	if instructionFiles(t, got) != "claude-md-or-agents-md" {
+		t.Errorf("configured settings = %q, want the instruction-file setting added", got)
+	}
+	// A value the supervisor sets itself is kept.
+	own := New(newStub(), Config{Settings: `{"pluginConfigs":{"agents-md@builtin":{"options":{"instructionFiles":"claude-md-and-agents-md"}}}}`})
+	if v := instructionFiles(t, argAfter(own.args(dontAsk(h), ""), "--settings")); v != "claude-md-and-agents-md" {
+		t.Errorf("the supervisor's own instructionFiles was replaced by %q", v)
+	}
+}
+
+// instructionFiles reads the agents-md plugin's instructionFiles option from
+// a settings JSON.
+func instructionFiles(t *testing.T, settings string) string {
+	t.Helper()
+	var m struct {
+		PluginConfigs map[string]struct {
+			Options map[string]string `json:"options"`
+		} `json:"pluginConfigs"`
+	}
+	if err := json.Unmarshal([]byte(settings), &m); err != nil {
+		t.Fatalf("settings %q: %v", settings, err)
+	}
+	return m.PluginConfigs["agents-md@builtin"].Options["instructionFiles"]
+}
+
+// D38: a CLAUDE.md-family file above the workspace, or a managed one, would
+// replace or add to AGENTS.md, so the adapter refuses to start.
+func TestInstructionFilesAboveTheWorkspaceRefuse(t *testing.T) {
+	h, _ := harness(t)
+	ad := New(foundRunner{found: "/work/CLAUDE.md"}, Config{})
+	_, err := ad.Start(context.Background(), dontAsk(h))
+	if !errors.Is(err, ErrInstructionFiles) || !strings.Contains(err.Error(), "/work/CLAUDE.md") {
+		t.Fatalf("Start with a CLAUDE.md above the workspace = %v, want ErrInstructionFiles naming it", err)
+	}
+	// Invalid supervisor settings refuse too, instead of passing something the CLI rejects.
+	bad := New(newStub(), Config{Settings: "not json"})
+	if _, err := bad.Start(context.Background(), dontAsk(h)); err == nil {
+		t.Fatal("invalid settings were accepted")
 	}
 }
 
@@ -252,5 +297,34 @@ func TestResumeFailureIsNoSessionOnlyWhenTheSessionIsMissing(t *testing.T) {
 		if err == nil || errors.Is(err, agent.ErrNoSession) {
 			t.Errorf("%q = %v, want an ordinary error that is not ErrNoSession", text, err)
 		}
+	}
+}
+
+// The check script itself, run by /bin/sh on a real tree: a CLAUDE.md above
+// the workspace is found, the workspace's own is the repository's and is not.
+func TestInstructionCheckScript(t *testing.T) {
+	root := t.TempDir()
+	ws := filepath.Join(root, "a", "b", "ws")
+	if err := os.MkdirAll(filepath.Join(root, "a", ".claude"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{filepath.Join(root, "a", ".claude", "CLAUDE.md"), filepath.Join(ws, "CLAUDE.md")} {
+		if err := os.WriteFile(f, []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := exec.CommandContext(context.Background(), "/bin/sh", "-c", instructionCheck, "whr-instruction-check", ws).Output() //nolint:gosec // the adapter's own fixed script
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, filepath.Join(root, "a", ".claude", "CLAUDE.md")) {
+		t.Errorf("found %q, want the .claude/CLAUDE.md above the workspace", got)
+	}
+	if strings.Contains(got, filepath.Join(ws, "CLAUDE.md")) {
+		t.Errorf("found %q, but the workspace's own CLAUDE.md is the repository's", got)
 	}
 }

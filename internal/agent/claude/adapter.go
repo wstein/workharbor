@@ -43,10 +43,62 @@ type Config struct {
 // (design §5.2): mid-run messages work, permission prompts do not reach the
 // host, and only an allowlist is permitted.
 type Adapter struct {
-	r   Runner
-	cfg Config
-	now func() time.Time
+	r           Runner
+	cfg         Config
+	now         func() time.Time
+	settingsErr error // the supervisor's settings did not parse; every start refuses
 }
+
+// ErrInstructionFiles is returned when a CLAUDE.md-family file sits above the
+// workspace, or a managed one exists: it would replace or add to the
+// repository's AGENTS.md (D38).
+var ErrInstructionFiles = errors.New("a CLAUDE.md-family file outside the repository would change the agent's instructions")
+
+// instructionFileMode makes the CLI read the repository's AGENTS.md when it has
+// no CLAUDE.md, set explicitly so that a changed default in a new CLI version
+// cannot change which file is read (D38).
+const instructionFileMode = "claude-md-or-agents-md"
+
+// withInstructionFiles adds the agents-md plugin's instructionFiles option to
+// the supervisor's settings unless they set it themselves.
+func withInstructionFiles(settings string) (string, error) {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(settings), &m); err != nil || m == nil {
+		return "", fmt.Errorf("%w: the supervisor's settings are not a JSON object", agent.ErrBadSpec)
+	}
+	sub := func(parent map[string]any, key string) map[string]any {
+		if v, ok := parent[key].(map[string]any); ok {
+			return v
+		}
+		v := map[string]any{}
+		parent[key] = v
+		return v
+	}
+	opts := sub(sub(sub(m, "pluginConfigs"), "agents-md@builtin"), "options")
+	if _, set := opts["instructionFiles"]; !set {
+		opts["instructionFiles"] = instructionFileMode
+	}
+	out, err := json.Marshal(m)
+	return string(out), err
+}
+
+// instructionCheck prints every CLAUDE.md-family file in the directories above
+// the workspace ($1), and a managed CLAUDE.md. The workspace's own files are the
+// repository's and are left to it (D38).
+const instructionCheck = `found=""
+[ -e /etc/claude-code/CLAUDE.md ] && found="/etc/claude-code/CLAUDE.md"
+d=$1
+if [ -n "$d" ] && [ "$d" != / ]; then
+	p=$(dirname "$d")
+	while :; do
+		for f in CLAUDE.md .claude/CLAUDE.md CLAUDE.local.md; do
+			[ -e "$p/$f" ] && found="$found $p/$f"
+		done
+		[ "$p" = / ] && break
+		p=$(dirname "$p")
+	done
+fi
+printf '%s' "$found"`
 
 // New returns an adapter that runs the CLI through r.
 func New(r Runner, cfg Config) *Adapter {
@@ -59,7 +111,33 @@ func New(r Runner, cfg Config) *Adapter {
 	if cfg.ResumeProbe <= 0 {
 		cfg.ResumeProbe = 10 * time.Second
 	}
-	return &Adapter{r: r, cfg: cfg, now: time.Now}
+	a := &Adapter{r: r, cfg: cfg, now: time.Now}
+	if s, err := withInstructionFiles(cfg.Settings); err != nil {
+		a.settingsErr = err
+	} else {
+		a.cfg.Settings = s
+	}
+	return a
+}
+
+// checkInstructionFiles runs instructionCheck in the environment and refuses
+// when it finds anything.
+func (a *Adapter) checkInstructionFiles(ctx context.Context, spec agent.StartSpec) error {
+	st, err := a.r.Exec(ctx, spec.EnvID, runtime.ExecRequest{Cmd: []string{"/bin/sh", "-c", instructionCheck, "whr-instruction-check", spec.Workdir}})
+	if err != nil {
+		return fmt.Errorf("the instruction-file check: %w", err)
+	}
+	out, _, code, err := runtime.Collect(st)
+	if err != nil {
+		return fmt.Errorf("the instruction-file check failed: %w", err)
+	}
+	if code != 0 {
+		return fmt.Errorf("the instruction-file check failed with exit %d", code)
+	}
+	if found := strings.TrimSpace(string(out)); found != "" {
+		return fmt.Errorf("%w: %s", ErrInstructionFiles, found)
+	}
+	return nil
 }
 
 // Name implements agent.Adapter.
@@ -123,6 +201,12 @@ func (a *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume strin
 	}
 	if strings.TrimSpace(spec.Prompt) == "" {
 		return nil, errors.Join(agent.ErrBadSpec, errors.New("a session starts with its first message, so the prompt is needed"))
+	}
+	if a.settingsErr != nil {
+		return nil, a.settingsErr
+	}
+	if err := a.checkInstructionFiles(ctx, spec); err != nil {
+		return nil, err
 	}
 
 	pctx, cancel := context.WithCancel(ctx)

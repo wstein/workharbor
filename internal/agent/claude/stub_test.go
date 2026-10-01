@@ -88,6 +88,9 @@ func (st *stubStream) Wait() (int, error)           { <-st.done; return st.code,
 
 // Exec implements Runner.
 func (s *stub) Exec(ctx context.Context, _ string, req runtime.ExecRequest) (runtime.ExecStream, error) {
+	if st, ok := preflight(req, ""); ok {
+		return st, nil
+	}
 	s.mu.Lock()
 	s.calls = append(s.calls, req.Cmd)
 	s.envs = append(s.envs, req.Env)
