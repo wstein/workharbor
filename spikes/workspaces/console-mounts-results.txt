@@ -1,0 +1,7 @@
+mounts:
+virtiofs /workspaces virtiofs ro,relatime 0 0
+virtiofs /workspaces/a virtiofs rw,relatime 0 0
+write to b (read-only): sh: 1: cannot create /workspaces/b/f: Read-only file system exit 2
+create in root (read-only): touch: cannot touch '/workspaces/new': Read-only file system exit 1
+write to a (read-write): exit 0
+host a/f: a x   host b/f: b

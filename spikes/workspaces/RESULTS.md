@@ -37,8 +37,10 @@ So hooks and fsmonitor are stopped by the two settings, **filter drivers, textco
 
 ## 4. Console images and Ubuntu LTS (`console/*.Dockerfile`, `console-images-results.txt`)
 
-Both images build with `container build` and have git, zsh, fish and jq: Fedora 44 (git 2.55.0, zsh 5.9, fish 4.6.0, jq 1.8.1) and Ubuntu 24.04.5 LTS (git 2.43.0, zsh 5.9, fish 3.7.0, jq 1.7). The Apple Container conformance suite passes on both (`WHR_TEST_IMAGE=whr-console-ubuntu go test -tags applecontainer -run TestAppleContainerPassesTheSuite ./internal/runtime/apple`, about 28 s each), and so does the egress test on the Ubuntu image (34 s). The console images were not run with the workspaces root mounted read-only and one workspace read-write; that mount combination is the part of the criterion that is still open.
+Both images build with `container build` and have git, zsh, fish and jq: Fedora 44 (git 2.55.0, zsh 5.9, fish 4.6.0, jq 1.8.1) and Ubuntu 24.04.5 LTS (git 2.43.0, zsh 5.9, fish 3.7.0, jq 1.7). The Apple Container conformance suite passes on both (`WHR_TEST_IMAGE=whr-console-ubuntu go test -tags applecontainer -run TestAppleContainerPassesTheSuite ./internal/runtime/apple`, about 28 s each), and so does the egress test on the Ubuntu image (34 s).
+
+`console-mounts.sh` mounts a root read-only at `/workspaces` and one workspace read-write over it (`/workspaces/a`) in the Ubuntu console image: writes and file creation under the root and in workspace `b` fail with `Read-only file system`, writes in `a` succeed and reach the host.
 
 ## Not done yet
 
-Several agents on one sign-in (needs a login, see #82) and the external SSD (needs the disk). The console mount combination above.
+Several agents on one sign-in (needs a login, see #82) and the external SSD (needs the disk).
