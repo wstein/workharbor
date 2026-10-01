@@ -1,0 +1,15 @@
+== 3. agent 'docs' acting on agent 'runtime' (same environment, same user)
+e5ecb83 runtime commit
+edit the other worktree: exit 0
+move the other agent branch: exit 0
+26dd1ee docs writes to the other branch
+error: cannot delete branch 'agent/runtime' used by worktree at '/ws/wt/runtime'
+delete the other branch (checked out elsewhere): exit 0
+config is shared by all worktrees:
+/ws/wt/docs/.hooks
+docs
+runtime
+== 5. console git with GIT_CONFIG_COUNT (run as the human would, in the workspace clone)
+plain git                              : markers = ALIAS FILTER FSMONITOR HOOK PRECOMMIT TEXTCONV
+GIT_CONFIG_COUNT hooksPath+fsmonitor   : markers = ALIAS FILTER TEXTCONV
+GIT_CONFIG_COUNT + filter/pager/textconv unset: markers =
