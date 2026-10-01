@@ -43,7 +43,7 @@ changelog:
 
 # Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
 docs:
-	cd docs && $(HUGO) --gc --minify --destination ../_site
+	cd docs && $(HUGO) --gc --minify --panicOnWarning --destination ../_site
 
 # Serve the documentation site locally with live reload.
 docs-serve:

@@ -38,3 +38,21 @@ jobs:
         uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
         with:
           config: typos.toml
+
+  site:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: docs/go.sum
+      - name: Build the documentation site
+        working-directory: docs
+        run: >-
+          go run -tags extended github.com/gohugoio/hugo@v0.167.0
+          --gc --minify --panicOnWarning --destination ../_site
