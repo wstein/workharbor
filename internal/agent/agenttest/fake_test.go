@@ -38,7 +38,7 @@ func TestUnarrangedSessionFinishesWithDone(t *testing.T) {
 	if err != nil || res.Status != agent.ResultCompleted || res.Text != "done" || res.SessionID == "" {
 		t.Errorf("result = %+v, %v", res, err)
 	}
-	if len(events) < 2 || events[0].Kind != agent.EventSession || events[len(events)-1].Kind != agent.EventMessage {
+	if len(events) < 2 || events[0].Kind != agent.EventSession || !hasText(events, agent.EventMessage, "done") {
 		t.Errorf("events = %+v", events)
 	}
 }

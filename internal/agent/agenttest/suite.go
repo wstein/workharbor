@@ -56,6 +56,7 @@ func Checks() []Check {
 		{"an approver that does not answer in time denies", checkApprovalTimeout},
 		{"stop cancels a pending approval", checkStopCancelsApproval},
 		{"the input of an approval is capped", checkApprovalCap},
+		{"usage events carry a typed payload", checkUsage},
 		{"instruction delivery is honest", checkInstruct},
 		{"stop is a hard interrupt and the session is resumable", checkStopAndResume},
 		{"auth expiry ends the run without failing it", checkAuthExpired},
@@ -468,6 +469,38 @@ func checkApprovalCap(ctx context.Context, h Harness) error {
 	defer mu.Unlock()
 	if seen > domain.MaxDecisionInput {
 		return fmt.Errorf("the approver saw %d characters of input, the cap is %d", seen, domain.MaxDecisionInput)
+	}
+	return nil
+}
+
+func checkUsage(ctx context.Context, h Harness) error {
+	if !h.Adapter.Capabilities().ReportsUsage {
+		return ErrSkip
+	}
+	h.Scenarios.Finish("done")
+	s, err := h.Adapter.Start(ctx, newSpec(h))
+	if err != nil {
+		return err
+	}
+	events, err := collect(s, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	seen := 0
+	for _, e := range events {
+		if e.Kind != agent.EventUsage {
+			continue
+		}
+		seen++
+		if e.Usage == nil {
+			return fmt.Errorf("a usage event has no payload: %+v", e)
+		}
+		if err := e.Usage.Validate(); err != nil {
+			return fmt.Errorf("usage payload %+v: %w", *e.Usage, err)
+		}
+	}
+	if seen == 0 {
+		return errors.New("the adapter reports usage but emitted no usage event")
 	}
 	return nil
 }

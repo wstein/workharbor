@@ -24,6 +24,7 @@ func FullCaps() agent.Capabilities {
 		SessionResume:     true,
 		AwaitingGuidance:  true,
 		ReportsQuota:      true,
+		ReportsUsage:      true,
 		AuthModes:         []agent.AuthMode{agent.AuthAPIKey, agent.AuthSubscription},
 	}
 }
@@ -52,6 +53,7 @@ type Defects struct {
 	WrongContractVersion bool // capabilities report another version
 	NoSessionEvent       bool // the session never reports its ID
 	StopLeavesApproval   bool // Stop does not cancel a pending approval
+	UntypedUsage         bool // usage events carry no payload
 }
 
 type scenarioKind int

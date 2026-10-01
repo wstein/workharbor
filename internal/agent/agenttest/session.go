@@ -76,6 +76,7 @@ func (s *session) run(ctx context.Context, sc scenario) {
 	switch sc.kind {
 	case scFinish:
 		s.emit(agent.Event{Kind: agent.EventMessage, Text: sc.text})
+		s.emitUsage()
 		s.finish(agent.Result{Status: agent.ResultCompleted, Text: sc.text})
 	case scAsk:
 		s.ask(ctx, sc)
@@ -110,6 +111,25 @@ func (s *session) run(ctx context.Context, sc scenario) {
 		s.emit(agent.Event{Kind: agent.EventQuotaExhausted, ResetAt: reset})
 		s.finish(agent.Result{Status: agent.ResultQuotaExhausted, ResetAt: reset})
 	}
+}
+
+// emitUsage reports one turn's usage when the agent claims to.
+func (s *session) emitUsage() {
+	if !s.f.caps.ReportsUsage {
+		return
+	}
+	if s.f.Defects.UntypedUsage {
+		s.emit(agent.Event{Kind: agent.EventUsage, Text: "12 in, 5 out"})
+		return
+	}
+	s.emit(agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{
+		Model: "fake-model-1", InputTokens: 120, OutputTokens: 45, CacheReadTokens: 900, CacheWriteTokens: 30,
+		Cost: &agent.Cost{MicroUSD: 18400, Source: agent.CostReported},
+		Windows: []agent.UsageWindow{
+			{Name: agent.WindowFiveHour, Utilization: 0.25, ResetsAt: time.Now().Add(3 * time.Hour).Truncate(time.Second)},
+			{Name: agent.WindowSevenDay, Utilization: 0.08, ResetsAt: time.Now().Add(5 * 24 * time.Hour).Truncate(time.Second)},
+		},
+	}})
 }
 
 // drainInstructions hears the messages sent before the stop, which a select

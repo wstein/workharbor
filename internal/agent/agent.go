@@ -54,6 +54,7 @@ type Capabilities struct {
 	IssuePRTooling    bool
 	AwaitingGuidance  bool // can raise a blocking question
 	ReportsQuota      bool // reports quota_exhausted with the reset time
+	ReportsUsage      bool // emits usage events with a typed payload (§5.7)
 
 	AuthModes []AuthMode
 }
@@ -107,6 +108,8 @@ type Event struct {
 	Tool      string
 	Input     string    // capped
 	ResetAt   time.Time // for quota_exhausted, when known
+	// Usage is set on a usage event (design §5.7).
+	Usage *Usage
 	// Approval is set on an approval event: the record the audit entry is
 	// written from (design §5.4).
 	Approval *ApprovalRecord
