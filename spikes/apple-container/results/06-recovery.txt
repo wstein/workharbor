@@ -1,0 +1,39 @@
+
+== how the services are launched
+34970	0	com.apple.container.container-network-vmnet.default
+34982	0	com.apple.container.container-core-images
+34963	0	com.apple.container.apiserver
+40099	0	com.apple.container.container-network-vmnet.whspike-net
+82590	-9	com.apple.containermanagerd
+-	0	com.apple.ContainerMigrationService
+40113	0	com.apple.container.container-runtime-linux.whspike-p1
+34981	0	com.apple.container.machine-apiserver
+40340	0	com.apple.container.container-runtime-linux.whspike-ag1
+no container LaunchAgent plist in ~/Library/LaunchAgents
+no container LaunchDaemon plist in /Library/LaunchDaemons
+34963     1       11:34 /opt/homebrew/Cellar/container/1.5.0/libexec/container-apiserver start
+34970     1       11:34 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-network-vmnet/bin/container-network-vmnet start --id
+34982     1       11:34 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-core-images/bin/container-core-images start
+40099     1       01:09 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-network-vmnet/bin/container-network-vmnet start --id
+40113     1       01:08 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-runtime-linux/bin/container-runtime-linux start --roo
+40340     1       00:37 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-runtime-linux/bin/container-runtime-linux start --roo
+
+== restart policy flags
+  --init                  Run an init process inside the container that
+  --init-image <image>    Use a custom init image instead of the default
+(only --init matches: there is no restart policy)
+
+== crash test: kill the host-side runtime process of whspike-ag1 only
+runtime pid for whspike-ag1: 40340
+40113 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-runtime-linux/bin/container-runtime-linux start --root /Users/werner/Library/Application Support/com.apple.container/cont
+40340 /opt/homebrew/Cellar/container/1.5.0/libexec/container-plugins/container-runtime-linux/bin/container-runtime-linux start --root /Users/werner/Library/Application Support/com.apple.container/cont
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP                                 CPUS  MEMORY   STARTED
+whspike-ag1                           docker.io/library/fedora:latest                                linux  arm64  stopped                                     2     2048 MB  2026-10-01T01:13:53Z
+exec after crash: Error: container whspike-ag1 is not running
+whspike-ag1                           docker.io/library/fedora:latest                                linux  arm64  running  192.168.128.6/24                   2     2048 MB  2026-10-01T01:14:33Z
+state after restart: agent-state-before-crash session-marker-1
+
+== kill the container's init process from inside (simulated agent/OS crash)
+state before: running
+state after in-guest PID 1 kill: running
+restart works: agent-state-before-crash

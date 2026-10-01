@@ -1,0 +1,51 @@
+host gateway seen by guests:  | mac LAN ip: 192.168.1.205 | LAN default gateway: 192.168.1.1
+
+== A. adapter-level mount deny-list (the runtime accepts any host path; see B)
+/Users/werner                                    -> reject (secrets or home: /Users/werner)
+/Users/werner/.ssh                               -> reject (secrets or home: /Users/werner/.ssh)
+/private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/home-link -> reject (secrets or home: /Users/werner)
+/Users                                           -> reject (too broad: /Users)
+/                                                -> reject (too broad: /)
+/Users/werner/.socktainer                        -> reject (runtime socket dir: /Users/werner/.socktainer)
+/private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/sock -> accept (/private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/sock)
+/private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/tools -> accept (/private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/tools)
+
+== B. the runtime accepts an arbitrary host path (read-only /etc, only existence checked)
+mounted /etc: readable
+touch: cannot touch '/hostetc/x': Read-only file system
+
+== C. unix sockets: can a guest connect to a host unix socket?
+FAIL: listen unix /private/tmp/claude-501/-Users-werner-github-com-wstein-workharbor/ea1218af-25a6-45cd-af63-9c7a079a83a2/scratchpad/whspike-iso/sock/test.sock: bind: invalid argument
+socket file visible in guest: ls: cannot access '/sock/test.sock': No such file or directory
+connect to a test unix socket (mounted):  FAIL: dial unix /sock/test.sock: connect: no such file or directory
+host listener saw a connection:          0
+socktainer socket visible in guest:       ls: cannot access '/socktainer/container.sock': Operation not supported
+connect to the real socktainer socket:    FAIL: dial unix /socktainer/container.sock: connect: operation not supported
+
+== D. network: guest to host, LAN and other containers
+container A=192.168.64.14 B=192.168.64.15
+guest -> host loopback-only listener via gateway :18081 : FAIL: dial tcp :18081: connect: connection refused
+guest -> host all-interfaces listener via gateway :18082: FAIL: dial tcp :18082: connect: connection refused
+guest -> host all-interfaces listener via LAN ip 192.168.1.205:18082   : ok: "pong\n"
+guest -> its own 127.0.0.1:18081 (guest loopback, not the host): FAIL: dial tcp 127.0.0.1:18081: connect: connection refused
+guest -> LAN default gateway 192.168.1.1:80  : ok: ""
+guest A -> container B 192.168.64.15:18083      : ok: "pong\n"
+host -> container B 192.168.64.15:18083         : ok: "pong\n"
+guest -> internet 1.1.1.1:443 (baseline): ok: ""
+guest -> https://example.com (baseline) : status: 200 OK
+listener 18082 saw: 1 connections
+
+== E. hardened container: --read-only --cap-drop ALL --user 1000:1000 --tmpfs /tmp
+uid=1000 gid=1000 groups=1000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+touch: cannot touch '/root/x': Permission denied
+touch: cannot touch '/usr/x': Read-only file system
+tmp writable
+mount: drop permissions failed.
+
+== F. VM boundary facts
+host kernel: Darwin 25.6.0 | guest kernel: Linux 6.12.28
+host runtime processes: 3
+autofs console cpu_dma_latency fd full fuse hvc0 hvc1 hvc2 hvc3 hvc4 hvc5 hvc6 hvc7 hwrng kmsg loop-control loop0 loop1 loop2 loop3 loop4 loop5 loop6 loop7 mqueue null ptmx pts ram0 ram1 ram10 ram11 ram12 ram13 ram14 ram15 ram2 ram3 ram4 ram5 ram6 ram7 ram8 ram9 random rtc rtc0 shm stderr stdin stdout tty tty0 tty1 tty10 tty11 tty12 tty13 tty14 tty15 tty16 tty17 tty18 tty19 tty2 tty20 tty21 tty22 tty23 tty24 tty25 tty26 tty27 tty28 tty29 tty3 tty30 tty31 tty32 tty33 tty34 tty35 tty36 tty37 tty38 tty39 tty4 tty40 tty41 tty42 tty43 tty44 tty45 tty46 tty47 tty48 tty49 tty5 tty50 tty51 tty52 tty53 tty54 tty55 tty56 tty57 tty58 tty59 tty6 tty60 tty61 tty62 tty63 tty7 tty8 tty9 ttyS0 ttyS1 ttyS2 ttyS3 urandom vcs vcs1 vcsa vcsa1 vcsu vcsu1 vda vdb vfio vga_arbiter vport1p0 vsock zero
+0::/

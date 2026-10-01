@@ -1,0 +1,28 @@
+
+== marker in the auth/config directory (/root/.claude lives in the volume)
+session-marker-1
+after stop and start: session-marker-1
+after delete and recreate with the same volume: session-marker-1
+claude
+
+== unauthenticated headless run inside the container, through the proxy
+{'type': 'system', 'subtype': 'init', 'apiKeySource': 'none'}
+partial: {"type":"assistant","message":{"diagnostics":null,"id":"cd445c83-c27e-4330-baa0-5f2987477930","conta
+
+== hosts contacted (proxy log, last lines)
+01:13:28.042 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58390
+01:13:28.122 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58394
+01:13:34.696 ALLOW CONNECT api.anthropic.com from 192.168.128.3:33678
+01:13:53.682 ALLOW CONNECT api.anthropic.com from 192.168.128.5:35972
+01:13:53.687 ALLOW CONNECT api.anthropic.com from 192.168.128.5:35976
+01:13:54.067 ALLOW CONNECT api.anthropic.com from 192.168.128.5:35990
+01:13:54.138 ALLOW CONNECT api.anthropic.com from 192.168.128.5:35992
+01:13:54.200 ALLOW CONNECT api.anthropic.com from 192.168.128.5:35994
+
+== idle memory of the agent in stream-json mode (waiting for input)
+sh: line 1: pgrep: command not found
+MemTotal:        2169584 kB
+MemAvailable:    1962548 kB
+Container ID  Cpu %  Memory Usage           Net Rx/Tx                Block I/O                Pids
+whspike-ag1   1.20%  277.21 MiB / 2.00 GiB  318.84 KiB / 233.27 KiB  154.75 MiB / 172.00 KiB  11
+sh: line 1: pkill: command not found

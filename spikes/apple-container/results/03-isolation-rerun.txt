@@ -1,0 +1,25 @@
+== B. the runtime accepts an arbitrary host path (read-only /etc, only existence checked)
+mounted /etc: readable
+touch: cannot touch '/hostetc/x': Read-only file system
+
+== C. unix sockets: can a guest connect to a host unix socket?
+socket file visible in guest: ls: cannot access '/sock/test.sock': Operation not supported
+connect to a test unix socket (mounted):  FAIL: dial unix /sock/test.sock: connect: operation not supported
+host listener saw a connection:          0
+socktainer socket visible in guest:       ls: cannot access '/socktainer/container.sock': Operation not supported
+connect to the real socktainer socket:    FAIL: dial unix /socktainer/container.sock: connect: operation not supported
+
+== D. network: guest to host, LAN and other containers
+container A=192.168.64.19 B=192.168.64.20 host gateway=192.168.64.1
+guest -> host loopback-only listener via gateway 192.168.64.1:18081 : FAIL: dial tcp 192.168.64.1:18081: connect: connection refused
+guest -> host all-interfaces listener via gateway 192.168.64.1:18082: ok: "pong\n"
+guest -> host all-interfaces listener via LAN ip 192.168.1.205:18082   : ok: "pong\n"
+guest -> its own 127.0.0.1:18081 (guest loopback, not the host): FAIL: dial tcp 127.0.0.1:18081: connect: connection refused
+guest -> LAN default gateway 192.168.1.1:80  : ok: ""
+guest A -> container B 192.168.64.20:18083      : ok: "pong\n"
+host -> container B 192.168.64.20:18083         : ok: "pong\n"
+guest -> internet 1.1.1.1:443 (baseline): ok: ""
+guest -> https://example.com (baseline) : status: 200 OK
+listener 18082 saw: 2 connections
+
+== E. hardened container: --read-only --cap-drop ALL --user 1000:1000 --tmpfs /tmp

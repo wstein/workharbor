@@ -1,0 +1,59 @@
+
+== network create --internal
+whspike-net
+NETWORK      SUBNET
+whspike-net  192.168.128.0/24
+[
+  {
+    "configuration" : {
+      "creationDate" : "2026-10-01T01:10:28Z",
+      "labels" : {
+
+      },
+      "mode" : "hostOnly",
+      "name" : "whspike-net",
+      "options" : {
+
+      },
+      "plugin" : "container-network-vmnet"
+    },
+    "id" : "whspike-net",
+    "status" : {
+      "ipv4Gateway" : "192.168.128.1",
+      "ipv4Subnet" : "192.168.128.0/24",
+      "ipv6Subnet" : "fd81:ccd5:5160:c9f6::/64"
+    }
+  }
+]
+internal container: ip=192.168.128.2 gateway=192.168.128.1 network=whspike-net
+default  container: ip=192.168.64.22 gateway=192.168.64.1 network=default
+bridge0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500 bridge100: flags=8a63<UP,BROADCAST,SMART,RUNNING,ALLMULTI,SIMPLEX,MULTICAST> mtu 1500
+
+== reachability matrix from the INTERNAL container
+internet 1.1.1.1:443                                       FAIL: dial tcp 1.1.1.1:443: i/o timeout
+https://example.com direct                                 FAIL: Get "https://example.com": context deadline exceeded (Client.Timeout exceeded while
+dns: getent hosts example.com                              no-resolution
+LAN default gateway 192.168.1.1:80                         FAIL: dial tcp 192.168.1.1:80: i/o timeout
+host via internal gateway 192.168.128.1:18082              FAIL: dial tcp 192.168.128.1:18082: i/o timeout
+host via LAN ip 192.168.1.205:18082                        FAIL: dial tcp 192.168.1.205:18082: i/o timeout
+host via default gateway 192.168.64.1:18082                FAIL: dial tcp 192.168.64.1:18082: i/o timeout
+container on the default network 192.168.64.22:22          FAIL: dial tcp 192.168.64.22:22: i/o timeout
+ipv6 internet [2606:4700:4700::1111]:443                   FAIL: dial tcp [2606:4700:4700::1111]:443: connect: network is unreachable
+
+== reachability from the DEFAULT container to the internal one
+default -> internal 192.168.128.2:22                       FAIL: dial tcp 192.168.128.2:22: i/o timeout
+
+== host-side allowlist proxy bound only to the internal gateway 192.168.128.1:3128
+egress proxy on 192.168.128.1:3128 allowing example.com,proxy.golang.org
+listen tcp 192.168.128.1:3128: bind: can't assign requested address
+allowed  https://example.com via proxy     : FAIL: Get "https://example.com": proxyconnect tcp: dial tcp 192.168.128.1:3128: connect: no route to host
+allowed  https://proxy.golang.org via proxy : FAIL: Get "https://proxy.golang.org": proxyconnect tcp: dial tcp 192.168.128.1:3128: connect: no route to host
+DENIED   https://github.com via proxy      : FAIL: Get "https://github.com": proxyconnect tcp: dial tcp 192.168.128.1:3128: connect: no route to host
+DENIED   http://example.org via proxy      : FAIL: Get "http://example.org": proxyconnect tcp: dial tcp 192.168.128.1:3128: connect: no route to host
+curl with HTTPS_PROXY (name resolved by proxy): 000
+direct attempt still blocked after the proxy exists: FAIL: Get "https://github.com": context deadline exceeded (Client.Timeout exceed
+proxy reachable from the DEFAULT container?  FAIL: dial tcp 192.168.128.1:3128: i/o timeout
+
+== proxy log
+egress proxy on 192.168.128.1:3128 allowing example.com,proxy.golang.org
+listen tcp 192.168.128.1:3128: bind: can't assign requested address

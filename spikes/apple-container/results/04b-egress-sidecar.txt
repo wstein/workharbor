@@ -1,0 +1,33 @@
+
+== sidecar attached to default AND internal networks (does --network repeat?)
+[6/6] Starting container [0s]
+whspike-p1
+sidecar networks: default=192.168.64.23(gw 192.168.64.1) whspike-net=192.168.128.2(gw 192.168.128.1)
+sidecar internal ip: 192.168.128.2
+
+== agent container on the internal network only
+agent networks: whspike-net=192.168.128.3(gw 192.168.128.1)
+direct internet (must fail)                 : FAIL: dial tcp 1.1.1.1:443: i/o timeout
+agent -> sidecar proxy port                 : ok: ""
+ALLOWED example.com via proxy               : status: 200 OK
+ALLOWED proxy.golang.org via proxy          : status: 200 OK
+DENIED  github.com via proxy                : FAIL: Get "https://github.com": Forbidden
+DENIED  http://example.org via proxy        : status: 403 Forbidden
+curl + HTTPS_PROXY, name resolved by proxy  : 200
+curl + HTTPS_PROXY, denied host             : 000
+bypass: CONNECT to a raw IP via proxy       : 000
+agent -> default-network container (must fail): FAIL: dial tcp 192.168.64.1:22: i/o timeout
+agent -> host gateway of default net (must fail): FAIL: dial tcp 192.168.64.1:18082: i/o timeout
+
+== second agent on the internal network: can agents reach each other?
+agent1 -> agent2 192.168.128.4:18083 : ok: "pong\n"
+
+== proxy log (sidecar)
+egress proxy on 0.0.0.0:3128 allowing example.com,proxy.golang.org,sum.golang.org
+01:12:10.598 ALLOW CONNECT example.com from 192.168.128.3:52062
+01:12:10.814 ALLOW CONNECT proxy.golang.org from 192.168.128.3:52074
+01:12:11.110 DENY  CONNECT github.com from 192.168.128.3:52088
+01:12:11.212 DENY  GET example.org from 192.168.128.3:52094
+01:12:11.347 ALLOW CONNECT example.com from 192.168.128.3:52100
+01:12:11.498 DENY  CONNECT github.com from 192.168.128.3:52106
+01:12:11.602 DENY  CONNECT 1.1.1.1 from 192.168.128.3:52114

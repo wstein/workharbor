@@ -1,0 +1,41 @@
+proxy sidecar internal ip: 192.168.128.2, allowlist: downloads.claude.ai,claude.ai,anthropic.com
+
+== install (curl -fsSL https://claude.ai/install.sh | bash) inside the container
+  Version: 2.1.286
+
+  Location: ~/.local/bin/claude
+
+
+  Next: Run claude --help to get started
+
+⚠ Setup notes:
+  ● Native installation exists but ~/.local/bin is not in your PATH. Run:
+
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> your shell config file && source your shell config file
+
+
+✅ Installation complete!
+
+install took 10771 ms
+
+== result
+total 0
+lrwxrwxrwx 1 root root 42 Oct  1 01:13 claude -> /root/.local/share/claude/versions/2.1.286
+2.1.286 (Claude Code)
+230M	/root/.local/share/claude
+aarch64
+
+== proxy log so far
+egress proxy on 0.0.0.0:3128 allowing downloads.claude.ai,claude.ai,anthropic.com
+01:13:24.421 ALLOW CONNECT claude.ai from 192.168.128.3:34298
+01:13:24.513 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:34308
+01:13:24.809 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58342
+01:13:25.026 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58346
+01:13:25.127 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58358
+01:13:25.219 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58366
+01:13:27.455 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58368
+01:13:27.958 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58372
+01:13:27.958 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58380
+01:13:28.042 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58390
+01:13:28.122 ALLOW CONNECT downloads.claude.ai from 192.168.128.3:58394
+01:13:34.696 ALLOW CONNECT api.anthropic.com from 192.168.128.3:33678

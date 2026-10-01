@@ -1,0 +1,56 @@
+
+== versions
+container CLI version 1.5.0 (build: release, commit: unspeci)
+26.6.2
+arm64
+
+== lifecycle timings (image already local: docker.io/library/fedora:latest)
+run -d (create+start): 1118 ms (exit 0)
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP               CPUS  MEMORY   STARTED
+whspike-l1                            docker.io/library/fedora:latest                                linux  arm64  running  192.168.64.2/24  2     512 MB   2026-10-01T01:06:17Z
+exec true (ready): 97 ms (exit 0)
+stop: 5311 ms (exit 0)
+ID                                    IMAGE                                                          OS     ARCH   STATE    IP  CPUS  MEMORY   STARTED
+whspike-l1                            docker.io/library/fedora:latest                                linux  arm64  stopped      2     512 MB   2026-10-01T01:06:17Z
+start: 628 ms (exit 0)
+exec true after restart: 77 ms (exit 0)
+stop again: 5383 ms (exit 0)
+rm: 141 ms (exit 0)
+containers named l1 left: 0
+
+== limits as seen by the guest (--cpus 2 --memory 512M)
+[0/6] [0s]
+[1/6] Fetching image [0s]
+[2/6] Unpacking image [0s]
+[3/6] Fetching kernel [0s]
+[4/6] Fetching init image [0s]
+[5/6] Unpacking init image [0s]
+[6/6] Starting container [0s]
+[6/6] Starting container [0s]
+nproc: 2
+MemTotal:         629012 kB
+6.12.28
+uid: 0
+NAME="Fedora Linux"
+VERSION="44 (Container Image)"
+
+== inspect (selected)
+
+== memory limit enforcement: allocate beyond 512M with tail /dev/zero
+tail exit: 137
+after OOM test: whspike-l1  docker.io/library/fedora:latest  linux  arm64  running  192.168.64.4/24  2     512 MB  2026-10-01T01:06:29Z
+alive-after-oom
+
+== dmesg tail (OOM evidence)
+[    0.794396] [     95]     0    95     1231       57       32       25         0    49152        0             0 sh
+[    0.794462] [     96]     0    96      803        0        0        0         0    45056        0             0 timeout
+[    0.794524] [     97]     0    97   131383   130561   130560        1         0  1089536        0             0 tail
+[    0.794583] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=whspike-l1,mems_allowed=0,oom_memcg=/container/whspike-l1,task_memcg=/container/whspike-l1,task=tail,pid=97,uid=0
+[    0.794675] Memory cgroup out of memory: Killed process 97 (tail) total-vm:525532kB, anon-rss:522240kB, file-rss:4kB, shmem-rss:0kB, UID:0 pgtables:1064kB oom_score_adj:0
+
+== stats
+Container ID  Cpu %  Memory Usage           Net Rx/Tx            Block I/O             Pids
+whspike-l1    0.00%  4.90 MiB / 512.00 MiB  7.78 KiB / 0.50 KiB  11.63 MiB / 0.00 KiB  1
+
+== cpu limit: 4 busy loops for 4 s on 2 cpus
+0.32 0.07 0.02 1/73 30
