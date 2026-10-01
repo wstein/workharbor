@@ -37,16 +37,23 @@ type UsageWindow struct {
 	ResetsAt    time.Time `json:"resets_at,omitzero"`
 }
 
+// TokenCounts are the tokens of one turn.
+type TokenCounts struct {
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+}
+
 // Usage is the payload of a usage event: one turn's tokens and cost, and the
-// usage windows when the agent reports them.
+// usage windows when the agent reports them. Tokens and Cost are nil when the
+// agent did not report them, which is not the same as zero: a budget must not
+// read an unknown count as 0 tokens (design §5.7).
 type Usage struct {
-	Model            string        `json:"model"`
-	InputTokens      int64         `json:"input_tokens"`
-	OutputTokens     int64         `json:"output_tokens"`
-	CacheReadTokens  int64         `json:"cache_read_tokens"`
-	CacheWriteTokens int64         `json:"cache_write_tokens"`
-	Cost             *Cost         `json:"cost,omitempty"` // nil when the agent reports none
-	Windows          []UsageWindow `json:"windows,omitempty"`
+	Model   string        `json:"model"`
+	Tokens  *TokenCounts  `json:"tokens,omitempty"`
+	Cost    *Cost         `json:"cost,omitempty"`
+	Windows []UsageWindow `json:"windows,omitempty"`
 }
 
 // ErrBadUsage reports a usage payload that cannot be recorded.
@@ -59,7 +66,7 @@ func (u Usage) Validate() error {
 	if u.Model == "" {
 		return fmt.Errorf("%w: no model", ErrBadUsage)
 	}
-	if u.InputTokens < 0 || u.OutputTokens < 0 || u.CacheReadTokens < 0 || u.CacheWriteTokens < 0 {
+	if t := u.Tokens; t != nil && (t.Input < 0 || t.Output < 0 || t.CacheRead < 0 || t.CacheWrite < 0) {
 		return fmt.Errorf("%w: a token count is negative", ErrBadUsage)
 	}
 	if u.Cost != nil {

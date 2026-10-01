@@ -124,7 +124,7 @@ func (s *session) emitUsage() {
 		return
 	}
 	s.emit(agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{
-		Model: "fake-model-1", InputTokens: 120, OutputTokens: 45, CacheReadTokens: 900, CacheWriteTokens: 30,
+		Model: "fake-model-1", Tokens: &agent.TokenCounts{Input: 120, Output: 45, CacheRead: 900, CacheWrite: 30},
 		Cost: &agent.Cost{MicroUSD: 18400, Source: agent.CostReported},
 		Windows: []agent.UsageWindow{
 			{Name: agent.WindowFiveHour, Utilization: 0.25, ResetsAt: time.Now().Add(3 * time.Hour).Truncate(time.Second)},

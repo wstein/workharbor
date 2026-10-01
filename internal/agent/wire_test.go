@@ -18,7 +18,7 @@ func TestEventWireNames(t *testing.T) {
 	e := Event{
 		Kind: EventUsage, At: at, SessionID: "s1",
 		Usage: &Usage{
-			Model: "m", InputTokens: 1, OutputTokens: 2, CacheReadTokens: 3, CacheWriteTokens: 4,
+			Model: "m", Tokens: &TokenCounts{Input: 1, Output: 2, CacheRead: 3, CacheWrite: 4},
 			Cost:    &Cost{MicroUSD: 5, Source: CostReported},
 			Windows: []UsageWindow{{Name: WindowFiveHour, Utilization: 0.5, ResetsAt: at}},
 		},
@@ -27,8 +27,8 @@ func TestEventWireNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"kind":"usage","at":"2026-10-01T12:00:00Z","session_id":"s1","usage":{"model":"m","input_tokens":1,"output_tokens":2,` +
-		`"cache_read_tokens":3,"cache_write_tokens":4,"cost":{"micro_usd":5,"source":"reported"},` +
+	want := `{"kind":"usage","at":"2026-10-01T12:00:00Z","session_id":"s1","usage":{"model":"m","tokens":{"input":1,"output":2,"cache_read":3,"cache_write":4},` +
+		`"cost":{"micro_usd":5,"source":"reported"},` +
 		`"windows":[{"name":"five_hour","utilization":0.5,"resets_at":"2026-10-01T12:00:00Z"}]}}`
 	if string(got) != want {
 		t.Errorf("event JSON\n got %s\nwant %s", got, want)
