@@ -1,0 +1,21 @@
+{
+  "events": [
+    {
+      "kind": "auth_expired",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "text": "authentication_failed"
+    },
+    {
+      "kind": "message",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "text": "Not logged in · Please run /login"
+    }
+  ],
+  "result": {
+    "status": "auth_expired",
+    "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+    "text": "Not logged in · Please run /login"
+  }
+}

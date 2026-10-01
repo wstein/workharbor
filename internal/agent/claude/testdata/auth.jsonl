@@ -1,0 +1,2 @@
+{"type":"assistant","session_id":"0b6c1c1e-0000-4000-8000-000000000001","error":"authentication_failed","message":{"role":"assistant","content":[{"type":"text","text":"Not logged in \u00b7 Please run /login"}]}}
+{"type":"result","subtype":"success","is_error":true,"result":"Not logged in \u00b7 Please run /login","session_id":"0b6c1c1e-0000-4000-8000-000000000001","total_cost_usd":0,"num_turns":1}

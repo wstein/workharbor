@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"0b6c1c1e-0000-4000-8000-000000000001","model":"claude-haiku-4-5","apiKeySource":"none","cwd":"/work"}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}}
+{"type":"assistant","session_id":"0b6c1c1e-0000-4000-8000-000000000001","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Hello","session_id":"0b6c1c1e-0000-4000-8000-000000000001","total_cost_usd":0.001,"num_turns":1}

@@ -1,0 +1,56 @@
+{
+  "events": [
+    {
+      "kind": "session",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "text": "claude-haiku-4-5"
+    },
+    {
+      "kind": "quota_exhausted",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "reset_at": "2026-09-21T14:13:20Z"
+    },
+    {
+      "kind": "message",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "text": "Usage limit reached."
+    },
+    {
+      "kind": "usage",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+      "usage": {
+        "model": "claude-haiku-4-5",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost": {
+          "micro_usd": 0,
+          "source": "reported"
+        },
+        "windows": [
+          {
+            "name": "five_hour",
+            "utilization": 1,
+            "resets_at": "2026-09-21T14:13:20Z"
+          },
+          {
+            "name": "seven_day",
+            "utilization": 0.5,
+            "resets_at": "2026-09-26T05:20:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "status": "quota_exhausted",
+    "session_id": "0b6c1c1e-0000-4000-8000-000000000001",
+    "text": "Usage limit reached.",
+    "reset_at": "2026-09-21T14:13:20Z"
+  }
+}

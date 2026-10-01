@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"0b6c1c1e-0000-4000-8000-000000000001","model":"claude-haiku-4-5","apiKeySource":"none","cwd":"/work"}
+{"type":"assistant","session_id":"0b6c1c1e-0000-4000-8000-000000000001","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Read","input":{"file_path":"/work/main.go"}}]}}
+{"type":"user","session_id":"0b6c1c1e-0000-4000-8000-000000000001","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"package main\n"}]}}
+{"type":"assistant","session_id":"0b6c1c1e-0000-4000-8000-000000000001","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Write","input":{"file_path":"/work/x.txt","content":"hi"}}]}}
+{"type":"system","subtype":"permission_denied","session_id":"0b6c1c1e-0000-4000-8000-000000000001","tool_name":"Write"}
+{"type":"assistant","session_id":"0b6c1c1e-0000-4000-8000-000000000001","message":{"role":"assistant","content":[{"type":"text","text":"I could not write the file."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"I could not write the file.","session_id":"0b6c1c1e-0000-4000-8000-000000000001","total_cost_usd":0.02,"num_turns":2}
