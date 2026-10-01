@@ -317,6 +317,15 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
 - **Auth and quota end a run without failing it.** The session emits `auth_expired` or `quota_exhausted` and finishes with that status and no error, so the supervisor opens a blocking Decision (§4.2) instead of retrying; the session stays resumable.
 - **Stop is a hard interrupt** and leaves the session resumable. **`agenttest`** has a scripted fake agent and the conformance suite; the Claude Code adapter (#25) and the Codex adapter (#35) run it too.
 
+**The Claude Code adapter** (issue #25, `internal/agent/claude`). It runs `claude -p --input-format stream-json --output-format stream-json --verbose` through the runtime's `Exec` with `Stdin` (§5.1), as spike #1 did, and turns each output line into an agent event:
+
+- **Session.** One process is one run of turns: the prompt is the first user message, a mid-run `Instruct` is another line on stdin (`next_turn`, as measured), and the adapter closes stdin after the `result` event so the process ends. A further turn is `Resume` with `--resume <id>`. The `session` event comes from `system/init`, which only appears after the first message.
+- **Stop** cancels the `Exec` context. The runtime contract (§5.1) requires that this ends the process in the guest, so the adapter needs no signal of its own; the session stays resumable by its ID.
+- **Events.** `assistant` text is a message, `tool_use` a tool call, `tool_result` a tool result, `thinking` is dropped, and `result` ends the run and produces one `usage` event (model, reported cost; the token fields are **unverified**) with the usage windows from the last `rate_limit_event`.
+- **`auth_expired`** comes from the `error` code `authentication_failed` on an `assistant` event, never from `subtype` or `apiKeySource` (§5.2, spike #1). The run ends `auth_expired` even though the `result` says `is_error` with `subtype: "success"`.
+- **Permission modes.** `dontAsk` runs with `--allowedTools` and the CLI denies the rest silently; the adapter records each decision as an approval event (an allowed tool from its allowlist, a denial from the `permission_denied` system event). `manual` needs the approval route of spike #7 and is refused with `ErrUnsupported` until then, so the adapter reports `HostApprovals` false and runs in the degraded mode (§5.2). It still reports mid-run injection.
+- **Unverified, taken from the spike's field names only:** `quota_exhausted` is raised when a usage window reaches utilization 1 (what `rate_limit_event.status` reads when exhausted was not observed); a `Resume` of an unknown session is recognized as an error `result` before any `init` and no login failure (the CLI's real signal was not captured); `resetsAt` is read as epoch seconds or an RFC 3339 string. The golden fixtures are built from the shapes in the spike's `RESULTS.md` and must be replaced by recorded streams.
+
 **Measured in spike #1** (issue #1; branch `spike/transcript`, `RESULTS.md`), with Claude Code 2.1.285, Codex CLI 0.159.2 and Antigravity `agy` 1.1.12 on one machine:
 
 | Capability | Claude Code | Codex CLI | Antigravity |
