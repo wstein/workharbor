@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D35 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D37 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks; hardened host git with checkout checks, the repository cache and the editor copy; redaction at ingest; runtime and agent contracts with fakes and conformance suites; the SQLite store; the service layer and DB-first reconciler; the Claude Code adapter in degraded mode; the `whr-shim` launcher; `whr version` | `internal/domain`, `internal/policy`, `internal/runtime`, `internal/hostgit`, `internal/redact`, `internal/agent`, `internal/store`, `internal/service`, `cmd/whr`, `cmd/whr-shim`; issues #4, #8, #15–#23, #45, #49–#52, #55–#60, #63, #64; open follow-ups #66–#69; #25 partly |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container; host cancel with `whr-shim`; approvals over stdio (evidence pending) | Issues #1, #2, #10 and #7 (reopened); results in §4.2, §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
@@ -83,6 +83,8 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D33 | **Web app previews go through a preview proxy in `whr`** (§9.3, issue #72). When an agent runs a dev server in its environment, `whr` proxies a preview of one declared port through the proxy sidecar, the only container on both networks, and `tailscale serve` (or the router-VPN forwarder of D29) carries it to the developer. Each preview has its own origin, never the web UI's; it needs a per-preview token, lives only while the environment runs, forwards only to that port, and passes WebSocket upgrades for hot reload | The developer's phone or laptop cannot reach an `--internal` environment, and should not; the supervisor already knows which task, environment and port belong together. A preview serves untrusted, agent-written code in the developer's browser, so sharing the UI's origin would let it read the session and answer Decisions. Port publishing straight to the host, Traefik or Caddy, Tailscale inside each guest, and Tailscale Funnel were rejected: they bypass the supervisor, need routing data it already has, put a key in the guest, or publish unreviewed code. That the sidecar can relay inbound traffic to the internal network is **unverified** (issues #69, #72) |
 | D34 | **Dogfood first: workharbor develops workharbor as early as possible** (§13). A Dogfood milestone holds the smallest set that runs one real workharbor issue through `whr` end to end: `whr serve` and the core commands (#24), the Claude Code adapter in degraded mode (#25, `dontAsk` with a fixed allowlist; host approvals follow with #7), the Apple Container adapter (#26), push after approval (#27), the reconciler fixes (#66) and the adapter's permission fix (#68), on a Mac mini M4 with 16 GB (#73). The supervisor always runs an **installed binary built from an approved commit on `main`** (`make install` until the first release, then the tap), never a topic's working tree. From the first green run, new issues start with `whr run`, and each manual workaround becomes an issue labelled `dogfood` | Today the human supervises three agent sessions by hand: relaying messages, pushing, ticking criteria, keeping the board, and catching duplicated work and a leaked token, which are all workharbor features. Degraded mode works now and takes #7 off the critical path; the push stays human-approved (D18). Agents working on workharbor edit the code that constrains them, including the policy, so the running supervisor must come from reviewed code. A host process runtime was rejected: it would be faster but would normalise unisolated agents |
 | D35 | **The phone and a 12-inch tablet are the primary clients** (§9.6). The phone serves short, urgent interactions (answer, approve a tool, stop a run, glance at the harbor); the tablet replaces the laptop for reviewing a topic before push, supervising several tasks and planning with an agent. One server-rendered UI with a phone layout and a two-pane tablet layout, installed as a PWA. Approving "Ready to push?" asks for a passkey on any device | The developer detaches while agents work and returns when one needs them (§1), which happens away from a desk; a 12-inch tablet with a keyboard covers the review that the phone's screen cannot. Publishing code is the one irreversible step a lost or unlocked phone could take, so it alone needs a fresh check of who is approving. That a passkey prompt works in an installed PWA on both devices is **unverified** |
+| D36 | **The autonomy table's defaults and fixed floor** (§6, issue #9). Commit in the topic's checkout: `auto`; push an `agent/*` branch: `ask`, carried out by the supervisor after the "Ready to push?" approval; open or update a PR and comment on the issue: `auto`, after the push; merge, tag, release and deploy: `forbid`. Whatever a repository's table says, merge, tag, release and deploy stay `forbid` and push stays at most `ask`; an override may only tighten; an unknown action or mode is `forbid` | Implemented and tested in `internal/policy` (issues #4, #51); this row records it as decided. Sensitive actions triggered by untrusted input asking (§6) follow with the trust tiers (issue #53) |
+| D37 | **The CLI grammar of the dogfood slice is stable** (§9.1, issue #9): `whr serve`, `run`, `ls`, `logs -f`, `say`, `cancel`, `inbox`, `approve`, `reject` and `answer <decision> <option>` (for a question's fixed options, D23), with the scripting contract of §9.2. The other commands stay provisional until they are built | These are the commands the first dogfood run uses (D34); fixing their names now lets #24, scripts and the manual (#65) rely on them. `answer` is separate from `approve` and `reject` because a question has its own options, not allow or deny |
 
 ## 4. Domain model
 
@@ -569,6 +571,7 @@ Review corrections to the original budget:
 Noun-verb with short aliases. Nouns: `task`, `ws`, `run`, `env`, `inbox`. `whr task create` is the canonical long form; common verbs are hoisted.
 
 ```bash
+whr serve                                  # the supervisor: JSON API, web UI, reconciler
 whr login --server <url>
 whr run <issue-url> [--backend apple]     # create + start; the core demo
 whr ls [--json]
@@ -581,6 +584,7 @@ whr purge <task> --transcript [--before <time>]   # delete transcript content, k
 whr usage [--task <task>] [--since <time>]       # tokens and cost per run, task, repo and period (§5.7)
 whr inbox [--watch]
 whr approve|reject <decision>
+whr answer <decision> <option> [--text "..."]  # a question's fixed option, or a free answer (D23)
 whr diff <task>
 whr ssh <ws> [--takeover]                  # --takeover pauses the agent and takes the lock
 whr ssh --config                           # emit ~/.ssh/config snippet (ProxyJump) for VS Code/JetBrains
@@ -590,7 +594,7 @@ whr kill-all
 whr doctor                                 # server, auth, runtime capabilities, SSH config
 ```
 
-Avoid `review` as a verb (ambiguous). Task refs accept a short ID, a prefix or `repo#42`. Names are provisional.
+Avoid `review` as a verb (ambiguous). Task refs accept a short ID, a prefix or `repo#42`. **Stable** (D37): `serve`, `run`, `ls`, `logs`, `say`, `cancel`, `inbox`, `approve`, `reject`, `answer`. The other names are provisional until they are built.
 
 ### 9.2 Scripting contract
 
@@ -755,11 +759,11 @@ Ordered by what is cheap and blocks the most work.
     - [ ] Approvals from inside the container (§4.2, D26): the stdio control protocol over `container exec -i` is chosen; reported in issue #7's comments, reproducible evidence and the crash and deadline cases pending (#7, reopened)
     - [x] A reliable cancel from the host (§5.1, D25): measured in spike #10 using the `whr-shim` launcher from the tool store (§5.6, D19). Signalling the host exec client fails; signalling the process group via `container exec <id> /tools/whr-shim kill` terminates cooperative processes in ~10 ms and stubborn trees after a 500 ms grace in ~514 ms, with 0 orphans left
     - [ ] Repositories mounted from the host (§4.5): bind-mount speed with `node_modules`-style trees and much larger repositories
-4. **Autonomy and approval policy** (§6) and threat model (§7): the policy table is implemented with a fixed floor (issues #4, #51), and the [threat model](threat-model.md) is written (issue #11). Trust tiers for untrusted input remain (issue #53).
+4. **Autonomy and approval policy** (§6) and threat model (§7): decided (D36); the policy table is implemented with a fixed floor (issues #4, #51), and the [threat model](threat-model.md) is written (issue #11). Trust tiers for untrusted input remain (issue #53).
 5. **Persistence semantics** (§4.4): decided (D16).
 6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
-8. Finalize the `whr` grammar (issue #9). The stack is decided (D3, D8, D14).
+8. The `whr` grammar of the slice is decided (D37); the stack too (D3, D8, D14).
 
 Reboot considerations also include power-loss/UPS behaviour and macOS auto-update reboot policy.
 
