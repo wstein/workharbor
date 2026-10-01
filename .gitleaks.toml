@@ -1,0 +1,11 @@
+# gitleaks configuration (issue #41). The default rules apply; the only
+# allowlisted path is the redaction test, whose canary tokens are synthetic
+# strings that exist to be redacted.
+title = "workharbor gitleaks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "synthetic canary tokens in the redaction tests"
+paths = ['''internal/redact/redact_test\.go''']
