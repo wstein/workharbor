@@ -13,7 +13,7 @@ Revision of the original discussion summary (`agent-work-supervisor-summary.md`)
 
 A self-hosted service in which AI coding agents carry out project work independently while one developer acts as human-in-the-loop (HitL): intervening, answering questions, reviewing and approving.
 
-- Agents work repository issues, modify code, run tests, update issues and open or update PRs.
+- Agents work repository issues, modify code, run tests and commit in their own checkouts. After a cleanup step and the developer's approval the supervisor pushes the branch and opens or updates the PR (§4.5).
 - Usage is a live coding assistant, not an automation pipeline: the developer chats with an agent about the work, then detaches while it works for 15 to 60 minutes or longer, and returns when it needs them. A personal tool with one developer and a handful of concurrent sessions.
 - The developer attaches via chat, SSH or an editor temporarily. Disconnecting never interrupts the agent.
 - Web UI and `whr` CLI are two front ends over one service layer: the CLI calls the JSON API, the web UI is server-rendered HTML (see D8).
@@ -140,7 +140,7 @@ Logical components live in one Go binary on the Mac; boundaries are package inte
 | Component | Responsibility |
 | --- | --- |
 | Control plane | Tasks, runs, workspaces, decisions, policies, integration config, event log, reconciler |
-| Web UI | v0: read-only task list, event log and inbox; answering Decisions is the only write. Server-rendered (D8) |
+| Web UI | v0: task list, live transcript and inbox; writes are answering Decisions, sending messages, starting tasks, pause/resume/cancel and transcript purge (§9.3). Server-rendered (D8) |
 | CLI (`whr`) | Same operations through the shared API |
 | Host worker | Executes a **fixed set** of authorized lifecycle operations beside the runtime |
 | Agent adapter | Start, observe, instruct, pause, resume a coding agent |
@@ -336,7 +336,7 @@ Threat model and autonomy policy are written before the build.
     - **Do not mount a shared `.git` read-write into an environment.** It exposes every branch, the shared hooks and config and the other worktrees' metadata. Agent topics get a per-task clone whose object cache is mounted read-only (§4.5).
 5. **Supervisor identity.** Login allowlist of forge users, PKCE and `state`, short-lived sessions, scoped revocable CLI tokens, CSRF protection, API bound to loopback/VPN, forge tokens encrypted at rest, webhook signature verification. Link accounts by provider instance + stable user ID, never by email.
 6. **SSH/IDE access.** Short-lived per-session SSH certificates or keys, no password auth, jump host only over VPN, code-server never public and always authenticated, treat Open VSX extensions as supply-chain risk.
-7. **Audit and kill switch.** Tamper-evident append-only log stored outside the workspace, linked to commit SHA. `whr kill-all` stops all runs and revokes tokens. Alert on anomalous egress or token spikes. Optional: signed bot commits.
+7. **Audit and kill switch.** Tamper-evident append-only log stored outside the workspace, linked to commit SHA. `whr kill-all` stops all runs and revokes tokens. Alert on anomalous egress or token spikes. Bot commits are signed with the bot key before push (§4.5).
 8. **Plugins.** A plugin handles sessions, credentials and workspace access, so it is a supply-chain risk. Default deny: plugins are installed only by explicit developer action, from a pinned version or hash, and run out of process with the same isolation as any agent environment. They never receive host credentials, `$HOME`, `~/.ssh` or runtime sockets; they get only the per-run credentials a built-in adapter would. Their capabilities are checked by the conformance suite, and every plugin action appears in the audit log.
 
 Separate identities: login identity, connected forge accounts, agent (bot) identity, supervisor sessions.
@@ -409,7 +409,6 @@ Because the app is a remote for coding agents (§1), v0 also carries the core re
 - **Start a task** from an issue or a repo, choosing the agent.
 - **Pause, resume and cancel** a run.
 - **Answer Decisions**, as before.
-
 - **History controls.** *Clear view* hides older events and loads them on request, without deleting anything. *Purge transcript* deletes the stored transcript content after a confirmation that states what goes (event count and size), what stays (the audit entries and a record of the purge) and that it cannot be undone. A chat is paged and virtualized, so a very long one stays usable on a phone.
 
 Writes in v0 are therefore: answer Decisions, send messages, start tasks, pause/resume/cancel, and purge a transcript. Editor launch and takeover (`whr ssh --takeover`) come after v0.
@@ -434,9 +433,9 @@ Push when a blocking Decision stops a task: the value of a supervisor is not hav
 First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI is scoped to remote control of running tasks (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
 
 1. **Sign in.** Server URL (reached over the VPN, never public) and the single static access token, stored encrypted. OAuth sign-in comes later (§10).
-2. **Connect the forge.** One forge in release 1, GitHub through a bot token; Gitea, Forgejo and GitLab later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
+2. **Connect the forge.** One forge in release 1 through a bot token, GitHub or Gitea (§10, §12 item 6); the others later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
 3. **Choose the agent login.** `subscription` (device-code sign-in; nothing typed into the web page) or `api-key` (kept in the host proxy), per §5.2. The subscription option states the accepted risk of §7.3.
-4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (the Apple Container isolation claims are unverified until the §12 spike).
+4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (spike #2 measured Apple Container isolation and egress; reboot survival is still unverified, §12).
 5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
 6. **Ready.** Summary of what was configured and what is not yet verified, then the first command: `whr run <issue-url>`.
 
@@ -481,7 +480,7 @@ The original rating table missed agent-task supervisors. It now has an explicit 
 Ordered by what is cheap and blocks the most work.
 
 1. **Runner scorecard** (value 10, effort 3). Target agents are Claude Code, Codex CLI and Google Antigravity; Aider, OpenHands, Goose and others are scored for reference. Claude Code ships first and Codex CLI second. Antigravity ships a CLI (`agy`) with a headless print mode, so the gate is met: spike #1 drove it headless with typed events and resume. It has no mid-run injection and no approval channel in print mode, so it is a second-tier adapter in degraded mode (§5.2). Its account requirements and vendor terms for headless use are **unverified**. Spike #1 (issue #1) measured Claude Code, and Codex CLI and Antigravity in part; the results are in §5.2, and still open are a real Codex run (usage limit until 3 October), a login that expires mid-session, what the usage-limit `status` reads once exhausted, and approvals for Codex and Antigravity. One page comparing them on: headless mode, permission/approval bypass, session-ID resume after process or VM kill, mid-run message injection (stdin vs resumed turn; a release 1 requirement, §5.2), structured event output (also required), how "blocked, needs human" is reported. Also score subscription sign-in for Claude Code and Codex CLI (all **unverified**): headless or device-code login, where the token is stored, whether it survives a container restart and a Mac reboot, refresh behaviour inside a container, what happens when two environments share one login, how an expired login or exhausted usage window is signalled, current vendor terms for this kind of use, and whether a run keeps going with no client attached. Pause via SIGSTOP or stop-after-turn is not a resumed session; most CLIs resume only between turns.
-2. **Adopt-or-extend spike** (value 9, effort 3). Time-box 1–2 days on two of OpenHands, Vibe Kanban, Sculptor, Coder Tasks before committing to a build.
+2. **Adopt-or-extend spike** (value 9, effort 3). Time-box 1–2 days on two of OpenHands, Vibe Kanban, Sculptor, Coder Tasks before committing to a build. Also check where the vendors' hosted remotes fall short for each target agent (§1).
 3. **Apple Container native spike**, merged with benchmarking. Run as spike #2 (issue #2, branch `spike/apple-container`, `RESULTS.md`); measured on Apple Container 1.5.0, macOS 26.6.2. Compatibility checklist:
     - [x] Create/start/stop/delete representative workspaces (start about 1.1 s; use `--init`, §5.1)
     - [x] Enforce explicit CPU/memory (vCPU count and a cgroup limit inside the VM)
@@ -499,6 +498,7 @@ Ordered by what is cheap and blocks the most work.
     - [x] Agent run inside a container with a real login (spike #2, `05c-agent-run.sh`): a stock image on an `--internal` network, tools from the store, the model reached only through the proxy sidecar, the spike #1 harness on the host driving it with live events, token deltas, a mid-run message and a resume after a container restart. The agent container used about 290 MiB
     - [ ] Approvals from inside the container: the guest has no path to the supervisor on an internal network. An HTTP MCP server reached through the sidecar, or a relay in the sidecar to a supervisor listener bound to the bridge address, is the open option
     - [ ] A reliable cancel from the host (§5.1)
+    - [ ] Repositories mounted from the host (§4.5): fetching an agent's branch into a supervisor-owned repository, partial `.git` mounts, and bind-mount speed with `node_modules`-style trees and much larger repositories
 4. **Autonomy and approval policy** (§6) and threat model (§7): a security decision that feeds credentials and UI.
 5. **Persistence semantics** (§4.4).
 6. **Primary forge and login provider** for release 1.
@@ -512,7 +512,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 ### Release 1: one vertical slice
 
 - [ ] Apple Container backend, one host, native adapter
-- [ ] One agent runner with observed progress and validated recovery
+- [ ] Built-in agent adapters for Claude Code (first) and Codex CLI (§5.2, §5.5), with observed progress and validated recovery
 - [ ] Task/workspace/run/decision model with durable state, event log, reconciler
 - [ ] `whr` CLI (scripting contract, completion, `doctor`)
 - [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel, transcript purge (§9.3, §5.4)
