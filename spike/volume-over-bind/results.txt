@@ -1,0 +1,18 @@
+1 guest mounts:
+virtiofs /work virtiofs rw,relatime 0 0
+/dev/vdc /work/node_modules ext4 rw,relatime 0 0
+2 guest sees volume file: hello
+2 host sees mount point: drwxr-xr-x entries=0
+2 host sees bind writes: README=tracked guest-edit  new-file=yes
+3 after stop+start: hello
+4 after delete+rebuild, mount point recreated by runtime: drwxr-xr-x
+4 after delete+rebuild: hello
+6 host has a file at the mount point; guest sees: dep.txt lost+found
+6 host file still there: tracked.txt
+7 unmounting not needed; rename of the mount point: mv: cannot move '/work/node_modules' to '/work/nm2': Device or resource busy
+
+8 rm -rf of the mount point: exit 1
+rm: cannot remove '/work/node_modules': Device or resource busy
+
+8 recreate inside: ok
+8 rmdir: rmdir: failed to remove '/work/node_modules': Device or resource busy
