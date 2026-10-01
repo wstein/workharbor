@@ -8,11 +8,13 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -153,11 +155,19 @@ func (c *Config) Validate() error {
 			add("%s: %s", key, msg)
 		}
 	}
-	// A secret file inside the workspace root would be readable by the agent.
-	if ws, ok := resolved["roots.workspaces"]; ok {
-		for key, path := range map[string]string{"github.key_file": c.GitHub.KeyFile, "agent_login_env_file": c.AgentLoginEnvFile, "api_token_file": c.APITokenFile} {
-			if target, err := filepath.EvalSymlinks(path); err == nil && within(target, ws) {
-				add("%s: %s is inside the workspace root, where an agent can read it", key, path)
+	// A secret file inside a root would reach an agent: it writes the
+	// workspaces, every environment mounts the tool store, and checkouts share
+	// the cache's objects. Directories are compared by identity, so a case
+	// variant of a path on APFS is caught too.
+	why := map[string]string{
+		"roots.workspaces": "the workspace root, where an agent can read it",
+		"roots.tool_store": "the tool store, which every environment mounts",
+		"roots.cache":      "the cache root, which the checkouts share",
+	}
+	for key, path := range map[string]string{"github.key_file": c.GitHub.KeyFile, "agent_login_env_file": c.AgentLoginEnvFile, "api_token_file": c.APITokenFile} {
+		for _, root := range sortedKeys(resolved) {
+			if within(path, resolved[root]) {
+				add("%s: %s is inside %s", key, path, why[root])
 			}
 		}
 	}
@@ -178,10 +188,28 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// within reports whether path is dir or lies below it.
+// within reports whether path is dir or lies below it. It compares directories
+// by identity (device and inode), walking up from path, so a link or a case
+// variant of a name on a case-insensitive disk does not hide the relation.
 func within(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	d, err := os.Stat(dir)
+	if err != nil {
+		return false
+	}
+	p := filepath.Clean(path)
+	if target, err := filepath.EvalSymlinks(p); err == nil {
+		p = target
+	}
+	for {
+		if fi, err := os.Stat(p); err == nil && os.SameFile(fi, d) {
+			return true
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }
 
 // checkListen accepts host:port where the host is a loopback address: the API
@@ -220,8 +248,9 @@ func checkDir(path string) (string, string) {
 }
 
 // checkSecretFile requires a regular file, not a link, owned by the current
-// user, with mode 0600 and some content: the value is in the file, never in
-// the configuration.
+// user, with mode 0600, a single link and some content: the value is in the
+// file, never in the configuration. A second hard link could sit where an
+// agent reads it.
 func checkSecretFile(path string) string {
 	switch {
 	case path == "":
@@ -233,17 +262,81 @@ func checkSecretFile(path string) string {
 	if err != nil {
 		return fmt.Sprintf("%q does not exist", path)
 	}
+	return checkSecretInfo(path, info)
+}
+
+func checkSecretInfo(path string, info os.FileInfo) string {
 	if !info.Mode().IsRegular() {
 		return fmt.Sprintf("%q is not a regular file (a link or a directory is refused)", path)
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		return fmt.Sprintf("%q has mode %04o, it must be 0600 so that nobody else can read it", path, perm)
 	}
-	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() { //nolint:gosec // a uid fits an int
-		return fmt.Sprintf("%q is owned by another user", path)
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		if int(st.Uid) != os.Getuid() { //nolint:gosec // a uid fits an int
+			return fmt.Sprintf("%q is owned by another user", path)
+		}
+		if st.Nlink != 1 {
+			return fmt.Sprintf("%q has %d hard links, it must have one", path, st.Nlink)
+		}
 	}
 	if info.Size() == 0 {
 		return fmt.Sprintf("%q is empty", path)
 	}
+	if info.Size() > maxSecret {
+		return fmt.Sprintf("%q is larger than %d bytes", path, maxSecret)
+	}
 	return ""
 }
+
+// maxSecret bounds a secret file; a key or a token is far smaller.
+const maxSecret = 64 << 10
+
+// ReadSecret reads a secret file without following a link, and checks the file
+// it opened (not the path) like the configuration check does, so a file
+// swapped after the check is refused. An error names the path, never the content.
+func ReadSecret(path string) ([]byte, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, fmt.Errorf("config: %q must be an absolute, clean path", path)
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0) //nolint:gosec // the operator names the secret; checked on the open file
+	if err != nil {
+		return nil, fmt.Errorf("config: cannot open the secret %q (a link is refused): %w", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if msg := checkSecretInfo(path, info); msg != "" {
+		return nil, errors.New("config: " + msg)
+	}
+	return io.ReadAll(io.LimitReader(f, maxSecret))
+}
+
+// AgentLogin reads AgentLoginEnvFile: KEY=VALUE lines, with blank lines and
+// lines starting with '#' ignored. The entries go to the agent's process
+// environment through the runtime's env file, never a command line.
+func (c *Config) AgentLogin() ([]string, error) {
+	raw, err := ReadSecret(c.AgentLoginEnvFile)
+	if err != nil {
+		return nil, err
+	}
+	var env []string
+	for i, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, _, ok := strings.Cut(line, "=")
+		if !ok || !envKey.MatchString(k) {
+			return nil, fmt.Errorf("config: agent_login_env_file line %d is not KEY=VALUE", i+1)
+		}
+		env = append(env, line)
+	}
+	if len(env) == 0 {
+		return nil, errors.New("config: agent_login_env_file holds no KEY=VALUE line")
+	}
+	return env, nil
+}
+
+var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
