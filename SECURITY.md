@@ -22,3 +22,17 @@ In scope:
 - secrets committed to the repository
 
 Out of scope: vulnerabilities in third-party software (Apple Container, forges, agent runners), which should be reported to their maintainers. The design's claims about those tools are unverified; corrections are welcome as normal issues.
+
+## If a secret leaks (runbook)
+
+For the maintainer and every agent session. A value counts as leaked once it reaches a commit, a push, an issue or chat message, a log or a command line, even if nobody has used it.
+
+1. **Revoke it first**, at the vendor (Anthropic, Google AI Studio, OpenAI, the GitHub App's key, workharbor's own API token), before cleaning anything up. A rewrite cannot recall what was already fetched, cached or forked.
+2. **Find every copy.** Without printing the value, search the working tree and every commit of every ref (`git grep -F` over `git rev-list --all`), the stashes, the other sessions' worktrees and branches, issue and pull request text, CI logs, and the agent session that saw it.
+3. **Replace the source,** so the value can never come back: a script or a test reads the key from a `0600` env file named by an environment variable (AGENTS.md, Secrets).
+4. **Rewrite unpushed history freely** (`git commit --fixup` with an autosquash rebase). **Rewrite pushed history only when the maintainer asks**: an interactive rebase that edits only the commit that added the value, a check that the trees differ only where the value was and that gitleaks is clean, then `git push --force-with-lease=main:<the old tip>` so a push that landed in between is never overwritten.
+5. **Move every branch off the old history** with `git rebase --onto <new base> <old base> <branch>`. A plain `git rebase main` replays the old commit, because its patch differs from the rewritten one, and brings the value back. Check with `git merge-base --is-ancestor <old commit> <branch>`.
+6. **Ask GitHub support to purge cached views** of the old commits if the repository is public, and record what happened (without the value) in the issue that tracks the fix.
+
+The hooks (`make hooks`) scan every commit and every push for secrets, and `make check-ci` scans the history being merged; a finding is never worked around. The custom rules in `.gitleaks.toml` flag a literal value assigned to a credential variable (for example `GEMINI_API_KEY=` or `CLAUDE_CODE_OAUTH_TOKEN=`), as in the leak of 1 October 2026.
+
