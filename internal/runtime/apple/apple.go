@@ -233,13 +233,16 @@ func randomID() (string, error) {
 	return "whr-" + hex.EncodeToString(b), nil
 }
 
+// labelArgs returns the --label flags. The adapter's own labels are set last,
+// so an extra label can never replace the owner, the role or the environment.
 func (a *Adapter) labelArgs(role, env string, extra map[string]string) []string {
-	labels := map[string]string{runtime.OwnerLabel: a.owner, roleLabel: role}
-	if env != "" {
-		labels[envLabel] = env
-	}
+	labels := map[string]string{}
 	for k, v := range extra {
 		labels[k] = v
+	}
+	labels[runtime.OwnerLabel], labels[roleLabel] = a.owner, role
+	if env != "" {
+		labels[envLabel] = env
 	}
 	var args []string
 	for _, k := range sortedKeys(labels) {
@@ -340,10 +343,13 @@ func (a *Adapter) createArgs(id string, spec runtime.Spec) []string {
 		"create", "--name", id, "--init", "--read-only", "--cap-drop", "ALL", "--user", spec.User,
 		"--cpus", strconv.Itoa(spec.CPUs), "--memory", strconv.Itoa(spec.MemoryMB) + "M", "--network", spec.Network.Name,
 	}
-	extra := map[string]string{netLabel: spec.Network.Name}
+	extra := map[string]string{}
 	for k, v := range spec.Labels {
-		extra[k] = v
+		if !strings.HasPrefix(strings.ToLower(k), runtime.ReservedLabelPrefix) { // Validate refuses them too
+			extra[k] = v
+		}
 	}
+	extra[netLabel] = spec.Network.Name
 	args = append(args, a.labelArgs(roleEnv, id, extra)...)
 	for _, t := range spec.Tmpfs {
 		args = append(args, "--tmpfs", t)

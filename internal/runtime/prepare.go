@@ -98,6 +98,10 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 					return PreparedSpec{}, err
 				}
 			}
+			if !unsplittable(resolved) {
+				add("mount %q resolves to %q, which holds ':'", m.Source, resolved)
+				continue
+			}
 			m.Kind, m.Source = MountBind, resolved // the path that was checked is the path that is mounted
 			out.Mounts = append(out.Mounts, m)
 		}
@@ -111,17 +115,23 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 			add("cache objects %q are not inside a cache root", alt)
 			continue
 		}
+		if !unsplittable(resolved) {
+			add("cache objects %q resolve to %q, which holds ':'", alt, resolved)
+			continue
+		}
 		out.Mounts = append(out.Mounts, Mount{Kind: MountBind, Source: resolved, Target: resolved, ReadOnly: true})
 		out.Alternates = append(out.Alternates, resolved)
 	}
 	if e := spec.Egress; e != nil {
-		if e.Image == "" {
-			add("the egress sidecar needs an image")
+		if !ValidImage(e.Image) {
+			add("the egress sidecar needs an image reference, not %q", e.Image)
 		}
 		if e.Proxy == "" || !filepath.IsAbs(e.Proxy) {
 			add("the egress proxy binary %q must be an absolute path", e.Proxy)
 		} else if resolved, err := ResolveMount(opts.FS, opts.Home, e.Proxy); err != nil {
 			return PreparedSpec{}, err
+		} else if !unsplittable(resolved) {
+			add("the egress proxy binary %q resolves to %q, which holds ':'", e.Proxy, resolved)
 		} else {
 			e2 := *e
 			e2.Proxy = resolved

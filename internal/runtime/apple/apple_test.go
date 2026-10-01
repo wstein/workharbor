@@ -142,3 +142,21 @@ func TestDeleteUsesExactNames(t *testing.T) {
 		}
 	}
 }
+
+func TestTheAdaptersOwnLabelsCannotBeReplaced(t *testing.T) {
+	a := &Adapter{owner: "o1"}
+	args := strings.Join(a.labelArgs(roleEnv, "whr-1", map[string]string{
+		runtime.OwnerLabel: "o2", roleLabel: "sidecar", envLabel: "whr-2", "whr.task": "t1",
+	}), " ")
+	for _, want := range []string{"workharbor.owner=o1", "workharbor.role=environment", "workharbor.env=whr-1", "whr.task=t1"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("labels %q lack %s", args, want)
+		}
+	}
+	spec := baseSpec()
+	spec.Labels = map[string]string{netLabel: "someone-elses-net"}
+	create := strings.Join(a.createArgs("whr-1", spec), " ")
+	if strings.Contains(create, "someone-elses-net") {
+		t.Errorf("a spec label replaced the network label: %s", create)
+	}
+}

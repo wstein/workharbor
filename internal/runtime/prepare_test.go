@@ -188,3 +188,20 @@ func TestResolveMountReturnsTheCheckedPath(t *testing.T) {
 		t.Errorf("a forbidden source returned %q, %v", got, err)
 	}
 }
+
+// A link without ':' that resolves to a path with one is judged by the path
+// that would be mounted.
+func TestPrepareRefusesAResolvedSourceWithAColon(t *testing.T) {
+	r := newPrepRig(t)
+	odd := filepath.Join(r.home, "src", "a:b")
+	mkdirs(t, odd)
+	link := filepath.Join(r.home, "src", "plain")
+	if err := os.Symlink(odd, link); err != nil {
+		t.Fatal(err)
+	}
+	spec := goodSpec()
+	spec.Mounts = []Mount{{Source: link, Target: "/work"}}
+	if _, err := Prepare(r.opts, spec); !errors.Is(err, ErrInvalidSpec) || !strings.Contains(err.Error(), "':'") {
+		t.Errorf("Prepare = %v, want a refusal of the ':'", err)
+	}
+}

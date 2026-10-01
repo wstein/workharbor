@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // OwnerLabel is the label every environment carries: the supervisor instance
@@ -94,7 +95,28 @@ func (e *SpecError) Is(target error) bool { return target == ErrInvalidSpec }
 var (
 	ownerRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 	volumeRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,127}$`)
+	// networkRe is a network name; it cannot start with '-', so it is never
+	// read as a flag.
+	networkRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
+	// imageRe is an image reference: name, optional tag and digest.
+	imageRe = regexp.MustCompile(`^[a-z0-9][A-Za-z0-9_./:@-]{0,254}$`)
+	// labelKeyRe is a label key the caller may set.
+	labelKeyRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_./-]{0,127}$`)
 )
+
+// ReservedLabelPrefix marks the labels the runtime adapter sets itself, such as
+// the owner, the role and the network: a spec may not set one, or Delete could
+// be pointed at a network the adapter never created.
+const ReservedLabelPrefix = "workharbor."
+
+// ValidImage reports whether ref is an image reference the adapter passes on.
+func ValidImage(ref string) bool { return imageRe.MatchString(ref) }
+
+// unsplittable reports whether a path is safe in a `source:target[:ro]`
+// mount value: container 1.5.0 refuses a ':' in either path ("invalid volume
+// format"), so it is refused here with a clear message. A ',' is taken
+// verbatim by -v (checked with a source named "c,readonly=false").
+func unsplittable(p string) bool { return !strings.Contains(p, ":") }
 
 // Validate checks that the spec is hardened and well formed. It does not look
 // at the host filesystem: bind mount sources are vetted by CheckMounts.
@@ -104,13 +126,20 @@ func (s Spec) Validate() error {
 
 	if s.Image == "" {
 		add("image is required")
+	} else if !ValidImage(s.Image) {
+		add("image %q is not an image reference", s.Image)
 	}
 	if !ownerRe.MatchString(s.Owner) {
 		add("owner %q must be a lower-case label value", s.Owner)
 	}
-	for k := range s.Labels {
-		if k == "" || k == OwnerLabel {
+	for k, v := range s.Labels {
+		switch {
+		case strings.HasPrefix(strings.ToLower(k), ReservedLabelPrefix):
+			add("label key %q is reserved for the runtime adapter", k)
+		case !labelKeyRe.MatchString(k):
 			add("label key %q is not allowed", k)
+		case strings.ContainsFunc(v, unicode.IsControl):
+			add("label %q has a control character in its value", k)
 		}
 	}
 	if s.CPUs < 1 {
@@ -124,6 +153,8 @@ func (s Spec) Validate() error {
 	}
 	if s.Network.Internal && s.Network.Name == "" {
 		add("an internal network needs a name")
+	} else if s.Network.Name != "" && !networkRe.MatchString(s.Network.Name) {
+		add("network name %q is not valid", s.Network.Name)
 	}
 	if err := checkUser(s.User); err != "" {
 		add("%s", err)
@@ -146,6 +177,8 @@ func (s Spec) Validate() error {
 		case MountBind, "":
 			if !path.IsAbs(m.Source) {
 				add("mount %d: bind source %q must be an absolute path", i, m.Source)
+			} else if !unsplittable(m.Source) {
+				add("mount %d: bind source %q holds ':'", i, m.Source)
 			}
 		case MountVolume:
 			if !volumeRe.MatchString(m.Source) {
@@ -215,6 +248,8 @@ func checkTarget(target string, seen map[string]bool) string {
 		return fmt.Sprintf("target %q must be an absolute path", target)
 	case target == "/":
 		return `target "/" is the root filesystem`
+	case !unsplittable(target):
+		return fmt.Sprintf("target %q holds ':'", target)
 	case path.Clean(target) != target:
 		return fmt.Sprintf("target %q must be a clean path", target)
 	case seen[target]:

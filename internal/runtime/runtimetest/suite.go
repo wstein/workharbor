@@ -284,7 +284,7 @@ func checkListByOwner(ctx context.Context, h Harness) error {
 	mine := map[string]bool{}
 	for range 2 {
 		spec := h.NewSpec()
-		spec.Labels = map[string]string{"workharbor.task": "t-1"}
+		spec.Labels = map[string]string{"whr.task": "t-1"}
 		id, err := h.provision(ctx, spec)
 		if err != nil {
 			return err
@@ -310,7 +310,7 @@ func checkListByOwner(ctx context.Context, h Harness) error {
 		if !mine[info.ID] || info.ID == foreign {
 			return fmt.Errorf("List(%q) returned %s, which is not this owner's", h.Owner, info.ID)
 		}
-		if info.Owner != h.Owner || info.Labels["workharbor.task"] != "t-1" {
+		if info.Owner != h.Owner || info.Labels["whr.task"] != "t-1" {
 			return fmt.Errorf("listed environment lost its labels: %+v", info)
 		}
 	}
