@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
 )
@@ -248,6 +249,41 @@ func liveRuns(ctx context.Context, q querier, env domain.ID) ([]domain.Run, erro
 		}
 		r.ID, r.TaskID, r.WorkspaceID, r.AgentID, r.EnvID, r.State = domain.ID(id), domain.ID(task), domain.ID(ws), domain.ID(ag), domain.ID(e), domain.RunState(st)
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// TaskSummary is one row of the task list.
+type TaskSummary struct {
+	ID        domain.ID
+	Repo      string
+	Issue     string
+	State     domain.TaskState
+	AgentID   domain.ID
+	CreatedAt time.Time
+}
+
+// Tasks lists every task, newest first; onlyActive leaves out the finished ones.
+func (s *Store) Tasks(ctx context.Context, onlyActive bool) ([]TaskSummary, error) {
+	q := `SELECT id, repo, issue, state, agent_id, created_at FROM tasks`
+	if onlyActive {
+		q += ` WHERE state NOT IN ('completed', 'cancelled', 'failed')`
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY created_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("store: tasks: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []TaskSummary
+	for rows.Next() {
+		var t TaskSummary
+		var id, state, agent string
+		var created int64
+		if err := rows.Scan(&id, &t.Repo, &t.Issue, &state, &agent, &created); err != nil {
+			return nil, fmt.Errorf("store: tasks: %w", err)
+		}
+		t.ID, t.State, t.AgentID, t.CreatedAt = domain.ID(id), domain.TaskState(state), domain.ID(agent), fromNano(created)
+		out = append(out, t)
 	}
 	return out, rows.Err()
 }

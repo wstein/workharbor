@@ -39,6 +39,12 @@ const (
 	EventWorkspaceRemoved   EventKind = "workspace.removed"
 	EventAgentAdded         EventKind = "agent.added"
 	EventAgentRemoved       EventKind = "agent.removed"
+	// EventInstruction is a message the human sent to a run, with how it was
+	// delivered (design §5.3, Say).
+	EventInstruction EventKind = "instruction.sent"
+	// EventTranscript is one observation of the agent (a message, a tool call or
+	// result, a diff, a test result, usage), stored in the transcript tier.
+	EventTranscript EventKind = "transcript"
 )
 
 // Event is an append-only record: the audit trail, the UI feed and the CLI
@@ -154,4 +160,22 @@ func newEvent(task ID, kind EventKind, payload any, at time.Time) Event {
 		panic("domain: event payload: " + err.Error())
 	}
 	return Event{TaskID: task, Kind: kind, Tier: TierAudit, Payload: b, At: at}
+}
+
+// InstructionSent is the payload of EventInstruction.
+type InstructionSent struct {
+	RunID    ID     `json:"run_id"`
+	Delivery string `json:"delivery"` // injected, next_turn or resumed_turn
+	Text     string `json:"text"`
+}
+
+// NewInstructionEvent returns the audit event of a message sent to a run.
+func NewInstructionEvent(task, run ID, delivery, text string, at time.Time) Event {
+	return newEvent(task, EventInstruction, InstructionSent{RunID: run, Delivery: delivery, Text: text}, at)
+}
+
+// NewTranscriptEvent returns a transcript-tier event whose payload is the
+// agent's observation as JSON. The domain does not know the agent's types.
+func NewTranscriptEvent(task ID, payload []byte, at time.Time) Event {
+	return Event{TaskID: task, Kind: EventTranscript, Tier: TierTranscript, Payload: payload, At: at}
 }

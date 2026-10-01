@@ -193,3 +193,22 @@ func TestOneEnvironmentServesSeveralTasks(t *testing.T) {
 		}
 	}
 }
+
+func TestTasksListsNewestFirstAndFiltersTheFinished(t *testing.T) {
+	s := openTemp(t)
+	for i, st := range []domain.TaskState{domain.TaskQueued, domain.TaskCompleted, domain.TaskRunning} {
+		id := domain.ID([]string{"t1", "t2", "t3"}[i])
+		agg := domain.NewTaskAggregate(domain.Task{ID: id, Repo: "a/b", Issue: "#" + string(id), State: st, AgentID: "a1", CreatedAt: wsNow.Add(time.Duration(i) * time.Minute)})
+		if _, err := s.SaveTask(bg, agg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := s.Tasks(bg, false)
+	if err != nil || len(all) != 3 || all[0].ID != "t3" || all[2].ID != "t1" || all[0].AgentID != "a1" {
+		t.Errorf("all = %+v, %v", all, err)
+	}
+	active, err := s.Tasks(bg, true)
+	if err != nil || len(active) != 2 || active[0].ID != "t3" || active[1].ID != "t1" {
+		t.Errorf("active = %+v, %v", active, err)
+	}
+}
