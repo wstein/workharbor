@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/store"
@@ -36,6 +37,12 @@ type WorkspaceConfig struct {
 	Prepare func(runtime.Spec) (runtime.PreparedSpec, error)
 	// NewID returns a fresh ID.
 	NewID func() domain.ID
+	// Issues loads an issue from the forge. Optional: Run needs it.
+	Issues IssueSource
+	// Trust is the trust tier of issue #53: it says whether an issue may start
+	// a run. Nil allows every issue, today. It is the place to add the tiers,
+	// not a way around them.
+	Trust func(forge.Issue) error
 }
 
 // Workspaces creates workspaces and their agents, and starts tasks on agents
@@ -214,41 +221,69 @@ type StartRequest struct {
 // run. A start that stops half-way leaves a starting run with no session, which
 // the reconciler fails into a retry-or-cancel Decision.
 func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID, domain.ID, error) {
-	a, err := w.svc.store.Agent(ctx, req.AgentID)
+	a, ws, err := w.agentAndWorkspace(ctx, req.AgentID)
 	if err != nil {
 		return "", "", err
 	}
-	ws, err := w.svc.store.Workspace(ctx, string(a.WorkspaceID))
-	if err != nil {
+	if err := w.ensureEnvironment(ctx, ws); err != nil {
 		return "", "", err
 	}
-	if ws.EnvID == "" {
-		return "", "", domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
-	}
-	info, err := w.svc.rt.Inspect(ctx, string(ws.EnvID))
-	if err != nil {
-		return "", "", err
-	}
-	if info.State != domain.EnvRunning {
-		if err := w.svc.rt.Start(ctx, string(ws.EnvID)); err != nil {
-			return "", "", fmt.Errorf("start environment %s: %w", ws.EnvID, err)
-		}
-	}
-	if err := w.svc.waitReady(ctx, ws.EnvID); err != nil {
-		return "", "", err
-	}
-
 	task, run := w.cfg.NewID(), w.cfg.NewID()
 	agg := domain.NewTaskAggregate(domain.Task{
 		ID: task, Repo: ws.Repo, Issue: req.Issue, State: domain.TaskQueued, AgentID: a.ID, CreatedAt: w.svc.clock.Now(),
 	})
 	agg.AddEnvironment(domain.Environment{ID: ws.EnvID, Backend: w.svc.rt.Name(), State: domain.EnvRunning})
-	if err := agg.StartRun(domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}); err != nil {
+	if err := w.launch(ctx, agg, ws, a, run, req.Prompt); err != nil {
 		return "", "", err
 	}
+	return task, run, nil
+}
+
+// agentAndWorkspace loads an agent and its workspace, which must have an
+// environment.
+func (w *Workspaces) agentAndWorkspace(ctx context.Context, agentID domain.ID) (domain.Agent, domain.Workspace, error) {
+	a, err := w.svc.store.Agent(ctx, agentID)
+	if err != nil {
+		return domain.Agent{}, domain.Workspace{}, err
+	}
+	ws, err := w.svc.store.Workspace(ctx, string(a.WorkspaceID))
+	if err != nil {
+		return domain.Agent{}, domain.Workspace{}, err
+	}
+	if ws.EnvID == "" {
+		return domain.Agent{}, domain.Workspace{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
+	}
+	return a, ws, nil
+}
+
+// ensureEnvironment starts the workspace's environment if it is not running and
+// waits until exec answers.
+func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace) error {
+	info, err := w.svc.rt.Inspect(ctx, string(ws.EnvID))
+	if err != nil {
+		return err
+	}
+	if info.State != domain.EnvRunning {
+		if err := w.svc.rt.Start(ctx, string(ws.EnvID)); err != nil {
+			return fmt.Errorf("start environment %s: %w", ws.EnvID, err)
+		}
+	}
+	return w.svc.waitReady(ctx, ws.EnvID)
+}
+
+// launch starts a run on a task aggregate that has none live: the run is added,
+// saved with the one-run check in one transaction, and the agent is started in
+// its worktree and attached. If the agent cannot be started the run fails into
+// a retry-or-cancel Decision, so the environment is free again.
+func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws domain.Workspace, a domain.Agent, run domain.ID, prompt string) error {
+	r := domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}
+	if err := agg.StartRun(r); err != nil {
+		return err
+	}
+	task := agg.Task().ID
 	var saved []domain.Event
 	sl := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
-	err = w.svc.store.Update(ctx, func(tx *store.Tx) error {
+	err := w.svc.store.Update(ctx, func(tx *store.Tx) error {
 		live, err := tx.LiveRuns(ctx, ws.EnvID)
 		if err != nil {
 			return err
@@ -261,31 +296,66 @@ func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID
 	})
 	if err != nil {
 		w.svc.end(run, sl)
-		return "", "", err
+		return err
 	}
 	w.svc.publish(saved)
 
-	spec := w.svc.cfg.Spec(agg.Task(), domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID})
+	spec := w.svc.cfg.Spec(agg.Task(), r)
 	spec.EnvID, spec.Workdir = string(ws.EnvID), a.Worktree
-	if req.Prompt != "" {
-		spec.Prompt = req.Prompt
+	if prompt != "" {
+		spec.Prompt = prompt
 	}
 	sess, err := w.svc.ag.Start(ctx, spec)
 	if err != nil {
 		w.svc.end(run, sl)
 		var rep Report
 		if ferr := w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep); ferr != nil {
-			return "", "", errors.Join(err, ferr)
+			return errors.Join(err, ferr)
 		}
-		return "", "", err
+		return err
 	}
 	if err := w.svc.update(ctx, task, func(t *domain.TaskAggregate) error { return t.MarkRunning(run) }); err != nil {
 		_ = sess.Stop(ctx)
 		w.svc.end(run, sl)
-		return "", "", err
+		return err
 	}
 	w.svc.attach(task, run, sl, sess)
-	return task, run, nil
+	return nil
+}
+
+// NewRun starts a new run on an existing task (design §5.3): rework after
+// changes were requested, and after the answers of the failed-run and
+// rebase-conflict questions. It checks the one-run rule like StartTask. The
+// agent starts with the briefing of D27 for a new run; notes are untrusted data
+// the caller wants in it, such as the paths of a rebase conflict.
+func (w *Workspaces) NewRun(ctx context.Context, task domain.ID, prompt, notes string) (domain.ID, error) {
+	agg, err := w.svc.store.LoadTask(ctx, task)
+	if err != nil {
+		return "", err
+	}
+	if agg.Task().AgentID == "" {
+		return "", domain.NewConflict(domain.RuleRunAgent, "task %s has no agent: it was made before agents existed", task)
+	}
+	a, ws, err := w.agentAndWorkspace(ctx, agg.Task().AgentID)
+	if err != nil {
+		return "", err
+	}
+	if err := w.ensureEnvironment(ctx, ws); err != nil {
+		return "", err
+	}
+	if env, ok := agg.Environment(ws.EnvID); !ok {
+		agg.AddEnvironment(domain.Environment{ID: ws.EnvID, Backend: w.svc.rt.Name(), State: domain.EnvRunning})
+	} else if env.State != domain.EnvRunning {
+		if err := agg.ObserveEnv(ws.EnvID, domain.EnvRunning); err != nil {
+			return "", err
+		}
+	}
+	run := w.cfg.NewID()
+	next := domain.Run{ID: run, AgentID: a.ID, WorkspaceID: ws.ID}
+	if err := w.launch(ctx, agg, ws, a, run, NewRunBriefing(agg.Task(), next, prompt, notes)); err != nil {
+		return "", err
+	}
+	return run, nil
 }
 
 // exec runs a command in an environment and returns its combined output and

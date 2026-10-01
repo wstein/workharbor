@@ -15,6 +15,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent/agenttest"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
@@ -35,6 +36,7 @@ type wsRig struct {
 	forge  string // the source repository
 	ids    int
 	failAg bool
+	issues *forgetest.Fake
 }
 
 func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
@@ -104,7 +106,9 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		t.Skipf("git is not available: %v", err)
 	}
 	t.Cleanup(func() { _ = g.Close() })
+	r.issues = forgetest.NewFake()
 	r.ws = NewWorkspaces(r.svc, WorkspaceConfig{
+		Issues:  r.issues,
 		Config:  &config.Config{Roots: config.Roots{Workspaces: []string{r.root}}},
 		Git:     g,
 		Spec:    func(domain.Workspace) runtime.Spec { return r.rt.NewSpec() },
