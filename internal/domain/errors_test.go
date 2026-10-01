@@ -9,9 +9,9 @@ import (
 
 func TestIllegalTransitionsAreConflicts(t *testing.T) {
 	errs := map[string]error{
-		"task":        (&Task{ID: "t1", State: TaskCompleted}).Transition(TaskRunning),
-		"run":         (&Run{ID: "r1", State: RunStopped}).Transition(RunRunning),
-		"environment": (&Environment{ID: "e1", State: EnvDeleted}).Transition(EnvStopped),
+		"task":        (&Task{ID: "t1", State: TaskCompleted}).transition(TaskRunning),
+		"run":         (&Run{ID: "r1", State: RunStopped}).transition(RunRunning),
+		"environment": (&Environment{ID: "e1", State: EnvDeleted}).transition(EnvStopped),
 	}
 	for name, err := range errs {
 		if err == nil {

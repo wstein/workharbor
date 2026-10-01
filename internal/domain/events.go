@@ -25,6 +25,7 @@ const (
 	EventEnvState           EventKind = "env.state"
 	EventRevisionPinned     EventKind = "revision.pinned"
 	EventCIRecorded         EventKind = "ci.recorded"
+	EventPRRecorded         EventKind = "pr.recorded"
 	EventDecisionRaised     EventKind = "decision.raised"
 	EventDecisionAnswered   EventKind = "decision.answered"
 	EventDecisionExpired    EventKind = "decision.expired"
@@ -78,6 +79,12 @@ type RevisionPinned struct {
 type CIRecorded struct {
 	SHA   string  `json:"sha"`
 	State CIState `json:"state"`
+}
+
+// PRRecorded is the payload of EventPRRecorded.
+type PRRecorded struct {
+	SHA string `json:"sha"`
+	URL string `json:"url"`
 }
 
 // DecisionRaised is the payload of EventDecisionRaised. For an approval it

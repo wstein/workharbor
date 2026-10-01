@@ -20,7 +20,7 @@ func (s TaskState) Terminal() bool {
 }
 
 // Transition validates a task state change.
-func (t *Task) Transition(to TaskState) error {
+func (t *Task) transition(to TaskState) error {
 	if !t.State.CanTransition(to) {
 		return conflict(RuleTransition, "task %s: illegal transition %s -> %s", t.ID, t.State, to)
 	}
@@ -53,7 +53,7 @@ func (s RunState) Terminal() bool {
 }
 
 // Transition validates a run state change.
-func (r *Run) Transition(to RunState) error {
+func (r *Run) transition(to RunState) error {
 	if !r.State.CanTransition(to) {
 		return conflict(RuleTransition, "run %s: illegal transition %s -> %s", r.ID, r.State, to)
 	}
@@ -82,7 +82,7 @@ func (s EnvState) Terminal() bool {
 }
 
 // Transition validates an environment state change.
-func (e *Environment) Transition(to EnvState) error {
+func (e *Environment) transition(to EnvState) error {
 	if !e.State.CanTransition(to) {
 		return conflict(RuleTransition, "environment %s: illegal transition %s -> %s", e.ID, e.State, to)
 	}

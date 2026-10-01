@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
@@ -56,7 +55,8 @@ func boolInt(b bool) int {
 // events are forgotten; the returned events carry their sequence numbers.
 func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain.Event, error) {
 	rd := tx.s.redactor
-	t := &agg.Task
+	snap := agg.Snapshot()
+	t := &snap.Task
 	expected := t.Version
 	if expected == 0 {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, created_at) VALUES (?, 1, ?, ?, ?, ?)`,
@@ -87,25 +87,19 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 			return nil, fmt.Errorf("store: save task %s: %w", t.ID, err)
 		}
 	}
-	envIDs := make([]string, 0, len(agg.Envs))
-	for id := range agg.Envs {
-		envIDs = append(envIDs, string(id))
-	}
-	sort.Strings(envIDs)
-	for _, id := range envIDs {
-		e := agg.Envs[domain.ID(id)]
+	for _, e := range snap.Envs {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO environments (id, task_id, backend, state) VALUES (?, ?, ?, ?)`,
 			string(e.ID), string(t.ID), e.Backend, string(e.State)); err != nil {
 			return nil, fmt.Errorf("store: save environment %s: %w", e.ID, err)
 		}
 	}
-	for i, r := range agg.Runs {
+	for i, r := range snap.Runs {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, session_id, ord) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), r.SessionID, i); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
-	for i, c := range agg.Candidates {
+	for i, c := range snap.Candidates {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO candidates (task_id, sha, run_id, branch, pr_url, ci, ord) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			string(t.ID), c.SHA, string(c.RunID), rd.String(c.Branch), rd.String(c.PRURL), string(c.CI), i); err != nil {
 			return nil, fmt.Errorf("store: save candidate %s: %w", c.SHA, err)
@@ -114,30 +108,24 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 
 	// Decisions that changed are written with the task. Their events are
 	// already among the aggregate's.
-	var saved []func()
-	for _, d := range agg.Decisions {
-		if d.Version != 0 && !d.Changed() {
+	versions := map[domain.ID]int64{}
+	for i := range snap.Decisions {
+		d := &snap.Decisions[i].Decision
+		if d.Version != 0 && !snap.Decisions[i].Changed {
 			continue
 		}
-		d.TaskID = t.ID
-		done, err := tx.writeDecision(ctx, d)
+		next, err := tx.writeDecision(ctx, d)
 		if err != nil {
 			return nil, err
 		}
-		saved = append(saved, done)
+		versions[d.ID] = next
 	}
 
 	events, err := tx.Append(ctx, agg.PendingEvents()...)
 	if err != nil {
 		return nil, err
 	}
-	tx.after = append(tx.after, func() {
-		t.Version = expected + 1
-		agg.TakeEvents()
-		for _, done := range saved {
-			done()
-		}
-	})
+	tx.after = append(tx.after, func() { agg.MarkSaved(expected+1, versions) })
 	return events, nil
 }
 
@@ -156,7 +144,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	t.ID, t.State, t.CreatedAt = id, domain.TaskState(state), fromNano(created)
-	agg := domain.NewTaskAggregate(t)
+	snap := domain.Snapshot{Task: t}
 
 	envs, err := tx.tx.QueryContext(ctx, `SELECT id, backend, state FROM environments WHERE task_id = ? ORDER BY id`, string(id))
 	if err != nil {
@@ -170,7 +158,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
 		e.ID, e.State = domain.ID(eid), domain.EnvState(st)
-		agg.AddEnvironment(&e)
+		snap.Envs = append(snap.Envs, e)
 	}
 	if err := envs.Close(); err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
@@ -188,7 +176,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
 		r.ID, r.TaskID, r.WorkspaceID, r.EnvID, r.State = domain.ID(rid), id, domain.ID(ws), domain.ID(env), domain.RunState(st)
-		agg.Runs = append(agg.Runs, &r)
+		snap.Runs = append(snap.Runs, r)
 	}
 	if err := runs.Close(); err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
@@ -206,7 +194,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
 		c.RunID, c.CI = domain.ID(run), domain.CIState(ci)
-		agg.Candidates = append(agg.Candidates, &c)
+		snap.Candidates = append(snap.Candidates, c)
 	}
 	if err := cands.Close(); err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
@@ -222,38 +210,23 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 			_ = decs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
-		agg.Decisions = append(agg.Decisions, d)
+		snap.Decisions = append(snap.Decisions, domain.DecisionState{Decision: *d})
 	}
 	if err := decs.Close(); err != nil {
+		return nil, fmt.Errorf("store: load task %s: %w", id, err)
+	}
+	agg, err := domain.Restore(snap)
+	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	return agg, nil
 }
 
-// SaveDecision writes a Decision and the events its changes recorded, as
-// SaveTask does for a task: a compare-and-swap on its Version, so an answer
-// and an expiry of the same Decision cannot both win.
-func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Event, error) {
-	done, err := tx.writeDecision(ctx, d)
-	if err != nil {
-		return nil, err
-	}
-	events, err := tx.Append(ctx, d.PendingEvents()...)
-	if err != nil {
-		return nil, err
-	}
-	tx.after = append(tx.after, func() {
-		done()
-		d.TakeEvents()
-	})
-	return events, nil
-}
-
 // writeDecision writes the Decision row with a compare-and-swap on its
-// version, and returns what to do once the transaction has committed.
-func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (func(), error) {
+// version, and returns the version it has once the transaction commits.
+func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (int64, error) {
 	if d.Kind == domain.DecisionApproval && d.Deadline.IsZero() {
-		return nil, fmt.Errorf("decision %s: %w", d.ID, ErrNoDeadline)
+		return 0, fmt.Errorf("decision %s: %w", d.ID, ErrNoDeadline)
 	}
 	rd := tx.s.redactor
 	redactedOptions := make([]string, len(d.Options))
@@ -262,7 +235,7 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (func(), er
 	}
 	options, err := json.Marshal(redactedOptions)
 	if err != nil {
-		return nil, fmt.Errorf("store: save decision %s: %w", d.ID, err)
+		return 0, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 	}
 	var answeredAt int64
 	if d.AnsweredAt != nil {
@@ -281,9 +254,9 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (func(), er
 			VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM decisions WHERE id = ?`, string(d.ID)).Scan(&exists) == nil {
-				return nil, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
+				return 0, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
 			}
-			return nil, fmt.Errorf("store: save decision %s: %w", d.ID, err)
+			return 0, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 		}
 	} else {
 		args := append(values, string(d.ID), expected)
@@ -291,17 +264,17 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (func(), er
 			input = ?, input_truncated = ?, sha = ?, options = ?, status = ?, created_at = ?, timeout_ns = ?, deadline = ?, answered_at = ?,
 			answer = ?, reason = ?, answered_by = ?, superseded_by = ?, cause = ?, resume_at = ? WHERE id = ? AND version = ?`, args...)
 		if err != nil {
-			return nil, fmt.Errorf("store: save decision %s: %w", d.ID, err)
+			return 0, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
 			var exists int
 			if errors.Is(tx.tx.QueryRowContext(ctx, `SELECT 1 FROM decisions WHERE id = ?`, string(d.ID)).Scan(&exists), sql.ErrNoRows) {
-				return nil, &domain.NotFoundError{Kind: "decision", ID: string(d.ID)}
+				return 0, &domain.NotFoundError{Kind: "decision", ID: string(d.ID)}
 			}
-			return nil, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
+			return 0, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
 		}
 	}
-	return func() { d.Saved(expected + 1) }, nil
+	return expected + 1, nil
 }
 
 const decisionColumns = `id, version, task_id, run_id, kind, blocking, subject, input, input_truncated, sha, options, status,
@@ -372,17 +345,6 @@ func (s *Store) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggrega
 	return agg, err
 }
 
-// SaveDecision saves a Decision and its events in one transaction.
-func (s *Store) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Event, error) {
-	var out []domain.Event
-	err := s.Update(ctx, func(tx *Tx) error {
-		var err error
-		out, err = tx.SaveDecision(ctx, d)
-		return err
-	})
-	return out, err
-}
-
 // LoadDecision reads a Decision.
 func (s *Store) LoadDecision(ctx context.Context, id domain.ID) (*domain.Decision, error) {
 	var d *domain.Decision
@@ -406,6 +368,7 @@ func (s *Store) LoadDecision(ctx context.Context, id domain.ID) (*domain.Decisio
 func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Response) (*domain.Decision, []domain.Event, error) {
 	var (
 		d       *domain.Decision
+		saved   *domain.TaskAggregate
 		events  []domain.Event
 		respond error
 	)
@@ -425,15 +388,16 @@ func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Resp
 		if events, err = tx.SaveTask(ctx, agg); err != nil {
 			return err
 		}
-		for _, c := range agg.Decisions {
-			if c.ID == id {
-				d = c
-			}
-		}
+		saved = agg
 		return nil
 	})
 	if err != nil {
 		return nil, nil, err
+	}
+	if saved != nil { // read after the commit, which gave the Decision its new version
+		if c, ok := saved.Decision(id); ok {
+			d = &c
+		}
 	}
 	return d, events, respond
 }

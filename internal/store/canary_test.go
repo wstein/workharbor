@@ -92,30 +92,28 @@ func writeEverywhere(t *testing.T, s *Store, c canaries) {
 
 	// Task text, candidate text and the events their changes record.
 	a := domain.NewTaskAggregate(domain.Task{ID: "t1", Repo: "wstein/workharbor " + c.github, Issue: "#15 " + text, State: domain.TaskRunning, CreatedAt: t0})
-	a.AddEnvironment(&domain.Environment{ID: "e1", Backend: "apple", State: domain.EnvRunning})
-	if err := a.StartRun(&domain.Run{ID: "r1", WorkspaceID: "w1", EnvID: "e1"}); err != nil {
+	a.AddEnvironment(domain.Environment{ID: "e1", Backend: "apple", State: domain.EnvRunning})
+	if err := a.StartRun(domain.Run{ID: "r1", WorkspaceID: "w1", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.PinRevision("r1", "agent/"+c.github, "aaa111"); err != nil {
 		t.Fatal(err)
 	}
-	a.Candidates[0].PRURL = "https://github.com/x/y/pull/1?access_token=" + c.assigned
-	if _, err := s.SaveTask(bg, a); err != nil {
+	if err := a.RecordPR("aaa111", "https://github.com/x/y/pull/1?access_token="+c.assigned); err != nil {
 		t.Fatal(err)
 	}
 
 	// A Decision: subject, input, options, reason, answer, actor, and the events.
-	d, err := domain.Raise(domain.NewDecision{
-		ID: "d1", TaskID: "t1", RunID: "r1", Kind: domain.DecisionApproval, Blocking: true,
+	if _, err := a.RaiseDecision(domain.NewDecision{
+		ID: "d1", RunID: "r1", Kind: domain.DecisionApproval, Blocking: true,
 		Subject: "Bash " + c.exact, Input: text, Options: []string{domain.AnswerAllow, domain.AnswerDeny}, Now: t0,
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Respond(domain.Response{By: "werner " + c.github, Option: domain.AnswerAllow, Reason: text, At: t0.Add(time.Minute)}); err != nil {
+	if err := a.Answer("d1", domain.Response{By: "werner " + c.github, Option: domain.AnswerAllow, Reason: text, At: t0.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveDecision(bg, d); err != nil {
+	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
 

@@ -12,13 +12,13 @@ import (
 func newRunningAggregate(t *testing.T) (*TaskAggregate, *Run, *Environment) {
 	t.Helper()
 	a := NewTaskAggregate(Task{ID: "t1", State: TaskRunning})
-	env := &Environment{ID: "e1", Backend: "apple", State: EnvRunning}
-	a.AddEnvironment(env)
-	run := &Run{ID: "r1", EnvID: "e1"}
-	if err := a.StartRun(run); err != nil {
+	a.AddEnvironment(Environment{ID: "e1", Backend: "apple", State: EnvRunning})
+	env := a.envs["e1"]
+	if err := a.StartRun(Run{ID: "r1", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := run.Transition(RunRunning); err != nil {
+	run := a.mustRun("r1")
+	if err := run.transition(RunRunning); err != nil {
 		t.Fatal(err)
 	}
 	return a, run, env
@@ -54,15 +54,15 @@ func wantNotFound(t *testing.T, err error) {
 func TestStartRunNeedsARunningEnvironment(t *testing.T) {
 	for _, state := range []EnvState{EnvProvisioning, EnvStopped, EnvDeleted} {
 		a := NewTaskAggregate(Task{ID: "t1", State: TaskRunning})
-		a.AddEnvironment(&Environment{ID: "e1", State: state})
-		err := a.StartRun(&Run{ID: "r1", EnvID: "e1"})
+		a.AddEnvironment(Environment{ID: "e1", State: state})
+		err := a.StartRun(Run{ID: "r1", EnvID: "e1"})
 		wantConflict(t, err, RuleEnvRunning)
-		if len(a.Runs) != 0 {
+		if len(a.runs) != 0 {
 			t.Errorf("environment %s: a refused run was added", state)
 		}
 	}
 	a := NewTaskAggregate(Task{ID: "t1", State: TaskRunning})
-	wantNotFound(t, a.StartRun(&Run{ID: "r1", EnvID: "missing"}))
+	wantNotFound(t, a.StartRun(Run{ID: "r1", EnvID: "missing"}))
 }
 
 func TestStartRunSetsTaskAndState(t *testing.T) {
@@ -70,37 +70,36 @@ func TestStartRunSetsTaskAndState(t *testing.T) {
 	if run.TaskID != "t1" {
 		t.Errorf("TaskID = %q, want t1", run.TaskID)
 	}
-	if len(a.Runs) != 1 || a.LiveRun() != run {
-		t.Errorf("runs = %v, live = %v", a.Runs, a.LiveRun())
+	if len(a.runs) != 1 || a.liveRun() != run {
+		t.Errorf("runs = %v, live = %v", a.runs, a.liveRun())
 	}
 }
 
 func TestOneLiveRunPerTask(t *testing.T) {
 	a, run, _ := newRunningAggregate(t)
-	wantConflict(t, a.StartRun(&Run{ID: "r2", EnvID: "e1"}), RuleOneLiveRun)
+	wantConflict(t, a.StartRun(Run{ID: "r2", EnvID: "e1"}), RuleOneLiveRun)
 
 	// Every non-terminal state still counts as live.
 	for _, state := range []RunState{RunStarting, RunRunning, RunPaused, RunInterrupted} {
 		run.State = state
-		if a.LiveRun() == nil {
+		if a.liveRun() == nil {
 			t.Errorf("a %s run must be live", state)
 		}
-		wantConflict(t, a.StartRun(&Run{ID: "rx", EnvID: "e1"}), RuleOneLiveRun)
+		wantConflict(t, a.StartRun(Run{ID: "rx", EnvID: "e1"}), RuleOneLiveRun)
 	}
 
 	// Once the run is over, a new one may start; the old one is never reused.
 	for _, state := range []RunState{RunStopped, RunFailed} {
 		a, run, _ := newRunningAggregate(t)
 		run.State = state
-		if a.LiveRun() != nil {
+		if a.liveRun() != nil {
 			t.Errorf("a %s run is not live", state)
 		}
-		next := &Run{ID: "r2", EnvID: "e1"}
-		if err := a.StartRun(next); err != nil {
+		if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 			t.Errorf("after a %s run: %v", state, err)
 		}
-		if len(a.Runs) != 2 || next.State != RunStarting {
-			t.Errorf("after a %s run: runs %d, state %s", state, len(a.Runs), next.State)
+		if next := a.mustRun("r2"); len(a.runs) != 2 || next.State != RunStarting {
+			t.Errorf("after a %s run: runs %d, state %s", state, len(a.runs), next.State)
 		}
 	}
 }
@@ -117,7 +116,7 @@ func TestPauseNeverStopsTheEnvironment(t *testing.T) {
 	if env.State != EnvRunning {
 		t.Errorf("environment state = %s after pause, want running", env.State)
 	}
-	if a.Envs["e1"] != env {
+	if a.envs["e1"] != env {
 		t.Error("pause replaced the environment")
 	}
 	// Only a running run can be paused.
@@ -164,7 +163,7 @@ func TestResumeNeedsARunningEnvironment(t *testing.T) {
 			t.Errorf("%s: a refused resume changed the run to %s", from, run.State)
 		}
 
-		if err := env.Transition(EnvRunning); err != nil {
+		if err := env.transition(EnvRunning); err != nil {
 			t.Fatal(err)
 		}
 		if err := a.Resume("r1"); err != nil {
@@ -189,17 +188,16 @@ func TestResumeOfARunThatCannotResume(t *testing.T) {
 func TestStartRunAcceptsOnlyAnUnusedRun(t *testing.T) {
 	a, run, _ := newRunningAggregate(t)
 	run.State = RunStopped
-	wantConflict(t, a.StartRun(run), RuleRunReused)
-	if run.State != RunStopped || len(a.Runs) != 1 {
-		t.Errorf("a refused run was changed or added: state %s, %d runs", run.State, len(a.Runs))
+	wantConflict(t, a.StartRun(*run), RuleRunReused)
+	if run.State != RunStopped || len(a.runs) != 1 {
+		t.Errorf("a refused run was changed or added: state %s, %d runs", run.State, len(a.runs))
 	}
 
 	for _, state := range allRunStates {
-		next := &Run{ID: ID("r-" + string(state)), EnvID: "e1", State: state}
-		wantConflict(t, a.StartRun(next), RuleRunReused)
+		wantConflict(t, a.StartRun(Run{ID: ID("r-" + string(state)), EnvID: "e1", State: state}), RuleRunReused)
 	}
-	if len(a.Runs) != 1 {
-		t.Errorf("%d runs after refused starts, want 1", len(a.Runs))
+	if len(a.runs) != 1 {
+		t.Errorf("%d runs after refused starts, want 1", len(a.runs))
 	}
 }
 
@@ -207,21 +205,20 @@ func TestStartRunNeedsAUniqueNonEmptyID(t *testing.T) {
 	a, run, _ := newRunningAggregate(t)
 	run.State = RunStopped
 
-	wantConflict(t, a.StartRun(&Run{ID: "", EnvID: "e1"}), RuleRunID)
-	wantConflict(t, a.StartRun(&Run{ID: "r1", EnvID: "e1"}), RuleRunID) // the stopped run's ID
-	if len(a.Runs) != 1 {
-		t.Fatalf("%d runs after refused starts, want 1", len(a.Runs))
+	wantConflict(t, a.StartRun(Run{ID: "", EnvID: "e1"}), RuleRunID)
+	wantConflict(t, a.StartRun(Run{ID: "r1", EnvID: "e1"}), RuleRunID) // the stopped run's ID
+	if len(a.runs) != 1 {
+		t.Fatalf("%d runs after refused starts, want 1", len(a.runs))
 	}
 	if got, err := a.run("r1"); err != nil || got != run {
 		t.Errorf("run(r1) = %v, %v; want the first run", got, err)
 	}
 
-	fresh := &Run{ID: "r2", EnvID: "e1"}
-	if err := a.StartRun(fresh); err != nil {
+	if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 		t.Fatalf("a new run with a new ID: %v", err)
 	}
-	if fresh.State != RunStarting || len(a.Runs) != 2 {
-		t.Errorf("state %s, %d runs", fresh.State, len(a.Runs))
+	if fresh := a.mustRun("r2"); fresh.State != RunStarting || len(a.runs) != 2 {
+		t.Errorf("state %s, %d runs", fresh.State, len(a.runs))
 	}
 }
 
@@ -229,8 +226,8 @@ func TestStartRunNeedsAUniqueNonEmptyID(t *testing.T) {
 func TestStartRunOnlyWhereTheTaskCanTakeOne(t *testing.T) {
 	for _, state := range allTaskStates {
 		a := NewTaskAggregate(Task{ID: "t1", State: state})
-		a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
-		err := a.StartRun(&Run{ID: "r1", EnvID: "e1"})
+		a.AddEnvironment(Environment{ID: "e1", State: EnvRunning})
+		err := a.StartRun(Run{ID: "r1", EnvID: "e1"})
 		switch state {
 		case TaskQueued, TaskRunning, TaskReadyForReview: // ready_for_review is rework
 			if err != nil {
@@ -238,7 +235,7 @@ func TestStartRunOnlyWhereTheTaskCanTakeOne(t *testing.T) {
 			}
 		default:
 			wantConflict(t, err, RuleTaskState)
-			if len(a.Runs) != 0 {
+			if len(a.runs) != 0 {
 				t.Errorf("task %s: a refused run was added", state)
 			}
 		}
@@ -251,12 +248,12 @@ func TestStartRunOnlyWhereTheTaskCanTakeOne(t *testing.T) {
 func TestStartRunMovesTheTaskToRunning(t *testing.T) {
 	for _, from := range []TaskState{TaskQueued, TaskReadyForReview, TaskRunning} {
 		a := NewTaskAggregate(Task{ID: "t1", State: from})
-		a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
-		if err := a.StartRun(&Run{ID: "r1", EnvID: "e1"}); err != nil {
+		a.AddEnvironment(Environment{ID: "e1", State: EnvRunning})
+		if err := a.StartRun(Run{ID: "r1", EnvID: "e1"}); err != nil {
 			t.Fatalf("from %s: %v", from, err)
 		}
-		if a.Task.State != TaskRunning {
-			t.Errorf("from %s the task is %s, want running", from, a.Task.State)
+		if a.task.State != TaskRunning {
+			t.Errorf("from %s the task is %s, want running", from, a.task.State)
 		}
 		var kinds []EventKind
 		for _, e := range a.PendingEvents() {
@@ -275,21 +272,21 @@ func TestStartRunMovesTheTaskToRunning(t *testing.T) {
 // A refused start must not move the task: the guards come first.
 func TestRefusedStartRunLeavesTheTask(t *testing.T) {
 	a := NewTaskAggregate(Task{ID: "t1", State: TaskQueued})
-	a.AddEnvironment(&Environment{ID: "e1", State: EnvStopped})
-	wantConflict(t, a.StartRun(&Run{ID: "r1", EnvID: "e1"}), RuleEnvRunning)
-	if a.Task.State != TaskQueued || len(a.PendingEvents()) != 0 {
-		t.Errorf("task %s with %d events after a refused start", a.Task.State, len(a.PendingEvents()))
+	a.AddEnvironment(Environment{ID: "e1", State: EnvStopped})
+	wantConflict(t, a.StartRun(Run{ID: "r1", EnvID: "e1"}), RuleEnvRunning)
+	if a.task.State != TaskQueued || len(a.PendingEvents()) != 0 {
+		t.Errorf("task %s with %d events after a refused start", a.task.State, len(a.PendingEvents()))
 	}
 }
 
 // #55: the whole rework loop with no state set by hand.
 func TestReworkEndToEnd(t *testing.T) {
 	a := NewTaskAggregate(Task{ID: "t1", State: TaskQueued})
-	a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
-	first := &Run{ID: "r1", EnvID: "e1"}
-	if err := a.StartRun(first); err != nil {
+	a.AddEnvironment(Environment{ID: "e1", State: EnvRunning})
+	if err := a.StartRun(Run{ID: "r1", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
+	first := a.mustRun("r1")
 	if err := a.moveRun(first, RunRunning); err != nil {
 		t.Fatal(err)
 	}
@@ -304,12 +301,12 @@ func TestReworkEndToEnd(t *testing.T) {
 	}
 
 	// The human asks for changes: a rework run on the ready_for_review task.
-	second := &Run{ID: "r2", EnvID: "e1"}
-	if err := a.StartRun(second); err != nil {
+	if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
-	if a.Task.State != TaskRunning {
-		t.Fatalf("rework left the task %s, want running", a.Task.State)
+	second := a.mustRun("r2")
+	if a.task.State != TaskRunning {
+		t.Fatalf("rework left the task %s, want running", a.task.State)
 	}
 	if err := a.moveRun(second, RunRunning); err != nil {
 		t.Fatal(err)
@@ -323,8 +320,8 @@ func TestReworkEndToEnd(t *testing.T) {
 	if err := a.MarkReady(false); err != nil {
 		t.Fatalf("MarkReady after the rework run: %v", err)
 	}
-	if a.Task.State != TaskReadyForReview {
-		t.Errorf("task = %s, want ready_for_review", a.Task.State)
+	if a.task.State != TaskReadyForReview {
+		t.Errorf("task = %s, want ready_for_review", a.task.State)
 	}
 }
 
@@ -332,14 +329,23 @@ func TestReworkEndToEnd(t *testing.T) {
 func TestPinRevisionOnlyFromTheLatestRun(t *testing.T) {
 	a, first, _ := newRunningAggregate(t)
 	first.State = RunStopped
-	if err := a.StartRun(&Run{ID: "r2", EnvID: "e1"}); err != nil {
+	if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
 	wantConflict(t, errOnly(a.PinRevision("r1", "agent/topic", "late111")), RuleCandidateRun)
-	if a.CurrentCandidate() != nil {
+	if a.currentCandidate() != nil {
 		t.Error("a refused pin became the current candidate")
 	}
 	if _, err := a.PinRevision("r2", "agent/topic", "bbb222"); err != nil {
 		t.Errorf("the latest run may pin: %v", err)
 	}
+}
+
+// mustRun returns the aggregate's own run, so a test sees later changes.
+func (a *TaskAggregate) mustRun(id ID) *Run {
+	r, err := a.run(id)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }

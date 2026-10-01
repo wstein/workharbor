@@ -30,28 +30,33 @@ const (
 // their own; the methods here are the guards that keep them consistent with
 // one another (design §4.1). A violation is a *ConflictError, which maps to
 // exit code Conflict; an unknown run or environment is a *NotFoundError.
+//
+// Only the aggregate changes state. Its fields and the machines' Transition
+// methods are unexported, so no caller can skip a guard; code outside the
+// domain reads through the accessors and a Snapshot, and the store rebuilds an
+// aggregate with Restore (design §4.1).
 type TaskAggregate struct {
-	Task Task
-	Runs []*Run // oldest first
-	Envs map[ID]*Environment
+	task Task
+	runs []*Run // oldest first
+	envs map[ID]*Environment
 
-	// Candidates are the prepared revisions, oldest first. The last one is the
+	// candidates are the prepared revisions, oldest first. The last one is the
 	// current revision.
-	Candidates []*ReviewCandidate
+	candidates []*ReviewCandidate
 
-	// Decisions are every Decision raised for the task, oldest first.
-	Decisions []*Decision
+	// decisions are every Decision raised for the task, oldest first.
+	decisions []*Decision
 
 	events []Event // recorded changes, taken by TakeEvents
 }
 
 // NewTaskAggregate returns an aggregate for task with nothing attached yet.
 func NewTaskAggregate(task Task) *TaskAggregate {
-	return &TaskAggregate{Task: task, Envs: map[ID]*Environment{}}
+	return &TaskAggregate{task: task, envs: map[ID]*Environment{}}
 }
 
 // AddEnvironment registers an environment the task's runs may use.
-func (a *TaskAggregate) AddEnvironment(e *Environment) { a.Envs[e.ID] = e }
+func (a *TaskAggregate) AddEnvironment(e Environment) { a.envs[e.ID] = &e }
 
 // PendingEvents returns the recorded events without forgetting them, so a
 // store can write them and forget them only once the write has committed.
@@ -67,12 +72,12 @@ func (a *TaskAggregate) TakeEvents() []Event {
 }
 
 func (a *TaskAggregate) record(kind EventKind, payload any) {
-	a.events = append(a.events, newEvent(a.Task.ID, kind, payload, time.Time{}))
+	a.events = append(a.events, newEvent(a.task.ID, kind, payload, time.Time{}))
 }
 
 func (a *TaskAggregate) moveRun(run *Run, to RunState) error {
 	from := run.State
-	if err := run.Transition(to); err != nil {
+	if err := run.transition(to); err != nil {
 		return err
 	}
 	a.record(EventRunState, StateChanged{Object: "run", ID: run.ID, From: string(from), To: string(to)})
@@ -81,7 +86,7 @@ func (a *TaskAggregate) moveRun(run *Run, to RunState) error {
 
 func (a *TaskAggregate) moveEnv(env *Environment, to EnvState) error {
 	from := env.State
-	if err := env.Transition(to); err != nil {
+	if err := env.transition(to); err != nil {
 		return err
 	}
 	a.record(EventEnvState, StateChanged{Object: "environment", ID: env.ID, From: string(from), To: string(to)})
@@ -89,16 +94,16 @@ func (a *TaskAggregate) moveEnv(env *Environment, to EnvState) error {
 }
 
 func (a *TaskAggregate) moveTask(to TaskState) error {
-	from := a.Task.State
-	if err := a.Task.Transition(to); err != nil {
+	from := a.task.State
+	if err := a.task.transition(to); err != nil {
 		return err
 	}
-	a.record(EventTaskState, StateChanged{Object: "task", ID: a.Task.ID, From: string(from), To: string(to)})
+	a.record(EventTaskState, StateChanged{Object: "task", ID: a.task.ID, From: string(from), To: string(to)})
 	return nil
 }
 
 func (a *TaskAggregate) run(id ID) (*Run, error) {
-	for _, r := range a.Runs {
+	for _, r := range a.runs {
 		if r.ID == id {
 			return r, nil
 		}
@@ -107,15 +112,14 @@ func (a *TaskAggregate) run(id ID) (*Run, error) {
 }
 
 func (a *TaskAggregate) env(id ID) (*Environment, error) {
-	if e, ok := a.Envs[id]; ok {
+	if e, ok := a.envs[id]; ok {
 		return e, nil
 	}
 	return nil, &NotFoundError{Kind: "environment", ID: string(id)}
 }
 
-// LiveRun returns the run that is not yet stopped or failed, or nil.
-func (a *TaskAggregate) LiveRun() *Run {
-	for _, r := range a.Runs {
+func (a *TaskAggregate) liveRun() *Run {
+	for _, r := range a.runs {
 		if !r.State.Terminal() {
 			return r
 		}
@@ -123,29 +127,38 @@ func (a *TaskAggregate) LiveRun() *Run {
 	return nil
 }
 
+// LiveRun returns a copy of the run that is not yet stopped or failed.
+func (a *TaskAggregate) LiveRun() (Run, bool) {
+	if r := a.liveRun(); r != nil {
+		return *r, true
+	}
+	return Run{}, false
+}
+
 // StartRun adds a new run in an environment and starts it. The run must be new
 // (no state yet) with an ID no run of the task has. A task has at most one live
 // run, and the environment must be running. Once every guard has passed, a
 // queued or ready_for_review (rework) task moves to running in the same change.
-func (a *TaskAggregate) StartRun(run *Run) error {
+func (a *TaskAggregate) StartRun(r Run) error {
+	run := &r
 	if run.State != "" {
 		return conflict(RuleRunReused, "run %s is already %s: a new run is started, a finished one is never reused", run.ID, run.State)
 	}
 	if run.ID == "" {
 		return conflict(RuleRunID, "a run needs an ID")
 	}
-	for _, r := range a.Runs {
+	for _, r := range a.runs {
 		if r.ID == run.ID {
-			return conflict(RuleRunID, "run %s already exists in task %s", run.ID, a.Task.ID)
+			return conflict(RuleRunID, "run %s already exists in task %s", run.ID, a.task.ID)
 		}
 	}
-	switch a.Task.State {
+	switch a.task.State {
 	case TaskQueued, TaskRunning, TaskReadyForReview: // the last is rework
 	default:
-		return conflict(RuleTaskState, "task %s is %s and starts no run", a.Task.ID, a.Task.State)
+		return conflict(RuleTaskState, "task %s is %s and starts no run", a.task.ID, a.task.State)
 	}
-	if live := a.LiveRun(); live != nil {
-		return conflict(RuleOneLiveRun, "task %s already has a live run %s (%s)", a.Task.ID, live.ID, live.State)
+	if live := a.liveRun(); live != nil {
+		return conflict(RuleOneLiveRun, "task %s already has a live run %s (%s)", a.task.ID, live.ID, live.State)
 	}
 	env, err := a.env(run.EnvID)
 	if err != nil {
@@ -154,14 +167,14 @@ func (a *TaskAggregate) StartRun(run *Run) error {
 	if env.State != EnvRunning {
 		return conflict(RuleEnvRunning, "run %s needs a running environment, but %s is %s", run.ID, env.ID, env.State)
 	}
-	if a.Task.State != TaskRunning {
+	if a.task.State != TaskRunning {
 		if err := a.moveTask(TaskRunning); err != nil {
 			return err
 		}
 	}
-	run.TaskID = a.Task.ID
+	run.TaskID = a.task.ID
 	run.State = RunStarting
-	a.Runs = append(a.Runs, run)
+	a.runs = append(a.runs, run)
 	a.record(EventRunStarted, RunStarted{RunID: run.ID, EnvID: run.EnvID})
 	return nil
 }
@@ -198,7 +211,7 @@ func (a *TaskAggregate) Resume(runID ID) error {
 	if err != nil {
 		return err
 	}
-	for _, d := range a.Decisions {
+	for _, d := range a.decisions {
 		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" {
 			return conflict(RuleDecisionOpen, "run %s cannot resume: decision %s (%s) is still open", run.ID, d.ID, d.Cause)
 		}
@@ -213,7 +226,7 @@ func (a *TaskAggregate) checkResume(runID ID) (*Run, error) {
 		return nil, err
 	}
 	if !run.State.CanTransition(RunStarting) {
-		return nil, run.Transition(RunStarting) // reports the illegal transition
+		return nil, run.transition(RunStarting) // reports the illegal transition
 	}
 	env, err := a.env(run.EnvID)
 	if err != nil {
@@ -241,7 +254,7 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 	if err != nil {
 		return err
 	}
-	for _, r := range a.Runs {
+	for _, r := range a.runs {
 		if r.EnvID == envID && (r.State == RunStarting || r.State == RunRunning) {
 			return conflict(RuleEnvInUse, "environment %s cannot be stopped: run %s is %s", envID, r.ID, r.State)
 		}
@@ -253,34 +266,41 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 // on a branch, before it is pushed (design §4.5), and the run that produced
 // it. It becomes the current revision. A SHA is pinned once, and only the
 // task's latest run may pin one.
-func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (*ReviewCandidate, error) {
+func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (ReviewCandidate, error) {
 	if _, err := a.run(runID); err != nil {
-		return nil, err
+		return ReviewCandidate{}, err
 	}
-	if last := a.Runs[len(a.Runs)-1]; last.ID != runID {
-		return nil, conflict(RuleCandidateRun, "run %s cannot pin a revision: it is not the latest run (%s is)", runID, last.ID)
+	if last := a.runs[len(a.runs)-1]; last.ID != runID {
+		return ReviewCandidate{}, conflict(RuleCandidateRun, "run %s cannot pin a revision: it is not the latest run (%s is)", runID, last.ID)
 	}
 	if sha == "" {
-		return nil, conflict(RulePinnedSHA, "a revision needs a commit SHA")
+		return ReviewCandidate{}, conflict(RulePinnedSHA, "a revision needs a commit SHA")
 	}
-	for _, c := range a.Candidates {
+	for _, c := range a.candidates {
 		if c.SHA == sha {
-			return nil, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
+			return ReviewCandidate{}, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
 		}
 	}
-	c := &ReviewCandidate{TaskID: a.Task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending}
-	a.Candidates = append(a.Candidates, c)
+	c := &ReviewCandidate{TaskID: a.task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending}
+	a.candidates = append(a.candidates, c)
 	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha})
-	return c, nil
+	return *c, nil
 }
 
-// CurrentCandidate returns the current revision, the most recently pinned one,
-// or nil.
-func (a *TaskAggregate) CurrentCandidate() *ReviewCandidate {
-	if len(a.Candidates) == 0 {
+func (a *TaskAggregate) currentCandidate() *ReviewCandidate {
+	if len(a.candidates) == 0 {
 		return nil
 	}
-	return a.Candidates[len(a.Candidates)-1]
+	return a.candidates[len(a.candidates)-1]
+}
+
+// CurrentCandidate returns a copy of the current revision, the most recently
+// pinned one.
+func (a *TaskAggregate) CurrentCandidate() (ReviewCandidate, bool) {
+	if c := a.currentCandidate(); c != nil {
+		return *c, true
+	}
+	return ReviewCandidate{}, false
 }
 
 // RecordCI stores a pipeline result on the candidate of its own commit. A
@@ -291,7 +311,7 @@ func (a *TaskAggregate) RecordCI(sha string, state CIState) error {
 	default:
 		return fmt.Errorf("unknown CI state %q", state)
 	}
-	for _, c := range a.Candidates {
+	for _, c := range a.candidates {
 		if c.SHA == sha {
 			c.CI = state
 			a.record(EventCIRecorded, CIRecorded{SHA: sha, State: state})
@@ -301,10 +321,32 @@ func (a *TaskAggregate) RecordCI(sha string, state CIState) error {
 	return &NotFoundError{Kind: "commit", ID: sha}
 }
 
+// RecordPR stores the URL of the pull request opened for a prepared revision
+// on the candidate of its commit. A candidate has one pull request.
+func (a *TaskAggregate) RecordPR(sha, url string) error {
+	if url == "" {
+		return conflict(RulePinnedSHA, "a pull request needs a URL")
+	}
+	for _, c := range a.candidates {
+		if c.SHA == sha {
+			if c.PRURL != "" && c.PRURL != url {
+				return conflict(RulePinnedSHA, "commit %s already has the pull request %s", sha, c.PRURL)
+			}
+			if c.PRURL == url {
+				return nil
+			}
+			c.PRURL = url
+			a.record(EventPRRecorded, PRRecorded{SHA: sha, URL: url})
+			return nil
+		}
+	}
+	return &NotFoundError{Kind: "commit", ID: sha}
+}
+
 // CIPassed reports whether the pipeline passed for the current revision. A pass
 // on an earlier commit does not count.
 func (a *TaskAggregate) CIPassed() bool {
-	c := a.CurrentCandidate()
+	c := a.currentCandidate()
 	return c != nil && c.CI == CIPassed
 }
 
@@ -313,22 +355,22 @@ func (a *TaskAggregate) CIPassed() bool {
 // pinned by that run, so after rework the old revision never counts. Where requireCI is set, the current revision must also have passed
 // CI: a pass on an earlier SHA is not enough.
 func (a *TaskAggregate) MarkReady(requireCI bool) error {
-	if len(a.Runs) == 0 {
-		return conflict(RuleStoppedRun, "task %s has no run", a.Task.ID)
+	if len(a.runs) == 0 {
+		return conflict(RuleStoppedRun, "task %s has no run", a.task.ID)
 	}
-	if last := a.Runs[len(a.Runs)-1]; last.State != RunStopped {
-		return conflict(RuleStoppedRun, "task %s is not ready: its latest run %s is %s, not stopped", a.Task.ID, last.ID, last.State)
+	if last := a.runs[len(a.runs)-1]; last.State != RunStopped {
+		return conflict(RuleStoppedRun, "task %s is not ready: its latest run %s is %s, not stopped", a.task.ID, last.ID, last.State)
 	}
-	cur := a.CurrentCandidate()
+	cur := a.currentCandidate()
 	if cur == nil || cur.SHA == "" {
-		return conflict(RulePinnedSHA, "task %s is not ready: no commit is pinned", a.Task.ID)
+		return conflict(RulePinnedSHA, "task %s is not ready: no commit is pinned", a.task.ID)
 	}
-	if last := a.Runs[len(a.Runs)-1]; cur.RunID != last.ID {
-		return conflict(RuleCandidateRun, "task %s is not ready: the current commit %s came from run %s, not the latest run %s", a.Task.ID, cur.SHA, cur.RunID, last.ID)
+	if last := a.runs[len(a.runs)-1]; cur.RunID != last.ID {
+		return conflict(RuleCandidateRun, "task %s is not ready: the current commit %s came from run %s, not the latest run %s", a.task.ID, cur.SHA, cur.RunID, last.ID)
 	}
 	if requireCI && cur.CI != CIPassed {
-		msg := fmt.Sprintf("task %s is not ready: CI is %s for the current commit %s", a.Task.ID, orPending(cur.CI), cur.SHA)
-		for _, c := range a.Candidates[:len(a.Candidates)-1] {
+		msg := fmt.Sprintf("task %s is not ready: CI is %s for the current commit %s", a.task.ID, orPending(cur.CI), cur.SHA)
+		for _, c := range a.candidates[:len(a.candidates)-1] {
 			if c.CI == CIPassed {
 				msg += fmt.Sprintf(" (it passed for the earlier commit %s, which does not count)", c.SHA)
 				break

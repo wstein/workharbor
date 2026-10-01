@@ -11,7 +11,7 @@ import (
 
 func newApproval(t *testing.T) *Decision {
 	t.Helper()
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Subject: "Bash", Input: "rm -rf build", Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Subject: "Bash", Input: "rm -rf build", Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func newApproval(t *testing.T) *Decision {
 
 func newPushReview(t *testing.T, sha string) *Decision {
 	t.Helper()
-	d, err := Raise(NewDecision{ID: "d2", TaskID: "t1", Kind: DecisionReview, Blocking: true, SHA: sha, Now: t0})
+	d, err := raise(NewDecision{ID: "d2", TaskID: "t1", Kind: DecisionReview, Blocking: true, SHA: sha, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func allow(at time.Time, sha string) Response {
 
 func TestAllowedApprovalAllows(t *testing.T) {
 	d := newApproval(t)
-	if err := d.Respond(Response{By: "werner", Option: AnswerAllow, Reason: "fine", At: t0.Add(time.Minute)}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: AnswerAllow, Reason: "fine", At: t0.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	if d.Status != DecisionAnswered || d.Answer != AnswerAllow || d.AnsweredBy != "werner" || d.Reason != "fine" {
@@ -55,19 +55,19 @@ func TestTimeoutDenies(t *testing.T) {
 	if d.Allows("") {
 		t.Fatal("an open approval must not allow")
 	}
-	if d.Expire(deadline.Add(-time.Second)) {
+	if d.expire(deadline.Add(-time.Second)) {
 		t.Fatal("must not expire before the deadline")
 	}
-	if !d.Expire(deadline) {
+	if !d.expire(deadline) {
 		t.Fatal("must expire at the deadline")
 	}
-	if d.Expire(deadline.Add(time.Hour)) {
+	if d.expire(deadline.Add(time.Hour)) {
 		t.Error("expiring twice must change nothing")
 	}
 	if d.Status != DecisionExpired || d.Allows("") {
 		t.Errorf("an expired approval must deny: status %s, allows %v", d.Status, d.Allows(""))
 	}
-	if err := d.Respond(allow(deadline.Add(time.Second), "")); !errors.Is(err, ErrDecisionClosed) {
+	if err := d.respond(allow(deadline.Add(time.Second), "")); !errors.Is(err, ErrDecisionClosed) {
 		t.Errorf("answering an expired decision: %v, want ErrDecisionClosed", err)
 	}
 }
@@ -77,7 +77,7 @@ func TestLateAnswerNeverCounts(t *testing.T) {
 	// store, but the answer arrives after the deadline.
 	for _, late := range []time.Duration{0, time.Second, time.Hour} {
 		d := newApproval(t)
-		err := d.Respond(allow(d.Deadline.Add(late), ""))
+		err := d.respond(allow(d.Deadline.Add(late), ""))
 		if !errors.Is(err, ErrDecisionExpired) {
 			t.Fatalf("late by %v: error = %v, want ErrDecisionExpired", late, err)
 		}
@@ -91,18 +91,18 @@ func TestLateAnswerNeverCounts(t *testing.T) {
 // is raised again on resume.
 func TestRestartSupersedesAndTheAskIsRaisedAgain(t *testing.T) {
 	d := newApproval(t)
-	if err := d.Supersede(); err != nil {
+	if err := d.supersede(); err != nil {
 		t.Fatal(err)
 	}
 	if d.Status != DecisionSuperseded || d.Allows("") {
 		t.Fatalf("a superseded approval must deny: %s", d.Status)
 	}
-	if err := d.Respond(allow(t0.Add(time.Minute), "")); !errors.Is(err, ErrDecisionClosed) {
+	if err := d.respond(allow(t0.Add(time.Minute), "")); !errors.Is(err, ErrDecisionClosed) {
 		t.Errorf("answering a superseded decision: %v, want ErrDecisionClosed", err)
 	}
 
 	resumed := t0.Add(2 * time.Minute)
-	n, err := d.Reraise("d1b", resumed)
+	n, err := d.reraise("d1b", resumed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,30 +121,30 @@ func TestRestartSupersedesAndTheAskIsRaisedAgain(t *testing.T) {
 	if n.Allows("") {
 		t.Error("a new open approval must not allow")
 	}
-	if _, err := d.Reraise("d1c", resumed); !errors.Is(err, ErrAlreadyRaised) {
+	if _, err := d.reraise("d1c", resumed); !errors.Is(err, ErrAlreadyRaised) {
 		t.Errorf("raising twice: %v, want ErrAlreadyRaised", err)
 	}
 }
 
 func TestOnlyASupersededDecisionIsRaisedAgain(t *testing.T) {
 	d := newApproval(t)
-	if _, err := d.Reraise("x", t0); !errors.Is(err, ErrNotSuperseded) {
+	if _, err := d.reraise("x", t0); !errors.Is(err, ErrNotSuperseded) {
 		t.Errorf("open decision: %v, want ErrNotSuperseded", err)
 	}
-	if err := d.Respond(allow(t0.Add(time.Second), "")); err != nil {
+	if err := d.respond(allow(t0.Add(time.Second), "")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Reraise("x", t0); !errors.Is(err, ErrNotSuperseded) {
+	if _, err := d.reraise("x", t0); !errors.Is(err, ErrNotSuperseded) {
 		t.Errorf("answered decision: %v, want ErrNotSuperseded", err)
 	}
-	if err := d.Supersede(); !errors.Is(err, ErrDecisionClosed) {
+	if err := d.supersede(); !errors.Is(err, ErrDecisionClosed) {
 		t.Errorf("superseding an answered decision: %v, want ErrDecisionClosed", err)
 	}
 }
 
 func TestReviewDecisionSurvivesARestart(t *testing.T) {
 	d := newPushReview(t, "8e2f1c4")
-	if err := d.Supersede(); !errors.Is(err, ErrNotRunBound) {
+	if err := d.supersede(); !errors.Is(err, ErrNotRunBound) {
 		t.Fatalf("Supersede = %v, want ErrNotRunBound", err)
 	}
 	if d.Status != DecisionOpen {
@@ -153,14 +153,14 @@ func TestReviewDecisionSurvivesARestart(t *testing.T) {
 }
 
 func TestQuestionWithoutDeadlineStaysOpen(t *testing.T) {
-	d, err := Raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Options: []string{"Allow both", "Allow one"}, Now: t0})
+	d, err := raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Options: []string{"Allow both", "Allow one"}, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Expire(t0.Add(1000 * time.Hour)) {
+	if d.expire(t0.Add(1000 * time.Hour)) {
 		t.Error("a decision without a deadline never expires")
 	}
-	if err := d.Respond(Response{By: "werner", Option: "Allow one", At: t0.Add(48 * time.Hour)}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: "Allow one", At: t0.Add(48 * time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if d.Allows("") {
@@ -172,7 +172,7 @@ func TestQuestionWithoutDeadlineStaysOpen(t *testing.T) {
 // SHA is denied.
 func TestApprovalForADifferentSHAIsDenied(t *testing.T) {
 	d := newPushReview(t, "aaa111")
-	err := d.Respond(allow(t0.Add(time.Minute), "bbb222"))
+	err := d.respond(allow(t0.Add(time.Minute), "bbb222"))
 	if !errors.Is(err, ErrSHAMismatch) {
 		t.Fatalf("Respond = %v, want ErrSHAMismatch", err)
 	}
@@ -188,7 +188,7 @@ func TestApprovalForADifferentSHAIsDenied(t *testing.T) {
 
 func TestApprovalCoversOnlyItsOwnCommit(t *testing.T) {
 	d := newPushReview(t, "aaa111")
-	if err := d.Respond(allow(t0.Add(time.Minute), "aaa111")); err != nil {
+	if err := d.respond(allow(t0.Add(time.Minute), "aaa111")); err != nil {
 		t.Fatal(err)
 	}
 	if !d.Allows("aaa111") {
@@ -205,7 +205,7 @@ func TestApprovalCoversOnlyItsOwnCommit(t *testing.T) {
 
 func TestDenialDoesNotNeedTheRightSHA(t *testing.T) {
 	d := newPushReview(t, "aaa111")
-	if err := d.Respond(Response{By: "werner", Option: AnswerDeny, Reason: "squash first", SHA: "other", At: t0.Add(time.Minute)}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: AnswerDeny, Reason: "squash first", SHA: "other", At: t0.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	if d.Answer != AnswerDeny || d.Allows("aaa111") {
@@ -225,7 +225,7 @@ func TestOnlyAnAnsweredAllowEverAllows(t *testing.T) {
 		}
 	}
 	d := newApproval(t)
-	if err := d.Respond(Response{By: "werner", Option: AnswerDeny, At: t0.Add(time.Second)}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: AnswerDeny, At: t0.Add(time.Second)}); err != nil {
 		t.Fatal(err)
 	}
 	if d.Allows("") {
@@ -235,19 +235,19 @@ func TestOnlyAnAnsweredAllowEverAllows(t *testing.T) {
 
 func TestRespondValidation(t *testing.T) {
 	d := newApproval(t)
-	if err := d.Respond(Response{Option: AnswerAllow, At: t0.Add(time.Second)}); !errors.Is(err, ErrDecisionActor) {
+	if err := d.respond(Response{Option: AnswerAllow, At: t0.Add(time.Second)}); !errors.Is(err, ErrDecisionActor) {
 		t.Errorf("no actor: %v, want ErrDecisionActor", err)
 	}
-	if err := d.Respond(Response{By: "werner", Option: "maybe", At: t0.Add(time.Second)}); !errors.Is(err, ErrDecisionOption) {
+	if err := d.respond(Response{By: "werner", Option: "maybe", At: t0.Add(time.Second)}); !errors.Is(err, ErrDecisionOption) {
 		t.Errorf("unknown option: %v, want ErrDecisionOption", err)
 	}
 	if d.Status != DecisionOpen {
 		t.Fatalf("a refused answer must leave the decision open, got %s", d.Status)
 	}
-	if err := d.Respond(allow(t0.Add(time.Second), "")); err != nil {
+	if err := d.respond(allow(t0.Add(time.Second), "")); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Respond(Response{By: "werner", Option: AnswerDeny, At: t0.Add(2 * time.Second)}); !errors.Is(err, ErrDecisionClosed) {
+	if err := d.respond(Response{By: "werner", Option: AnswerDeny, At: t0.Add(2 * time.Second)}); !errors.Is(err, ErrDecisionClosed) {
 		t.Errorf("answering twice: %v, want ErrDecisionClosed", err)
 	}
 	if d.Answer != AnswerAllow {
@@ -259,7 +259,7 @@ func TestRespondValidation(t *testing.T) {
 // allow counted and AnsweredAt was year 1.
 func TestRespondNeedsTheTimeOfTheAnswer(t *testing.T) {
 	d := newApproval(t)
-	err := d.Respond(Response{By: "werner", Option: AnswerAllow})
+	err := d.respond(Response{By: "werner", Option: AnswerAllow})
 	if !errors.Is(err, ErrDecisionTime) {
 		t.Fatalf("Respond without a time = %v, want ErrDecisionTime", err)
 	}
@@ -268,7 +268,7 @@ func TestRespondNeedsTheTimeOfTheAnswer(t *testing.T) {
 	}
 
 	at := t0.Add(time.Minute)
-	if err := d.Respond(Response{By: "werner", Option: AnswerAllow, At: at}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: AnswerAllow, At: at}); err != nil {
 		t.Fatal(err)
 	}
 	if d.AnsweredAt == nil || !d.AnsweredAt.Equal(at) || d.AnsweredAt.Year() == 1 {
@@ -281,7 +281,7 @@ func TestZeroTimeNeverReachesTheDeadlineCheck(t *testing.T) {
 	// time is refused rather than counted.
 	d := newApproval(t)
 	d.Deadline = t0.Add(-time.Hour)
-	if err := d.Respond(Response{By: "werner", Option: AnswerAllow}); !errors.Is(err, ErrDecisionTime) {
+	if err := d.respond(Response{By: "werner", Option: AnswerAllow}); !errors.Is(err, ErrDecisionTime) {
 		t.Fatalf("Respond = %v, want ErrDecisionTime", err)
 	}
 	if d.Allows("") {
@@ -293,20 +293,20 @@ func TestZeroTimeNeverReachesTheDeadlineCheck(t *testing.T) {
 // CreatedAt, which a store may not keep.
 func TestReraiseKeepsTruncationAndTheStoredTimeout(t *testing.T) {
 	long := strings.Repeat("x", MaxDecisionInput+10)
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: long, Timeout: 2 * time.Minute, Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: long, Timeout: 2 * time.Minute, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !d.InputTruncated {
 		t.Fatal("setup: the input should have been capped")
 	}
-	if err := d.Supersede(); err != nil {
+	if err := d.supersede(); err != nil {
 		t.Fatal(err)
 	}
 	d.CreatedAt = time.Time{} // a store that does not keep it
 
 	resumed := t0.Add(time.Hour)
-	n, err := d.Reraise("d1b", resumed)
+	n, err := d.reraise("d1b", resumed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,15 +319,15 @@ func TestReraiseKeepsTruncationAndTheStoredTimeout(t *testing.T) {
 }
 
 func TestReraiseOfAQuestionHasNoDeadline(t *testing.T) {
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Supersede(); err != nil {
+	if err := d.supersede(); err != nil {
 		t.Fatal(err)
 	}
 	d.CreatedAt = time.Time{}
-	n, err := d.Reraise("d1b", t0.Add(time.Hour))
+	n, err := d.reraise("d1b", t0.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,27 +339,27 @@ func TestReraiseOfAQuestionHasNoDeadline(t *testing.T) {
 // #49: state errors are conflicts (exit code 5) and still match their sentinels.
 func TestDecisionStateErrorsAreConflicts(t *testing.T) {
 	answered := newApproval(t)
-	if err := answered.Respond(allow(t0.Add(time.Second), "")); err != nil {
+	if err := answered.respond(allow(t0.Add(time.Second), "")); err != nil {
 		t.Fatal(err)
 	}
 	late := newApproval(t)
 	mismatch := newPushReview(t, "aaa111")
 	open := newApproval(t)
 	raised := newApproval(t)
-	_ = raised.Supersede()
-	_, _ = raised.Reraise("d1b", t0.Add(time.Minute))
+	_ = raised.supersede()
+	_, _ = raised.reraise("d1b", t0.Add(time.Minute))
 
 	tests := []struct {
 		name string
 		err  error
 		want error
 	}{
-		{"answering a closed decision", answered.Respond(allow(t0.Add(2*time.Second), "")), ErrDecisionClosed},
-		{"answering after the deadline", late.Respond(allow(late.Deadline, "")), ErrDecisionExpired},
-		{"allow for another commit", mismatch.Respond(allow(t0.Add(time.Second), "bbb222")), ErrSHAMismatch},
-		{"superseding a review decision", newPushReview(t, "aaa111").Supersede(), ErrNotRunBound},
-		{"raising an open decision again", func() error { _, err := open.Reraise("x", t0); return err }(), ErrNotSuperseded},
-		{"raising twice", func() error { _, err := raised.Reraise("y", t0); return err }(), ErrAlreadyRaised},
+		{"answering a closed decision", answered.respond(allow(t0.Add(2*time.Second), "")), ErrDecisionClosed},
+		{"answering after the deadline", late.respond(allow(late.Deadline, "")), ErrDecisionExpired},
+		{"allow for another commit", mismatch.respond(allow(t0.Add(time.Second), "bbb222")), ErrSHAMismatch},
+		{"superseding a review decision", newPushReview(t, "aaa111").supersede(), ErrNotRunBound},
+		{"raising an open decision again", func() error { _, err := open.reraise("x", t0); return err }(), ErrNotSuperseded},
+		{"raising twice", func() error { _, err := raised.reraise("y", t0); return err }(), ErrAlreadyRaised},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -379,7 +379,7 @@ func TestApprovalWithoutDeadlineFailsClosed(t *testing.T) {
 	t.Run("a late allow is refused and the approval expires", func(t *testing.T) {
 		d := newApproval(t)
 		d.Deadline = time.Time{}
-		err := d.Respond(allow(t0.Add(24*time.Hour), ""))
+		err := d.respond(allow(t0.Add(24*time.Hour), ""))
 		if !errors.Is(err, ErrDecisionExpired) {
 			t.Fatalf("Respond = %v, want ErrDecisionExpired", err)
 		}
@@ -390,13 +390,13 @@ func TestApprovalWithoutDeadlineFailsClosed(t *testing.T) {
 	t.Run("Expire expires it", func(t *testing.T) {
 		d := newApproval(t)
 		d.Deadline = time.Time{}
-		if !d.Expire(t0) || d.Status != DecisionExpired {
+		if !d.expire(t0) || d.Status != DecisionExpired {
 			t.Errorf("Expire = false or status = %s", d.Status)
 		}
 	})
 	t.Run("an answered allow without a deadline does not allow", func(t *testing.T) {
 		d := newApproval(t)
-		if err := d.Respond(allow(t0.Add(time.Second), "")); err != nil {
+		if err := d.respond(allow(t0.Add(time.Second), "")); err != nil {
 			t.Fatal(err)
 		}
 		d.Deadline = time.Time{} // lost after the answer was stored
@@ -405,17 +405,17 @@ func TestApprovalWithoutDeadlineFailsClosed(t *testing.T) {
 		}
 	})
 	t.Run("a question still waits without a deadline", func(t *testing.T) {
-		q, err := Raise(NewDecision{ID: "q1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
+		q, err := raise(NewDecision{ID: "q1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := q.Respond(Response{By: "werner", Option: "yes", At: t0.Add(24 * time.Hour)}); err != nil {
+		if err := q.respond(Response{By: "werner", Option: "yes", At: t0.Add(24 * time.Hour)}); err != nil {
 			t.Errorf("Respond to a question without a deadline = %v", err)
 		}
 	})
 	t.Run("a review decision is not an approval", func(t *testing.T) {
 		d := newPushReview(t, "aaa111")
-		if err := d.Respond(allow(t0.Add(24*time.Hour), "aaa111")); err != nil {
+		if err := d.respond(allow(t0.Add(24*time.Hour), "aaa111")); err != nil {
 			t.Errorf("Respond to a review = %v", err)
 		}
 		if !d.Allows("aaa111") {
@@ -427,11 +427,11 @@ func TestApprovalWithoutDeadlineFailsClosed(t *testing.T) {
 // #57: validation errors are usage errors (exit code 2), and still match
 // their sentinels.
 func TestDecisionValidationErrorsAreUsage(t *testing.T) {
-	respond := func(r Response) error { return newApproval(t).Respond(r) }
+	respond := func(r Response) error { return newApproval(t).respond(r) }
 	raise := func(mod func(*NewDecision)) error {
 		spec := NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0}
 		mod(&spec)
-		_, err := Raise(spec)
+		_, err := raise(spec)
 		return err
 	}
 	tests := []struct {

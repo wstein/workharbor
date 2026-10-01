@@ -48,7 +48,7 @@ func TestRaise(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			d, err := Raise(tc.spec)
+			d, err := raise(tc.spec)
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("Raise error = %v, want %v", err, tc.err)
 			}
@@ -60,7 +60,7 @@ func TestRaise(t *testing.T) {
 }
 
 func TestApprovalGetsDeadlineAndOptions(t *testing.T) {
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestApprovalGetsDeadlineAndOptions(t *testing.T) {
 		t.Errorf("options = %v, want allow and deny", d.Options)
 	}
 
-	custom, err := Raise(NewDecision{ID: "d2", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: time.Minute, Now: t0})
+	custom, err := raise(NewDecision{ID: "d2", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: time.Minute, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestApprovalGetsDeadlineAndOptions(t *testing.T) {
 		t.Errorf("deadline = %v, want %v", custom.Deadline, want)
 	}
 
-	q, err := Raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Now: t0})
+	q, err := raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestApprovalGetsDeadlineAndOptions(t *testing.T) {
 
 func TestInputIsCapped(t *testing.T) {
 	long := strings.Repeat("é", MaxDecisionInput+500) // multi-byte characters
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: long, Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: long, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestInputIsCapped(t *testing.T) {
 	}
 
 	exact := strings.Repeat("a", MaxDecisionInput)
-	d, _ = Raise(NewDecision{ID: "d2", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: exact, Now: t0})
+	d, _ = raise(NewDecision{ID: "d2", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: exact, Now: t0})
 	if d.Input != exact || d.InputTruncated {
 		t.Error("an input of exactly the cap must be kept whole")
 	}
@@ -123,7 +123,7 @@ func TestRaisesGuidance(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			d, err := Raise(tc.spec)
+			d, err := raise(tc.spec)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,11 +138,11 @@ func TestRaisesGuidance(t *testing.T) {
 func TestRaiseRejectsNegativeTimeoutAndZeroNow(t *testing.T) {
 	for _, kind := range []DecisionKind{DecisionApproval, DecisionQuestion} {
 		spec := NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: kind, Timeout: -time.Hour, Now: t0}
-		if _, err := Raise(spec); !errors.Is(err, ErrDecisionTimeout) {
+		if _, err := raise(spec); !errors.Is(err, ErrDecisionTimeout) {
 			t.Errorf("%s with a negative timeout: error = %v, want ErrDecisionTimeout", kind, err)
 		}
 		spec = NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: kind, Now: time.Time{}}
-		if _, err := Raise(spec); !errors.Is(err, ErrDecisionTime) {
+		if _, err := raise(spec); !errors.Is(err, ErrDecisionTime) {
 			t.Errorf("%s with a zero Now: error = %v, want ErrDecisionTime", kind, err)
 		}
 	}
@@ -150,7 +150,7 @@ func TestRaiseRejectsNegativeTimeoutAndZeroNow(t *testing.T) {
 
 func TestEveryApprovalHasADeadline(t *testing.T) {
 	for _, timeout := range []time.Duration{0, time.Nanosecond, time.Minute, 24 * time.Hour} {
-		d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
+		d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
 		if err != nil {
 			t.Fatalf("timeout %v: %v", timeout, err)
 		}
@@ -163,11 +163,11 @@ func TestEveryApprovalHasADeadline(t *testing.T) {
 // A year-late allow must not count, whatever timeout the approval was raised with.
 func TestAYearLateAllowNeverCounts(t *testing.T) {
 	for _, timeout := range []time.Duration{0, time.Minute} {
-		d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
+		d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Timeout: timeout, Now: t0})
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = d.Respond(Response{By: "werner", Option: AnswerAllow, At: t0.AddDate(1, 0, 0)})
+		err = d.respond(Response{By: "werner", Option: AnswerAllow, At: t0.AddDate(1, 0, 0)})
 		if !errors.Is(err, ErrDecisionExpired) || d.Allows("") {
 			t.Errorf("timeout %v: late allow gave %v, allows %v", timeout, err, d.Allows(""))
 		}
@@ -204,22 +204,22 @@ func TestResolutionUsesTheTable(t *testing.T) {
 	decisionTransitions = map[DecisionStatus][]DecisionStatus{}
 	t.Cleanup(func() { decisionTransitions = saved })
 
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = d.Respond(Response{By: "werner", Option: AnswerAllow, At: t0.Add(time.Second)})
+	_ = d.respond(Response{By: "werner", Option: AnswerAllow, At: t0.Add(time.Second)})
 	if d.Status != DecisionOpen || d.Allows("") {
 		t.Errorf("Respond changed the status to %s without the table", d.Status)
 	}
-	_ = d.Respond(Response{By: "werner", Option: AnswerAllow, At: d.Deadline})
+	_ = d.respond(Response{By: "werner", Option: AnswerAllow, At: d.Deadline})
 	if d.Status != DecisionOpen {
 		t.Errorf("a late Respond changed the status to %s without the table", d.Status)
 	}
-	if d.Expire(d.Deadline.Add(time.Hour)) || d.Status != DecisionOpen {
+	if d.expire(d.Deadline.Add(time.Hour)) || d.Status != DecisionOpen {
 		t.Errorf("Expire changed the status to %s without the table", d.Status)
 	}
-	_ = d.Supersede()
+	_ = d.supersede()
 	if d.Status != DecisionOpen {
 		t.Errorf("Supersede changed the status to %s without the table", d.Status)
 	}

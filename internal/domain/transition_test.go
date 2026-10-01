@@ -53,16 +53,16 @@ func TestTerminalTaskStates(t *testing.T) {
 
 func TestTaskTransition(t *testing.T) {
 	task := &Task{ID: "t1", State: TaskQueued}
-	if err := task.Transition(TaskRunning); err != nil {
+	if err := task.transition(TaskRunning); err != nil {
 		t.Fatal(err)
 	}
-	if err := task.Transition(TaskCompleted); err == nil {
+	if err := task.transition(TaskCompleted); err == nil {
 		t.Fatal("running -> completed must be illegal")
 	}
 	if task.State != TaskRunning {
 		t.Fatalf("state after illegal transition = %s, want running", task.State)
 	}
-	if err := task.Transition(TaskReadyForReview); err != nil {
+	if err := task.transition(TaskReadyForReview); err != nil {
 		t.Fatal(err)
 	}
 }

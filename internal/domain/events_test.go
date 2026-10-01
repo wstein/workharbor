@@ -97,7 +97,7 @@ func TestRefusedChangesRecordNothing(t *testing.T) {
 		"ready while the run is running":         a.MarkReady(false),
 		"pin for an unknown run":                 func() error { _, err := a.PinRevision("nope", "b", "x"); return err }(),
 		"CI for an unknown commit":               a.RecordCI("zzz", CIPassed),
-		"a run with a duplicate ID":              a.StartRun(&Run{ID: "r1", EnvID: "e1"}),
+		"a run with a duplicate ID":              a.StartRun(Run{ID: "r1", EnvID: "e1"}),
 	}
 	for name, err := range refused {
 		if err == nil {
@@ -110,7 +110,7 @@ func TestRefusedChangesRecordNothing(t *testing.T) {
 }
 
 func TestDecisionRecordsItsEvents(t *testing.T) {
-	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Subject: "Bash", Input: strings.Repeat("x", MaxDecisionInput+10), Now: t0})
+	d, err := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Subject: "Bash", Input: strings.Repeat("x", MaxDecisionInput+10), Now: t0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestDecisionRecordsItsEvents(t *testing.T) {
 	}
 
 	at := t0.Add(time.Minute)
-	if err := d.Respond(Response{By: "werner", Option: AnswerAllow, Reason: "fine", At: at}); err != nil {
+	if err := d.respond(Response{By: "werner", Option: AnswerAllow, Reason: "fine", At: at}); err != nil {
 		t.Fatal(err)
 	}
 	events = d.TakeEvents()
@@ -141,37 +141,37 @@ func TestDecisionRecordsItsEvents(t *testing.T) {
 
 func TestDecisionRecordsDenialExpiryAndSupersession(t *testing.T) {
 	// An allow for another commit is recorded as the denial it became.
-	review, _ := Raise(NewDecision{ID: "d2", TaskID: "t1", Kind: DecisionReview, SHA: "aaa111", Now: t0})
+	review, _ := raise(NewDecision{ID: "d2", TaskID: "t1", Kind: DecisionReview, SHA: "aaa111", Now: t0})
 	review.TakeEvents()
-	_ = review.Respond(Response{By: "werner", Option: AnswerAllow, SHA: "bbb222", At: t0.Add(time.Second)})
+	_ = review.respond(Response{By: "werner", Option: AnswerAllow, SHA: "bbb222", At: t0.Add(time.Second)})
 	events := review.TakeEvents()
 	if len(events) != 1 || payload[AnswerRecorded](t, events[0]).Answer != AnswerDeny {
 		t.Errorf("a mismatching allow must be recorded as a denial: %+v", events)
 	}
 
 	// A late answer records the expiry, not the answer.
-	late, _ := Raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	late, _ := raise(NewDecision{ID: "d3", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
 	late.TakeEvents()
-	_ = late.Respond(Response{By: "werner", Option: AnswerAllow, At: late.Deadline})
+	_ = late.respond(Response{By: "werner", Option: AnswerAllow, At: late.Deadline})
 	if got := kinds(late.TakeEvents()); !reflect.DeepEqual(got, []EventKind{EventDecisionExpired}) {
 		t.Errorf("a late answer recorded %v, want only the expiry", got)
 	}
 
-	expired, _ := Raise(NewDecision{ID: "d4", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	expired, _ := raise(NewDecision{ID: "d4", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
 	expired.TakeEvents()
-	if !expired.Expire(expired.Deadline) {
+	if !expired.expire(expired.Deadline) {
 		t.Fatal("setup: the decision should expire")
 	}
 	if got := kinds(expired.TakeEvents()); !reflect.DeepEqual(got, []EventKind{EventDecisionExpired}) {
 		t.Errorf("Expire recorded %v", got)
 	}
 
-	sup, _ := Raise(NewDecision{ID: "d5", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	sup, _ := raise(NewDecision{ID: "d5", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
 	sup.TakeEvents()
-	if err := sup.Supersede(); err != nil {
+	if err := sup.supersede(); err != nil {
 		t.Fatal(err)
 	}
-	n, err := sup.Reraise("d5b", t0.Add(time.Hour))
+	n, err := sup.reraise("d5b", t0.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,11 +183,11 @@ func TestDecisionRecordsDenialExpiryAndSupersession(t *testing.T) {
 	}
 
 	// Refused answers record nothing.
-	d, _ := Raise(NewDecision{ID: "d6", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	d, _ := raise(NewDecision{ID: "d6", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
 	d.TakeEvents()
-	_ = d.Respond(Response{Option: AnswerAllow, At: t0.Add(time.Second)})      // no actor
-	_ = d.Respond(Response{By: "w", Option: "maybe", At: t0.Add(time.Second)}) // unknown option
-	_ = d.Respond(Response{By: "w", Option: AnswerAllow})                      // no time
+	_ = d.respond(Response{Option: AnswerAllow, At: t0.Add(time.Second)})      // no actor
+	_ = d.respond(Response{By: "w", Option: "maybe", At: t0.Add(time.Second)}) // unknown option
+	_ = d.respond(Response{By: "w", Option: AnswerAllow})                      // no time
 	if events := d.TakeEvents(); len(events) != 0 {
 		t.Errorf("refused answers recorded %v", kinds(events))
 	}
@@ -207,7 +207,7 @@ func TestPendingEventsDoNotForget(t *testing.T) {
 		t.Errorf("TakeEvents drains: %d taken, %d pending after", len(got), len(a.PendingEvents()))
 	}
 
-	d, _ := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Now: t0})
+	d, _ := raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Now: t0})
 	if first, second := len(d.PendingEvents()), len(d.PendingEvents()); first != 1 || second != 1 {
 		t.Errorf("a Decision's PendingEvents must not drain: %d then %d", first, second)
 	}

@@ -47,7 +47,7 @@ type Response struct {
 //   - an allow for a different commit than the Decision's SHA is recorded as a
 //     denial and reported as ErrSHAMismatch;
 //   - a Decision that is no longer open cannot be answered.
-func (d *Decision) Respond(r Response) error {
+func (d *Decision) respond(r Response) error {
 	if d.Status != DecisionOpen {
 		return ErrDecisionClosed
 	}
@@ -100,7 +100,7 @@ func (d *Decision) pastDeadline(at time.Time) bool {
 
 // Expire expires an open Decision whose deadline has passed and reports
 // whether it changed anything. An expired Decision denies.
-func (d *Decision) Expire(now time.Time) bool {
+func (d *Decision) expire(now time.Time) bool {
 	if d.Status != DecisionOpen || !d.pastDeadline(now) {
 		return false
 	}
@@ -110,7 +110,7 @@ func (d *Decision) Expire(now time.Time) bool {
 // Supersede marks an open Decision superseded because the supervisor
 // restarted: the agent process that was waiting for it is gone. Only a
 // Decision raised by a run is superseded; a review Decision survives.
-func (d *Decision) Supersede() error {
+func (d *Decision) supersede() error {
 	if d.Status != DecisionOpen {
 		return ErrDecisionClosed
 	}
@@ -123,14 +123,14 @@ func (d *Decision) Supersede() error {
 // Reraise opens a new Decision with the same ask for the resumed run, with a
 // new ID and a fresh deadline of the same length, and links the superseded one
 // to it. Reconciliation (design §5.3) calls it when a run resumes.
-func (d *Decision) Reraise(id ID, now time.Time) (*Decision, error) {
+func (d *Decision) reraise(id ID, now time.Time) (*Decision, error) {
 	if d.Status != DecisionSuperseded {
 		return nil, ErrNotSuperseded
 	}
 	if d.SupersededBy != "" {
 		return nil, ErrAlreadyRaised
 	}
-	n, err := Raise(NewDecision{
+	n, err := raise(NewDecision{
 		ID:       id,
 		TaskID:   d.TaskID,
 		RunID:    d.RunID,

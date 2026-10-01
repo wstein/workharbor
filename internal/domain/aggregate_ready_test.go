@@ -23,10 +23,10 @@ func TestMarkReadyNeedsAStoppedRun(t *testing.T) {
 
 	for _, state := range []RunState{RunStarting, RunRunning, RunPaused, RunInterrupted, RunFailed} {
 		a := newStoppedAggregate(t)
-		a.Runs[0].State = state
+		a.runs[0].State = state
 		wantConflict(t, a.MarkReady(false), RuleStoppedRun)
-		if a.Task.State != TaskRunning {
-			t.Errorf("run %s: a refused MarkReady changed the task to %s", state, a.Task.State)
+		if a.task.State != TaskRunning {
+			t.Errorf("run %s: a refused MarkReady changed the task to %s", state, a.task.State)
 		}
 	}
 }
@@ -35,12 +35,11 @@ func TestMarkReadyUsesTheLatestRun(t *testing.T) {
 	a := newStoppedAggregate(t)
 	// A rework starts a new run; until it stops, the task is not ready, even
 	// though an earlier run did stop.
-	next := &Run{ID: "r2", EnvID: "e1"}
-	if err := a.StartRun(next); err != nil {
+	if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
 	wantConflict(t, a.MarkReady(false), RuleStoppedRun)
-	next.State = RunStopped
+	a.mustRun("r2").State = RunStopped
 	// The rework run produced no commit of its own: the old revision is not ready.
 	wantConflict(t, a.MarkReady(false), RuleCandidateRun)
 	if _, err := a.PinRevision("r2", "agent/topic", "bbb222"); err != nil {
@@ -56,10 +55,10 @@ func TestMarkReadyNeedsAPinnedSHA(t *testing.T) {
 	run.State = RunStopped
 	wantConflict(t, a.MarkReady(false), RulePinnedSHA) // nothing pinned
 
-	a.Candidates = append(a.Candidates, &ReviewCandidate{TaskID: "t1", RunID: "r1", Branch: "agent/topic"}) // no SHA
+	a.candidates = append(a.candidates, &ReviewCandidate{TaskID: "t1", RunID: "r1", Branch: "agent/topic"}) // no SHA
 	wantConflict(t, a.MarkReady(false), RulePinnedSHA)
-	if a.Task.State != TaskRunning {
-		t.Errorf("a refused MarkReady changed the task to %s", a.Task.State)
+	if a.task.State != TaskRunning {
+		t.Errorf("a refused MarkReady changed the task to %s", a.task.State)
 	}
 }
 
@@ -68,18 +67,18 @@ func TestMarkReadyMovesTheTask(t *testing.T) {
 	if err := a.MarkReady(false); err != nil {
 		t.Fatal(err)
 	}
-	if a.Task.State != TaskReadyForReview {
-		t.Errorf("task state = %s, want ready_for_review", a.Task.State)
+	if a.task.State != TaskReadyForReview {
+		t.Errorf("task state = %s, want ready_for_review", a.task.State)
 	}
 	// The task machine still has the last word.
 	queued := newStoppedAggregate(t)
-	queued.Task.State = TaskQueued
+	queued.task.State = TaskQueued
 	wantConflict(t, queued.MarkReady(false), RuleTransition)
 }
 
 func TestPinRevision(t *testing.T) {
 	a, _, _ := newRunningAggregate(t)
-	if a.CurrentCandidate() != nil {
+	if a.currentCandidate() != nil {
 		t.Fatal("no current revision before one is pinned")
 	}
 	wantConflict(t, errOnly(a.PinRevision("r1", "agent/topic", "")), RulePinnedSHA)
@@ -98,12 +97,12 @@ func TestPinRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.CurrentCandidate() != second || len(a.Candidates) != 2 {
+	if cur, _ := a.CurrentCandidate(); cur != second || len(a.candidates) != 2 {
 		t.Errorf("the most recently pinned revision must be current")
 	}
 }
 
-func errOnly(_ *ReviewCandidate, err error) error { return err }
+func errOnly[T any](_ T, err error) error { return err }
 
 func TestCIIsOnlyRequiredWhenAsked(t *testing.T) {
 	a := newStoppedAggregate(t)
@@ -112,7 +111,7 @@ func TestCIIsOnlyRequiredWhenAsked(t *testing.T) {
 	}
 	for _, state := range []CIState{"", CIPending, CIFailed} {
 		a := newStoppedAggregate(t)
-		a.CurrentCandidate().CI = state
+		a.currentCandidate().CI = state
 		wantConflict(t, a.MarkReady(true), RuleCIPassed)
 	}
 	a = newStoppedAggregate(t)
@@ -151,12 +150,12 @@ func TestPipelineOnAnEarlierSHADoesNotCount(t *testing.T) {
 	if err := a.RecordCI("aaa111", CIPassed); err != nil {
 		t.Fatal(err)
 	}
-	if got := a.CurrentCandidate().CI; got != CIPending {
+	if got := a.currentCandidate().CI; got != CIPending {
 		t.Errorf("current revision CI = %q after a result for an earlier commit, want pending", got)
 	}
 	wantConflict(t, a.MarkReady(true), RuleCIPassed)
-	if a.Task.State != TaskRunning {
-		t.Errorf("a refused MarkReady changed the task to %s", a.Task.State)
+	if a.task.State != TaskRunning {
+		t.Errorf("a refused MarkReady changed the task to %s", a.task.State)
 	}
 
 	// Only its own pipeline marks the current revision ready.
@@ -174,7 +173,7 @@ func TestRecordCI(t *testing.T) {
 	if err := a.RecordCI("aaa111", "flaky"); err == nil {
 		t.Error("an unknown CI state must be refused")
 	}
-	if got := a.CurrentCandidate().CI; got != CIPending {
+	if got := a.currentCandidate().CI; got != CIPending {
 		t.Errorf("a refused result changed CI to %q", got)
 	}
 	if err := a.RecordCI("aaa111", CIFailed); err != nil {
@@ -198,22 +197,21 @@ func TestReworkNeverReusesTheOldRevisionOrItsCI(t *testing.T) {
 	if err := a.MarkReady(true); err != nil {
 		t.Fatal(err)
 	}
-	if a.CurrentCandidate().RunID != "r1" {
-		t.Fatalf("the candidate records run %q, want r1", a.CurrentCandidate().RunID)
+	if a.currentCandidate().RunID != "r1" {
+		t.Fatalf("the candidate records run %q, want r1", a.currentCandidate().RunID)
 	}
 
 	// Rework: the push was declined, the task runs again with a new run.
-	a.Task.State = TaskRunning
-	rework := &Run{ID: "r2", EnvID: "e1"}
-	if err := a.StartRun(rework); err != nil {
+	a.task.State = TaskRunning
+	if err := a.StartRun(Run{ID: "r2", EnvID: "e1"}); err != nil {
 		t.Fatal(err)
 	}
-	rework.State = RunStopped // it changed nothing, so it pinned nothing
+	a.mustRun("r2").State = RunStopped // it changed nothing, so it pinned nothing
 
 	err := a.MarkReady(true)
 	wantConflict(t, err, RuleCandidateRun)
-	if a.Task.State != TaskRunning {
-		t.Errorf("a refused MarkReady changed the task to %s", a.Task.State)
+	if a.task.State != TaskRunning {
+		t.Errorf("a refused MarkReady changed the task to %s", a.task.State)
 	}
 	if !strings.Contains(err.Error(), "r1") || !strings.Contains(err.Error(), "r2") {
 		t.Errorf("message %q should name both runs", err)

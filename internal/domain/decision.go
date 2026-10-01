@@ -146,7 +146,7 @@ var (
 // Raise creates an open Decision. It caps the input, gives an approval a
 // deadline, gives an approval or review the allow and deny options, and checks that a review Decision
 // names its commit and that only a review Decision is raised without a run.
-func Raise(spec NewDecision) (*Decision, error) {
+func raise(spec NewDecision) (*Decision, error) {
 	if spec.ID == "" || spec.TaskID == "" {
 		return nil, ErrDecisionID
 	}

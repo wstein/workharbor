@@ -193,11 +193,11 @@ func TestRunTransition(t *testing.T) {
 	run := &Run{ID: "r1", State: RunStarting}
 	steps := []RunState{RunRunning, RunPaused, RunRunning, RunInterrupted, RunStarting, RunRunning, RunStopped}
 	for _, to := range steps {
-		if err := run.Transition(to); err != nil {
+		if err := run.transition(to); err != nil {
 			t.Fatalf("-> %s: %v", to, err)
 		}
 	}
-	if err := run.Transition(RunRunning); err == nil {
+	if err := run.transition(RunRunning); err == nil {
 		t.Fatal("a stopped run must not run again")
 	}
 	if run.State != RunStopped {
@@ -210,7 +210,7 @@ func TestRunTransition(t *testing.T) {
 func TestPausedRunRelaunches(t *testing.T) {
 	run := &Run{ID: "r2", State: RunPaused}
 	for _, to := range []RunState{RunStarting, RunFailed} {
-		if err := run.Transition(to); err != nil {
+		if err := run.transition(to); err != nil {
 			t.Fatalf("-> %s: %v", to, err)
 		}
 	}
@@ -220,7 +220,7 @@ func TestPausedRunRelaunches(t *testing.T) {
 
 	run = &Run{ID: "r3", State: RunPaused}
 	for _, to := range []RunState{RunStarting, RunRunning} {
-		if err := run.Transition(to); err != nil {
+		if err := run.transition(to); err != nil {
 			t.Fatalf("-> %s: %v", to, err)
 		}
 	}
@@ -229,11 +229,11 @@ func TestPausedRunRelaunches(t *testing.T) {
 func TestEnvTransition(t *testing.T) {
 	env := &Environment{ID: "e1", State: EnvProvisioning}
 	for _, to := range []EnvState{EnvStopped, EnvRunning, EnvStopped, EnvRunning, EnvStopped, EnvDeleted} {
-		if err := env.Transition(to); err != nil {
+		if err := env.transition(to); err != nil {
 			t.Fatalf("-> %s: %v", to, err)
 		}
 	}
-	if err := env.Transition(EnvStopped); err == nil {
+	if err := env.transition(EnvStopped); err == nil {
 		t.Fatal("a deleted environment must not come back")
 	}
 	if env.State != EnvDeleted {
@@ -241,7 +241,7 @@ func TestEnvTransition(t *testing.T) {
 	}
 
 	running := &Environment{ID: "e2", State: EnvRunning}
-	if err := running.Transition(EnvDeleted); err == nil {
+	if err := running.transition(EnvDeleted); err == nil {
 		t.Fatal("a running environment must be stopped before it is deleted")
 	}
 }

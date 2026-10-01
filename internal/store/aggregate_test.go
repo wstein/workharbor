@@ -17,8 +17,8 @@ var t0 = time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 func newAggregate(t *testing.T, id domain.ID) *domain.TaskAggregate {
 	t.Helper()
 	a := domain.NewTaskAggregate(domain.Task{ID: id, Repo: "wstein/workharbor", Issue: "#15", State: domain.TaskRunning, CreatedAt: t0})
-	a.AddEnvironment(&domain.Environment{ID: domain.ID("e-" + string(id)), Backend: "apple", State: domain.EnvRunning})
-	if err := a.StartRun(&domain.Run{ID: domain.ID("r-" + string(id)), WorkspaceID: "w1", EnvID: domain.ID("e-" + string(id))}); err != nil {
+	a.AddEnvironment(domain.Environment{ID: domain.ID("e-" + string(id)), Backend: "apple", State: domain.EnvRunning})
+	if err := a.StartRun(domain.Run{ID: domain.ID("r-" + string(id)), WorkspaceID: "w1", EnvID: domain.ID("e-" + string(id))}); err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -32,43 +32,69 @@ func eventKinds(events []domain.Event) []domain.EventKind {
 	return out
 }
 
+// running moves the aggregate's started run to running.
+func running(t *testing.T, a *domain.TaskAggregate) {
+	t.Helper()
+	if err := a.MarkRunning(a.Runs()[0].ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func approve(t *testing.T, a *domain.TaskAggregate, id domain.ID) {
+	t.Helper()
+	if _, err := a.RaiseDecision(domain.NewDecision{
+		ID: id, RunID: a.Runs()[0].ID, Kind: domain.DecisionApproval, Blocking: true,
+		Subject: "Bash", Input: "make deploy", Now: t0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSaveAndLoadATaskRoundTrips(t *testing.T) {
 	s := openTemp(t)
 	a := newAggregate(t, "t1")
-	a.Runs[0].State = domain.RunRunning
+	running(t, a)
 	if err := a.Pause("r-t1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Resume("r-t1"); err != nil {
 		t.Fatal(err)
 	}
-	a.Runs[0].State = domain.RunStopped
+	running(t, a)
 	if _, err := a.PinRevision("r-t1", "agent/topic", "aaa111"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.StopRun("r-t1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.RecordCI("aaa111", domain.CIPassed); err != nil {
 		t.Fatal(err)
 	}
-	a.Candidates[0].PRURL = "https://github.com/wstein/workharbor/pull/22"
+	if err := a.RecordPR("aaa111", "https://github.com/wstein/workharbor/pull/22"); err != nil {
+		t.Fatal(err)
+	}
 
 	events, err := s.SaveTask(bg, a)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []domain.EventKind{domain.EventRunStarted, domain.EventRunState, domain.EventRunState, domain.EventRevisionPinned, domain.EventCIRecorded}
+	want := []domain.EventKind{
+		domain.EventRunStarted, domain.EventRunState, domain.EventRunState, domain.EventRunState, domain.EventRunState,
+		domain.EventRevisionPinned, domain.EventRunState, domain.EventCIRecorded, domain.EventPRRecorded,
+	}
 	if !reflect.DeepEqual(eventKinds(events), want) {
 		t.Errorf("saved events = %v, want %v", eventKinds(events), want)
 	}
-	if a.Task.Version != 1 || len(a.PendingEvents()) != 0 {
-		t.Errorf("after the save: version %d, %d pending events; want 1 and none", a.Task.Version, len(a.PendingEvents()))
+	if a.Task().Version != 1 || len(a.PendingEvents()) != 0 {
+		t.Errorf("after the save: version %d, %d pending events; want 1 and none", a.Task().Version, len(a.PendingEvents()))
 	}
 
 	got, err := s.LoadTask(bg, "t1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.Task, a.Task) || !reflect.DeepEqual(got.Runs, a.Runs) || !reflect.DeepEqual(got.Envs, a.Envs) || !reflect.DeepEqual(got.Candidates, a.Candidates) {
-		t.Errorf("the loaded aggregate differs:\n got %+v\nwant %+v", got, a)
+	if !reflect.DeepEqual(got.Snapshot(), a.Snapshot()) {
+		t.Errorf("the loaded aggregate differs:\n got %+v\nwant %+v", got.Snapshot(), a.Snapshot())
 	}
 	log, _ := s.EventsSince(bg, "t1", 0, 0)
 	if !reflect.DeepEqual(eventKinds(log), want) || log[0].Seq != 1 {
@@ -79,7 +105,7 @@ func TestSaveAndLoadATaskRoundTrips(t *testing.T) {
 func TestSavingAgainBumpsTheVersionAndAppendsOnlyNewEvents(t *testing.T) {
 	s := openTemp(t)
 	a := newAggregate(t, "t1")
-	a.Runs[0].State = domain.RunRunning
+	running(t, a)
 	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
@@ -90,16 +116,16 @@ func TestSavingAgainBumpsTheVersionAndAppendsOnlyNewEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Task.Version != 2 || len(events) != 1 || events[0].Kind != domain.EventRunState {
-		t.Errorf("version %d, events %v; want 2 and one run.state", a.Task.Version, eventKinds(events))
+	if a.Task().Version != 2 || len(events) != 1 || events[0].Kind != domain.EventRunState {
+		t.Errorf("version %d, events %v; want 2 and one run.state", a.Task().Version, eventKinds(events))
 	}
 	// A save with nothing new changes the version but adds no event.
-	if events, err = s.SaveTask(bg, a); err != nil || len(events) != 0 || a.Task.Version != 3 {
-		t.Errorf("an unchanged save: %d events, version %d, %v", len(events), a.Task.Version, err)
+	if events, err = s.SaveTask(bg, a); err != nil || len(events) != 0 || a.Task().Version != 3 {
+		t.Errorf("an unchanged save: %d events, version %d, %v", len(events), a.Task().Version, err)
 	}
 	loaded, _ := s.LoadTask(bg, "t1")
-	if loaded.Runs[0].State != domain.RunPaused || loaded.Task.Version != 3 {
-		t.Errorf("loaded run %s at version %d", loaded.Runs[0].State, loaded.Task.Version)
+	if loaded.Runs()[0].State != domain.RunPaused || loaded.Task().Version != 3 {
+		t.Errorf("loaded run %s at version %d", loaded.Runs()[0].State, loaded.Task().Version)
 	}
 }
 
@@ -107,7 +133,7 @@ func TestSavingAgainBumpsTheVersionAndAppendsOnlyNewEvents(t *testing.T) {
 func TestCompareAndSwapOnATask(t *testing.T) {
 	s := openTemp(t)
 	a := newAggregate(t, "t1")
-	a.Runs[0].State = domain.RunRunning
+	running(t, a)
 	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +147,6 @@ func TestCompareAndSwapOnATask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second.Runs[0].State = domain.RunStopped
 	if _, err := second.PinRevision("r-t1", "agent/topic", "bbb222"); err != nil {
 		t.Fatal(err)
 	}
@@ -139,11 +164,11 @@ func TestCompareAndSwapOnATask(t *testing.T) {
 		t.Errorf("the lost save wrote %d events", len(after)-len(before))
 	}
 	stored, _ := s.LoadTask(bg, "t1")
-	if stored.Runs[0].State != domain.RunPaused || len(stored.Candidates) != 0 {
-		t.Errorf("the winner's state was overwritten: run %s, %d candidates", stored.Runs[0].State, len(stored.Candidates))
+	if stored.Runs()[0].State != domain.RunPaused || len(stored.Candidates()) != 0 {
+		t.Errorf("the winner's state was overwritten: run %s, %d candidates", stored.Runs()[0].State, len(stored.Candidates()))
 	}
-	if second.Task.Version != 1 || len(second.PendingEvents()) == 0 {
-		t.Errorf("a lost save must leave the aggregate to retry: version %d, %d pending events", second.Task.Version, len(second.PendingEvents()))
+	if second.Task().Version != 1 || len(second.PendingEvents()) == 0 {
+		t.Errorf("a lost save must leave the aggregate to retry: version %d, %d pending events", second.Task().Version, len(second.PendingEvents()))
 	}
 }
 
@@ -157,15 +182,27 @@ func TestTwoNewTasksWithTheSameIDDoNotBothWin(t *testing.T) {
 	}
 }
 
+// restoredAt returns the aggregate as if it had been loaded at a version.
+func restoredAt(t *testing.T, a *domain.TaskAggregate, version int64) *domain.TaskAggregate {
+	t.Helper()
+	snap := a.Snapshot()
+	snap.Task.Version = version
+	r, err := domain.Restore(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
 func TestUnknownTasksAreNotFound(t *testing.T) {
 	s := openTemp(t)
 	_, err := s.LoadTask(bg, "nope")
 	if !errors.Is(err, domain.ErrNotFound) || exitcode.From(err) != exitcode.NotFound {
 		t.Errorf("LoadTask = %v (exit %d), want not-found", err, exitcode.From(err))
 	}
-	a := newAggregate(t, "ghost")
-	a.Task.Version = 5 // it was loaded from somewhere that no longer has it
-	if _, err := s.SaveTask(bg, a); !errors.Is(err, domain.ErrNotFound) {
+	// It was loaded from somewhere that no longer has it.
+	ghost := restoredAt(t, newAggregate(t, "ghost"), 5)
+	if _, err := s.SaveTask(bg, ghost); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("saving a loaded task that is gone = %v, want not-found", err)
 	}
 }
@@ -191,40 +228,27 @@ func TestStateAndEventsAreOneTransaction(t *testing.T) {
 	if events, _ := s.EventsSince(bg, "", 0, 0); len(events) != 0 {
 		t.Errorf("%d events survived a rolled-back transaction", len(events))
 	}
-	if a.Task.Version != 0 || len(a.PendingEvents()) != 1 {
-		t.Errorf("a rolled-back save must leave the aggregate as it was: version %d, %d pending", a.Task.Version, len(a.PendingEvents()))
+	if a.Task().Version != 0 || len(a.PendingEvents()) != 1 {
+		t.Errorf("a rolled-back save must leave the aggregate as it was: version %d, %d pending", a.Task().Version, len(a.PendingEvents()))
 	}
-}
-
-func raiseApproval(t *testing.T, id domain.ID) *domain.Decision {
-	t.Helper()
-	d, err := domain.Raise(domain.NewDecision{
-		ID: id, TaskID: "t1", RunID: "r-t1", Kind: domain.DecisionApproval, Blocking: true,
-		Subject: "Bash", Input: "make deploy", Now: t0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
 }
 
 func TestSaveAndLoadADecisionRoundTrips(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
+	a := newAggregate(t, "t1")
+	approve(t, a, "d1")
+	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
-	d := raiseApproval(t, "d1")
-	if _, err := s.SaveDecision(bg, d); err != nil {
+	if err := a.Answer("d1", domain.Response{By: "werner", Option: domain.AnswerAllow, Reason: "fine", At: t0.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Respond(domain.Response{By: "werner", Option: domain.AnswerAllow, Reason: "fine", At: t0.Add(time.Minute)}); err != nil {
-		t.Fatal(err)
-	}
-	events, err := s.SaveDecision(bg, d)
+	events, err := s.SaveTask(bg, a)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].Kind != domain.EventDecisionAnswered || d.Version != 2 {
+	d, _ := a.Decision("d1")
+	if len(events) != 2 || events[0].Kind != domain.EventDecisionAnswered || events[1].Kind != domain.EventTaskState || d.Version != 2 {
 		t.Errorf("events %v, version %d", eventKinds(events), d.Version)
 	}
 
@@ -232,16 +256,25 @@ func TestSaveAndLoadADecisionRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, d) {
-		t.Errorf("the loaded decision differs:\n got %+v\nwant %+v", got, d)
+	if !reflect.DeepEqual(*got, d) {
+		t.Errorf("the loaded decision differs:\n got %+v\nwant %+v", *got, d)
 	}
 	if !got.Allows("") || got.AnsweredBy != "werner" || got.AnsweredAt == nil || !got.AnsweredAt.Equal(t0.Add(time.Minute)) {
 		t.Errorf("an answered allow must survive the store: %+v", got)
 	}
 	log, _ := s.EventsSince(bg, "t1", 0, 0)
-	// The task's own events come first, then the decision's: raised, answered.
-	if kinds := eventKinds(log); kinds[len(kinds)-2] != domain.EventDecisionRaised || kinds[len(kinds)-1] != domain.EventDecisionAnswered {
-		t.Errorf("log = %v", kinds)
+	kinds := eventKinds(log)
+	raised, answered := -1, -1
+	for i, k := range kinds {
+		switch k {
+		case domain.EventDecisionRaised:
+			raised = i
+		case domain.EventDecisionAnswered:
+			answered = i
+		}
+	}
+	if raised < 0 || answered < raised {
+		t.Errorf("log = %v, want raised before answered", kinds)
 	}
 }
 
@@ -249,37 +282,36 @@ func TestSaveAndLoadADecisionRoundTrips(t *testing.T) {
 func TestAnAnswerAndAnExpiryCannotBothWin(t *testing.T) {
 	for _, answerFirst := range []bool{true, false} {
 		s := openTemp(t)
-		if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
+		a := newAggregate(t, "t1")
+		approve(t, a, "d1")
+		if _, err := s.SaveTask(bg, a); err != nil {
 			t.Fatal(err)
 		}
-		d := raiseApproval(t, "d1")
-		if _, err := s.SaveDecision(bg, d); err != nil {
+		answerer, _ := s.LoadTask(bg, "t1")
+		expirer, _ := s.LoadTask(bg, "t1")
+		if err := answerer.Answer("d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Minute)}); err != nil {
 			t.Fatal(err)
 		}
-		answerer, _ := s.LoadDecision(bg, "d1")
-		expirer, _ := s.LoadDecision(bg, "d1")
-		if err := answerer.Respond(domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Minute)}); err != nil {
-			t.Fatal(err)
-		}
-		if !expirer.Expire(expirer.Deadline) {
+		d, _ := expirer.Decision("d1")
+		if got := expirer.ExpireDecisions(d.Deadline); len(got) != 1 {
 			t.Fatal("setup: the decision should expire")
 		}
 
-		order := []*domain.Decision{answerer, expirer}
+		order := []*domain.TaskAggregate{answerer, expirer}
 		wantStatus := domain.DecisionAnswered
 		if !answerFirst {
-			order = []*domain.Decision{expirer, answerer}
+			order = []*domain.TaskAggregate{expirer, answerer}
 			wantStatus = domain.DecisionExpired
 		}
-		if _, err := s.SaveDecision(bg, order[0]); err != nil {
+		if _, err := s.SaveTask(bg, order[0]); err != nil {
 			t.Fatalf("the first save: %v", err)
 		}
 		loser := order[1]
-		if _, err := s.SaveDecision(bg, loser); !errors.Is(err, ErrStale) {
+		if _, err := s.SaveTask(bg, loser); !errors.Is(err, ErrStale) {
 			t.Fatalf("answerFirst=%v: the second save = %v, want ErrStale", answerFirst, err)
 		}
-		if len(loser.PendingEvents()) == 0 || loser.Version != 1 {
-			t.Errorf("the loser must keep its change to retry: version %d, %d pending", loser.Version, len(loser.PendingEvents()))
+		if ld, _ := loser.Decision("d1"); len(loser.PendingEvents()) == 0 || ld.Version != 1 {
+			t.Errorf("the loser must keep its change to retry: version %d, %d pending", ld.Version, len(loser.PendingEvents()))
 		}
 		stored, _ := s.LoadDecision(bg, "d1")
 		if stored.Status != wantStatus {
@@ -293,20 +325,16 @@ func TestAnAnswerAndAnExpiryCannotBothWin(t *testing.T) {
 
 func TestOpenDecisionsListsOnlyOpenOnesOfTheTask(t *testing.T) {
 	s := openTemp(t)
-	for _, id := range []domain.ID{"t1", "t2"} {
-		if _, err := s.SaveTask(bg, newAggregate(t, id)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	open := raiseApproval(t, "d-open")
-	answered := raiseApproval(t, "d-answered")
-	if err := answered.Respond(domain.Response{By: "w", Option: domain.AnswerDeny, At: t0.Add(time.Second)}); err != nil {
+	a := newAggregate(t, "t1")
+	approve(t, a, "d-open")
+	approve(t, a, "d-answered")
+	if err := a.Answer("d-answered", domain.Response{By: "w", Option: domain.AnswerDeny, At: t0.Add(time.Second)}); err != nil {
 		t.Fatal(err)
 	}
-	other := raiseApproval(t, "d-other")
-	other.TaskID = "t2"
-	for _, d := range []*domain.Decision{open, answered, other} {
-		if _, err := s.SaveDecision(bg, d); err != nil {
+	other := newAggregate(t, "t2")
+	approve(t, other, "d-other")
+	for _, agg := range []*domain.TaskAggregate{a, other} {
+		if _, err := s.SaveTask(bg, agg); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -316,58 +344,57 @@ func TestOpenDecisionsListsOnlyOpenOnesOfTheTask(t *testing.T) {
 	}
 }
 
-func TestADecisionNeedsItsTaskAndUnknownOnesAreNotFound(t *testing.T) {
+func TestUnknownDecisionsAreNotFound(t *testing.T) {
 	s := openTemp(t)
-	_, err := s.SaveDecision(bg, raiseApproval(t, "d1")) // task t1 was never saved
-	if err == nil || errors.Is(err, ErrStale) {
-		t.Errorf("a decision for an unknown task = %v, want a foreign key error", err)
-	}
 	if _, err := s.LoadDecision(bg, "nope"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("LoadDecision = %v, want not-found", err)
 	}
-	d := raiseApproval(t, "gone")
-	d.Version = 3
-	if _, err := s.SaveDecision(bg, d); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("saving a loaded decision that is gone = %v, want not-found", err)
+	if _, _, err := s.RespondDecision(bg, "nope", domain.Response{By: "w", Option: domain.AnswerAllow, At: t0}); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("RespondDecision = %v, want not-found", err)
 	}
 }
 
 // #57: an approval without a deadline is never written and never read back.
 func TestAnApprovalWithoutADeadlineIsRefused(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
+	a := newAggregate(t, "t1")
+	approve(t, a, "d-lost")
+	snap := a.Snapshot()
+	snap.Decisions[0].Decision.Deadline = time.Time{}
+	lost, err := domain.Restore(snap)
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	lost := raiseApproval(t, "d-lost")
-	lost.Deadline = time.Time{}
-	if _, err := s.SaveDecision(bg, lost); !errors.Is(err, ErrNoDeadline) {
-		t.Errorf("SaveDecision without a deadline = %v, want ErrNoDeadline", err)
+	if _, err := s.SaveTask(bg, lost); !errors.Is(err, ErrNoDeadline) {
+		t.Errorf("SaveTask with an approval without a deadline = %v, want ErrNoDeadline", err)
 	}
-	if _, err := s.LoadDecision(bg, "d-lost"); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("a refused approval must not be stored: %v", err)
+	if _, err := s.LoadTask(bg, "t1"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("a refused save must store nothing: %v", err)
 	}
 
 	// A row that lost its deadline after it was written (a bad migration, a hand edit).
-	if _, err := s.SaveDecision(bg, raiseApproval(t, "d1")); err != nil {
+	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(bg, `UPDATE decisions SET deadline = 0 WHERE id = 'd1'`); err != nil {
+	if _, err := s.db.ExecContext(bg, `UPDATE decisions SET deadline = 0 WHERE id = 'd-lost'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.LoadDecision(bg, "d1"); !errors.Is(err, ErrNoDeadline) {
+	if _, err := s.LoadDecision(bg, "d-lost"); !errors.Is(err, ErrNoDeadline) {
 		t.Errorf("LoadDecision of a row without a deadline = %v, want ErrNoDeadline", err)
+	}
+	if _, err := s.LoadTask(bg, "t1"); !errors.Is(err, ErrNoDeadline) {
+		t.Errorf("LoadTask with such a row = %v, want ErrNoDeadline", err)
 	}
 	if _, err := s.OpenDecisions(bg, "t1"); !errors.Is(err, ErrNoDeadline) {
 		t.Errorf("OpenDecisions with such a row = %v, want ErrNoDeadline", err)
 	}
 
 	// A question and a review decision may have none.
-	q, err := domain.Raise(domain.NewDecision{ID: "q1", TaskID: "t1", RunID: "r-t1", Kind: domain.DecisionQuestion, Blocking: true, Now: t0})
-	if err != nil {
+	b := newAggregate(t, "t2")
+	if _, err := b.RaiseDecision(domain.NewDecision{ID: "q1", RunID: "r-t2", Kind: domain.DecisionQuestion, Blocking: true, Now: t0}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveDecision(bg, q); err != nil {
+	if _, err := s.SaveTask(bg, b); err != nil {
 		t.Errorf("a question without a deadline was refused: %v", err)
 	}
 	if _, err := s.LoadDecision(bg, "q1"); err != nil {
@@ -377,31 +404,50 @@ func TestAnApprovalWithoutADeadlineIsRefused(t *testing.T) {
 
 // #57: a refusal that changed the Decision is saved with the error.
 func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
-	setup := func(t *testing.T, d *domain.Decision) *Store {
+	setup := func(t *testing.T, id domain.ID, review bool) *Store {
 		t.Helper()
 		s := openTemp(t)
-		if _, err := s.SaveTask(bg, newAggregate(t, "t1")); err != nil {
-			t.Fatal(err)
+		a := newAggregate(t, "t1")
+		running(t, a)
+		if review {
+			if _, err := a.PinRevision("r-t1", "agent/topic", "aaa111"); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.StopRun("r-t1"); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.MarkReady(false); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.RaiseDecision(domain.NewDecision{ID: id, Kind: domain.DecisionReview, Blocking: true, SHA: "aaa111", Now: t0}); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			approve(t, a, id)
 		}
-		if _, err := s.SaveDecision(bg, d); err != nil {
+		if _, err := s.SaveTask(bg, a); err != nil {
 			t.Fatal(err)
 		}
 		return s
 	}
 
 	t.Run("an answer after the deadline expires the decision for good", func(t *testing.T) {
-		d := raiseApproval(t, "d1")
-		s := setup(t, d)
-		got, events, err := s.RespondDecision(bg, "d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: d.Deadline})
+		s := setup(t, "d1", false)
+		stored, _ := s.LoadDecision(bg, "d1")
+		got, events, err := s.RespondDecision(bg, "d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: stored.Deadline})
 		if !errors.Is(err, domain.ErrDecisionExpired) {
 			t.Fatalf("error = %v, want ErrDecisionExpired", err)
 		}
-		if got == nil || got.Status != domain.DecisionExpired || len(events) != 1 || events[0].Kind != domain.EventDecisionExpired {
+		if got == nil || got.Status != domain.DecisionExpired || len(events) == 0 || events[0].Kind != domain.EventDecisionExpired {
 			t.Errorf("decision %+v, events %v", got, eventKinds(events))
 		}
-		stored, _ := s.LoadDecision(bg, "d1")
+		stored, _ = s.LoadDecision(bg, "d1")
 		if stored.Status != domain.DecisionExpired || stored.Allows("") {
 			t.Errorf("stored status = %s, Allows = %v; the expiry was lost", stored.Status, stored.Allows(""))
+		}
+		task, _ := s.LoadTask(bg, "t1")
+		if task.Task().State != domain.TaskRunning {
+			t.Errorf("the expiry left the task %s", task.Task().State)
 		}
 		// And it stays refused.
 		if _, _, err := s.RespondDecision(bg, "d1", domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Second)}); !errors.Is(err, domain.ErrDecisionClosed) {
@@ -410,11 +456,7 @@ func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
 	})
 
 	t.Run("an allow for another commit is stored as a denial", func(t *testing.T) {
-		review, err := domain.Raise(domain.NewDecision{ID: "d2", TaskID: "t1", Kind: domain.DecisionReview, Blocking: true, SHA: "aaa111", Now: t0})
-		if err != nil {
-			t.Fatal(err)
-		}
-		s := setup(t, review)
+		s := setup(t, "d2", true)
 		_, events, err := s.RespondDecision(bg, "d2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: "bbb222", At: t0.Add(time.Second)})
 		if !errors.Is(err, domain.ErrSHAMismatch) {
 			t.Fatalf("error = %v, want ErrSHAMismatch", err)
@@ -429,8 +471,7 @@ func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
 	})
 
 	t.Run("bad input changes nothing", func(t *testing.T) {
-		d := raiseApproval(t, "d3")
-		s := setup(t, d)
+		s := setup(t, "d3", false)
 		got, events, err := s.RespondDecision(bg, "d3", domain.Response{Option: domain.AnswerAllow, At: t0})
 		if !errors.Is(err, domain.ErrDecisionActor) || exitcode.From(err) != exitcode.Usage {
 			t.Fatalf("error = %v, want ErrDecisionActor with exit code 2", err)
@@ -445,21 +486,13 @@ func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
 	})
 
 	t.Run("an allowed answer is saved and returned", func(t *testing.T) {
-		d := raiseApproval(t, "d4")
-		s := setup(t, d)
+		s := setup(t, "d4", false)
 		got, events, err := s.RespondDecision(bg, "d4", domain.Response{By: "werner", Option: domain.AnswerAllow, At: t0.Add(time.Minute)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !got.Allows("") || got.Version != 2 || len(events) != 1 {
+		if !got.Allows("") || got.Version != 2 || len(events) == 0 {
 			t.Errorf("decision %+v, events %v", got, eventKinds(events))
-		}
-	})
-
-	t.Run("an unknown decision", func(t *testing.T) {
-		s := setup(t, raiseApproval(t, "d5"))
-		if _, _, err := s.RespondDecision(bg, "nope", domain.Response{By: "w", Option: domain.AnswerAllow, At: t0}); !errors.Is(err, domain.ErrNotFound) {
-			t.Errorf("error = %v, want ErrNotFound", err)
 		}
 	})
 }
@@ -469,63 +502,54 @@ func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
 func TestTaskAggregateRoundTripsDecisionsAndSession(t *testing.T) {
 	s := openTemp(t)
 	a := newAggregate(t, "t1")
-	if err := a.RecordSession(a.Runs[0].ID, "session-1"); err != nil {
+	if err := a.RecordSession("r-t1", "session-1"); err != nil {
 		t.Fatal(err)
 	}
-	appr, err := a.RaiseDecision(domain.NewDecision{ID: "d1", RunID: a.Runs[0].ID, Kind: domain.DecisionApproval, Blocking: true, Subject: "Bash", Now: t0})
-	if err != nil {
-		t.Fatal(err)
-	}
+	approve(t, a, "d1")
 	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
-	if appr.Version != 1 || appr.Changed() {
-		t.Errorf("after the save: version %d, changed %v", appr.Version, appr.Changed())
+	if d, _ := a.Decision("d1"); d.Version != 1 || d.Changed() {
+		t.Errorf("after the save: version %d, changed %v", d.Version, d.Changed())
 	}
 
 	got, err := s.LoadTask(bg, "t1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Runs[0].SessionID != "session-1" || len(got.Decisions) != 1 || got.Task.State != domain.TaskAwaitingGuidance {
-		t.Fatalf("loaded: session %q, %d decisions, task %s", got.Runs[0].SessionID, len(got.Decisions), got.Task.State)
+	if got.Runs()[0].SessionID != "session-1" || len(got.Decisions()) != 1 || got.Task().State != domain.TaskAwaitingGuidance {
+		t.Fatalf("loaded: session %q, %d decisions, task %s", got.Runs()[0].SessionID, len(got.Decisions()), got.Task().State)
 	}
-	if !reflect.DeepEqual(got.Decisions[0], appr) {
-		t.Errorf("the decision differs:\n got %+v\nwant %+v", got.Decisions[0], appr)
+	if !reflect.DeepEqual(got.Snapshot(), a.Snapshot()) {
+		t.Errorf("the loaded aggregate differs")
 	}
 
 	// Saving again without a change does not touch the Decision's version.
 	if _, err := s.SaveTask(bg, got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Decisions[0].Version != 1 {
-		t.Errorf("an unchanged decision was rewritten: version %d", got.Decisions[0].Version)
+	if d, _ := got.Decision("d1"); d.Version != 1 {
+		t.Errorf("an unchanged decision was rewritten: version %d", d.Version)
 	}
 
 	// A suspended run keeps its cause and reset time.
 	reset := t0.Add(2 * time.Hour)
-	if err := got.MarkRunning(got.Runs[0].ID); err != nil {
+	if err := got.MarkRunning("r-t1"); err != nil {
 		t.Fatal(err)
 	}
-	q, err := got.SuspendRun(got.Runs[0].ID, domain.CauseQuotaExhausted, reset, "q1", t0)
-	if err != nil {
+	if _, err := got.SuspendRun("r-t1", domain.CauseQuotaExhausted, reset, "q1", t0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveTask(bg, got); err != nil {
 		t.Fatal(err)
 	}
 	again, _ := s.LoadTask(bg, "t1")
-	var loaded *domain.Decision
-	for _, d := range again.Decisions {
-		if d.ID == "q1" {
-			loaded = d
-		}
-	}
-	if loaded == nil || loaded.Cause != domain.CauseQuotaExhausted || !loaded.ResumeAt.Equal(reset) || len(loaded.Options) != 3 {
+	loaded, ok := again.Decision("q1")
+	if !ok || loaded.Cause != domain.CauseQuotaExhausted || !loaded.ResumeAt.Equal(reset) || len(loaded.Options) != 3 {
 		t.Errorf("loaded %+v, want the cause, the reset time and three options", loaded)
 	}
-	if again.Decisions[0].Status != domain.DecisionSuperseded || again.Runs[0].State != domain.RunPaused || q.Deadline != (time.Time{}) {
-		t.Errorf("approval %s, run %s", again.Decisions[0].Status, again.Runs[0].State)
+	if first, _ := again.Decision("d1"); first.Status != domain.DecisionSuperseded || again.Runs()[0].State != domain.RunPaused || !loaded.Deadline.IsZero() {
+		t.Errorf("approval %s, run %s", first.Status, again.Runs()[0].State)
 	}
 	log, _ := s.EventsSince(bg, "t1", 0, 0)
 	n := 0
@@ -544,18 +568,15 @@ func TestTaskAggregateRoundTripsDecisionsAndSession(t *testing.T) {
 func TestRespondDecisionSettlesTheTask(t *testing.T) {
 	s := openTemp(t)
 	a := newAggregate(t, "t1")
-	d, err := a.RaiseDecision(domain.NewDecision{ID: "d1", RunID: a.Runs[0].ID, Kind: domain.DecisionApproval, Blocking: true, Now: t0})
-	if err != nil {
-		t.Fatal(err)
-	}
+	approve(t, a, "d1")
 	if _, err := s.SaveTask(bg, a); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.RespondDecision(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: t0.Add(time.Minute)}); err != nil {
+	if _, _, err := s.RespondDecision(bg, "d1", domain.Response{By: "w", Option: domain.AnswerAllow, At: t0.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.LoadTask(bg, "t1")
-	if got.Task.State != domain.TaskRunning || got.Decisions[0].Status != domain.DecisionAnswered {
-		t.Errorf("task %s, decision %s", got.Task.State, got.Decisions[0].Status)
+	if d, _ := got.Decision("d1"); got.Task().State != domain.TaskRunning || d.Status != domain.DecisionAnswered {
+		t.Errorf("task %s, decision %s", got.Task().State, d.Status)
 	}
 }

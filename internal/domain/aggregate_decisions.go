@@ -6,7 +6,7 @@ import (
 )
 
 func (a *TaskAggregate) decision(id ID) (*Decision, error) {
-	for _, d := range a.Decisions {
+	for _, d := range a.decisions {
 		if d.ID == id {
 			return d, nil
 		}
@@ -25,9 +25,9 @@ func (a *TaskAggregate) absorb(d *Decision) {
 // that is already paused or over, and nothing waits on them (D23). Review
 // Decisions belong to no run.
 func (a *TaskAggregate) supersedeOpen(runID ID) {
-	for _, d := range a.Decisions {
+	for _, d := range a.decisions {
 		if d.RunID == runID && d.Status == DecisionOpen && d.Cause == "" {
-			if d.Supersede() == nil {
+			if d.supersede() == nil {
 				a.absorb(d)
 			}
 		}
@@ -37,10 +37,10 @@ func (a *TaskAggregate) supersedeOpen(runID ID) {
 // settle moves an awaiting_guidance task back to running once no blocking
 // Decision of a run is open.
 func (a *TaskAggregate) settle() {
-	if a.Task.State != TaskAwaitingGuidance {
+	if a.task.State != TaskAwaitingGuidance {
 		return
 	}
-	for _, d := range a.Decisions {
+	for _, d := range a.decisions {
 		if d.Status == DecisionOpen && d.RaisesGuidance() {
 			return
 		}
@@ -53,39 +53,39 @@ func (a *TaskAggregate) settle() {
 // ready_for_review and the pinned commit it is about. Raising a blocking
 // Decision from a run moves a running task to awaiting_guidance (D13). A
 // refused raise changes nothing.
-func (a *TaskAggregate) RaiseDecision(spec NewDecision) (*Decision, error) {
-	if spec.TaskID != "" && spec.TaskID != a.Task.ID {
-		return nil, conflict(RuleDecisionTask, "decision %s is for task %s, not %s", spec.ID, spec.TaskID, a.Task.ID)
+func (a *TaskAggregate) RaiseDecision(spec NewDecision) (Decision, error) {
+	if spec.TaskID != "" && spec.TaskID != a.task.ID {
+		return Decision{}, conflict(RuleDecisionTask, "decision %s is for task %s, not %s", spec.ID, spec.TaskID, a.task.ID)
 	}
-	spec.TaskID = a.Task.ID
+	spec.TaskID = a.task.ID
 	if _, err := a.decision(spec.ID); err == nil {
-		return nil, conflict(RuleDecisionID, "decision %s already exists in task %s", spec.ID, a.Task.ID)
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", spec.ID, a.task.ID)
 	}
-	d, err := Raise(spec)
+	d, err := raise(spec)
 	if err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	if d.RunID != "" {
 		run, err := a.run(d.RunID)
 		if err != nil {
-			return nil, err
+			return Decision{}, err
 		}
 		if run.State != RunStarting && run.State != RunRunning {
-			return nil, conflict(RuleRunLive, "run %s is %s and raises no decision", run.ID, run.State)
+			return Decision{}, conflict(RuleRunLive, "run %s is %s and raises no decision", run.ID, run.State)
 		}
 	} else if err := a.checkReview(d); err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	a.addDecision(d)
-	return d, nil
+	return *d, nil
 }
 
 // checkReview checks a review Decision against the task and its candidates.
 func (a *TaskAggregate) checkReview(d *Decision) error {
-	if a.Task.State != TaskReadyForReview {
-		return conflict(RuleTaskState, "task %s is %s: a review decision needs ready_for_review", a.Task.ID, a.Task.State)
+	if a.task.State != TaskReadyForReview {
+		return conflict(RuleTaskState, "task %s is %s: a review decision needs ready_for_review", a.task.ID, a.task.State)
 	}
-	for _, c := range a.Candidates {
+	for _, c := range a.candidates {
 		if c.SHA == d.SHA {
 			return nil
 		}
@@ -95,9 +95,9 @@ func (a *TaskAggregate) checkReview(d *Decision) error {
 
 // addDecision adds a checked Decision and applies its effect on the task.
 func (a *TaskAggregate) addDecision(d *Decision) {
-	a.Decisions = append(a.Decisions, d)
+	a.decisions = append(a.decisions, d)
 	a.absorb(d)
-	if d.RaisesGuidance() && a.Task.State == TaskRunning {
+	if d.RaisesGuidance() && a.task.State == TaskRunning {
 		_ = a.moveTask(TaskAwaitingGuidance) // running to awaiting_guidance is legal
 	}
 }
@@ -120,7 +120,7 @@ func (a *TaskAggregate) Answer(id ID, r Response) error {
 			return err
 		}
 	}
-	respErr := d.Respond(r)
+	respErr := d.respond(r)
 	a.absorb(d)
 	if respErr != nil {
 		a.settle()
@@ -145,12 +145,12 @@ func (a *TaskAggregate) Answer(id ID, r Response) error {
 // them with Resume.
 func (a *TaskAggregate) DueResumes(now time.Time) []ID {
 	var due []ID
-	for _, run := range a.Runs {
+	for _, run := range a.runs {
 		if run.State != RunPaused {
 			continue
 		}
 		var last *Decision
-		for _, d := range a.Decisions {
+		for _, d := range a.decisions {
 			if d.RunID == run.ID && d.Cause == CauseQuotaExhausted && d.Status == DecisionAnswered {
 				last = d
 			}
@@ -167,7 +167,7 @@ func (a *TaskAggregate) DueResumes(now time.Time) []ID {
 // the blocking question that asks the human what to do (design §4.2, D23). The
 // question has no deadline and fixed options; "resume at reset" is offered only
 // when the reset time is known. The task moves to awaiting_guidance.
-func (a *TaskAggregate) SuspendRun(runID ID, cause DecisionCause, resetAt time.Time, id ID, now time.Time) (*Decision, error) {
+func (a *TaskAggregate) SuspendRun(runID ID, cause DecisionCause, resetAt time.Time, id ID, now time.Time) (Decision, error) {
 	var subject string
 	options := []string{AnswerResume, AnswerCancel}
 	switch cause {
@@ -179,59 +179,59 @@ func (a *TaskAggregate) SuspendRun(runID ID, cause DecisionCause, resetAt time.T
 			options = []string{AnswerResume, AnswerResumeAtReset, AnswerCancel}
 		}
 	default:
-		return nil, invalid(fmt.Sprintf("cause %q does not suspend a run", cause))
+		return Decision{}, invalid(fmt.Sprintf("cause %q does not suspend a run", cause))
 	}
 	run, err := a.run(runID)
 	if err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	if run.State != RunRunning {
-		return nil, conflict(RuleTransition, "run %s: illegal transition %s -> %s", run.ID, run.State, RunPaused)
+		return Decision{}, conflict(RuleTransition, "run %s: illegal transition %s -> %s", run.ID, run.State, RunPaused)
 	}
 	if _, err := a.decision(id); err == nil {
-		return nil, conflict(RuleDecisionID, "decision %s already exists in task %s", id, a.Task.ID)
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", id, a.task.ID)
 	}
-	d, err := Raise(NewDecision{
-		ID: id, TaskID: a.Task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true, Subject: subject,
+	d, err := raise(NewDecision{
+		ID: id, TaskID: a.task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true, Subject: subject,
 		Options: options, Cause: cause, ResumeAt: resetAt, Now: now,
 	})
 	if err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	if err := a.moveRun(run, RunPaused); err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	a.supersedeOpen(runID)
 	a.addDecision(d)
-	return d, nil
+	return *d, nil
 }
 
 // FailRun ends a run as failed and opens the blocking Decision that asks the
 // human to retry or cancel (design §4.1): a failed run does not fail its task.
-func (a *TaskAggregate) FailRun(runID, decisionID ID, now time.Time) (*Decision, error) {
+func (a *TaskAggregate) FailRun(runID, decisionID ID, now time.Time) (Decision, error) {
 	run, err := a.run(runID)
 	if err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	if !run.State.CanTransition(RunFailed) {
-		return nil, run.Transition(RunFailed)
+		return Decision{}, run.transition(RunFailed)
 	}
 	if _, err := a.decision(decisionID); err == nil {
-		return nil, conflict(RuleDecisionID, "decision %s already exists in task %s", decisionID, a.Task.ID)
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", decisionID, a.task.ID)
 	}
-	d, err := Raise(NewDecision{
-		ID: decisionID, TaskID: a.Task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true, Subject: "The run failed",
+	d, err := raise(NewDecision{
+		ID: decisionID, TaskID: a.task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true, Subject: "The run failed",
 		Options: []string{AnswerRetry, AnswerCancel}, Cause: CauseRunFailed, Now: now,
 	})
 	if err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	if err := a.moveRun(run, RunFailed); err != nil {
-		return nil, err
+		return Decision{}, err
 	}
 	a.supersedeOpen(runID)
 	a.addDecision(d)
-	return d, nil
+	return *d, nil
 }
 
 // MarkRunning moves a starting run to running once the agent is up.
@@ -268,17 +268,17 @@ func (a *TaskAggregate) RecordSession(runID ID, sessionID string) error {
 // Decision too) and cancels the task. A task that is already over cannot be
 // cancelled.
 func (a *TaskAggregate) Cancel() error {
-	if !a.Task.State.CanTransition(TaskCancelled) {
-		return a.Task.Transition(TaskCancelled) // reports the illegal transition
+	if !a.task.State.CanTransition(TaskCancelled) {
+		return a.task.transition(TaskCancelled) // reports the illegal transition
 	}
-	for _, run := range a.Runs {
+	for _, run := range a.runs {
 		if !run.State.Terminal() {
 			if err := a.moveRun(run, RunStopped); err != nil {
 				return err
 			}
 		}
 	}
-	for _, d := range a.Decisions {
+	for _, d := range a.decisions {
 		if d.Status == DecisionOpen && d.move(DecisionSuperseded, time.Time{}) == nil {
 			a.absorb(d)
 		}
@@ -326,7 +326,7 @@ func (a *TaskAggregate) ObserveEnv(envID ID, state EnvState) error {
 		return conflict(RuleTransition, "environment %s: illegal transition %s -> %s", env.ID, env.State, state)
 	}
 	if state != EnvRunning {
-		for _, run := range a.Runs {
+		for _, run := range a.runs {
 			if run.EnvID == envID && !run.State.Terminal() && run.State != RunInterrupted {
 				if err := a.Interrupt(run.ID); err != nil {
 					return err
@@ -343,4 +343,62 @@ func (a *TaskAggregate) ObserveEnv(envID ID, state EnvState) error {
 		}
 	}
 	return a.moveEnv(env, state)
+}
+
+// ExpireDecisions expires the open Decisions whose deadline has passed at now
+// and returns their IDs. An expired approval denies (design §4.2). A task that
+// waited only for them is freed.
+func (a *TaskAggregate) ExpireDecisions(now time.Time) []ID {
+	var expired []ID
+	for _, d := range a.decisions {
+		if d.expire(now) {
+			a.absorb(d)
+			expired = append(expired, d.ID)
+		}
+	}
+	a.settle()
+	return expired
+}
+
+// ReraiseDecision opens a new Decision with the same ask for a resumed run,
+// with a new ID and a fresh deadline of the same length, and links the
+// superseded one to it (design §5.3). The run must be live again.
+func (a *TaskAggregate) ReraiseDecision(id, newID ID, now time.Time) (Decision, error) {
+	old, err := a.decision(id)
+	if err != nil {
+		return Decision{}, err
+	}
+	if _, err := a.decision(newID); err == nil {
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", newID, a.task.ID)
+	}
+	run, err := a.run(old.RunID)
+	if err != nil {
+		return Decision{}, err
+	}
+	if run.State != RunStarting && run.State != RunRunning {
+		return Decision{}, conflict(RuleRunLive, "run %s is %s and raises no decision", run.ID, run.State)
+	}
+	n, err := old.reraise(newID, now)
+	if err != nil {
+		return Decision{}, err
+	}
+	a.absorb(old)
+	a.addDecision(n)
+	return *n, nil
+}
+
+// StopRun ends a live run normally: the agent finished, or the run was
+// cancelled or stopped by hand. It supersedes what the run asked and frees a
+// task that waited for guidance only on it. A failed end is FailRun.
+func (a *TaskAggregate) StopRun(runID ID) error {
+	run, err := a.run(runID)
+	if err != nil {
+		return err
+	}
+	if err := a.moveRun(run, RunStopped); err != nil {
+		return err
+	}
+	a.supersedeOpen(run.ID)
+	a.settle()
+	return nil
 }
