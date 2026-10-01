@@ -17,7 +17,8 @@ import (
 )
 
 // Run on a Mac with Apple Container: go test -tags applecontainer ./internal/runtime/apple
-// The fedora image must be present (`container image pull fedora`).
+// The fedora image must be present (`container image pull fedora`). WHR_TEST_IMAGE runs the suite
+// on another base image instead (design D43: Fedora and Ubuntu LTS), which needs sh, sleep and cat.
 func newHarness(t *testing.T) runtimetest.Harness {
 	t.Helper()
 	if _, err := exec.LookPath("container"); err != nil {
@@ -47,6 +48,10 @@ func newHarness(t *testing.T) runtimetest.Harness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	image := os.Getenv("WHR_TEST_IMAGE")
+	if image == "" {
+		image = "fedora"
+	}
 	nets := 0
 	t.Cleanup(func() { cleanOwner(t, a) })
 	return runtimetest.Harness{
@@ -62,7 +67,7 @@ func newHarness(t *testing.T) runtimetest.Harness {
 		NewSpec: func() runtime.Spec {
 			nets++
 			return runtime.Spec{
-				Image: "fedora", Owner: owner, CPUs: 2, MemoryMB: 1024, DiskMB: 2048,
+				Image: image, Owner: owner, CPUs: 2, MemoryMB: 1024, DiskMB: 2048,
 				Network: runtime.Network{Name: fmt.Sprintf("%s-net-%d", owner, nets), Internal: true},
 				User:    "1000:1000", ReadOnlyRoot: true, CapDrop: []string{"ALL"}, Init: true, Tmpfs: []string{"/tmp"},
 				Mounts: []runtime.Mount{{Kind: runtime.MountBind, Source: bin, Target: "/tools", ReadOnly: true}},
