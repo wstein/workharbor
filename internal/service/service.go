@@ -7,6 +7,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -63,6 +65,10 @@ type Config struct {
 	// MaxAttempts is how many failed launches of the agent a run may have
 	// before it ends failed (design §5.3). Default 3.
 	MaxAttempts int
+	// Notifier gets a push for a new blocking Decision and for a run that ended
+	// or failed (design §9.4). It is best effort: a failure is reported through
+	// OnError and never fails the change. Optional.
+	Notifier notify.Notifier
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)
@@ -149,16 +155,43 @@ func (s *Service) update(ctx context.Context, task domain.ID, fn func(*domain.Ta
 		}
 		fnErr := fn(agg)
 		if len(agg.PendingEvents()) > 0 {
-			if _, err = s.store.SaveTask(ctx, agg); err != nil {
+			var saved []domain.Event
+			if saved, err = s.store.SaveTask(ctx, agg); err != nil {
 				if errors.Is(err, store.ErrStale) {
 					continue
 				}
 				return err
 			}
+			s.notify(ctx, saved)
 		}
 		return fnErr
 	}
 	return fmt.Errorf("task %s: %w", task, err)
+}
+
+// notify pushes what the saved events call for. It runs after the change is
+// committed and never fails it; the inbox is the source of truth.
+func (s *Service) notify(ctx context.Context, events []domain.Event) {
+	if s.cfg.Notifier == nil {
+		return
+	}
+	cancelled := false
+	for _, e := range events {
+		if e.Kind == domain.EventTaskState {
+			var p domain.StateChanged
+			if json.Unmarshal(e.Payload, &p) == nil && p.To == string(domain.TaskCancelled) {
+				cancelled = true
+			}
+		}
+	}
+	for _, m := range notify.FromEvents(events) {
+		if cancelled && m.Kind == notify.KindRunEnded {
+			continue // the human cancelled it; they know
+		}
+		nctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		s.report(s.cfg.Notifier.Notify(nctx, m))
+		cancel()
+	}
 }
 
 // begin marks a run's launch as in progress.

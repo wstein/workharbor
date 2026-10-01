@@ -12,6 +12,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/agent/agenttest"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -604,5 +605,57 @@ func TestAnOldSessionDoesNotRemoveANewerEntry(t *testing.T) {
 	r.svc.end("r1", fresh)
 	if r.svc.attached("r1") {
 		t.Error("the entry was not removed by its own session")
+	}
+}
+
+type pushes struct{ got []notify.Message }
+
+func (p *pushes) Notify(_ context.Context, m notify.Message) error {
+	p.got = append(p.got, m)
+	return nil
+}
+
+// A blocking Decision, a login that expired and a failed run each notify once,
+// with IDs and a kind only (design §9.4).
+func TestBlockingDecisionsAndEndsNotify(t *testing.T) {
+	r := newRig(t)
+	rec := &pushes{}
+	r.svc.cfg.Notifier = notify.Throttled{Next: rec, Throttle: &notify.Throttle{Now: func() time.Time { return r.clock.now }}}
+	r.live()
+
+	must(t, r.svc.update(bg, "t1", func(x *domain.TaskAggregate) error {
+		_, e := x.RaiseDecision(domain.NewDecision{ID: "ap1", RunID: "r1", Kind: domain.DecisionApproval, Blocking: true, Subject: "Bash", Input: "SECRET-INPUT", Now: r.clock.now})
+		if e != nil {
+			return e
+		}
+		_, e = x.RaiseDecision(domain.NewDecision{ID: "q-quiet", RunID: "r1", Kind: domain.DecisionQuestion, Now: r.clock.now})
+		return e
+	}))
+	if len(rec.got) != 1 || rec.got[0].Kind != notify.KindApproval || rec.got[0].DecisionID != "ap1" || rec.got[0].TaskID != "t1" {
+		t.Fatalf("pushes = %+v, want one approval and none for the quiet question", rec.got)
+	}
+
+	// A cancel does not notify the human who asked for it.
+	rec.got = nil
+	must(t, r.svc.Cancel(bg, "t1"))
+	for _, m := range rec.got {
+		if m.Kind == notify.KindRunEnded {
+			t.Errorf("a cancel pushed %+v", m)
+		}
+	}
+}
+
+func TestAFailedRunNotifies(t *testing.T) {
+	r := newRig(t, withSession(""))
+	rec := &pushes{}
+	r.svc.cfg.Notifier = rec
+	must(t, r.rt.Restart(bg))
+	r.reconcile() // no session: the run fails and asks what to do
+	found := false
+	for _, m := range rec.got {
+		found = found || m.Kind == notify.KindRunFailed
+	}
+	if !found {
+		t.Errorf("pushes = %+v, want run_failed", rec.got)
 	}
 }
