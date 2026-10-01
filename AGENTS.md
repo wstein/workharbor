@@ -28,12 +28,15 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 
 ## Layout
 
-- `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design.md` is the design document
-- `cmd/whr/`: single binary entrypoint (CLI now, `whr serve` later)
-- `internal/domain/`: Task, Workspace, Run, Environment, Decision, ReviewCandidate, Event and state transitions
-- `internal/policy/`: autonomy table (action -> auto | ask | forbid)
-- `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts
-- `internal/exitcode/`, `internal/version/`: shared constants
+- `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design.md` is the design document, `threat-model.md` the threat model
+- `design/mock/`: the app mock (Claude Design canvas sources)
+- `cmd/whr/`: single binary entrypoint (CLI now, `whr serve` later); `cmd/commitlint/`: the commit message linter
+- `internal/domain/`: Task, Workspace, Run, Environment, Decision, ReviewCandidate, Event, state machines and the task aggregate
+- `internal/policy/`: autonomy table (action -> auto | ask | forbid) with a fixed floor
+- `internal/store/`: SQLite store, event log and idempotency
+- `internal/hostgit/`: the only way the host runs git on agent-writable repositories
+- `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts; `runtime/runtimetest/` and `agent/agenttest/` hold the fakes and conformance suites
+- `internal/commitlint/`: commit rules; `internal/exitcode/`, `internal/version/`: shared constants
 
 ## Conventions
 
@@ -88,11 +91,13 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 Push only when the human asks for it in the session; never push on your own initiative, and a request covers that push only. Merge into `main` only as the workflow below describes. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
+**Design decisions.** One session at a time owns the decision table (§3) and the rule sections of the design; the human says which. Other sessions propose decision text in the issue instead of editing those sections. Reserve the next D-row number in the decision issue before writing it, cite D-rows as `D16`, never as `#16`, and run `git log -p origin/main -- docs/content/docs/design.md` before editing the design.
+
 **Issues.** When work on an issue is done (its closing commit is pushed to `origin/main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
 
-**Working on an issue, start to finish.** Several sessions share this repository, so each session works in its own worktree, which it reuses for every issue, and each issue gets its own branch. Every issue finishes the same way:
+**Working on an issue, start to finish.** This workflow is for agent sessions; human contributors use the pull-request flow in CONTRIBUTING.md. Several sessions, possibly from different tools, share this repository, so each session works in its own worktree, which it reuses for every issue, and each issue gets its own branch. Every issue finishes the same way:
 
-1. **Start.** Read the issue and the design sections it names. If your session has no worktree yet, create one once under a name that `git worktree list` does not show, such as `git worktree add ../workharbor-<name> -b <type>/<topic> main`. Otherwise reuse it: with a clean tree, `git -C <worktree> switch -c <type>/<topic> main`. Work only there, never in another session's worktree, and do not switch branches in the shared checkout.
+1. **Claim, then start.** Skip an issue that is closed or already claimed. Claim it with a comment (`Claimed by <tool>:<model-id>`) and assign it to yourself where you can, then `git fetch` and read the issue and the design sections it names. If your session has no worktree yet, create one once under a name that `git worktree list` does not show, such as `git worktree add ../workharbor-<name> -b <type>/<topic> main`. Otherwise reuse it: with a clean tree, `git -C <worktree> switch -c <type>/<topic> main`. Work only there, never in another session's worktree, and do not switch branches in the shared checkout.
 2. **Commit** as above: atomic commits by topic, specification (design) before code, each with its trailers (`Refs: #N`, and `Closes: #N` on the last one). Run `make check` first, and confirm each commit landed (`git log -1`).
 3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then fast-forward `main` from the worktree without switching branches: `git -C <shared checkout> merge --ff-only <branch>` (the shared checkout stays on `main`). If another session moved `main` meanwhile, rebase again and retry.
 4. **Comment.** Add a comment to the issue that names the commits and anything left undone.
