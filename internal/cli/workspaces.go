@@ -43,6 +43,7 @@ func (s *state) workspaces(ctx context.Context) ([]workspaceRow, []byte, error) 
 // newWs builds `whr ws add|ls|rm` (provisional, issue #99).
 func newWs(s *state) *cobra.Command {
 	ws := &cobra.Command{Use: "ws", Short: "Workspaces: folders with an agent clone and their environment (provisional)"}
+	group(ws)
 	ws.AddCommand(newWsAdd(s), newWsLs(s), newWsRm(s))
 	return ws
 }
@@ -146,6 +147,7 @@ func newWsRm(s *state) *cobra.Command {
 // newAgent builds `whr agent add|ls|rm` (provisional, issue #99).
 func newAgent(s *state) *cobra.Command {
 	ag := &cobra.Command{Use: "agent", Short: "Named agents in a workspace (provisional)"}
+	group(ag)
 	var instructions string
 	add := &cobra.Command{
 		Use:               "add <workspace> <role>",
@@ -241,4 +243,17 @@ func (s *state) completeAgentRefs(cmd *cobra.Command, args []string, _ string) (
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return s.completeAgents(cmd, nil, "")
+}
+
+// group makes a command that only holds subcommands print its help, and refuse
+// an argument that is not one of them with a usage error (cobra otherwise prints
+// the help and exits 0, which a script cannot tell from success).
+func group(c *cobra.Command) {
+	c.Args = cobra.ArbitraryArgs
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return usageError{fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())}
+		}
+		return cmd.Help()
+	}
 }

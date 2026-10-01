@@ -131,7 +131,9 @@ func TestCompletionScriptsAreGeneratedForEveryShell(t *testing.T) {
 	if _, out, _ := s.runCLI("", "help"); !strings.Contains(out, "completion") {
 		t.Error("whr help does not list the completion command")
 	}
-	if code, _, _ := s.runCLI("", "completion", "nonsense"); code != exitcode.Usage {
-		t.Errorf("an unknown shell: exit %d, want usage", code)
+	for _, args := range [][]string{{"completion", "nonsense"}, {"ws", "bogus"}, {"agent", "bogus"}} {
+		if code, out, _ := s.runCLI("", args...); code != exitcode.Usage || out != "" {
+			t.Errorf("%v: exit %d, stdout %q, want usage and no data", args, code, out)
+		}
 	}
 }

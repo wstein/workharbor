@@ -119,6 +119,12 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	for _, c := range env.Extra {
 		add(c)
 	}
+	root.InitDefaultCompletionCmd()
+	for _, c := range root.Commands() {
+		if c.Name() == "completion" {
+			group(c) // an unknown shell is a usage error, not a help page
+		}
+	}
 	return root, ran
 }
 
