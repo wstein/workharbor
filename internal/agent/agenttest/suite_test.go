@@ -45,6 +45,7 @@ func TestSuiteNoticesDefectiveAgents(t *testing.T) {
 		{"fails the run when the login expires", Defects{AuthExpiredFails: true}, "auth expiry ends the run without failing it"},
 		{"offers a Pauser without the flag", Defects{PauserWithoutFlag: true}, "cooperative pause is a capability flag"},
 		{"loses the session ID on stop", Defects{StopLosesSession: true}, "stop is a hard interrupt and the session is resumable"},
+		{"never reports its session ID", Defects{NoSessionEvent: true}, "the session ID arrives with the session event"},
 		{"implements another contract version", Defects{WrongContractVersion: true}, "capabilities are reported"},
 	}
 	for _, tc := range tests {

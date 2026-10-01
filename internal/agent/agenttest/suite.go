@@ -48,6 +48,7 @@ func Checks() []Check {
 	return []Check{
 		{"capabilities are reported", checkCapabilities},
 		{"start checks the auth mode and the approver", checkStart},
+		{"the session ID arrives with the session event", checkSessionEvent},
 		{"events are typed and the session ends with a result", checkEvents},
 		{"an allowed approval lets the agent go on", checkApprovalAllowed},
 		{"a denial reaches the agent with its reason", checkApprovalDenied},
@@ -118,6 +119,64 @@ func collect(s agent.Session, limit time.Duration) ([]agent.Event, error) {
 			return events, errors.New("the session did not end in time")
 		}
 	}
+}
+
+// SessionWait is how long the suite waits for a session event. A test of the
+// suite itself shortens it.
+var SessionWait = 2 * time.Second
+
+// awaitSession reads events until the session event, which says the session
+// ID, and returns the events read, that one last. Instruct and Stop come after
+// it: Claude Code reports the ID only after the first message (spike #1).
+func awaitSession(s agent.Session, limit time.Duration) ([]agent.Event, error) {
+	var events []agent.Event
+	timeout := time.After(limit)
+	for {
+		select {
+		case e, ok := <-s.Events():
+			if !ok {
+				return events, errors.New("the session ended without a session event")
+			}
+			events = append(events, e)
+			if e.Kind == agent.EventSession {
+				if e.SessionID == "" || s.ID() != e.SessionID {
+					return events, fmt.Errorf("the session event says %q and ID() says %q, want the same non-empty ID", e.SessionID, s.ID())
+				}
+				return events, nil
+			}
+		case <-timeout:
+			return events, errors.New("the session never reported its ID (no session event)")
+		}
+	}
+}
+
+// startAndWait starts a session and waits for its session event.
+func startAndWait(ctx context.Context, h Harness, spec agent.StartSpec) (agent.Session, error) {
+	s, err := h.Adapter.Start(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := awaitSession(s, SessionWait); err != nil {
+		_ = s.Stop(ctx)
+		return nil, err
+	}
+	return s, nil
+}
+
+func checkSessionEvent(ctx context.Context, h Harness) error {
+	h.Scenarios.Finish("hello")
+	s, err := startAndWait(ctx, h, newSpec(h))
+	if err != nil {
+		return err
+	}
+	id := s.ID()
+	if _, err := collect(s, 5*time.Second); err != nil {
+		return err
+	}
+	if res, err := s.Wait(); err != nil || res.SessionID != id {
+		return fmt.Errorf("the result's session ID is %q (%s), want the one the session event gave: %q", res.SessionID, show(err), id)
+	}
+	return nil
 }
 
 func hasText(events []agent.Event, kind agent.EventKind, sub string) bool {
@@ -321,7 +380,7 @@ func checkApprovalCap(ctx context.Context, h Harness) error {
 
 func checkInstruct(ctx context.Context, h Harness) error {
 	h.Scenarios.Block()
-	s, err := h.Adapter.Start(ctx, newSpec(h))
+	s, err := startAndWait(ctx, h, newSpec(h))
 	if err != nil {
 		return err
 	}
@@ -348,7 +407,7 @@ func checkInstruct(ctx context.Context, h Harness) error {
 
 func checkStopAndResume(ctx context.Context, h Harness) error {
 	h.Scenarios.Block()
-	s, err := h.Adapter.Start(ctx, newSpec(h))
+	s, err := startAndWait(ctx, h, newSpec(h))
 	if err != nil {
 		return err
 	}
@@ -447,7 +506,7 @@ func checkQuota(ctx context.Context, h Harness) error {
 
 func checkPause(ctx context.Context, h Harness) error {
 	h.Scenarios.Block()
-	s, err := h.Adapter.Start(ctx, newSpec(h))
+	s, err := startAndWait(ctx, h, newSpec(h))
 	if err != nil {
 		return err
 	}

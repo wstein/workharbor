@@ -50,6 +50,7 @@ type Defects struct {
 	PauserWithoutFlag    bool // sessions implement Pauser though the flag is false
 	StopLosesSession     bool // Stop returns a result without the session ID
 	WrongContractVersion bool // capabilities report another version
+	NoSessionEvent       bool // the session never reports its ID
 }
 
 type scenarioKind int
@@ -156,7 +157,7 @@ func (f *Fake) Start(ctx context.Context, spec agent.StartSpec) (agent.Session, 
 	f.sessions++
 	id := "session-" + strconv.Itoa(f.sessions)
 	f.mu.Unlock()
-	return f.launch(ctx, spec, id), nil
+	return f.launch(ctx, spec, id, true), nil
 }
 
 // Resume implements agent.Adapter.
@@ -173,5 +174,5 @@ func (f *Fake) Resume(ctx context.Context, spec agent.StartSpec, sessionID strin
 	if !ok {
 		return nil, agent.ErrNoSession
 	}
-	return f.launch(ctx, spec, sessionID), nil
+	return f.launch(ctx, spec, sessionID, false), nil
 }

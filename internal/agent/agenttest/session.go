@@ -10,7 +10,8 @@ import (
 
 type session struct {
 	f      *Fake
-	id     string
+	real   string // the agent's session ID
+	id     string // what ID reports: empty until the session event when late
 	spec   agent.StartSpec
 	events chan agent.Event
 	instr  chan string
@@ -24,13 +25,18 @@ type session struct {
 
 type pausable struct{ *session }
 
-func (f *Fake) launch(ctx context.Context, spec agent.StartSpec, id string) agent.Session {
+// launch starts a session. A new session reports its ID late, with the session
+// event, as Claude Code does (spike #1); a resumed one knows it from the start.
+func (f *Fake) launch(ctx context.Context, spec agent.StartSpec, id string, late bool) agent.Session {
 	s := &session{
-		f: f, id: id, spec: spec,
+		f: f, real: id, id: id, spec: spec,
 		events: make(chan agent.Event, 64),
 		instr:  make(chan string, 8),
 		stop:   make(chan struct{}),
 		done:   make(chan struct{}),
+	}
+	if late {
+		s.id = ""
 	}
 	f.mu.Lock()
 	f.known[id] = true
@@ -45,14 +51,14 @@ func (f *Fake) launch(ctx context.Context, spec agent.StartSpec, id string) agen
 func (s *session) emit(e agent.Event) {
 	e.At = time.Now()
 	if e.SessionID == "" {
-		e.SessionID = s.id
+		e.SessionID = s.real
 	}
 	s.events <- e
 }
 
 func (s *session) finish(r agent.Result) {
 	if r.SessionID == "" && (!s.f.Defects.StopLosesSession || r.Status != agent.ResultStopped) {
-		r.SessionID = s.id
+		r.SessionID = s.real
 	}
 	s.mu.Lock()
 	s.result = r
@@ -62,7 +68,10 @@ func (s *session) finish(r agent.Result) {
 func (s *session) run(ctx context.Context, sc scenario) {
 	defer close(s.done)
 	defer close(s.events)
-	s.emit(agent.Event{Kind: agent.EventSession})
+	if !s.f.Defects.NoSessionEvent {
+		s.bind()
+		s.emit(agent.Event{Kind: agent.EventSession})
+	}
 
 	switch sc.kind {
 	case scFinish:
@@ -140,7 +149,19 @@ func (s *session) ask(ctx context.Context, sc scenario) {
 	s.finish(agent.Result{Status: agent.ResultCompleted})
 }
 
-func (s *session) ID() string                 { return s.id }
+// bind makes the session ID known, as the first message does for Claude Code.
+func (s *session) bind() {
+	s.mu.Lock()
+	s.id = s.real
+	s.mu.Unlock()
+}
+
+func (s *session) ID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.id
+}
+
 func (s *session) Events() <-chan agent.Event { return s.events }
 
 func (s *session) Instruct(_ context.Context, message string) (agent.Delivery, error) {
