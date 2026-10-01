@@ -40,6 +40,17 @@ Command names are provisional; see the design document.
 
 Go, a single static binary, SQLite, and a server-rendered web UI (`templ`, htmx, SSE).
 
+## Status and roadmap
+
+Design phase, with the domain model being built test first. The plan is tracked in GitHub milestones:
+
+1. [M0 Decisions](https://github.com/wstein/workharbor/milestone/1): open design decisions and spike follow-ups
+2. [R1 Slice](https://github.com/wstein/workharbor/milestone/2): a CLI-only vertical slice, `whr run <issue-url>` to an opened pull request
+3. [R1 Complete](https://github.com/wstein/workharbor/milestone/3): the rest of release 1, including the web UI and phone client
+4. [Later](https://github.com/wstein/workharbor/milestone/4): medium and long term
+
+See [all milestones](https://github.com/wstein/workharbor/milestones), [open issues](https://github.com/wstein/workharbor/issues) and the [delivery plan](docs/content/docs/design.md#13-delivery) in the design.
+
 ## Contributing
 
 Contributions are welcome, especially design reviews. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
