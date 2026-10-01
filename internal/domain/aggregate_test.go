@@ -224,3 +224,23 @@ func TestStartRunNeedsAUniqueNonEmptyID(t *testing.T) {
 		t.Errorf("state %s, %d runs", fresh.State, len(a.Runs))
 	}
 }
+
+// #52: a run started on a completed, cancelled or failed task without error.
+func TestStartRunOnlyWhereTheTaskCanTakeOne(t *testing.T) {
+	for _, state := range allTaskStates {
+		a := NewTaskAggregate(Task{ID: "t1", State: state})
+		a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
+		err := a.StartRun(&Run{ID: "r1", EnvID: "e1"})
+		switch state {
+		case TaskQueued, TaskRunning, TaskReadyForReview: // ready_for_review is rework
+			if err != nil {
+				t.Errorf("task %s: %v", state, err)
+			}
+		default:
+			wantConflict(t, err, RuleTaskState)
+			if len(a.Runs) != 0 {
+				t.Errorf("task %s: a refused run was added", state)
+			}
+		}
+	}
+}

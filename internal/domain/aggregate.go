@@ -7,6 +7,7 @@ const (
 	RuleOneLiveRun Rule = "one-live-run" // a task has at most one run that is not stopped or failed
 	RuleRunReused  Rule = "run-reused"   // StartRun takes a run that has not started
 	RuleRunID      Rule = "run-id"       // a run has a non-empty ID that is unique in the task
+	RuleTaskState  Rule = "task-state"   // a run starts only on a queued, running or ready_for_review task
 	RuleEnvRunning Rule = "env-running"  // a run is created or started only in a running environment
 	RuleEnvInUse   Rule = "env-in-use"   // an environment is not stopped under a starting or running run
 	RuleStoppedRun Rule = "stopped-run"  // ready_for_review needs the task's latest run to be stopped
@@ -77,6 +78,11 @@ func (a *TaskAggregate) StartRun(run *Run) error {
 		if r.ID == run.ID {
 			return conflict(RuleRunID, "run %s already exists in task %s", run.ID, a.Task.ID)
 		}
+	}
+	switch a.Task.State {
+	case TaskQueued, TaskRunning, TaskReadyForReview: // the last is rework
+	default:
+		return conflict(RuleTaskState, "task %s is %s and starts no run", a.Task.ID, a.Task.State)
 	}
 	if live := a.LiveRun(); live != nil {
 		return conflict(RuleOneLiveRun, "task %s already has a live run %s (%s)", a.Task.ID, live.ID, live.State)
