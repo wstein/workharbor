@@ -7,4 +7,8 @@ accept = ["200..=299", "429"]
 # CHANGELOG.md is generated from commits; its commit links only resolve after a push.
 exclude_path = ["CHANGELOG.md", "docs/vendor", "_site"]
 # GitHub user projects return 404 to unauthenticated clients.
-exclude = ['^https://github\.com/users/wstein/projects/6']
+# OpenAI help center blocks datacenter IPs with Cloudflare bot challenges (403).
+exclude = [
+  '^https://github\.com/users/wstein/projects/6',
+  '^https://help\.openai\.com/',
+]
