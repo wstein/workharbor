@@ -86,7 +86,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 `make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
 
-Do not push or merge without being asked. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
+Never push: pushing is human-in-the-loop work (see the workflow below). Merge only as that workflow describes, and not into `main` otherwise. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
 **Issues.** When work on an issue is done (its closing commit is on `main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
 
@@ -97,7 +97,7 @@ Do not push or merge without being asked. The repository allows only **rebase me
 3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then, in the shared checkout, `git checkout main` and `git merge --ff-only <branch>`.
 4. **Tick and comment.** Update the issue as described under **Issues**, with a comment that names the commits and anything left undone.
 5. **Clean up.** `git worktree remove <path>`, then delete the branch. If `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`.
-6. **Push only when asked.** The fast-forward is local; pushing publishes the commits, runs CI and closes the issue through its `Closes:` trailer. Ask at the end of an issue whether to push.
+6. **Hand over; the human pushes.** Pushing is human-in-the-loop work: agents never push, even at the end of an issue. It publishes the commits, runs CI and closes the issue through its `Closes:` trailer, so the human reviews first. Leave `main` fast-forwarded and say what is ready: the commits (`git log --oneline origin/main..main`) and the issues that will close.
 
 ## License
 
