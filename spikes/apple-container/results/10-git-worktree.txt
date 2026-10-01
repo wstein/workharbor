@@ -1,0 +1,54 @@
+
+== setup: a synthetic repository with 5000 small files, a bare host cache, three layouts
+cache objects:  20M, tracked files:     5000
+t1 .git file : gitdir: $SCRATCH/g/cache.git/worktrees/t1
+t2 .git file : gitdir: ../../cache.git/worktrees/t2
+t3 alternates: $SCRATCH/g/cache.git/objects
+
+== guest image with git: docker.io/alpine/git:latest
+pulled (remove it afterwards)
+
+== V0: mount only the worktree (absolute pointer) at /work
+fatal: not a git repository: (null)
+
+== V0r: relative worktree: mount the worktree and the cache keeping their relative layout
+On branch agent/t2
+nothing to commit, working tree clean
+agent/t2
+
+== V1: absolute worktree with the cache mounted at its host path (read-write)
+git works: changed files: 0
+agent/t1
+guest sees ALL branches of the shared repo: + agent/t1 + agent/t2 * main
+guest sees other tasks' worktree metadata:   t1 t2
+
+== S4: from the shared repo a guest can destroy another task's branch
+error: cannot delete branch 'agent/t2' used by worktree at '$SCRATCH/g/wt/t2'
+host: branch agent/t2 still exists?        1
+
+== S1: a hostile guest plants a pre-commit hook in the shared repo; the host then runs git
+plain host git ran the guest's hook: YES, code executed on the host
+host git with -c core.hooksPath=/dev/null:   no, hook ignored
+
+== S2: a hostile guest sets core.fsmonitor in the shared config; the host runs git status
+plain host git status ran the guest's command: YES, code executed on the host
+host git with -c core.fsmonitor=false:        no, ignored
+
+== V3: per-task clone with alternates; the cache objects are mounted read-only at their host path
+git works: changed files: 0
+agent/t3
+5d80e5b commit in the guest
+c05a777 init
+guest commit stored in the task's own repo; host cache objects before/after:     5060 /     5060
+guest cannot write the cache objects: touch: $SCRATCH/g/cache.git/objects/x: Read-only file system
+other tasks' worktrees and branches are not visible: ls: $SCRATCH/g/wt: No such file or directory
+host commit, plain git, in the task clone with a planted hook:    YES, code executed on the host
+host commit, with -c core.hooksPath=/dev/null:                    no, ignored
+
+== performance: 5000 files. Bind-mounted checkout versus a clone inside a volume
+clone into the volume (alternates to the read-only cache): 1611 ms
+bind-mounted clone (host dir)  : status after 300 edits 1128 ms | add 363 ms | commit 667 ms | clean status 156 ms
+clone inside a volume          : status after 300 edits 118 ms | add 120 ms | commit 334 ms | clean status 75 ms
+
+== cleanup note
+host-side hardening used above: git -c core.hooksPath=/dev/null -c core.fsmonitor=false

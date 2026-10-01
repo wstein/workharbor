@@ -1,0 +1,4 @@
+default: status runs (ms): 378 108 91
+core.untrackedCache=true: status runs (ms): 114 125 100
+feature.manyFiles=true: status runs (ms): 120 127 109
+plus preloadIndex and checkStat=minimal: status runs (ms): 143 124 132

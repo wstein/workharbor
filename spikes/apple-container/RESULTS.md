@@ -14,6 +14,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 6. Recovery | Measured, except a reboot | No restart policy. After a crash or a `system stop` and `start`, containers come back `stopped` with their data. Volumes, networks and images survive. A reboot was not triggered |
 | 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
 | 8. Memory at 1 and 4 containers | Not started | |
+| 9. Repositories on the host, mounted in (worktrees) | Measured | Works in three layouts. A shared `.git` exposes sibling tasks and runs guest-planted hooks and config on the host unless host git is hardened; a per-task clone with read-only alternates is the safest layout. A bind-mounted checkout costs a cold first status of 0.3 to 1.1 s and then about 120 ms |
 
 ## 1. Lifecycle and limits
 
@@ -139,6 +140,45 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 - It also removes network need at start-up: the egress allowlist no longer has to permit `downloads.claude.ai`.
 - The harness and helper binaries (for example the spike's approve helper) can live in the same store.
 
+## 9. Repositories on the host, mounted into environments
+
+Direction from the owner: clones live outside containers and volumes, on the host, and are mounted in; worktrees give parallel topics that are merged and cleaned up before anything is pushed. `10-git-worktree.sh` and `10b-git-tuning.sh` test the mechanics on a synthetic repository (5000 files, git 2.56 on the host, `alpine/git` in the guest, pulled and removed afterwards).
+
+**Four layouts**
+
+| Layout | Does git work in the guest? | What the guest can reach |
+| --- | --- | --- |
+| Worktree (absolute pointer), only the worktree mounted | **No**: `fatal: not a git repository`. The `.git` file holds `gitdir: <host path>/cache.git/worktrees/t1` | |
+| Worktree created with `--relative-paths`, worktree and shared repo mounted with the same relative layout | Yes | The whole shared repo |
+| Worktree, shared repo mounted read-write at its host path | Yes | **All branches, the shared hooks and config, and every other task's worktree metadata** |
+| **Per-task clone** (`git clone --shared`) with the cache's objects mounted read-only at their host path | Yes | Only its own repository. The cache objects are read-only, and other tasks are invisible |
+
+**What a hostile guest can do to the host**
+
+- **Guest-planted hook.** A `pre-commit` hook written into the shared repo from inside the guest ran on the **host** when the host later ran a plain `git commit`.
+- **Guest-planted config.** A `core.fsmonitor` command set in the shared config ran on the host at the next plain `git status`.
+- **Both were neutralised** by host-side `git -c core.hooksPath=/dev/null -c core.fsmonitor=false`. Other repo-config keys of the same class were not tested: `core.sshCommand`, `core.pager`, `core.editor`, `credential.helper`, `diff.external`, `gpg.program`, aliases and clean/smudge filters. A hardened `-c` list is therefore a floor, not a guarantee. Safer is to not run host git inside agent-writable trees at all and to `git fetch` their branches into a supervisor-owned repository; that route was not tested.
+- **The same hook trick works in the per-task clone**, but only against the task's own repository. It reaches the host only if the host runs plain git there.
+- **Branch protection exists but is partial.** Deleting a branch that a worktree has checked out was refused (`used by worktree`). Other branches of a shared repo were not tried and are reachable.
+
+**Speed of a bind-mounted checkout** (5000 files, 300 edited):
+
+| | Bind-mounted clone | Clone in a volume |
+| --- | --- | --- |
+| First `git status` after fresh edits | 0.3 to 1.1 s | 0.12 s |
+| Later `git status` | about 100 to 130 ms | 75 to 118 ms |
+| `git add` of 300 files | 363 ms | 120 ms |
+| `git commit` | 667 ms | 334 ms |
+| Clone into the volume from the read-only cache | | 1.6 s |
+
+Git tuning (`core.untrackedCache`, `feature.manyFiles`, `core.preloadIndex`, `core.checkStat=minimal`) changed steady-state `status` by almost nothing (about 100 to 130 ms in every case), because the cost is the cold first stat of every file, not repeated work. For much larger repositories the cold pass grows with the file count and was not measured.
+
+**Consequences**
+- Repositories on the host are workable. The agent's home and caches stay on the volume; the checkout is a host directory mounted read-write.
+- Prefer the **per-task clone with a read-only object cache** over worktrees of one shared repository: it removes the sibling-task and shared-hook exposure and needs no pointer fix. Worktrees stay attractive for the developer's own parallel topics on the host, where no agent writes into the shared `.git`.
+- The host must treat every agent-writable repository as hostile: hardened git invocation or fetch into a trusted repository, never plain git in the agent's tree.
+- A relative worktree (`--relative-paths`) fixes the pointer only if the mounts keep the relative layout.
+
 ## Consequences for the design
 
 - **§5.1 runtime adapter.** Report: isolation boundary is a VM per container; `--internal` networks supported; no restart policy; no suspend or checkpoint observed.
@@ -152,4 +192,4 @@ The "not found" errors are the missing dynamic loader, not a missing file. So a 
 
 ## Not tested
 
-A reboot, the interactive kernel-install prompt of `container system start`, approvals from inside the container, a working cancel through `container exec`, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
+Much larger repositories on a bind mount, fetching from an agent's repository into a trusted one, a reboot, the interactive kernel-install prompt of `container system start`, approvals from inside the container, a working cancel through `container exec`, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
