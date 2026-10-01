@@ -62,9 +62,7 @@ func (s *Store) Do(ctx context.Context, key, requestHash string, fn func(tx *Tx)
 		if err != nil {
 			return err
 		}
-		if out == nil {
-			out = []byte{}
-		}
+		out = tx.s.redactor.Bytes(out) // the stored response and the one returned now are the same bytes
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO idempotency (key, request_hash, response, created_at) VALUES (?, ?, ?, ?)`,
 			key, requestHash, out, tx.s.now().UnixNano()); err != nil {
 			return fmt.Errorf("store: %w", err)

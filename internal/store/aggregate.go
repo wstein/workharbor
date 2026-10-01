@@ -49,11 +49,12 @@ func boolInt(b bool) int {
 // After the transaction commits the aggregate's Version moves and its recorded
 // events are forgotten; the returned events carry their sequence numbers.
 func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain.Event, error) {
+	rd := tx.s.redactor
 	t := &agg.Task
 	expected := t.Version
 	if expected == 0 {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, created_at) VALUES (?, 1, ?, ?, ?, ?)`,
-			string(t.ID), t.Repo, t.Issue, string(t.State), toNano(t.CreatedAt)); err != nil {
+			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), toNano(t.CreatedAt)); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM tasks WHERE id = ?`, string(t.ID)).Scan(&exists) == nil {
 				return nil, fmt.Errorf("task %s: %w", t.ID, ErrStale)
@@ -62,7 +63,7 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	} else {
 		res, err := tx.tx.ExecContext(ctx, `UPDATE tasks SET repo = ?, issue = ?, state = ?, version = version + 1 WHERE id = ? AND version = ?`,
-			t.Repo, t.Issue, string(t.State), string(t.ID), expected)
+			rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.ID), expected)
 		if err != nil {
 			return nil, fmt.Errorf("store: save task %s: %w", t.ID, err)
 		}
@@ -100,7 +101,7 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 	}
 	for i, c := range agg.Candidates {
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO candidates (task_id, sha, run_id, branch, pr_url, ci, ord) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			string(t.ID), c.SHA, string(c.RunID), c.Branch, c.PRURL, string(c.CI), i); err != nil {
+			string(t.ID), c.SHA, string(c.RunID), rd.String(c.Branch), rd.String(c.PRURL), string(c.CI), i); err != nil {
 			return nil, fmt.Errorf("store: save candidate %s: %w", c.SHA, err)
 		}
 	}
@@ -193,7 +194,12 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 // SaveTask does for a task: a compare-and-swap on its Version, so an answer
 // and an expiry of the same Decision cannot both win.
 func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Event, error) {
-	options, err := json.Marshal(d.Options)
+	rd := tx.s.redactor
+	redactedOptions := make([]string, len(d.Options))
+	for i, o := range d.Options {
+		redactedOptions[i] = rd.String(o)
+	}
+	options, err := json.Marshal(redactedOptions)
 	if err != nil {
 		return nil, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 	}
@@ -203,9 +209,9 @@ func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Ev
 	}
 	expected := d.Version
 	values := []any{
-		string(d.TaskID), string(d.RunID), string(d.Kind), boolInt(d.Blocking), d.Subject, d.Input, boolInt(d.InputTruncated),
+		string(d.TaskID), string(d.RunID), string(d.Kind), boolInt(d.Blocking), rd.String(d.Subject), rd.String(d.Input), boolInt(d.InputTruncated),
 		d.SHA, string(options), string(d.Status), toNano(d.CreatedAt), int64(d.Timeout), toNano(d.Deadline), answeredAt,
-		d.Answer, d.Reason, d.AnsweredBy, string(d.SupersededBy),
+		rd.String(d.Answer), rd.String(d.Reason), rd.String(d.AnsweredBy), string(d.SupersededBy),
 	}
 	if expected == 0 {
 		args := append([]any{string(d.ID)}, values...)

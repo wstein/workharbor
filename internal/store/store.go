@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wstein/workharbor/internal/redact"
+
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
 
@@ -28,8 +30,9 @@ var ErrNewerDatabase = errors.New("the database was written by a newer version o
 
 // Store is a SQLite database of tasks, decisions and events.
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db       *sql.DB
+	now      func() time.Time
+	redactor *redact.Redactor
 }
 
 // Option configures Open.
@@ -39,6 +42,18 @@ type Option func(*Store)
 // it to be deterministic.
 func WithClock(now func() time.Time) Option {
 	return func(s *Store) { s.now = now }
+}
+
+// WithRedactor sets the redactor the store applies before it writes. Without
+// this option the store uses a redactor that knows the well-known token
+// formats, so redaction is on by default (design §5.4); pass a redactor with
+// the run's scoped tokens registered to cover those exactly.
+func WithRedactor(r *redact.Redactor) Option {
+	return func(s *Store) {
+		if r != nil {
+			s.redactor = r
+		}
+	}
 }
 
 // Open opens the database at path, creating it if needed, in WAL mode with
@@ -58,7 +73,7 @@ func Open(ctx context.Context, path string, opts ...Option) (*Store, error) {
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, now: func() time.Time { return time.Now().UTC() }}
+	s := &Store{db: db, now: func() time.Time { return time.Now().UTC() }, redactor: redact.New()}
 	for _, o := range opts {
 		o(s)
 	}

@@ -31,6 +31,7 @@ func (tx *Tx) Append(ctx context.Context, events ...domain.Event) ([]domain.Even
 		if payload == nil {
 			payload = []byte("{}")
 		}
+		payload = tx.s.redactor.Bytes(payload) // audit entries are never purged: redact before writing
 		res, err := tx.tx.ExecContext(ctx, `INSERT INTO events (task_id, kind, tier, payload, at) VALUES (?, ?, ?, ?, ?)`,
 			string(e.TaskID), string(e.Kind), string(e.Tier), payload, e.At.UnixNano())
 		if err != nil {
