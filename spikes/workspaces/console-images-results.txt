@@ -1,0 +1,18 @@
+== fedora
+#5 16.99 Removed 18 files, 11 directories (total of 99 MiB). 0 errors occurred.
+#5 DONE 17.0s
+#6 DONE 4.9s
+git: git version 2.55.0
+zsh: zsh 5.9 (aarch64-redhat-linux-gnu)
+fish: fish, version 4.6.0
+jq: jq-1.8.1
+Fedora Linux 44 (Container Image)
+== ubuntu
+#4 DONE 0.9s
+#5 DONE 16.8s
+#6 DONE 5.0s
+git: git version 2.43.0
+zsh: zsh 5.9 (aarch64-unknown-linux-gnu)
+fish: fish, version 3.7.0
+jq: jq-1.7
+Ubuntu 24.04.5 LTS
