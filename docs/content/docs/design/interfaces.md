@@ -92,6 +92,8 @@ First run is a guided sequence of six steps. The steps are the contract; the sur
 5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
 6. **Ready.** Summary of what was configured and what is not yet verified, then the first command: `whr run <issue-url>`.
 
+`whr doctor` runs the checks of these steps and prints one line per check: `ok`, `fail`, `not_verified` or `skipped`, then the check's name and what it found. Only `fail` is a non-zero exit; a check nobody has measured says `not_verified`, never `ok`, and `--skip <check>` leaves one out until the next run. The checks: `config`, `server`, `forge-key`, `forge-limits`, `agent-login`, `runtime`, `mounts`, `egress`, `reboot`, `capacity` and `notifications`. In release 1 the live measurements (default-deny egress, reboot survival, capacity, the forge's limits, notifications) are `not_verified`: the command does not run them yet. `ok` on `forge-key`, `agent-login` and `runtime` means the file or binary is in order, not that GitHub, the vendor or the container service accepted it.
+
 ### 9.6 Mobile clients: phone and 12-inch tablet
 
 The phone and a 12-inch tablet are the **primary** clients (D35); a laptop browser is a larger tablet. Both run the installed PWA (§13) over the VPN and its forwarder (D29). The phone is for short, urgent interactions; the tablet replaces the laptop for reviewing and longer supervision.
