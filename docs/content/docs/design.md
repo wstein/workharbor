@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D21 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D22 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks | `internal/domain`, `internal/policy`, `internal/runtime`; issues #4, #8, #15, #16, #17, #18 |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container | Issues #1 and #2; results in §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
@@ -69,6 +69,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D19 | **Stock images plus a shared read-only tool store** (§5.6): agent CLIs live once, content-addressed, on the host and are mounted read-only; versions are profiles | Spike #2: installing per container cost about 11 s and 230 MB; the store is immutable from inside and shared by several containers |
 | D20 | **Adapters are built in for release 1 and out-of-process plugins later** (§5.5), never Go's in-process `plugin` package | Two built-in adapters prove the contract first; third-party code stays out of the supervisor process |
 | D21 | **Task state machine, amending D13** (§4.1): a run paused by `auth_expired` or `quota_exhausted` moves its task to `awaiting_guidance`; a task fails only from `running` or `awaiting_guidance`, and a lost workspace in `ready_for_review` opens a review Decision (rework or cancel) | Settles the gaps found in the review of the D13 implementation without new transitions, so the code in `internal/domain` already agrees |
+| D22 | **Build the supervision layer; adopt none of the agent-task supervisors** (issue #5, confirms D1). OpenHands, Vibe Kanban, Sculptor and Coder Agents were assessed from their docs and repositories (§11). Borrow: ACP as a candidate generic agent-adapter protocol (§5.5) and OpenHands' confirmation states; Sculptor's Claude control-protocol integration and editable message queue; Claude Remote Control's phone UX as a reference and a fallback for Claude | None meets the non-negotiable parts of release 1 together: Apple Container, default-deny egress per environment, approvals routed to a human for Claude Code and Codex under subscription logins, an agent that never pushes, more than one forge. Adapting one would replace its runtime, policy and forge layers, which is most of workharbor. Vendor remotes cover one vendor and push to GitHub only. Desk research only: the claims marked **unverified** in §11 were not tried |
 
 ## 4. Domain model
 
@@ -550,25 +551,36 @@ Result chain: **Task → branch → commit SHA → PR → CI results** (ReviewCa
 | Socktainer | Docker API over Apple Container | Partial compatibility; exec and restart recovery limits |
 | Eclipse Che | Kubernetes dev workspaces | Heavy |
 | code-server | Browser editor | No orchestration; Open VSX |
-| **Agent-task supervisors** (OpenHands, Vibe Kanban, Sculptor, Coder Tasks) | May cover 60–80% of release 1 | **Not yet assessed; status and Apple Container support unverified** |
+| **Agent-task supervisors** (OpenHands, Vibe Kanban, Sculptor, Coder Agents) | Assessed by desk research (issue #5, D22): none fits release 1 | See the scorecard below |
 
-The original rating table missed agent-task supervisors. It now has an explicit "adopt/extend" column and is **re-rated after the spikes**.
+**Agent-task supervisors and vendor remotes** (desk research from docs and repositories, 1 October 2026, issue #5; nothing was installed, so every capability below is as documented, and the marked ones are **unverified**). Fit is against release 1: phone or browser remote, detached runs, mid-run messages, approvals routed to a human, Apple Container, default-deny egress, supervisor-only push, more than one forge.
+
+| Candidate | Runtime | Agents | Approvals to a human | Push | Forges | Fit | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| OpenHands 1.24 (MIT) | Docker or a plain process; no Apple Container | Own agent; Claude Code and Codex over ACP | Confirmation mode for its own agent; for ACP agents **unverified** | Agent holds forge tokens | GitHub, GitLab, Bitbucket | 5 | Borrow: ACP as an adapter protocol, the confirmation states |
+| Vibe Kanban 0.1.44 (Apache-2.0) | Host worktrees, no isolation | Claude Code, Codex, Gemini and others | Plan approval cards | The UI pushes, opens and can merge PRs | GitHub, Azure Repos | 3 | Reject: the company shut down and its phone pairing went with its cloud service |
+| Sculptor 0.48 (MIT, research preview) | Desktop app; Docker backend experimental | Claude Code, Pi | None: tool permissions are auto-approved | Pushes and opens a PR on a click | GitHub | 3 | Borrow: its Claude control-protocol integration and editable message queue |
+| Coder Agents 2.36 (AGPL; Coder Tasks was removed) | Terraform templates; no Apple Container provisioner | Its own loop on API keys; no Claude Code or Codex subscription | Plan mode only | Agent pushes as the user | Through templates (**unverified**) | 2 | Reject |
+| Claude Code Remote Control and on the web | Local CLI relayed by the vendor, or vendor VMs | Claude only | Permission modes; approval from the phone **unverified** | The cloud agent pushes itself | GitHub only | 3 | Complement: a reference phone UX and a fallback for Claude |
+| Codex cloud | Vendor containers | Codex only | **Unverified** | User-initiated PR | GitHub only | 2 | Complement |
+
+The original rating table missed agent-task supervisors; it is re-rated here (D22).
 
 | Strategy | Original fit | Revised note |
 | --- | --- | --- |
 | Existing runner + thin supervisor + native Apple Container | 9 | Preferred; Claude Code first, Codex CLI second (D12, §5.2) |
 | Same supervisor via Portainer/Socktainer | 7 | → ~4–5; optional shim only |
-| Coder workspace layer + task supervisor | 7 | Re-rate after spike |
+| Coder workspace layer + task supervisor | 7 | → ~3: Coder Tasks was removed and Coder Agents runs its own loop on API keys (D22) |
 | Portainer + templates alone | 4 | Insufficient |
 | Full new Codespaces/DevPod replacement | 3 | Excessive scope |
-| Adopt/extend an agent-task supervisor | — | **Unrated; spike first** |
+| Adopt/extend an agent-task supervisor | — | 2–3: none supports Apple Container, default-deny egress, host-routed approvals under subscription logins and supervisor-only push together (D22) |
 
 ## 12. Open decisions and spikes (reordered)
 
 Ordered by what is cheap and blocks the most work.
 
 1. **Runner scorecard** (value 10, effort 3). Target agents are Claude Code, Codex CLI and Google Antigravity; Aider, OpenHands, Goose and others are scored for reference. Claude Code ships first and Codex CLI second. Antigravity ships a CLI (`agy`) with a headless print mode, so the gate is met: spike #1 drove it headless with typed events and resume. It has no mid-run injection and no approval channel in print mode, so it is a second-tier adapter in degraded mode (§5.2). Its account requirements and vendor terms for headless use are **unverified**. Spike #1 (issue #1) measured Claude Code, and Codex CLI and Antigravity in part; the results are in §5.2, and still open are a real Codex run (usage limit until 3 October), a login that expires mid-session, what the usage-limit `status` reads once exhausted, and approvals for Codex and Antigravity. One page comparing them on: headless mode, permission/approval bypass, session-ID resume after process or VM kill, mid-run message injection (stdin vs resumed turn; a release 1 requirement, §5.2), structured event output (also required), how "blocked, needs human" is reported. Also score subscription sign-in for Claude Code and Codex CLI (all **unverified**): headless or device-code login, where the token is stored, whether it survives a container restart and a Mac reboot, refresh behaviour inside a container, what happens when two environments share one login, how an expired login or exhausted usage window is signalled, current vendor terms for this kind of use, and whether a run keeps going with no client attached. Pause via SIGSTOP or stop-after-turn is not a resumed session; most CLIs resume only between turns.
-2. **Adopt-or-extend spike** (value 9, effort 3). Time-box 1–2 days on two of OpenHands, Vibe Kanban, Sculptor, Coder Tasks before committing to a build. Also check where the vendors' hosted remotes fall short for each target agent (§1).
+2. **Adopt-or-extend** (value 9, effort 3): decided by desk research, build (D22, §11). Hands-on checks of the unverified claims are optional and only worth doing if a candidate adds Apple Container support or host-routed approvals.
 3. **Apple Container native spike**, merged with benchmarking. Run as spike #2 (issue #2, branch `spike/apple-container`, `RESULTS.md`); measured on Apple Container 1.5.0, macOS 26.6.2. Compatibility checklist:
     - [x] Create/start/stop/delete representative workspaces (start about 1.1 s; use `--init`, §5.1)
     - [x] Enforce explicit CPU/memory (vCPU count and a cgroup limit inside the VM)
