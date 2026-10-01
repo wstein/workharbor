@@ -178,7 +178,7 @@ Still open: retention and garbage collection of completed tasks, topics and work
 
 A **topic** is one line of work: one branch (`agent/<topic>`) with its own checkout on the host. Several topics are in flight at once, each with its own environment and agent, and the developer can open any checkout in their editor at the same time. That is the worktree idea: parallel topics that are merged and tidied locally before anything leaves the machine.
 
-**Since D42** a topic is an agent's branch in a workspace: each named agent works in its own worktree of the workspace's agent clone, rebases onto the integration branch, and its commits leave as a `git bundle` exported from the running environment (issue #91), not through a fetch from a stopped environment. The layout below is the per-task clone of D17 that D42 replaces; it stays until #90 and #91 land, and its cleanup and push rules (prepare, per-SHA approval, push, no rewriting of pushed commits) carry over unchanged.
+**Since D42** a topic is an agent's branch in a workspace: each named agent works in its own worktree of the workspace's agent clone, rebases onto the integration branch, and its commits leave as a `git bundle` exported from the running environment (issue #91), not through a fetch from a stopped environment. The import is a fetch of the bundle into a supervisor-owned repository that lacks its objects: `git bundle verify` alone passed a bundle truncated to half its size, while the fetch refused it and left no ref (spike #89). The layout below is the per-task clone of D17 that D42 replaces; it stays until #90 and #91 land, and its cleanup and push rules (prepare, per-SHA approval, push, no rewriting of pushed commits) carry over unchanged.
 
 **Checkout layout** (spike #2, item 9):
 
