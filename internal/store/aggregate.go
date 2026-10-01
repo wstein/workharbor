@@ -402,6 +402,25 @@ func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Resp
 	return d, events, respond
 }
 
+// ActiveTaskIDs returns the IDs of the tasks that are not over (completed,
+// cancelled or failed), oldest first. The reconciler walks them (design §5.3).
+func (s *Store) ActiveTaskIDs(ctx context.Context) ([]domain.ID, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM tasks WHERE state NOT IN ('completed', 'cancelled', 'failed') ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: active tasks: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []domain.ID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("store: active tasks: %w", err)
+		}
+		out = append(out, domain.ID(id))
+	}
+	return out, rows.Err()
+}
+
 // OpenDecisions returns the open Decisions of a task, oldest first. After a
 // restart the reconciler supersedes those raised by a run (design §4.2).
 func (s *Store) OpenDecisions(ctx context.Context, task domain.ID) ([]*domain.Decision, error) {

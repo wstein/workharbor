@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -578,5 +579,62 @@ func TestRespondDecisionSettlesTheTask(t *testing.T) {
 	got, _ := s.LoadTask(bg, "t1")
 	if d, _ := got.Decision("d1"); got.Task().State != domain.TaskRunning || d.Status != domain.DecisionAnswered {
 		t.Errorf("task %s, decision %s", got.Task().State, d.Status)
+	}
+}
+
+func TestActiveTaskIDsSkipsFinishedTasks(t *testing.T) {
+	s := openTemp(t)
+	for _, id := range []domain.ID{"t1", "t2", "t3"} {
+		if _, err := s.SaveTask(bg, newAggregate(t, id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, _ := s.LoadTask(bg, "t2")
+	if err := a.Cancel(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ActiveTaskIDs(bg)
+	if err != nil || len(got) != 2 || got[0] != "t1" || got[1] != "t3" {
+		t.Errorf("active tasks = %v, %v; want t1 and t3", got, err)
+	}
+}
+
+// A container's address changes on every start, so no table has a column for
+// one: the schema is the guarantee that it is never stored (design §5.3).
+func TestNoTableStoresAnAddress(t *testing.T) {
+	s := openTemp(t)
+	tables, err := s.db.QueryContext(bg, `SELECT name FROM sqlite_master WHERE type = 'table'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for tables.Next() {
+		var n string
+		if err := tables.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, n)
+	}
+	_ = tables.Close()
+	for _, table := range names {
+		cols, err := s.db.QueryContext(bg, `SELECT name FROM pragma_table_info(?)`, table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for cols.Next() {
+			var c string
+			if err := cols.Scan(&c); err != nil {
+				t.Fatal(err)
+			}
+			for _, bad := range []string{"addr", "ip", "host", "endpoint"} {
+				if c == bad || strings.HasPrefix(c, bad+"_") || strings.HasSuffix(c, "_"+bad) {
+					t.Errorf("%s.%s looks like a container address column", table, c)
+				}
+			}
+		}
+		_ = cols.Close()
 	}
 }
