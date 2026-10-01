@@ -422,7 +422,7 @@ Rules for using them:
 
 ## 7. Security
 
-The rules below are the security requirements. The [threat model](../threat-model/) says what each defends against, where it is enforced and tested, and which risks are accepted (issue #11).
+The rules below are the security requirements. The [threat model](threat-model.md) says what each defends against, where it is enforced and tested, and which risks are accepted (issue #11).
 
 1. **Untrusted input.** Issue text, PR comments and CI logs are untrusted. Use trust tiers by author (owner vs external); hold or flag runs on issues from unknown authors. A run that combines private data, untrusted input and outbound network requires approval.
 2. **Default-deny egress** through a logging allowlist proxy: forge, package registries, LLM API only. Block LAN, host, other workspaces and cloud-metadata addresses.
