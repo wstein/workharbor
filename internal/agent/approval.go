@@ -15,16 +15,16 @@ const DefaultApprovalTimeout = domain.DefaultApprovalTimeout
 
 // ApprovalRequest is a permission prompt of the agent put to the host.
 type ApprovalRequest struct {
-	ID    string
-	Tool  string
-	Input string // capped by Ask; all of it is untrusted
-	Plan  bool   // an ExitPlanMode request, whose subject is the plan
+	ID    string `json:"id"`
+	Tool  string `json:"tool"`
+	Input string `json:"input"`          // capped by Ask; all of it is untrusted
+	Plan  bool   `json:"plan,omitempty"` // an ExitPlanMode request, whose subject is the plan
 }
 
 // Approval is the human's answer.
 type Approval struct {
-	Allow  bool
-	Reason string // optional; passed back to the agent
+	Allow  bool   `json:"allow"`
+	Reason string `json:"reason,omitempty"` // optional; passed back to the agent
 }
 
 // Approver answers permission prompts for the host, usually by opening an

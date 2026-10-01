@@ -26,27 +26,27 @@ const (
 // Cost is an amount and where it comes from. In api-key mode it is real
 // spend; in subscription mode it is notional (design §5.7).
 type Cost struct {
-	MicroUSD int64 // millionths of a US dollar, so that no float holds money
-	Source   CostSource
+	MicroUSD int64      `json:"micro_usd"` // millionths of a US dollar, so that no float holds money
+	Source   CostSource `json:"source"`
 }
 
 // UsageWindow is how much of a rolling usage limit has been used.
 type UsageWindow struct {
-	Name        string  // for example WindowFiveHour
-	Utilization float64 // 0 to 1
-	ResetsAt    time.Time
+	Name        string    `json:"name"`        // for example WindowFiveHour
+	Utilization float64   `json:"utilization"` // 0 to 1
+	ResetsAt    time.Time `json:"resets_at,omitzero"`
 }
 
 // Usage is the payload of a usage event: one turn's tokens and cost, and the
 // usage windows when the agent reports them.
 type Usage struct {
-	Model            string
-	InputTokens      int64
-	OutputTokens     int64
-	CacheReadTokens  int64
-	CacheWriteTokens int64
-	Cost             *Cost // nil when the agent reports none
-	Windows          []UsageWindow
+	Model            string        `json:"model"`
+	InputTokens      int64         `json:"input_tokens"`
+	OutputTokens     int64         `json:"output_tokens"`
+	CacheReadTokens  int64         `json:"cache_read_tokens"`
+	CacheWriteTokens int64         `json:"cache_write_tokens"`
+	Cost             *Cost         `json:"cost,omitempty"` // nil when the agent reports none
+	Windows          []UsageWindow `json:"windows,omitempty"`
 }
 
 // ErrBadUsage reports a usage payload that cannot be recorded.

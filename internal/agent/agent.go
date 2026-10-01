@@ -44,20 +44,20 @@ const (
 // Capabilities describe what an agent supports. Every flag is a claim the
 // conformance suite checks.
 type Capabilities struct {
-	ContractVersion int
+	ContractVersion int `json:"contract_version"`
 
-	Headless          bool // runs unattended
-	StructuredEvents  bool // typed events; required of every adapter
-	MidRunInstruction bool // a message can be sent into a running session
-	HostApprovals     bool // permission prompts are routed to the host
-	CooperativePause  bool // pause without ending the process (D11: none of the measured agents)
-	SessionResume     bool // a stopped session can be resumed by ID
-	IssuePRTooling    bool
-	AwaitingGuidance  bool // can raise a blocking question
-	ReportsQuota      bool // reports quota_exhausted with the reset time
-	ReportsUsage      bool // emits usage events with a typed payload (§5.7)
+	Headless          bool `json:"headless"`            // runs unattended
+	StructuredEvents  bool `json:"structured_events"`   // typed events; required of every adapter
+	MidRunInstruction bool `json:"mid_run_instruction"` // a message can be sent into a running session
+	HostApprovals     bool `json:"host_approvals"`      // permission prompts are routed to the host
+	CooperativePause  bool `json:"cooperative_pause"`   // pause without ending the process (D11: none of the measured agents)
+	SessionResume     bool `json:"session_resume"`      // a stopped session can be resumed by ID
+	IssuePRTooling    bool `json:"issue_pr_tooling"`
+	AwaitingGuidance  bool `json:"awaiting_guidance"` // can raise a blocking question
+	ReportsQuota      bool `json:"reports_quota"`     // reports quota_exhausted with the reset time
+	ReportsUsage      bool `json:"reports_usage"`     // emits usage events with a typed payload (§5.7)
 
-	AuthModes []AuthMode
+	AuthModes []AuthMode `json:"auth_modes"`
 }
 
 // Mode computes the mode from the capabilities.
@@ -102,27 +102,27 @@ const (
 // Event is one typed observation from a running agent. Everything in it comes
 // from the agent or the repository and is untrusted data.
 type Event struct {
-	Kind      EventKind
-	At        time.Time
-	SessionID string
-	Text      string
-	Tool      string
-	Input     string    // capped
-	ResetAt   time.Time // for quota_exhausted, when known
+	Kind      EventKind `json:"kind"`
+	At        time.Time `json:"at"`
+	SessionID string    `json:"session_id,omitempty"`
+	Text      string    `json:"text,omitempty"`
+	Tool      string    `json:"tool,omitempty"`
+	Input     string    `json:"input,omitempty"`   // capped
+	ResetAt   time.Time `json:"reset_at,omitzero"` // for quota_exhausted, when known
 	// Usage is set on a usage event (design §5.7).
-	Usage *Usage
+	Usage *Usage `json:"usage,omitempty"`
 	// Approval is set on an approval event: the record the audit entry is
 	// written from (design §5.4).
-	Approval *ApprovalRecord
+	Approval *ApprovalRecord `json:"approval,omitempty"`
 }
 
 // ApprovalRecord is what happened to one permission prompt: the request that
 // was put to the host and the answer the agent was given. A prompt that no
 // human answered is a denial with the reason why.
 type ApprovalRecord struct {
-	ID     string // the ApprovalRequest ID
-	Allow  bool
-	Reason string
+	ID     string `json:"id"` // the ApprovalRequest ID
+	Allow  bool   `json:"allow"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ResultStatus is how a session ended.
@@ -142,10 +142,10 @@ const (
 
 // Result is the outcome of a session.
 type Result struct {
-	Status    ResultStatus
-	SessionID string
-	Text      string
-	ResetAt   time.Time // for ResultQuotaExhausted, when known
+	Status    ResultStatus `json:"status"`
+	SessionID string       `json:"session_id,omitempty"`
+	Text      string       `json:"text,omitempty"`
+	ResetAt   time.Time    `json:"reset_at,omitzero"` // for ResultQuotaExhausted, when known
 }
 
 // Delivery says how an instruction reached the agent.
@@ -178,22 +178,23 @@ const (
 
 // StartSpec describes a session to start or resume.
 type StartSpec struct {
-	EnvID   string
-	Workdir string
-	Prompt  string
-	Auth    AuthMode
+	EnvID   string   `json:"env_id"`
+	Workdir string   `json:"workdir"`
+	Prompt  string   `json:"prompt"`
+	Auth    AuthMode `json:"auth"`
 	// PermissionMode is fixed when the agent process starts. Empty means
 	// PermissionManual.
-	PermissionMode PermissionMode
+	PermissionMode PermissionMode `json:"permission_mode,omitempty"`
 	// AllowedTools are the tools that run without asking in PermissionDontAsk,
 	// and must be empty in any other mode.
-	AllowedTools []string
+	AllowedTools []string `json:"allowed_tools,omitempty"`
 	// Approver answers the agent's permission prompts. An adapter that reports
-	// HostApprovals needs one.
-	Approver Approver
+	// HostApprovals needs one. It does not cross a process boundary: the plugin
+	// calls back to the supervisor (design §5.5).
+	Approver Approver `json:"-"`
 	// ApprovalTimeout is how long the Approver has; zero means
-	// DefaultApprovalTimeout.
-	ApprovalTimeout time.Duration
+	// DefaultApprovalTimeout. It is in nanoseconds on the wire.
+	ApprovalTimeout time.Duration `json:"approval_timeout_ns,omitempty"`
 }
 
 // Errors an adapter returns for the same situations.
