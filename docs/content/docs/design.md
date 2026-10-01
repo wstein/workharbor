@@ -86,7 +86,34 @@ Task, run and environment each get their own small FSM with explicit legal trans
     - **`completed`** is set when the pushed PR is merged on the forge.
     - **`failed`** is terminal and maps to exit code 10 (§9.2). A failed run does not fail its task: it opens a blocking Decision (retry or cancel). A task fails only when a hard limit ends it (time or cost budget, a lost workspace) or the human answers that Decision with "give up".
     - A paused run leaves its task `running`: pause is a run state.
-- **Run and environment:** tracked separately. Pause is a **run** state, not an environment state.
+- **Run** (issue #15):
+
+    | From | To |
+    | --- | --- |
+    | `starting` | `running`, `stopped`, `failed`, `interrupted` |
+    | `running` | `paused`, `stopped`, `failed`, `interrupted` |
+    | `paused` | `starting` (relaunch), `running` (cooperative pause), `stopped`, `interrupted` |
+    | `interrupted` | `starting` (resume), `stopped`, `failed` |
+    | `stopped`, `failed` | none (terminal) |
+
+    - **Pause is a run state.** Pausing never changes the environment (§4.3).
+    - **Resuming a paused run.** None of the measured agents has a cooperative pause (D11), so pause is a hard interrupt: the agent process is gone while the run is paused, and resume relaunches it from the session. That is `paused → starting`, like a resume from `interrupted`, so a failed relaunch can end in `failed`. `paused → running` is for an agent that reports cooperative pause, whose process stays alive. If the process of a paused run is lost anyway, the run goes to `interrupted`.
+    - **`stopped`** is a normal end: the agent finished, or the run was cancelled. **`failed`** is an agent crash, a failed start or a failed resume.
+    - **Into `interrupted`:** the reconciler (§5.3) marks a `starting`, `running` or `paused` run `interrupted` when its process or environment is gone: a supervisor or host restart, or a lost environment. Nothing else sets it, and a pending approval is raised again on resume (§4.2).
+    - **Out of `interrupted`:** `starting` when the reconciler resumes the agent from its session in a running environment (§4.3); `stopped` when the task is cancelled; `failed` when resuming is impossible or its attempts are used up.
+    - **Terminal runs are never reused.** A retry or rework starts a new run on the same workspace and topic (§4.1 task rules).
+- **Environment** (issue #15):
+
+    | From | To |
+    | --- | --- |
+    | `provisioning` | `stopped` (created), `deleted` (provisioning failed or abandoned) |
+    | `stopped` | `running`, `deleted` |
+    | `running` | `stopped` |
+    | `deleted` | none (terminal) |
+
+    - **Start and stop** move between `stopped` and `running`. After a service or host restart every environment is `stopped` (spike #2, §5.3), so the reconciler observes `running → stopped` and starts the ones that should run.
+    - **Delete only from `stopped`.** A running environment is stopped first.
+    - **Recycling** (§4.3) deletes an environment and provisions a new one, so it is a new Environment with a new ID. An environment is never reprovisioned.
 - **Coupling rules (examples):**
   - `ready_for_review` requires a stopped run and a pinned commit SHA.
   - Pausing a run never stops its environment.
