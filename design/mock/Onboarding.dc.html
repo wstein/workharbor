@@ -106,8 +106,8 @@ a{color:inherit;text-decoration:none}
             </sc-for>
             <sc-if value="{{ isSub }}" hint-placeholder-val="{{ true }}">
               <div style="padding: 16px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556; display: flex; align-items: center; justify-content: space-between; gap: 16px">
-                <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Sign in to Claude Code</span><span style="color: #9fb3c8; font-size: 12px">Open the link on any device and enter this code. Nothing is typed into this page.</span></div>
-                <span style="padding: 8px 14px; border-radius: 8px; background: #13294a; font-family: 'IBM Plex Mono', monospace; font-size: 18px; letter-spacing: 0.08em">XXXX-0000</span>
+                <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Sign in to Claude Code inside the environment</span><span style="color: #9fb3c8; font-size: 12px">Open the console, start claude and use its own login. workharbor never sees the credential.</span></div>
+                <span style="padding: 8px 14px; border-radius: 8px; background: #13294a; font-family: 'IBM Plex Mono', monospace; font-size: 14px">whr console &lt;workspace&gt;</span>
               </div>
             </sc-if>
           </div>
@@ -207,8 +207,8 @@ class Component extends DCLogic {
     });
 
     const modeDefs = [
-      { key: 'sub', title: 'Subscription login', text: 'Use your Claude or ChatGPT plan through the agent CLI. No API key to manage.', note: 'The login lives inside the agent environment, in a dedicated auth folder. It is long-lived, so an accepted risk for a personal, watched setup. Usage shows the five-hour and seven-day windows first; cost is notional. Runs pause and ask you when the login expires or a window runs out.' },
-      { key: 'key', title: 'API key', text: 'The key stays on the host, in the proxy, and is issued per run.', note: 'Stronger isolation: the agent never sees the key. Billed per use, so cost is real spend.' },
+      { key: 'sub', title: 'Subscription login', text: 'Use your Claude or ChatGPT plan through the agent CLI. No API key to manage.', note: 'You sign in inside the environment with the agent\'s own login; workharbor never sees it (D40). The login lives there, in a dedicated auth folder. It is long-lived, so an accepted risk for a personal, watched setup. Usage shows the five-hour and seven-day windows first; cost is notional. Runs pause and ask you when the login expires or a window runs out.' },
+      { key: 'key', title: 'API key', text: 'The key lives in a 0600 file on the host and reaches the agent through an env file, never a command line.', note: 'Billed per use, so cost is real spend. A host-side key proxy that keeps the key out of the environment comes later (D41).' },
     ];
     const modes = modeDefs.map((m) => {
       const on = m.key === mode;
@@ -250,7 +250,7 @@ class Component extends DCLogic {
     const summary = [
       { k: 'Server', v: 'https://mac-mini.example.net' },
       { k: 'Forge', v: 'GitHub · wstein/workharbor · workharbor GitHub App' },
-      { k: 'Agents', v: (mode === 'sub' ? 'Claude Code, subscription login' : 'API key held in the host proxy') + ' · default mode ' + presetDefs.find((d) => d.key === pm).label },
+      { k: 'Agents', v: (mode === 'sub' ? 'Claude Code, subscription login' : 'API key from a 0600 file on the host') + ' · default mode ' + presetDefs.find((d) => d.key === pm).label },
       { k: 'Host checks', v: '6 passed, 2 not tested yet' },
       { k: 'Notifications', v: (prov === 'self' ? 'Self-hosted ntfy' : 'ntfy.sh') + (sent ? ' · test push sent' : ' · no test push yet') },
     ];

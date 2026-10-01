@@ -62,7 +62,7 @@ a{color:inherit;text-decoration:none}
 
         <div style="border: 1px solid #1f3556; border-radius: 12px; background: #0f2038; overflow: hidden">
           <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 150px 96px 64px; gap: 16px; padding: 11px 20px; color: #9fb3c8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #1f3556">
-            <div>State</div><div>Task</div><div>Agent</div><div>Workspace</div><div style="text-align: right">Age</div>
+            <div>State</div><div>Task</div><div>Agent</div><div>Workspace / agent</div><div style="text-align: right">Age</div>
           </div>
           <sc-for list="{{ rows }}" as="row" hint-placeholder-count="6">
             <a href="Task.dc.html" style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 150px 96px 64px; gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid #172a48">
@@ -160,14 +160,14 @@ class Component extends DCLogic {
       done: { label: 'Completed', bg: '#11331f', fg: '#4ade80' },
     };
     const all = [
-      { state: 'guidance', title: 'Egress allowlist proxy: a question and a Write approval', ref: 'wstein/workharbor#15', agent: 'Claude Code', env: 'ws-2c9e', age: '18m' },
-      { state: 'guidance', title: 'Audit log export: login expired, log in again', ref: 'wstein/workharbor#16', agent: 'Claude Code', env: 'ws-4d1c', age: '31m' },
-      { state: 'guidance', title: 'Add run interrupted state: approve the plan', ref: 'wstein/workharbor#12', agent: 'Claude Code', env: 'ws-7f3a', age: '42m' },
-      { state: 'running', title: 'Policy table: table-driven tests', ref: 'wstein/workharbor#11', agent: 'Codex CLI · degraded', env: 'ws-91b0', age: '9m' },
-      { state: 'review', title: 'Reconciler: mark orphaned runs interrupted', ref: 'wstein/workharbor#9 · Ready to push? 3c71a9e', agent: 'Claude Code', env: 'stopped', age: '2h' },
-      { state: 'queued', title: 'Workspace retention on the 1 TB disk', ref: 'wstein/workharbor#18', agent: 'waiting for a slot', env: '-', age: '4m' },
-      { state: 'failed', title: 'Tool store garbage collection: cost budget exceeded', ref: 'wstein/workharbor#22 · budget $12.00', agent: 'Claude Code', env: 'stopped', age: '3h' },
-      { state: 'done', title: 'Runner scorecard: headless and resume', ref: 'wstein/workharbor#7 · PR #19 merged', agent: 'Claude Code', env: 'deleted', age: '1d' },
+      { state: 'guidance', title: 'Egress allowlist proxy: a question and a Write approval', ref: 'wstein/workharbor#15', agent: 'Claude Code', env: 'whr-main / runtime', age: '18m' },
+      { state: 'guidance', title: 'Audit log export: login expired, log in again', ref: 'wstein/workharbor#16', agent: 'Claude Code', env: 'whr-docs / docs', age: '31m' },
+      { state: 'guidance', title: 'Add run interrupted state: approve the plan', ref: 'wstein/workharbor#12', agent: 'Claude Code', env: 'whr-main / domain', age: '42m' },
+      { state: 'running', title: 'Policy table: table-driven tests', ref: 'wstein/workharbor#11', agent: 'Codex CLI · degraded', env: 'whr-main / policy', age: '9m' },
+      { state: 'review', title: 'Reconciler: mark orphaned runs interrupted', ref: 'wstein/workharbor#9 · Ready to push? 3c71a9e', agent: 'Claude Code', env: 'whr-main / runtime', age: '2h' },
+      { state: 'queued', title: 'Workspace retention on the 1 TB disk', ref: 'wstein/workharbor#18', agent: 'waiting for a slot', env: 'whr-docs / docs', age: '4m' },
+      { state: 'failed', title: 'Tool store garbage collection: cost budget exceeded', ref: 'wstein/workharbor#22 · budget $12.00', agent: 'Claude Code', env: 'whr-main / store', age: '3h' },
+      { state: 'done', title: 'Runner scorecard: headless and resume', ref: 'wstein/workharbor#7 · PR #19 merged', agent: 'Claude Code', env: 'whr-main / agent', age: '1d' },
     ];
     const needs = (r) => r.state === 'guidance' || r.state === 'review';
     const match = (r) => filter === 'all' || (filter === 'needs' && needs(r)) || filter === r.state;

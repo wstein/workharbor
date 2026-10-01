@@ -143,7 +143,7 @@ a{color:inherit;text-decoration:none}
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
         <span style="font-weight: 600">Branch and push</span>
         <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
-          <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/egress-proxy · not pushed</span>
+          <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/runtime · not pushed</span>
           <span style="color: #9fb3c8">Last commit</span><span><span style="font-family: 'IBM Plex Mono', monospace">8e2f1c4</span> <span style="color: #9fb3c8">by the agent, not pinned yet</span></span>
           <span style="color: #9fb3c8">Changes</span><span><span style="color: #4ade80; font-family: 'IBM Plex Mono', monospace">+214</span> <span style="color: #f87171; font-family: 'IBM Plex Mono', monospace">-18</span> in 6 files</span>
           <span style="color: #9fb3c8">Tests</span><span style="color: #4ade80">41 passed</span>
@@ -157,13 +157,14 @@ a{color:inherit;text-decoration:none}
       </div>
 
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
-        <span style="font-weight: 600">Workspace ws-2c9e</span>
+        <span style="font-weight: 600">Workspace whr-main · agent runtime</span>
         <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
           <span style="color: #9fb3c8">Environment</span><span>Running · Apple Container, one VM</span>
           <span style="color: #9fb3c8">Resources</span><span style="font-family: 'IBM Plex Mono', monospace">2 CPU · 1.4 of 2 GiB</span>
-          <span style="color: #9fb3c8">Storage</span><span>Volume ws-2c9e-vol, one writer</span>
+          <span style="color: #9fb3c8">Storage</span><span>Workspace folder on the host SSD, agent home on a volume</span>
           <span style="color: #9fb3c8">Network</span><span>Internal, through the egress proxy</span>
           <span style="color: #9fb3c8">Tools</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">claude 2.1.286 · store 0292fa22</span>
+          <span style="color: #9fb3c8">Console</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">whr console whr-main</span>
           <span style="color: #9fb3c8">Lock</span><span style="color: {{ lock.fg }}; font-weight: 500">{{ lock.label }}</span>
           <span style="color: #9fb3c8">Session</span><span>{{ session }}</span>
           <span style="color: #9fb3c8">Agent login</span><span>Claude Code · subscription · <span style="color: #4ade80">signed in</span></span>
@@ -211,9 +212,9 @@ class Component extends DCLogic {
 
     const base = [
       { time: '09:12', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Task created from issue #15 by you.', audit: true },
-      { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started in ws-2c9e (Apple Container, 2 GiB), tools from the shared store: claude 2.1.286.', audit: true },
+      { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started for agent runtime in workspace whr-main (Apple Container, 2 GiB), tools from the shared store: claude 2.1.286.', audit: true },
       { time: '09:21', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Read design section 7: default-deny egress through a logging proxy.' },
-      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Committed on agent/egress-proxy (8e2f1c4) in the task checkout. Not pushed yet.', audit: true },
+      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Committed on agent/runtime (8e2f1c4) in its worktree. Not exported or pushed yet.', audit: true },
       { time: '09:41', dot: '#fbbf24', fg: '#fde68a', text: 'Asked you: allow proxy.golang.org and sum.golang.org in the default allowlist?', audit: true },
       { time: '09:41', dot: '#a78bfa', fg: '#c7d3e6', text: 'Sent a push to your phone through ntfy: task ID, event kind and a link only.', note: 'You were detached; the agent kept working until it needed you.', audit: true },
       { time: '09:44', dot: '#fbbf24', fg: '#fde68a', text: 'Wants to Write internal/proxy/allowlist.go.', note: apprState ? '' : 'Waiting for your approval, the run is blocked.', audit: true },
