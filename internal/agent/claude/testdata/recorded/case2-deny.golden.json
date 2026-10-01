@@ -1,0 +1,64 @@
+{
+  "events": [
+    {
+      "kind": "session",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+      "text": "claude-haiku-4-5-20251001"
+    },
+    {
+      "kind": "tool_call",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/deny_test.txt\",\"content\":\"DENIED_SECRET\"}"
+    },
+    {
+      "kind": "tool_result",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+      "text": "Denied by supervisor policy"
+    },
+    {
+      "kind": "message",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+      "text": "The Write tool call was denied by supervisor policy. The system prevented the operation from completing, even though you explicitly requested it. This suggests there's a security policy in place that blocks writing this particular content or operation."
+    },
+    {
+      "kind": "usage",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+      "usage": {
+        "model": "claude-haiku-4-5-20251001",
+        "tokens": {
+          "input": 18,
+          "output": 584,
+          "cache_read": 43494,
+          "cache_write": 493
+        },
+        "cost": {
+          "micro_usd": 8273,
+          "source": "reported"
+        },
+        "windows": [
+          {
+            "name": "five_hour",
+            "utilization": 0.66,
+            "resets_at": "2026-10-01T11:50:00Z"
+          },
+          {
+            "name": "seven_day",
+            "utilization": 0.24,
+            "resets_at": "2026-10-06T09:00:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "status": "completed",
+    "session_id": "2c31e644-f846-4ae1-8e54-2ca830201deb",
+    "text": "The Write tool call was denied by supervisor policy. The system prevented the operation from completing, even though you explicitly requested it. This suggests there's a security policy in place that blocks writing this particular content or operation."
+  }
+}

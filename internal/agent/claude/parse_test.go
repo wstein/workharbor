@@ -294,3 +294,101 @@ func TestAFullWindowThatIsStillAllowedIsNotExhausted(t *testing.T) {
 		t.Errorf("outcome = %+v, want completed", res)
 	}
 }
+
+// The recordings are real streams of Claude Code 2.1.285 (spike #7). Their
+// golden files are the parser's output for them.
+func TestGoldenRecordedStreams(t *testing.T) {
+	for _, name := range []string{"case1-allow", "case2-deny", "case3-closed-stdin", "case6-reqid", "case7-resume"} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "recorded", name+".jsonl")) //nolint:gosec // a fixed testdata path
+			if err != nil {
+				t.Fatal(err)
+			}
+			events, p := parseAll(t, raw, false)
+			res, _ := p.outcome()
+			golden(t, filepath.Join("recorded", name), map[string]any{"events": events, "result": res})
+		})
+	}
+}
+
+func recorded(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "recorded", name+".jsonl")) //nolint:gosec // a fixed testdata path
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// Verified on a real stream: the token counts come from result.usage, the cost
+// is the reported one, the model is the init event's, and the usage windows are
+// the real rate_limit_info (reset times are epoch seconds).
+func TestRealUsageEvent(t *testing.T) {
+	events, p := parseAll(t, recorded(t, "case2-deny"), false)
+	var u *agent.Usage
+	for _, e := range events {
+		if e.Kind == agent.EventUsage {
+			u = e.Usage
+		}
+	}
+	if u == nil {
+		t.Fatal("no usage event")
+	}
+	if err := u.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	want := agent.TokenCounts{Input: 18, Output: 584, CacheRead: 43494, CacheWrite: 493}
+	if u.Model != "claude-haiku-4-5-20251001" || u.Tokens == nil || *u.Tokens != want || u.Cost == nil || u.Cost.MicroUSD != 8273 {
+		t.Errorf("usage = %+v tokens %+v cost %+v, want %+v", u, u.Tokens, u.Cost, want)
+	}
+	if len(u.Windows) != 2 || u.Windows[0].Utilization != 0.66 || !u.Windows[0].ResetsAt.Equal(time.Unix(1790855400, 0)) || u.Windows[1].Name != agent.WindowSevenDay {
+		t.Errorf("windows = %+v", u.Windows)
+	}
+	if res, _ := p.outcome(); res.Status != agent.ResultCompleted || res.SessionID != "2c31e644-f846-4ae1-8e54-2ca830201deb" {
+		t.Errorf("outcome = %+v", res)
+	}
+}
+
+// A real denial comes back as an is_error tool result with non_execution_kind;
+// it is recorded as denied, in dontAsk mode, with no permission_denied event.
+func TestARealDenialIsRecordedAsDenied(t *testing.T) {
+	events, _ := parseAll(t, recorded(t, "case2-deny"), true) // no allowlist: Write is not on it
+	var recs []agent.ApprovalRecord
+	for _, e := range events {
+		if e.Kind == agent.EventApproval {
+			recs = append(recs, *e.Approval)
+		}
+	}
+	if len(recs) != 1 || recs[0].Allow || recs[0].ID != "toolu_0184n989fMkWaGjhTgrpsqCV" || !strings.Contains(recs[0].Reason, "permission-rule") {
+		t.Errorf("records = %+v, want one denial naming the tool use", recs)
+	}
+	// The allowed run's tool result ran, and Write was not on the allowlist: the
+	// agent's own rules (here the host's allow) let it, which is not a denial.
+	events, _ = parseAll(t, recorded(t, "case1-allow"), true)
+	for _, e := range events {
+		if e.Kind == agent.EventApproval && !e.Approval.Allow {
+			t.Errorf("an executed tool was recorded as denied: %+v", e.Approval)
+		}
+	}
+}
+
+func TestEveryRecordedEventKindIsKnownOrIgnored(t *testing.T) {
+	for _, name := range []string{"case1-allow", "case2-deny", "case3-closed-stdin", "case6-reqid", "case7-resume"} {
+		events, p := parseAll(t, recorded(t, name), false)
+		if len(events) == 0 {
+			t.Errorf("%s: no events", name)
+		}
+		for _, e := range events {
+			if e.Kind == agent.EventError {
+				t.Errorf("%s: an error event from a real stream: %+v", name, e)
+			}
+			if e.SessionID == "" && e.Kind != agent.EventSession {
+				// events before init may lack it; none do in these recordings
+				t.Errorf("%s: %s has no session ID", name, e.Kind)
+			}
+		}
+		if res, ok := p.outcome(); !ok || res.Status != agent.ResultCompleted {
+			t.Errorf("%s: outcome %+v", name, res)
+		}
+	}
+}

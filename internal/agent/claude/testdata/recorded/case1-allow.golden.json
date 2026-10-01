@@ -1,0 +1,64 @@
+{
+  "events": [
+    {
+      "kind": "session",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+      "text": "claude-haiku-4-5-20251001"
+    },
+    {
+      "kind": "tool_call",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/allow_test.txt\",\"content\":\"ALLOWED_SUCCESS\"}"
+    },
+    {
+      "kind": "tool_result",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+      "text": "File created successfully at: /work/allow_test.txt (file state is current in your context — no need to Read it back)"
+    },
+    {
+      "kind": "message",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+      "text": "ALL_DONE"
+    },
+    {
+      "kind": "usage",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+      "usage": {
+        "model": "claude-haiku-4-5-20251001",
+        "tokens": {
+          "input": 18,
+          "output": 194,
+          "cache_read": 43502,
+          "cache_write": 233
+        },
+        "cost": {
+          "micro_usd": 5804,
+          "source": "reported"
+        },
+        "windows": [
+          {
+            "name": "five_hour",
+            "utilization": 0.66,
+            "resets_at": "2026-10-01T11:50:00Z"
+          },
+          {
+            "name": "seven_day",
+            "utilization": 0.24,
+            "resets_at": "2026-10-06T09:00:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "status": "completed",
+    "session_id": "651360d5-23e5-4f3f-9300-eab208c351e2",
+    "text": "ALL_DONE"
+  }
+}

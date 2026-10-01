@@ -35,7 +35,20 @@ type rawEvent struct {
 	IsError   bool            `json:"is_error"`
 	TotalCost *float64        `json:"total_cost_usd"`
 	RateLimit json.RawMessage `json:"rate_limit_info"`
-	Error     json.RawMessage `json:"error"` // a short code on assistant events
+	// Usage is on the result event (recorded in spike #7): the tokens of the run.
+	Usage *struct {
+		InputTokens      int64 `json:"input_tokens"`
+		OutputTokens     int64 `json:"output_tokens"`
+		CacheReadTokens  int64 `json:"cache_read_input_tokens"`
+		CacheWriteTokens int64 `json:"cache_creation_input_tokens"`
+	} `json:"usage"`
+	// ToolResultMeta says, for a tool result on a user event, when the tool was
+	// not executed at all: "non_execution_kind" is "permission-rule" for a denial.
+	ToolResultMeta []struct {
+		ID               string `json:"id"`
+		NonExecutionKind string `json:"non_execution_kind"`
+	} `json:"tool_result_meta"`
+	Error json.RawMessage `json:"error"` // a short code on assistant events
 }
 
 type contentItem struct {
@@ -209,8 +222,12 @@ func (p *parser) dropPending(id string) {
 // result that is an error is how a denial can come back, so it is never
 // recorded as allowed: the audit trail must not say "allowed" for a tool that
 // may have been refused.
-func (p *parser) toolDecision(id, tool string, isError bool) agent.Event {
+func (p *parser) toolDecision(id, tool string, isError bool, nonExec string) agent.Event {
 	switch {
+	case nonExec != "":
+		// The CLI says the tool never ran (recorded: "permission-rule" for a
+		// denial), whatever the allowlist says.
+		return p.approval(id, tool, false, "not executed ("+nonExec+"): denied")
 	case p.allowlist[tool]:
 		return p.approval(id, tool, true, "on the allowlist")
 	case isError:
@@ -264,7 +281,13 @@ func (p *parser) message(ev rawEvent) []agent.Event {
 			}
 		case "tool_result":
 			if tool, ok := p.pending[it.UseID]; ok {
-				events = append(events, p.toolDecision(it.UseID, tool, it.IsError))
+				nonExec := ""
+				for _, m := range ev.ToolResultMeta {
+					if m.ID == it.UseID {
+						nonExec = m.NonExecutionKind
+					}
+				}
+				events = append(events, p.toolDecision(it.UseID, tool, it.IsError, nonExec))
 				p.dropPending(it.UseID)
 			}
 			e := p.event(agent.EventToolResult)
@@ -317,6 +340,9 @@ func (p *parser) finish(ev rawEvent) []agent.Event {
 	u := agent.Usage{Model: p.model, Windows: append([]agent.UsageWindow(nil), p.windows...)}
 	if ev.TotalCost != nil && *ev.TotalCost >= 0 {
 		u.Cost = &agent.Cost{MicroUSD: int64(math.Round(*ev.TotalCost * 1e6)), Source: agent.CostReported}
+	}
+	if t := ev.Usage; t != nil && t.InputTokens >= 0 && t.OutputTokens >= 0 && t.CacheReadTokens >= 0 && t.CacheWriteTokens >= 0 {
+		u.Tokens = &agent.TokenCounts{Input: t.InputTokens, Output: t.OutputTokens, CacheRead: t.CacheReadTokens, CacheWrite: t.CacheWriteTokens}
 	}
 	e := p.event(agent.EventUsage)
 	e.Usage = &u
