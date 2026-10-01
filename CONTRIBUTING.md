@@ -47,7 +47,8 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 - `Refs: #N` or `Closes: #N` is required for `feat`, `fix`, `perf` and `refactor`.
 - `Assisted-by: <tool>:<model-id>` discloses AI assistance (see below).
 - `Signed-off-by` is for humans only.
-- One logical change per commit. Do not bypass the hooks with `--no-verify`.
+- One commit per finished logical change, not per attempt: iterate in your working tree and commit once the result is final. Amend or fixup your own unpushed commits instead of adding "fix previous commit" commits.
+- Do not bypass the hooks with `--no-verify`.
 
 ## AI-assisted contributions
 

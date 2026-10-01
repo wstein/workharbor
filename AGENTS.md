@@ -67,6 +67,14 @@ Refs: #12
 Assisted-by: Claude Code:claude-sonnet-5-5
 ```
 
+**Commit frequency.** One commit per finished change, not per attempt.
+
+- Iterate in the working tree. Look at the result (render, test, `make check`) and commit once when it is final. Do not commit each iteration of the same file: a banner redesigned three times is one commit, not three.
+- Keep a file and what is generated from it (an SVG and its PNG export, a source and its lockfile) in the same commit, together with any link or reference fix the change caused.
+- Keep unrelated changes in separate commits, and split a large change by topic (for example one commit per document section), not by editing session.
+- To correct your own unpushed commit, amend it or use `git commit --fixup` with an autosquash rebase instead of adding a "fix the previous commit" commit.
+- Never rewrite commits that are already pushed unless asked. Because the repository allows only rebase merges, every commit lands on `main` as written.
+
 | Trailer | Rule |
 | --- | --- |
 | `Refs: #12`, `Closes: #12` (also `Fixes`, `Resolves`, `Related`; `owner/repo#12` and comma lists work) | **Required for `feat`, `fix`, `perf` and `refactor`**; optional for other types. Put the issue in a trailer, never in the subject. Never invent an issue number: open one first. |
