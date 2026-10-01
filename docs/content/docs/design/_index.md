@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D38 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D39 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | The domain (state machines, Decisions, the aggregate and its guards), the policy table, the SQLite store with redaction at ingest, the service layer and reconciler, hostgit (checkout checks, the repository cache, prepare and push, the editor copy), the runtime and agent contracts with their conformance suites, the Apple Container adapter with the egress proxy sidecar, the tool store, the config file and `make install`, the Claude Code adapter in degraded mode, ntfy notifications, `whr version`, the `whr-shim` launcher, and the design-drift test | Packages under `internal/` and `cmd/`; what remains for the first dogfood run is the [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5), the rest of release 1 the [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container; host cancel with `whr-shim`; approvals over stdio (evidence pending) | Issues #1, #2, #10 and #7 (reopened); results in §4.2, §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |

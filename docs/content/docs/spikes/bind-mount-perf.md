@@ -27,4 +27,4 @@ Measured on a Mac mini (Apple silicon), Apple `container` 1.5.0, a `fedora` gues
 
 ## Limits
 
-One machine, one image, one run per cell (the first run is the cold one; a second run in `results.txt` repeats it warm for the bind mount). The trees are generated, not a real `node_modules` or a real repository, and the host side was not measured. Whether this changes the "repositories live on the host and are mounted" decision (D16) is for the design owner; this page only records the measurement.
+One machine, one image, one run per cell (the first run is the cold one; a second run in `results.txt` repeats it warm for the bind mount). The trees are generated, not a real `node_modules` or a real repository, and the host side was not measured. The design owner decided from it: dependency directories go on a volume and the checkout stays on the host ([D39](../design/decisions.md)), and a volume checkout for very large repositories stays open (§12).

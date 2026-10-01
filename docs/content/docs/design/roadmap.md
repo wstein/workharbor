@@ -64,7 +64,7 @@ Ordered by what is cheap and blocks the most work. The measured results are on t
     - [x] A reliable cancel from the host (§5.1, D25): measured in spike #10 using the `whr-shim` launcher from the tool store (§5.6, D19). Signalling the host exec client fails; signalling the process group via `container exec <id> /tools/whr-shim kill` terminates cooperative processes in ~10 ms and stubborn trees after a 500 ms grace in ~514 ms, with 0 orphans left
     - [ ] Repositories mounted from the host (§4.5): bind-mount speed with `node_modules`-style trees and much larger repositories
 4. **Autonomy and approval policy** (§6) and threat model (§7): decided (D36); the policy table is implemented with a fixed floor (issues #4, #51), and the [threat model](../threat-model.md) is written (issue #11). Trust tiers for untrusted input remain (issue #53).
-5. **Persistence semantics** (§4.4): decided (D16).
+5. **Persistence semantics** (§4.4): decided (D16, D39). Open: a checkout on a volume for repositories that track more than about 50 000 files. It needs the branch exported from inside the guest for hostgit, for example as a bundle written by a disposable helper container that mounts the volume read-only; measured cost of seeding such a volume: 68 s for 153 000 files (spike #40).
 6. **Primary forge** for release 1: decided, GitHub through a GitHub App (D15). A login provider is not needed before OAuth; release 1 signs in with a static token (§9.5).
 7. **CI credentials and event handling** for Gitea/Drone (medium term).
 8. The `whr` grammar of the slice is decided (D37); the stack too (D3, D8, D14).
