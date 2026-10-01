@@ -53,24 +53,39 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D10 | **Decisions are rows in this table.** Each is proposed and settled in a GitHub issue labelled `decision`, then recorded here with its rationale. Separate decision-record pages come only if the design is split into several pages | One place to look; CONTRIBUTING already names this table as the record |
 | D11 | **Cooperative pause stays an agent capability flag**, reported per adapter and never assumed. None of the measured agents has it (spike #1), so their adapters report it false; pause then means a hard interrupt followed by a resume from the agent session, and the UI says so | Keeps the contract ready for an agent that can stop after its current turn, without pretending the current ones can |
 | D12 | **Release 1 starts with a CLI-only vertical slice:** `whr run <issue-url>`, then `whr logs -f`, `whr say` and `whr cancel`, and `whr approve` pushes the prepared `agent/*` branch and opens the PR, with Claude Code in Apple Container on one forge. The web UI, PWA, SSH, notifications and the Codex CLI adapter follow in the rest of release 1 | Proves the service layer, adapters and policy end to end before any UI, and gives D8 a working API to check against |
+| D13 | **Task state machine** (§4.1): a terminal `failed` state, rework from `ready_for_review` back to `running`, and `awaiting_guidance` only for blocking Decisions raised by a live run, so "Ready to push?" leaves the task in `ready_for_review` | Gives exit code 10 a state, makes the rework path explicit, and keeps the review gate from looking like a stalled run in the inbox |
 
 ## 4. Domain model
 
 | Object | Responsibility | Lifetime |
 | --- | --- | --- |
-| Task | Issue, instructions, decisions, progress, results, PR link | Until completed or cancelled |
+| Task | Issue, instructions, decisions, progress, results, PR link | Until completed, cancelled or failed |
 | Workspace | Checkout/worktree, branch, files, tool config, caches | May span several runs |
 | Run | One execution of an agent in an environment | Start, pause, resume, terminate |
 | Environment (`env`) | Container or VM backing a run/workspace | Stopped or recreated independently of workspace data |
 | **Decision** | A question, approval or review request raised to the human | Until answered |
-| **ReviewCandidate** | Task → branch → commit SHA → PR → CI results, keyed by SHA | One per pushed revision |
+| **ReviewCandidate** | Task → branch → commit SHA → PR → CI results, keyed by SHA | One per prepared revision: created when cleanup pins the SHA, before the push (§4.5) |
 | Event | Append-only record of instructions, observations, decisions, actions | Permanent (audit trail and UI feed) |
 
 ### 4.1 State machines
 
 Task, run and environment each get their own small FSM with explicit legal transitions; these are specified before coding.
 
-- **Task:** `queued → running → awaiting_guidance → ready_for_review → completed`, plus `cancelled`.
+- **Task** (D13):
+
+    | From | To |
+    | --- | --- |
+    | `queued` | `running`, `cancelled` |
+    | `running` | `awaiting_guidance`, `ready_for_review`, `failed`, `cancelled` |
+    | `awaiting_guidance` | `running`, `failed`, `cancelled` |
+    | `ready_for_review` | `running` (rework), `completed`, `cancelled` |
+    | `completed`, `cancelled`, `failed` | none (terminal) |
+
+    - `awaiting_guidance` is for blocking Decisions raised by a live run: a question, a tool approval, `auth_expired` or `quota_exhausted`. The review Decisions of `ready_for_review` ("Ready to push?", §4.5) leave the task in `ready_for_review`.
+    - **Rework** (`ready_for_review → running`) happens when the push is declined or the PR needs changes. It starts a new run on the same workspace and topic.
+    - **`completed`** is set when the pushed PR is merged on the forge.
+    - **`failed`** is terminal and maps to exit code 10 (§9.2). A failed run does not fail its task: it opens a blocking Decision (retry or cancel). A task fails only when a hard limit ends it (time or cost budget, a lost workspace) or the human answers that Decision with "give up".
+    - A paused run leaves its task `running`: pause is a run state.
 - **Run and environment:** tracked separately. Pause is a **run** state, not an environment state.
 - **Coupling rules (examples):**
   - `ready_for_review` requires a stopped run and a pinned commit SHA.
@@ -79,7 +94,7 @@ Task, run and environment each get their own small FSM with explicit legal trans
 
 ### 4.2 Decision object
 
-Fields: ID, task, kind (`question | approval | review`), blocking flag, options, created/answered timestamps, answering actor. The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision is open.
+Fields: ID, task, kind (`question | approval | review`), blocking flag, options, created/answered timestamps, answering actor. The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision raised by a live run is open; review Decisions belong to `ready_for_review` (§4.1).
 
 **Approvals are live and blocking.** Spike #1 showed the pattern with Claude Code: the agent's permission prompt is routed to the supervisor, which opens an `approval` Decision carrying the tool name and a capped copy of its input. The agent stays blocked until a human answers allow or deny, with an optional reason that is passed back to the agent. Rules:
 

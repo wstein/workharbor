@@ -17,6 +17,7 @@ const (
 	TaskReadyForReview   TaskState = "ready_for_review"
 	TaskCompleted        TaskState = "completed"
 	TaskCancelled        TaskState = "cancelled"
+	TaskFailed           TaskState = "failed"
 )
 
 // RunState is the lifecycle state of a Run. Pause is a run state, not an
@@ -83,8 +84,9 @@ const (
 	DecisionReview   DecisionKind = "review"
 )
 
-// Decision is a request raised to the human. A blocking Decision puts its
-// task into TaskAwaitingGuidance.
+// Decision is a request raised to the human. A blocking Decision raised by a
+// live run puts its task into TaskAwaitingGuidance; the review Decisions of
+// TaskReadyForReview ("Ready to push?") leave the task where it is.
 type Decision struct {
 	ID         ID
 	TaskID     ID
@@ -96,8 +98,9 @@ type Decision struct {
 	Answer     string
 }
 
-// ReviewCandidate ties a pushed revision to its PR and CI results, keyed by
-// commit SHA so a pass on an earlier revision never marks a later one ready.
+// ReviewCandidate ties a prepared revision to its push, PR and CI results,
+// keyed by commit SHA so a pass on an earlier revision never marks a later one
+// ready. It is created when cleanup pins the SHA, before the push.
 type ReviewCandidate struct {
 	TaskID ID
 	Branch string
