@@ -354,6 +354,8 @@ Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`
 | Merge, tag, release, deploy | **forbid** for the agent; human-gated |
 | Sensitive actions triggered by untrusted input | ask |
 
+Two limits hold whatever a repository's table says (issue #51). Merge, tag, release and deploy are `forbid`, and an agent push is at most `ask`: the supervisor pushes only after approval (§4.5), so an override can tighten these but never loosen them. A mode other than `auto`, `ask` or `forbid`, and an action the table does not list, is `forbid`.
+
 Enforcement is outside the agent: forge branch protection, required human review, and a bot identity that cannot bypass them. Approval is per commit SHA (ties to ReviewCandidate). Every approval is a Decision record.
 
 **Agent permission modes.** The agent CLIs have their own coarse modes. In the spike with Claude Code (a fixed allowlist of `Read` and a few harmless shell prefixes) they behaved as follows for a file write:
