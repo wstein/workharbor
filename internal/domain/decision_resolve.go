@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"slices"
 	"time"
 )
@@ -27,8 +26,8 @@ var (
 	ErrNotSuperseded   = conflict(RuleNotSuperseded, "only a superseded decision can be raised again")
 	ErrAlreadyRaised   = conflict(RuleAlreadyRaised, "decision was already raised again")
 
-	ErrDecisionOption = errors.New("answer is not one of the options")
-	ErrDecisionActor  = errors.New("an answer needs the actor who gave it")
+	ErrDecisionOption = invalid("answer is not one of the options")
+	ErrDecisionActor  = invalid("an answer needs the actor who gave it")
 )
 
 // Response is a human's answer to a Decision.
@@ -58,7 +57,7 @@ func (d *Decision) Respond(r Response) error {
 	if r.At.IsZero() {
 		return ErrDecisionTime
 	}
-	if !d.Deadline.IsZero() && !r.At.Before(d.Deadline) {
+	if d.pastDeadline(r.At) {
 		if err := d.move(DecisionExpired, r.At); err != nil {
 			return err
 		}
@@ -88,10 +87,21 @@ func (d *Decision) Respond(r Response) error {
 	return nil
 }
 
+// pastDeadline reports whether the Decision's time is up at a moment. An
+// approval without a deadline is always past it: every approval has one, so a
+// missing one is a lost value, and a lost deadline must not let a late allow
+// through. A question or a review Decision without a deadline waits.
+func (d *Decision) pastDeadline(at time.Time) bool {
+	if d.Deadline.IsZero() {
+		return d.Kind == DecisionApproval
+	}
+	return !at.Before(d.Deadline)
+}
+
 // Expire expires an open Decision whose deadline has passed and reports
 // whether it changed anything. An expired Decision denies.
 func (d *Decision) Expire(now time.Time) bool {
-	if d.Status != DecisionOpen || d.Deadline.IsZero() || now.Before(d.Deadline) {
+	if d.Status != DecisionOpen || !d.pastDeadline(now) {
 		return false
 	}
 	return d.move(DecisionExpired, now) == nil
@@ -150,6 +160,9 @@ func (d *Decision) Reraise(id ID, now time.Time) (*Decision, error) {
 func (d *Decision) Allows(sha string) bool {
 	if d.Kind == DecisionQuestion || d.Status != DecisionAnswered || d.Answer != AnswerAllow {
 		return false
+	}
+	if d.Kind == DecisionApproval && d.Deadline.IsZero() {
+		return false // a lost deadline: fail closed
 	}
 	return d.SHA == "" || d.SHA == sha
 }

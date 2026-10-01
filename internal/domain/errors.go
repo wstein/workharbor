@@ -54,3 +54,15 @@ func (e *NotFoundError) Error() string { return fmt.Sprintf("%s %s not found", e
 
 // ExitCode implements exitcode.Coder.
 func (e *NotFoundError) ExitCode() int { return exitcode.NotFound }
+
+// InvalidError reports input that is not acceptable, whatever the state: a
+// missing ID, an answer that is not offered, a time that is zero. It maps to
+// exit code Usage, apart from a conflict, which depends on the state.
+type InvalidError struct{ Msg string }
+
+func invalid(msg string) *InvalidError { return &InvalidError{Msg: msg} }
+
+func (e *InvalidError) Error() string { return e.Msg }
+
+// ExitCode implements exitcode.Coder.
+func (e *InvalidError) ExitCode() int { return exitcode.Usage }

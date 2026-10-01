@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -109,13 +108,13 @@ type NewDecision struct {
 
 // Validation errors returned by Raise.
 var (
-	ErrDecisionID   = errors.New("decision needs an ID and a task")
-	ErrDecisionKind = errors.New("unknown decision kind")
-	ErrDecisionRun  = errors.New("a review decision has no run, and any other decision needs one")
-	ErrDecisionSHA  = errors.New("a review decision needs the commit SHA it is about")
+	ErrDecisionID   = invalid("decision needs an ID and a task")
+	ErrDecisionKind = invalid("unknown decision kind")
+	ErrDecisionRun  = invalid("a review decision has no run, and any other decision needs one")
+	ErrDecisionSHA  = invalid("a review decision needs the commit SHA it is about")
 
-	ErrDecisionTimeout = errors.New("a decision timeout cannot be negative")
-	ErrDecisionTime    = errors.New("a time is needed and it is zero")
+	ErrDecisionTimeout = invalid("a decision timeout cannot be negative")
+	ErrDecisionTime    = invalid("a time is needed and it is zero")
 )
 
 // Raise creates an open Decision. It caps the input, gives an approval a

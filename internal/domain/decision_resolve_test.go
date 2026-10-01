@@ -372,3 +372,91 @@ func TestDecisionStateErrorsAreConflicts(t *testing.T) {
 		})
 	}
 }
+
+// #57: an approval that lost its deadline (a bad load, a hand-edited row) must
+// not let a late allow through. "Zero means none" holds for a question only.
+func TestApprovalWithoutDeadlineFailsClosed(t *testing.T) {
+	t.Run("a late allow is refused and the approval expires", func(t *testing.T) {
+		d := newApproval(t)
+		d.Deadline = time.Time{}
+		err := d.Respond(allow(t0.Add(24*time.Hour), ""))
+		if !errors.Is(err, ErrDecisionExpired) {
+			t.Fatalf("Respond = %v, want ErrDecisionExpired", err)
+		}
+		if d.Status != DecisionExpired || d.Allows("") {
+			t.Errorf("status = %s, Allows = %v; want expired and false", d.Status, d.Allows(""))
+		}
+	})
+	t.Run("Expire expires it", func(t *testing.T) {
+		d := newApproval(t)
+		d.Deadline = time.Time{}
+		if !d.Expire(t0) || d.Status != DecisionExpired {
+			t.Errorf("Expire = false or status = %s", d.Status)
+		}
+	})
+	t.Run("an answered allow without a deadline does not allow", func(t *testing.T) {
+		d := newApproval(t)
+		if err := d.Respond(allow(t0.Add(time.Second), "")); err != nil {
+			t.Fatal(err)
+		}
+		d.Deadline = time.Time{} // lost after the answer was stored
+		if d.Allows("") {
+			t.Error("an approval without a deadline must not allow")
+		}
+	})
+	t.Run("a question still waits without a deadline", func(t *testing.T) {
+		q, err := Raise(NewDecision{ID: "q1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := q.Respond(Response{By: "werner", Option: "yes", At: t0.Add(24 * time.Hour)}); err != nil {
+			t.Errorf("Respond to a question without a deadline = %v", err)
+		}
+	})
+	t.Run("a review decision is not an approval", func(t *testing.T) {
+		d := newPushReview(t, "aaa111")
+		if err := d.Respond(allow(t0.Add(24*time.Hour), "aaa111")); err != nil {
+			t.Errorf("Respond to a review = %v", err)
+		}
+		if !d.Allows("aaa111") {
+			t.Error("an answered review allow must allow its commit")
+		}
+	})
+}
+
+// #57: validation errors are usage errors (exit code 2), and still match
+// their sentinels.
+func TestDecisionValidationErrorsAreUsage(t *testing.T) {
+	respond := func(r Response) error { return newApproval(t).Respond(r) }
+	raise := func(mod func(*NewDecision)) error {
+		spec := NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0}
+		mod(&spec)
+		_, err := Raise(spec)
+		return err
+	}
+	tests := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"an answer without a time", respond(Response{By: "w", Option: AnswerAllow}), ErrDecisionTime},
+		{"an answer without an actor", respond(Response{Option: AnswerAllow, At: t0}), ErrDecisionActor},
+		{"an option that is not offered", respond(Response{By: "w", Option: "maybe", At: t0}), ErrDecisionOption},
+		{"raise without an ID", raise(func(n *NewDecision) { n.ID = "" }), ErrDecisionID},
+		{"raise with an unknown kind", raise(func(n *NewDecision) { n.Kind = "poll" }), ErrDecisionKind},
+		{"raise an approval without a run", raise(func(n *NewDecision) { n.RunID = "" }), ErrDecisionRun},
+		{"raise a review without a SHA", raise(func(n *NewDecision) { n.Kind, n.RunID = DecisionReview, "" }), ErrDecisionSHA},
+		{"raise with a negative timeout", raise(func(n *NewDecision) { n.Timeout = -1 }), ErrDecisionTimeout},
+		{"raise without a time", raise(func(n *NewDecision) { n.Now = time.Time{} }), ErrDecisionTime},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !errors.Is(tc.err, tc.want) {
+				t.Fatalf("error = %v, want it to match %v", tc.err, tc.want)
+			}
+			if got := exitcode.From(tc.err); got != exitcode.Usage {
+				t.Errorf("exit code = %d, want Usage (%d)", got, exitcode.Usage)
+			}
+		})
+	}
+}
