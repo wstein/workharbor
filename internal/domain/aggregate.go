@@ -5,6 +5,8 @@ import "fmt"
 // Rules of design §4.1 that couple the task, run and environment machines.
 const (
 	RuleOneLiveRun Rule = "one-live-run" // a task has at most one run that is not stopped or failed
+	RuleRunReused  Rule = "run-reused"   // StartRun takes a run that has not started
+	RuleRunID      Rule = "run-id"       // a run has a non-empty ID that is unique in the task
 	RuleEnvRunning Rule = "env-running"  // a run is created or started only in a running environment
 	RuleEnvInUse   Rule = "env-in-use"   // an environment is not stopped under a starting or running run
 	RuleStoppedRun Rule = "stopped-run"  // ready_for_review needs the task's latest run to be stopped
@@ -61,9 +63,21 @@ func (a *TaskAggregate) LiveRun() *Run {
 	return nil
 }
 
-// StartRun adds a new run in an environment and starts it. A task has at most
-// one live run, and the environment must be running.
+// StartRun adds a new run in an environment and starts it. The run must be new
+// (no state yet) with an ID no run of the task has. A task has at most one live
+// run, and the environment must be running.
 func (a *TaskAggregate) StartRun(run *Run) error {
+	if run.State != "" {
+		return conflict(RuleRunReused, "run %s is already %s: a new run is started, a finished one is never reused", run.ID, run.State)
+	}
+	if run.ID == "" {
+		return conflict(RuleRunID, "a run needs an ID")
+	}
+	for _, r := range a.Runs {
+		if r.ID == run.ID {
+			return conflict(RuleRunID, "run %s already exists in task %s", run.ID, a.Task.ID)
+		}
+	}
 	if live := a.LiveRun(); live != nil {
 		return conflict(RuleOneLiveRun, "task %s already has a live run %s (%s)", a.Task.ID, live.ID, live.State)
 	}

@@ -184,3 +184,43 @@ func TestResumeOfARunThatCannotResume(t *testing.T) {
 	wantConflict(t, a.Resume("r1"), RuleTransition)
 	wantNotFound(t, a.Resume("nope"))
 }
+
+// #52: a stopped run passed back in returned to starting and was appended twice.
+func TestStartRunAcceptsOnlyAnUnusedRun(t *testing.T) {
+	a, run, _ := newRunningAggregate(t)
+	run.State = RunStopped
+	wantConflict(t, a.StartRun(run), RuleRunReused)
+	if run.State != RunStopped || len(a.Runs) != 1 {
+		t.Errorf("a refused run was changed or added: state %s, %d runs", run.State, len(a.Runs))
+	}
+
+	for _, state := range allRunStates {
+		next := &Run{ID: ID("r-" + string(state)), EnvID: "e1", State: state}
+		wantConflict(t, a.StartRun(next), RuleRunReused)
+	}
+	if len(a.Runs) != 1 {
+		t.Errorf("%d runs after refused starts, want 1", len(a.Runs))
+	}
+}
+
+func TestStartRunNeedsAUniqueNonEmptyID(t *testing.T) {
+	a, run, _ := newRunningAggregate(t)
+	run.State = RunStopped
+
+	wantConflict(t, a.StartRun(&Run{ID: "", EnvID: "e1"}), RuleRunID)
+	wantConflict(t, a.StartRun(&Run{ID: "r1", EnvID: "e1"}), RuleRunID) // the stopped run's ID
+	if len(a.Runs) != 1 {
+		t.Fatalf("%d runs after refused starts, want 1", len(a.Runs))
+	}
+	if got, err := a.run("r1"); err != nil || got != run {
+		t.Errorf("run(r1) = %v, %v; want the first run", got, err)
+	}
+
+	fresh := &Run{ID: "r2", EnvID: "e1"}
+	if err := a.StartRun(fresh); err != nil {
+		t.Fatalf("a new run with a new ID: %v", err)
+	}
+	if fresh.State != RunStarting || len(a.Runs) != 2 {
+		t.Errorf("state %s, %d runs", fresh.State, len(a.Runs))
+	}
+}
