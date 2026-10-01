@@ -60,6 +60,54 @@ type Config struct {
 	AgentAPIKeyEnvFile string `json:"agent_api_key_env_file,omitempty"`
 	// APITokenFile holds the API token that guards the API (D29).
 	APITokenFile string `json:"api_token_file"`
+	// StateDir holds the supervisor's database. Optional: an absolute path, or
+	// ~/.local/state/whr. It must not lie in a workspace root, where an agent
+	// writes.
+	StateDir string `json:"state_dir,omitempty"`
+	// Environment shapes the environments `whr serve` provisions. Optional.
+	Environment Environment `json:"environment,omitzero"`
+}
+
+// Environment is the supervisor's choice of what an agent environment looks
+// like (design §5.1, D38: a repository may request, never grant). Zero values
+// take the defaults of the field.
+type Environment struct {
+	// Image is the stock base image, Fedora by default (D43).
+	Image string `json:"image,omitempty"`
+	// EgressAllow are the host names the agent may reach through the egress
+	// proxy, `api.anthropic.com` by default. Names only: no IP, no wildcard.
+	EgressAllow []string `json:"egress_allow,omitempty"`
+	CPUs        int      `json:"cpus,omitempty"`      // default 2
+	MemoryMB    int      `json:"memory_mb,omitempty"` // default 4096
+	DiskMB      int      `json:"disk_mb,omitempty"`   // default 10240
+}
+
+// Defaults of Environment.
+const (
+	DefaultImage    = "docker.io/library/fedora:latest" // provisional: pin by digest (D43)
+	DefaultCPUs     = 2
+	DefaultMemoryMB = 4096
+	DefaultDiskMB   = 10240
+)
+
+// Resolved returns the environment with the defaults filled in.
+func (e Environment) Resolved() Environment {
+	if e.Image == "" {
+		e.Image = DefaultImage
+	}
+	if len(e.EgressAllow) == 0 {
+		e.EgressAllow = []string{"api.anthropic.com"}
+	}
+	if e.CPUs == 0 {
+		e.CPUs = DefaultCPUs
+	}
+	if e.MemoryMB == 0 {
+		e.MemoryMB = DefaultMemoryMB
+	}
+	if e.DiskMB == 0 {
+		e.DiskMB = DefaultDiskMB
+	}
+	return e
 }
 
 // Error lists everything wrong with a configuration, each with the key it is
@@ -157,6 +205,26 @@ func (c *Config) Validate() error {
 			if within(resolved[a], resolved[b]) || within(resolved[b], resolved[a]) {
 				add("%s and %s overlap (%s, %s): they must be separate directories", a, b, resolved[a], resolved[b])
 			}
+		}
+	}
+
+	if c.StateDir != "" {
+		if dir, msg := checkDir(c.StateDir); msg != "" {
+			add("state_dir: %s", msg)
+		} else {
+			for _, key := range sortedKeys(resolved) {
+				if strings.HasPrefix(key, "roots.workspaces") && (within(dir, resolved[key]) || within(resolved[key], dir)) {
+					add("state_dir: %s overlaps %s: the database must be out of reach of an agent", dir, key)
+				}
+			}
+		}
+	}
+	if e := c.Environment; e.CPUs < 0 || e.MemoryMB < 0 || e.DiskMB < 0 {
+		add("environment: cpus, memory_mb and disk_mb must not be negative")
+	}
+	for _, h := range c.Environment.EgressAllow {
+		if !validEgressHost(h) {
+			add("environment.egress_allow: %q is not a host name (no IP address, wildcard, port or path)", h)
 		}
 	}
 
@@ -425,4 +493,24 @@ func (c *Config) CheckWorkspacePath(path string) (string, error) {
 		return "", fmt.Errorf("workspace path: %s is not empty: the agent clone is created in it", resolved)
 	}
 	return resolved, nil
+}
+
+// validEgressHost accepts a plain DNS name: letters, digits, '-' and '.',
+// with at least one dot and no IP address, so the allowlist cannot be a way
+// around the proxy's rule that a raw IP is refused.
+func validEgressHost(h string) bool {
+	if h == "" || len(h) > 253 || !strings.Contains(h, ".") || net.ParseIP(h) != nil {
+		return false
+	}
+	for _, label := range strings.Split(h, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range label {
+			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }

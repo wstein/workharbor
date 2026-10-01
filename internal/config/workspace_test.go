@@ -116,3 +116,40 @@ func TestCheckWorkspacePath(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvironmentAndStateDirAreChecked(t *testing.T) {
+	r := newRig(t)
+	r.cfg.Environment = Environment{Image: "fedora", EgressAllow: []string{"api.anthropic.com", "proxy.golang.org"}, CPUs: 4}
+	if _, err := r.parse(t); err != nil {
+		t.Fatalf("a valid environment: %v", err)
+	}
+	for _, bad := range []string{"1.2.3.4", "*.example.com", "example.com:443", "a b.com", "localhost", "-x.com", "x..com", "x.com/path", ""} {
+		r.cfg.Environment.EgressAllow = []string{bad}
+		if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "environment.egress_allow") {
+			t.Errorf("egress host %q = %v", bad, err)
+		}
+	}
+	r = newRig(t)
+	r.cfg.Environment = Environment{CPUs: -1}
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "must not be negative") {
+		t.Errorf("negative cpus = %v", err)
+	}
+	// The database may not live where an agent writes.
+	r = newRig(t)
+	r.cfg.StateDir = filepath.Join(r.dir, "workspaces")
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "state_dir") {
+		t.Errorf("state_dir in a workspace root = %v", err)
+	}
+	r = newRig(t)
+	state := filepath.Join(r.dir, "state")
+	if err := os.Mkdir(state, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.StateDir = state
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("a separate state_dir: %v", err)
+	}
+	if got := (Environment{}).Resolved(); got.Image != DefaultImage || got.CPUs != 2 || got.MemoryMB != 4096 || got.EgressAllow[0] != "api.anthropic.com" {
+		t.Errorf("defaults = %+v", got)
+	}
+}
