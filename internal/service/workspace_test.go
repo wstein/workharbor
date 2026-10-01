@@ -37,7 +37,11 @@ type wsRig struct {
 	failAg bool
 }
 
-func newWsRig(t *testing.T) *wsRig {
+func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
+
+// newWsRigBlocking makes the rig; with block false the fake agent's sessions
+// finish at once instead of running until they are stopped.
+func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
@@ -79,7 +83,9 @@ func newWsRig(t *testing.T) *wsRig {
 	}
 	t.Cleanup(func() { _ = r.store.Close() })
 	r.agent = agenttest.NewFake(agenttest.FullCaps())
-	r.agent.Block()
+	if block {
+		r.agent.Block()
+	}
 	r.svc = New(r.store, r.rt.Adapter, r.agent, clock, Config{
 		Owner: r.rt.Owner, ReadyCmd: []string{"echo", "ready"},
 		NewID: func() domain.ID { return r.id("d") },

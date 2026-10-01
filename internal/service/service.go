@@ -87,6 +87,7 @@ type Service struct {
 	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
 	closing  bool                // set by Shutdown: no session joins the wait group any more
 	async    *notify.Async       // the queue that delivers cfg.Notifier's messages, when set
+	bus      bus                 // live events for subscribers (design §5.3)
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent
@@ -176,6 +177,7 @@ func (s *Service) update(ctx context.Context, task domain.ID, fn func(*domain.Ta
 				}
 				return err
 			}
+			s.publish(saved)
 			s.notify(ctx, saved)
 		}
 		return fnErr
@@ -263,6 +265,8 @@ func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 				s.report(s.suspend(ctx, task, run, domain.CauseAuthExpired, time.Time{}))
 			case agent.EventQuotaExhausted:
 				s.report(s.suspend(ctx, task, run, domain.CauseQuotaExhausted, e.ResetAt))
+			default:
+				s.record(ctx, task, e)
 			}
 		}
 		res, _ := sess.Wait()
@@ -323,7 +327,9 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	if resumes {
 		sl = s.begin(row.RunID) // the run is about to start: it is not lost
 	}
-	if _, _, err := s.store.RespondDecision(ctx, id, r); err != nil {
+	_, answered, err := s.store.RespondDecision(ctx, id, r)
+	s.publish(answered)
+	if err != nil {
 		if sl != nil {
 			s.end(row.RunID, sl)
 		}

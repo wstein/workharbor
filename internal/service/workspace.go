@@ -246,6 +246,7 @@ func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID
 	if err := agg.StartRun(domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}); err != nil {
 		return "", "", err
 	}
+	var saved []domain.Event
 	sl := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
 	err = w.svc.store.Update(ctx, func(tx *store.Tx) error {
 		live, err := tx.LiveRuns(ctx, ws.EnvID)
@@ -255,15 +256,14 @@ func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID
 		if err := domain.CheckEnvironmentFree(ws.EnvID, live); err != nil {
 			return err
 		}
-		if _, err := tx.SaveTask(ctx, agg); err != nil {
-			return err
-		}
-		return nil
+		saved, err = tx.SaveTask(ctx, agg)
+		return err
 	})
 	if err != nil {
 		w.svc.end(run, sl)
 		return "", "", err
 	}
+	w.svc.publish(saved)
 
 	spec := w.svc.cfg.Spec(agg.Task(), domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID})
 	spec.EnvID, spec.Workdir = string(ws.EnvID), a.Worktree
