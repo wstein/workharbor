@@ -244,3 +244,102 @@ func TestStartRunOnlyWhereTheTaskCanTakeOne(t *testing.T) {
 		}
 	}
 }
+
+// #55: StartRun left a queued or reworked task where it was, so a rework run
+// stopped under a ready_for_review task and MarkReady failed with an illegal
+// transition.
+func TestStartRunMovesTheTaskToRunning(t *testing.T) {
+	for _, from := range []TaskState{TaskQueued, TaskReadyForReview, TaskRunning} {
+		a := NewTaskAggregate(Task{ID: "t1", State: from})
+		a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
+		if err := a.StartRun(&Run{ID: "r1", EnvID: "e1"}); err != nil {
+			t.Fatalf("from %s: %v", from, err)
+		}
+		if a.Task.State != TaskRunning {
+			t.Errorf("from %s the task is %s, want running", from, a.Task.State)
+		}
+		var kinds []EventKind
+		for _, e := range a.PendingEvents() {
+			kinds = append(kinds, e.Kind)
+		}
+		want := []EventKind{EventTaskState, EventRunStarted}
+		if from == TaskRunning {
+			want = []EventKind{EventRunStarted} // nothing moved
+		}
+		if len(kinds) != len(want) || (len(want) == 2 && (kinds[0] != want[0] || kinds[1] != want[1])) {
+			t.Errorf("from %s events = %v, want %v", from, kinds, want)
+		}
+	}
+}
+
+// A refused start must not move the task: the guards come first.
+func TestRefusedStartRunLeavesTheTask(t *testing.T) {
+	a := NewTaskAggregate(Task{ID: "t1", State: TaskQueued})
+	a.AddEnvironment(&Environment{ID: "e1", State: EnvStopped})
+	wantConflict(t, a.StartRun(&Run{ID: "r1", EnvID: "e1"}), RuleEnvRunning)
+	if a.Task.State != TaskQueued || len(a.PendingEvents()) != 0 {
+		t.Errorf("task %s with %d events after a refused start", a.Task.State, len(a.PendingEvents()))
+	}
+}
+
+// #55: the whole rework loop with no state set by hand.
+func TestReworkEndToEnd(t *testing.T) {
+	a := NewTaskAggregate(Task{ID: "t1", State: TaskQueued})
+	a.AddEnvironment(&Environment{ID: "e1", State: EnvRunning})
+	first := &Run{ID: "r1", EnvID: "e1"}
+	if err := a.StartRun(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.moveRun(first, RunRunning); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.PinRevision("r1", "agent/topic", "aaa111"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.moveRun(first, RunStopped); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.MarkReady(false); err != nil {
+		t.Fatal(err)
+	}
+
+	// The human asks for changes: a rework run on the ready_for_review task.
+	second := &Run{ID: "r2", EnvID: "e1"}
+	if err := a.StartRun(second); err != nil {
+		t.Fatal(err)
+	}
+	if a.Task.State != TaskRunning {
+		t.Fatalf("rework left the task %s, want running", a.Task.State)
+	}
+	if err := a.moveRun(second, RunRunning); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.PinRevision("r2", "agent/topic", "bbb222"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.moveRun(second, RunStopped); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.MarkReady(false); err != nil {
+		t.Fatalf("MarkReady after the rework run: %v", err)
+	}
+	if a.Task.State != TaskReadyForReview {
+		t.Errorf("task = %s, want ready_for_review", a.Task.State)
+	}
+}
+
+// #55: a late pin from an old run must not become the current candidate.
+func TestPinRevisionOnlyFromTheLatestRun(t *testing.T) {
+	a, first, _ := newRunningAggregate(t)
+	first.State = RunStopped
+	if err := a.StartRun(&Run{ID: "r2", EnvID: "e1"}); err != nil {
+		t.Fatal(err)
+	}
+	wantConflict(t, errOnly(a.PinRevision("r1", "agent/topic", "late111")), RuleCandidateRun)
+	if a.CurrentCandidate() != nil {
+		t.Error("a refused pin became the current candidate")
+	}
+	if _, err := a.PinRevision("r2", "agent/topic", "bbb222"); err != nil {
+		t.Errorf("the latest run may pin: %v", err)
+	}
+}

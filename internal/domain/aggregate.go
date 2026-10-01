@@ -116,7 +116,8 @@ func (a *TaskAggregate) LiveRun() *Run {
 
 // StartRun adds a new run in an environment and starts it. The run must be new
 // (no state yet) with an ID no run of the task has. A task has at most one live
-// run, and the environment must be running.
+// run, and the environment must be running. Once every guard has passed, a
+// queued or ready_for_review (rework) task moves to running in the same change.
 func (a *TaskAggregate) StartRun(run *Run) error {
 	if run.State != "" {
 		return conflict(RuleRunReused, "run %s is already %s: a new run is started, a finished one is never reused", run.ID, run.State)
@@ -143,6 +144,11 @@ func (a *TaskAggregate) StartRun(run *Run) error {
 	}
 	if env.State != EnvRunning {
 		return conflict(RuleEnvRunning, "run %s needs a running environment, but %s is %s", run.ID, env.ID, env.State)
+	}
+	if a.Task.State != TaskRunning {
+		if err := a.moveTask(TaskRunning); err != nil {
+			return err
+		}
 	}
 	run.TaskID = a.Task.ID
 	run.State = RunStarting
@@ -205,10 +211,14 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 
 // PinRevision records a prepared revision: the commit SHA that cleanup pinned
 // on a branch, before it is pushed (design §4.5), and the run that produced
-// it. It becomes the current revision. A SHA is pinned once.
+// it. It becomes the current revision. A SHA is pinned once, and only the
+// task's latest run may pin one.
 func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (*ReviewCandidate, error) {
 	if _, err := a.run(runID); err != nil {
 		return nil, err
+	}
+	if last := a.Runs[len(a.Runs)-1]; last.ID != runID {
+		return nil, conflict(RuleCandidateRun, "run %s cannot pin a revision: it is not the latest run (%s is)", runID, last.ID)
 	}
 	if sha == "" {
 		return nil, conflict(RulePinnedSHA, "a revision needs a commit SHA")
