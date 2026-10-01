@@ -90,13 +90,13 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Issues.** When work on an issue is done (its closing commit is pushed to `origin/main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. A `Closes:` trailer closes the issue but ticks nothing.
 
-**Working on an issue, start to finish.** Several sessions share this repository, so each issue gets its own worktree and branch, and finishes the same way:
+**Working on an issue, start to finish.** Several sessions share this repository, so each session works in its own worktree, which it reuses for every issue, and each issue gets its own branch. Every issue finishes the same way:
 
-1. **Start.** Read the issue and the design sections it names, then `git worktree add ../workharbor-<topic> -b <type>/<topic> main` and work only there. Do not switch branches in the shared checkout.
+1. **Start.** Read the issue and the design sections it names. If your session has no worktree yet, create one once under a name that `git worktree list` does not show, such as `git worktree add ../workharbor-<name> -b <type>/<topic> main`. Otherwise reuse it: with a clean tree, `git -C <worktree> switch -c <type>/<topic> main`. Work only there, never in another session's worktree, and do not switch branches in the shared checkout.
 2. **Commit** as above: atomic commits by topic, specification (design) before code, each with its trailers (`Refs: #N`, and `Closes: #N` on the last one). Run `make check` first, and confirm each commit landed (`git log -1`).
 3. **Finish.** In the worktree, `git rebase main`, then `make check` and `make commitlint`. Then fast-forward `main` from the worktree without switching branches: `git -C <shared checkout> merge --ff-only <branch>` (the shared checkout stays on `main`). If another session moved `main` meanwhile, rebase again and retry.
 4. **Comment.** Add a comment to the issue that names the commits and anything left undone.
-5. **Clean up.** `git worktree remove <path>`, then delete the branch. If `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`.
+5. **Clean up.** Keep the worktree for the next issue: switch it to the next branch, or to `git switch --detach main` if there is none, then delete the merged branch. If `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`. Remove the worktree (`git worktree remove <path>`) only when the session ends.
 6. **Hand over.** Leave `main` fast-forwarded and say what is ready: the commits (`git log --oneline origin/main..main`) and the issues that will close. Pushing publishes the commits, runs CI and closes the issue through its `Closes:` trailer, so push only when the human asks (`git fetch` first, and never force). After a push, tick the criteria as described under **Issues**.
 
 ## License
