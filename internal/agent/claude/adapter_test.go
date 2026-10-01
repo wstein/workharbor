@@ -133,28 +133,48 @@ func TestExitWithoutAResult(t *testing.T) {
 	}
 }
 
-func TestSettingSourcesArePinned(t *testing.T) {
+// The CLI reads only what the supervisor passes, on every start and every
+// resume (design §5.2, spike/claude-config).
+func TestTheCLIReadsOnlyWhatTheSupervisorPasses(t *testing.T) {
 	h, st := harness(t)
-	s, err := h.Adapter.Start(context.Background(), dontAsk(h))
+	start, err := h.Adapter.Start(context.Background(), dontAsk(h))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range s.Events() {
+	for range start.Events() {
 	}
-	if got := argAfter(st.lastCall(), "--setting-sources"); got != "user" {
-		t.Errorf("--setting-sources = %q, want the user's own settings only by default", got)
+	startCmd := st.lastCall()
+	res, _ := start.Wait()
+	resume, err := h.Adapter.Resume(context.Background(), dontAsk(h), res.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range resume.Events() {
+	}
+	for name, cmd := range map[string][]string{"start": startCmd, "resume": st.lastCall()} {
+		i := slices.Index(cmd, "--setting-sources")
+		if i < 0 || i+1 >= len(cmd) || cmd[i+1] != "" {
+			t.Errorf("%s: --setting-sources must be present with no source: %v", name, cmd)
+		}
+		if got := argAfter(cmd, "--settings"); got != "{}" {
+			t.Errorf("%s: --settings = %q, want the supervisor's own JSON", name, got)
+		}
+		for _, flag := range []string{"--strict-mcp-config", "--disable-slash-commands"} {
+			if !slices.Contains(cmd, flag) {
+				t.Errorf("%s: %s is missing: %v", name, flag, cmd)
+			}
+		}
+		for _, bad := range []string{"--mcp-config", "--plugin-dir", "--plugin-url", "--add-dir", "--agents"} {
+			if slices.Contains(cmd, bad) {
+				t.Errorf("%s: %s lets something else configure the CLI: %v", name, bad, cmd)
+			}
+		}
 	}
 
-	st2 := newStub()
-	ad := New(st2, Config{SettingSources: "user,local"})
-	s, err = ad.Start(context.Background(), dontAsk(h))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range s.Events() {
-	}
-	if got := argAfter(st2.lastCall(), "--setting-sources"); got != "user,local" {
-		t.Errorf("a configured value = %q", got)
+	// The supervisor's own settings replace the default, and are what is passed.
+	ad := New(newStub(), Config{Settings: `{"permissions":{"deny":["WebFetch"]}}`})
+	if got := argAfter(ad.args(dontAsk(h), ""), "--settings"); got != `{"permissions":{"deny":["WebFetch"]}}` {
+		t.Errorf("configured settings = %q", got)
 	}
 }
 

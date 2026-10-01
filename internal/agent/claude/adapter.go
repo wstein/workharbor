@@ -27,12 +27,12 @@ type Config struct {
 	Bin       string // the claude binary in the environment; default "claude"
 	Model     string // optional --model
 	ConfigDir string // a per-environment auth directory, passed as CLAUDE_CONFIG_DIR, never $HOME
-	// SettingSources pins where the CLI may read settings from, so that the
-	// checked-out repository cannot widen the allowlist with its own permission
-	// rules or hooks. Default "user". The flag is unverified against the real
-	// CLI (design §5.2); a CLI that rejects it fails the run, it does not widen.
-	SettingSources string
-	Env            []string // extra KEY=VALUE for the process
+	// Settings is the supervisor's own settings, a JSON object passed inline as
+	// --settings. The CLI reads no other settings, hooks, MCP servers or
+	// skills: not the repository's and not the agent home's, because the agent
+	// can write both (design §5.2, spike/claude-config). Default "{}".
+	Settings string
+	Env      []string // extra KEY=VALUE for the process
 	// ResumeProbe is how long Resume waits to learn whether the session
 	// exists. Default 10 s.
 	ResumeProbe time.Duration
@@ -53,8 +53,8 @@ func New(r Runner, cfg Config) *Adapter {
 	if cfg.Bin == "" {
 		cfg.Bin = "claude"
 	}
-	if cfg.SettingSources == "" {
-		cfg.SettingSources = "user"
+	if cfg.Settings == "" {
+		cfg.Settings = "{}"
 	}
 	if cfg.ResumeProbe <= 0 {
 		cfg.ResumeProbe = 10 * time.Second
@@ -100,7 +100,10 @@ func (a *Adapter) args(spec agent.StartSpec, resume string) []string {
 	args := []string{
 		a.cfg.Bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--permission-prompts", "none", "--permission-mode", string(agent.PermissionDontAsk),
-		"--setting-sources", a.cfg.SettingSources,
+		// The CLI reads only what the supervisor passes. The agent writes its
+		// repository and its home, and both are settings sources: pinning the
+		// sources to user was measured not to be enough (design §5.2).
+		"--setting-sources", "", "--settings", a.cfg.Settings, "--strict-mcp-config", "--disable-slash-commands",
 	}
 	if len(spec.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(spec.AllowedTools, ","))
