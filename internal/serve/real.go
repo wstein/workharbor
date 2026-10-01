@@ -12,6 +12,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/agent/claude"
 	"github.com/wstein/workharbor/internal/api"
+	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
@@ -198,7 +199,22 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	}
 	ag := claude.New(rt, claude.Config{Bin: bin + "/claude", ConfigDir: GuestHome + "/.claude", Env: env})
 
-	opts := SpecOptions{Owner: Owner, Env: c.Environment.Resolved(), ToolStore: c.Roots.ToolStore, Proxy: proxy}
+	spec := c.Environment.Resolved()
+	if spec.Image == "" {
+		// The workharbor base image (D44): built once, again only when the
+		// pinned base changes. The first start takes a while.
+		tag, built, err := baseimage.Ensure(context.Background(), rt, baseimage.Distro(spec.Base), filepath.Join(dir, "build"))
+		if err != nil {
+			_ = git.Close()
+			_ = st.Close()
+			return Deps{}, nil, err
+		}
+		if built {
+			logf("built the base image %s", tag)
+		}
+		spec.Image = tag
+	}
+	opts := SpecOptions{Owner: Owner, Env: spec, ToolStore: c.Roots.ToolStore, Proxy: proxy}
 	roots := append(append([]string(nil), c.Roots.Workspaces...), c.Roots.ToolStore, filepath.Dir(proxy))
 	prepare := func(s runtime.Spec) (runtime.PreparedSpec, error) {
 		return runtime.Prepare(runtime.PrepareOptions{

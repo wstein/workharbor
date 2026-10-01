@@ -149,7 +149,7 @@ func TestEnvironmentAndStateDirAreChecked(t *testing.T) {
 	if _, err := r.parse(t); err != nil {
 		t.Errorf("a separate state_dir: %v", err)
 	}
-	if got := (Environment{}).Resolved(); got.Image != DefaultImage || got.CPUs != 2 || got.MemoryMB != 4096 || got.EgressAllow[0] != "api.anthropic.com" {
+	if got := (Environment{}).Resolved(); got.Image != "" || got.Base != DefaultBase || got.CPUs != 2 || got.MemoryMB != 4096 || got.EgressAllow[0] != "api.anthropic.com" {
 		t.Errorf("defaults = %+v", got)
 	}
 }

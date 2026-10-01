@@ -21,6 +21,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/hostgit"
 )
 
@@ -83,8 +84,13 @@ type Config struct {
 // like (design §5.1, D38: a repository may request, never grant). Zero values
 // take the defaults of the field.
 type Environment struct {
-	// Image is the stock base image, Fedora by default (D43).
+	// Image is an image to run instead of the workharbor base image. Empty, the
+	// default, means the base image of Base, which whr builds once (D44). An
+	// image set here must have git: a workspace on one without is refused.
 	Image string `json:"image,omitempty"`
+	// Base is the first-class base of the workharbor base image: "fedora", the
+	// default, or "ubuntu" (D43, D44).
+	Base string `json:"base,omitempty"`
 	// EgressAllow are the host names the agent may reach through the egress
 	// proxy, `api.anthropic.com` by default. Names only: no IP, no wildcard.
 	EgressAllow []string `json:"egress_allow,omitempty"`
@@ -95,7 +101,7 @@ type Environment struct {
 
 // Defaults of Environment.
 const (
-	DefaultImage    = "docker.io/library/fedora:latest" // provisional: pin by digest (D43)
+	DefaultBase     = "fedora" // the workharbor base image's base (D43, D44)
 	DefaultCPUs     = 2
 	DefaultMemoryMB = 4096
 	DefaultDiskMB   = 10240
@@ -103,8 +109,8 @@ const (
 
 // Resolved returns the environment with the defaults filled in.
 func (e Environment) Resolved() Environment {
-	if e.Image == "" {
-		e.Image = DefaultImage
+	if e.Base == "" {
+		e.Base = DefaultBase
 	}
 	if len(e.EgressAllow) == 0 {
 		e.EgressAllow = []string{"api.anthropic.com"}
@@ -168,6 +174,10 @@ func (c *Config) Validate() error {
 
 	if err := checkListen(c.Listen); err != "" {
 		add("listen: %s", err)
+	}
+
+	if b := c.Environment.Base; b != "" && !baseimage.Distro(b).Valid() {
+		add("environment.base: %q is not a first-class base (want fedora or ubuntu)", b)
 	}
 
 	seen := map[string]string{}

@@ -33,7 +33,7 @@ func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
 	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
 		t.Fatal(err)
 	}
-	opts := SpecOptions{Owner: Owner, Env: config.Environment{}.Resolved(), ToolStore: store, Proxy: proxy}
+	opts := SpecOptions{Owner: Owner, Env: config.Environment{Image: "whr-base/fedora:abc123abc123"}.Resolved(), ToolStore: store, Proxy: proxy}
 	spec := opts.For(domain.Workspace{ID: "w1"})
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: ws, Target: "/ws"}) // what the service adds
 	if err := spec.Validate(); err != nil {
