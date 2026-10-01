@@ -143,7 +143,7 @@ workharbor talks to GitHub as an App of your own, never with your personal token
     - **Where can this GitHub App be installed:** **Only on this account**.
     - **Create GitHub App**, then note the **App ID** on its General page.
 2. **Generate a private key** on the same page (**Private keys → Generate a private key**). The browser downloads a `.pem` file: that file is the secret, see step 12.
-3. **Install it** (**Install App**) on your account with **Only select repositories** and pick the repositories workharbor works on. `whr` finds the installation by itself.
+3. **Install it** (**Install App**) on your account with **Only select repositories** and pick the repositories workharbor works on. `whr` finds the installation by itself. **One App serves all your repositories**: to add one later, add it to the installation's repository list and to `repositories` in the configuration; each token `whr` mints still covers one repository only. Repositories of an organization need the App installed there too, which takes **Any account** in step 1, or a second App owned by the organization.
 4. **Check the ruleset of `main`** (the repository's **Settings → Rules → Rulesets**): changes need a pull request with a human review, force pushes are blocked, and the App is **not** in the bypass list (D15). The supervisor pushes only `agent/*` branches and opens pull requests; merging stays with you.
 
 ## 12. Secrets
