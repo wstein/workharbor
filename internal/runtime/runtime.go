@@ -1,6 +1,6 @@
 // Package runtime defines the runtime adapter contract. Backends report
 // capabilities explicitly and do not pretend to share Docker semantics.
-// See docs/design.md §5.1.
+// See docs/content/docs/design.md §5.1.
 package runtime
 
 import "context"

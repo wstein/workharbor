@@ -20,7 +20,8 @@ Commands:
   help      show this help
 
 Not yet implemented: serve, login, run, ls, show, logs, watch, say, pause,
-resume, cancel, inbox, approve, reject, diff, ssh, open, wait, kill-all, doctor.
+resume, cancel, purge, usage, inbox, approve, reject, diff, ssh, open, wait,
+kill-all, doctor.
 `
 
 // editorconfig-checker-enable

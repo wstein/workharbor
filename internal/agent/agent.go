@@ -1,5 +1,5 @@
 // Package agent defines the agent adapter contract for supported coding
-// agents. See docs/design.md §5.2.
+// agents. See docs/content/docs/design.md §5.2.
 package agent
 
 import "context"

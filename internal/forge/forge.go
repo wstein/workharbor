@@ -1,6 +1,6 @@
 // Package forge defines the forge adapter contract: issues, pull requests,
 // reviews, metadata and webhooks. It enforces the autonomy policy.
-// See docs/design.md §10.
+// See docs/content/docs/design.md §10.
 package forge
 
 import "context"

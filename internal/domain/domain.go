@@ -1,5 +1,5 @@
 // Package domain defines the core workharbor objects: Task, Workspace, Run,
-// Environment, Decision, ReviewCandidate and Event. See docs/design.md §4.
+// Environment, Decision, ReviewCandidate and Event. See docs/content/docs/design.md §4.
 package domain
 
 import "time"
