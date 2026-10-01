@@ -121,10 +121,15 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 
 - [ ] An enterprise offering: several developers on one supervisor under the vendors' commercial terms (Team or Enterprise plans, API keys or a cloud provider), with per-user identity and audit. D40's one-human rule is for consumer subscriptions; this needs its own decision (D41)
 - [ ] Proxmox VE and VMware vSphere/ESXi as runtime targets (#86): environments as full VMs on an existing virtualization cluster, each with its own kernel (a Proxmox LXC container shares the host kernel and does not meet §7's bar), driven through their APIs with credentials scoped to one pool or folder, an isolated network per environment with the egress sidecar, and the runtime conformance suite as the gate. A full VM boots far slower than Apple Container's 1.1 s (spike #2), which may call for pooled environments
+- [ ] A Windows host with Hyper-V VMs (#87): the supervisor on Windows, each environment a Hyper-V VM with its own kernel. A host port, not only a runtime: the Windows counterparts of Homebrew (D28), the `pf` rules (D29), launchd and `0600` secret files are needed, and whether Firecracker (#85) can run inside WSL2 is {{< status unverified >}}
 - [ ] Other microVM/VM platforms, Kubernetes where useful
 - [ ] Multiple hosts and placement policies
 - [ ] Wider forge/CI coverage
 
-**Not planned:** native iOS and Android apps. The installable PWA (release 1) is the mobile client; the JSON API stays the contract for any client.
+**Not planned:**
+
+- Native iOS and Android apps. The installable PWA (release 1) is the mobile client; the JSON API stays the contract for any client.
+- VirtualBox as a runtime. One VM per environment would meet §7, but it adds little next to Apple Container on the Mac and Firecracker, Proxmox or VMware on Linux; it is driven only through `VBoxManage`, boots full VMs slowly, and its shared folders are slow where spike #40 already found bind mounts costly. Whether it runs on Apple-silicon Macs is {{< status unverified >}}.
+- WSL2 as a runtime. Its distributions share one utility VM and one Linux kernel, so environments would be separated by namespaces only, which fails §7's bar of a kernel per environment. Windows is a host platform instead (#87).
 
 Phases are proposals, not a schedule.
