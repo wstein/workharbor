@@ -289,3 +289,58 @@ func TestPushSendsTheApprovedCommitOnly(t *testing.T) {
 		t.Errorf("a refused push changed the remote to %s", got)
 	}
 }
+
+// #79: after a push, a follow-up round rebases only the agent's new commits
+// onto the pushed commit, so the second push is a fast-forward and the pushed
+// commits are not rewritten.
+func TestPrepareFollowUpExtendsThePushedCommit(t *testing.T) {
+	ctx := context.Background()
+	p := newPrep(t)
+	first, err := p.repo.Prepare(ctx, p.spec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Source == "" || first.Source == first.SHA {
+		t.Fatalf("Source = %q, want the agent's own tip before the rewrite", first.Source)
+	}
+	remote := filepath.Join(p.base, "remote.git")
+	if _, err := p.g.InitBare(ctx, remote); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.repo.Push(ctx, remote, "agent/topic", first.SHA); err != nil {
+		t.Fatal(err)
+	}
+
+	// The agent goes on from its own history, which the push did not change.
+	p.commitFile("c.txt", "docs: add c")
+	p.fetch()
+	spec := p.spec()
+	spec.Onto, spec.Upstream = first.SHA, first.Source
+	second, err := p.repo.Prepare(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Commits) != 1 {
+		t.Fatalf("follow-up commits = %v, want only the new one", second.Commits)
+	}
+	if base := mustGit(t, p.env, p.repo.Path(), "rev-parse", second.SHA+"^"); base != first.SHA {
+		t.Fatalf("the new commit's parent is %s, want the pushed %s", base, first.SHA)
+	}
+	if err := p.repo.Push(ctx, remote, "agent/topic", second.SHA); err != nil {
+		t.Fatalf("the follow-up push = %v, want a fast-forward", err)
+	}
+
+	// An agent that rewrote what it already handed in is refused, not guessed at.
+	mustGit(t, p.env, p.topic, "reset", "--quiet", "--hard", "HEAD~3")
+	p.commitFile("d.txt", "docs: add d")
+	p.fetch()
+	if _, err := p.repo.Prepare(ctx, spec); !errors.Is(err, ErrHistoryRewritten) {
+		t.Fatalf("a rewritten agent history = %v, want ErrHistoryRewritten", err)
+	}
+	// Onto and Upstream go together and must be full commit IDs.
+	bad := p.spec()
+	bad.Onto = first.SHA
+	if _, err := p.repo.Prepare(ctx, bad); err == nil {
+		t.Fatal("Onto without Upstream was accepted")
+	}
+}

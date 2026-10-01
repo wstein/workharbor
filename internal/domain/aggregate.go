@@ -271,6 +271,13 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 // it. It becomes the current revision. A SHA is pinned once, and only the
 // task's latest run may pin one.
 func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (ReviewCandidate, error) {
+	return a.PinPrepared(runID, branch, sha, "")
+}
+
+// PinPrepared pins a prepared revision like PinRevision and records the
+// agent's own tip it was prepared from (source), which a follow-up round
+// rebases from.
+func (a *TaskAggregate) PinPrepared(runID ID, branch, sha, source string) (ReviewCandidate, error) {
 	if _, err := a.run(runID); err != nil {
 		return ReviewCandidate{}, err
 	}
@@ -285,9 +292,9 @@ func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (ReviewCandida
 			return ReviewCandidate{}, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
 		}
 	}
-	c := &ReviewCandidate{TaskID: a.task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending}
+	c := &ReviewCandidate{TaskID: a.task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending, Source: source}
 	a.candidates = append(a.candidates, c)
-	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha})
+	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha, Source: source})
 	return *c, nil
 }
 
@@ -303,6 +310,32 @@ func (a *TaskAggregate) currentCandidate() *ReviewCandidate {
 func (a *TaskAggregate) CurrentCandidate() (ReviewCandidate, bool) {
 	if c := a.currentCandidate(); c != nil {
 		return *c, true
+	}
+	return ReviewCandidate{}, false
+}
+
+// RecordPushed marks a revision as pushed to the forge. Recording the same
+// push again changes nothing.
+func (a *TaskAggregate) RecordPushed(sha string) error {
+	for _, c := range a.candidates {
+		if c.SHA == sha {
+			if c.Pushed {
+				return nil
+			}
+			c.Pushed = true
+			a.record(EventRevisionPushed, RevisionPushed{SHA: sha})
+			return nil
+		}
+	}
+	return &NotFoundError{Kind: "commit", ID: sha}
+}
+
+// LastPushed returns the most recently pinned revision that was pushed.
+func (a *TaskAggregate) LastPushed() (ReviewCandidate, bool) {
+	for i := len(a.candidates) - 1; i >= 0; i-- {
+		if a.candidates[i].Pushed {
+			return *a.candidates[i], true
+		}
 	}
 	return ReviewCandidate{}, false
 }

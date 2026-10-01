@@ -28,6 +28,7 @@ const (
 	EventRevisionPinned     EventKind = "revision.pinned"
 	EventCIRecorded         EventKind = "ci.recorded"
 	EventPRRecorded         EventKind = "pr.recorded"
+	EventRevisionPushed     EventKind = "revision.pushed"
 	EventDecisionRaised     EventKind = "decision.raised"
 	EventDecisionAnswered   EventKind = "decision.answered"
 	EventDecisionExpired    EventKind = "decision.expired"
@@ -89,6 +90,12 @@ type RevisionPinned struct {
 	RunID  ID     `json:"run_id"`
 	Branch string `json:"branch"`
 	SHA    string `json:"sha"`
+	Source string `json:"source,omitempty"`
+}
+
+// RevisionPushed is the payload of EventRevisionPushed.
+type RevisionPushed struct {
+	SHA string `json:"sha"`
 }
 
 // CIRecorded is the payload of EventCIRecorded.

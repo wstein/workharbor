@@ -150,8 +150,8 @@ func (p *pubRig) envState() domain.EnvState {
 	return info.State
 }
 
-func (p *pubRig) answer(option string, sha string) error {
-	return p.svc.AnswerDecision(bg, "review-1", domain.Response{By: "werner", Option: option, SHA: sha, At: p.clock.now})
+func (p *pubRig) allow(sha string) error {
+	return p.svc.AnswerDecision(bg, "review-1", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: sha, At: p.clock.now})
 }
 
 func (p *pubRig) remoteHas(branch string) bool {
@@ -235,7 +235,7 @@ func TestPublishNeedsTheApprovalOfExactlyThePinnedCommit(t *testing.T) {
 		t.Errorf("an open decision = %v, want ErrNotApproved", err)
 	}
 	// An allow for another commit is a denial.
-	if err := p.answer(domain.AnswerAllow, "ffffffffffffffffffffffffffffffffffffffff"); !errors.Is(err, domain.ErrSHAMismatch) {
+	if err := p.allow("ffffffffffffffffffffffffffffffffffffffff"); !errors.Is(err, domain.ErrSHAMismatch) {
 		t.Fatalf("answer = %v, want ErrSHAMismatch", err)
 	}
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotApproved) {
@@ -251,7 +251,7 @@ func TestPublishPushesTheApprovedCommitAndOpensThePR(t *testing.T) {
 	p := newPubRig(t)
 	prepared, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
-	must(t, p.answer(domain.AnswerAllow, prepared.SHA))
+	must(t, p.allow(prepared.SHA))
 
 	pr, err := p.pub.Publish(bg, "t1", "review-1", "Add a", "body")
 	if err != nil {
@@ -312,5 +312,86 @@ func TestOpenCopyOffersACopyNeverTheCheckout(t *testing.T) {
 	stale, err := p.pub.OpenCopy(bg, p.req, dir)
 	if err != nil || !stale.Stale {
 		t.Errorf("copy while running = %+v, %v; want the last copy marked stale", stale, err)
+	}
+}
+
+// rework starts and stops a second run on the same environment, as a rework
+// after review does, and lets the agent commit more work in its checkout.
+func (p *pubRig) rework(id domain.ID, file string) {
+	p.t.Helper()
+	must(p.t, p.rt.Adapter.Start(bg, string(p.env)))
+	a := p.load()
+	must(p.t, a.ObserveEnv(p.env, domain.EnvRunning))
+	must(p.t, a.StartRun(domain.Run{ID: id, EnvID: p.env}))
+	must(p.t, a.StopRun(id))
+	_, err := p.store.SaveTask(bg, a)
+	must(p.t, err)
+	must(p.t, os.WriteFile(filepath.Join(p.checkout, file), []byte(file+"\n"), 0o600))
+	plainGit(p.t, p.home, p.checkout, "add", file)
+	plainGit(p.t, p.home, p.checkout, "commit", "--quiet", "-m", "docs: add "+file)
+}
+
+// #79: after a push, the next round extends the pushed commit instead of
+// rewriting it, so the second push is a fast-forward.
+func TestFollowUpRoundPushesAsAFastForward(t *testing.T) {
+	p := newPubRig(t)
+	first, err := p.pub.Prepare(bg, p.req)
+	must(t, err)
+	must(t, p.allow(first.SHA))
+	_, err = p.pub.Publish(bg, "t1", "review-1", "Add a", "body")
+	must(t, err)
+	if c, ok := p.load().LastPushed(); !ok || c.SHA != first.SHA {
+		t.Fatalf("LastPushed = %+v, %v; want the published %s", c, ok, first.SHA)
+	}
+
+	p.rework("r2", "b.txt")
+	req := p.req
+	req.DecisionID = "review-2"
+	second, err := p.pub.Prepare(bg, req)
+	must(t, err)
+	if len(second.Commits) != 1 {
+		t.Fatalf("follow-up commits = %v, want only the new one", second.Commits)
+	}
+	must(t, p.svc.AnswerDecision(bg, "review-2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: second.SHA, At: p.clock.now}))
+	if _, err := p.pub.Publish(bg, "t1", "review-2", "Add a and b", "body"); err != nil {
+		t.Fatalf("the follow-up publish = %v, want a fast-forward push", err)
+	}
+	if got, _ := p.forge.BranchSHA(bg, "", "agent/topic"); got != second.SHA {
+		t.Fatalf("the remote has %s, want %s", got, second.SHA)
+	}
+
+	// The first approval does not cover the new revision.
+	err = p.pub.cfg.Guard.Push(bg, "wstein/workharbor", "agent/topic", forge.Approval{DecisionID: "review-1", SHA: first.SHA})
+	if !errors.Is(err, forge.ErrNotApproved) {
+		t.Errorf("an approval for the earlier revision = %v, want ErrNotApproved", err)
+	}
+}
+
+// #79: an approval given before the task was cancelled does not publish.
+func TestCancelledTaskDoesNotPublish(t *testing.T) {
+	p := newPubRig(t)
+	prepared, err := p.pub.Prepare(bg, p.req)
+	must(t, err)
+	must(t, p.allow(prepared.SHA))
+	must(t, p.svc.Cancel(bg, "t1"))
+
+	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err == nil {
+		t.Fatal("a cancelled task was published")
+	}
+	err = p.pub.cfg.Guard.Push(bg, "wstein/workharbor", "agent/topic", forge.Approval{DecisionID: "review-1", SHA: prepared.SHA})
+	if !errors.Is(err, forge.ErrNotApproved) {
+		t.Errorf("the guard with a cancelled task's approval = %v, want ErrNotApproved", err)
+	}
+	if p.remoteHas("agent/topic") {
+		t.Fatal("a cancelled task's commit reached the remote")
+	}
+}
+
+// #79: the repository's checks are required, never silently skipped.
+func TestPrepareNeedsChecks(t *testing.T) {
+	p := newPubRig(t)
+	p.pub.cfg.Checks = nil
+	if _, err := p.pub.Prepare(bg, p.req); !errors.Is(err, ErrNoChecks) {
+		t.Fatalf("Prepare without checks = %v, want ErrNoChecks", err)
 	}
 }

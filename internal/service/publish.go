@@ -14,6 +14,8 @@ import (
 var (
 	ErrEnvRunning  = errors.New("the environment is still running")
 	ErrNotReadyYet = errors.New("the task has no stopped run to prepare")
+	ErrNoChecks    = errors.New("the repository's checks are not configured")
+	ErrNotReview   = errors.New("the task is not ready for review")
 )
 
 // Checker runs the repository's own checks on a prepared commit. They are the
@@ -64,6 +66,9 @@ type Request struct {
 // for exactly that SHA. It returns the prepared commit.
 func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared, error) {
 	s := p.svc
+	if p.cfg.Checks == nil {
+		return hostgit.Prepared{}, ErrNoChecks
+	}
 	agg, err := s.store.LoadTask(ctx, req.Task)
 	if err != nil {
 		return hostgit.Prepared{}, err
@@ -95,18 +100,24 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 	}
 	spec := p.cfg.Prepare
 	spec.Target, spec.Topic = req.Target, req.Branch
+	// After a push, only the agent's newer commits are rebased onto the pushed
+	// revision: pushed commits are never rewritten (design §4.5).
+	if pushed, ok := agg.LastPushed(); ok {
+		if pushed.Source == "" {
+			return hostgit.Prepared{}, fmt.Errorf("%w: the pushed revision %s does not record its source", hostgit.ErrHistoryRewritten, pushed.SHA)
+		}
+		spec.Onto, spec.Upstream = pushed.SHA, pushed.Source
+	}
 	prepared, err := p.cfg.Repo.Prepare(ctx, spec)
 	if err != nil {
 		return hostgit.Prepared{}, err
 	}
-	if p.cfg.Checks != nil {
-		if err := p.cfg.Checks(ctx, req.Task, prepared.SHA); err != nil {
-			return hostgit.Prepared{}, fmt.Errorf("the repository's checks failed: %w", err)
-		}
+	if err := p.cfg.Checks(ctx, req.Task, prepared.SHA); err != nil {
+		return hostgit.Prepared{}, fmt.Errorf("the repository's checks failed: %w", err)
 	}
 
 	err = s.update(ctx, req.Task, func(a *domain.TaskAggregate) error {
-		if _, err := a.PinRevision(last.ID, req.Branch, prepared.SHA); err != nil {
+		if _, err := a.PinPrepared(last.ID, req.Branch, prepared.SHA, prepared.Source); err != nil {
 			return err
 		}
 		if err := a.MarkReady(false); err != nil {
@@ -147,6 +158,9 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	if err != nil {
 		return forge.PullRequest{}, err
 	}
+	if agg.Task().State != domain.TaskReadyForReview {
+		return forge.PullRequest{}, fmt.Errorf("%w: it is %s", ErrNotReview, agg.Task().State)
+	}
 	cand, ok := agg.CurrentCandidate()
 	d, found := agg.Decision(decision)
 	if !ok || !found || !d.Allows(cand.SHA) {
@@ -166,7 +180,12 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	} else if pr, err = p.cfg.Guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body); err != nil {
 		return forge.PullRequest{}, err
 	}
-	err = s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.RecordPR(cand.SHA, pr.URL) })
+	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		if err := a.RecordPushed(cand.SHA); err != nil {
+			return err
+		}
+		return a.RecordPR(cand.SHA, pr.URL)
+	})
 	return pr, err
 }
 
@@ -182,14 +201,24 @@ func parsePRNumber(url string) int {
 
 // VerifierFor returns the forge.Verifier over the service's store: a commit is
 // approved when the review Decision exists and was answered allow for exactly
-// that SHA.
+// that SHA, its task is ready for review, and the SHA is the task's current
+// revision. A cancelled task, or an approval of an earlier revision, approves
+// nothing.
 func (s *Service) VerifierFor() forge.Verifier { return storeVerifier{s} }
 
 type storeVerifier struct{ s *Service }
 
 func (v storeVerifier) Approved(ctx context.Context, ap forge.Approval) bool {
 	d, err := v.s.store.LoadDecision(ctx, domain.ID(ap.DecisionID))
-	return err == nil && d.Kind == domain.DecisionReview && d.Allows(ap.SHA)
+	if err != nil || d.Kind != domain.DecisionReview || !d.Allows(ap.SHA) {
+		return false
+	}
+	agg, err := v.s.store.LoadTask(ctx, d.TaskID)
+	if err != nil || agg.Task().State != domain.TaskReadyForReview {
+		return false
+	}
+	cand, ok := agg.CurrentCandidate()
+	return ok && cand.SHA == ap.SHA
 }
 
 // RepoPusher is a forge.Pusher that sends the branch with hostgit.

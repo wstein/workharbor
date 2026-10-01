@@ -94,6 +94,11 @@ type ReviewCandidate struct {
 	SHA    string
 	PRURL  string
 	CI     CIState // the pipeline result for SHA; empty means pending
+	// Source is the agent's own tip the revision was prepared from. A
+	// follow-up round rebases only the agent's commits after it onto the
+	// pushed revision, so pushed commits are never rewritten (design §4.5).
+	Source string
+	Pushed bool // the revision reached the forge
 }
 
 // CIState is the result of a CI pipeline for one commit.

@@ -50,7 +50,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 3 || name != "0003_resume_attempts.sql" || applied != fixed.UnixNano() {
+	if n != 4 || name != "0004_candidate_source.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -79,8 +79,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 3 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 3", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 4 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 4", n, err)
 	}
 }
 

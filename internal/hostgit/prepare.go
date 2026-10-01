@@ -18,6 +18,10 @@ var (
 	ErrNotSigned      = errors.New("a rewritten commit is not signed")
 	ErrNoSigningKey   = errors.New("preparing a topic needs the bot's signing key")
 	ErrNotFastForward = errors.New("the push is not a fast-forward")
+	// ErrHistoryRewritten: the agent rewrote commits it had already handed in, so
+	// a follow-up round cannot tell which of its commits are new.
+	ErrHistoryRewritten = errors.New("the agent rewrote commits that were already prepared")
+	ErrNothingNew       = errors.New("the topic has no commits after the pushed revision")
 )
 
 // Identity is who commits the rewritten commits: the bot. The authors of the
@@ -35,12 +39,21 @@ type PrepareSpec struct {
 	// The repository's own checks are not run here: they are the repository's
 	// code and run in an environment, never on the host (design §4.5).
 	Lint func(message string) []string
+	// Onto and Upstream make a follow-up round after a push (design §4.5):
+	// only the agent's commits after Upstream (the agent's own tip the pushed
+	// revision was prepared from) are rebased onto Onto (the pushed commit),
+	// so pushed commits are never rewritten and the next push is a
+	// fast-forward. Both are full commit IDs, or both empty for a first round.
+	Onto, Upstream string
 }
 
 // Prepared is a topic ready for review: the new tip and the commits on it.
 type Prepared struct {
 	SHA     string
 	Commits []string // oldest first
+	// Source is the agent's own tip the revision was prepared from: the
+	// Upstream of the next follow-up round.
+	Source string
 }
 
 // Prepare rebases the topic onto the target in a temporary worktree with
@@ -49,7 +62,7 @@ type Prepared struct {
 // signatures are there, and only then moves the topic branch to the new tip.
 // On a conflict, a lint problem or an unsigned commit the branch is left as it
 // was and nothing remains of the worktree. Commits already pushed must not be
-// passed in: the caller prepares only unpushed work.
+// passed in: a follow-up round after a push sets Onto and Upstream.
 func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) {
 	if !validBranch(spec.Target) || !validBranch(spec.Topic) {
 		return Prepared{}, fmt.Errorf("%w: %q or %q", ErrBadBranch, spec.Target, spec.Topic)
@@ -67,6 +80,26 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 	oldTip, err := r.revParse(ctx, topicRef)
 	if err != nil {
 		return Prepared{}, err
+	}
+	base := targetRef // what the topic is rebased onto, and what its commits are counted from
+	rebaseArgs := []string{targetRef}
+	if spec.Onto != "" || spec.Upstream != "" {
+		if !shaRe.MatchString(spec.Onto) || !shaRe.MatchString(spec.Upstream) {
+			return Prepared{}, fmt.Errorf("%w: a follow-up round needs both Onto and Upstream as full commit IDs", ErrBadPath)
+		}
+		for _, sha := range []string{spec.Onto, spec.Upstream} {
+			if _, err := r.revParse(ctx, sha); err != nil {
+				return Prepared{}, fmt.Errorf("%w: %s is not in this repository", ErrBadPath, sha)
+			}
+		}
+		if _, err := r.g.run(ctx, r.path, false, nil, "merge-base", "--is-ancestor", spec.Upstream, oldTip); err != nil {
+			return Prepared{}, fmt.Errorf("%w: %.12s is not an ancestor of the topic", ErrHistoryRewritten, spec.Upstream)
+		}
+		if spec.Upstream == oldTip {
+			return Prepared{}, ErrNothingNew
+		}
+		base = spec.Onto
+		rebaseArgs = []string{"--onto", spec.Onto, spec.Upstream}
 	}
 
 	dir, err := os.MkdirTemp("", "whr-prepare-")
@@ -86,9 +119,11 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		"GIT_SEQUENCE_EDITOR=:",
 		"GIT_COMMITTER_NAME=" + spec.Committer.Name, "GIT_COMMITTER_EMAIL=" + spec.Committer.Email,
 	}
-	_, err = r.g.run(ctx, dir, false, env,
-		"-c", "gpg.format=ssh", "-c", "user.signingkey="+spec.SigningKey,
-		"rebase", "--quiet", "--interactive", "--autosquash", "--force-rebase", "--gpg-sign", targetRef)
+	args := append([]string{
+		"-c", "gpg.format=ssh", "-c", "user.signingkey=" + spec.SigningKey,
+		"rebase", "--quiet", "--interactive", "--autosquash", "--force-rebase", "--gpg-sign",
+	}, rebaseArgs...)
+	_, err = r.g.run(ctx, dir, false, env, args...)
 	if err != nil {
 		_, _ = r.g.run(ctx, dir, false, nil, "rebase", "--abort")
 		return Prepared{}, fmt.Errorf("%w: %v", ErrRebaseConflict, err) //nolint:errorlint // the git output is the detail
@@ -99,11 +134,11 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		return Prepared{}, err
 	}
 	tip := strings.TrimSpace(string(newTip))
-	list, err := r.g.run(ctx, dir, false, nil, "rev-list", "--reverse", targetRef+".."+tip)
+	list, err := r.g.run(ctx, dir, false, nil, "rev-list", "--reverse", base+".."+tip)
 	if err != nil {
 		return Prepared{}, err
 	}
-	out := Prepared{SHA: tip, Commits: strings.Fields(string(list))}
+	out := Prepared{SHA: tip, Commits: strings.Fields(string(list)), Source: oldTip}
 
 	var problems []string
 	for _, c := range out.Commits {

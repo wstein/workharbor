@@ -689,3 +689,28 @@ func TestAStateChangeWithNoEventIsRefused(t *testing.T) {
 		t.Errorf("an unchanged save: %v", err)
 	}
 }
+
+// #79: the source tip and the pushed flag of a revision survive a save and a
+// load, since a follow-up round rebases from them.
+func TestCandidateSourceAndPushedRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	a := newAggregate(t, "t1")
+	running(t, a)
+	if _, err := a.PinPrepared("r-t1", "agent/topic", "aaa111", "src111"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.RecordPushed("aaa111"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadTask(bg, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, ok := got.LastPushed()
+	if !ok || c.SHA != "aaa111" || c.Source != "src111" || !c.Pushed {
+		t.Fatalf("loaded LastPushed = %+v, %v", c, ok)
+	}
+}
