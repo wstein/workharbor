@@ -4,7 +4,7 @@ description: "What a guest on Apple Container can reach on the host's addresses,
 weight: 5
 ---
 
-> Source: `spike/host-reachability` at `0c78d94f86cb5d659e993714fe4d728c0dc9fe50` (not on GitHub yet), with the scripts and raw output next to the results. Tracks [#69](https://github.com/wstein/workharbor/issues/69). Published as recorded on 1 October 2026.
+> Source: [`spike/host-reachability`](https://github.com/wstein/workharbor/tree/spike/host-reachability/spikes/host-reachability) at `0c78d94f86cb5d659e993714fe4d728c0dc9fe50`, with the scripts and raw output next to the results. Tracks [#69](https://github.com/wstein/workharbor/issues/69). Published as recorded on 1 October 2026.
 
 Issue #69, for design D29 and §7.2. Run on 2026-10-01 on the Mac mini: macOS 26.6.2, Apple `container` 1.5.0, the macOS Application Firewall **disabled** (state 0), no VPN. `run.sh` is the whole experiment and `run.out` is its unedited output.
 

@@ -4,7 +4,7 @@ description: "git status, read, copy, remove and build times for a node_modules-
 weight: 6
 ---
 
-> Source: `spike/bind-mount-perf` at `2d29ecdeedeaa1937e89b8ab6d9863e22c854d89` (local branch until it is pushed), with `run.sh`, `gen.py`, `guest.sh` and the raw `results.txt`. Tracks [#40](https://github.com/wstein/workharbor/issues/40). Recorded on 1 October 2026.
+> Source: [`spike/bind-mount-perf`](https://github.com/wstein/workharbor/tree/spike/bind-mount-perf/spikes/bind-mount-perf) at `f3432b6629a8ef2e37b70f392fc99bf791e4364f` (measured at `2d29ecdeedeaa1937e89b8ab6d9863e22c854d89`; the files moved to `spikes/` afterwards), with `run.sh`, `gen.py`, `guest.sh` and the raw `results.txt`. Tracks [#40](https://github.com/wstein/workharbor/issues/40). Recorded on 1 October 2026.
 
 Measured on a Mac mini (Apple silicon), Apple `container` 1.5.0, a `fedora` guest with 4 CPUs and 4 GB, git, gcc and tar installed with `dnf`. Two generated workloads, both committed to git so `git status` has every file to check: `nodemods` (40 000 small files, the shape of a `node_modules` tree) and `large` (153 000 files plus 3 000 C sources). Each ran once on a bind mount of a host directory (virtiofs) and once on a volume (ext4 image) seeded from the host copy. Times are seconds; the first row of each kind is the first run, with cold caches in the guest.
 

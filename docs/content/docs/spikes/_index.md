@@ -14,3 +14,4 @@ Each spike measured one question on the Mac mini (Apple silicon, macOS 26.6.2; A
 | [Planted Claude Code config](claude-config.md) | Which hooks, MCP servers, skills and settings planted in a repository or the agent home take effect. | [#68](https://github.com/wstein/workharbor/issues/68) |
 | [Host reachability](host-reachability.md) | What a guest on Apple Container can reach on the host's addresses, `--internal` networks included. | [#69](https://github.com/wstein/workharbor/issues/69) |
 | [Bind mount versus volume](bind-mount-perf.md) | `git status`, copy and build times for a `node_modules`-style tree and a 153 000-file repository on a bind mount and on a volume. | [#40](https://github.com/wstein/workharbor/issues/40) |
+| [A volume over a bind mount](volume-over-bind.md) | Whether a volume mounted over a subdirectory of a bind-mounted checkout works, and what its mount point does in the guest. | [#80](https://github.com/wstein/workharbor/issues/80) |

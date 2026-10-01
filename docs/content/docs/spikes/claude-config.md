@@ -4,7 +4,7 @@ description: "Which hooks, MCP servers, skills and settings planted in a reposit
 weight: 4
 ---
 
-> Source: `spike/claude-config` at `a89724c7d99c7957ed98f660044aec34874a1af1` (not on GitHub yet), with the scripts and raw output next to the results. Tracks [#68](https://github.com/wstein/workharbor/issues/68). Published as recorded on 1 October 2026.
+> Source: [`spike/claude-config`](https://github.com/wstein/workharbor/tree/spike/claude-config/spikes/claude-config) at `a89724c7d99c7957ed98f660044aec34874a1af1`, with the scripts and raw output next to the results. Tracks [#68](https://github.com/wstein/workharbor/issues/68). Published as recorded on 1 October 2026.
 
 Issue #68, design §5.2. Run on 2026-10-01 with Claude Code 2.1.285 on macOS 26.6.2. `run.sh` is the experiment and `run.out` its unedited output. The agent is not logged in (an empty `CLAUDE_CONFIG_DIR`), so no model call is made: the hooks and MCP servers start before the first request.
 
