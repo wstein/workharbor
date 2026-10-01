@@ -1,0 +1,7 @@
+baseline | memory_free=52% pageouts=3075725 | vm_processes_rss_MiB=0 | total = 18432.00M used = 17553.81M free = 878.19M (encrypted)
+1 containers idle | memory_free=50% pageouts=3075781 | vm_processes_rss_MiB=192 | total = 18432.00M used = 17545.81M free = 886.19M (encrypted)
+1 containers holding 1000 MiB each | memory_free=42% pageouts=3076023 | vm_processes_rss_MiB=56 | total = 18432.00M used = 17153.81M free = 1278.19M (encrypted)
+after stopping 1 | memory_free=43% pageouts=3076073 | vm_processes_rss_MiB=0 | total = 18432.00M used = 17153.81M free = 1278.19M (encrypted)
+4 containers idle | memory_free=37% pageouts=3076126 | vm_processes_rss_MiB=131 | total = 18432.00M used = 17121.81M free = 1310.19M (encrypted)
+4 containers holding 1000 MiB each | memory_free=43% pageouts=3076632 | vm_processes_rss_MiB=1114 | total = 18432.00M used = 16753.81M free = 1678.19M (encrypted)
+after stopping 4 | memory_free=51% pageouts=3076683 | vm_processes_rss_MiB=0 | total = 18432.00M used = 16737.81M free = 1694.19M (encrypted)
