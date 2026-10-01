@@ -476,3 +476,71 @@ func TestAFailedCreateDoesNotLeakTheHomeVolume(t *testing.T) {
 		t.Errorf("left behind: %+v, %v", inv, err)
 	}
 }
+
+func TestRemoveAgentAndWorkspace(t *testing.T) {
+	r := newWsRig(t)
+	r.home = true
+	w, a := r.create("rm")
+	second, err := r.ws.AddAgent(bg, "rm", "runtime", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = second
+	// A workspace with agents is not removed.
+	var c *domain.ConflictError
+	if err := r.ws.Remove(bg, "rm"); !errors.As(err, &c) || c.Rule != "in-use" {
+		t.Errorf("a workspace with agents = %v", err)
+	}
+	// An agent with an unfinished task is not removed; the other one is.
+	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ws.RemoveAgent(bg, "rm", "docs"); !errors.As(err, &c) || c.Rule != "in-use" {
+		t.Errorf("an agent with a task = %v", err)
+	}
+	if err := r.ws.RemoveAgent(bg, "rm", "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ws.RemoveAgent(bg, "rm", "nope"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("an unknown agent = %v", err)
+	}
+	must(t, r.svc.Cancel(bg, task))
+	if err := r.ws.RemoveAgent(bg, "rm", "docs"); err != nil {
+		t.Fatal(err)
+	}
+	// The clone is the human's: it stays. The environment, network and volume go.
+	if err := r.ws.Remove(bg, "rm"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(w.Path, CloneDir, ".git")); err != nil {
+		t.Errorf("the clone was removed: %v", err)
+	}
+	inv, _ := r.rt.Adapter.Inventory(bg)
+	if len(inv.Volumes)+len(inv.Networks)+len(inv.Sidecars) != 0 {
+		t.Errorf("left behind: %+v", inv)
+	}
+	if envs, _ := r.rt.Adapter.List(bg, r.rt.Owner); len(envs) != 0 {
+		t.Errorf("environments left: %+v", envs)
+	}
+	if _, err := r.store.Workspace(bg, "rm"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("the record is still there: %v", err)
+	}
+	if err := r.ws.Remove(bg, "rm"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("removing twice = %v", err)
+	}
+}
+
+func TestTasksAndShowCarryTheAgentAsWorkspaceSlashRole(t *testing.T) {
+	r := newWsRig(t)
+	_, a := r.create("named")
+	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := r.svc.List(bg, false)
+	v, _ := r.svc.Show(bg, task)
+	if len(list) != 1 || list[0].Agent != "named/docs" || v.Agent != "named/docs" {
+		t.Errorf("list %+v, show agent %q", list, v.Agent)
+	}
+}

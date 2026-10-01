@@ -216,6 +216,7 @@ type TaskView struct {
 	Runs      []domain.Run
 	Open      []domain.Decision // the Decisions waiting for the human
 	Candidate *domain.ReviewCandidate
+	Agent     string // "<workspace>/<role>", empty for a task made before agents
 }
 
 // Show returns a task with its runs, its open Decisions and its current
@@ -226,6 +227,13 @@ func (s *Service) Show(ctx context.Context, task domain.ID) (TaskView, error) {
 		return TaskView{}, err
 	}
 	v := TaskView{Task: agg.Task(), Runs: agg.Runs()}
+	if id := agg.Task().AgentID; id != "" {
+		if a, err := s.store.Agent(ctx, id); err == nil {
+			if w, err := s.store.Workspace(ctx, string(a.WorkspaceID)); err == nil {
+				v.Agent = w.Name + "/" + a.Role
+			}
+		}
+	}
 	for _, d := range agg.Decisions() {
 		if d.Status == domain.DecisionOpen {
 			v.Open = append(v.Open, d)

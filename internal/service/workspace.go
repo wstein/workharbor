@@ -456,3 +456,52 @@ func (w *Workspaces) Rebase(ctx context.Context, agentID domain.ID) error {
 func gitEnv(extra ...string) []string {
 	return append([]string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=safe.directory", "GIT_CONFIG_VALUE_0=*"}, extra...)
 }
+
+// RemoveAgent removes an agent record. It is refused (store.RuleInUse) while a
+// task that is not finished is assigned to it. The worktree and the branch stay
+// in the clone, so no unpushed work is lost; the human removes the workspace
+// folder when they are done with it.
+func (w *Workspaces) RemoveAgent(ctx context.Context, workspace, role string) error {
+	ws, err := w.svc.store.Workspace(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	a, err := w.svc.store.AgentByRole(ctx, ws.ID, role)
+	if err != nil {
+		return err
+	}
+	return w.svc.store.RemoveAgent(ctx, a, domain.RemovedAgentEvent(a, w.svc.clock.Now()))
+}
+
+// Remove removes a workspace: its environment, with its network, sidecar and
+// home volume, and its record. It is refused while the workspace has agents
+// (remove them first). The folder and the clone in it are the human's and stay.
+func (w *Workspaces) Remove(ctx context.Context, workspace string) error {
+	ws, err := w.svc.store.Workspace(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	agents, err := w.svc.store.Agents(ctx, ws.ID)
+	if err != nil {
+		return err
+	}
+	if len(agents) > 0 {
+		return domain.NewConflict(store.RuleInUse, "workspace %s still has %d agent(s): remove them first", ws.Name, len(agents))
+	}
+	if ws.EnvID != "" {
+		env := string(ws.EnvID)
+		res, _ := w.svc.rt.Resources(ctx, env)
+		if err := w.svc.rt.Stop(ctx, env); err != nil && !errors.Is(err, runtime.ErrNotFound) {
+			return fmt.Errorf("stop environment %s: %w", env, err)
+		}
+		if err := w.svc.rt.Delete(ctx, env); err != nil {
+			return fmt.Errorf("delete environment %s: %w", env, err)
+		}
+		for _, v := range res.Volumes {
+			if err := w.svc.rt.RemoveVolume(ctx, v); err != nil {
+				return fmt.Errorf("remove volume %s: %w", v, err)
+			}
+		}
+	}
+	return w.svc.store.RemoveWorkspace(ctx, ws, domain.RemovedWorkspaceEvent(ws, w.svc.clock.Now()))
+}

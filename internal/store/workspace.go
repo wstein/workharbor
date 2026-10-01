@@ -260,16 +260,18 @@ type TaskSummary struct {
 	Issue     string
 	State     domain.TaskState
 	AgentID   domain.ID
+	Agent     string // "<workspace>/<role>", empty for a task made before agents
 	CreatedAt time.Time
 }
 
 // Tasks lists every task, newest first; onlyActive leaves out the finished ones.
 func (s *Store) Tasks(ctx context.Context, onlyActive bool) ([]TaskSummary, error) {
-	q := `SELECT id, repo, issue, state, agent_id, created_at FROM tasks`
+	q := `SELECT t.id, t.repo, t.issue, t.state, t.agent_id, COALESCE(w.name || '/' || a.role, ''), t.created_at
+		FROM tasks t LEFT JOIN agents a ON a.id = t.agent_id LEFT JOIN workspaces w ON w.id = a.workspace_id`
 	if onlyActive {
-		q += ` WHERE state NOT IN ('completed', 'cancelled', 'failed')`
+		q += ` WHERE t.state NOT IN ('completed', 'cancelled', 'failed')`
 	}
-	rows, err := s.db.QueryContext(ctx, q+` ORDER BY created_at DESC, id DESC`)
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY t.created_at DESC, t.id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("store: tasks: %w", err)
 	}
@@ -279,7 +281,7 @@ func (s *Store) Tasks(ctx context.Context, onlyActive bool) ([]TaskSummary, erro
 		var t TaskSummary
 		var id, state, agent string
 		var created int64
-		if err := rows.Scan(&id, &t.Repo, &t.Issue, &state, &agent, &created); err != nil {
+		if err := rows.Scan(&id, &t.Repo, &t.Issue, &state, &agent, &t.Agent, &created); err != nil {
 			return nil, fmt.Errorf("store: tasks: %w", err)
 		}
 		t.ID, t.State, t.AgentID, t.CreatedAt = domain.ID(id), domain.TaskState(state), domain.ID(agent), fromNano(created)
