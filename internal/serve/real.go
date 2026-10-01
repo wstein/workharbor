@@ -7,13 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/agent/claude"
+	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/redact"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/apple"
 	"github.com/wstein/workharbor/internal/service"
@@ -108,6 +111,32 @@ func toolProfile(c *config.Config) (string, error) {
 	return names[0], nil
 }
 
+// Redactor returns the redactor the store applies before it writes (§5.4,
+// threat model T9): the well-known token formats, plus the exact secrets this
+// supervisor holds, so they are masked whatever their format: the API token and
+// the values of the agent's API-key file (D40). A value too short to register
+// is refused rather than silently left unredacted.
+func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
+	rd := redact.New()
+	tok, err := api.TokenFromConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	if !rd.Add(string(tok)) {
+		return nil, fmt.Errorf("api_token_file: the token is shorter than %d characters", redact.MinSecretLength)
+	}
+	for i, e := range agentEnv {
+		_, v, _ := strings.Cut(e, "=")
+		if v == "" {
+			continue
+		}
+		if !rd.Add(v) {
+			return nil, fmt.Errorf("agent_api_key_env_file: the value of entry %d is shorter than %d characters", i+1, redact.MinSecretLength)
+		}
+	}
+	return rd, nil
+}
+
 // StateDir returns the directory of the database.
 func StateDir(c *config.Config, home string) string {
 	if c.StateDir != "" {
@@ -141,7 +170,11 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Deps{}, nil, err
 	}
-	st, err := store.Open(context.Background(), filepath.Join(dir, "workharbor.db"))
+	rd, err := Redactor(c, env)
+	if err != nil {
+		return Deps{}, nil, err
+	}
+	st, err := store.Open(context.Background(), filepath.Join(dir, "workharbor.db"), store.WithRedactor(rd))
 	if err != nil {
 		return Deps{}, nil, err
 	}

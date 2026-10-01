@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,6 +89,16 @@ func NewClient(configPath string) (*Client, error) {
 	cc, err := ReadClientConfig(configPath)
 	if err != nil {
 		return nil, err
+	}
+	// The token goes over plain HTTP, so only to a loopback address: the API
+	// listens on loopback only (D29), and remote access goes through a
+	// forwarder with TLS, never through this client sending the token in clear.
+	host, _, err := net.SplitHostPort(cc.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("configuration %s: listen %q is not host:port", configPath, cc.Listen)
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+		return nil, fmt.Errorf("configuration %s: listen %q is not a loopback address; whr sends its token only to the local supervisor (D29)", configPath, cc.Listen)
 	}
 	tok, err := config.ReadSecret(cc.APITokenFile)
 	if err != nil {

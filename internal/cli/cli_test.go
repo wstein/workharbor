@@ -491,3 +491,31 @@ func TestTheConfigurationFileGivesTheServerAndTheToken(t *testing.T) {
 		t.Error("--config was ignored")
 	}
 }
+
+// The client sends its token over plain HTTP, so only to a loopback address
+// (D29); a configuration that names another host is refused before the token
+// file is even read.
+func TestTheClientSendsTheTokenOnlyToLoopback(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(dir, "api.token")
+	if err := os.WriteFile(tokenFile, []byte(tok+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for listen, ok := range map[string]bool{
+		"127.0.0.1:8787": true, "[::1]:8787": true,
+		"192.168.1.20:8787": false, "example.com:8787": false, "0.0.0.0:8787": false, "localhost:8787": false, "8787": false,
+	} {
+		cfg := filepath.Join(dir, "c.json")
+		raw, _ := json.Marshal(map[string]string{"listen": listen, "api_token_file": tokenFile})
+		if err := os.WriteFile(cfg, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := NewClient(cfg)
+		if (err == nil) != ok {
+			t.Errorf("listen %q: err = %v, want ok=%v", listen, err, ok)
+		}
+		if err != nil && strings.Contains(err.Error(), tok) {
+			t.Errorf("listen %q: the error shows the token: %v", listen, err)
+		}
+	}
+}

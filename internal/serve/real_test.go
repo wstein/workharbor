@@ -128,3 +128,27 @@ func TestTheUnconfiguredForgeSaysSo(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// The store's redactor knows this supervisor's exact secrets, so they are masked
+// whatever their format (T9): the API token and the API key's value.
+func TestTheRedactorKnowsTheSupervisorsOwnSecrets(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(dir, "api.token")
+	token := "whr-test-token-" + strings.Repeat("x", 20)
+	if err := os.WriteFile(tokenFile, []byte(token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &config.Config{APITokenFile: tokenFile}
+	key := "plainvalue-" + strings.Repeat("k", 24) // not a well-known token format
+	rd, err := Redactor(c, []string{"ANTHROPIC_API_KEY=" + key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := rd.String("token " + token + " key " + key)
+	if strings.Contains(out, token) || strings.Contains(out, key) {
+		t.Errorf("a supervisor secret was not redacted: %s", out)
+	}
+	if _, err := Redactor(c, []string{"ANTHROPIC_API_KEY=zq7"}); err == nil || strings.Contains(err.Error(), "zq7") {
+		t.Errorf("a value too short to redact = %v, want an error that names no value", err)
+	}
+}
