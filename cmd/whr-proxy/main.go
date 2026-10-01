@@ -23,7 +23,13 @@ func main() {
 	p := egress.New(strings.Split(*allow, ","))
 	p.Log = func(line string) { fmt.Fprintln(os.Stderr, line) }
 	fmt.Fprintln(os.Stderr, "egress proxy on", *listen, "allowing", *allow)
-	srv := &http.Server{Addr: *listen, Handler: p, ReadHeaderTimeout: 10 * time.Second}
+	// The read and write deadlines bound a plain HTTP exchange; a CONNECT
+	// tunnel clears them and is bounded by the proxy's idle timeout instead.
+	srv := &http.Server{
+		Addr: *listen, Handler: p,
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute,
+		WriteTimeout: 10 * time.Minute, IdleTimeout: time.Minute,
+	}
 	fmt.Fprintln(os.Stderr, srv.ListenAndServe())
 	os.Exit(1)
 }
