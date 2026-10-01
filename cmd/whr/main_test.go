@@ -198,8 +198,9 @@ func TestToolsBuild(t *testing.T) {
 	}
 }
 
-// make install builds from the committed tree: it installs whr and the shim with
-// the version stamp, and refuses a dirty tree (D34).
+// make install builds from the committed tree: it installs whr, the shim and
+// the proxy with the version stamp, and refuses a dirty tree and a commit that
+// is not on origin/main (D34).
 func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	for _, tool := range []string{"make", "git", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -223,6 +224,9 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 		}
 	}
 	gitIn(t.TempDir(), "clone", "--quiet", "--local", root, clone)
+	// The clone's HEAD is whatever the checkout has, a topic branch included,
+	// so origin/main is pinned to it: this commit counts as merged.
+	gitIn(clone, "update-ref", "refs/remotes/origin/main", "HEAD")
 	prefix := t.TempDir()
 	install := func() ([]byte, error) {
 		cmd := exec.CommandContext(t.Context(), "make", "-s", "install", "PREFIX="+prefix) //nolint:gosec // fixed arguments
@@ -233,7 +237,7 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	if out, err := install(); err != nil {
 		t.Fatalf("make install on a clean clone: %v\n%s", err, out)
 	}
-	for _, p := range []string{"bin/whr", "libexec/whr/whr-shim-linux-arm64"} {
+	for _, p := range []string{"bin/whr", "libexec/whr/whr-shim-linux-arm64", "libexec/whr/whr-proxy-linux-arm64"} {
 		if info, err := os.Stat(filepath.Join(prefix, p)); err != nil || info.Mode().Perm()&0o100 == 0 {
 			t.Errorf("%s was not installed (%v)", p, err)
 		}
@@ -263,5 +267,19 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
 		t.Error("a dirty tree still installed whr")
+	}
+
+	// A clean commit that is not on origin/main is refused too.
+	gitIn(clone, "-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false",
+		"commit", "--quiet", "--allow-empty", "-m", "test: an unmerged commit")
+	if err := os.Remove(filepath.Join(clone, "stray.txt")); err != nil {
+		t.Fatal(err)
+	}
+	msg, err = install()
+	if err == nil || !strings.Contains(string(msg), "not on origin/main") {
+		t.Fatalf("make install of an unmerged commit = %v\n%s", err, msg)
+	}
+	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
+		t.Error("an unmerged commit still installed whr")
 	}
 }
