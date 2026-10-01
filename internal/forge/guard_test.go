@@ -162,3 +162,21 @@ func TestIssuesAndWebhooksPassThrough(t *testing.T) {
 		t.Error("a webhook without a signature was accepted")
 	}
 }
+
+// A pull request is only opened or updated for an agent branch, and the refusal
+// comes before any call to the forge.
+func TestPullRequestsAreOnlyForAgentBranches(t *testing.T) {
+	f := forgetest.NewFake()
+	f.Branches["r:main"] = "aaa111"
+	g := forge.NewGuard(f, f, policy.Default(), approvals{"d1": "aaa111"})
+	ap := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	if _, err := g.OpenPR(context.Background(), "r", "main", ap, "t", "b"); !errors.Is(err, forge.ErrBranch) {
+		t.Errorf("OpenPR(main) = %v, want ErrBranch", err)
+	}
+	if err := g.UpdatePR(context.Background(), forge.PullRequest{Repo: "r", Number: 1, Branch: "feature/x"}, ap, "t", "b"); !errors.Is(err, forge.ErrBranch) {
+		t.Errorf("UpdatePR(feature/x) = %v, want ErrBranch", err)
+	}
+	if len(f.Calls) != 0 {
+		t.Errorf("a refused request reached the forge: %v", f.Calls)
+	}
+}

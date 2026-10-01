@@ -14,7 +14,7 @@ import (
 	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
-	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/redact"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -75,16 +75,6 @@ func AgentSpec(allowed []string, auth agent.AuthMode) func(domain.Task, domain.R
 	}
 }
 
-// unconfiguredForge is the forge of a supervisor that has no forge adapter yet:
-// every call says so, so `whr run` fails with a clear message and not a nil.
-type unconfiguredForge struct{}
-
-var errNoForge = errors.New("no forge adapter is built yet (the GitHub App adapter, issue #27): the supervisor cannot load issues")
-
-func (unconfiguredForge) GetIssue(context.Context, string, int) (forge.Issue, error) {
-	return forge.Issue{}, errNoForge
-}
-
 // toolProfile finds the tool store profile to use: the configured one, or the
 // only one there is.
 func toolProfile(c *config.Config) (string, error) {
@@ -124,6 +114,15 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 	}
 	if !rd.Add(string(tok)) {
 		return nil, fmt.Errorf("api_token_file: the token is shorter than %d characters", redact.MinSecretLength)
+	}
+	if c.GitHub.KeyFile != "" {
+		key, err := config.ReadSecret(c.GitHub.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		if !rd.Add(string(key)) {
+			return nil, fmt.Errorf("github.key_file: the key is shorter than %d characters", redact.MinSecretLength)
+		}
 	}
 	for i, e := range agentEnv {
 		_, v, _ := strings.Cut(e, "=")
@@ -174,6 +173,10 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	if err != nil {
 		return Deps{}, nil, err
 	}
+	gh, err := newGitHub(c, rd)
+	if err != nil {
+		return Deps{}, nil, err
+	}
 	st, err := store.Open(context.Background(), filepath.Join(dir, "workharbor.db"), store.WithRedactor(rd))
 	if err != nil {
 		return Deps{}, nil, err
@@ -201,10 +204,29 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}, s)
 	}
 	return Deps{
-		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: unconfiguredForge{}, Git: git, Owner: Owner,
+		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpec(c.AgentAllowedTools, mode), Logf: logf,
 	}, func() {
 		_ = git.Close()
 		_ = st.Close()
 	}, nil
+}
+
+// newGitHub builds the GitHub App client: the App's key is read with
+// config.ReadSecret, and every installation token it mints is registered with
+// the redactor (D31). It is scoped to the configured repositories.
+func newGitHub(c *config.Config, rd *redact.Redactor) (*github.Client, error) {
+	pemBytes, err := config.ReadSecret(c.GitHub.KeyFile)
+	if err != nil {
+		return nil, err
+	}
+	key, err := github.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return nil, fmt.Errorf("github.key_file: %w", err)
+	}
+	repos := make([]string, len(c.Repositories))
+	for i, r := range c.Repositories {
+		repos[i] = r.Name
+	}
+	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd})
 }

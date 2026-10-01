@@ -1,6 +1,10 @@
 package serve
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,13 +126,6 @@ func TestBuildNeedsAnAllowlistAndAnInstalledProxy(t *testing.T) {
 	}
 }
 
-func TestTheUnconfiguredForgeSaysSo(t *testing.T) {
-	_, err := unconfiguredForge{}.GetIssue(nil, "a/b", 1) //nolint:staticcheck // the context is unused
-	if err == nil || !strings.Contains(err.Error(), "no forge adapter") {
-		t.Errorf("err = %v", err)
-	}
-}
-
 // The store's redactor knows this supervisor's exact secrets, so they are masked
 // whatever their format (T9): the API token and the API key's value.
 func TestTheRedactorKnowsTheSupervisorsOwnSecrets(t *testing.T) {
@@ -150,5 +147,46 @@ func TestTheRedactorKnowsTheSupervisorsOwnSecrets(t *testing.T) {
 	}
 	if _, err := Redactor(c, []string{"ANTHROPIC_API_KEY=zq7"}); err == nil || strings.Contains(err.Error(), "zq7") {
 		t.Errorf("a value too short to redact = %v, want an error that names no value", err)
+	}
+}
+
+// The GitHub App's key is read with ReadSecret, parsed, and registered with the
+// redactor (D31): its PEM never reaches the database or a log.
+func TestTheGitHubClientIsBuiltFromTheAppKeyAndTheKeyIsRedacted(t *testing.T) {
+	dir := t.TempDir()
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)})
+	keyFile := filepath.Join(dir, "app.pem")
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokenFile := filepath.Join(dir, "api.token")
+	if err := os.WriteFile(tokenFile, []byte("whr-test-token-"+strings.Repeat("x", 20)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &config.Config{
+		APITokenFile: tokenFile, GitHub: config.GitHub{AppID: 4242, KeyFile: keyFile},
+		Repositories: []config.Repository{{Name: "wstein/workharbor"}},
+	}
+	rd, err := Redactor(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := rd.String("leaked: " + string(keyPEM)); strings.Contains(out, "BEGIN RSA PRIVATE KEY") && strings.Contains(out, string(keyPEM)) {
+		t.Error("the App key was not registered with the redactor")
+	}
+	gh, err := newGitHub(c, rd)
+	if err != nil || gh.Name() != "github" {
+		t.Fatalf("newGitHub = %v, %v", gh, err)
+	}
+	// A key that is not an RSA private key is an error that does not repeat it.
+	if err := os.WriteFile(keyFile, []byte("not a key at all"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := newGitHub(c, rd); err == nil || strings.Contains(err.Error(), "not a key at all") {
+		t.Errorf("a bad key = %v", err)
 	}
 }

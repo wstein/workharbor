@@ -80,9 +80,14 @@ func (g *Guard) approve(ctx context.Context, a policy.Action, ap Approval) error
 	return nil
 }
 
+// agentBranch reports whether a branch is one the agent may publish.
+func agentBranch(branch string) bool {
+	return strings.HasPrefix(branch, "agent/") && !strings.Contains(branch, "..")
+}
+
 // Push sends an agent branch at the approved commit.
 func (g *Guard) Push(ctx context.Context, repo, branch string, ap Approval) error {
-	if !strings.HasPrefix(branch, "agent/") || strings.Contains(branch, "..") {
+	if !agentBranch(branch) {
 		return fmt.Errorf("%w: %q", ErrBranch, branch)
 	}
 	if err := g.approve(ctx, policy.PushAgentBranch, ap); err != nil {
@@ -93,6 +98,9 @@ func (g *Guard) Push(ctx context.Context, repo, branch string, ap Approval) erro
 
 // onForge checks that the branch on the forge points at the approved commit.
 func (g *Guard) onForge(ctx context.Context, repo, branch string, ap Approval) error {
+	if !agentBranch(branch) { // before any call to the forge
+		return fmt.Errorf("%w: %q", ErrBranch, branch)
+	}
 	got, err := g.inner.BranchSHA(ctx, repo, branch)
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
@@ -29,8 +30,10 @@ type Deps struct {
 	Store   *store.Store
 	Runtime runtime.Adapter
 	Agent   agent.Adapter
-	// Issues loads issues from the forge.
+	// Issues loads issues from the forge, and Forge is the whole adapter (the
+	// publisher takes it behind a forge.Guard).
 	Issues service.IssueSource
+	Forge  forge.Adapter
 	Git    *hostgit.Git
 	// Owner is the owner label of every environment this supervisor makes.
 	Owner string
