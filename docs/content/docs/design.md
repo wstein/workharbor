@@ -101,14 +101,16 @@ Fields: ID, task, kind (`question | approval | review`), blocking flag, options,
 
 Decided from spike #2 (Apple Container, issue #2; confirm on other backends):
 
-- **One writable volume per environment** holds the repository checkout and the agent home (auth directory and session). A named volume survives stop, start, delete and rebuild, and was about 5x faster than a bind mount for many small files (3000 files in 198 ms against 1172 ms).
+- **Repositories live on the host**, outside containers and volumes, and are mounted into an environment read-write. They survive any environment, a developer's editor can open them at any time, and one object store serves every task. How checkouts are laid out is §4.5. This replaces the earlier idea of keeping the checkout on a volume.
+- **The agent home** (auth directory, session, caches) is one writable named volume per environment. A volume survives stop, start, delete and rebuild.
 - **A writable volume is exclusive.** While one container has it read-write, no other container can attach it, not even read-only (the second start fails with "The storage device attachment is invalid"). A rebuild stops the old container before the new one starts. A volume can be shared read-only by several containers.
-- **Bind mounts only for hand-over to the host.** They sync both ways at once, and files the guest root writes appear owned by the host user. Expect git-heavy work on them to be slow.
+- **A bind-mounted checkout is slower but usable.** For 5000 files with 300 edits, the first `git status` took 0.3 to 1.1 s on a bind mount against 0.12 s in a volume, later runs about 100 to 130 ms against 75 to 118 ms, `git add` 363 ms against 120 ms, and `commit` 667 ms against 334 ms. Git tuning (untracked cache, `feature.manyFiles`, preloaded index) changed steady-state `status` by almost nothing, because the cost is the cold first stat of every file. Very large repositories were not measured; the cold pass grows with the file count.
+- **Bind mounts sync both ways at once**, and files the guest root writes appear owned by the host user.
 - **The root filesystem is disposable.** It survives stop and start and is lost on delete, so nothing that matters lives there.
 - **Mounts are rejected by the adapter, not the runtime.** The runtime accepts any host path. The adapter resolves symlinks first, then rejects `$HOME` and its parents, `~/.ssh`, other secrets directories and runtime sockets, and enforces it in the conformance suite (§7.4).
 - **Tools are not part of the workspace.** Agent CLIs come from a shared read-only store (§5.6).
 
-Still open: git worktree per task versus full clone, and retention and garbage collection of completed tasks and workspaces on the 1 TB disk. A named volume is a sparse image (virtual size 512 GiB), so quotas need their own decision.
+Still open: retention and garbage collection of completed tasks, topics and workspaces on the 1 TB disk, quotas (a named volume is a sparse image with a virtual size of 512 GiB), and bind-mount speed on very large repositories.
 
 ## 5. Architecture
 
