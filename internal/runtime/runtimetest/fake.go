@@ -36,6 +36,9 @@ type Defects struct {
 type Fake struct {
 	// Defects is for tests of the suite only.
 	Defects Defects
+	// GitExit is the exit code of a `git` command in an environment, for a
+	// test of a git step that fails. Zero (the default) succeeds.
+	GitExit int
 
 	owner string
 	fsys  runtime.FS
