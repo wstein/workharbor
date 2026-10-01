@@ -5,9 +5,9 @@ weight: 1
 toc: true
 ---
 
-**CLI:** `whr` · **Status:** Revised design, 30 September 2026 · No implementation or compatibility testing yet.
+**CLI:** `whr` · **Status:** Revised design, updated 1 October 2026 · No implementation yet. Two spikes have measured the agent contract (issue #1) and Apple Container (issue #2); results are marked in the sections they affect.
 
-Revision of the original discussion summary (`agent-work-supervisor-summary.md`) after a four-role team review (architecture, security, product/CLI, feasibility/ops). Review ratings are value/effort out of 10. Claims about Apple Container, Socktainer, Coder and Portainer come from the original sources and are **unverified** until the spikes in §12 are done.
+Revision of the original discussion summary (`agent-work-supervisor-summary.md`) after a four-role team review (architecture, security, product/CLI, feasibility/ops). Review ratings are value/effort out of 10. Claims about Apple Container that spike #2 measured are stated as measured in §4.4, §5.1, §5.3, §5.6, §7 and §12. Claims about Socktainer, Coder and Portainer, and anything marked **unverified**, still come from the original sources and are unverified until the remaining spikes in §12 are done.
 
 ## 1. Goal
 
