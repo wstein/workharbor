@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,11 +176,15 @@ func TestSubscribeFromASequenceNumberSkipsWhatWasSeen(t *testing.T) {
 	}
 }
 
-func TestASlowSubscriberIsDroppedNotWaitedFor(t *testing.T) {
+// A subscriber that does not read never blocks publishing. It loses ephemeral
+// events it was too slow for, and is then caught up from the store, so it stays
+// open and still gets the next durable event.
+func TestASlowSubscriberIsNotWaitedFor(t *testing.T) {
 	r := newRig(t)
 	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
-	ch, err := r.svc.Subscribe(ctx, "t1", 1<<40)
+	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
+	ch, err := r.svc.Subscribe(ctx, "t1", stored[len(stored)-1].Seq)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,12 +200,28 @@ func TestASlowSubscriberIsDroppedNotWaitedFor(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("publishing blocked on a subscriber that does not read")
 	}
-	n := 0
-	for range ch { // drained, then closed because it was dropped
-		n++
+	saved, err := r.store.Append(bg, domain.NewTranscriptEvent("t1", []byte(`{"after":true}`), r.clock.now))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if n >= 3*subBuffer {
-		t.Errorf("the slow subscriber saw all %d events", n)
+	r.svc.publish(saved)
+	tokens := 0
+	for {
+		e, ok := next(t, ch)
+		if !ok {
+			t.Fatal("the slow subscriber was closed instead of caught up")
+		}
+		if e.Kind == "token" {
+			tokens++
+			continue
+		}
+		if e.Seq != saved[0].Seq {
+			t.Fatalf("got %+v, want the durable event %d", e, saved[0].Seq)
+		}
+		break
+	}
+	if tokens >= 3*subBuffer {
+		t.Errorf("the slow subscriber saw all %d ephemeral events", tokens)
 	}
 }
 
@@ -264,5 +286,79 @@ func TestLogReturnsTheStoredEventsAfterASequenceNumber(t *testing.T) {
 	}
 	if _, err := r.svc.Log(bg, "nope", 0, 0); err == nil {
 		t.Error("an unknown task was accepted")
+	}
+}
+
+// A task with more history than the live buffer can still be followed from the
+// start: the store is the buffer, at the client's pace (a `whr logs -f` on any
+// real task).
+func TestSubscribeReplaysALongHistory(t *testing.T) {
+	r := newRig(t)
+	const many = 3 * subBuffer
+	for i := range many {
+		if _, err := r.store.Append(bg, domain.NewTranscriptEvent("t1", []byte(`{"n":`+strconv.Itoa(i)+`}`), r.clock.now)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, _ := r.store.EventsSince(bg, "t1", 0, 5000)
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	ch, err := r.svc.Subscribe(ctx, "t1", 0)
+	if err != nil {
+		t.Fatalf("Subscribe of a long history: %v", err)
+	}
+	for i, want := range stored {
+		e, ok := next(t, ch)
+		if !ok || e.Seq != want.Seq {
+			t.Fatalf("event %d: got seq %d (%v), want %d", i, e.Seq, ok, want.Seq)
+		}
+	}
+}
+
+// A subscriber that falls behind the live feed is caught up from the store,
+// so it misses no durable event.
+func TestASlowSubscriberMissesNoDurableEvent(t *testing.T) {
+	r := newRig(t)
+	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
+	last := stored[len(stored)-1].Seq
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	ch, err := r.svc.Subscribe(ctx, "t1", last)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Flood the live feed without reading, far past both buffers.
+	var want []int64
+	for i := range 4 * subBuffer {
+		saved, err := r.store.Append(bg, domain.NewTranscriptEvent("t1", []byte(`{"m":`+strconv.Itoa(i)+`}`), r.clock.now))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.svc.publish(saved)
+		want = append(want, saved[0].Seq)
+	}
+	for i, seq := range want {
+		e, ok := next(t, ch)
+		if !ok || e.Seq != seq {
+			t.Fatalf("event %d: got seq %d (%v), want %d", i, e.Seq, ok, seq)
+		}
+	}
+}
+
+// An ephemeral event is redacted like a stored one (T9).
+func TestEphemeralEventsAreRedacted(t *testing.T) {
+	r := newRig(t)
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
+	ch, err := r.svc.Subscribe(ctx, "t1", stored[len(stored)-1].Seq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := "ghp_" + strings.Repeat("a1B2", 9) // the shape of a GitHub token, built here
+	r.svc.PublishEphemeral("t1", "token", []byte(`{"text":"key `+token+`"}`))
+	e := nextKind(t, ch, "token")
+	if strings.Contains(string(e.Payload), token) {
+		t.Errorf("an ephemeral event carried a token: %s", e.Payload)
 	}
 }

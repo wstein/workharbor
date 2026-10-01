@@ -47,6 +47,10 @@ func (tx *Tx) Append(ctx context.Context, events ...domain.Event) ([]domain.Even
 	return out, nil
 }
 
+// Redact applies the store's redactor to bytes that are never written, such as
+// an ephemeral event's payload, so a client sees no more than the store keeps.
+func (s *Store) Redact(b []byte) []byte { return s.redactor.Bytes(b) }
+
 // Append writes events in their own transaction.
 func (s *Store) Append(ctx context.Context, events ...domain.Event) ([]domain.Event, error) {
 	var out []domain.Event

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -72,9 +71,11 @@ func (b *bus) publish(events ...domain.Event) {
 func (s *Service) publish(events []domain.Event) { s.bus.publish(events...) }
 
 // PublishEphemeral sends an event to subscribers of a task from memory, with no
-// sequence number, and never stores it: token deltas and heartbeats (§5.4).
+// sequence number, and never stores it: token deltas and heartbeats (§5.4). Its
+// payload is redacted like a stored one first: a token the agent prints must not
+// reach a client just because the event is not kept (threat model T9).
 func (s *Service) PublishEphemeral(task domain.ID, kind domain.EventKind, payload []byte) {
-	s.bus.publish(domain.Event{TaskID: task, Kind: kind, Tier: domain.TierEphemeral, Payload: payload, At: s.clock.Now()})
+	s.bus.publish(domain.Event{TaskID: task, Kind: kind, Tier: domain.TierEphemeral, Payload: s.store.Redact(payload), At: s.clock.Now()})
 }
 
 // record stores one observation of the agent as a transcript-tier event and
@@ -96,54 +97,73 @@ func (s *Service) record(ctx context.Context, task domain.ID, e agent.Event) {
 
 // Subscribe returns the events of a task after sequence number since: first the
 // durable ones from the store, then the live ones as they happen, among them
-// ephemeral events that have no sequence number. The channel is closed when ctx
-// ends or when the subscriber falls too far behind; a client then reconnects
-// with the last sequence number it saw.
+// ephemeral events that have no sequence number. The store is the buffer, so a
+// long history is replayed at the client's pace, and a client that falls too
+// far behind the live feed is caught up from the store again, without losing a
+// durable event (ephemeral ones it missed are gone, by design). The channel is
+// closed when ctx ends or when the store fails.
 func (s *Service) Subscribe(ctx context.Context, task domain.ID, since int64) (<-chan domain.Event, error) {
-	sub := s.bus.add(task) // registered first, so nothing between the replay and the live feed is lost
-	out := make(chan domain.Event, subBuffer)
-	last := since
-	// Replay everything stored up to now.
-	for {
-		page, err := s.store.EventsSince(ctx, task, last, 500)
-		if err != nil {
-			s.bus.remove(sub)
-			return nil, err
-		}
-		for _, e := range page {
-			select {
-			case out <- e:
-			default:
-				s.bus.remove(sub)
-				return nil, errors.New("subscribe: the replay is longer than the buffer: ask for a later sequence number")
-			}
-			last = e.Seq
-		}
-		if len(page) < 500 {
-			break
-		}
+	if _, err := s.store.EventsSince(ctx, task, since, 1); err != nil {
+		return nil, err
 	}
+	out := make(chan domain.Event, subBuffer)
+	sub := s.bus.add(task) // registered before Subscribe returns, so an event published after it is not lost
 	go func() {
 		defer close(out)
-		defer s.bus.remove(sub)
-		for {
+		last := since
+		send := func(e domain.Event) bool {
 			select {
+			case out <- e:
+				return true
 			case <-ctx.Done():
-				return
-			case e, ok := <-sub.ch:
-				if !ok {
+				return false
+			}
+		}
+		for {
+			if sub == nil {
+				sub = s.bus.add(task) // again before the replay, so nothing between the two is lost
+			}
+			for {
+				page, err := s.store.EventsSince(ctx, task, last, 500)
+				if err != nil {
+					s.bus.remove(sub)
+					if ctx.Err() == nil {
+						s.report(fmt.Errorf("subscribe %s: %w", task, err))
+					}
 					return
 				}
-				if e.Seq != 0 && e.Seq <= last {
-					continue // already replayed
-				}
-				if e.Seq != 0 {
+				for _, e := range page {
+					if !send(e) {
+						s.bus.remove(sub)
+						return
+					}
 					last = e.Seq
 				}
+				if len(page) < 500 {
+					break
+				}
+			}
+			dropped := false
+			for !dropped {
 				select {
-				case out <- e:
 				case <-ctx.Done():
+					s.bus.remove(sub)
 					return
+				case e, ok := <-sub.ch:
+					if !ok {
+						dropped, sub = true, nil // the bus let go of a slow subscriber: catch up from the store
+						break
+					}
+					if e.Seq != 0 && e.Seq <= last {
+						continue // already replayed
+					}
+					if e.Seq != 0 {
+						last = e.Seq
+					}
+					if !send(e) {
+						s.bus.remove(sub)
+						return
+					}
 				}
 			}
 		}
