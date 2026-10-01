@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range
+.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -119,6 +119,23 @@ check-hooks:
 	@if [ "$$(git config core.hooksPath)" != ".githooks" ]; then \
 		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
 	fi
+
+# Land the current branch on main, from a session's own worktree: refuse unless
+# the shared checkout is on main (a detached HEAD there once swallowed merges),
+# the branch is rebased onto main, and check, check-ci and commitlint pass; then
+# fast-forward main, unless main moved during the checks (rebase and run again).
+land:
+	@shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
+	branch="$$(git symbolic-ref -q --short HEAD)" || { echo "land: check out the branch to land first" >&2; exit 1; }; \
+	if [ "$$branch" = main ]; then echo "land: run it on a topic branch in your own worktree, not on main" >&2; exit 1; fi; \
+	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
+		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
+	base="$$(git rev-parse main)"; \
+	git merge-base --is-ancestor "$$base" HEAD || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
+	$(MAKE) -s check check-ci commitlint || exit 1; \
+	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
+	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then echo "land: the shared checkout left main during the checks: stop and tell the human" >&2; exit 1; fi; \
+	git -C "$$shared" merge -q --ff-only "$$branch" && echo "land: main is now $$(git rev-parse --short main)"
 
 # Scan the commits of a git log range for secrets: the pre-push hook runs it
 # with the range about to be pushed.
