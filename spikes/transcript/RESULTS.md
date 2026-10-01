@@ -11,7 +11,9 @@ Measured on 1 October 2026 on the Mac mini, with Claude Code 2.1.285 (model alia
 | 3. Mid-run message injection | Pass | Not tested; `exec` takes its prompt once (unverified) |
 | 4. Live page over SSE, send and cancel | Pass | Not tested |
 | 5. Reconnect replay, restart and resume | Pass | Not tested (`exec resume` exists) |
-| 6. Auth, quota, approval signals | Partial | Quota seen as text only |
+| 6. Auth, quota, approval signals | Approvals pass (round-trip, modes); auth expiry untested | Quota seen as text only |
+
+Antigravity (`agy` 1.1.12) is covered in its own section below: headless works, there is no streaming input.
 
 ## Claude Code
 
@@ -36,7 +38,31 @@ Invocation: `claude -p --input-format stream-json --output-format stream-json --
 
 **Auth.** `init.apiKeySource` tells the auth mode. How an expired login shows up was not tested.
 
-**Approvals.** A tool that is not allowed gives `system/permission_denied` and an error `tool_result`, then the agent explains it cannot proceed. `--permission-prompts host` without `--permission-prompt-tool` still denied. A real approval round-trip needs `--permission-prompt-tool` (an MCP tool) or the SDK control protocol; untested. Fallback that works with the flags seen here: show the denial as a Decision, and on approval resume the session with the tool allowed.
+**Approvals (round-trip works, no restart).** `--permission-prompts host --permission-prompt-tool mcp__workharbor__approve --mcp-config <file> --strict-mcp-config` makes the agent call a small MCP server (the harness binary in `-mcp-permission` mode, stdio) whenever a tool needs permission. The helper forwards `{tool_name, input, tool_use_id}` to the supervisor, which publishes an `approval` event and holds the call open until a human answers on the page. The helper returns `{"behavior":"allow","updatedInput":...}` or `{"behavior":"deny","message":...}`.
+
+- **Approve:** `Write x.txt` waited in `awaiting approval`; after Approve the file existed with the right content, in the same live session.
+- **Deny:** after Deny with a message, no file was created and the agent reported "blocked by a permission hook" with the message. The agent can be told why.
+- **Timeout and failure.** The supervisor denies after 10 minutes with no answer, and the helper fails closed (deny) if the supervisor is unreachable. Pending approvals do not survive a supervisor restart (the agent process dies too).
+- **Without the prompt tool**, `--permission-prompts none` denies automatically and says so; the denial text claims all further approvals are denied for the rest of that session, so the round-trip is the better design.
+- **Plan mode** ends in `ExitPlanMode`, which arrives as an approval request: the plan itself becomes the thing the human approves.
+- **Token handling.** The approve route needs a random per-run token that reaches the helper through its environment. The token sits in `mcp.json` (mode 0600) in the data dir; a real service would keep it in the credential service.
+
+**Permission modes** (`--permission-mode`, chosen per session on the page; changing it restarts the process with `--resume`). The tool allowlist stays fixed: only `Read` and a few harmless `Bash` prefixes.
+
+| Mode | Observed for `Write` |
+| --- | --- |
+| `manual` | Approval requested |
+| `acceptEdits` | Written with no prompt |
+| `dontAsk` | Denied silently, no approval event |
+| `auto` | Approval still requested. What "auto" decides on its own is untested beyond this |
+| `plan` | Agent writes a plan, then `ExitPlanMode` raises an approval |
+| `bypassPermissions` | Not offered: it switches every prompt off and the spike runs on the host |
+
+These map onto the design's autonomy table (§6): `acceptEdits` and the allowlist are `auto`, `manual` is `ask`, `dontAsk` is `forbid`. The table is per action; the CLI's modes are coarser, so the supervisor still has to enforce the real policy outside the agent.
+
+**Compound shell commands.** `Bash(ls:*)` style allow rules do not match a combined command such as `go version && ls -la && cat a.txt`; the CLI asks about the whole command. An allowlist for agents needs a plan for compound commands.
+
+**Large tool inputs.** A `Write` carries the whole file in the tool call. The harness caps tool-call and approval inputs at 2,000 characters in events and the log (`{"truncated":true,"bytes":N,"preview":...}`); the full input stays with the agent.
 
 **Cancel.** SIGINT stops the process immediately, even mid-tool-call. The session stays resumable. There is no cooperative "stop after this turn".
 
@@ -49,14 +75,26 @@ Invocation: `claude -p --input-format stream-json --output-format stream-json --
 - `codex exec resume <id>` and `fork` exist, so resume between turns is likely.
 - Everything else is untested. Re-run after the limit resets.
 
+## Antigravity (`agy` 1.1.12)
+
+Installed here. `agy -p "<prompt>" --output-format stream-json` ran headless with no login prompt, in about 19 s. A third-party note says headless mode goes straight to the Gemini API without an account session, and that Antigravity 2.0 may have restricted headless use for authenticated memberships; both are **unverified** here, so check the current docs.
+
+- **Events.** Newline-delimited JSON: `init` (`conversation_id`, `cwd`, `permission_mode`, `tools`), repeated `step_update` (`step_type` of `user_input`, `tool`, `agent_response`, `checkpoint`, with `state` `ACTIVE`/`ERROR`, `tool_info`, `usage`), then `result` (`status`, `response`, `error`, `num_turns`, `usage`). A clear, typed model that normalizes easily.
+- **Flags of interest.** `--output-format text|json|stream-json`, `--conversation <id>` and `--continue` (resume), `--mode accept-edits|plan`, `--sandbox`, `--print-timeout` (default 5 minutes), `--dangerously-skip-permissions`, `--json-schema`.
+- **No streaming input.** `--print` takes one prompt and exits, so there is no mid-run injection; a follow-up is a resumed turn via `--conversation`. Like Codex `exec`, a degraded mode.
+- **Permissions in print mode.** The agent tried `list_dir` on the home directory (outside the workspace) and was denied automatically; the whole run then ended with `result.status: ERROR` instead of carrying on, unlike Claude Code. The tool list includes `ask_permission` and `ask_question`, but nothing in print mode gave a way to answer them. A remote-approval design for it is untested.
+- **Verdict.** Drivable headless with structured events and resume, so the gate in design §12 is met for read and run use. It lacks mid-run injection and a visible approval channel. Treat it as a second-tier adapter alongside Codex.
+
 ## Consequences for the design
 
 - §5.2: mid-run message injection and a structured event stream are achievable with Claude Code, so keeping them required for release 1 is realistic. For Codex they may need a degraded mode (message delivered as a resumed turn).
-- §5.2: add `permission_denied` as the source of approval Decisions, with the resume-with-tool-allowed fallback.
+- §5.2 and §4.2: approvals are a real, live Decision: the agent blocks on an MCP call, the Decision stays open until a human answers, the supervisor answers allow or deny with a reason. Add a timeout (fail closed) and treat the plan in plan mode as an approval. The adapter capability is "approval prompts routed to the host", which Claude Code has and Codex and Antigravity (print mode) do not, as far as tested.
+- §6: the CLI's permission modes are coarser than the per-action autonomy table. Offer them as presets, never offer `bypassPermissions` outside an isolated environment, and enforce the real table outside the agent.
+- Agent adapters without streaming input (Codex `exec`, `agy -p`) need a degraded mode: a message is delivered as a resumed turn, and the UI labels it.
 - §5.2 and §7: the usage window and reset time are available from Claude Code; for Codex they are text.
 - §5.3: persist the transcript and agent session ID. Resuming from the agent session works.
 - §9.3: delivery semantics for a sent message are "at the next step", not instantaneous. Cancel is a hard interrupt.
 
 ## Not tested
 
-Partial token streaming (`--include-partial-messages`), `--permission-prompt-tool`, expired-login behaviour, multi-session concurrency, running inside Apple Container, and Antigravity.
+Partial token streaming (`--include-partial-messages`), expired-login behaviour, multi-session concurrency, running inside Apple Container, what the `auto` mode approves by itself, approvals for Codex and Antigravity, and a real Codex run (usage limit).

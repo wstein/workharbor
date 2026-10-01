@@ -15,7 +15,9 @@ go run . -dir /tmp/scratch
 # open http://127.0.0.1:8787
 ```
 
-Flags: `-dir` (required), `-addr` (keep it on loopback), `-data` (persisted transcript), `-model`, `-tools` (allowed tools; anything else is denied).
+Flags: `-dir` (required), `-addr` (keep it on loopback), `-data` (persisted transcript), `-model`, `-tools` (tools allowed without asking), `-approvals` (default on: permission prompts go to the page).
+
+With approvals on, anything outside `-tools` raises an Approve or Deny card on the page and the agent waits. The page also picks the permission mode per session: `manual`, `acceptEdits`, `auto`, `plan`, `dontAsk`. `bypassPermissions` is not offered, because the agent runs on the host.
 
 ## API
 
@@ -23,7 +25,8 @@ Flags: `-dir` (required), `-addr` (keep it on loopback), `-data` (persisted tran
 | --- | --- |
 | `GET /events` | SSE stream; honours `Last-Event-ID` and `?since=` |
 | `GET /state` | status, session ID, event count, whether the process is alive |
-| `POST /start` | start a session with `{"text": "..."}`; `?resume=1` resumes the persisted session |
+| `POST /start` | start a session with `{"text": "..."}`; `?resume=1` resumes the persisted session, `?mode=` sets the permission mode |
+| `POST /approve` | answer a pending approval: `{"id": "a-1", "allow": true, "message": "..."}` |
 | `POST /say` | inject a message into the running session |
 | `POST /cancel` | interrupt the agent |
 
