@@ -4,15 +4,16 @@ import "fmt"
 
 // Rules of design §4.1 that couple the task, run and environment machines.
 const (
-	RuleOneLiveRun Rule = "one-live-run" // a task has at most one run that is not stopped or failed
-	RuleRunReused  Rule = "run-reused"   // StartRun takes a run that has not started
-	RuleRunID      Rule = "run-id"       // a run has a non-empty ID that is unique in the task
-	RuleTaskState  Rule = "task-state"   // a run starts only on a queued, running or ready_for_review task
-	RuleEnvRunning Rule = "env-running"  // a run is created or started only in a running environment
-	RuleEnvInUse   Rule = "env-in-use"   // an environment is not stopped under a starting or running run
-	RuleStoppedRun Rule = "stopped-run"  // ready_for_review needs the task's latest run to be stopped
-	RulePinnedSHA  Rule = "pinned-sha"   // ready_for_review needs a pinned commit
-	RuleCIPassed   Rule = "ci-passed"    // where CI is required, the current commit must have passed
+	RuleOneLiveRun   Rule = "one-live-run"  // a task has at most one run that is not stopped or failed
+	RuleRunReused    Rule = "run-reused"    // StartRun takes a run that has not started
+	RuleRunID        Rule = "run-id"        // a run has a non-empty ID that is unique in the task
+	RuleCandidateRun Rule = "candidate-run" // the current revision was produced by the latest run
+	RuleTaskState    Rule = "task-state"    // a run starts only on a queued, running or ready_for_review task
+	RuleEnvRunning   Rule = "env-running"   // a run is created or started only in a running environment
+	RuleEnvInUse     Rule = "env-in-use"    // an environment is not stopped under a starting or running run
+	RuleStoppedRun   Rule = "stopped-run"   // ready_for_review needs the task's latest run to be stopped
+	RulePinnedSHA    Rule = "pinned-sha"    // ready_for_review needs a pinned commit
+	RuleCIPassed     Rule = "ci-passed"     // where CI is required, the current commit must have passed
 )
 
 // TaskAggregate is a task with the runs, environments and review candidates
@@ -153,9 +154,12 @@ func (a *TaskAggregate) StopEnvironment(envID ID) error {
 }
 
 // PinRevision records a prepared revision: the commit SHA that cleanup pinned
-// on a branch, before it is pushed (design §4.5). It becomes the current
-// revision. A SHA is pinned once.
-func (a *TaskAggregate) PinRevision(branch, sha string) (*ReviewCandidate, error) {
+// on a branch, before it is pushed (design §4.5), and the run that produced
+// it. It becomes the current revision. A SHA is pinned once.
+func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (*ReviewCandidate, error) {
+	if _, err := a.run(runID); err != nil {
+		return nil, err
+	}
 	if sha == "" {
 		return nil, conflict(RulePinnedSHA, "a revision needs a commit SHA")
 	}
@@ -164,7 +168,7 @@ func (a *TaskAggregate) PinRevision(branch, sha string) (*ReviewCandidate, error
 			return nil, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
 		}
 	}
-	c := &ReviewCandidate{TaskID: a.Task.ID, Branch: branch, SHA: sha, CI: CIPending}
+	c := &ReviewCandidate{TaskID: a.Task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending}
 	a.Candidates = append(a.Candidates, c)
 	return c, nil
 }
@@ -204,7 +208,7 @@ func (a *TaskAggregate) CIPassed() bool {
 
 // MarkReady moves the task to ready_for_review. It requires that the task's
 // latest run is stopped (not failed, not live) and that a commit SHA is
-// pinned. Where requireCI is set, the current revision must also have passed
+// pinned by that run, so after rework the old revision never counts. Where requireCI is set, the current revision must also have passed
 // CI: a pass on an earlier SHA is not enough.
 func (a *TaskAggregate) MarkReady(requireCI bool) error {
 	if len(a.Runs) == 0 {
@@ -216,6 +220,9 @@ func (a *TaskAggregate) MarkReady(requireCI bool) error {
 	cur := a.CurrentCandidate()
 	if cur == nil || cur.SHA == "" {
 		return conflict(RulePinnedSHA, "task %s is not ready: no commit is pinned", a.Task.ID)
+	}
+	if last := a.Runs[len(a.Runs)-1]; cur.RunID != last.ID {
+		return conflict(RuleCandidateRun, "task %s is not ready: the current commit %s came from run %s, not the latest run %s", a.Task.ID, cur.SHA, cur.RunID, last.ID)
 	}
 	if requireCI && cur.CI != CIPassed {
 		msg := fmt.Sprintf("task %s is not ready: CI is %s for the current commit %s", a.Task.ID, orPending(cur.CI), cur.SHA)

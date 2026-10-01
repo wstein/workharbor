@@ -80,6 +80,7 @@ type Environment struct {
 // ready. It is created when cleanup pins the SHA, before the push.
 type ReviewCandidate struct {
 	TaskID ID
+	RunID  ID // the run that produced the revision
 	Branch string
 	SHA    string
 	PRURL  string
