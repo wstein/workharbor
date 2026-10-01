@@ -147,3 +147,10 @@ func clean(s string) string {
 		return r
 	}, s)
 }
+
+// needsHumanError is a command that did what it could and now waits for a human.
+// It is exit code 6 (design §9.2).
+type needsHumanError struct{ msg string }
+
+func (e needsHumanError) Error() string { return e.msg }
+func (needsHumanError) ExitCode() int   { return exitcode.NeedsHuman }

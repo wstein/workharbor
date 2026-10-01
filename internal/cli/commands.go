@@ -234,16 +234,29 @@ func newRun(s *state) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.emit(raw, func(w io.Writer) error {
-				var r struct{ TaskID, RunID string }
-				var m map[string]string
-				if err := json.Unmarshal(data, &m); err != nil {
+			var m struct {
+				TaskID     string `json:"task_id"`
+				RunID      string `json:"run_id"`
+				Held       bool   `json:"held"`
+				DecisionID string `json:"decision_id"`
+			}
+			if err := json.Unmarshal(data, &m); err != nil {
+				return err
+			}
+			if err := s.emit(raw, func(w io.Writer) error {
+				if m.Held {
+					_, err := fmt.Fprintf(w, "%s\t\theld\t%s\n", clean(m.TaskID), clean(m.DecisionID))
 					return err
 				}
-				r.TaskID, r.RunID = m["task_id"], m["run_id"]
-				_, err := fmt.Fprintf(w, "%s\t%s\n", clean(r.TaskID), clean(r.RunID))
+				_, err := fmt.Fprintf(w, "%s\t%s\n", clean(m.TaskID), clean(m.RunID))
 				return err
-			})
+			}); err != nil {
+				return err
+			}
+			if m.Held { // the task exists, but nothing started: a human has to answer (exit code 6)
+				return needsHumanError{fmt.Sprintf("the issue's author is not trusted, so nothing was started: read it with `whr inbox`, then `whr answer %s start` or `whr answer %s cancel`", clean(m.DecisionID), clean(m.DecisionID))}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&agentRef, "agent", "", "the agent that works on it: <workspace>/<role>")

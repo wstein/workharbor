@@ -162,7 +162,7 @@ func TestJSONPrintsTheEnvelopeUnchanged(t *testing.T) {
 
 func TestRunSendsTheRequestWithAnIdempotencyKey(t *testing.T) {
 	s := newStub(t)
-	s.reply("POST /v1/tasks", 201, ok(`{"task_id":"t-new","run_id":"r-new"}`))
+	s.reply("POST /v1/tasks", 201, ok(`{"task_id":"t-new","run_id":"r-new","held":false}`))
 	code, out, errOut := s.runCLI("", "run", "https://github.com/wstein/workharbor/issues/7", "--agent", "docs-ws/docs", "--prompt", "be brief")
 	if code != 0 || errOut != "" || out != "t-new\tr-new\n" {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
@@ -520,5 +520,22 @@ func TestTheClientSendsTheTokenOnlyToLoopback(t *testing.T) {
 		if err != nil && strings.Contains(err.Error(), tok) {
 			t.Errorf("listen %q: the error shows the token: %v", listen, err)
 		}
+	}
+}
+
+// An issue by an untrusted author starts nothing: the task is held, the data is
+// printed, and the exit code says a human has to answer.
+func TestRunOnAnUntrustedIssuePrintsTheHoldAndExitsSix(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/tasks", 202, ok(`{"task_id":"t-held","held":true,"decision_id":"d-hold"}`))
+	code, out, errOut := s.runCLI("", "run", "https://github.com/a/b/issues/8", "--agent", "ws/docs")
+	if code != exitcode.NeedsHuman || out != "t-held\t\theld\td-hold\n" {
+		t.Fatalf("exit %d, stdout %q", code, out)
+	}
+	if !strings.Contains(errOut, "whr answer d-hold start") || strings.Count(errOut, "\n") != 1 {
+		t.Errorf("stderr %q", errOut)
+	}
+	if code, out, _ := s.runCLI("", "run", "https://github.com/a/b/issues/8", "--agent", "ws/docs", "--json"); code != exitcode.NeedsHuman || !strings.Contains(out, `"held":true`) {
+		t.Errorf("--json: exit %d, stdout %q", code, out)
 	}
 }
