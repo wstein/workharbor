@@ -345,3 +345,39 @@ func TestAFailedAgentStartOpensADecisionAndFreesTheEnvironment(t *testing.T) {
 		t.Errorf("the next start: %v", err)
 	}
 }
+
+func TestRebaseRunsInTheEnvironmentAndReportsAConflict(t *testing.T) {
+	r := newWsRig(t)
+	w, a := r.create("rebase")
+	if err := r.ws.Rebase(bg, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if want := "git -C /ws/wt/docs rebase main"; !strings.Contains(r.logs(w.EnvID), want) {
+		t.Errorf("no %q in the log:\n%s", want, r.logs(w.EnvID))
+	}
+
+	r.fake.GitExit = 1 // the rebase and the abort both exit 1 in the fake
+	err := r.ws.Rebase(bg, a.ID)
+	var c *domain.ConflictError
+	if !errors.As(err, &c) || c.Rule != domain.RuleRebase {
+		t.Fatalf("err = %v, want rebase-conflict", err)
+	}
+	if !strings.Contains(err.Error(), "rebase --abort") {
+		t.Errorf("a failed abort must be reported: %v", err)
+	}
+	r.fake.GitExit = 0
+	if !strings.Contains(r.logs(w.EnvID), "git -C /ws/wt/docs rebase --abort") {
+		t.Errorf("a conflict must abort the rebase:\n%s", r.logs(w.EnvID))
+	}
+
+	// Not under a running agent.
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ws.Rebase(bg, a.ID); !errors.As(err, &c) || c.Rule != domain.RuleAgentActive {
+		t.Errorf("a rebase under a running agent: %v", err)
+	}
+	if err := r.ws.Rebase(bg, "nope"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("unknown agent: %v", err)
+	}
+}

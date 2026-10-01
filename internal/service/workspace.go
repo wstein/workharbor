@@ -300,3 +300,56 @@ func (s *Service) exec(ctx context.Context, env string, req runtime.ExecRequest)
 	stdout, stderr, code, err := runtime.Collect(st)
 	return string(stdout) + string(stderr), code, err
 }
+
+// Rebase rebases an agent's branch onto the workspace's integration branch,
+// inside the environment (design §4.5). It is refused while the agent has a
+// starting or running run, which is editing the worktree. On a conflict the
+// rebase is aborted, so the worktree is as it was, and the conflict is
+// returned with git's report: the caller (the export, #91) turns it into a
+// Decision on the task, which a conflict outside a live run has no run to
+// raise from.
+func (w *Workspaces) Rebase(ctx context.Context, agentID domain.ID) error {
+	a, err := w.svc.store.Agent(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	ws, err := w.svc.store.Workspace(ctx, string(a.WorkspaceID))
+	if err != nil {
+		return err
+	}
+	if ws.EnvID == "" {
+		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
+	}
+	live, err := w.svc.store.LiveRuns(ctx, ws.EnvID)
+	if err != nil {
+		return err
+	}
+	for _, r := range live {
+		if r.AgentID == a.ID && (r.State == domain.RunStarting || r.State == domain.RunRunning) {
+			return domain.NewConflict(domain.RuleAgentActive, "agent %s has run %s (%s): pause or finish it before a rebase", a.Role, r.ID, r.State)
+		}
+	}
+	env := []string{
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=safe.directory", "GIT_CONFIG_VALUE_0=*",
+		// a rebase writes commits, which need a committer; the authors are kept
+		"GIT_COMMITTER_NAME=workharbor agent " + a.Role, "GIT_COMMITTER_EMAIL=agent@workharbor.invalid",
+	}
+	out, code, err := w.svc.exec(ctx, string(ws.EnvID), runtime.ExecRequest{
+		Cmd: []string{"git", "-C", a.Worktree, "rebase", ws.Integration}, Env: env,
+	})
+	if err != nil {
+		return fmt.Errorf("rebase agent %s: %w", a.Role, err)
+	}
+	if code == 0 {
+		return nil
+	}
+	// Leave the worktree as it was; a failed abort is reported with the conflict.
+	_, acode, aerr := w.svc.exec(context.WithoutCancel(ctx), string(ws.EnvID), runtime.ExecRequest{
+		Cmd: []string{"git", "-C", a.Worktree, "rebase", "--abort"}, Env: env,
+	})
+	msg := fmt.Sprintf("agent/%s does not rebase onto %s: %s", a.Role, ws.Integration, strings.TrimSpace(out))
+	if aerr != nil || acode != 0 {
+		msg += fmt.Sprintf(" (and `rebase --abort` failed: exit %d, %v)", acode, aerr)
+	}
+	return domain.NewConflict(domain.RuleRebase, "%s", msg)
+}

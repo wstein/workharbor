@@ -8,9 +8,11 @@ import (
 
 // Rules of the workspace and agent records (design §4.3, D42).
 const (
-	RuleWorkspaceName Rule = "workspace-name" // a workspace is named by lowercase letters, digits and "-"
-	RuleAgentRole     Rule = "agent-role"     // an agent's role follows the same rule and is unique in its workspace
-	RuleEnvBusy       Rule = "env-busy"       // one active run per environment until several agents run at once (#94)
+	RuleWorkspaceName Rule = "workspace-name"  // a workspace is named by lowercase letters, digits and "-"
+	RuleAgentRole     Rule = "agent-role"      // an agent's role follows the same rule and is unique in its workspace
+	RuleEnvBusy       Rule = "env-busy"        // one active run per environment until several agents run at once (#94)
+	RuleAgentActive   Rule = "agent-active"    // an agent with a starting or running run is not rebased under it
+	RuleRebase        Rule = "rebase-conflict" // the agent branch does not rebase onto the integration branch
 )
 
 // Workspace is a folder on the host or an external SSD with the agent clone the
