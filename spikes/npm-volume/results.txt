@@ -1,0 +1,21 @@
+== A. npm install (first, volume empty apart from lost+found)
+npm notice
+exit 0
+is-number is-odd left-pad == B. npm ci over an existing tree
+npm warn deprecated left-pad@1.3.0: use String.prototype.padStart()
+
+added 3 packages in 131ms
+exit 0
+is-number is-odd left-pad == C. rm -rf node_modules && npm install
+rm: cannot remove 'node_modules': Device or resource busy
+npm warn deprecated left-pad@1.3.0: use String.prototype.padStart()
+
+added 3 packages in 114ms
+exit 0
+is-number is-odd left-pad == D. npm ci with the directory emptied by hand
+npm warn deprecated left-pad@1.3.0: use String.prototype.padStart()
+
+added 3 packages in 120ms
+exit 0
+is-number is-odd left-pad == E. host view
+entries in host node_modules:        0
