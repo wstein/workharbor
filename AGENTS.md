@@ -4,7 +4,7 @@ Guidance for AI coding agents working on workharbor (CLI: `whr`).
 
 ## Project
 
-A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/content/docs/design/](docs/content/docs/design/_index.md), one page per topic with the § numbers kept, and is the source of truth; read it before changing architecture. The project is building release 1, dogfood first (D34): the domain layer, the store, hostgit, the service layer, the Apple Container adapter with its egress proxy, the Claude Code adapter in degraded mode, the tool store and the config file exist; `whr serve` and the task commands do not yet (#24).
+A self-hosted supervisor that lets AI coding agents work on repository issues in isolated, managed workspaces while one developer stays in the loop. The design is in [docs/content/docs/design/](docs/content/docs/design/_index.md), one page per topic with the § numbers kept, and is the source of truth; read it before changing architecture. The project is building release 1, dogfood first (D34): the domain layer, the store, hostgit, the service layer, the Apple Container adapter with its egress proxy, the Claude Code adapter in degraded mode, the tool store, the config file, the JSON API, the CLI, `whr serve` and the GitHub App client exist; the first run of a real issue end to end (#28) is next.
 
 ## Commands
 
@@ -33,14 +33,15 @@ The pre-commit hook runs format, lint and editorconfig checks; the commit-msg ho
 - `docs/`: the Hugo + Hextra documentation site (content in `docs/content`, brand CSS in `docs/assets/css/custom.css`); `docs/content/docs/design/` holds the design (start at `_index.md`; §3 is `decisions.md`, §4 `domain.md`, §5 and §8 `architecture.md`, §6 and §7 `security.md`, §9 and §10 `interfaces.md`, §11 to §13 `roadmap.md`), `threat-model.md` the threat model
   - also `glossary.md`, `spikes/` (published spike results) and `manual/` (host setup, security notes, vendor terms); status markers use the `status` shortcode (see Hard rules)
 - `design/mock/`: the app mock (Claude Design canvas sources)
-- `cmd/whr/`: single binary entrypoint (`whr version` and `whr tools build` today, `whr serve` and the task commands next); `cmd/whr-proxy/`: the egress allowlist proxy run in the sidecar; `cmd/whr-shim/`: the in-guest launcher that cancels a process group (D25); `cmd/commitlint/`: the commit message linter
+- `cmd/whr/`: single binary entrypoint: `whr serve` and the CLI commands of D37, plus `whr version` and `whr tools build`; `cmd/whr-proxy/`: the egress allowlist proxy run in the sidecar; `cmd/whr-shim/`: the in-guest launcher that cancels a process group (D25); `cmd/commitlint/`: the commit message linter
 - `internal/domain/`: Task, Workspace and Agent (D42), Run, Environment, Decision, ReviewCandidate, Event, state machines and the task aggregate
 - `internal/policy/`: autonomy table (action -> auto | ask | forbid) with a fixed floor
 - `internal/store/`: SQLite store, event log and idempotency
 - `internal/hostgit/`: the only way the host runs git on agent-writable repositories; it seeds a workspace's agent clone (D42), imports an agent's branch from a bundle, and keeps the forge mirror (the repository cache)
-- `internal/service/`: the service layer the JSON API and web UI share: runs, Decisions, prepare and push, the reconciler
-- `internal/config/`: the configuration file and safe reading of secret files; `internal/toolstore/`: the content-addressed tool store; `internal/egress/`: the allowlist proxy; `internal/notify/`: notifications (ntfy); `internal/docscheck/`: tests that fail when the design and the code disagree
-- `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts; `runtime/runtimetest/` and `agent/agenttest/` hold the fakes and conformance suites; `runtime/apple/` is the Apple Container adapter (its live suite runs with `-tags applecontainer`); `agent/claude/` is the Claude Code adapter; `forge/` holds the policy `Guard`
+- `internal/service/`: the service layer the JSON API and web UI share: workspaces and agents, runs, Decisions, the bundle export, prepare and push, the event stream, the reconciler
+- `internal/api/`: the JSON API (token, envelope, idempotency, SSE; `openapi.json` is the contract); `internal/cli/`: the cobra commands, a client of the API; `internal/serve/`: wires `whr serve` together from the configuration
+- `internal/config/`: the configuration file and safe reading of secret files; `internal/toolstore/`: the content-addressed tool store; `internal/egress/`: the allowlist proxy; `internal/notify/`: notifications (ntfy); `internal/devcontainer/`: the safe subset of `devcontainer.json` from the default branch, and building its image (D38); `internal/usage/`: cost estimates from a configured price table; `internal/docscheck/`: tests that fail when the design and the code disagree
+- `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts; `runtime/runtimetest/` and `agent/agenttest/` hold the fakes and conformance suites; `runtime/apple/` is the Apple Container adapter (its live suite runs with `-tags applecontainer`); `agent/claude/` is the Claude Code adapter; `forge/` holds the policy `Guard`, and `forge/github/` the GitHub App client
 - `internal/redact/`: secret redaction at ingest
 - `internal/commitlint/`: commit rules; `internal/exitcode/`, `internal/version/`: shared constants
 
