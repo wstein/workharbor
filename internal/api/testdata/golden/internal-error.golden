@@ -1,0 +1,11 @@
+HTTP Internal Server Error (500)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "error",
+    "exit_code": 1,
+    "message": "internal error"
+  }
+}
+

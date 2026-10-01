@@ -1,0 +1,21 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": [
+    {
+      "id": "w1",
+      "name": "docs-ws",
+      "repo": "wstein/workharbor",
+      "integration": "main",
+      "agents": [
+        {
+          "id": "a1",
+          "role": "docs",
+          "branch": "agent/docs"
+        }
+      ]
+    }
+  ]
+}
+

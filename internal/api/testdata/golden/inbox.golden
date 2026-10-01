@@ -1,0 +1,21 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": [
+    {
+      "id": "d1",
+      "task_id": "t2",
+      "kind": "review",
+      "blocking": true,
+      "subject": "Ready to push? 2 commits",
+      "sha": "abc123",
+      "options": [
+        "allow",
+        "deny"
+      ],
+      "status": "open"
+    }
+  ]
+}
+

@@ -1,0 +1,1090 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "workharbor API",
+    "version": "1",
+    "description": "The JSON API of `whr serve` (design \u00a79.7). Loopback only; every route needs the bearer token. Responses are wrapped in the envelope of \u00a79.2. Free text from agents, repositories and the forge (input, subject, message) is untrusted data."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Liveness and version",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "version"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "summary": "This document",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document (not wrapped in the envelope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List tasks, newest first",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Leave out finished tasks."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "runTask",
+        "summary": "Start a task from an issue on a named agent",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "the task and its first run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Started"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task}": {
+      "get": {
+        "operationId": "showTask",
+        "summary": "One task with its runs, open decisions and current revision",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Task"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{task}/say": {
+      "post": {
+        "operationId": "say",
+        "summary": "Send a message to the running agent",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "how it was delivered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Delivery"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task}/cancel": {
+      "post": {
+        "operationId": "cancel",
+        "summary": "Cancel a task",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{task}/events": {
+      "get": {
+        "operationId": "events",
+        "summary": "Server-sent events of a task",
+        "description": "Durable events carry `id` (their sequence number); reconnect with `Last-Event-ID` or `since` to replay the missed ones from the store. Ephemeral events and `: heartbeat` comments come from memory, carry no id and are never stored.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbox": {
+      "get": {
+        "operationId": "inbox",
+        "summary": "The decisions waiting for the human",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "open decisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Decision"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/decisions/{decision}/answer": {
+      "post": {
+        "operationId": "answer",
+        "summary": "Answer a decision (an approval is allow or deny with the commit shown)",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "answered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Answered"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "decision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces": {
+      "get": {
+        "operationId": "workspaces",
+        "summary": "Workspaces with their agents",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the workspaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workspace"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "description": "The first request with a key runs; the same key and request returns the stored response (header Idempotent-Replay: true); the same key with another request is a conflict."
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "exit_code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "exit_code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TaskSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "repo",
+          "issue",
+          "state",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "issue": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Run": {
+        "type": "object",
+        "required": [
+          "id",
+          "env_id",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "env_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Candidate": {
+        "type": "object",
+        "required": [
+          "branch",
+          "sha",
+          "pushed"
+        ],
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "pr_url": {
+            "type": "string"
+          },
+          "ci": {
+            "type": "string"
+          },
+          "pushed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "kind",
+          "blocking",
+          "subject",
+          "options",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string",
+            "description": "Untrusted data."
+          },
+          "sha": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Task": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TaskSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "runs",
+              "open_decisions"
+            ],
+            "properties": {
+              "runs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              },
+              "open_decisions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Decision"
+                }
+              },
+              "candidate": {
+                "$ref": "#/components/schemas/Candidate"
+              }
+            }
+          }
+        ]
+      },
+      "Workspace": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "repo",
+          "integration",
+          "agents"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "integration": {
+            "type": "string"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "role",
+                "branch"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue_url",
+          "agent"
+        ],
+        "properties": {
+          "issue_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "agent": {
+            "type": "string",
+            "description": "<workspace>/<role>"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        }
+      },
+      "SayRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "AnswerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "option"
+        ],
+        "properties": {
+          "option": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          }
+        }
+      },
+      "Started": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "run_id"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Delivery": {
+        "type": "object",
+        "required": [
+          "delivery"
+        ],
+        "properties": {
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "injected",
+              "next_turn",
+              "resumed_turn"
+            ]
+          }
+        }
+      },
+      "Answered": {
+        "type": "object",
+        "properties": {
+          "new_run_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "kind",
+          "tier",
+          "at"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "audit",
+              "transcript",
+              "ephemeral"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {}
+        }
+      }
+    }
+  }
+}

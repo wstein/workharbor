@@ -1,0 +1,11 @@
+HTTP Unauthorized (401)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "unauthorized",
+    "exit_code": 4,
+    "message": "a valid API token is required"
+  }
+}
+

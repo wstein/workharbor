@@ -1,0 +1,11 @@
+HTTP Method Not Allowed (405)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "method_not_allowed",
+    "exit_code": 2,
+    "message": "method not allowed"
+  }
+}
+
