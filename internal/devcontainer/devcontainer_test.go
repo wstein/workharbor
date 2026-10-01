@@ -107,7 +107,7 @@ func TestReadUsesTheRefNotTheWorkingTree(t *testing.T) {
 }
 
 // The file in this repository must pass its own reader (D34, issue #77).
-func TestThisRepositorysDevcontainer(t *testing.T) {
+func TestThisRepositoryDevcontainer(t *testing.T) {
 	data, err := os.ReadFile("../../.devcontainer/devcontainer.json")
 	if err != nil {
 		t.Fatal(err)
