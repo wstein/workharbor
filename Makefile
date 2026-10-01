@@ -6,7 +6,7 @@ EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/
 
 .DEFAULT_GOAL := build
 
-.PHONY: build install check-clean test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
+.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -19,11 +19,15 @@ BUILD_VERSION = $(or $(GIT_VERSION),v0.0.0-$(shell git rev-list --count HEAD 2>/
 BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Dirty=$(GIT_DIRTY) -X $(VERSION_PKG).Date=$(BUILD_DATE)
 
-# make install builds whr and the launcher whr-shim (linux-arm64, for the tool
-# store) from the current commit, with the version stamp, and installs them under
-# PREFIX. It refuses a dirty tree, so the supervisor always runs committed code
-# (D34). The whr user runs it with PREFIX=$$HOME/.local, or any PREFIX it can write.
+# make install builds whr, the launcher whr-shim and the egress proxy whr-proxy
+# (both linux-arm64: the tool store and the sidecar) from the current commit,
+# with the version stamp, and installs them under PREFIX. It refuses a dirty
+# tree and a commit that is not on origin/main, so the supervisor always runs
+# approved, committed code (D34), and builds with GOWORK=off and no GOFLAGS, so
+# a parent go.work or the environment cannot change what is built. The whr user
+# runs it with PREFIX=$$HOME/.local, or any PREFIX it can write.
 PREFIX ?= $(HOME)/.local
+INSTALL_GO = GOWORK=off GOFLAGS= go
 
 check-clean:
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -31,11 +35,18 @@ check-clean:
 		git status --short >&2; exit 1; \
 	fi
 
-install: check-clean
+check-main:
+	@if ! git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then \
+		echo "refusing to install $$(git rev-parse --short HEAD): it is not on origin/main (run git fetch origin, or install a merged commit)" >&2; \
+		exit 1; \
+	fi
+
+install: check-clean check-main
 	mkdir -p $(PREFIX)/bin $(PREFIX)/libexec/whr
-	go build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/bin/whr ./cmd/whr
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
-	@echo "installed whr $$($(PREFIX)/bin/whr version) and whr-shim (linux-arm64) under $(PREFIX)"
+	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/bin/whr ./cmd/whr
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-proxy-linux-arm64 ./cmd/whr-proxy
+	@echo "installed whr $$($(PREFIX)/bin/whr version), whr-shim and whr-proxy (linux-arm64) under $(PREFIX)"
 	@echo "next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64"
 
 build:
