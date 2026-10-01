@@ -243,6 +243,15 @@ Covers provision, start/stop/delete, inspect, resource limits, logs, exec, stora
 | Suspend/checkpoint | Reported support only |
 | SSH/browser access | Intervention endpoints |
 
+**The Go contract** (issue #20, `internal/runtime`):
+
+- **`Spec`** carries what the hardened environment needs: image, owner and labels, CPUs, memory and a disk quota, the network (default or `--internal`, by name), the user (never root), a read-only root, `cap-drop ALL`, `--init`, tmpfs mounts and the mounts. `Validate` rejects a spec that is not hardened: a root or empty user, no `cap-drop ALL`, no `--init`, no owner, a relative or duplicate target. Mounts are `bind` (a host path, checked by `CheckMount`, §7.4) or `volume` (a name); a bind mount of a forbidden path never reaches the runtime.
+- **Owner label.** Every environment carries the supervisor's owner label. `List(owner)` returns only environments with that label, and an adapter refuses to start, stop or delete one it does not own. Removal is by exact ID, never a pattern (`rm --all` deletes every container on the machine).
+- **`Inspect`** returns a typed `Info`: the ID, owner, labels, state (`provisioning`, `running`, `stopped`, `deleted` as in §4.1) and the current address, which is empty unless the environment is running and is never stored. An unknown environment is `ErrNotFound`.
+- **`Exec`** streams: separate stdout and stderr readers, `Wait` for the exit code, and cancellation through the context. Exec in an environment that is not running is `ErrNotRunning`.
+- **Lifecycle is idempotent.** Start of a running and stop of a stopped environment succeed, so a reconciler can retry (§5.3).
+- **Fakes and conformance.** `runtimetest` has an in-memory fake that can simulate a service restart (every environment becomes `stopped`, as measured below) and the conformance suite every backend must pass; the real Apple Container adapter (#26) runs the same suite on the Mac.
+
 Do not pretend backends share Docker semantics. One **runtime conformance suite** (the §12 checklist, automated) must pass for every backend; it turns capability flags into verified claims.
 
 **Measured on Apple Container 1.5.0** (macOS 26.6.2, spike #2, issue #2):
@@ -283,6 +292,16 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
     - `api-key`: the key stays in the host-side proxy and is issued per run (§7.3).
     - `subscription`: a consumer-plan login (for example Claude or ChatGPT sign-in) kept in a dedicated per-environment auth directory. The CLI refreshes the token itself, so it cannot sit behind the proxy.
 - **auth and quota blocking states**: the adapter reports `auth_expired` and `quota_exhausted` (with the reset time when known). Each opens a blocking Decision and pauses the run instead of failing or retrying. Re-login is a UI action through a browser or device-code flow.
+
+**The Go contract** (issue #20, `internal/agent`):
+
+- **`ContractVersion`** is a constant; `Capabilities` carries the version the adapter implements, the flags above, the auth modes and whether it reports quota. `Mode()` computes the mode from them: *full* needs headless, structured events, mid-run injection and host-routed approvals; an agent with events and headless only is *degraded*; anything less is unsupported.
+- **`Start` and `Resume`** take a `StartSpec` (environment, working directory, prompt, auth mode, approver and approval timeout) and return a `Session`. The session ID may be empty until the first user message (spike #1). `Events` is a typed stream: message, tool call, tool result, diff, test result, usage, approval, `auth_expired`, `quota_exhausted` (with the reset time when known), result and error.
+- **`Instruct` returns the delivery**: `injected` (now), `next_turn` (after the running tool, as measured for Claude Code) or `resumed_turn` (degraded: the message becomes a resumed turn). An agent without injection never claims the first two.
+- **Approvals are a host callback, and fail closed.** The adapter blocks the agent on its permission request and asks the `Approver`. An error, a cancelled context or no answer within the approval timeout is a denial, and the agent sees the denial.
+- **Cooperative pause stays a capability flag** (D11): a session implements `Pauser` only if the flag is true, and the conformance suite checks both ways.
+- **Auth and quota end a run without failing it.** The session emits `auth_expired` or `quota_exhausted` and finishes with that status and no error, so the supervisor opens a blocking Decision (§4.2) instead of retrying; the session stays resumable.
+- **Stop is a hard interrupt** and leaves the session resumable. **`agenttest`** has a scripted fake agent and the conformance suite; the Claude Code adapter (#25) and the Codex adapter (#35) run it too.
 
 **Measured in spike #1** (issue #1; branch `spike/transcript`, `RESULTS.md`), with Claude Code 2.1.285, Codex CLI 0.159.2 and Antigravity `agy` 1.1.12 on one machine:
 
