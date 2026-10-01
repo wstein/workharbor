@@ -11,4 +11,6 @@ exclude_path = ["CHANGELOG.md", "docs/vendor", "_site"]
 exclude = [
   '^https://github\.com/users/wstein/projects/6',
   '^https://help\.openai\.com/',
+  # Google's developer site answers datacenter IPs with 500 (CI, 1 October 2026); it loads from a browser.
+  '^https://ai\.google\.dev/',
 ]
