@@ -115,10 +115,12 @@ Task, run and environment each get their own small FSM with explicit legal trans
     - **Start and stop** move between `stopped` and `running`. After a service or host restart every environment is `stopped` (spike #2, §5.3), so the reconciler observes `running → stopped` and starts the ones that should run.
     - **Delete only from `stopped`.** A running environment is stopped first.
     - **Recycling** (§4.3) deletes an environment and provisions a new one, so it is a new Environment with a new ID. An environment is never reprovisioned.
-- **Coupling rules (examples):**
-  - `ready_for_review` requires a stopped run and a pinned commit SHA.
-  - Pausing a run never stops its environment.
-  - A passing pipeline on an earlier SHA never marks the current revision ready.
+- **Coupling rules** (issue #16). The three machines are not independent; a task aggregate (the task with its runs, their environments and its ReviewCandidates) checks these guards before a change is made:
+  - **One live run.** A task has at most one run that is not `stopped` or `failed`, and a run is only created or started (from `paused` or `interrupted`) in an environment that is `running`.
+  - **Pause never stops the environment.** Pausing a run changes the run only. An environment is not stopped while a run in it is `starting` or `running`; a run is stopped or interrupted first.
+  - **`ready_for_review` needs a stopped run and a pinned SHA.** The task's latest run is `stopped` (a `failed` run does not qualify), and a ReviewCandidate exists whose SHA is pinned (§4.5). The current revision is the most recent ReviewCandidate.
+  - **CI belongs to a SHA.** A pipeline result is recorded on the ReviewCandidate of its own commit. A pass on an earlier SHA never counts for the current revision: where CI is required, `ready_for_review` is refused until the current SHA has passed.
+  - **Violations are conflicts.** A broken coupling rule and an illegal transition are reported as a conflict, exit code 5 (§9.2). An unknown run, environment or SHA is "not found", exit code 3.
 
 ### 4.2 Decision object
 
