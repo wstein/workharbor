@@ -186,8 +186,12 @@ func (s *stub) process(ctx context.Context, st *stubStream, req runtime.ExecRequ
 		return map[string]any{"type": "result", "subtype": "success", "is_error": isErr, "result": t, "session_id": id, "total_cost_usd": 0.0123}
 	}
 	window := func(util float64, reset time.Time) map[string]any {
+		status := "allowed"
+		if util >= 1 {
+			status = "rejected" // an assumption: the real value was not observed
+		}
 		return map[string]any{"type": "rate_limit_event", "rate_limit_info": map[string]any{
-			"status": "allowed", "unifiedWindows": map[string]any{"five_hour": map[string]any{"utilization": util, "resetsAt": reset.Unix()}},
+			"status": status, "unifiedWindows": map[string]any{"five_hour": map[string]any{"utilization": util, "resetsAt": reset.Unix()}},
 		}}
 	}
 	idle := func() { // after its result the process waits for stdin to end

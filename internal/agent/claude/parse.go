@@ -50,6 +50,7 @@ type contentItem struct {
 }
 
 type rateLimit struct {
+	Status  string `json:"status"` // "allowed" in the measured streams; the exhausted value was not observed
 	Windows map[string]struct {
 		Utilization float64         `json:"utilization"`
 		ResetsAt    json.RawMessage `json:"resetsAt"`
@@ -281,6 +282,10 @@ func (p *parser) rateLimit(ev rawEvent) []agent.Event {
 	}
 	p.windows = p.windows[:0]
 	var events []agent.Event
+	// A window at full utilization is exhausted unless the stream says the
+	// limit still allows the request. Unverified: the value of status when the
+	// limit is reached was never observed, so only "allowed" is trusted.
+	allowed := rl.Status == "allowed"
 	for _, name := range []string{agent.WindowFiveHour, agent.WindowSevenDay} {
 		w, ok := rl.Windows[name]
 		if !ok {
@@ -290,7 +295,7 @@ func (p *parser) rateLimit(ev rawEvent) []agent.Event {
 		p.windows = append(p.windows, agent.UsageWindow{Name: name, Utilization: clamp01(w.Utilization), ResetsAt: reset})
 		// Unverified: what the stream reads when a window is used up was not
 		// observed, so a window at full utilization is taken as exhausted.
-		if w.Utilization >= 1 && !p.exhausted {
+		if w.Utilization >= 1 && !allowed && !p.exhausted {
 			p.exhausted, p.resetAt = true, reset
 			e := p.event(agent.EventQuotaExhausted)
 			e.ResetAt = reset

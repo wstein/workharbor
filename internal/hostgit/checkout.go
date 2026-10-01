@@ -22,8 +22,9 @@ const maxAlternates = 64 << 10
 //   - objects/info/alternates that is not absent or a plain file naming only
 //     the listed caches, and any http-alternates.
 //
-// The agent's own files are what is checked, so the run must have stopped: a
-// running agent could change them between this check and the fetch.
+// The agent's own files are what is checked, so the environment must have
+// stopped, not merely the run: a process left running in it could change them
+// between this check and the fetch (design §4.5).
 func (g *Git) verifyCheckout(path string) (checkout, gitDir string, err error) {
 	if g.root == "" {
 		return "", "", ErrNoRoot

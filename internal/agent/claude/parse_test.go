@@ -280,3 +280,17 @@ func TestAnErrorResultIsNeverRecordedAsAllowed(t *testing.T) {
 		}
 	}
 }
+
+// A full window the stream still calls "allowed" is not an exhausted quota.
+func TestAFullWindowThatIsStillAllowedIsNotExhausted(t *testing.T) {
+	stream := strings.ReplaceAll(string(fixture(t, "quota")), `"status":"rejected"`, `"status":"allowed"`)
+	events, p := parseAll(t, []byte(stream), false)
+	for _, e := range events {
+		if e.Kind == agent.EventQuotaExhausted {
+			t.Fatal("status allowed with a full window raised quota_exhausted")
+		}
+	}
+	if res, _ := p.outcome(); res.Status != agent.ResultCompleted {
+		t.Errorf("outcome = %+v, want completed", res)
+	}
+}
