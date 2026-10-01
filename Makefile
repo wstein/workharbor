@@ -4,7 +4,7 @@ GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 HUGO := go run -tags extended github.com/gohugoio/hugo@v0.167.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 
-.PHONY: build test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
+.PHONY: build install check-clean test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -16,6 +16,25 @@ GIT_DIRTY = $(shell if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then ech
 BUILD_VERSION = $(or $(GIT_VERSION),v0.0.0-$(shell git rev-list --count HEAD 2>/dev/null || echo 0)-g$(GIT_COMMIT))
 BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Dirty=$(GIT_DIRTY) -X $(VERSION_PKG).Date=$(BUILD_DATE)
+
+# make install builds whr and the launcher whr-shim (linux-arm64, for the tool
+# store) from the current commit, with the version stamp, and installs them under
+# PREFIX. It refuses a dirty tree, so the supervisor always runs committed code
+# (D34). The whr user runs it with PREFIX=$$HOME/.local, or any PREFIX it can write.
+PREFIX ?= $(HOME)/.local
+
+check-clean:
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "refusing to install from a dirty tree: commit or stash first, so that whr runs committed code" >&2; \
+		git status --short >&2; exit 1; \
+	fi
+
+install: check-clean
+	mkdir -p $(PREFIX)/bin $(PREFIX)/libexec/whr
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/bin/whr ./cmd/whr
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
+	@echo "installed whr $$($(PREFIX)/bin/whr version) and whr-shim (linux-arm64) under $(PREFIX)"
+	@echo "next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64"
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/whr
