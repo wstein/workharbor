@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Every `feat`, `fix`, `perf` and `refactor` commit references an issue, so please describe the work here before opening a pull request. Check the [design](https://wstein.github.io/workharbor/docs/design/) first; open decisions are in section 12.
+        Every `feat`, `fix`, `perf` and `refactor` commit references an issue, so please describe the work here before opening a pull request. Check the [design](https://wstein.github.io/workharbor/docs/design/) first; open decisions are in section 12. Use the decision template for a choice between options.
   - type: dropdown
     id: kind
     attributes:
@@ -14,7 +14,6 @@ body:
         - Feature
         - Improvement or refactor
         - Spike or investigation
-        - Design question or decision
         - Documentation
     validations:
       required: true
@@ -29,11 +28,28 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: How will we know it is done?
+      description: One checkbox per criterion. Each must be checkable when the work is done; they are ticked after the closing commit is pushed (AGENTS.md).
       placeholder: |
         - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: How it is verified
+      description: A test, a whr command or a measurement that shows each criterion is met.
+    validations:
+      required: true
   - type: textarea
     id: design
     attributes:
       label: Design impact
-      description: Which section or decision (D1, D2, ...) does this touch? Mark claims about external tools as unverified.
+      description: Which section or decision (D1, D2, ...) does this touch? Write "none" if it touches none. Mark claims about external tools as unverified.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this issue deliberately leaves for later, if anything.

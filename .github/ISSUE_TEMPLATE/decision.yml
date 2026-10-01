@@ -1,0 +1,50 @@
+name: Decision
+description: A choice between options, recorded as a D-row in the design
+labels: [decision]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Decisions are rows in the design's decision table (D10). Settle the choice here, then record it as a D-row with its rationale. Check the [design](https://wstein.github.io/workharbor/docs/design/) first: section 3 lists the decisions taken, section 12 the open ones.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What has to be decided, why now, and what it blocks.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Each option with its trade-offs, ideally rated (value and effort out of 10). Mark claims about external tools as unverified unless measured.
+      placeholder: |
+        | Option | Rating | Notes |
+        | --- | --- | --- |
+        | ... | ... | ... |
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: The option you propose and why.
+    validations:
+      required: true
+  - type: input
+    id: drow
+    attributes:
+      label: D-row
+      description: The decision row this creates or changes, for example D15, and the design sections it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Usually that the D-row is recorded and the affected sections are updated.
+      value: |
+        - [ ] Decision recorded as a D-row in design §3
+        - [ ] Affected design sections updated
+    validations:
+      required: true
