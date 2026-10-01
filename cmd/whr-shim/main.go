@@ -17,7 +17,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: whr-shim <run|kill> [flags] [cmd...]\n")
+		fmt.Fprintf(os.Stderr, "usage: whr-shim <run|kill|chown> [flags] [cmd...]\n")
 		os.Exit(2)
 	}
 	switch os.Args[1] {
@@ -25,6 +25,11 @@ func main() {
 		runCmd(os.Args[2:])
 	case "kill":
 		killCmd(os.Args[2:])
+	case "chown":
+		if err := chownCmd(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "chown: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(2)
@@ -184,4 +189,34 @@ func killCmd(args []string) {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stdout, "killed process group %d in %v\n", pid, elapsed)
+}
+
+// chownCmd gives one directory to a numeric user, without following a link
+// and without recursing: `whr-shim chown -owner 1000:1000 /v`. The runtime
+// adapter runs it as root on a new volume, from the tool store, so that no
+// program of the environment's image runs as root (design §5.1).
+func chownCmd(args []string) error {
+	fs := flag.NewFlagSet("chown", flag.ContinueOnError)
+	owner := fs.String("owner", "", "numeric uid:gid")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("one directory is needed")
+	}
+	u, g, ok := strings.Cut(*owner, ":")
+	uid, uerr := strconv.Atoi(u)
+	gid, gerr := strconv.Atoi(g)
+	if !ok || uerr != nil || gerr != nil || uid <= 0 || gid < 0 {
+		return fmt.Errorf("-owner %q must be numeric uid:gid with a non-root uid", *owner)
+	}
+	dir := fs.Arg(0)
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return os.Lchown(dir, uid, gid)
 }

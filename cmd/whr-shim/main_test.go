@@ -119,3 +119,33 @@ func TestWritePIDFileIsAtomic(t *testing.T) {
 		t.Errorf("temporary files left in %s: %v", dir, entries)
 	}
 }
+
+func TestChownGivesOneDirectoryToANumericUser(t *testing.T) {
+	dir := t.TempDir()
+	me := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
+	if err := chownCmd([]string{"-owner", me, dir}); err != nil {
+		t.Fatalf("chown to the current user: %v", err)
+	}
+	file := filepath.Join(dir, "f")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "l")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"root uid":     {"-owner", "0:0", dir},
+		"a name":       {"-owner", "agent:agent", dir},
+		"no gid":       {"-owner", "1000", dir},
+		"a file":       {"-owner", me, file},
+		"a link":       {"-owner", me, link},
+		"two paths":    {"-owner", me, dir, dir},
+		"missing":      {"-owner", me, filepath.Join(dir, "nope")},
+		"no directory": {"-owner", me},
+	} {
+		if err := chownCmd(args); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

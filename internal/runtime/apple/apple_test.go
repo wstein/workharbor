@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -24,12 +25,19 @@ func (r *recorder) run(_ context.Context, _ io.Reader, args ...string) ([]byte, 
 	return nil, nil, nil
 }
 
-func prepared(t *testing.T, spec runtime.Spec) runtime.PreparedSpec {
+func testHome(t *testing.T) string {
 	t.Helper()
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	return home
+}
+
+// preparedIn prepares spec with home as the user's home; bind sources below it
+// pass the mount checks.
+func preparedIn(t *testing.T, home string, spec runtime.Spec) runtime.PreparedSpec {
+	t.Helper()
 	prep, err := runtime.Prepare(runtime.PrepareOptions{
 		FS: runtime.OSFS{}, Home: home,
 		Owns: func(v string) bool { return strings.HasPrefix(v, "wh-") },
@@ -50,10 +58,18 @@ func baseSpec() runtime.Spec {
 
 func TestProvisionIsHardened(t *testing.T) {
 	r := &recorder{}
-	a := &Adapter{owner: "o1", run: r.run}
+	a := &Adapter{owner: "o1", run: r.run, shim: "/tools/bin/whr-shim"}
+	home := testHome(t)
+	store := filepath.Join(home, "store")
+	if err := os.Mkdir(store, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	spec := baseSpec()
-	spec.Mounts = []runtime.Mount{{Kind: runtime.MountVolume, Source: "wh-home", Target: "/home/agent"}}
-	if _, err := a.Provision(context.Background(), prepared(t, spec)); err != nil {
+	spec.Mounts = []runtime.Mount{
+		{Kind: runtime.MountVolume, Source: "wh-home", Target: "/home/agent"},
+		{Kind: runtime.MountBind, Source: store, Target: "/tools", ReadOnly: true},
+	}
+	if _, err := a.Provision(context.Background(), preparedIn(t, home, spec)); err != nil {
 		t.Fatal(err)
 	}
 	var create []string
@@ -209,5 +225,39 @@ func TestBuildRefusesAnInvalidSpecBeforeRunning(t *testing.T) {
 	_, err := a.Build(context.Background(), runtime.BuildSpec{Tag: "-x", ContextDir: "relative", Dockerfile: "relative"})
 	if !errors.Is(err, runtime.ErrInvalidBuild) || len(rec.calls) != 0 {
 		t.Errorf("err = %v, calls = %v", err, rec.calls)
+	}
+}
+
+// A new volume is given to the environment's user by whr-shim from the
+// read-only tool store, as the entrypoint, on the internal network: no program
+// of the image (which may come from the repository, D38) runs as root, and the
+// helper has no way out.
+func TestANewVolumeIsOwnedWithoutRunningTheImageAsRoot(t *testing.T) {
+	a := &Adapter{owner: "o1", shim: "/tools/profiles/p/bin/whr-shim"}
+	spec := baseSpec()
+	tools := runtime.Mount{Kind: runtime.MountBind, Source: "/store", Target: "/tools", ReadOnly: true}
+	spec.Mounts = []runtime.Mount{{Kind: runtime.MountBind, Source: "/work", Target: "/work"}, tools}
+	args, err := a.ownVolumeArgs("whr-1", spec, "wh-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"--entrypoint /tools/profiles/p/bin/whr-shim", "--network wh-net-1", "--cap-add CHOWN", "--cap-drop ALL", "--read-only", "-v wh-home:/v", "-v /store:/tools:ro", "chown -owner 1000:1000 /v"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("helper %q lacks %q", joined, want)
+		}
+	}
+	if strings.Contains(joined, "/work") || strings.Contains(joined, "default") {
+		t.Errorf("the helper gets another mount or the default network: %s", joined)
+	}
+	if args[len(args)-5] != spec.Image {
+		t.Errorf("the image must come right before the shim's arguments: %v", args)
+	}
+	if _, err := (&Adapter{owner: "o1"}).ownVolumeArgs("whr-1", spec, "wh-home"); !errors.Is(err, ErrNoLauncher) {
+		t.Errorf("without a launcher = %v, want ErrNoLauncher", err)
+	}
+	spec.Mounts = []runtime.Mount{{Kind: runtime.MountBind, Source: "/store", Target: "/tools"}} // writable: not the tool store
+	if _, err := a.ownVolumeArgs("whr-1", spec, "wh-home"); !errors.Is(err, ErrNoLauncher) {
+		t.Errorf("a writable mount for the launcher = %v, want ErrNoLauncher", err)
 	}
 }

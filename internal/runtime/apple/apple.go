@@ -724,21 +724,57 @@ func (a *Adapter) Build(ctx context.Context, b runtime.BuildSpec) ([]byte, error
 
 var _ runtime.Builder = (*Adapter)(nil)
 
-// ownVolume gives a new volume to the environment's user: a short container as
-// root runs chown on it and is deleted. It is the only place the adapter runs
-// anything as root, it has no network of the environment's and no other mount.
+// ownVolume gives a new volume to the environment's user. A short container as
+// root runs `whr-shim chown` from the read-only tool store as its entrypoint,
+// so no program of the environment's image runs as root (since D38 the image
+// may be built from the repository), on the environment's internal network, so
+// it has no way out, and is deleted. It is the only place the adapter runs
+// anything as root.
 func (a *Adapter) ownVolume(ctx context.Context, env string, spec runtime.Spec, volume string) error {
-	helper := env + "-own-" + volume
-	if len(helper) > 100 {
-		helper = helper[:100]
+	args, err := a.ownVolumeArgs(env, spec, volume)
+	if err != nil {
+		return err
 	}
-	args := []string{"run", "--name", helper, "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--read-only", "-v", volume + ":/v"}
-	args = append(args, a.labelArgs(roleVolume, env, nil)...)
-	args = append(args, spec.Image, "chown", spec.User, "/v")
-	_, _, err := a.run(ctx, nil, args...)
-	_, _, _ = a.run(context.WithoutCancel(ctx), nil, "delete", helper)
+	_, _, err = a.run(ctx, nil, args...)
+	_, _, _ = a.run(context.WithoutCancel(ctx), nil, "delete", ownHelperName(env, volume))
 	if err != nil {
 		return fmt.Errorf("give volume %s to user %s: %w", volume, spec.User, err)
 	}
 	return nil
+}
+
+func ownHelperName(env, volume string) string {
+	helper := env + "-own-" + volume
+	if len(helper) > 100 {
+		helper = helper[:100]
+	}
+	return helper
+}
+
+// ErrNoLauncher means the adapter has no whr-shim in the tool store to give a
+// volume to the environment's user without running the image as root.
+var ErrNoLauncher = errors.New("apple: a volume needs whr-shim from the tool store (WithShim) to be given to the environment's user")
+
+func (a *Adapter) ownVolumeArgs(env string, spec runtime.Spec, volume string) ([]string, error) {
+	if a.shim == "" {
+		return nil, ErrNoLauncher
+	}
+	var tools *runtime.Mount
+	for i, m := range spec.Mounts {
+		if m.Kind != runtime.MountVolume && m.ReadOnly && strings.HasPrefix(a.shim, strings.TrimSuffix(m.Target, "/")+"/") {
+			tools = &spec.Mounts[i]
+			break
+		}
+	}
+	if tools == nil {
+		return nil, fmt.Errorf("%w: no read-only mount of the spec holds %s", ErrNoLauncher, a.shim)
+	}
+	args := []string{
+		"run", "--name", ownHelperName(env, volume), "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--read-only",
+		"--network", spec.Network.Name, "--entrypoint", a.shim,
+		"-v", volume + ":/v",
+	}
+	args = append(args, mountArgs(*tools)...)
+	args = append(args, a.labelArgs(roleVolume, env, nil)...)
+	return append(args, spec.Image, "chown", "-owner", spec.User, "/v"), nil
 }
