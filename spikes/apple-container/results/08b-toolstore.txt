@@ -1,0 +1,72 @@
+
+== stock images (pull the ones that are missing, remember them for removal)
+present: docker.io/library/fedora:latest
+present: docker.io/library/debian:bookworm-slim
+present: docker.io/library/ubuntu:24.04
+present: docker.io/library/alpine:3
+NAME                                   TAG            DIGEST
+alpine                                 3              294b683cb724
+debian                                 bookworm-slim  3783cc01769c
+fedora                                 latest         498c452f32a7
+ubuntu                                 24.04          008173c23f95
+
+== does the same store run in each stock image? (profile default: glibc claude + musl codex; profile musl: musl claude)
+--- fedora:latest  (libc: /lib64/libc.so.6)
+    default/claude  2.1.286 (Claude Code)
+    default/codex   codex-cli 0.159.3
+    musl/claude     sh: line 1: /opt/store/profiles/musl/bin/claude: cannot execute: required file not found
+--- debian:bookworm-slim  (libc: /lib/aarch64-linux-gnu/libc.so.6)
+    default/claude  2.1.286 (Claude Code)
+    default/codex   codex-cli 0.159.3
+    musl/claude     sh: 1: /opt/store/profiles/musl/bin/claude: not found
+--- ubuntu:24.04  (libc: /lib/aarch64-linux-gnu/libc.so.6)
+    default/claude  2.1.286 (Claude Code)
+    default/codex   codex-cli 0.159.3
+    musl/claude     sh: 1: /opt/store/profiles/musl/bin/claude: not found
+--- alpine:3  (libc: /lib/ld-musl-aarch64.so.1)
+    default/claude  sh: /opt/store/profiles/default/bin/claude: not found
+    default/codex   codex-cli 0.159.3
+    musl/claude     2.1.286 (Claude Code)
+
+== startup cost of claude --version on fedora: bind mount vs rootfs copy vs ext4 volume
+bind mount (virtiofs), ro: runs (ms): 130 121 127
+copy 230 MB into the rootfs: 433 ms
+rootfs copy: runs (ms): 106 94 92
+populate a volume from the store (949 MB): 3348 ms
+volume mounted read-only: ok
+ext4 volume: runs (ms): 219 102 76
+volume read-only enforced? touch: cannot touch '/opt/store/x': Read-only file system
+
+== one volume attached to two running containers at once
+whspike-p2
+second container sees the store: 2.1.286 (Claude Code)
+first container still fine:      2.1.286 (Claude Code)
+
+== immutability of the bind-mounted store from inside
+touch: cannot touch '/opt/store/x': Read-only file system
+rm: cannot remove '/opt/store/profiles/default/bin/claude': Read-only file system
+sh: line 1: /opt/store/profiles/default/bin/claude: Read-only file system
+chmod: changing permissions of '/opt/store/store': Read-only file system
+ln: failed to create symbolic link '/opt/store/profiles/default/bin/claude': Read-only file system
+host store untouched: profiles/default/bin/claude -> ../../../store/0292fa22-claude-2.1.286-linux-arm64/bin/claude
+
+== four concurrent containers sharing the one store
+4 containers start, run both tools and exit: 3033 ms total
+  4 2.1.286 (Claude Code)
+  4 codex-cli 0.159.3
+
+== two versions side by side in different environments, separate writable homes
+env A (profile default): 2.1.286 (Claude Code)
+env B (profile pinned) : 2.1.285 (Claude Code)
+which claude in A: /opt/store/store/0292fa22-claude-2.1.286-linux-arm64/bin/claude
+which claude in B: /opt/store/store/24fac777-claude-2.1.285-linux-arm64/bin/claude
+homes are separate: A=A-only B=B-only
+Not logged in · Please run /login
+claude wrote its state into the home, not the store: .claude .claude.json lost+found who
+
+== store integrity after all of the above (re-hash each binary against its content address)
+ok   0292fa22-claude-2.1.286-linux-arm64
+ok   24fac777-claude-2.1.285-linux-arm64
+ok   54a834b6-codex-0.159.3-linux-arm64-musl
+ok   5b9b9e41-claude-2.1.286-linux-arm64-musl
+store integrity: unchanged

@@ -1,0 +1,13 @@
+--- store:
+0292fa22-claude-2.1.286-linux-arm64
+24fac777-claude-2.1.285-linux-arm64
+54a834b6-codex-0.159.3-linux-arm64-musl
+5b9b9e41-claude-2.1.286-linux-arm64-musl
+total: 949M
+--- profiles:
+profiles/default/bin/claude -> ../../../store/0292fa22-claude-2.1.286-linux-arm64/bin/claude
+profiles/default/bin/codex -> ../../../store/54a834b6-codex-0.159.3-linux-arm64-musl/bin/codex
+profiles/musl/bin/claude -> ../../../store/5b9b9e41-claude-2.1.286-linux-arm64-musl/bin/claude
+profiles/musl/bin/codex -> ../../../store/54a834b6-codex-0.159.3-linux-arm64-musl/bin/codex
+profiles/pinned/bin/claude -> ../../../store/24fac777-claude-2.1.285-linux-arm64/bin/claude
+profiles/pinned/bin/codex -> ../../../store/54a834b6-codex-0.159.3-linux-arm64-musl/bin/codex

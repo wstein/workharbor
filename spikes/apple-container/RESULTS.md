@@ -13,6 +13,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 5. Agent in a container | Partly | Claude Code installs and runs through the proxy; state survives stop, start and rebuild. Not logged in, so no real agent run yet |
 | 6. Recovery | Partly | No restart policy. A crashed container stays `stopped`; state survives. Runtime restart and reboot not tested |
 | 7. Memory at 1 and 4 containers | Not started | |
+| 8. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
 
 ## 1. Lifecycle and limits
 
@@ -77,12 +78,58 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 - **Not done:** `container system stop` and `start` (restarts the services; needs the owner's approval first).
 - Killing PID 1 from inside the guest had no effect, because the init process ignores it.
 
+## 8. Stock image plus a shared read-only tool store
+
+Instead of installing an agent in every container (item 5: 11 s and 230 MB each), the agent CLIs live once in a versioned, immutable **tool store** on the host and are mounted read-only into stock images, the way a Nix store is shared. `build-store.sh` builds it; `08b-toolstore.sh` tests it.
+
+**Layout** (a tiny Nix-like store, 949 MB for four entries):
+
+```
+store/<hash8>-<name>-<version>-<platform>/bin/<name>     content-addressed, never modified
+profiles/<profile>/bin/<name> -> ../../../store/.../bin/<name>
+```
+
+Claude Code is downloaded from the vendor's release URL and verified against its SHA-256 manifest; Codex CLI is the static musl build from the GitHub release. Relative symlinks inside one mount keep working. Profiles `default` (glibc Claude Code 2.1.286 and Codex), `musl` and `pinned` (Claude Code 2.1.285) were used.
+
+**One store, four stock images** (`--mount type=bind,source=STORE,target=/opt/store,readonly`):
+
+| Stock image | libc | `default` Claude Code (glibc) | `musl` Claude Code | Codex CLI (static musl) |
+| --- | --- | --- | --- | --- |
+| fedora:latest | glibc | runs | `required file not found` | runs |
+| debian:bookworm-slim | glibc | runs | `not found` | runs |
+| ubuntu:24.04 | glibc | runs | `not found` | runs |
+| alpine:3 | musl | `not found` | runs | runs |
+
+The "not found" errors are the missing dynamic loader, not a missing file. So a store needs **one build per libc** (the vendor's installer picks the musl build the same way, by looking for the musl loader), and a static binary such as Codex runs in any image. The adapter picks the profile from the image's libc. A tool that needs shared libraries beyond libc would need its closure in the store, which is what Nix does; none of the three needed it.
+
+**Where the store lives**, startup cost of `claude --version` on fedora (three runs, ms):
+
+| Source | Runs | Notes |
+| --- | --- | --- |
+| Bind mount (virtiofs), read-only | 127, 120, 103 | Shared by all containers with no copy |
+| Rootfs copy | 107, 116, 109 | Copying the 230 MB binary took 443 ms per container |
+| ext4 named volume, read-only | 187, 108, 100 | Populating it from the store took 3.5 s, once |
+
+- **No meaningful startup difference.** The bind mount wins on simplicity: nothing to copy, one directory to update. A volume is read-only capable (`-v NAME:/opt/store:ro` works and is enforced) and **one volume can be attached to two running containers at once**, so it is a fallback if bind mounts are ever restricted.
+- **Immutable from inside.** `touch`, `rm`, appending to a tool, `chmod` and replacing a symlink all failed with "Read-only file system". Re-hashing every store entry afterwards showed no change.
+- **Several containers, one store.** Four containers started at once, each ran both tools and exited, in 3.0 to 4.5 s total, including VM start.
+- **Two versions side by side.** Environment A (profile `default`) ran Claude Code 2.1.286 and environment B (profile `pinned`) ran 2.1.285 at the same time, each resolving to its own store entry.
+- **Writable state is separate.** With `HOME` on a per-environment volume, the agent's files (`.claude`, `.claude.json`) landed in that home and not in the store, and the two homes were independent.
+- **Cost comparison.** A per-container install was 11 s and 230 MB each; the store costs one download (949 MB for four entries) and zero per container.
+
+**Design consequences**
+- The agent adapter declares its tool entry (name, version, platform, hash) and the runtime adapter mounts the matching profile read-only. A new agent version is a new store entry plus a profile change, and a rollback is a profile change.
+- Updates, pinning and audit are central: one place verifies checksums, one place records which version ran a task (record the store hash in the run's audit entry).
+- It also removes network need at start-up: the egress allowlist no longer has to permit `downloads.claude.ai`.
+- The harness and helper binaries (for example the spike's approve helper) can live in the same store.
+
 ## Consequences for the design
 
 - **§5.1 runtime adapter.** Report: isolation boundary is a VM per container; `--internal` networks supported; no restart policy; no suspend or checkpoint observed.
 - **§4.4 persistence.** Repository and agent home on a volume; bind mounts for hand-over only; the rootfs is disposable.
 - **§7.2 egress.** Per-environment `--internal` network plus a dual-homed proxy sidecar is a verified way to get default-deny egress with a log.
 - **§7.4 isolation policy.** The adapter rejects mounts (resolve symlinks first); unix sockets cannot be mounted usefully; never pass `--ssh`; use `--init`, `--read-only`, `--cap-drop ALL` and a non-root user where possible.
+- **§5.1 and §5.2, tool store.** Prefer stock images plus a shared read-only, content-addressed tool store mounted into each environment (item 8): one build per libc, profiles for versions, the store hash recorded per run. No per-container install.
 - **§5.3 reconciler.** Detect `stopped` containers and restart them; state lives on the volume.
 - **§12.** Replace the "Apple Container network isolation controls are unverified" marks with these measurements; keep reboot behaviour, the authenticated agent run and approvals from inside the container open.
 
