@@ -9,7 +9,8 @@ A checklist for the host, in order. Each step says why. Steps marked **unverifie
 
 ## 1. Hardware and macOS
 
-- An Apple-silicon Mac mini; 16 GB of memory plans for about four concurrent agent environments ([design §8](../design.md#8-resources)).
+- An Apple-silicon Mac mini. **Recommended: 24 GB memory and 512 GB storage**, for about six concurrent agent environments. Take 32 GB for heavy builds, JetBrains or more agents at once. The minimum is 16 GB (about four environments) and 256 GB plus an external SSD (D32, [design §8](../design.md#8-resources)).
+- Spend on memory before storage: memory cannot be upgraded later, storage can be added externally. An external SSD holds repositories, workspaces and backups well; whether Apple Container's own storage (images, volumes with the agents' build caches) can live there is **unverified** (issue #54).
 - macOS 26. The Apple Container measurements were made on macOS 26.6.2.
 - Keep automatic security updates on, but **install macOS updates that restart the Mac yourself**: a restart stops every running agent until the supervisor resumes them.
 
