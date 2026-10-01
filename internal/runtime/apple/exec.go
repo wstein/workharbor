@@ -1,0 +1,167 @@
+package apple
+
+import (
+	"bufio"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"io"
+	"os/exec"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/runtime"
+)
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortStrings(s []string) { sort.Strings(s) }
+
+// killGrace is how long whr-shim waits after SIGINT before SIGKILL.
+const killGrace = 2 * time.Second
+
+type stream struct {
+	chunks chan runtime.Chunk
+	done   chan struct{}
+	code   int
+	err    error
+}
+
+func (s *stream) Chunks() <-chan runtime.Chunk { return s.chunks }
+
+func (s *stream) Wait() (int, error) {
+	<-s.done
+	return s.code, s.err
+}
+
+// Exec implements runtime.Adapter. Output is streamed as it is produced; stdin
+// is copied into the command and closed when it ends. With a shim the command
+// runs under whr-shim, and cancelling the context signals its process group
+// inside the guest, because SIGINT to the `container exec` client is not
+// forwarded (spike #2): the guest process would keep running.
+func (a *Adapter) Exec(ctx context.Context, id string, req runtime.ExecRequest) (runtime.ExecStream, error) {
+	c, err := a.find(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if a.info(c).State != domain.EnvRunning {
+		return nil, runtime.ErrNotRunning
+	}
+
+	args := []string{"exec"}
+	if req.Stdin != nil {
+		args = append(args, "-i")
+	}
+	if req.Dir != "" {
+		args = append(args, "-w", req.Dir)
+	}
+	for _, e := range req.Env {
+		args = append(args, "-e", e)
+	}
+	args = append(args, id)
+	pidfile := ""
+	if a.shim != "" {
+		b := make([]byte, 6)
+		if _, err := rand.Read(b); err != nil {
+			return nil, err
+		}
+		pidfile = "/tmp/whr-exec-" + hex.EncodeToString(b) + ".pid"
+		args = append(args, a.shim, "run", "-pidfile", pidfile, "--")
+	}
+	args = append(args, req.Cmd...)
+
+	bin := a.binary()
+	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx)) // the client is ended by us, after the guest process
+	cmd := exec.CommandContext(runCtx, bin, args...)               //nolint:gosec // the container CLI with arguments built from checked values
+	cmd.Stdin = req.Stdin
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stop()
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		stop()
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		stop()
+		return nil, err
+	}
+
+	st := &stream{chunks: make(chan runtime.Chunk, 16), done: make(chan struct{})}
+	var pumps sync.WaitGroup
+	pump := func(r io.Reader, which runtime.Stream) {
+		defer pumps.Done()
+		br := bufio.NewReaderSize(r, 32<<10)
+		buf := make([]byte, 32<<10)
+		for {
+			n, err := br.Read(buf)
+			if n > 0 {
+				data := append([]byte(nil), buf[:n]...)
+				select {
+				case st.chunks <- runtime.Chunk{Stream: which, Data: data}:
+				case <-runCtx.Done():
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
+	pumps.Add(2)
+	go pump(stdout, runtime.Stdout)
+	go pump(stderr, runtime.Stderr)
+
+	waited := make(chan error, 1)
+	go func() { pumps.Wait(); waited <- cmd.Wait() }()
+	go func() {
+		defer close(st.done)
+		defer close(st.chunks)
+		defer stop()
+		select {
+		case err := <-waited:
+			st.code = exitCode(err)
+		case <-ctx.Done():
+			// Signal the process group in the guest first, then end the client.
+			if pidfile != "" {
+				kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*killGrace)
+				_, _, _ = a.run(kctx, nil, "exec", id, a.shim, "kill", "-pidfile", pidfile, "-grace", killGrace.String())
+				cancel()
+			}
+			stop()
+			<-waited
+			st.code, st.err = 130, ctx.Err()
+		}
+	}()
+	return st, nil
+}
+
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if ee, ok := err.(*exec.ExitError); ok { //nolint:errorlint // a direct type check on exec's own error
+		return ee.ExitCode()
+	}
+	return 1
+}
+
+// binary returns the container CLI used by Exec: the adapter's runner is a
+// closure, so the path is looked up again.
+func (a *Adapter) binary() string {
+	if p, err := exec.LookPath("container"); err == nil {
+		return p
+	}
+	return "container"
+}
