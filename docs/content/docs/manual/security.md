@@ -7,12 +7,14 @@ toc: true
 
 The short version of the [threat model](../threat-model.md) for whoever runs workharbor. Agents are treated as untrusted: they read text strangers wrote, and they follow it.
 
-## What workharbor enforces
+## What workharbor is built to enforce
 
-- **Agents never push, merge, tag, release or deploy.** They commit in their own checkout. workharbor pushes a branch only after you approve its exact commit in a "Ready to push?" decision, and a GitHub ruleset makes a human review the pull request (D15, D18).
-- **Approvals fail closed.** A request nobody answers in time, an approval for different code, or a lost connection to the agent ends in a denial (design §4.2).
-- **Each agent runs in its own lightweight VM** on its own internal network. It reaches the model provider only through a proxy that allows listed hosts, and it cannot reach your LAN, your Mac's services or other agents (design §7.2).
-- **Your home directory, SSH keys and secrets folders are never mounted** into an agent environment, and git on the host never runs commands an agent planted in its checkout (design §4.4, §4.5).
+workharbor has no runnable service yet: these are the design's guarantees. Each says whether it is implemented; the [design's status table](../design.md) and the threat model track the rest.
+
+- **Agents never push, merge, tag, release or deploy.** They commit in their own checkout. workharbor pushes a branch only after you approve its exact commit in a "Ready to push?" decision, and a GitHub ruleset makes a human review the pull request (D15, D18). *Policy table implemented; the push flow and the ruleset check come with issue #27.*
+- **Approvals fail closed.** A request nobody answers in time, an approval for different code, or a lost connection to the agent ends in a denial (design §4.2). *Implemented in the domain; the agent's approval channel is being verified (issue #7).*
+- **Each agent runs in its own lightweight VM** on its own internal network. It reaches the model provider only through a proxy that allows listed hosts, and it cannot reach your LAN, your Mac's services or other agents (design §7.2). *Measured in spike #2; the runtime adapter comes with issue #26.*
+- **Your home directory, SSH keys and secrets folders are never mounted** into an agent environment, and git on the host never runs commands an agent planted in its checkout (design §4.4, §4.5). *Mount checks and hardened host git implemented.*
 
 ## What you accept
 

@@ -28,7 +28,7 @@ sudo sysadminctl -addUser whr -fullName "workharbor" -password -
 Keep **FileVault on**. That rules out automatic login, which is the right trade-off for a machine that holds agent logins.
 
 - **Planned restarts:** `sudo fdesetup authrestart` restarts once without the unlock prompt.
-- **After a power cut:** unlock the Mac once (screen sharing or a keyboard), then log in as `whr` so its services start.
+- **After a power cut:** the Mac stops at the FileVault unlock screen. Nobody is logged in yet, so the Tailscale app (step 7) is not running and Screen Sharing is not available: unlock it with a keyboard and display, then log in as `whr` so its services start. Whether macOS 26 accepts a remote unlock over SSH at that screen is **unverified**. A small UPS makes this rare.
 - Whether workharbor runs as a LaunchAgent of `whr` or as a LaunchDaemon is still open (issue #38).
 
 ## 4. Power
@@ -39,14 +39,14 @@ A sleeping Mac pauses every agent.
 sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1
 ```
 
-`autorestart 1` starts the Mac after a power cut; `womp 1` lets it wake for network access.
+`autorestart 1` starts the Mac after a power cut; `womp 1` lets it wake on a Wake-on-LAN magic packet.
 
 ## 5. Software (Homebrew)
 
-Install [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading on its own:
+Install [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading anything you did not ask for: `HOMEBREW_NO_AUTO_UPDATE` stops the automatic index refresh, `HOMEBREW_NO_INSTALL_UPGRADE` stops `brew install` from upgrading what is installed, and `brew pin` (step 6) holds a version through `brew upgrade`.
 
 ```bash
-echo 'export HOMEBREW_NO_AUTO_UPDATE=1' >> ~/.zprofile
+echo 'export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1' >> ~/.zprofile
 ```
 
 ```ruby
@@ -65,18 +65,19 @@ Do **not** install Claude Code, Codex CLI or other agent CLIs on the host for wo
 
 ## 6. Apple Container
 
-Start the container system once as `whr`, then check it:
+As `whr`, install the Linux kernel the containers boot once, then start the container system and check it:
 
 ```bash
+container system kernel set --recommended
 container system start --disable-kernel-install
 container system status
 ```
 
-`--disable-kernel-install` skips an interactive prompt. After a restart the system does not start by itself; the workharbor launchd job will start it and then resume agents (issue #38). Pin the version you tested: `brew pin container`.
+`--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed first; without a kernel no container starts. After a restart the system does not start by itself; the workharbor launchd job will start it and then resume agents (issue #38). Pin the version you tested: `brew pin container`.
 
 ## 7. Reach it from your phone
 
-workharbor listens on loopback and on exactly **one address you configure**, never on all interfaces: a container on the default network can reach any host service bound to all interfaces (D29). Pick one option.
+workharbor listens on loopback and on exactly **one address you configure**, never on all interfaces, and every request needs its API token (D29). The address keeps the API off your other networks; the token is what stops anything else that reaches it, including the proxy container, which can reach the Mac. Pick one option.
 
 ### Option A: Tailscale (default)
 
@@ -94,7 +95,7 @@ No VPN software on the Mac and no third party. A FRITZ!Box offers WireGuard from
 
 1. On the FRITZ!Box: *Internet → Permit Access → VPN (WireGuard)*, add a connection for your phone, and import it into the WireGuard app with the QR code.
 2. The phone then reaches the Mac at its LAN address. There is no VPN interface on the Mac, so the address alone does not tell your phone from any other device on the LAN.
-3. So workharbor listens on the Mac's LAN address, and the macOS firewall admits only the addresses the FRITZ!Box gives VPN clients. How the FRITZ!Box numbers VPN clients is **unverified**: check the address your phone gets.
+3. So workharbor listens on the Mac's LAN address, and a `pf` packet-filter rule admits only the addresses the FRITZ!Box gives VPN clients to its port. The macOS firewall in System Settings cannot do this: it filters by app, not by address. The `pf` rule and how the FRITZ!Box numbers VPN clients are **unverified** (issue #69): check the address your phone gets.
 4. The phone app needs HTTPS: use your own certificate authority (installed on the phone) or a certificate for a domain you own.
 
 A line without a public IPv4 address (DS-Lite, carrier-grade NAT) may not accept inbound WireGuard (**unverified**); Tailscale works there.
@@ -106,8 +107,8 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 ## 8. Firewall and SSH
 
 - macOS firewall on, in stealth mode: *System Settings → Network → Firewall*.
-- Remote Login (SSH) only for your administrator account, and only over the VPN, until workharbor's short-lived SSH certificates exist (issue #32).
-- Screen Sharing over the VPN is enough for unlocking after a power cut.
+- Remote Login (SSH) only for your administrator account (*System Settings → General → Sharing → Remote Login → Allow access for*), until workharbor's short-lived SSH certificates exist (issue #32). To keep it off the LAN, reach it only through Tailscale (Tailscale SSH, or a `pf` rule like step 7B's); with nothing else, macOS answers SSH on every interface.
+- Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3).
 
 ## 9. Backups
 
