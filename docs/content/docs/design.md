@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D23 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D24 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | Task, run and environment state machines and their coupling rules; Decisions with fail-closed approvals; the policy table; mount checks; hardened host git (alternates check open); runtime and agent contracts with fakes and conformance suites; the SQLite store | `internal/domain`, `internal/policy`, `internal/runtime`, `internal/hostgit`, `internal/agent`, `internal/store`; issues #4, #8, #15–#18, #19 (reopened), #20, #21, #49–#52; open follow-ups #55–#58 |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container | Issues #1 and #2; results in §4.4, §5.1 to §5.3, §5.6, §7 |
 | Planned | The release 1 slice and the rest of release 1 | §13; [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
@@ -71,6 +71,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D21 | **Task state machine, amending D13** (§4.1): a run paused by `auth_expired` or `quota_exhausted` moves its task to `awaiting_guidance`; a task fails only from `running` or `awaiting_guidance`, and a lost workspace in `ready_for_review` opens a review Decision (rework or cancel) | Settles the gaps found in the review of the D13 implementation without new transitions, so the code in `internal/domain` already agrees |
 | D22 | **Build the supervision layer; adopt none of the agent-task supervisors** (issue #5, confirms D1). OpenHands, Vibe Kanban, Sculptor and Coder Agents were assessed from their docs and repositories (§11). Borrow: ACP as a candidate generic agent-adapter protocol (§5.5) and OpenHands' confirmation states; Sculptor's Claude control-protocol integration and editable message queue; Claude Remote Control's phone UX as a reference and a fallback for Claude | None meets the non-negotiable parts of release 1 together: Apple Container, default-deny egress per environment, approvals routed to a human for Claude Code and Codex under subscription logins, an agent that never pushes, more than one forge. Adapting one would replace its runtime, policy and forge layers, which is most of workharbor. Vendor remotes cover one vendor and push to GitHub only. Desk research only: the claims marked **unverified** in §11 were not tried |
 | D23 | **Decisions around pauses** (§4.2): `auth_expired` and `quota_exhausted` are blocking `question` Decisions with fixed options (re-login and resume, resume now or at the reset, cancel) and no deadline; pausing a run supersedes every open Decision the run raised, questions and approvals alike, and they are raised again when the agent asks after resuming | Nothing is permitted by a login or quota answer, so it is a question, and waiting on it is safe, so it does not fail closed. A paused agent's process is gone (D11), so an answer could only reach a dead process or the wrong request; superseding reuses the restart rule |
+| D24 | **Releases are human-signed tags built by GoReleaser into draft releases, distributed through a Homebrew tap** (§13, Releases). You push a signed `v*` tag; a workflow checks it and has GoReleaser build `whr`, checksums, an SBOM and a build-provenance attestation into a **draft** GitHub release; you publish it, and only then is the tap updated. Versions are `0.x` until the JSON API, the adapter `contract_version` and the database migrations are stable; the first release, `v0.1.0`, is cut when the release 1 slice demo (issue #28) passes on the Mac mini | Tags and releases are already human-only (§6, AGENTS.md), and a signed tag is the trust anchor; the tag is also the Go module version, so there is no version file. GoReleaser covers cross-builds, checksums, SBOMs, signing and the tap in one pinned tool. The draft is where you check the assets before anyone can install them, so the tap must not point at a draft. A tap avoids notarizing a downloaded binary for now; whether a tap cask of an unsigned binary needs its quarantine attribute removed is **unverified** |
 
 ## 4. Domain model
 
@@ -670,6 +671,16 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] Runtime and forge adapters as interfaces with one implementation each
 
 **Explicitly out of release 1:** code-server, JetBrains validation, OAuth, editor launch and takeover in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
+
+### Releases (D24)
+
+- **When.** The pipeline is built during release 1 and stays dormant; the first release, `v0.1.0`, is cut when the slice demo (issue #28) passes, so the Mac mini runs `whr serve` from a released binary under launchd (issue #38). Then one `0.x` release per milestone. `v1.0.0` waits until the JSON API (OpenAPI, D3), the adapter `contract_version` and the database migrations are stable and an upgrade with a backup has been tested.
+- **Version.** The tag is the only source: `git describe` is stamped into the binary with `-ldflags`, built with `-trimpath`; `whr version` prints the version, commit and whether the tree was dirty. No version file.
+- **Prepare.** An ordinary commit, which an agent may make: `chore(release): prepare vX.Y.Z` regenerates CHANGELOG.md with git-cliff for that version. CI must pass on it.
+- **Tag.** Only the human, signed and annotated: `git tag -s vX.Y.Z`. A tag ruleset lets only the repository admin create `v*` tags and forbids updating or deleting them.
+- **Build.** A workflow triggered by the tag checks that the tag is annotated and signed by a known key, that the tagged commit is on `main` and that CI passed on it. It then runs GoReleaser (pinned): `darwin/arm64` first, `linux/arm64` and `linux/amd64` for later remote hosts, checksums, an SBOM, a build-provenance attestation and release notes from git-cliff, into a **draft** release. Only that job gets `contents: write` and the attestation permissions.
+- **Publish.** The human checks the draft and publishes it. A second workflow, triggered by the publication, updates the Homebrew tap (`brew install wstein/tap/whr`), so the tap never points at a draft.
+- **macOS distribution.** The tap is the supported install path. Signing and notarizing a downloaded binary need an Apple Developer ID and are deferred until someone other than the developer installs it from a download.
 
 ### Medium term
 
