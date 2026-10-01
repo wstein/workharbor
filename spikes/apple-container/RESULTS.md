@@ -1,0 +1,91 @@
+# Results
+
+Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2) with `container` CLI 1.5.0, guest Linux 6.12.28 on the `fedora:latest` image. Tracks [issue #2](https://github.com/wstein/workharbor/issues/2). Raw output of every script is in `results/`. All objects were named `whspike-*` and removed afterwards; the two containers that already existed were not touched.
+
+## Summary
+
+| Item | Status | Headline |
+| --- | --- | --- |
+| 1. Lifecycle and limits | Measured | Each container is its own VM. CPU and memory limits are enforced. Use `--init`, or a stop takes 5 s |
+| 2. Storage | Measured | Volumes and bind mounts survive a rebuild; the rootfs does not. Bind mounts are about 5x slower for many small files |
+| 3. Isolation | Measured | Mounted unix sockets are unusable. The runtime accepts any host path, so the adapter must reject. The default network reaches the LAN, the internet, other containers and host services |
+| 4. Default-deny egress | Measured | `--internal` networks block everything. A dual-homed proxy sidecar gives a logging allowlist |
+| 5. Agent in a container | Partly | Claude Code installs and runs through the proxy; state survives stop, start and rebuild. Not logged in, so no real agent run yet |
+| 6. Recovery | Partly | No restart policy. A crashed container stays `stopped`; state survives. Runtime restart and reboot not tested |
+| 7. Memory at 1 and 4 containers | Not started | |
+
+## 1. Lifecycle and limits
+
+- **Timings** (image already local): `run -d` 1.1 s, `exec` ready after about 100 ms, `start` 0.6 s, `rm` 0.14 s. `stop` took **5.3 s** with `sleep` as PID 1, because it ignores SIGTERM; with `--init` it took **145 ms**. Always pass `--init`.
+- **Isolation unit.** Each container is a separate lightweight VM: the guest reports its own kernel (`Linux 6.12.28` against `Darwin 25.6.0`) and one `container-runtime-linux` host process runs per container.
+- **Limits.** `--cpus 2` gives `nproc` of 2; four busy loops used at most two CPUs' worth of time. `--memory 512M` is enforced by a memory cgroup inside the VM (`oom_memcg=/container/...`): a 700 MB allocation was killed with exit 137 and the container survived. The guest shows a larger `MemTotal` (629 MB for 512M), so the cgroup, not `MemTotal`, is the limit. The inspect output has a `cpuOverhead` of 1. Defaults are 4 CPUs and 1 GiB.
+- **Addresses.** A container's IP changes across recreate and restart; read it with `container inspect` each time. The `.dns` domain list is empty.
+- **Sharp edge.** `container rm --all` deletes every container, including ones you did not create. The scripts only remove by exact `whspike-` name.
+
+## 2. Storage
+
+| | Rootfs | Named volume | Bind mount |
+| --- | --- | --- | --- |
+| Survives stop and start | Yes | Yes | Yes |
+| Survives delete and recreate | **No** | Yes | Yes (it is a host directory) |
+| 3000 small files | 225 ms | 198 ms | **1172 ms** |
+| 200 MB sequential write | 313 ms | 492 ms | 567 ms |
+| Read 3000 small files | | 9 ms | 349 ms |
+
+- A named volume is an ext4 image file (`volume.img`, virtual size 512 GiB, sparse) under `~/Library/Application Support/com.apple.container/volumes/`. The host cannot browse it directly.
+- A bind mount syncs both ways at once. Files the guest root writes appear on the host owned by the host user (uid 501) with the mode kept. A symlink to `$HOME` inside a mount is just a dangling link in the guest.
+- **Recommendation for §4.4:** keep the repository checkout and the agent home on a volume; use a bind mount only for hand-over to the host, and expect git-heavy work on it to be slow.
+
+## 3. Isolation and escape tests
+
+- **The runtime does not reject mounts.** It mounted `/etc` read-only without complaint, so rejecting `$HOME`, `~/.ssh`, home's parents and runtime sockets is the adapter's job. `03-isolation.sh` has a deny-list function that resolves symlinks first (so a symlink to `$HOME` is rejected) and rejects unix sockets; it is a seed for the conformance suite.
+- **Mounted unix sockets are unusable.** A host socket in a bind-mounted directory could not be listed (`Operation not supported`) or connected to, and the host listener saw no connection. The same held for the real Socktainer socket (`~/.socktainer/container.sock`): no escape that way.
+- **Network, default network** (everything below succeeded from a guest):
+  - the internet (`1.1.1.1:443`, `https://example.com`);
+  - the LAN default gateway (one TCP connect to port 80);
+  - the Mac's own LAN address, and the host gateway `192.168.64.1`, **when the host service listens on all interfaces**; a service bound only to `127.0.0.1` was not reachable;
+  - other containers on the network, both ways, and the host can reach container IPs.
+- **Hardening works.** `--read-only --cap-drop ALL --user 1000:1000 --tmpfs /tmp` gave an empty capability set, a read-only root filesystem, a writable `/tmp`, and failing `mount`.
+- **Not tested on purpose:** `--ssh` forwards the host ssh-agent into the container, which would let it sign with your keys. The adapter must never pass it. `--publish-socket`, `--virtualization` and `--rosetta` were not exercised.
+- **VM boundary.** The guest has `/dev/vsock` and `/dev/vfio` nodes; the host-guest channels (vsock, the exec path) were not probed beyond the tests above.
+
+## 4. Default-deny egress
+
+- `container network create --internal NAME` ("host-only") blocks **everything** from a container on it: the internet, DNS (names do not resolve), the LAN, the host through every address, IPv6, and containers on other networks. Nothing leaks.
+- **The host cannot serve it.** The host gets no interface on an internal network, so a proxy on the host cannot bind to its gateway address or be reached.
+- **Working design:** a **sidecar** container attached to both networks (`--network default --network NAME`, the flag repeats) runs the logging allowlist proxy. Agent containers live only on the internal network and reach the sidecar's internal IP on port 3128. Measured with the probe's proxy:
+  - allowed hosts returned 200 (`example.com`, `proxy.golang.org`); denied hosts got 403 (HTTPS through CONNECT and plain HTTP); a CONNECT to a raw IP was denied too;
+  - `curl` with `HTTPS_PROXY` works, and the **proxy** resolves the name, so the guest needs no DNS (no DNS exfiltration path);
+  - direct connections stayed blocked; the proxy was not reachable from the default network; every decision was logged with time, verdict, method, host and source.
+- **Agents on one internal network can reach each other.** One internal network per task or environment, not one shared network.
+- **Limits of the test:** the allowlist matches the hostname in CONNECT, so it does not defeat domain fronting, and the sidecar has full egress and is trusted.
+
+## 5. Agent inside a container
+
+- **Install.** `curl -fsSL https://claude.ai/install.sh | bash` inside a container on the internal network, through the proxy, installed Claude Code 2.1.286 (a native Linux aarch64 build, 230 MB) into a volume in about 11 s. The install needed only `claude.ai` and `downloads.claude.ai`.
+- **Hosts contacted.** An unauthenticated headless run contacted only `api.anthropic.com`. A minimal allowlist for Claude Code is therefore `api.anthropic.com`, `claude.ai` and `downloads.claude.ai`; further hosts may appear once a real login and tools are used.
+- **State survives.** A marker in `/root/.claude` (the volume) survived stop and start and a delete and recreate of the container, so an auth directory and agent session kept on a volume survive the same events.
+- **Memory.** A container with an idle agent in `stream-json` mode used about 277 MiB (including page cache) of a 2 GiB limit, with 11 processes.
+- **Not done yet:** a real run, because it needs a login inside the container (a subscription token the owner must create). Approvals from inside the container also need a path from the guest to the supervisor: the MCP helper of spike #1 runs in the guest and the supervisor is on the host, which an internal network cannot reach. Options: an HTTP MCP server reached through the sidecar, or a relay.
+
+## 6. Recovery
+
+- **Process model.** launchd jobs `com.apple.container.apiserver`, `...container-core-images`, one `container-network-vmnet.<network>` per network and one `container-runtime-linux.<container>` per container, all children of launchd.
+- **No restart policy.** Among the `run` flags only `--init` matches; nothing restarts a container.
+- **Runtime crash.** Killing the host-side runtime process of one container left it `stopped`; `exec` failed with "not running"; the volume state was intact and `start` brought it back with its files. A reconciler has to detect and restart it (design §5.3).
+- **After a reboot.** No LaunchAgent or LaunchDaemon plist for the container services exists on disk, so nothing starts automatically; `container system start` has to run after login. A reboot was not triggered.
+- **Not done:** `container system stop` and `start` (restarts the services; needs the owner's approval first).
+- Killing PID 1 from inside the guest had no effect, because the init process ignores it.
+
+## Consequences for the design
+
+- **§5.1 runtime adapter.** Report: isolation boundary is a VM per container; `--internal` networks supported; no restart policy; no suspend or checkpoint observed.
+- **§4.4 persistence.** Repository and agent home on a volume; bind mounts for hand-over only; the rootfs is disposable.
+- **§7.2 egress.** Per-environment `--internal` network plus a dual-homed proxy sidecar is a verified way to get default-deny egress with a log.
+- **§7.4 isolation policy.** The adapter rejects mounts (resolve symlinks first); unix sockets cannot be mounted usefully; never pass `--ssh`; use `--init`, `--read-only`, `--cap-drop ALL` and a non-root user where possible.
+- **§5.3 reconciler.** Detect `stopped` containers and restart them; state lives on the volume.
+- **§12.** Replace the "Apple Container network isolation controls are unverified" marks with these measurements; keep reboot behaviour, the authenticated agent run and approvals from inside the container open.
+
+## Not tested
+
+A reboot, `container system stop` and `start`, an authenticated agent run, approvals from inside the container, memory at 1 and 4 containers, behaviour under memory pressure on the host, `--publish-socket`, `--virtualization`, Rosetta, and Socktainer beyond its socket.
