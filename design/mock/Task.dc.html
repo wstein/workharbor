@@ -124,17 +124,17 @@ a{color:inherit;text-decoration:none}
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
         <span style="font-weight: 600">Review candidate</span>
         <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px">
-          <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/egress-proxy</span>
+          <span style="color: #9fb3c8">Branch</span><span style="font-family: 'IBM Plex Mono', monospace">agent/egress-proxy · not pushed</span>
           <span style="color: #9fb3c8">Commit</span><span style="font-family: 'IBM Plex Mono', monospace">8e2f1c4</span>
           <span style="color: #9fb3c8">Changes</span><span><span style="color: #4ade80; font-family: 'IBM Plex Mono', monospace">+214</span> <span style="color: #f87171; font-family: 'IBM Plex Mono', monospace">-18</span> in 6 files</span>
           <span style="color: #9fb3c8">Tests</span><span style="color: #4ade80">41 passed</span>
-          <span style="color: #9fb3c8">CI (Drone)</span><span style="color: #4ade80">passed for 8e2f1c4, the current commit</span>
+          <span style="color: #9fb3c8">CI (Drone)</span><span style="color: #9fb3c8">runs after the push</span>
         </div>
         <div style="display: flex; gap: 8px">
           <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">View diff</button>
-          <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Open PR #22</button>
+          <button style="padding: 8px 14px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #e6edf7; font: inherit; cursor: pointer">Prepare for push</button>
         </div>
-        <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Merging stays with you, on the forge.</div>
+        <div style="color: #6b819e; font-size: 12px; line-height: 1.5">Cleanup first (rebase, one commit per change, checks), then you approve the push. Merging stays with you, on the forge.</div>
       </div>
 
       <div style="padding: 18px; border-radius: 12px; background: #0f2038; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 12px">
@@ -194,7 +194,7 @@ class Component extends DCLogic {
       { time: '09:12', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Task created from issue #15 by you.', audit: true },
       { time: '09:13', dot: '#60a5fa', fg: '#c7d3e6', text: 'Run r-88 started in ws-2c9e (Apple Container, 2 GiB), tools from the shared store: claude 2.1.286.', audit: true },
       { time: '09:21', dot: '#9fb3c8', fg: '#c7d3e6', text: 'Read design section 7: default-deny egress through a logging proxy.' },
-      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Pushed agent/egress-proxy (8e2f1c4) and opened draft PR #22.', audit: true },
+      { time: '09:34', dot: '#5eead4', fg: '#c7d3e6', text: 'Committed on agent/egress-proxy (8e2f1c4) in the task checkout. Not pushed yet.', audit: true },
       { time: '09:41', dot: '#fbbf24', fg: '#fde68a', text: 'Asked you: allow proxy.golang.org and sum.golang.org in the default allowlist?', audit: true },
       { time: '09:41', dot: '#a78bfa', fg: '#c7d3e6', text: 'Sent a push to your phone through ntfy: task ID, event kind and a link only.', note: 'You were detached; the agent kept working until it needed you.', audit: true },
       { time: '09:44', dot: '#fbbf24', fg: '#fde68a', text: 'Wants to Write internal/proxy/allowlist.go.', note: apprState ? '' : 'Waiting for your approval, the run is blocked.', audit: true },
