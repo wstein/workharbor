@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -357,6 +358,16 @@ func (a *Adapter) createArgs(id string, spec runtime.Spec) []string {
 	for _, m := range spec.Mounts {
 		args = append(args, mountArgs(m)...)
 	}
+	// The variables come from the repository and are not secrets; Validate
+	// refused every name the supervisor sets. Sorted, so the command is stable.
+	names := make([]string, 0, len(spec.Env))
+	for k := range spec.Env {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		args = append(args, "-e", k+"="+spec.Env[k])
+	}
 	return append(args, spec.Image, "sleep", idleSeconds)
 }
 
@@ -675,3 +686,34 @@ func (a *Adapter) Endpoints(ctx context.Context, id string) ([]runtime.Endpoint,
 	}
 	return nil, nil
 }
+
+// buildArgs is `container build` for a checked BuildSpec. The flags are those
+// of container 1.5.0 (`container build --help`). It never passes --ssh (it
+// forwards the host's ssh-agent), --secret or --output, and sorts the build
+// arguments so the command is stable.
+func buildArgs(b runtime.BuildSpec) []string {
+	args := []string{"build", "--progress", "plain", "--tag", b.Tag, "--file", b.Dockerfile}
+	names := make([]string, 0, len(b.Args))
+	for k := range b.Args {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		args = append(args, "--build-arg", k+"="+b.Args[k])
+	}
+	return append(args, "--", b.ContextDir)
+}
+
+// Build builds an image from a context directory the supervisor wrote. It
+// returns the builder's output, and on failure the error with the last of it.
+// The build's own network access is the builder VM's, not an environment's:
+// the egress allowlist does not apply to it (design §7.2).
+func (a *Adapter) Build(ctx context.Context, b runtime.BuildSpec) ([]byte, error) {
+	if err := b.Validate(); err != nil {
+		return nil, err
+	}
+	out, errOut, err := a.run(ctx, nil, buildArgs(b)...)
+	return append(out, errOut...), err
+}
+
+var _ runtime.Builder = (*Adapter)(nil)

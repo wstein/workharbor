@@ -60,6 +60,9 @@ type Spec struct {
 	Init         bool     // run an init as PID 1 (--init); always true
 	Tmpfs        []string // writable in-memory directories
 	Mounts       []Mount
+	// Env is the environment's own variables, from the repository's
+	// containerEnv. A name the supervisor sets or the agent reads is refused.
+	Env map[string]string
 
 	// Egress is the proxy sidecar that gives the internal network its only way
 	// out (design §7.2). Nil means no way out at all.
@@ -165,6 +168,8 @@ func (s Spec) Validate() error {
 	if !hasAll(s.CapDrop) {
 		add("capabilities must be dropped (cap-drop ALL)")
 	}
+
+	problems = append(problems, checkEnv("environment variable", s.Env)...)
 
 	targets := map[string]bool{}
 	for _, t := range s.Tmpfs {

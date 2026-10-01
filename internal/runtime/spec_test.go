@@ -140,3 +140,42 @@ func TestSpecCheckMountsSkipsVolumes(t *testing.T) {
 		t.Errorf("a forbidden bind mount in a spec: %v, want ErrForbiddenMount", err)
 	}
 }
+
+func TestSpecEnvRefusesWhatTheSupervisorSets(t *testing.T) {
+	s := validSpec()
+	s.Env = map[string]string{"GOFLAGS": "-mod=mod", "NODE_ENV": "test"}
+	if err := s.Validate(); err != nil {
+		t.Errorf("ordinary variables: %v", err)
+	}
+	for _, name := range []string{"HTTPS_PROXY", "https_proxy", "PATH", "HOME", "LD_PRELOAD", "WHR_TASK", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "FTP_PROXY"} {
+		s.Env = map[string]string{name: "x"}
+		if err := s.Validate(); !errors.Is(err, ErrInvalidSpec) {
+			t.Errorf("Env[%s]: err = %v, want ErrInvalidSpec", name, err)
+		}
+	}
+	for _, bad := range []map[string]string{{"A=B": "x"}, {"": "x"}, {"1A": "x"}, {"A": "x\ny"}, {"A": "x\x00"}, {"A": strings.Repeat("x", 5000)}} {
+		s.Env = bad
+		if err := s.Validate(); !errors.Is(err, ErrInvalidSpec) {
+			t.Errorf("Env %q: err = %v, want ErrInvalidSpec", bad, err)
+		}
+	}
+}
+
+func TestBuildSpecValidate(t *testing.T) {
+	ok := BuildSpec{Tag: "whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/ctx/Dockerfile", Args: map[string]string{"GO_VERSION": "1.27"}}
+	if err := ok.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*BuildSpec){
+		"tag looks like an option": func(b *BuildSpec) { b.Tag = "--privileged" },
+		"relative context":         func(b *BuildSpec) { b.ContextDir = "ctx" },
+		"unclean dockerfile":       func(b *BuildSpec) { b.Dockerfile = "/var/ctx/../Dockerfile" },
+		"proxy build argument":     func(b *BuildSpec) { b.Args = map[string]string{"HTTPS_PROXY": "http://evil"} },
+	} {
+		b := ok
+		mutate(&b)
+		if err := b.Validate(); !errors.Is(err, ErrInvalidBuild) {
+			t.Errorf("%s: err = %v, want ErrInvalidBuild", name, err)
+		}
+	}
+}

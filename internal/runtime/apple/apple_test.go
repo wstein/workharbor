@@ -173,3 +173,41 @@ func TestTheSidecarHasLimits(t *testing.T) {
 		t.Errorf("the sidecar has no memory limit: %v", args)
 	}
 }
+
+func TestCreateArgsPassTheEnvironmentSorted(t *testing.T) {
+	a := &Adapter{owner: "o1"}
+	spec := baseSpec()
+	spec.Env = map[string]string{"ZED": "1", "GOFLAGS": "-mod=mod -x"}
+	args := a.createArgs("whr-1", spec)
+	i := slices.Index(args, "GOFLAGS=-mod=mod -x")
+	if i < 1 || args[i-1] != "-e" || args[i+1] != "-e" || args[i+2] != "ZED=1" {
+		t.Errorf("variables are not passed as sorted -e pairs: %v", args)
+	}
+	// Every flag comes before the image, so a value can never become one.
+	if slices.Index(args, spec.Image) < slices.Index(args, "ZED=1") {
+		t.Errorf("the image comes before a variable: %v", args)
+	}
+}
+
+func TestBuildArgs(t *testing.T) {
+	b := runtime.BuildSpec{Tag: "whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/df/Dockerfile", Args: map[string]string{"B": "2", "A": "1"}}
+	got := strings.Join(buildArgs(b), " ")
+	want := "build --progress plain --tag whr-env/o1:abc --file /var/df/Dockerfile --build-arg A=1 --build-arg B=2 -- /var/ctx"
+	if got != want {
+		t.Errorf("buildArgs =\n%s\nwant\n%s", got, want)
+	}
+	for _, banned := range []string{"--ssh", "--secret", "--output", "--no-cache"} {
+		if strings.Contains(got, banned) {
+			t.Errorf("build passes %s", banned)
+		}
+	}
+}
+
+func TestBuildRefusesAnInvalidSpecBeforeRunning(t *testing.T) {
+	rec := &recorder{}
+	a := &Adapter{owner: "o1", run: rec.run}
+	_, err := a.Build(context.Background(), runtime.BuildSpec{Tag: "-x", ContextDir: "relative", Dockerfile: "relative"})
+	if !errors.Is(err, runtime.ErrInvalidBuild) || len(rec.calls) != 0 {
+		t.Errorf("err = %v, calls = %v", err, rec.calls)
+	}
+}
