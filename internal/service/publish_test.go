@@ -275,3 +275,37 @@ func TestPublishPushesTheApprovedCommitAndOpensThePR(t *testing.T) {
 		t.Errorf("webhook: %v", err)
 	}
 }
+
+func TestOpenCopyOffersACopyNeverTheCheckout(t *testing.T) {
+	p := newPubRig(t)
+	dir := filepath.Join(t.TempDir(), "editor")
+
+	// While the environment runs and no copy exists, nothing is offered.
+	if _, err := p.pub.OpenCopy(bg, p.req, dir); !errors.Is(err, ErrEnvRunning) {
+		t.Fatalf("a running environment and no copy = %v, want ErrEnvRunning", err)
+	}
+	if _, err := os.Stat(dir); err == nil {
+		t.Fatal("a copy was made from a running environment")
+	}
+
+	must(t, p.svc.stopEnvironment(bg, "t1", p.env))
+	got, err := p.pub.OpenCopy(bg, p.req, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Path != dir || got.Stale || got.Path == p.checkout {
+		t.Errorf("copy = %+v; the editor must get its own directory", got)
+	}
+	// The agent's checkout is refused as a destination.
+	if _, err := p.pub.OpenCopy(bg, p.req, p.checkout); !errors.Is(err, hostgit.ErrInsideWorkspace) {
+		t.Errorf("the agent's checkout as the copy = %v, want ErrInsideWorkspace", err)
+	}
+
+	// The environment runs again: the last copy is offered as stale and the
+	// checkout is not read.
+	must(t, p.rt.Adapter.Start(bg, string(p.env)))
+	stale, err := p.pub.OpenCopy(bg, p.req, dir)
+	if err != nil || !stale.Stale {
+		t.Errorf("copy while running = %+v, %v; want the last copy marked stale", stale, err)
+	}
+}

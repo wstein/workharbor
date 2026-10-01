@@ -202,3 +202,50 @@ type RepoPusher struct {
 func (r RepoPusher) Push(ctx context.Context, _, branch, sha string) error {
 	return r.Repo.Push(ctx, r.Remote, branch, sha)
 }
+
+// EditorCopy is what `whr open` and the web UI's editor launch return: the path
+// of a supervisor-owned copy of the topic, never the agent's checkout, and the
+// files in it that an editor may act on by itself, for the UI to warn about.
+type EditorCopy struct {
+	Path     string
+	Warnings []string
+	// Stale is set when the environment still runs: the copy is the last one
+	// made from a stopped environment and was not refreshed, because hostgit
+	// reads an agent's checkout only once nothing can run in the guest.
+	Stale bool
+}
+
+// OpenCopy prepares the editor copy of a task's topic in dir. With the
+// environment stopped it fetches the agent's branch and refreshes the copy by
+// fast-forward; with the environment running it offers the last copy as stale,
+// and fails if there is none yet (ErrEnvRunning).
+func (p *Publisher) OpenCopy(ctx context.Context, req Request, dir string) (EditorCopy, error) {
+	agg, err := p.svc.store.LoadTask(ctx, req.Task)
+	if err != nil {
+		return EditorCopy{}, err
+	}
+	runs := agg.Runs()
+	if len(runs) == 0 {
+		return EditorCopy{}, ErrNotReadyYet
+	}
+	env, ok := agg.Environment(runs[len(runs)-1].EnvID)
+	if !ok {
+		return EditorCopy{}, ErrNotReadyYet
+	}
+	info, err := p.svc.rt.Inspect(ctx, string(env.ID))
+	if err != nil {
+		return EditorCopy{}, err
+	}
+	if info.State == domain.EnvRunning {
+		if _, err := p.cfg.Repo.Run(ctx, "rev-parse", "--verify", "--quiet", "refs/heads/"+req.Branch); err != nil {
+			return EditorCopy{}, fmt.Errorf("%w: no copy has been made yet", ErrEnvRunning)
+		}
+		warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)
+		return EditorCopy{Path: dir, Warnings: warn, Stale: true}, err
+	}
+	if _, err := p.cfg.Repo.FetchBranch(ctx, req.Checkout, req.Branch); err != nil {
+		return EditorCopy{}, err
+	}
+	warn, err := p.cfg.Repo.EditorCopy(ctx, dir, req.Branch)
+	return EditorCopy{Path: dir, Warnings: warn}, err
+}
