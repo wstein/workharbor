@@ -143,6 +143,27 @@ Covers provision, start/stop/delete, inspect, resource limits, logs, exec, stora
 
 Do not pretend backends share Docker semantics. One **runtime conformance suite** (the §12 checklist, automated) must pass for every backend; it turns capability flags into verified claims.
 
+**Measured on Apple Container 1.5.0** (macOS 26.6.2, spike #2, issue #2):
+
+| Capability | Observed |
+| --- | --- |
+| Isolation boundary | A lightweight VM per container: its own Linux kernel and one host runtime process each |
+| CPU architecture | arm64 guests; a Rosetta flag exists and was not tested |
+| Persistent storage | Named volumes (ext4 image files, exclusive while writable) and bind mounts survive delete; the root filesystem does not (§4.4) |
+| Networking | The default NAT network reaches the LAN, the internet, other containers and host services bound to all interfaces. `--internal` networks block everything and the host has no interface on them (§7.2) |
+| Resource limits | `--cpus` sets the vCPU count; `--memory` is enforced by a cgroup inside the VM (a larger allocation is killed with exit 137 and the container survives) |
+| Restart policy | None. After a crash or a service restart every container is `stopped` (§5.3) |
+| Suspend/checkpoint | None observed |
+| SSH/browser access | Not tested; `exec` works |
+
+Adapter rules that follow from it:
+
+- Always pass `--init`: a stop took 145 ms with it and 5.3 s without, because PID 1 ignored SIGTERM.
+- Never store a container's IP; it changes across recreate and restart. Read it with `inspect`.
+- Remove only containers by exact ID. `container rm --all` deletes every container on the machine, including ones the supervisor did not create.
+- Never pass `--ssh`, which forwards the host ssh-agent into the container.
+- A container starts in about 1.1 s and `exec` is ready in about 100 ms, so recycling environments (§4.3) is cheap.
+
 ### 5.2 Agent adapter
 
 Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 ships Claude Code and Codex CLI as built-in adapters against it. Capability flags:
