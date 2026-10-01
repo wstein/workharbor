@@ -1,0 +1,128 @@
+package domain
+
+// Rules of design §4.1 that couple the task, run and environment machines.
+const (
+	RuleOneLiveRun Rule = "one-live-run" // a task has at most one run that is not stopped or failed
+	RuleEnvRunning Rule = "env-running"  // a run is created or started only in a running environment
+	RuleEnvInUse   Rule = "env-in-use"   // an environment is not stopped under a starting or running run
+)
+
+// TaskAggregate is a task with the runs, environments and review candidates
+// it is coupled to. The task, run and environment machines are each valid on
+// their own; the methods here are the guards that keep them consistent with
+// one another (design §4.1). A violation is a *ConflictError, which maps to
+// exit code Conflict; an unknown run or environment is a *NotFoundError.
+type TaskAggregate struct {
+	Task Task
+	Runs []*Run // oldest first
+	Envs map[ID]*Environment
+
+	// Candidates are the prepared revisions, oldest first. The last one is the
+	// current revision.
+	Candidates []*ReviewCandidate
+}
+
+// NewTaskAggregate returns an aggregate for task with nothing attached yet.
+func NewTaskAggregate(task Task) *TaskAggregate {
+	return &TaskAggregate{Task: task, Envs: map[ID]*Environment{}}
+}
+
+// AddEnvironment registers an environment the task's runs may use.
+func (a *TaskAggregate) AddEnvironment(e *Environment) { a.Envs[e.ID] = e }
+
+func (a *TaskAggregate) run(id ID) (*Run, error) {
+	for _, r := range a.Runs {
+		if r.ID == id {
+			return r, nil
+		}
+	}
+	return nil, &NotFoundError{Kind: "run", ID: string(id)}
+}
+
+func (a *TaskAggregate) env(id ID) (*Environment, error) {
+	if e, ok := a.Envs[id]; ok {
+		return e, nil
+	}
+	return nil, &NotFoundError{Kind: "environment", ID: string(id)}
+}
+
+// LiveRun returns the run that is not yet stopped or failed, or nil.
+func (a *TaskAggregate) LiveRun() *Run {
+	for _, r := range a.Runs {
+		if !r.State.Terminal() {
+			return r
+		}
+	}
+	return nil
+}
+
+// StartRun adds a new run in an environment and starts it. A task has at most
+// one live run, and the environment must be running.
+func (a *TaskAggregate) StartRun(run *Run) error {
+	if live := a.LiveRun(); live != nil {
+		return conflict(RuleOneLiveRun, "task %s already has a live run %s (%s)", a.Task.ID, live.ID, live.State)
+	}
+	env, err := a.env(run.EnvID)
+	if err != nil {
+		return err
+	}
+	if env.State != EnvRunning {
+		return conflict(RuleEnvRunning, "run %s needs a running environment, but %s is %s", run.ID, env.ID, env.State)
+	}
+	run.TaskID = a.Task.ID
+	run.State = RunStarting
+	a.Runs = append(a.Runs, run)
+	return nil
+}
+
+// Pause pauses a running run. It changes the run only: the environment stays
+// as it is, because the human may want to inspect or edit in it (design §4.3).
+func (a *TaskAggregate) Pause(runID ID) error {
+	run, err := a.run(runID)
+	if err != nil {
+		return err
+	}
+	env, err := a.env(run.EnvID)
+	if err != nil {
+		return err
+	}
+	if env.State != EnvRunning {
+		return conflict(RuleEnvRunning, "run %s cannot be paused: its environment %s is %s", run.ID, env.ID, env.State)
+	}
+	return run.Transition(RunPaused)
+}
+
+// Resume starts a paused or interrupted run again, which relaunches the agent
+// from its session. The environment must be running.
+func (a *TaskAggregate) Resume(runID ID) error {
+	run, err := a.run(runID)
+	if err != nil {
+		return err
+	}
+	if !run.State.CanTransition(RunStarting) {
+		return run.Transition(RunStarting) // reports the illegal transition
+	}
+	env, err := a.env(run.EnvID)
+	if err != nil {
+		return err
+	}
+	if env.State != EnvRunning {
+		return conflict(RuleEnvRunning, "run %s cannot resume: its environment %s is %s", run.ID, env.ID, env.State)
+	}
+	return run.Transition(RunStarting)
+}
+
+// StopEnvironment stops an environment. It is refused while a run in it is
+// starting or running: the run is stopped or interrupted first.
+func (a *TaskAggregate) StopEnvironment(envID ID) error {
+	env, err := a.env(envID)
+	if err != nil {
+		return err
+	}
+	for _, r := range a.Runs {
+		if r.EnvID == envID && (r.State == RunStarting || r.State == RunRunning) {
+			return conflict(RuleEnvInUse, "environment %s cannot be stopped: run %s is %s", envID, r.ID, r.State)
+		}
+	}
+	return env.Transition(EnvStopped)
+}
