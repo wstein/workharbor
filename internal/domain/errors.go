@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/wstein/workharbor/internal/exitcode"
@@ -25,6 +26,12 @@ func conflict(rule Rule, format string, args ...any) *ConflictError {
 	return &ConflictError{Rule: rule, Msg: fmt.Sprintf(format, args...)}
 }
 
+// NewConflict returns a conflict error for another package to report, such as
+// the store when a compare-and-swap loses.
+func NewConflict(rule Rule, format string, args ...any) *ConflictError {
+	return conflict(rule, format, args...)
+}
+
 func (e *ConflictError) Error() string { return e.Msg }
 
 // ExitCode implements exitcode.Coder.
@@ -36,6 +43,12 @@ type NotFoundError struct {
 	Kind string
 	ID   string
 }
+
+// ErrNotFound matches every *NotFoundError with errors.Is.
+var ErrNotFound = errors.New("not found")
+
+// Is makes errors.Is(err, ErrNotFound) true.
+func (e *NotFoundError) Is(target error) bool { return target == ErrNotFound }
 
 func (e *NotFoundError) Error() string { return fmt.Sprintf("%s %s not found", e.Kind, e.ID) }
 

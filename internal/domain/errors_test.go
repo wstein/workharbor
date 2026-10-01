@@ -36,3 +36,16 @@ func TestNotFoundMapsToNotFound(t *testing.T) {
 		t.Errorf("message = %q", err)
 	}
 }
+
+func TestNewConflictAndErrNotFound(t *testing.T) {
+	err := error(NewConflict("stale", "task %s changed", "t1"))
+	if got := exitcode.From(err); got != exitcode.Conflict || err.Error() != "task t1 changed" {
+		t.Errorf("NewConflict = %q, exit %d", err, got)
+	}
+	if !errors.Is(&NotFoundError{Kind: "task", ID: "t9"}, ErrNotFound) {
+		t.Error("a *NotFoundError must match ErrNotFound")
+	}
+	if errors.Is(errors.New("something else"), ErrNotFound) {
+		t.Error("an unrelated error must not match ErrNotFound")
+	}
+}
