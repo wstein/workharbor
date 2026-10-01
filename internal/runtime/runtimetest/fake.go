@@ -16,8 +16,22 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
+// Defects switches off one guarantee of the fake, so tests can show that the
+// conformance suite notices an adapter that lacks it.
+type Defects struct {
+	SkipValidate    bool // Provision accepts an unhardened spec
+	SkipMountCheck  bool // Provision accepts forbidden bind mounts
+	ListAll         bool // List ignores the owner
+	TouchForeign    bool // ID methods act on environments it does not own
+	DeleteRunning   bool // Delete removes a running environment
+	RestartKeepsRun bool // Restart leaves running environments running
+}
+
 // Fake is an in-memory runtime.Adapter acting for one owner.
 type Fake struct {
+	// Defects is for tests of the suite only.
+	Defects Defects
+
 	owner string
 	fsys  runtime.FS
 	home  string
@@ -59,14 +73,18 @@ func (f *Fake) Capabilities() runtime.Capabilities {
 
 // Provision implements runtime.Adapter.
 func (f *Fake) Provision(_ context.Context, spec runtime.Spec) (string, error) {
-	if err := spec.Validate(); err != nil {
-		return "", err
+	if !f.Defects.SkipValidate {
+		if err := spec.Validate(); err != nil {
+			return "", err
+		}
+		if spec.Owner != f.owner {
+			return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("owner %q is not this adapter's owner %q", spec.Owner, f.owner)}}
+		}
 	}
-	if spec.Owner != f.owner {
-		return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("owner %q is not this adapter's owner %q", spec.Owner, f.owner)}}
-	}
-	if err := spec.CheckMounts(f.fsys, f.home); err != nil {
-		return "", err
+	if !f.Defects.SkipMountCheck {
+		if err := spec.CheckMounts(f.fsys, f.home); err != nil {
+			return "", err
+		}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -87,7 +105,7 @@ func (f *Fake) own(id string) (*fakeEnv, error) {
 	if !ok {
 		return nil, runtime.ErrNotFound
 	}
-	if e.owner != f.owner {
+	if e.owner != f.owner && !f.Defects.TouchForeign {
 		return nil, runtime.ErrNotOwned
 	}
 	return e, nil
@@ -133,7 +151,7 @@ func (f *Fake) Delete(_ context.Context, id string) error {
 		}
 		return err
 	}
-	if e.state == domain.EnvRunning {
+	if e.state == domain.EnvRunning && !f.Defects.DeleteRunning {
 		return runtime.ErrRunning
 	}
 	delete(f.envs, id)
@@ -165,7 +183,7 @@ func (f *Fake) List(_ context.Context, owner string) ([]runtime.Info, error) {
 	defer f.mu.Unlock()
 	var out []runtime.Info
 	for i := 1; i <= f.next; i++ {
-		if e, ok := f.envs["fake-"+strconv.Itoa(i)]; ok && e.labels[runtime.OwnerLabel] == owner {
+		if e, ok := f.envs["fake-"+strconv.Itoa(i)]; ok && (f.Defects.ListAll || e.labels[runtime.OwnerLabel] == owner) {
 			out = append(out, f.info(e))
 		}
 	}
@@ -199,6 +217,9 @@ func (f *Fake) Endpoints(_ context.Context, id string) ([]runtime.Endpoint, erro
 func (f *Fake) Restart() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.Defects.RestartKeepsRun {
+		return
+	}
 	for _, e := range f.envs {
 		e.state, e.addr = domain.EnvStopped, ""
 	}
