@@ -29,6 +29,13 @@ form { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-ins
 textarea { flex: 1; min-height: 44px; max-height: 120px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; resize: none; }
 button { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--accent); color: #06231f; font: inherit; font-weight: 600; cursor: pointer; }
 button.ghost { background: transparent; border: 1px solid var(--line); color: var(--fg); }
+button.deny { background: transparent; border: 1px solid var(--bad); color: var(--bad); }
+select { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; }
+.pill.ask { background: #3a2d0b; color: var(--warn); }
+.approval { align-self: flex-start; max-width: 92%; padding: 12px 14px; border-radius: 12px; border: 1px solid #6b4f0a; background: #2a2209; display: flex; flex-direction: column; gap: 8px; }
+.approval.done { border-color: var(--line); background: var(--panel); }
+.approval .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.approval pre { margin: 0; padding: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -36,6 +43,8 @@ button.ghost { background: transparent; border: 1px solid var(--line); color: va
   <b>transcript spike</b>
   <span id="status" class="pill">connecting</span>
   <span id="auth" class="pill"></span>
+  <label for="mode" hidden>Permission mode</label>
+  <select id="mode" title="Permission mode: what the agent may do without asking"></select>
   <div class="meter"><span id="usage">usage: n/a</span><div class="bar"><i id="usagebar"></i></div></div>
   <button type="button" class="ghost" id="cancel">Cancel</button>
 </header>
@@ -60,7 +69,27 @@ function setStatus(s) {
   status = s;
   const p = document.getElementById('status');
   p.textContent = s;
-  p.className = 'pill ' + (s === 'working' ? 'working' : s === 'idle' ? 'idle' : s.startsWith('exited') ? 'bad' : '');
+  p.className = 'pill ' + (s === 'working' ? 'working' : s === 'idle' ? 'idle' : s === 'awaiting approval' ? 'ask' : s.startsWith('exited') ? 'bad' : '');
+}
+// apiKeySource is "none" when no API key is in use, which means a subscription login.
+const authLabel = (a) => a === 'none' ? 'subscription (no API key)' : (a || '?');
+const approvals = {};
+function approvalCard(e) {
+  const d = e.data || {};
+  const card = el('div', 'approval');
+  card.appendChild(el('b', '', 'Approval needed: ' + e.tool));
+  card.appendChild(el('pre', '', JSON.stringify(d.input, null, 2)));
+  const row = el('div', 'row');
+  const ok = el('button', '', 'Approve once'); const no = el('button', 'deny', 'Deny');
+  const answer = async (allow) => {
+    ok.disabled = no.disabled = true;
+    const r = await fetch('approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, allow }) });
+    if (!r.ok) { card.appendChild(el('div', 'err', await r.text())); }
+  };
+  ok.onclick = () => answer(true); no.onclick = () => answer(false);
+  row.append(ok, no); card.appendChild(row);
+  approvals[d.id] = { card, row };
+  return card;
 }
 function details(summary, body) {
   const d = el('details'); d.appendChild(el('summary', '', summary));
@@ -71,7 +100,7 @@ function render(e) {
   switch (e.kind) {
     case 'session': {
       const d = e.data || {};
-      document.getElementById('auth').textContent = 'auth: ' + (d.auth || '?');
+      document.getElementById('auth').textContent = authLabel(d.auth);
       add(el('div', 'note', 'session ' + (d.session_id || '') + ' · ' + (d.model || '')));
       break;
     }
@@ -95,6 +124,14 @@ function render(e) {
       add(el('div', 'note', 'turn done · ' + d.turns + ' turns · $' + (d.cost_usd || 0).toFixed(4)));
       break;
     }
+    case 'approval': add(approvalCard(e)); break;
+    case 'approval_result': {
+      const a = approvals[(e.data || {}).id];
+      if (a) { a.card.className = 'approval done'; a.row.replaceWith(el('div', 'note', e.text + (e.data.message ? ': ' + e.data.message : ''))); }
+      break;
+    }
+    case 'permission': add(el('div', 'note', 'blocked by policy: ' + e.tool)); break;
+    case 'mode': { const m = document.getElementById('mode'); if (m.value !== e.text) m.value = e.text; add(el('div', 'note', 'permission mode: ' + e.text)); break; }
     case 'status': setStatus(e.text); break;
     case 'error': add(el('div', 'err', e.text)); break;
   }
@@ -117,10 +154,26 @@ document.getElementById('form').addEventListener('submit', async (ev) => {
   const text = box.value.trim();
   if (!text) return;
   const s = await (await fetch('state')).json();
-  const ok = await post(s.process_alive ? 'say' : 'start' + (s.session_id ? '?resume=1' : ''), { text });
+  const mode = document.getElementById('mode').value;
+  const ok = await post(s.process_alive ? 'say' : 'start?mode=' + mode + (s.session_id ? '&resume=1' : ''), { text });
   if (ok) box.value = '';
 });
 document.getElementById('cancel').addEventListener('click', () => post('cancel'));
+
+// The mode is fixed when the agent process starts, so changing it on a running
+// session restarts the process with --resume (the session and transcript carry on).
+const modeSel = document.getElementById('mode');
+fetch('state').then((r) => r.json()).then((s) => {
+  for (const [k, v] of Object.entries(s.modes)) { const o = el('option', '', k); o.value = k; o.title = v; modeSel.appendChild(o); }
+  modeSel.value = s.mode || 'manual';
+});
+modeSel.addEventListener('change', async () => {
+  const s = await (await fetch('state')).json();
+  if (!s.process_alive) return;
+  await post('cancel');
+  for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 300)); if (!(await (await fetch('state')).json()).process_alive) break; }
+  await post('start?resume=1&mode=' + modeSel.value);
+});
 </script>
 </body>
 </html>

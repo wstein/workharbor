@@ -132,10 +132,23 @@ func (h *Hub) State() (status, sessionID string, n int) {
 }
 
 type server struct {
-	hub   *Hub
-	agent Claude
-	mu    sync.Mutex
-	cur   *Session
+	hub       *Hub
+	agent     Claude
+	approvals *Approvals
+	mu        sync.Mutex
+	cur       *Session
+	mode      string
+}
+
+// modes are the permission modes the page may choose. bypassPermissions is
+// deliberately absent: it switches every prompt off, and this spike runs the
+// agent on the host without isolation (design 6, default deny).
+var modes = map[string]string{
+	"manual":      "ask for everything not allowed",
+	"acceptEdits": "auto-accept file edits, ask for the rest",
+	"auto":        "agent decides what is safe, asks otherwise (behaviour untested)",
+	"plan":        "read-only planning, no changes",
+	"dontAsk":     "never ask: deny anything not allowed",
 }
 
 func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +189,12 @@ func (s *server) handleState(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	live := s.cur != nil && s.cur.Alive()
 	s.mu.Unlock()
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "session_id": sid, "events": n, "process_alive": live})
+	s.mu.Lock()
+	mode := s.mode
+	s.mu.Unlock()
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": status, "session_id": sid, "events": n, "process_alive": live, "mode": mode, "modes": modes,
+	})
 }
 
 func (s *server) text(r *http.Request) (string, bool) {
@@ -201,12 +219,27 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("resume") == "1" {
 		_, resume, _ = s.hub.State()
 	}
-	sess, err := s.agent.Start(s.hub, resume)
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = s.mode
+	}
+	if mode == "" {
+		mode = "manual"
+	}
+	if _, ok := modes[mode]; !ok {
+		http.Error(w, "unknown or forbidden permission mode", http.StatusBadRequest)
+		return
+	}
+	agent := s.agent
+	agent.Mode = mode
+	sess, err := agent.Start(s.hub, resume)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	s.cur = sess
+	s.mode = mode
+	s.hub.Publish(Event{Kind: "mode", Text: mode})
 	if text, ok := s.text(r); ok {
 		if err := sess.Send(text); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -251,7 +284,16 @@ func main() {
 	model := flag.String("model", "haiku", "model alias passed to the agent")
 	tools := flag.String("tools", "Read,Bash(sleep:*),Bash(ls:*),Bash(cat:*)", "allowed tools; anything else is denied")
 	bin := flag.String("claude", "claude", "claude binary")
+	approve := flag.Bool("approvals", true, "route permission prompts to the page through an MCP approve tool")
+	mcp := flag.Bool("mcp-permission", false, "internal: run as the MCP approve server the agent starts")
+	supervisor := flag.String("supervisor", "http://127.0.0.1:8787", "internal: supervisor URL for -mcp-permission")
 	flag.Parse()
+	if *mcp {
+		if err := runMCPPermission(*supervisor, os.Getenv("WH_TOKEN")); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if *dir == "" {
 		log.Fatal("-dir is required: point it at a scratch repository, never a real one")
 	}
@@ -259,8 +301,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := &server{hub: hub, agent: Claude{Bin: *bin, Dir: *dir, Model: *model, Tools: *tools}}
+	s := &server{hub: hub, approvals: newApprovals(), agent: Claude{Bin: *bin, Dir: *dir, Model: *model, Tools: *tools}}
+	if *approve {
+		cfg, err := writeMCPConfig(*data, "http://"+*addr, s.approvals.token)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s.agent.MCPConfig = cfg
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /approve", s.handleApprove)
+	mux.HandleFunc("POST /internal/permission", s.handlePermission)
 	mux.Handle("GET /", http.FileServerFS(assets))
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /state", s.handleState)

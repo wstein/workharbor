@@ -14,6 +14,13 @@ import (
 // Claude drives Claude Code headless over its stream-json protocol.
 type Claude struct {
 	Bin, Dir, Model, Tools string
+	// Mode is the agent's permission mode (manual, acceptEdits, auto, plan,
+	// dontAsk). It maps onto the design's autonomy table (6): what the agent
+	// does by itself and what it must ask.
+	Mode string
+	// MCPConfig, when set, routes permission prompts to the supervisor through
+	// an MCP "approve" tool, so a human answers them on the page.
+	MCPConfig string
 }
 
 // Session is one running agent process. The process stays alive across turns.
@@ -28,9 +35,17 @@ type Session struct {
 // Start launches the agent. A non-empty resumeID resumes that agent session,
 // which is how a restarted supervisor recovers (design 5.3).
 func (c Claude) Start(hub *Hub, resumeID string) (*Session, error) {
-	args := []string{
-		"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-		"--permission-prompts", "none",
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"}
+	if c.MCPConfig != "" {
+		args = append(args,
+			"--permission-prompts", "host",
+			"--mcp-config", c.MCPConfig, "--strict-mcp-config",
+			"--permission-prompt-tool", "mcp__workharbor__approve")
+	} else {
+		args = append(args, "--permission-prompts", "none")
+	}
+	if c.Mode != "" {
+		args = append(args, "--permission-mode", c.Mode)
 	}
 	if c.Model != "" {
 		args = append(args, "--model", c.Model)
@@ -188,7 +203,7 @@ func (s *Session) normalize(line []byte) {
 			case "thinking":
 				s.hub.Publish(Event{Kind: "thinking"})
 			case "tool_use":
-				s.hub.Publish(Event{Kind: "tool_call", Tool: it.Name, Data: it.Input})
+				s.hub.Publish(Event{Kind: "tool_call", Tool: it.Name, Data: capInput(it.Input, 2000)})
 			case "tool_result":
 				kind := "tool_result"
 				if it.IsError {
