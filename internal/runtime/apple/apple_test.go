@@ -160,3 +160,16 @@ func TestTheAdaptersOwnLabelsCannotBeReplaced(t *testing.T) {
 		t.Errorf("a spec label replaced the network label: %s", create)
 	}
 }
+
+func TestTheSidecarHasLimits(t *testing.T) {
+	a := &Adapter{owner: "o1"}
+	spec := baseSpec()
+	spec.Egress = &runtime.Egress{Image: "fedora", Proxy: "/opt/whr-proxy", Allow: []string{"api.anthropic.com"}}
+	args := a.sidecarArgs("whr-1", spec)
+	if i := slices.Index(args, "--cpus"); i < 0 || args[i+1] != "1" {
+		t.Errorf("the sidecar has no CPU limit: %v", args)
+	}
+	if i := slices.Index(args, "--memory"); i < 0 || args[i+1] != "256M" {
+		t.Errorf("the sidecar has no memory limit: %v", args)
+	}
+}

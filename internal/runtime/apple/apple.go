@@ -374,6 +374,7 @@ func (a *Adapter) sidecarArgs(id string, spec runtime.Spec) []string {
 	e := spec.Egress
 	args := []string{
 		"create", "--name", sidecarName(id), "--init", "--read-only", "--cap-drop", "ALL", "--user", "1000:1000",
+		"--cpus", sidecarCPUs, "--memory", sidecarMemory,
 		"--network", "default", "--network", spec.Network.Name,
 		"-v", e.Proxy + ":" + guestProxy + ":ro",
 	}
@@ -382,6 +383,14 @@ func (a *Adapter) sidecarArgs(id string, spec runtime.Spec) []string {
 }
 
 func sidecarName(id string) string { return id + "-proxy" }
+
+// The sidecar's limits: the proxy needs little, and an agent that floods it
+// must not take the host's memory or every core. Container 1.5.0 refuses less
+// than 200 MiB; 256M with one CPU boots (checked by hand).
+const (
+	sidecarCPUs   = "1"
+	sidecarMemory = "256M"
+)
 
 // ---- lifecycle ----
 
