@@ -1,0 +1,6 @@
+Verdict: PASS
+Target Process Group PID: 54
+whr-shim Kill Latency: 319.67 ms
+Process Present Before Kill: True
+Remaining Guest Orphans: 0
+Kill Command Output: killed process group 54 in 256.293583ms
