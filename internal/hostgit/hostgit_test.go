@@ -20,14 +20,14 @@ func plainEnv(home string) []string {
 	)
 }
 
-func mustRun(t *testing.T, env []string, dir string, name string, args ...string) string {
+func mustGit(t *testing.T, env []string, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), name, args...) //nolint:gosec // test helper running git and scripts the test built
+	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // test helper; the arguments are built by the test
 	cmd.Dir = dir
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 	return strings.TrimSpace(string(out))
 }
@@ -50,6 +50,17 @@ func (p plant) fired() []string {
 	return names
 }
 
+// clearCanary forgets what fired so far, for a test whose own setup ran plain
+// git in the planted checkout.
+func (p plant) clearCanary(t *testing.T) {
+	t.Helper()
+	for _, name := range p.fired() {
+		if err := os.Remove(filepath.Join(p.canary, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // newPlant builds an agent checkout on branch agent/topic with a hook, a
 // file-system monitor, an ssh command, a pager, an editor, a credential
 // helper, a clean and smudge filter and a pack-objects hook planted.
@@ -65,7 +76,7 @@ func newPlant(t *testing.T) plant {
 		}
 	}
 	env := plainEnv(home)
-	git := func(args ...string) string { return mustRun(t, env, repo, "git", args...) }
+	git := func(args ...string) string { return mustGit(t, env, repo, args...) }
 
 	script := func(name, extra string) string {
 		path := filepath.Join(base, "evil", name)
