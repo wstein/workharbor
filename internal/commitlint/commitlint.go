@@ -24,6 +24,10 @@ var (
 	assistedRe = regexp.MustCompile(`^[^:\s][^:]*:[A-Za-z0-9][A-Za-z0-9._/+-]*(?: \[[^\]]+\])*$`)
 	idRe       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 	botRe      = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@anthropic\.com`)
+
+	// depBotRe matches the dependency-update bots, whose generated messages
+	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
+	depBotRe = regexp.MustCompile(`(?i)^\s*(?:dependabot|renovate)(?:\[bot\])?\b`)
 )
 
 // issueKeys are the trailer tokens that reference an issue.
@@ -41,7 +45,9 @@ var exemptPrefixes = []string{"Merge ", "Revert ", "fixup! ", "squash! ", "amend
 // Options carries context that is not part of the message itself.
 type Options struct {
 	// Author is the commit author identity ("Name <email>"). Bot authors may
-	// not add Signed-off-by, which certifies human origin.
+	// not add Signed-off-by, which certifies human origin. The dependency bots
+	// (Dependabot, Renovate) are exempt from the subject length and Signed-off-by
+	// rules, because they generate their own messages.
 	Author string
 }
 
@@ -70,7 +76,8 @@ func Lint(msg string, opt Options) []string {
 	if m == nil {
 		add("subject must follow Conventional Commits, e.g. 'feat(domain): add run state'")
 	}
-	if n := utf8.RuneCountInString(subject); n > maxSubject {
+	depBot := depBotRe.MatchString(opt.Author)
+	if n := utf8.RuneCountInString(subject); n > maxSubject && !depBot {
 		add("subject is %d characters; keep it at %d or fewer", n, maxSubject)
 	}
 	if len(lines) > 1 && lines[1] != "" {
@@ -115,7 +122,7 @@ func Lint(msg string, opt Options) []string {
 	if runs > 0 && tasks == 0 {
 		add("Whr-Run requires a Whr-Task trailer")
 	}
-	if signoffs > 0 && botRe.MatchString(opt.Author) {
+	if signoffs > 0 && botRe.MatchString(opt.Author) && !depBot {
 		add("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author)
 	}
 	return problems
