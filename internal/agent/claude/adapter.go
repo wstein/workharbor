@@ -211,7 +211,7 @@ func (a *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume strin
 
 	pctx, cancel := context.WithCancel(ctx)
 	pr, pw := io.Pipe()
-	env := append([]string(nil), a.cfg.Env...)
+	env := append(append([]string(nil), a.cfg.Env...), spec.Env...)
 	if a.cfg.ConfigDir != "" {
 		env = append(env, "CLAUDE_CONFIG_DIR="+a.cfg.ConfigDir)
 	}

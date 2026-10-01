@@ -211,7 +211,15 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 	}
 	spec := s.cfg.Spec(agg.Task(), r)
 	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
-	sess, err := s.ag.Resume(ctx, spec, r.SessionID)
+	spec.EnvID, spec.Env = string(r.EnvID), append(spec.Env, s.agentEnv(ctx, r.EnvID)...)
+	if r.AgentID != "" { // a resumed agent works in its own worktree, as a started one does
+		if a, err := s.store.Agent(ctx, r.AgentID); err == nil {
+			spec.Workdir = a.Worktree
+		}
+	}
+	// The session outlives the call that starts it: an answer to a Decision comes
+	// in on a request that ends long before the agent does.
+	sess, err := s.ag.Resume(context.WithoutCancel(ctx), spec, r.SessionID)
 	if err != nil {
 		s.end(run, sl)
 		if errors.Is(err, agent.ErrNoSession) {

@@ -71,6 +71,9 @@ func AgentSpec(allowed []string, auth agent.AuthMode) func(domain.Task, domain.R
 		return agent.StartSpec{
 			Auth: auth, PermissionMode: agent.PermissionDontAsk, AllowedTools: append([]string(nil), allowed...),
 			Prompt: "continue",
+			// A read-only root has no home: tools that want one (git, the
+			// agent's own config lookups) use the agent home volume.
+			Env: []string{"HOME=" + GuestHome},
 		}
 	}
 }

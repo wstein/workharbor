@@ -195,6 +195,11 @@ type StartSpec struct {
 	// ApprovalTimeout is how long the Approver has; zero means
 	// DefaultApprovalTimeout. It is in nanoseconds on the wire.
 	ApprovalTimeout time.Duration `json:"approval_timeout_ns,omitempty"`
+	// Env is KEY=VALUE for the agent process, chosen by the supervisor for this
+	// start: the egress proxy's address (it changes with every start of the
+	// environment) and the agent's HOME. It holds no secret; a credential
+	// reaches the agent only through the adapter's own configuration (D40).
+	Env []string `json:"env,omitempty"`
 }
 
 // Errors an adapter returns for the same situations.
@@ -241,7 +246,11 @@ func (c Capabilities) CheckSpec(s StartSpec) error {
 	return nil
 }
 
-// Adapter starts and resumes sessions of one coding agent.
+// Adapter starts and resumes sessions of one coding agent. The context passed to
+// Start and Resume bounds the session: when it ends, the session is stopped. A
+// caller that wants a session to outlive a request passes a context that does
+// not end with it (the serve integration run found a session dying when the API
+// request that started it returned).
 type Adapter interface {
 	Name() string
 	Capabilities() Capabilities

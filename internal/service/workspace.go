@@ -305,7 +305,10 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 	if prompt != "" {
 		spec.Prompt = prompt
 	}
-	sess, err := w.svc.ag.Start(ctx, spec)
+	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
+	// The session outlives the request that starts it (the API request returns
+	// at once; the agent runs for hours). Shutdown stops it.
+	sess, err := w.svc.ag.Start(context.WithoutCancel(ctx), spec)
 	if err != nil {
 		w.svc.end(run, sl)
 		var rep Report

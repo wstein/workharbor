@@ -377,3 +377,18 @@ func (s *Service) stopSession(run domain.ID) {
 		_ = sl.sess.Stop(context.Background())
 	}
 }
+
+// agentEnv is the environment the supervisor adds for an agent process: the
+// egress proxy's address, read from the runtime now because it changes with
+// every start of the environment and is never stored. Without a sidecar there
+// is no proxy and nothing is added. It holds no secret.
+func (s *Service) agentEnv(ctx context.Context, env domain.ID) []string {
+	info, err := s.rt.Inspect(ctx, string(env))
+	if err != nil || info.Proxy == "" {
+		if err != nil {
+			s.report(fmt.Errorf("find the egress proxy of %s: %w", env, err))
+		}
+		return nil
+	}
+	return []string{"HTTPS_PROXY=" + info.Proxy, "HTTP_PROXY=" + info.Proxy, "NO_PROXY=localhost,127.0.0.1,::1"}
+}

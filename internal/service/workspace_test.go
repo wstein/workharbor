@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -37,6 +38,7 @@ type wsRig struct {
 	ids    int
 	failAg bool
 	issues *forgetest.Fake
+	egress bool // give the environments an egress sidecar
 }
 
 func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
@@ -93,6 +95,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		NewID: func() domain.ID { return r.id("d") },
 		Spec: func(domain.Task, domain.Run) agent.StartSpec {
 			s := spec()
+			s.Env = []string{"HOME=/home/agent"}
 			if r.failAg {
 				s.Auth = "no-such-auth"
 			}
@@ -108,10 +111,16 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 	t.Cleanup(func() { _ = g.Close() })
 	r.issues = forgetest.NewFake()
 	r.ws = NewWorkspaces(r.svc, WorkspaceConfig{
-		Issues:  r.issues,
-		Config:  &config.Config{Roots: config.Roots{Workspaces: []string{r.root}}},
-		Git:     g,
-		Spec:    func(domain.Workspace) runtime.Spec { return r.rt.NewSpec() },
+		Issues: r.issues,
+		Config: &config.Config{Roots: config.Roots{Workspaces: []string{r.root}}},
+		Git:    g,
+		Spec: func(domain.Workspace) runtime.Spec {
+			spec := r.rt.NewSpec()
+			if r.egress {
+				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"api.anthropic.com"}}
+			}
+			return spec
+		},
 		Prepare: r.rt.Prepare,
 		NewID:   func() domain.ID { return r.id("x") },
 	})
@@ -389,5 +398,60 @@ func TestRebaseRunsInTheEnvironmentAndReportsAConflict(t *testing.T) {
 	}
 	if err := r.ws.Rebase(bg, "nope"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown agent: %v", err)
+	}
+}
+
+// The agent's session outlives the request that started it: the API call
+// returns at once and the agent runs for hours (found by the serve integration
+// run, where the session died with its request).
+func TestTheSessionOutlivesTheContextThatStartedIt(t *testing.T) {
+	r := newWsRig(t) // blocking sessions
+	_, a := r.create("outlive")
+	ctx, cancel := context.WithCancel(context.Background())
+	task, run, err := r.ws.StartTask(ctx, StartRequest{AgentID: a.ID, Issue: "#1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel() // the request is over
+	time.Sleep(200 * time.Millisecond)
+	if !r.svc.attached(run) {
+		t.Fatal("the session ended with the request that started it")
+	}
+	v, _ := r.svc.Show(bg, task)
+	if v.Runs[0].State != domain.RunRunning {
+		t.Errorf("run = %s, want running", v.Runs[0].State)
+	}
+	// An answer that resumes it does the same.
+	if _, err := r.svc.Say(bg, task, "still there?"); err != nil {
+		t.Errorf("the session cannot be spoken to: %v", err)
+	}
+}
+
+// The agent gets the egress proxy's address and a home, and no secret.
+func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
+	r := newWsRig(t)
+	r.egress = true
+	_, a := r.create("proxyenv")
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+		t.Fatal(err)
+	}
+	spec := r.agent.Specs[0]
+	var proxy string
+	for _, e := range spec.Env {
+		if v, ok := strings.CutPrefix(e, "HTTPS_PROXY="); ok {
+			proxy = v
+		}
+	}
+	if !strings.HasPrefix(proxy, "http://") || !strings.HasSuffix(proxy, ":3128") {
+		t.Errorf("env = %v, want HTTPS_PROXY=http://<sidecar>:3128", spec.Env)
+	}
+	have := map[string]bool{}
+	for _, e := range spec.Env {
+		have[strings.SplitN(e, "=", 2)[0]] = true
+	}
+	for _, k := range []string{"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "HOME"} {
+		if !have[k] {
+			t.Errorf("no %s in %v", k, spec.Env)
+		}
 	}
 }
