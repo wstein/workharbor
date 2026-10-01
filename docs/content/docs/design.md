@@ -255,6 +255,17 @@ Push when a blocking Decision stops a task: the value of a supervisor is not hav
 - **Topic protection.** A long random topic, or an access token on a self-hosted server. Keep the topic and token in the credential service, never in the repo or logs.
 - **Best effort.** The inbox stays the source of truth; a push can arrive late or be lost.
 
+### 9.5 Onboarding
+
+First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI only answers Decisions (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
+
+1. **Sign in.** Server URL (reached over the VPN, never public) and the single static access token, stored encrypted. OAuth sign-in comes later (§10).
+2. **Connect the forge.** One forge in release 1, GitHub through a bot token; Gitea, Forgejo and GitLab later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
+3. **Choose the agent login.** `subscription` (device-code sign-in; nothing typed into the web page) or `api-key` (kept in the host proxy), per §5.2. The subscription option states the accepted risk of §7.3.
+4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (the Apple Container isolation claims are unverified until the §12 spike).
+5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
+6. **Ready.** Summary of what was configured and what is not yet verified, then the first command: `whr run <issue-url>`.
+
 ## 10. Forge, CI and identity integrations
 
 Keep Git transport separate from forge API operations. Release 1 ships **one forge** (Gitea or GitHub) with a PAT or bot token and no manual-handoff half-state.
@@ -342,6 +353,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] Drone CI with revision-aware feedback
 - [ ] Resource-aware scheduling, recovery improvements
 - [ ] code-server, UI pause/resume and editor launch, `whr top`
+- [ ] Web onboarding wizard over the same service layer (§9.5); release 1 uses `whr login` and `whr doctor`
 - [ ] Installable PWA for phone use: web app manifest, service worker for the app shell and Web Push alongside ntfy (§9.4). Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and iOS Web Push needs the app installed to the Home Screen (**unverified**). Per-device revocable tokens.
 
 ### Long term
