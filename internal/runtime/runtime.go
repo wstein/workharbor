@@ -35,6 +35,7 @@ type Capabilities struct {
 var (
 	ErrNotFound   = errors.New("environment not found")
 	ErrNotRunning = errors.New("environment is not running")
+	ErrRunning    = errors.New("environment is running and must be stopped first")
 	ErrNotOwned   = errors.New("environment is not owned by this supervisor")
 )
 
@@ -115,7 +116,9 @@ type Adapter interface {
 	Provision(ctx context.Context, spec Spec) (envID string, err error)
 	Start(ctx context.Context, envID string) error
 	Stop(ctx context.Context, envID string) error
-	// Delete removes one environment by its exact ID, never by pattern.
+	// Delete removes one stopped environment by its exact ID, never by pattern
+	// (ErrRunning if it is running, as the environment machine of design §4.1
+	// deletes only from stopped).
 	Delete(ctx context.Context, envID string) error
 
 	Inspect(ctx context.Context, envID string) (Info, error)
