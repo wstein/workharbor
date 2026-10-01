@@ -3,6 +3,7 @@ package claude
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -129,5 +130,107 @@ func TestExitWithoutAResult(t *testing.T) {
 	res, _ := s.Wait()
 	if res.Status != agent.ResultFailed || !strings.Contains(res.Text, "code 2") || !sawStderr {
 		t.Errorf("result %+v, stderr seen %v", res, sawStderr)
+	}
+}
+
+func TestSettingSourcesArePinned(t *testing.T) {
+	h, st := harness(t)
+	s, err := h.Adapter.Start(context.Background(), dontAsk(h))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range s.Events() {
+	}
+	if got := argAfter(st.lastCall(), "--setting-sources"); got != "user" {
+		t.Errorf("--setting-sources = %q, want the user's own settings only by default", got)
+	}
+
+	st2 := newStub()
+	ad := New(st2, Config{SettingSources: "user,local"})
+	s, err = ad.Start(context.Background(), dontAsk(h))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range s.Events() {
+	}
+	if got := argAfter(st2.lastCall(), "--setting-sources"); got != "user,local" {
+		t.Errorf("a configured value = %q", got)
+	}
+}
+
+func TestStderrIsCapped(t *testing.T) {
+	h, _ := harness(t)
+	var lines []string
+	for i := range 1000 {
+		lines = append(lines, fmt.Sprintf("noise %d\n", i))
+	}
+	s, err := New(scripted{err: lines}, Config{}).Start(context.Background(), dontAsk(h))
+	if err != nil {
+		t.Fatal(err)
+	}
+	errors := 0
+	for e := range s.Events() {
+		if e.Kind == agent.EventError {
+			errors++
+		}
+	}
+	if errors > maxStderrLines+2 {
+		t.Errorf("%d error events from 1000 stderr lines, want at most %d", errors, maxStderrLines+2)
+	}
+
+	// An unfinished line does not grow without bound either.
+	sess := &session{events: make(chan agent.Event, 8), p: newParser(clock, true, nil)}
+	var rest []byte
+	n := 0
+	for range 200 {
+		rest = sess.flushStderr(append(rest, make([]byte, 64<<10)...), &n)
+	}
+	if len(rest) > maxStderrLine {
+		t.Errorf("an unfinished line kept %d bytes, want at most %d", len(rest), maxStderrLine)
+	}
+}
+
+// A late Stop must not overwrite a result that has arrived.
+func TestALateStopKeepsTheResult(t *testing.T) {
+	h, _ := harness(t)
+	finish := `{"type":"system","subtype":"init","session_id":"s1","model":"m"}` + "\n" +
+		`{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"s1"}` + "\n"
+	s, err := New(scripted{out: []string{finish}, linger: true}, Config{}).Start(context.Background(), dontAsk(h))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for e := range s.Events() { // the usage event comes with the result
+		if e.Kind == agent.EventUsage {
+			break
+		}
+	}
+	_ = s.Stop(context.Background())
+	go func() {
+		for range s.Events() {
+		}
+	}()
+	res, _ := s.Wait()
+	if res.Status != agent.ResultCompleted || res.Text != "done" {
+		t.Errorf("result after a late Stop = %+v, want the completed result", res)
+	}
+}
+
+func TestResumeFailureIsNoSessionOnlyWhenTheSessionIsMissing(t *testing.T) {
+	h, _ := harness(t)
+	resume := func(text string) error {
+		line := fmt.Sprintf(`{"type":"result","subtype":"error_during_execution","is_error":true,"result":%q}`+"\n", text)
+		_, err := New(scripted{out: []string{line}}, Config{ResumeProbe: 2 * time.Second}).Resume(context.Background(), dontAsk(h), "s-1")
+		return err
+	}
+	for _, text := range []string{"No conversation found with session ID s-1", "session s-1 does not exist"} {
+		if err := resume(text); !errors.Is(err, agent.ErrNoSession) {
+			t.Errorf("%q = %v, want ErrNoSession", text, err)
+		}
+	}
+	for _, text := range []string{"Rate limited, try again later", "internal error"} {
+		err := resume(text)
+		if err == nil || errors.Is(err, agent.ErrNoSession) {
+			t.Errorf("%q = %v, want an ordinary error that is not ErrNoSession", text, err)
+		}
 	}
 }

@@ -1,9 +1,11 @@
 package claude
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -22,10 +24,15 @@ type Runner interface {
 
 // Config is what the adapter needs to know about the installation.
 type Config struct {
-	Bin       string   // the claude binary in the environment; default "claude"
-	Model     string   // optional --model
-	ConfigDir string   // a per-environment auth directory, passed as CLAUDE_CONFIG_DIR, never $HOME
-	Env       []string // extra KEY=VALUE for the process
+	Bin       string // the claude binary in the environment; default "claude"
+	Model     string // optional --model
+	ConfigDir string // a per-environment auth directory, passed as CLAUDE_CONFIG_DIR, never $HOME
+	// SettingSources pins where the CLI may read settings from, so that the
+	// checked-out repository cannot widen the allowlist with its own permission
+	// rules or hooks. Default "user". The flag is unverified against the real
+	// CLI (design §5.2); a CLI that rejects it fails the run, it does not widen.
+	SettingSources string
+	Env            []string // extra KEY=VALUE for the process
 	// ResumeProbe is how long Resume waits to learn whether the session
 	// exists. Default 10 s.
 	ResumeProbe time.Duration
@@ -45,6 +52,9 @@ type Adapter struct {
 func New(r Runner, cfg Config) *Adapter {
 	if cfg.Bin == "" {
 		cfg.Bin = "claude"
+	}
+	if cfg.SettingSources == "" {
+		cfg.SettingSources = "user"
 	}
 	if cfg.ResumeProbe <= 0 {
 		cfg.ResumeProbe = 10 * time.Second
@@ -90,6 +100,7 @@ func (a *Adapter) args(spec agent.StartSpec, resume string) []string {
 	args := []string{
 		a.cfg.Bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--permission-prompts", "none", "--permission-mode", string(agent.PermissionDontAsk),
+		"--setting-sources", a.cfg.SettingSources,
 	}
 	if len(spec.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(spec.AllowedTools, ","))
@@ -156,7 +167,8 @@ type session struct {
 	id       string
 	stopped  bool
 	result   agent.Result
-	unknown  bool // a resume that found no such session
+	unknown  bool  // a resume that found no such session
+	earlyErr error // a resume that failed before init for another reason
 	initOnce sync.Once
 }
 
@@ -197,6 +209,7 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 	defer s.cancel()
 
 	var stderr []byte
+	var lines int
 	for c := range st.Chunks() {
 		switch c.Stream {
 		case runtime.Stdout:
@@ -209,7 +222,7 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 			}
 		case runtime.Stderr:
 			stderr = append(stderr, c.Data...)
-			stderr = s.flushStderr(stderr)
+			stderr = s.flushStderr(stderr, &lines)
 		}
 	}
 	code, err := st.Wait()
@@ -222,13 +235,21 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 	s.mu.Unlock()
 
 	var final agent.Result
+	var early error
 	unknown := false
 	switch {
+	case ok:
+		// A result that arrived is the outcome, even if Stop came after it.
+		final = res
+		if s.resume && !s.p.sawInit && !s.p.authFailed && s.p.result.IsError {
+			if missingSession(s.p.result.Result) {
+				unknown = true
+			} else {
+				early = fmt.Errorf("claude: resume failed: %s", capText(s.p.result.Result))
+			}
+		}
 	case stopped:
 		final = agent.Result{Status: agent.ResultStopped, SessionID: id}
-	case ok:
-		final = res
-		unknown = s.resume && !s.p.sawInit && !s.p.authFailed && s.p.result.IsError
 	default:
 		text := "the agent ended without a result"
 		if err != nil || code != 0 {
@@ -238,7 +259,7 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 		final = agent.Result{Status: agent.ResultFailed, SessionID: id, Text: text}
 	}
 	s.mu.Lock()
-	s.result, s.unknown = final, unknown
+	s.result, s.unknown, s.earlyErr = final, unknown, early
 	s.mu.Unlock()
 }
 
@@ -252,16 +273,37 @@ func (s *session) observe(e agent.Event) {
 	}
 }
 
+// Limits on stderr: it is untrusted and must not grow without bound.
+const (
+	maxStderrLines = 200
+	maxStderrLine  = 64 << 10 // bytes kept of one line, and of an unfinished one
+)
+
 // flushStderr turns each complete stderr line into an error event and returns
-// the incomplete rest.
-func (s *session) flushStderr(buf []byte) []byte {
+// the incomplete rest. At most maxStderrLines lines become events per session,
+// the rest are dropped after one note, and no line or unfinished line keeps
+// more than maxStderrLine bytes.
+func (s *session) flushStderr(buf []byte, lines *int) []byte {
 	for {
-		i := strings.IndexByte(string(buf), '\n')
+		i := bytes.IndexByte(buf, '\n')
 		if i < 0 {
+			if len(buf) > maxStderrLine {
+				buf = buf[:maxStderrLine] // an unfinished line is kept to its cap
+			}
 			return buf
 		}
-		if line := strings.TrimSpace(string(buf[:i])); line != "" {
-			s.emit(s.p.errorEvent(line))
+		line := buf[:i]
+		if len(line) > maxStderrLine {
+			line = line[:maxStderrLine]
+		}
+		if text := strings.TrimSpace(string(line)); text != "" {
+			*lines++
+			switch {
+			case *lines < maxStderrLines:
+				s.emit(s.p.errorEvent(text))
+			case *lines == maxStderrLines:
+				s.emit(s.p.errorEvent("stderr has more lines than are kept; the rest are dropped"))
+			}
 		}
 		buf = buf[i+1:]
 	}
@@ -278,12 +320,21 @@ func (s *session) probe(limit time.Duration) error {
 		return nil // no verdict: go on as if it exists
 	}
 	s.mu.Lock()
-	unknown := s.unknown
+	unknown, early := s.unknown, s.earlyErr
 	s.mu.Unlock()
 	if unknown {
 		return agent.ErrNoSession
 	}
-	return nil
+	return early
+}
+
+// missingSession reports whether an error result says the session does not
+// exist. What the CLI really prints is unverified, so this is a heuristic on
+// the wording; any other failure is an ordinary error.
+func missingSession(text string) bool {
+	t := strings.ToLower(text)
+	return strings.Contains(t, "no conversation") ||
+		(strings.Contains(t, "session") && (strings.Contains(t, "not found") || strings.Contains(t, "no such") || strings.Contains(t, "does not exist")))
 }
 
 func (s *session) ID() string {
