@@ -179,9 +179,9 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, idemKey 
 // redactURLError drops the URL of a failed request from its error, which would
 // otherwise print the address and nothing the user can use.
 func redactURLError(err error) error {
-	var ue *url.Error
-	if errors.As(err, &ue) {
-		return ue.Err
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
 	}
 	return err
 }
