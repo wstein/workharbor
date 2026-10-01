@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/wstein/workharbor/internal/exitcode"
@@ -27,23 +28,48 @@ kill-all, doctor.
 // editorconfig-checker-enable
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(args []string) int {
+// run executes one command. Stdout is data, stderr is human text (design §9.2).
+func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(stderr, usage)
 		return exitcode.Usage
 	}
 	switch args[0] {
 	case "version", "--version":
-		fmt.Println(version.Version)
-		return exitcode.OK
+		return runVersion(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
-		fmt.Print(usage)
+		fmt.Fprint(stdout, usage)
 		return exitcode.OK
 	default:
-		fmt.Fprintf(os.Stderr, "whr: unknown or unimplemented command %q\n", args[0])
+		fmt.Fprintf(stderr, "whr: unknown or unimplemented command %q\n", args[0])
 		return exitcode.Usage
 	}
+}
+
+// runVersion prints the version, the commit and whether the tree was dirty;
+// --json gives the same as data.
+func runVersion(args []string, stdout, stderr io.Writer) int {
+	asJSON := false
+	for _, a := range args {
+		if a != "--json" {
+			fmt.Fprintf(stderr, "whr version: unknown option %q\n", a)
+			return exitcode.Usage
+		}
+		asJSON = true
+	}
+	info := version.Get()
+	if asJSON {
+		b, err := info.JSON()
+		if err != nil {
+			fmt.Fprintf(stderr, "whr version: %v\n", err)
+			return exitcode.Error
+		}
+		fmt.Fprintf(stdout, "%s\n", b)
+		return exitcode.OK
+	}
+	fmt.Fprintf(stdout, "%s\n", info.Text())
+	return exitcode.OK
 }

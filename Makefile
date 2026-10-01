@@ -6,8 +6,19 @@ EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/
 
 .PHONY: build test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks
 
+# The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
+# when there is no tag, never empty. The tree is dirty if anything is uncommitted.
+BIN ?= bin/whr
+VERSION_PKG := github.com/wstein/workharbor/internal/version
+GIT_COMMIT = $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+GIT_VERSION = $(shell git describe --tags --match 'v[0-9]*' --abbrev=7 2>/dev/null | sed 's/-dirty$$//' || true)
+GIT_DIRTY = $(shell if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo true; else echo false; fi)
+BUILD_VERSION = $(or $(GIT_VERSION),v0.0.0-$(shell git rev-list --count HEAD 2>/dev/null || echo 0)-g$(GIT_COMMIT))
+BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Dirty=$(GIT_DIRTY) -X $(VERSION_PKG).Date=$(BUILD_DATE)
+
 build:
-	go build -o bin/whr ./cmd/whr
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/whr
 
 test:
 	go test ./...
