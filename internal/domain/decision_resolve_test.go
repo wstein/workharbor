@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -283,5 +284,52 @@ func TestZeroTimeNeverReachesTheDeadlineCheck(t *testing.T) {
 	}
 	if d.Allows("") {
 		t.Error("an answer without a time must not allow")
+	}
+}
+
+// #49: re-raising lost the truncation flag, and rebuilt the timeout from
+// CreatedAt, which a store may not keep.
+func TestReraiseKeepsTruncationAndTheStoredTimeout(t *testing.T) {
+	long := strings.Repeat("x", MaxDecisionInput+10)
+	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Input: long, Timeout: 2 * time.Minute, Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.InputTruncated {
+		t.Fatal("setup: the input should have been capped")
+	}
+	if err := d.Supersede(); err != nil {
+		t.Fatal(err)
+	}
+	d.CreatedAt = time.Time{} // a store that does not keep it
+
+	resumed := t0.Add(time.Hour)
+	n, err := d.Reraise("d1b", resumed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !n.InputTruncated {
+		t.Error("the raised-again decision lost InputTruncated")
+	}
+	if n.Timeout != 2*time.Minute || !n.Deadline.Equal(resumed.Add(2*time.Minute)) {
+		t.Errorf("timeout %v, deadline %v; want 2m and %v", n.Timeout, n.Deadline, resumed.Add(2*time.Minute))
+	}
+}
+
+func TestReraiseOfAQuestionHasNoDeadline(t *testing.T) {
+	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Supersede(); err != nil {
+		t.Fatal(err)
+	}
+	d.CreatedAt = time.Time{}
+	n, err := d.Reraise("d1b", t0.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !n.Deadline.IsZero() {
+		t.Errorf("a question must stay without a deadline, got %v", n.Deadline)
 	}
 }

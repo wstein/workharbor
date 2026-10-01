@@ -100,10 +100,6 @@ func (d *Decision) Reraise(id ID, now time.Time) (*Decision, error) {
 	if d.SupersededBy != "" {
 		return nil, ErrAlreadyRaised
 	}
-	var timeout time.Duration
-	if !d.Deadline.IsZero() {
-		timeout = d.Deadline.Sub(d.CreatedAt)
-	}
 	n, err := Raise(NewDecision{
 		ID:       id,
 		TaskID:   d.TaskID,
@@ -115,11 +111,12 @@ func (d *Decision) Reraise(id ID, now time.Time) (*Decision, error) {
 		SHA:      d.SHA,
 		Options:  d.Options,
 		Now:      now,
-		Timeout:  timeout,
+		Timeout:  d.Timeout,
 	})
 	if err != nil {
 		return nil, err
 	}
+	n.InputTruncated = d.InputTruncated
 	d.SupersededBy = id
 	return n, nil
 }
