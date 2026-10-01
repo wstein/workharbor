@@ -28,7 +28,7 @@ func TestOpenUsesWALAndForeignKeys(t *testing.T) {
 	}
 	var fk int
 	if err := s.db.QueryRowContext(bg, `PRAGMA foreign_keys`).Scan(&fk); err != nil || fk != 1 {
-		t.Errorf("foreign_keys = %d, %v; want 1", fk, err)
+		t.Errorf("foreign_keys = %d, %v; want 2", fk, err)
 	}
 	// A child row without its parent is refused.
 	if _, err := s.db.ExecContext(bg, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, ord) VALUES ('r', 'no-task', 'w', 'e', 'starting', 0)`); err == nil {
@@ -50,7 +50,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 || name != "0001_init.sql" || applied != fixed.UnixNano() {
+	if n != 2 || name != "0002_session_cause.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -79,8 +79,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 1 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 1", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 2 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 2", n, err)
 	}
 }
 

@@ -111,7 +111,8 @@ type Decision struct {
 
 	SupersededBy ID // the Decision raised again after a restart
 
-	events []Event // recorded changes, taken by TakeEvents
+	events  []Event // recorded changes, taken by TakeEvents
+	changed bool    // set by every change, cleared when the store has saved it
 }
 
 // NewDecision describes a Decision to raise.
@@ -244,7 +245,19 @@ func (d *Decision) move(to DecisionStatus, at time.Time) error {
 }
 
 func (d *Decision) record(kind EventKind, payload any, at time.Time) {
+	d.changed = true
 	d.events = append(d.events, newEvent(d.TaskID, kind, payload, at))
+}
+
+// Changed reports whether the Decision changed since it was last saved. A
+// task aggregate absorbs a Decision's events, so this is how the store knows
+// which Decisions to write.
+func (d *Decision) Changed() bool { return d.changed }
+
+// Saved tells the Decision the store has written it at a version.
+func (d *Decision) Saved(version int64) {
+	d.Version = version
+	d.changed = false
 }
 
 // PendingEvents returns the recorded events without forgetting them, so a

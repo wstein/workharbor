@@ -100,8 +100,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 	for i, r := range agg.Runs {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, ord) VALUES (?, ?, ?, ?, ?, ?)`,
-			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), i); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, env_id, state, session_id, ord) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.EnvID), string(r.State), r.SessionID, i); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
@@ -112,6 +112,21 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 
+	// Decisions that changed are written with the task. Their events are
+	// already among the aggregate's.
+	var saved []func()
+	for _, d := range agg.Decisions {
+		if d.Version != 0 && !d.Changed() {
+			continue
+		}
+		d.TaskID = t.ID
+		done, err := tx.writeDecision(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+		saved = append(saved, done)
+	}
+
 	events, err := tx.Append(ctx, agg.PendingEvents()...)
 	if err != nil {
 		return nil, err
@@ -119,6 +134,9 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 	tx.after = append(tx.after, func() {
 		t.Version = expected + 1
 		agg.TakeEvents()
+		for _, done := range saved {
+			done()
+		}
 	})
 	return events, nil
 }
@@ -158,14 +176,14 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, env_id, state FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
+	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, env_id, state, session_id FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	for runs.Next() {
 		var r domain.Run
 		var rid, ws, env, st string
-		if err := runs.Scan(&rid, &ws, &env, &st); err != nil {
+		if err := runs.Scan(&rid, &ws, &env, &st, &r.SessionID); err != nil {
 			_ = runs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
@@ -193,6 +211,22 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 	if err := cands.Close(); err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
+
+	decs, err := tx.tx.QueryContext(ctx, `SELECT `+decisionColumns+` FROM decisions WHERE task_id = ? ORDER BY created_at, id`, string(id))
+	if err != nil {
+		return nil, fmt.Errorf("store: load task %s: %w", id, err)
+	}
+	for decs.Next() {
+		d, err := scanDecision(decs)
+		if err != nil {
+			_ = decs.Close()
+			return nil, fmt.Errorf("store: load task %s: %w", id, err)
+		}
+		agg.Decisions = append(agg.Decisions, d)
+	}
+	if err := decs.Close(); err != nil {
+		return nil, fmt.Errorf("store: load task %s: %w", id, err)
+	}
 	return agg, nil
 }
 
@@ -200,6 +234,24 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 // SaveTask does for a task: a compare-and-swap on its Version, so an answer
 // and an expiry of the same Decision cannot both win.
 func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Event, error) {
+	done, err := tx.writeDecision(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	events, err := tx.Append(ctx, d.PendingEvents()...)
+	if err != nil {
+		return nil, err
+	}
+	tx.after = append(tx.after, func() {
+		done()
+		d.TakeEvents()
+	})
+	return events, nil
+}
+
+// writeDecision writes the Decision row with a compare-and-swap on its
+// version, and returns what to do once the transaction has committed.
+func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (func(), error) {
 	if d.Kind == domain.DecisionApproval && d.Deadline.IsZero() {
 		return nil, fmt.Errorf("decision %s: %w", d.ID, ErrNoDeadline)
 	}
@@ -220,13 +272,13 @@ func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Ev
 	values := []any{
 		string(d.TaskID), string(d.RunID), string(d.Kind), boolInt(d.Blocking), rd.String(d.Subject), rd.String(d.Input), boolInt(d.InputTruncated),
 		d.SHA, string(options), string(d.Status), toNano(d.CreatedAt), int64(d.Timeout), toNano(d.Deadline), answeredAt,
-		rd.String(d.Answer), rd.String(d.Reason), rd.String(d.AnsweredBy), string(d.SupersededBy),
+		rd.String(d.Answer), rd.String(d.Reason), rd.String(d.AnsweredBy), string(d.SupersededBy), string(d.Cause), toNano(d.ResumeAt),
 	}
 	if expected == 0 {
 		args := append([]any{string(d.ID)}, values...)
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO decisions (id, version, task_id, run_id, kind, blocking, subject, input, input_truncated,
-			sha, options, status, created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by)
-			VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...); err != nil {
+			sha, options, status, created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at)
+			VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM decisions WHERE id = ?`, string(d.ID)).Scan(&exists) == nil {
 				return nil, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
@@ -237,7 +289,7 @@ func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Ev
 		args := append(values, string(d.ID), expected)
 		res, err := tx.tx.ExecContext(ctx, `UPDATE decisions SET version = version + 1, task_id = ?, run_id = ?, kind = ?, blocking = ?, subject = ?,
 			input = ?, input_truncated = ?, sha = ?, options = ?, status = ?, created_at = ?, timeout_ns = ?, deadline = ?, answered_at = ?,
-			answer = ?, reason = ?, answered_by = ?, superseded_by = ? WHERE id = ? AND version = ?`, args...)
+			answer = ?, reason = ?, answered_by = ?, superseded_by = ?, cause = ?, resume_at = ? WHERE id = ? AND version = ?`, args...)
 		if err != nil {
 			return nil, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 		}
@@ -249,34 +301,27 @@ func (tx *Tx) SaveDecision(ctx context.Context, d *domain.Decision) ([]domain.Ev
 			return nil, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
 		}
 	}
-	events, err := tx.Append(ctx, d.PendingEvents()...)
-	if err != nil {
-		return nil, err
-	}
-	tx.after = append(tx.after, func() {
-		d.Version = expected + 1
-		d.TakeEvents()
-	})
-	return events, nil
+	return func() { d.Saved(expected + 1) }, nil
 }
 
 const decisionColumns = `id, version, task_id, run_id, kind, blocking, subject, input, input_truncated, sha, options, status,
-	created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by`
+	created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
 func scanDecision(r rowScanner) (*domain.Decision, error) {
 	var d domain.Decision
-	var id, task, run, kind, status, options, superseded string
+	var id, task, run, kind, status, options, superseded, cause string
 	var blocking, truncated int
-	var created, timeout, deadline, answeredAt int64
+	var created, timeout, deadline, answeredAt, resumeAt int64
 	if err := r.Scan(&id, &d.Version, &task, &run, &kind, &blocking, &d.Subject, &d.Input, &truncated, &d.SHA, &options, &status,
-		&created, &timeout, &deadline, &answeredAt, &d.Answer, &d.Reason, &d.AnsweredBy, &superseded); err != nil {
+		&created, &timeout, &deadline, &answeredAt, &d.Answer, &d.Reason, &d.AnsweredBy, &superseded, &cause, &resumeAt); err != nil {
 		return nil, err
 	}
 	d.ID, d.TaskID, d.RunID, d.Kind, d.Status = domain.ID(id), domain.ID(task), domain.ID(run), domain.DecisionKind(kind), domain.DecisionStatus(status)
 	d.Blocking, d.InputTruncated = blocking != 0, truncated != 0
 	d.CreatedAt, d.Timeout, d.Deadline, d.SupersededBy = fromNano(created), time.Duration(timeout), fromNano(deadline), domain.ID(superseded)
+	d.Cause, d.ResumeAt = domain.DecisionCause(cause), fromNano(resumeAt)
 	if answeredAt != 0 {
 		at := fromNano(answeredAt)
 		d.AnsweredAt = &at
@@ -349,9 +394,10 @@ func (s *Store) LoadDecision(ctx context.Context, id domain.ID) (*domain.Decisio
 	return d, err
 }
 
-// RespondDecision loads a Decision, records an answer and saves the result in
-// one transaction. A refusal that changed the Decision is saved too: a late
-// answer expires it, and an allow for another commit is stored as a denial,
+// RespondDecision answers a Decision through its task aggregate, in one
+// transaction: it loads the Decision's task, calls Answer and saves what
+// changed. A refusal that changed something is saved too: a late answer
+// expires the Decision, and an allow for another commit is stored as a denial,
 // although both return an error (design §4.2). Without this, a caller that
 // stopped at the error would lose the change and the Decision would stay open.
 // The Decision and the events are returned with the error when something was
@@ -364,22 +410,30 @@ func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Resp
 		respond error
 	)
 	err := s.Update(ctx, func(tx *Tx) error {
-		var err error
-		if d, err = tx.LoadDecision(ctx, id); err != nil {
+		row, err := tx.LoadDecision(ctx, id)
+		if err != nil {
 			return err
 		}
-		respond = d.Respond(r)
-		if len(d.PendingEvents()) == 0 {
+		agg, err := tx.LoadTask(ctx, row.TaskID)
+		if err != nil {
+			return err
+		}
+		respond = agg.Answer(id, r)
+		if len(agg.PendingEvents()) == 0 {
 			return nil // nothing changed, so nothing to save
 		}
-		events, err = tx.SaveDecision(ctx, d)
-		return err
+		if events, err = tx.SaveTask(ctx, agg); err != nil {
+			return err
+		}
+		for _, c := range agg.Decisions {
+			if c.ID == id {
+				d = c
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, nil, err
-	}
-	if len(events) == 0 {
-		d = nil
 	}
 	return d, events, respond
 }

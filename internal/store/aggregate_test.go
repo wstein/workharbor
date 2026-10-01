@@ -463,3 +463,99 @@ func TestRespondDecisionSavesWhatARefusalChanged(t *testing.T) {
 		}
 	})
 }
+
+// The aggregate carries its Decisions and the run's session ID through the
+// store, and writes only the Decisions that changed.
+func TestTaskAggregateRoundTripsDecisionsAndSession(t *testing.T) {
+	s := openTemp(t)
+	a := newAggregate(t, "t1")
+	if err := a.RecordSession(a.Runs[0].ID, "session-1"); err != nil {
+		t.Fatal(err)
+	}
+	appr, err := a.RaiseDecision(domain.NewDecision{ID: "d1", RunID: a.Runs[0].ID, Kind: domain.DecisionApproval, Blocking: true, Subject: "Bash", Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	if appr.Version != 1 || appr.Changed() {
+		t.Errorf("after the save: version %d, changed %v", appr.Version, appr.Changed())
+	}
+
+	got, err := s.LoadTask(bg, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Runs[0].SessionID != "session-1" || len(got.Decisions) != 1 || got.Task.State != domain.TaskAwaitingGuidance {
+		t.Fatalf("loaded: session %q, %d decisions, task %s", got.Runs[0].SessionID, len(got.Decisions), got.Task.State)
+	}
+	if !reflect.DeepEqual(got.Decisions[0], appr) {
+		t.Errorf("the decision differs:\n got %+v\nwant %+v", got.Decisions[0], appr)
+	}
+
+	// Saving again without a change does not touch the Decision's version.
+	if _, err := s.SaveTask(bg, got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Decisions[0].Version != 1 {
+		t.Errorf("an unchanged decision was rewritten: version %d", got.Decisions[0].Version)
+	}
+
+	// A suspended run keeps its cause and reset time.
+	reset := t0.Add(2 * time.Hour)
+	if err := got.MarkRunning(got.Runs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	q, err := got.SuspendRun(got.Runs[0].ID, domain.CauseQuotaExhausted, reset, "q1", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, got); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := s.LoadTask(bg, "t1")
+	var loaded *domain.Decision
+	for _, d := range again.Decisions {
+		if d.ID == "q1" {
+			loaded = d
+		}
+	}
+	if loaded == nil || loaded.Cause != domain.CauseQuotaExhausted || !loaded.ResumeAt.Equal(reset) || len(loaded.Options) != 3 {
+		t.Errorf("loaded %+v, want the cause, the reset time and three options", loaded)
+	}
+	if again.Decisions[0].Status != domain.DecisionSuperseded || again.Runs[0].State != domain.RunPaused || q.Deadline != (time.Time{}) {
+		t.Errorf("approval %s, run %s", again.Decisions[0].Status, again.Runs[0].State)
+	}
+	log, _ := s.EventsSince(bg, "t1", 0, 0)
+	n := 0
+	for _, e := range log {
+		if e.Kind == domain.EventDecisionRaised {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("%d decision.raised events, want 2: %v", n, eventKinds(log))
+	}
+}
+
+// RespondDecision goes through the task, so answering the last blocking
+// Decision frees the task.
+func TestRespondDecisionSettlesTheTask(t *testing.T) {
+	s := openTemp(t)
+	a := newAggregate(t, "t1")
+	d, err := a.RaiseDecision(domain.NewDecision{ID: "d1", RunID: a.Runs[0].ID, Kind: domain.DecisionApproval, Blocking: true, Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.RespondDecision(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: t0.Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.LoadTask(bg, "t1")
+	if got.Task.State != domain.TaskRunning || got.Decisions[0].Status != domain.DecisionAnswered {
+		t.Errorf("task %s, decision %s", got.Task.State, got.Decisions[0].Status)
+	}
+}
