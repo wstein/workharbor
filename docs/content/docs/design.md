@@ -218,6 +218,24 @@ New agents (and later runtime or forge backends) are added as **out-of-process p
 - **Conformance.** A plugin declares its capabilities and must pass the same conformance suite as a built-in adapter, so a capability flag is a verified claim (§5.1).
 - **Trust.** See §7.8: plugins are installed explicitly and run isolated.
 
+### 5.6 Tool store
+
+Environments run **stock images**. The agent CLIs (Claude Code, Codex CLI, later others) and the supervisor's own helpers live once in a versioned, immutable **tool store** on the host and are mounted read-only into each environment, in the manner of a Nix store. This replaces installing an agent in every container, which took about 11 s and 230 MB each in spike #2.
+
+```
+store/<hash8>-<name>-<version>-<platform>/bin/<name>     content-addressed, never modified
+profiles/<profile>/bin/<name> -> ../../../store/.../bin/<name>
+```
+
+- **Verified on download.** Claude Code is fetched from the vendor's release URL and checked against its SHA-256 manifest; Codex CLI is the static musl build from its GitHub release. The store hash is recorded in the run's audit entry, so every run says exactly which tool version ran it.
+- **One build per libc.** The glibc build of Claude Code ran in fedora, debian and ubuntu and failed in alpine; its musl build ran only in alpine; Codex's static build ran in all four. The adapter picks the profile from the image's libc (the vendor installer does the same, by looking for the musl loader). A tool that needs shared libraries beyond libc would need its closure in the store, as Nix does; none of the tested tools did.
+- **Immutable from inside.** The store is mounted read-only; `touch`, `rm`, appending to a tool, `chmod` and replacing a symlink all failed, and re-hashing every entry afterwards showed no change. Writable state (the agent home, with its auth directory and session) stays on the per-environment volume (§4.4).
+- **Versions are profiles.** Environment A ran Claude Code 2.1.286 and environment B 2.1.285 at the same time, each resolving to its own store entry. An upgrade is a new entry and a profile change, and a rollback is a profile change.
+- **Mounting.** A read-only bind mount and a read-only volume both worked, with the same startup cost (about 100 to 130 ms for `claude --version`), and four containers shared one store at once. A volume can be attached read-only by several containers but is exclusive while writable (§4.4), so the shared store is read-only everywhere.
+- **Network.** The agent starts without network, so the egress allowlist (§7.2) no longer has to permit the download host.
+
+Open: how new versions are discovered, verified and promoted (a developer action, never an agent action), and how the store is garbage collected.
+
 ## 6. Policy and autonomy
 
 Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`**.
