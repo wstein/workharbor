@@ -184,10 +184,14 @@ func CheckMount(fsys FS, home, source string) error {
 	return nil
 }
 
-// CheckMounts checks every mount of a spec and returns all rejections joined.
+// CheckMounts checks every bind mount and returns all rejections joined. A
+// mount without a Kind is a bind mount.
 func CheckMounts(fsys FS, home string, mounts []Mount) error {
 	var errs []error
 	for _, m := range mounts {
+		if m.Kind == MountVolume {
+			continue // a named volume is not a host path
+		}
 		if err := CheckMount(fsys, home, m.Source); err != nil {
 			errs = append(errs, err)
 		}

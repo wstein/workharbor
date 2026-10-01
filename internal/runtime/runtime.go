@@ -25,21 +25,6 @@ type Capabilities struct {
 	Browser           bool
 }
 
-// Spec describes an environment to provision.
-type Spec struct {
-	Image    string
-	CPUs     int
-	MemoryMB int
-	Mounts   []Mount
-}
-
-// Mount is an explicit project mount; host-home mounts are rejected.
-type Mount struct {
-	Source   string
-	Target   string
-	ReadOnly bool
-}
-
 // Endpoint is a temporary access point into an environment.
 type Endpoint struct {
 	Kind string // "ssh" | "browser"
