@@ -39,12 +39,12 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Isolated by default"
-    subtitle="Apple Container on an Apple-silicon Mac mini comes first, with default-deny networking and short-lived per-run credentials."
+    subtitle="Apple Container on an Apple-silicon Mac mini comes first, with default-deny networking and per-run credentials."
     icon="shield-check"
   >}}
   {{< hextra/feature-card
     title="Approval boundaries are policy"
-    subtitle="Agents push branches and open pull requests. Merge, release and deploy stay with you."
+    subtitle="Agents commit in their own checkouts. After your approval the supervisor pushes the branch and opens the pull request. Merge, release and deploy stay with you."
     icon="badge-check"
   >}}
   {{< hextra/feature-card
