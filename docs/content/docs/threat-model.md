@@ -72,11 +72,11 @@ phone / laptop ──VPN──▶ supervisor (host, trusted) ──▶ GitHub AP
 | T8 | Forge credentials leak | A2, A3 | Installation tokens last about an hour, are scoped to the installed repositories, reach git through a credential helper or the proxy, and never sit in the guest's environment, on disk or in logs (§7.3, D15) | #27, #22 | Planned |
 | T9 | Secrets end up in logs, transcripts or notifications | A2, A4 | Redaction at ingest, before events, Decision inputs and audit entries are written; generic notification payloads with no content (§5.4, §9.4) | #22, #31 | Planned |
 | T10 | The agent login is stolen from the environment | A2, A3 | Dedicated auth directory per environment, never `$HOME`; egress allowlist; revocation at the vendor when an environment is deleted (§7.3) | #26 | Accepted risk |
-| T11 | Someone else drives the supervisor | A4 | API on loopback or VPN only; a static token in release 1, per-device revocable tokens for the phone app; CSRF protection (§7.5) | #24, #33 | Planned |
-| T12 | The record of what happened is altered | A2, A5 | Append-only audit log outside the workspace, hash-linked to transcript content; purges record themselves (§5.4, §7.7) | #21, #37 | Planned |
+| T11 | Someone else drives the supervisor | A4 | API on loopback and one configured address (D29); the API token on every request, also against the proxy sidecar, which shares the default network; per-device revocable tokens for the phone app; CSRF protection (§7.5) | #24, #33, #69 | Planned; reachability unmeasured (#69) |
+| T12 | The record of what happened is altered | A2, A5 | Append-only audit log outside the workspace, hash-linked to transcript content; purges record themselves (§5.4, §7.7) | #21, #37, #66 | Partly implemented: audit tier, redaction before writing and self-recording purges exist; hash-linking is planned (#37); the guard bypass found in review is open (#66) |
 | T13 | An agent exhausts the host or the budget | A2 | CPU and memory limits per environment, admission control, time and cost budgets, `whr kill-all` (§7.4, §8, §5.7) | #37, #48 | Measured limits; budgets planned |
 | T14 | A tampered tool or plugin runs in an environment or in the supervisor | A5 | Agent CLIs come from a content-addressed, read-only store verified against the vendor's checksums; plugins run out of process with the same isolation (D19, D20, §7.8); CI actions pinned by SHA | Tool store measured in spike #2; plugins later | Partly measured |
-| T15 | The developer's editor runs planted repository config when opening an agent checkout | A2 | Open a copy fetched into a supervisor-owned repository, not the agent's own tree (§4.5) | #59 | Open |
+| T15 | The developer's editor runs planted repository config when opening an agent checkout | A2 | The editor gets a supervisor-owned copy of the topic, refreshed by hardened fetch and marked stale while the run is active; the agent's checkout is never offered (§4.5) | #59; the CLI and UI launch in #24, #30 | Implemented in the service; front ends planned |
 | T16 | SSH or IDE access into an environment is abused or left open | A4, A5 | Short-lived per-session certificates, no passwords, reachable only over the VPN; code-server never public; editor extensions treated as a supply-chain risk (§7.6) | #32 | Planned, after the slice |
 
 ## Accepted risks
@@ -91,7 +91,7 @@ These are accepted for a single-developer, watched personal tool. Each has a lim
 
 ## Open items
 
-- T1 and T15 have no implemented control yet: #53 and #59. T3's fetch needs the stopped-environment rule enforced (#27). T7's transport needs reproducible evidence and the crash and deadline cases (#7).
+- T1 has no implemented control yet (#53); T15's front ends come with #24 and #30. T3's fetch needs the stopped-environment rule enforced (#27). T7's transport needs reproducible evidence and the crash and deadline cases (#7).
 - Links inside a secrets directory are followed one level and the locations found in review are rejected (#58). Mounts can also be limited to the workspace roots workharbor owns, as a second layer behind the deny-list (`CheckMountsWithin`). Accepted: a hard link to a secret inside a project, and links more than one level deep inside a secrets directory.
 - Webhook signature verification and the author association used for trust tiers are part of the forge adapter, #27.
 - This page is reviewed whenever a D-row changes a boundary, and before release 1.
