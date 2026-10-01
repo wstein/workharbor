@@ -12,10 +12,13 @@ Task
 : One piece of work, usually from a forge issue: its instructions, Decisions, progress, results and pull request link. It ends completed, cancelled or failed. States in [§4.1](design/domain.md#41-state-machines).
 
 Topic
-: One line of work: one branch, `agent/<topic>`, with its own checkout on the host. Several topics run at once, each with its own environment and agent ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+: One line of work on one branch. Since D42 a topic is a named agent's branch, `agent/<role>`, in its worktree of a workspace ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
 
 Workspace
-: The files a task works in: the topic's checkout, its branch, tool configuration and caches. A workspace may outlive several runs ([§4](design/domain.md#4-domain-model)).
+: A folder on the host or an external SSD that the human creates: its own agent clone, one worktree per named agent, the integration branch (`main` or `develop`), tool configuration and caches. It is mounted into one environment, outlives tasks and runs, and never contains the human's own repository (D42, [§4](design/domain.md#4-domain-model)).
+
+Agent
+: A named role in a workspace, such as `docs` or `runtime`: its worktree and branch `agent/<role>`, instructions, permission profile and session. Tasks are assigned to an agent; several agents run in one environment at once (D42).
 
 Run
 : One execution of an agent in an environment. A paused or interrupted run is relaunched from the agent's session; a stopped or failed run is never reused, so a retry or rework starts a new run on the same workspace and topic ([§4.1](design/domain.md#41-state-machines)).
@@ -66,7 +69,10 @@ Egress sidecar
 : A container next to each environment that runs `whr-proxy`, the logging allowlist proxy. It is the environment's only way out: hosts by name, ports 443 and 80, public addresses only ([§7](design/security.md#7-security), threat model T5).
 
 Repository cache
-: A bare repository per forge repository on the host. Each topic is a shared clone of it, and its objects are mounted read-only into the environment ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+: The per-task clone layout of D17: a bare repository per forge repository on the host, with each topic a shared clone of it. Replaced by workspaces (D42); kept until #90 and #91 land ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+
+Console
+: An environment without an agent for the human's shell work: zsh or fish and the usual tools, the workspaces mounted read-only by default, no credentials. `whr console` and SSH land there, so only the admin logs in to the host (D43).
 
 Owner label
 : The `workharbor.owner` label on everything a supervisor instance creates. An adapter lists, starts, stops and deletes only what carries its own owner ([§5.1](design/architecture.md#51-runtime-adapter)).

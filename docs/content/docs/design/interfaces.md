@@ -14,7 +14,7 @@ Noun-verb with short aliases. Nouns: `task`, `ws`, `run`, `env`, `inbox`. `whr t
 ```bash
 whr serve                                  # the supervisor: JSON API, web UI, reconciler
 whr login --server <url>
-whr run <issue-url> [--backend apple]     # create + start; the core demo
+whr run <issue-url> [--agent <ws>/<role>] # create + start on a named agent (D42); the core demo
 whr ls [--json]
 whr show <task>                            # review card: diff stat, tests, CI for current SHA, agent notes, open decisions
 whr logs <task> -f
@@ -27,6 +27,9 @@ whr inbox [--watch]
 whr approve|reject <decision>
 whr answer <decision> <option> [--text "..."]  # a question's fixed option, or a free answer (D23)
 whr diff <task>
+whr ws add <path> --from <repo-url|path>   # a workspace with its agent clone (D42)
+whr agent add <ws> <role>                  # a named agent with its worktree agent/<role>
+whr console [<ws>] [--rw]                  # a shell in the console environment (D43)
 whr ssh <ws> [--takeover]                  # --takeover pauses the agent and takes the lock
 whr ssh --config                           # emit ~/.ssh/config snippet (ProxyJump) for VS Code/JetBrains
 whr open <ws> --editor vscode

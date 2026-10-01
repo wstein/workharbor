@@ -203,7 +203,7 @@ New agents (and later runtime or forge backends) are added as **out-of-process p
 
 ### 5.6 Tool store
 
-Environments run **stock images**. The agent CLIs (Claude Code, Codex CLI, later others) and the supervisor's own helpers live once in a versioned, immutable **tool store** on the host and are mounted read-only into each environment, in the manner of a Nix store. This replaces installing an agent in every container, which took about 11 s and 230 MB each in spike #2.
+Environments run **stock images**. Fedora and Ubuntu LTS are the first-class bases, pinned by digest and covered by the conformance suite, with Fedora the default; other bases work best-effort (D43). The agent CLIs (Claude Code, Codex CLI, later others) and the supervisor's own helpers live once in a versioned, immutable **tool store** on the host and are mounted read-only into each environment, in the manner of a Nix store. This replaces installing an agent in every container, which took about 11 s and 230 MB each in spike #2.
 
 ```
 store/<hash8>-<name>-<version>-<platform>/bin/<name>     content-addressed, never modified

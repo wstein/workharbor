@@ -10,9 +10,10 @@ toc: true
 | Object | Responsibility | Lifetime |
 | --- | --- | --- |
 | Task | Issue, instructions, decisions, progress, results, PR link | Until completed, cancelled or failed |
-| Workspace | Checkout/worktree, branch, files, tool config, caches | May span several runs |
+| Workspace | A folder on the host or an external SSD: its agent clone, the agents' worktrees, the integration branch, tool config and caches (D42) | Created and removed by the human; outlives tasks, runs and environments |
+| Agent | A named role in a workspace (for example `docs`, `runtime`): its worktree and branch `agent/<role>`, instructions, permission profile and session (D42) | Until the human removes it; works on many tasks in turn |
 | Run | One execution of an agent in an environment | Start, pause, resume, terminate |
-| Environment (`env`) | Container or VM backing a run/workspace | Stopped or recreated independently of workspace data |
+| Environment (`env`) | Container or VM backing a workspace; it runs the runs of the workspace's agents at once (D42). A console is an environment without an agent (D43) | Stopped or recreated independently of workspace data |
 | **Decision** | A question, approval or review request raised to the human | Until answered |
 | **ReviewCandidate** | Task → branch → commit SHA → PR → CI results, keyed by SHA | One per prepared revision: created when cleanup pins the SHA, before the push (§4.5) |
 | Event | Append-only record of instructions, observations, decisions, actions | Permanent (audit trail and UI feed) |
@@ -160,7 +161,7 @@ Fields: ID, task, run (empty for a review Decision, which no live run raised), k
 
 Decided from spike #2 (Apple Container, issue #2; confirm on other backends):
 
-- **Repositories live on the host**, outside containers and volumes, and are mounted into an environment read-write. They survive any environment, a developer's editor can open them at any time, and one object store serves every task. How checkouts are laid out is §4.5. This replaces the earlier idea of keeping the checkout on a volume.
+- **Workspaces live on the host or an external SSD** (D42), outside containers and volumes, and are mounted into their environment read-write. A workspace holds its own agent clone and the agents' worktrees; the human's own repositories are never mounted. Workspaces survive any environment, and one environment serves all agents of a workspace. This replaces per-task clones of a repository cache (D17); the earlier idea of keeping the checkout on a volume stays rejected, and dependency directories follow D39 per worktree.
 - **The agent home** (auth directory, session, caches) is one writable named volume per environment. A volume survives stop, start, delete and rebuild.
 - **A writable volume is exclusive.** While one container has it read-write, no other container can attach it, not even read-only (the second start fails with "The storage device attachment is invalid"). A rebuild stops the old container before the new one starts. A volume can be shared read-only by several containers.
 - **A bind-mounted checkout is slower but usable.** For 5000 files with 300 edits, the first `git status` took 0.3 to 1.1 s on a bind mount against 0.12 s in a volume, later runs about 100 to 130 ms against 75 to 118 ms, `git add` 363 ms against 120 ms, and `commit` 667 ms against 334 ms. Git tuning (untracked cache, `feature.manyFiles`, preloaded index) changed steady-state `status` by almost nothing, because the cost is the cold first stat of every file. Very large repositories were not measured; the cold pass grows with the file count.
@@ -176,6 +177,8 @@ Still open: retention and garbage collection of completed tasks, topics and work
 ### 4.5 Topics, checkouts and cleanup before push
 
 A **topic** is one line of work: one branch (`agent/<topic>`) with its own checkout on the host. Several topics are in flight at once, each with its own environment and agent, and the developer can open any checkout in their editor at the same time. That is the worktree idea: parallel topics that are merged and tidied locally before anything leaves the machine.
+
+**Since D42** a topic is an agent's branch in a workspace: each named agent works in its own worktree of the workspace's agent clone, rebases onto the integration branch, and its commits leave as a `git bundle` exported from the running environment (issue #91), not through a fetch from a stopped environment. The layout below is the per-task clone of D17 that D42 replaces; it stays until #90 and #91 land, and its cleanup and push rules (prepare, per-SHA approval, push, no rewriting of pushed commits) carry over unchanged.
 
 **Checkout layout** (spike #2, item 9):
 
