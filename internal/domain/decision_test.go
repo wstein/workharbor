@@ -173,3 +173,54 @@ func TestAYearLateAllowNeverCounts(t *testing.T) {
 		}
 	}
 }
+
+// #49: every status change goes through the transition table.
+func TestStatusMovesThroughTheTable(t *testing.T) {
+	for _, from := range allDecisionStatuses {
+		for _, to := range allDecisionStatuses {
+			d := &Decision{ID: "d1", Status: from}
+			err := d.move(to)
+			if from.CanTransition(to) {
+				if err != nil || d.Status != to {
+					t.Errorf("%s -> %s: err %v, status %s", from, to, err, d.Status)
+				}
+				continue
+			}
+			var ce *ConflictError
+			if !errors.As(err, &ce) || ce.Rule != RuleTransition {
+				t.Errorf("%s -> %s: error = %v, want a transition conflict", from, to, err)
+			}
+			if d.Status != from {
+				t.Errorf("%s -> %s: a refused move changed the status to %s", from, to, d.Status)
+			}
+		}
+	}
+}
+
+// Respond, Expire and Supersede must not set Status behind the table's back:
+// with the table emptied none of them may change the status.
+func TestResolutionUsesTheTable(t *testing.T) {
+	saved := decisionTransitions
+	decisionTransitions = map[DecisionStatus][]DecisionStatus{}
+	t.Cleanup(func() { decisionTransitions = saved })
+
+	d, err := Raise(NewDecision{ID: "d1", TaskID: "t1", RunID: "r1", Kind: DecisionApproval, Now: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = d.Respond(Response{By: "werner", Option: AnswerAllow, At: t0.Add(time.Second)})
+	if d.Status != DecisionOpen || d.Allows("") {
+		t.Errorf("Respond changed the status to %s without the table", d.Status)
+	}
+	_ = d.Respond(Response{By: "werner", Option: AnswerAllow, At: d.Deadline})
+	if d.Status != DecisionOpen {
+		t.Errorf("a late Respond changed the status to %s without the table", d.Status)
+	}
+	if d.Expire(d.Deadline.Add(time.Hour)) || d.Status != DecisionOpen {
+		t.Errorf("Expire changed the status to %s without the table", d.Status)
+	}
+	_ = d.Supersede()
+	if d.Status != DecisionOpen {
+		t.Errorf("Supersede changed the status to %s without the table", d.Status)
+	}
+}

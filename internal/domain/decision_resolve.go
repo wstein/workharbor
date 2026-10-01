@@ -59,14 +59,18 @@ func (d *Decision) Respond(r Response) error {
 		return ErrDecisionTime
 	}
 	if !d.Deadline.IsZero() && !r.At.Before(d.Deadline) {
-		d.Status = DecisionExpired
+		if err := d.move(DecisionExpired); err != nil {
+			return err
+		}
 		return ErrDecisionExpired
 	}
 	if len(d.Options) > 0 && !slices.Contains(d.Options, r.Option) {
 		return ErrDecisionOption
 	}
 
-	d.Status = DecisionAnswered
+	if err := d.move(DecisionAnswered); err != nil {
+		return err
+	}
 	at := r.At
 	d.AnsweredAt = &at
 	d.AnsweredBy = r.By
@@ -85,8 +89,7 @@ func (d *Decision) Expire(now time.Time) bool {
 	if d.Status != DecisionOpen || d.Deadline.IsZero() || now.Before(d.Deadline) {
 		return false
 	}
-	d.Status = DecisionExpired
-	return true
+	return d.move(DecisionExpired) == nil
 }
 
 // Supersede marks an open Decision superseded because the supervisor
@@ -99,8 +102,7 @@ func (d *Decision) Supersede() error {
 	if d.RunID == "" {
 		return ErrNotRunBound
 	}
-	d.Status = DecisionSuperseded
-	return nil
+	return d.move(DecisionSuperseded)
 }
 
 // Reraise opens a new Decision with the same ask for the resumed run, with a

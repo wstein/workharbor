@@ -190,3 +190,13 @@ func capInput(s string) (string, bool) {
 func (d *Decision) RaisesGuidance() bool {
 	return d.Blocking && d.RunID != ""
 }
+
+// move changes the status through the transition table. Every status change
+// goes through it, so none can skip the table.
+func (d *Decision) move(to DecisionStatus) error {
+	if !d.Status.CanTransition(to) {
+		return conflict(RuleTransition, "decision %s: illegal transition %s -> %s", d.ID, d.Status, to)
+	}
+	d.Status = to
+	return nil
+}
