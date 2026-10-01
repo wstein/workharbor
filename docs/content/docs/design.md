@@ -24,7 +24,7 @@ A self-hosted service in which AI coding agents carry out project work independe
 - Usage is a live coding assistant, not an automation pipeline: the developer chats with an agent about the work, then detaches while it works for 15 to 60 minutes or longer, and returns when it needs them. A personal tool with one developer and a handful of concurrent sessions.
 - The developer attaches via chat, SSH or an editor temporarily. Disconnecting never interrupts the agent.
 - Web UI and `whr` CLI are two front ends over one service layer: the CLI calls the JSON API, the web UI is server-rendered HTML (see D8).
-- First host: Apple-silicon Mac mini on Apple Container, recommended with 24 GB memory and 512 GB storage (D32). Other runtimes later via adapters.
+- First host: Apple-silicon Mac mini on Apple Container, recommended M6 with 32 GB memory and 512 GB storage (D32). Other runtimes later via adapters.
 
 The central concept is an **agent task supervisor with managed workspaces**, not an editor-centred dev environment.
 
@@ -35,7 +35,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | Area | Requirement |
 | --- | --- |
 | Deployment | On-premises, one developer |
-| Hardware | Apple-silicon Mac mini: 24 GB memory and 512 GB storage recommended; 16 GB and 256 GB plus an external SSD as a minimum (D32, §8) |
+| Hardware | Apple-silicon Mac mini: M6 with 32 GB memory and 512 GB storage recommended, 24 GB / 512 GB on a budget; 16 GB and 256 GB plus an external SSD as a minimum (D32, §8) |
 | Runtime | Apple Container (per-container VM isolation); Docker/Podman/other microVMs later |
 | Capacity | **4 concurrent instances realistic, 8 a stretch goal** (see §8) |
 | Overhead | Light operational and resource cost |
@@ -79,7 +79,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D29 | **Reachability: loopback plus one configured address, never all interfaces; the API's token is the guard** (§7.5). The API and web UI listen on loopback and on exactly one address the developer configures: a VPN interface on the Mac (Tailscale, the default, or WireGuard on the Mac), or, for a VPN that ends on the router such as a FRITZ!Box with WireGuard, the Mac's LAN address with a `pf` rule admitting only the router's VPN client addresses (the macOS Application Firewall filters by app, not by source address). Every request needs the API token regardless of address. TLS for the phone client (PWA) comes from Tailscale's certificates or from the developer's own CA or domain | Binding to one address keeps the API off other interfaces and, with `pf`, off other LAN devices. It does not keep containers out: spike #2 showed guests on the default network reach host services through the LAN address, and the proxy sidecar is on that network. Agents themselves sit on `--internal` networks with no host route, so the token stops the sidecar. What the sidecar and guests reach on each address, and the `pf` rule, are **unverified** until issue #69; router VPN details (FRITZ!OS version, client addresses, DS-Lite) too |
 | D30 | **The forge board mirrors task state; the supervisor writes it** (issue #70). Through the forge adapter, as an optional capability, the supervisor keeps a project board current: a task awaiting guidance moves its card to "Needs you" (first), running → In progress, ready for review → Ready to push, completed → Done; Session names the agent, and the card links to the task in the web UI. Agents never write to the board. Starting a task by moving its card to an agent queue comes later, only through an "Accept this task?" Decision and the trust tiers (issue #71) | The GitHub board is a good planning dashboard and the web UI the control surface; mirroring keeps one current view without rebuilding a board in workharbor. Whether an App installation token can write fields on a **user-owned** project, and whether card-move webhooks exist for one, is **unverified**: issue #70 tests it first, and moving the repository and project into an organization is the fallback the human decides on |
 | D31 | **GitHub is reached through its API from Go, with the App's installation token, never through `gh`** (§10). The forge adapter has a typed client for the REST API (issues, pull requests, rulesets) and the GraphQL API (Projects v2 fields), mints installation tokens from a JWT signed with the App key using the standard library, and handles rate limits and errors as typed values. `gh` stays a developer and agent-session tool for this repository, not part of the product (issue #27) | `gh` would carry the user's own broadly scoped token, the wrong identity for a bot, add a host dependency against D28, and leave errors and rate limits to output parsing. Libraries such as `go-github` and `githubv4` are added only if the hand-written client grows large enough to justify them (AGENTS.md) |
-| D32 | **Recommended host: Mac mini with 24 GB memory and 512 GB storage** (§2, §8). 32 GB for heavy builds, JetBrains or more than six concurrent agents. The minimum is 16 GB, with 256 GB plus an external SSD for repositories, workspaces and backups. Spend on memory before storage: storage can be added externally, memory cannot be upgraded | Memory sets how many environments run at once (about 4 on 16 GB, about 6 on 24 GB, estimated until issue #39 measures it). Agent homes and build caches live on Apple Container volumes, which sit on the internal disk; whether Apple Container's storage can move to an external SSD is **unverified** (issue #54), so an external disk takes repositories, workspaces and backups but not reliably the volumes. An M4 Pro's extra cores buy little while agents are API-backed. Upgrade prices per region are **unverified** |
+| D32 | **Recommended host: Mac mini M6 with 32 GB memory and 512 GB storage; 24 GB / 512 GB on a budget** (§2, §8). The minimum is 16 GB, with 256 GB plus an external SSD for repositories, workspaces and backups. Spend on memory before storage, and add an external SSD rather than paying for 1 TB internal. The M5 Pro is not worth its premium for API-backed agents | US Apple Store prices on 1 October 2026: M6 16 GB / 256 GB $899, 16 / 512 $1,099, 24 / 512 $1,299, 32 / 512 $1,499, 24 GB / 1 TB $1,599, 32 GB / 1 TB $1,799; M5 Pro 24 / 512 $1,699 (Germany: M6 from €1,049). Each memory step costs $200 and buys about four more concurrent environments; memory cannot be upgraded later, while storage can be added externally. That makes 32 GB about $150 per environment against about $215 for 24 GB and $275 for 16 / 512. Environment counts are estimates until issue #39; whether Apple Container's storage can move to an external SSD is **unverified** (issue #54) |
 
 ## 4. Domain model
 
@@ -533,15 +533,15 @@ Starting estimates, to be replaced by measurement. Assumes API-backed agents, no
 
 Review corrections to the original budget:
 
-- 8–10 GiB guests + 4–6 GiB macOS leaves near-zero slack on 16 GB. **Plan for 4 concurrent instances on 16 GB and about 6 on 24 GB (D32); 8 is a stretch.**
+- 8–10 GiB guests + 4–6 GiB macOS leaves near-zero slack on 16 GB. **Plan for 4 concurrent instances on 16 GB, about 6 on 24 GB and about 10 on 32 GB (D32).**
 
 **Capacity by memory** (estimates; issue #39 measures them). macOS, the supervisor and the VPN take 4–6 GiB; a moderate environment (agent and build, including VM overhead) about 2–2.5 GiB; heavy builds or JetBrains 3–4 GiB.
 
 | Memory | Left for environments | Moderate environments | Heavy |
 | --- | --- | --- | --- |
 | 16 GB | about 10–12 GiB | about 4 | 1–2 |
-| 24 GB (recommended) | about 18–20 GiB | about 6 | 3–4 |
-| 32 GB | about 26–28 GiB | about 10 | 5–6 |
+| 24 GB (budget) | about 18–20 GiB | about 6 | 3–4 |
+| 32 GB (recommended) | about 26–28 GiB | about 10 | 5–6 |
 
 **Storage for about 4 concurrent environments** (estimates; issue #54 measures them): macOS, apps and Homebrew 35–50 GB; Apple Container images 2–10 GB; per environment a root filesystem of 1–3 GB and an agent-home volume with build caches of 3–15 GB; repository caches and topic clones by repository size; stopped environments awaiting review stay on disk; keep 10–20% free. That is roughly 120–250 GB in use, so 512 GB is comfortable and 256 GB is tight. A few stopped spike containers already took 8.2 GB on the development Mac.
 - Per-VM overhead sits outside the guest limit; a Linux kernel plus a Node-based agent is typically 300–500 MB, so the 0.75 GiB floor is tight.
