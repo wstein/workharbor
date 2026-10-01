@@ -131,3 +131,11 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 ## 10. Phone notifications (optional)
 
 Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor generates during onboarding ([design §9.4](../design.md#94-notifications)). A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7.
+
+## 11. Build and configure whr (dogfood)
+
+Three steps, as the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design.md)):
+
+1. **Install.** `make install` builds `whr` and the launcher `whr-shim` for the guest (linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`). It refuses a dirty tree, so the supervisor always runs committed code. `whr version` shows the version and whether the tree was clean.
+2. **Fill the tool store.** `whr tools build -store <tool store> -shim ~/.local/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.
+3. **Write the configuration file.** One JSON file with the repositories, the cache, workspace and tool-store directories, the GitHub App ID and key file, the agent-login file, the API token file and a loopback listen address. Every secret is a path to a file with mode `0600`, never a value in the configuration. `whr serve` checks all of it at start and lists every problem.
