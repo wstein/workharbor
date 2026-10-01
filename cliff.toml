@@ -34,15 +34,16 @@ filter_unconventional = true
 split_commits = false
 protect_breaking_commits = true
 sort_commits = "oldest"
+# Only changes a user of whr notices are listed: features, fixes, performance,
+# reverts and breaking changes. Internal types (docs, tests, refactoring, build,
+# CI, style, chores) are skipped; protect_breaking_commits keeps a breaking one
+# of any type. The HTML comments order the groups and are stripped on output.
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactoring" },
-  { message = "^docs", group = "Documentation" },
-  { message = "^test", group = "Tests" },
-  { message = "^(build|ci)", group = "Build and CI" },
-  { message = "^style", group = "Style" },
-  { message = "^chore", group = "Maintenance" },
-  { message = "^revert", group = "Reverts" },
+  { message = "^[a-z]+(\\([^)]*\\))?!:", group = "<!-- 0 -->Breaking changes" },
+  { footer = "^BREAKING[ -]CHANGE", group = "<!-- 0 -->Breaking changes" },
+  { message = "^feat", group = "<!-- 1 -->Features" },
+  { message = "^fix", group = "<!-- 2 -->Bug fixes" },
+  { message = "^perf", group = "<!-- 3 -->Performance" },
+  { message = "^revert", group = "<!-- 4 -->Reverts" },
+  { message = "^(docs|test|refactor|build|ci|style|chore)", skip = true },
 ]
