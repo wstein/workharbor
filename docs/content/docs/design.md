@@ -50,6 +50,9 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | D7 | Harbor metaphor is for branding and UI section names only; CLI and API use plain nouns | Guessable, searchable commands |
 | D8 | **Web UI: server-rendered Go with `templ` templates, htmx and SSE**, embedded in the binary. No Node toolchain and no CSS framework in release 1. The JSON API and the HTML handlers call the **same service layer**, so nothing is implemented twice | Release 1 is a small remote-control UI: live transcript, messages, start and pause/cancel, and answering Decisions (§9.3). One language, one binary, fewer dependencies and a smaller attack surface on the same origin. Revisit (Svelte) if the UI needs rich client-side state such as inline diff review or a takeover panel |
 | D9 | **Documentation site: Hugo with the Hextra theme** (Go module, pinned version), deployed to GitHub Pages, dark by default with a light toggle | Go toolchain only, no Ruby or Node. Fast builds, built-in search and dark mode. Replaces the earlier Jekyll setup |
+| D10 | **Decisions are rows in this table.** Each is proposed and settled in a GitHub issue labelled `decision`, then recorded here with its rationale. Separate decision-record pages come only if the design is split into several pages | One place to look; CONTRIBUTING already names this table as the record |
+| D11 | **Cooperative pause stays an agent capability flag**, reported per adapter and never assumed. None of the measured agents has it (spike #1), so their adapters report it false; pause then means a hard interrupt followed by a resume from the agent session, and the UI says so | Keeps the contract ready for an agent that can stop after its current turn, without pretending the current ones can |
+| D12 | **Release 1 starts with a CLI-only vertical slice:** `whr run <issue-url>`, then `whr logs -f`, `whr say` and `whr cancel`, and `whr approve` pushes the prepared `agent/*` branch and opens the PR, with Claude Code in Apple Container on one forge. The web UI, PWA, SSH, notifications and the Codex CLI adapter follow in the rest of release 1 | Proves the service layer, adapters and policy end to end before any UI, and gives D8 a working API to check against |
 
 ## 4. Domain model
 
@@ -195,7 +198,7 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
 - headless / unattended operation
 - **mid-run message injection (required for release 1)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
 - **structured event stream (required for release 1)**: messages, tool calls, diffs and test results as typed events, which feed the live transcript (§9.3)
-- cooperative pause (e.g. stop after current turn)
+- cooperative pause (e.g. stop after current turn); reported false by every measured agent (D11)
 - session persistence and resume
 - PR/issue tooling
 - "awaiting guidance" signal (how the agent raises a blocking Decision)
@@ -510,6 +513,8 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 ## 13. Delivery
 
 ### Release 1: one vertical slice
+
+Built CLI first (D12): the slice is the core loop through `whr`; the web UI and the phone client come after it.
 
 - [ ] Apple Container backend, one host, native adapter
 - [ ] Built-in agent adapters for Claude Code (first) and Codex CLI (§5.2, §5.5), with observed progress and validated recovery
