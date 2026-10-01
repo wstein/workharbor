@@ -112,7 +112,7 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 		root.AddCommand(c)
 	}
 	for _, c := range []*cobra.Command{
-		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st),
+		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st),
 	} {
 		add(c)
 	}

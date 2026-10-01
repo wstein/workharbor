@@ -1,0 +1,176 @@
+// Package doctor is `whr doctor`: the checks of the onboarding steps (design
+// §9.5). A check that has not been measured reports not verified, never ok:
+// the point of the command is that a green line means something.
+package doctor
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/runtime"
+)
+
+// Status is the outcome of one check.
+type Status string
+
+const (
+	OK          Status = "ok"           // measured and fine
+	Fail        Status = "fail"         // measured and wrong
+	NotVerified Status = "not_verified" // no measurement exists, or it needs a live run
+	Skipped     Status = "skipped"      // the human left it out (--skip)
+)
+
+// Result is one line of the report.
+type Result struct {
+	Check  string `json:"check"`
+	Step   int    `json:"step"` // the onboarding step of §9.5
+	Status Status `json:"status"`
+	Detail string `json:"detail"`
+}
+
+// Check is one named check. Its Run may assume nothing about the others.
+type Check struct {
+	Name string
+	Step int
+	Run  func(ctx context.Context) (Status, string)
+}
+
+// Deps is what the checks touch outside themselves, so tests need no host.
+type Deps struct {
+	ConfigPath string
+	Home       string
+	FS         runtime.FS
+	LookPath   func(string) (string, error)
+	// Probe asks the running supervisor for something that needs the token.
+	Probe func(ctx context.Context) error
+}
+
+// VendorTerms is where the manual explains a subscription login (D40).
+const VendorTerms = "docs/manual/vendor-terms"
+
+// Checks returns every check in the order of §9.5. They share one loaded
+// configuration, read on first use.
+func Checks(d Deps) []Check {
+	var (
+		cfg    *config.Config
+		cfgErr error
+		loaded bool
+	)
+	load := func() (*config.Config, error) {
+		if !loaded {
+			cfg, cfgErr = config.Load(d.ConfigPath)
+			loaded = true
+		}
+		return cfg, cfgErr
+	}
+	needCfg := func(run func(*config.Config) (Status, string)) func(context.Context) (Status, string) {
+		return func(context.Context) (Status, string) {
+			c, err := load()
+			if err != nil {
+				return Fail, "needs a valid configuration (see the config check)"
+			}
+			return run(c)
+		}
+	}
+	notVerified := func(why string) func(context.Context) (Status, string) {
+		return func(context.Context) (Status, string) { return NotVerified, why }
+	}
+	return []Check{
+		{"config", 1, func(context.Context) (Status, string) {
+			c, err := load()
+			if err != nil {
+				return Fail, problems(err)
+			}
+			return OK, fmt.Sprintf("%s: %d repositories, listening on %s", d.ConfigPath, len(c.Repositories), c.Listen)
+		}},
+		{"server", 1, func(ctx context.Context) (Status, string) {
+			if d.Probe == nil {
+				return NotVerified, "no client"
+			}
+			if err := d.Probe(ctx); err != nil {
+				return Fail, "the supervisor did not accept the token: " + oneLine(err.Error()) + " (is `whr serve` running?)"
+			}
+			return OK, "the supervisor answered with the configured token"
+		}},
+		{"forge-key", 2, needCfg(func(c *config.Config) (Status, string) {
+			b, err := config.ReadSecret(c.GitHub.KeyFile)
+			if err != nil {
+				return Fail, "github.key_file: " + oneLine(err.Error())
+			}
+			if !strings.Contains(string(b), "PRIVATE KEY") {
+				return Fail, "github.key_file does not hold a PEM private key"
+			}
+			return OK, fmt.Sprintf("App %d: the key file is private and a PEM key; not tried against GitHub", c.GitHub.AppID)
+		})},
+		{"forge-limits", 2, notVerified("that the bot cannot bypass branch protection, and that merge, tag, release and deploy stay forbidden, is enforced by the forge adapter but not checked against your repositories")},
+		{"agent-login", 3, needCfg(func(c *config.Config) (Status, string) {
+			if c.AgentAPIKeyEnvFile != "" {
+				if _, err := c.AgentAPIKey(); err != nil {
+					return Fail, oneLine(err.Error())
+				}
+				return OK, "api-key: the key file is private and holds only API keys; not tried against the vendor"
+			}
+			return NotVerified, "subscription: sign in inside each environment (D40); whr never sees the credential. Read " + VendorTerms + " first"
+		})},
+		{"runtime", 4, func(context.Context) (Status, string) {
+			p, err := d.LookPath("container")
+			if err != nil {
+				return Fail, "the container CLI is not on the PATH"
+			}
+			return OK, p + " found; whether its service is running is not checked"
+		}},
+		{"mounts", 4, func(context.Context) (Status, string) {
+			if err := runtime.CheckMount(d.FS, d.Home, d.Home); err == nil {
+				return Fail, "the host-side mount check accepts the home directory"
+			}
+			return OK, "the host-side mount check refuses the home directory; the runtime's own refusal is not measured here"
+		}},
+		{"egress", 4, notVerified("default-deny egress needs a live environment; run the Apple Container live suite (-tags applecontainer)")},
+		{"reboot", 4, notVerified("an agent session surviving a reboot is unverified (design §12)")},
+		{"capacity", 4, notVerified("room for 4 concurrent environments (§8) is not measured")},
+		{"notifications", 5, notVerified("no notification channel is configured yet")},
+	}
+}
+
+// Run runs the checks except the skipped ones, in order.
+func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
+	out := make([]Result, 0, len(checks))
+	for _, c := range checks {
+		if skip[c.Name] {
+			out = append(out, Result{c.Name, c.Step, Skipped, "skipped on request"})
+			continue
+		}
+		st, detail := c.Run(ctx)
+		out = append(out, Result{c.Name, c.Step, st, detail})
+	}
+	return out
+}
+
+// Failed reports whether any check failed. Not verified and skipped do not
+// fail: they say what is unknown.
+func Failed(rs []Result) bool {
+	for _, r := range rs {
+		if r.Status == Fail {
+			return true
+		}
+	}
+	return false
+}
+
+// DefaultLookPath is exec.LookPath.
+var DefaultLookPath = exec.LookPath
+
+func problems(err error) string {
+	if e, ok := err.(*config.Error); ok { //nolint:errorlint // the config error is returned unwrapped
+		if len(e.Problems) > 3 {
+			return strings.Join(e.Problems[:3], "; ") + fmt.Sprintf("; and %d more", len(e.Problems)-3)
+		}
+		return strings.Join(e.Problems, "; ")
+	}
+	return oneLine(err.Error())
+}
+
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

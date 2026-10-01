@@ -1,0 +1,174 @@
+package doctor
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/runtime"
+)
+
+type rig struct {
+	dir, cfgPath string
+	cfg          config.Config
+}
+
+func newRig(t *testing.T) *rig {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"workspaces", "store", "secrets", "home"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	secret := func(name, body string) string {
+		p := filepath.Join(dir, "secrets", name)
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	r := &rig{dir: dir, cfgPath: filepath.Join(dir, "config.json")}
+	r.cfg = config.Config{
+		Listen:             "127.0.0.1:8787",
+		Repositories:       []config.Repository{{Name: "wstein/workharbor"}},
+		Roots:              config.Roots{Workspaces: []string{filepath.Join(dir, "workspaces")}, ToolStore: filepath.Join(dir, "store")},
+		GitHub:             config.GitHub{AppID: 1, KeyFile: secret("app.pem", "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n")},
+		AgentAPIKeyEnvFile: secret("agent.env", "ANTHROPIC_API_KEY=x\n"),
+		APITokenFile:       secret("api.token", "x\n"),
+	}
+	return r
+}
+
+func (r *rig) write(t *testing.T) {
+	t.Helper()
+	b, err := json.Marshal(r.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.cfgPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (r *rig) deps() Deps {
+	return Deps{
+		ConfigPath: r.cfgPath, Home: filepath.Join(r.dir, "home"), FS: runtime.OSFS{},
+		LookPath: func(string) (string, error) { return "/usr/local/bin/container", nil },
+		Probe:    func(context.Context) error { return nil },
+	}
+}
+
+func statuses(rs []Result) map[string]Status {
+	m := map[string]Status{}
+	for _, r := range rs {
+		m[r.Check] = r.Status
+	}
+	return m
+}
+
+func run(d Deps, skip ...string) []Result {
+	sk := map[string]bool{}
+	for _, s := range skip {
+		sk[s] = true
+	}
+	return Run(context.Background(), Checks(d), sk)
+}
+
+func TestAHealthyHostPassesAndStillSaysWhatIsNotVerified(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+	rs := run(r.deps())
+	if Failed(rs) {
+		t.Fatalf("failed: %+v", rs)
+	}
+	got := statuses(rs)
+	for _, name := range []string{"config", "server", "forge-key", "agent-login", "runtime", "mounts"} {
+		if got[name] != OK {
+			t.Errorf("%s = %s, want ok", name, got[name])
+		}
+	}
+	// what nothing measured is never reported as passed
+	for _, name := range []string{"forge-limits", "egress", "reboot", "capacity", "notifications"} {
+		if got[name] != NotVerified {
+			t.Errorf("%s = %s, want not_verified", name, got[name])
+		}
+	}
+}
+
+func TestASubscriptionLoginIsNotVerifiedAndPointsAtTheVendorTerms(t *testing.T) {
+	r := newRig(t)
+	r.cfg.AgentAPIKeyEnvFile = ""
+	r.write(t)
+	for _, res := range run(r.deps()) {
+		if res.Check == "agent-login" {
+			if res.Status != NotVerified || !strings.Contains(res.Detail, VendorTerms) || !strings.Contains(res.Detail, "D40") {
+				t.Errorf("agent-login: %+v", res)
+			}
+			return
+		}
+	}
+	t.Fatal("no agent-login check")
+}
+
+func TestASubscriptionTokenInTheKeyFileFails(t *testing.T) {
+	r := newRig(t)
+	if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte("CLAUDE_CODE_OAUTH_TOKEN=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.write(t)
+	rs := run(r.deps())
+	if !Failed(rs) {
+		t.Fatalf("a subscription token in agent_api_key_env_file passed: %+v", rs)
+	}
+}
+
+func TestAnInvalidConfigFailsAndTheChecksThatNeedItSayWhy(t *testing.T) {
+	r := newRig(t)
+	r.cfg.Listen = "0.0.0.0:8787"
+	r.write(t)
+	got := run(r.deps())
+	st := statuses(got)
+	if st["config"] != Fail || st["forge-key"] != Fail || st["agent-login"] != Fail {
+		t.Fatalf("%+v", got)
+	}
+	if !strings.Contains(got[0].Detail, "listen") {
+		t.Errorf("detail %q does not name the problem", got[0].Detail)
+	}
+	// a missing file is a failure too, with the path in the message
+	r.cfgPath = filepath.Join(r.dir, "missing.json")
+	if rs := run(r.deps()); statuses(rs)["config"] != Fail {
+		t.Fatalf("%+v", rs)
+	}
+}
+
+func TestFailuresOfTheHost(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+	d := r.deps()
+	d.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+	d.Probe = func(context.Context) error { return errors.New("401 token\nrejected") }
+	st := statuses(run(d))
+	if st["runtime"] != Fail || st["server"] != Fail {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestSkippedChecksAreReportedAndNotRun(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+	d := r.deps()
+	d.Probe = func(context.Context) error { t.Error("a skipped check ran"); return nil }
+	rs := run(d, "server")
+	if statuses(rs)["server"] != Skipped || Failed(rs) {
+		t.Fatalf("%+v", rs)
+	}
+}

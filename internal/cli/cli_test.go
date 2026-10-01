@@ -539,3 +539,27 @@ func TestRunOnAnUntrustedIssuePrintsTheHoldAndExitsSix(t *testing.T) {
 		t.Errorf("--json: exit %d, stdout %q", code, out)
 	}
 }
+
+func TestDoctorSaysNotVerifiedAndFailsOnlyOnFail(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	// no configuration file at the default path: the config check fails
+	code, out, _ := s.runCLI("", "doctor", "--skip", "runtime")
+	if code != exitcode.Error || !strings.Contains(out, "fail\tconfig\t") || !strings.Contains(out, "skipped\truntime\t") || !strings.Contains(out, "not_verified\tegress\t") {
+		t.Fatalf("exit %d, stdout %q", code, out)
+	}
+	if strings.Contains(out, "ok\tegress") {
+		t.Error("egress reported ok")
+	}
+	code, out, _ = s.runCLI("", "doctor", "--json", "--skip", "runtime")
+	var v struct {
+		OK     bool
+		Checks []struct{ Check, Status string }
+	}
+	if err := json.Unmarshal([]byte(out), &v); err != nil || code != exitcode.Error || v.OK || len(v.Checks) == 0 {
+		t.Fatalf("exit %d, %v, %q", code, err, out)
+	}
+	if code, _, _ := s.runCLI("", "doctor", "--skip", "nope"); code != exitcode.Usage {
+		t.Errorf("unknown check: exit %d, want usage", code)
+	}
+}
