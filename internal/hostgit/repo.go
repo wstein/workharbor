@@ -61,7 +61,7 @@ func (r *Repo) FetchBranch(ctx context.Context, agentCheckout, branch string) (s
 	ref := "refs/heads/" + branch
 	// The source is the verified .git directory, never the path as given.
 	if _, err := r.g.run(ctx, r.path, true, nil,
-		"fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--force",
+		"fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--update-shallow", "--force",
 		"--", gitDir, "+"+ref+":"+ref); err != nil {
 		return "", err
 	}
