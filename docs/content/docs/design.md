@@ -281,8 +281,9 @@ Autonomy is a per-repo/per-task policy table: **action → `auto | ask | forbid`
 
 | Action | Default |
 | --- | --- |
-| Push to `agent/*` branches | auto |
-| Open/update PR, comment on issue | auto |
+| Commit in the topic's own checkout | auto |
+| Push an `agent/*` branch | **after cleanup**: the supervisor pushes the prepared branch once you approve it (§4.5); the agent never pushes |
+| Open/update PR, comment on issue | auto, after the push |
 | Merge, tag, release, deploy | **forbid** for the agent; human-gated |
 | Sensitive actions triggered by untrusted input | ask |
 
