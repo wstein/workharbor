@@ -1,0 +1,34 @@
+layout A | project files:      114 | go 1.27.1 | resources: 4 CPUs, 4 GiB
+copy the checkout into the volume: 215 ms
+container: running 4 cpus 4096MB
+
+== cold: empty module and build caches (includes downloading modules from the network)
+cold   build            3342 ms (exit 0)
+cold   vet              1083 ms (exit 0)
+cold   test             1902 ms (exit 0)
+cold   lint            35599 ms (exit 0)
+cold   editorconfig     3367 ms (exit 0)
+cold   TOTAL           45300 ms
+
+== warm: same tree, caches full
+warm   build             239 ms (exit 0)
+warm   vet               170 ms (exit 0)
+warm   test              172 ms (exit 0)
+warm   lint             1409 ms (exit 0)
+warm   editorconfig      346 ms (exit 0)
+warm   TOTAL            2339 ms
+
+== incremental: one source file changed
+incr   build             251 ms (exit 0)
+incr   vet               165 ms (exit 0)
+incr   test              180 ms (exit 0)
+incr   lint             1682 ms (exit 1)
+incr   editorconfig      316 ms (exit 0)
+incr   TOTAL            2596 ms
+
+== cache sizes
+390M	/data/gomod
+697M	/data/gocache
+gomod files: 25741  gocache files: 7773
+Container ID  Cpu %  Memory Usage         Net Rx/Tx             Block I/O             Pids
+whspike-bA    0.05%  1.41 GiB / 4.00 GiB  80.82 MiB / 1.17 MiB  88.73 MiB / 1.68 GiB  2

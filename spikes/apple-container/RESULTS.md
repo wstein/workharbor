@@ -15,6 +15,7 @@ Measured on 1 October 2026 on the Mac mini (Apple silicon, 16 GiB, macOS 26.6.2)
 | 7. Stock image plus a shared read-only tool store | Measured | Works. glibc and musl need separate builds; Codex's static musl binary runs everywhere. Startup is the same from a bind mount, a volume or a copy |
 | 8. Memory at 1 and 4 containers | Not started | |
 | 9. Repositories on the host, mounted in (worktrees) | Measured | Works in three layouts. A shared `.git` exposes sibling tasks and runs guest-planted hooks and config on the host unless host git is hardened; a per-task clone with read-only alternates is the safest layout. A bind-mounted checkout costs a cold first status of 0.3 to 1.1 s and then about 120 ms |
+| 10. A real project build, volume versus bind mount | Measured | Keeping the checkout on a bind mount costs nothing measurable. Keeping the Go module and build caches on a bind mount roughly doubles warm builds and adds a quarter to a cold one |
 
 ## 1. Lifecycle and limits
 
@@ -178,6 +179,25 @@ Git tuning (`core.untrackedCache`, `feature.manyFiles`, `core.preloadIndex`, `co
 - Prefer the **per-task clone with a read-only object cache** over worktrees of one shared repository: it removes the sibling-task and shared-hook exposure and needs no pointer fix. Worktrees stay attractive for the developer's own parallel topics on the host, where no agent writes into the shared `.git`.
 - The host must treat every agent-writable repository as hostile: hardened git invocation or fetch into a trusted repository, never plain git in the agent's tree.
 - A relative worktree (`--relative-paths`) fixes the pointer only if the mounts keep the relative layout.
+
+## 10. A real project build: volume versus bind mount
+
+`11-build-bench.sh` times the steps of this repository's `make check` (build, vet, test, and golangci-lint and editorconfig-checker compiled from source with `go run`) in a stock fedora image with the Go 1.27.1 toolchain mounted read-only, 4 CPUs and 4 GiB. The caches it builds are large: 390 MB in about 25,700 module files and 697 MB in about 7,800 build-cache files. One run per cell, on one machine; the cold run includes downloading modules from the network, so it varies.
+
+| Layout | Cold (empty caches) | Warm | One file changed |
+| --- | --- | --- | --- |
+| **A** checkout and caches on one **volume** | 45.3 s | 2.34 s | 2.60 s |
+| **B** checkout on a **bind mount**, caches on a volume | 41.1 s | 2.68 s | 2.65 s |
+| **C** checkout and caches on a **bind mount** | 56.4 s | 4.65 s | 4.83 s |
+
+Per step, warm: build 239 / 257 / 318 ms, vet 170 / 180 / 267 ms, test 172 / 201 / 283 ms, golangci-lint 1.41 / 1.46 / 3.32 s (A / B / C). The slowest cold step was compiling golangci-lint: 35.6 s on a volume, 32.7 s with the checkout on a bind mount and 45.9 s with everything on a bind mount.
+
+- **The checkout on a bind mount (B) is as fast as on a volume (A).** The differences are within the run-to-run noise (B's cold run was even faster, which is network variance). A project's own sources are few files, so the bind mount's cost per file does not show.
+- **The caches are what hurt (C).** Putting the module cache (about 25,700 small files) and the build cache on a bind mount made warm builds about 2x slower and the cold build about 25% slower, with golangci-lint's warm run taking 3.3 s instead of 1.4 s.
+- **A project with many small files in its working tree behaves like C.** `node_modules` is the obvious case and was not measured.
+- Memory: the container peaked at about 1.4 GiB during the build.
+
+**Consequences:** keep repositories on the host (section 9) and bind-mount them; keep every cache and build output (`GOMODCACHE`, `GOCACHE`, package-manager caches, build directories) on the per-environment volume, outside the checkout, by environment variables set in the environment. The adapter, not the agent, sets them.
 
 ## Consequences for the design
 

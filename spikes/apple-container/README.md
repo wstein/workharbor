@@ -26,9 +26,10 @@ SCRATCH=$S ./05a-agent-install.sh && SCRATCH=$S ./05b-agent-persist.sh
 SCRATCH=$S ./06-recovery.sh
 STORE=$S/store ./build-store.sh && STORE=$S/store ./07b-toolstore.sh
 SCRATCH=$S ./10-git-worktree.sh && SCRATCH=$S ./10b-git-tuning.sh
+for L in A B C; do LAYOUT=$L SCRATCH=$S/build ./11-build-bench.sh; done
 ./cleanup-all.sh
 ```
 
-`07b-toolstore.sh` pulls `debian:bookworm-slim`, `ubuntu:24.04` and `alpine:3` if they are missing and records them in `pulled-images.txt` next to the store, so only those can be removed afterwards (`container image rm`). `10-git-worktree.sh` pulls `alpine/git` for a guest with git and records it in `pulled-git-image.txt`; remove it with `container image rm`. `build-store.sh` needs `curl`, `jq`, `gh` and `tar`, and downloads about 950 MB.
+`07b-toolstore.sh` pulls `debian:bookworm-slim`, `ubuntu:24.04` and `alpine:3` if they are missing and records them in `pulled-images.txt` next to the store, so only those can be removed afterwards (`container image rm`). `10-git-worktree.sh` pulls `alpine/git` for a guest with git and records it in `pulled-git-image.txt`; remove it with `container image rm`. `11-build-bench.sh` downloads the Go toolchain (67 MB) and about 1 GB of modules per layout; Go makes its module cache read-only, so run `chmod -R u+w` on the scratch directory before removing it. `build-store.sh` needs `curl`, `jq`, `gh` and `tar`, and downloads about 950 MB.
 
 `probe/` is a small static Go helper (listeners, dial tests and a logging allowlist proxy) that runs on the host and, cross-compiled, inside the containers, so the guest image needs no extra tools.
