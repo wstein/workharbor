@@ -87,15 +87,16 @@ container system status
 
 ## 7. Reach it from your phone
 
-workharbor listens on loopback and on exactly **one address you configure**, never on all interfaces, and every request needs its API token (D29). The address keeps the API off your other networks; the token is what stops anything else that reaches it, including the proxy container, which can reach the Mac. Pick one option.
+workharbor listens on **loopback only**, and every request needs its API token (D29). A guest container reaches anything on the Mac's LAN address or on all interfaces, even from an isolated network, but not loopback (issue #69). Your phone reaches workharbor through a forwarder. Pick one option.
 
 ### Option A: Tailscale (default)
 
 The quickest option. The Mac gets its own VPN interface and a stable name, and Tailscale can issue HTTPS certificates for that name, which the phone app (PWA) needs.
 
 1. Install the Tailscale app on the Mac (step 5) and on the phone, and sign in on both.
-2. workharbor listens on the Mac's Tailscale address.
-3. Optional: limit the phone to the workharbor port with a Tailscale access rule.
+2. Forward the Mac's Tailscale name to workharbor on loopback with HTTPS: `tailscale serve --bg <port>` (check the exact syntax with `tailscale serve --help`). workharbor itself stays on loopback.
+3. Optional: limit the phone to that port with a Tailscale access rule.
+4. Whether a guest container can reach the Mac's Tailscale address is **unverified** (issue #69); the API token guards it either way.
 
 Tailscale's coordination server is a third party. [Headscale](https://github.com/juanfont/headscale) replaces it with a self-hosted one.
 
@@ -105,7 +106,7 @@ No VPN software on the Mac and no third party. A FRITZ!Box offers WireGuard from
 
 1. On the FRITZ!Box: *Internet → Permit Access → VPN (WireGuard)*, add a connection for your phone, and import it into the WireGuard app with the QR code.
 2. The phone then reaches the Mac at its LAN address. There is no VPN interface on the Mac, so the address alone does not tell your phone from any other device on the LAN.
-3. So workharbor listens on the Mac's LAN address, and a `pf` packet-filter rule admits only the addresses the FRITZ!Box gives VPN clients to its port. The macOS firewall in System Settings cannot do this: it filters by app, not by address. The `pf` rule and how the FRITZ!Box numbers VPN clients are **unverified** (issue #69): check the address your phone gets.
+3. So workharbor stays on loopback, and a small HTTPS proxy on the Mac's LAN address forwards to it. Guest containers can reach that proxy too, so a `pf` packet-filter rule admits only the addresses the FRITZ!Box gives VPN clients to its port, and the API token guards every request. The macOS firewall in System Settings cannot do this: it filters by app, not by address. The `pf` rule and how the FRITZ!Box numbers VPN clients are **unverified** (issue #69): check the address your phone gets.
 4. The phone app needs HTTPS: use your own certificate authority (installed on the phone) or a certificate for a domain you own.
 
 A line without a public IPv4 address (DS-Lite, carrier-grade NAT) may not accept inbound WireGuard (**unverified**); Tailscale works there.
@@ -117,7 +118,9 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 ## 8. Firewall and SSH
 
 - macOS firewall on, in stealth mode: *System Settings → Network → Firewall*.
-- Remote Login (SSH) only for your administrator account (*System Settings → General → Sharing → Remote Login → Allow access for*), until workharbor's short-lived SSH certificates exist (issue #32). To keep it off the LAN, reach it only through Tailscale (Tailscale SSH, or a `pf` rule like step 7B's); with nothing else, macOS answers SSH on every interface.
+- **Every guest container can reach the Mac's services that listen on all interfaces**, even from an isolated network (issue #69). Turn off what you do not need in *System Settings → General → Sharing* (File Sharing, Screen Sharing, AirPlay Receiver, Media Sharing).
+- Remote Login (SSH) only for your administrator account (*Allow access for*), with **keys only**: set `PasswordAuthentication no` and `KbdInteractiveAuthentication no` in a file under `/etc/ssh/sshd_config.d/`. Otherwise an agent could guess passwords. Keep it until workharbor's short-lived SSH certificates exist (issue #32).
+- A `pf` rule that blocks the container subnets (`192.168.64.0/24` for the default network, and the `--internal` networks') from the Mac's own addresses closes this for every service; it is **unverified** and comes with issue #69.
 - Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3).
 
 ## 9. Backups
