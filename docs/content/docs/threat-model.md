@@ -63,7 +63,7 @@ phone / laptop ──VPN──▶ supervisor (host, trusted) ──▶ GitHub AP
 | # | Threat | Source | Controls | Enforced and tested in | Status |
 | --- | --- | --- | --- | --- | --- |
 | T1 | Injected instructions make the agent do something harmful | A1 | Untrusted input is data, never instructions; runs on issues by untrusted authors wait for a Decision; sensitive actions on untrusted input ask (§6, §7.1) | #53 | Open |
-| T2 | The guest reads or writes host secrets through a mount | A2, A3 | The adapter rejects `$HOME` and its parents, secrets directories, sockets and system directories, after resolving symlinks (§4.4, §7.4) | #18, #50; remaining gaps in #58; resolved-path mounting in #26 | Implemented; known gaps in #58 |
+| T2 | The guest reads or writes host secrets through a mount | A2, A3 | The adapter rejects `$HOME` and its parents, secrets directories, sockets and system directories, after resolving symlinks (§4.4, §7.4) | #18, #50; #58; resolved-path mounting in #26 | Implemented; hard links accepted |
 | T3 | The host runs code planted in an agent checkout (hooks, `core.fsmonitor`, filters, `core.sshCommand`) | A2 | Host git runs only through `hostgit`: read-only plumbing in the agent's tree, isolated configuration, and cleanup and push on a supervisor-owned copy (§4.5, §7.4) | #19 (reopened: alternates and `.git` redirect checks) | Implemented and tested for hooks, `core.fsmonitor`, `core.sshCommand`, `core.pager`, filters and `packObjectsHook`; alternates open |
 | T4 | The guest reaches the host, the LAN or other environments | A2, A3 | One `--internal` network per environment; supervisor listeners on loopback; the sidecar is the only way out (§7.2) | Egress conformance in #26 | Measured in spike #2 |
 | T5 | Data leaves through the network | A2, A3 | Default-deny allowlist by hostname in the sidecar, every decision logged; no DNS in the guest (§7.2) | #26 | Measured; limits under accepted risks |
@@ -92,6 +92,6 @@ These are accepted for a single-developer, watched personal tool. Each has a lim
 ## Open items
 
 - T1 and T15 have no implemented control yet: #53 and #59. T3's fetch is open to an alternates or `.git` redirect until #19 is fixed.
-- The `CheckMount` gaps found in review (symlinked secret files inside a secrets directory, a few more locations) are in #58, which also decides whether mounts are accepted only below workspace roots that workharbor owns.
+- Links inside a secrets directory are followed one level and the locations found in review are rejected (#58). Mounts can also be limited to the workspace roots workharbor owns, as a second layer behind the deny-list (`CheckMountsWithin`). Accepted: a hard link to a secret inside a project, and links more than one level deep inside a secrets directory.
 - Webhook signature verification and the author association used for trust tiers are part of the forge adapter, #27.
 - This page is reviewed whenever a D-row changes a boundary, and before release 1.
