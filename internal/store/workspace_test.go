@@ -171,3 +171,25 @@ func TestExistingTasksLoad(t *testing.T) {
 		t.Errorf("old task: %+v, %v", agg, err)
 	}
 }
+
+// A workspace's environment serves its tasks one after the other, so one
+// environment ID is in several tasks.
+func TestOneEnvironmentServesSeveralTasks(t *testing.T) {
+	s := openTemp(t)
+	for _, id := range []domain.ID{"t1", "t2"} {
+		agg := domain.NewTaskAggregate(domain.Task{ID: id, Repo: "a/b", Issue: "1", State: domain.TaskQueued, CreatedAt: wsNow})
+		agg.AddEnvironment(domain.Environment{ID: "shared", Backend: "fake", State: domain.EnvRunning})
+		if _, err := s.SaveTask(bg, agg); err != nil {
+			t.Fatalf("task %s: %v", id, err)
+		}
+	}
+	for _, id := range []domain.ID{"t1", "t2"} {
+		agg, err := s.LoadTask(bg, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := agg.Environment("shared"); !ok {
+			t.Errorf("task %s lost its environment", id)
+		}
+	}
+}

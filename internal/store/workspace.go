@@ -220,7 +220,21 @@ func (s *Store) RemoveAgent(ctx context.Context, a domain.Agent, ev domain.Event
 // running or paused. It is how the service applies the one-run-per-environment
 // rule across tasks.
 func (s *Store) LiveRuns(ctx context.Context, env domain.ID) ([]domain.Run, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, task_id, workspace_id, agent_id, env_id, state FROM runs WHERE env_id = ? AND state IN ('starting', 'running', 'paused') ORDER BY id`, string(env))
+	return liveRuns(ctx, s.db, env)
+}
+
+// LiveRuns is Store.LiveRuns inside a transaction, so a check and the save that
+// follows it cannot be separated by another writer.
+func (tx *Tx) LiveRuns(ctx context.Context, env domain.ID) ([]domain.Run, error) {
+	return liveRuns(ctx, tx.tx, env)
+}
+
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func liveRuns(ctx context.Context, q querier, env domain.ID) ([]domain.Run, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id, task_id, workspace_id, agent_id, env_id, state FROM runs WHERE env_id = ? AND state IN ('starting', 'running', 'paused') ORDER BY id`, string(env))
 	if err != nil {
 		return nil, fmt.Errorf("store: live runs: %w", err)
 	}
