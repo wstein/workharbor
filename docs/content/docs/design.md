@@ -212,9 +212,18 @@ Measured in spike #2 (issue #2):
 - **After a Mac reboot** nothing starts the services either: there is no LaunchAgent or LaunchDaemon plist for them on disk. The supervisor's own launchd job must run `container system start --disable-kernel-install` (the flag avoids the interactive kernel-install prompt, which was not exercised) and then reconcile. A reboot itself was not triggered.
 - **Recovery loop.** List containers, start those that should be running, wait for `exec` to answer (about 100 ms after start), then resume the agent from its session. Container IPs change on every start, so they are read again each time and never stored.
 
-### 5.4 Events and idempotency
+### 5.4 Events, idempotency and retention
 
 Per-task append-only event log doubles as audit trail, UI feed and CLI stream. Every mutating command accepts an idempotency key.
+
+**Retention.** A chat grows with every message, tool call, tool result and diff, so the log has two tiers:
+
+- **Audit entries** are never purged: state changes, Decisions and their answers, approvals (including the tool and a capped input), commits and PR links, credential issue and revoke, policy denials, permission-mode changes, and the record of every purge.
+- **Transcript content** is bulk and has retention: assistant text, tool inputs and results, diffs, thinking and attachments. Streamed token deltas are never kept durably, only the final message (§5.2).
+- **Limits.** A size cap and an age limit per task, with the cap and limit set by policy, and a manual purge from the web UI and `whr purge` (§9.3). Deleting a task purges its transcript.
+- **A purge records itself.** It deletes transcript content and keeps one audit entry: who, when, and what was removed (event count and bytes). Audit entries refer to transcript content by hash, so a purge leaves a verifiable gap and never silently rewrites history (§7.7).
+- **The agent's own session is separate.** A purge does not touch the session the agent resumes from; shrinking the agent's context (compaction or a new session) is a different action with its own consequence, the agent forgetting, and is not offered as a purge.
+- **Redaction.** Retained transcripts are redacted (§7.3) and treated as untrusted data when shown.
 
 ### 5.5 Adapter plugins
 
@@ -339,6 +348,7 @@ whr logs <task> -f
 whr watch                                  # live event stream
 whr say <task> "msg"                       # or -f guidance.md, or - for stdin
 whr pause|resume|cancel <task>
+whr purge <task> --transcript [--before <time>]   # delete transcript content, keep audit entries
 whr inbox [--watch]
 whr approve|reject <decision>
 whr diff <task>
@@ -373,7 +383,9 @@ Because the app is a remote for coding agents (§1), v0 also carries the core re
 - **Pause, resume and cancel** a run.
 - **Answer Decisions**, as before.
 
-Writes in v0 are therefore: answer Decisions, send messages, start tasks, pause/resume/cancel. Editor launch and takeover (`whr ssh --takeover`) come after v0.
+- **History controls.** *Clear view* hides older events and loads them on request, without deleting anything. *Purge transcript* deletes the stored transcript content after a confirmation that states what goes (event count and size), what stays (the audit entries and a record of the purge) and that it cannot be undone. A chat is paged and virtualized, so a very long one stays usable on a phone.
+
+Writes in v0 are therefore: answer Decisions, send messages, start tasks, pause/resume/cancel, and purge a transcript. Editor launch and takeover (`whr ssh --takeover`) come after v0.
 
 **Stack (D8).** `templ` templates rendered by the Go server, htmx for partial updates and form posts, and the htmx SSE extension for live event and inbox updates. htmx is vendored and version-pinned; styling is plain CSS with design tokens shared with the documentation site (navy and teal, light and dark). Pages are semantic HTML first, so they work without JavaScript for reading. Handlers stay thin: they call the same service layer as the JSON API. Diffs are server-rendered (or use a small library such as diff2html); an interactive terminal (xterm.js) is out of scope for v0.
 
@@ -474,7 +486,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 - [ ] One agent runner with observed progress and validated recovery
 - [ ] Task/workspace/run/decision model with durable state, event log, reconciler
 - [ ] `whr` CLI (scripting contract, completion, `doctor`)
-- [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel (§9.3)
+- [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel, transcript purge (§9.3, §5.4)
 - [ ] SSH access (certificates, `whr ssh --config`)
 - [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
 - [ ] Installable PWA as the phone client: web app manifest and a service worker for the app shell, so the remote-control UI (§9.3) installs to the Home Screen. Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and uses per-device revocable tokens
