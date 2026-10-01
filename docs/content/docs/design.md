@@ -296,7 +296,7 @@ Per-task append-only event log doubles as audit trail, UI feed and CLI stream. E
 
 **Retention.** A chat grows with every message, tool call, tool result and diff, so the log has two tiers:
 
-- **Audit entries** are never purged: state changes, Decisions and their answers, approvals (including the tool and a capped input), commits and PR links, credential issue and revoke, policy denials, permission-mode changes, and the record of every purge.
+- **Audit entries** are never purged: state changes, Decisions and their answers, usage records (§5.7), approvals (including the tool and a capped input), commits and PR links, credential issue and revoke, policy denials, permission-mode changes, and the record of every purge.
 - **Transcript content** is bulk and has retention: assistant text, tool inputs and results, diffs, thinking and attachments. Streamed token deltas are never kept durably, only the final message (§5.2).
 - **Limits.** A size cap and an age limit per task, with the cap and limit set by policy, and a manual purge from the web UI and `whr purge` (§9.3). Deleting a task purges its transcript.
 - **A purge records itself.** It deletes transcript content and keeps one audit entry: who, when, and what was removed (event count and bytes). Audit entries refer to transcript content by hash, so a purge leaves a verifiable gap and never silently rewrites history (§7.7).
@@ -329,6 +329,17 @@ profiles/<profile>/bin/<name> -> ../../../store/.../bin/<name>
 - **Network.** The agent starts without network, so the egress allowlist (§7.2) no longer has to permit the download host.
 
 Open: how new versions are discovered, verified and promoted (a developer action, never an agent action), and how the store is garbage collected.
+
+### 5.7 Usage and cost
+
+A remote for agents that run detached for an hour has to say what they used. The supervisor records usage per run and reports it; it never meters the model traffic itself.
+
+- **Source: the agent's own reports.** Each turn becomes a `usage` event: model, input, output, cache-read and cache-write tokens, and the cost the agent reports. Spike #1 read `total_cost_usd` from Claude Code's `result` event; its token fields were not parsed and are **unverified**. Antigravity sends `usage` in `step_update` and `result`; Codex CLI is **unverified**.
+- **Reported or estimated.** Every cost carries its source. `reported` is the agent's figure; `estimated` is computed by workharbor from a pinned, dated price table and labelled as an estimate everywhere it is shown.
+- **Auth mode decides what the number means** (§5.2). In `api-key` mode cost is real spend. In `subscription` mode it is notional: the plan is paid flat, and the usage-window utilization (five-hour and seven-day, §5.2) is what limits the developer, so the UI leads with that.
+- **Kept as audit entries.** Usage rows are small and survive a transcript purge (§5.4), so totals stay correct after history is deleted.
+- **Reports.** Totals per run, task, repository and day or month: `whr usage [--task <task>] [--since <time>] [--json]`, a usage line in `whr show`, and per-task usage plus a usage-window meter in the web UI (§9.3).
+- **Budgets read the same counters.** The per-run and per-task token and cost budgets of §7.4 compare against these totals: a soft threshold notifies (§9.4), and a hard limit ends the task as `failed` (D13).
 
 ## 6. Policy and autonomy
 
@@ -434,6 +445,7 @@ whr watch                                  # live event stream
 whr say <task> "msg"                       # or -f guidance.md, or - for stdin
 whr pause|resume|cancel <task>
 whr purge <task> --transcript [--before <time>]   # delete transcript content, keep audit entries
+whr usage [--task <task>] [--since <time>]       # tokens and cost per run, task, repo and period (§5.7)
 whr inbox [--watch]
 whr approve|reject <decision>
 whr diff <task>
