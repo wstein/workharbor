@@ -116,3 +116,5 @@ via the proxy 404
 10	2026-10-01T20:40:02Z	task.state	{"object":"task","id":"x-721d31aefad3ea9c","from":"running","to":"awaiting_guidance"}
 11	2026-10-01T20:40:02Z	transcript	{"kind":"message","at":"2026-10-01T22:40:02.653911+02:00","session_id":"42f624b9-0b87-4e44-834e-19c81c00ac1b","text":"Not logged in · Please run /login"}
 == done
+spikes/serve-integration/run.sh: line 15:  9683 Terminated: 15          "$ROOT/prefix/fakegithub" -listen 127.0.0.1:$GHPORT > "$OUT/fakegithub.log" 2>&1
+spikes/serve-integration/run.sh  3.47s user 3.81s system 8% cpu 1:26.65 total

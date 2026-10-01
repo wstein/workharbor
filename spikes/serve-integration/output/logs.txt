@@ -1,5 +1,9 @@
-3	2026-10-01T20:34:29Z	env.added	{"id":"whr-7567ab8fe1","backend":"apple-container","state":"running"}
-4	2026-10-01T20:34:29Z	task.state	{"object":"task","id":"x-6e8a38b462f49afb","from":"queued","to":"running"}
-5	2026-10-01T20:34:29Z	run.started	{"run_id":"x-38c946d13cf8bbe6","env_id":"whr-7567ab8fe1"}
-6	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"starting","to":"running"}
-7	2026-10-01T20:34:29Z	run.state	{"object":"run","id":"x-38c946d13cf8bbe6","from":"running","to":"interrupted"}
+3	2026-10-01T20:40:01Z	env.added	{"id":"whr-479ddf57e7","backend":"apple-container","state":"running"}
+4	2026-10-01T20:40:01Z	task.state	{"object":"task","id":"x-721d31aefad3ea9c","from":"queued","to":"running"}
+5	2026-10-01T20:40:01Z	run.started	{"run_id":"x-103ae07394e2a567","env_id":"whr-479ddf57e7"}
+6	2026-10-01T20:40:02Z	run.state	{"object":"run","id":"x-103ae07394e2a567","from":"starting","to":"running"}
+7	2026-10-01T20:40:02Z	run.session	{"run_id":"x-103ae07394e2a567","session_id":"42f624b9-0b87-4e44-834e-19c81c00ac1b"}
+8	2026-10-01T20:40:02Z	run.state	{"object":"run","id":"x-103ae07394e2a567","from":"running","to":"paused"}
+9	2026-10-01T20:40:02Z	decision.raised	{"id":"x-369f767075d141c5","run_id":"x-103ae07394e2a567","kind":"question","blocking":true,"subject":"The login expired","cause":"auth_expired"}
+10	2026-10-01T20:40:02Z	task.state	{"object":"task","id":"x-721d31aefad3ea9c","from":"running","to":"awaiting_guidance"}
+11	2026-10-01T20:40:02Z	transcript	{"kind":"message","at":"2026-10-01T22:40:02.653911+02:00","session_id":"42f624b9-0b87-4e44-834e-19c81c00ac1b","text":"Not logged in · Please run /login"}
