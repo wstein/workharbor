@@ -39,6 +39,7 @@ type fake struct {
 	runs     int
 	since    []int64
 	logCalls [][2]int64
+	created  []service.CreateRequest
 	events   chan domain.Event
 
 	onRun    func(service.RunRequest) (domain.ID, domain.ID, error)
@@ -127,6 +128,38 @@ func (f *fake) Log(_ context.Context, id domain.ID, since int64, limit int) ([]d
 		{Seq: since + 1, TaskID: "t2", Kind: domain.EventRunStarted, Tier: domain.TierAudit, At: t0, Payload: []byte(`{"run_id":"r1"}`)},
 		{Seq: since + 2, TaskID: "t2", Kind: domain.EventTranscript, Tier: domain.TierTranscript, At: t0, Payload: []byte(`{"kind":"message","text":"hello"}`)},
 	}, nil
+}
+
+func (f *fake) CreateWorkspace(_ context.Context, req service.CreateRequest) (domain.Workspace, domain.Agent, error) {
+	f.mu.Lock()
+	f.created = append(f.created, req)
+	f.mu.Unlock()
+	if req.Name == "taken" {
+		return domain.Workspace{}, domain.Agent{}, domain.NewConflict("exists", "a workspace named %q already exists", req.Name)
+	}
+	return domain.Workspace{ID: "w9", Name: req.Name, Path: req.Path, Repo: req.Repo, Integration: req.Integration, EnvID: "e9"},
+		domain.Agent{ID: "a9", WorkspaceID: "w9", Role: req.Role, Branch: "agent/" + req.Role}, nil
+}
+
+func (f *fake) RemoveWorkspace(_ context.Context, workspace string) error {
+	if workspace == "busy" {
+		return domain.NewConflict("in-use", "workspace busy still has agents: remove them first")
+	}
+	return nil
+}
+
+func (f *fake) AddAgent(_ context.Context, workspace, role, _, _ string) (domain.Agent, error) {
+	if workspace == "nope" {
+		return domain.Agent{}, &domain.NotFoundError{Kind: "workspace", ID: workspace}
+	}
+	return domain.Agent{ID: "a10", WorkspaceID: "w1", Role: role, Branch: "agent/" + role}, nil
+}
+
+func (f *fake) RemoveAgent(_ context.Context, _, role string) error {
+	if role == "busy" {
+		return domain.NewConflict("in-use", "agent busy has 1 unfinished task(s)")
+	}
+	return nil
 }
 
 func (f *fake) Subscribe(_ context.Context, _ domain.ID, since int64) (<-chan domain.Event, error) {
@@ -309,7 +342,7 @@ func TestEveryRouteNeedsTheToken(t *testing.T) {
 	var paths []string
 	for _, rt := range Routes() {
 		m, p, _ := strings.Cut(rt, " ")
-		paths = append(paths, m+" "+strings.NewReplacer("{task}", "t2", "{decision}", "d1").Replace(p))
+		paths = append(paths, m+" "+strings.NewReplacer("{task}", "t2", "{decision}", "d1", "{workspace}", "w", "{role}", "r").Replace(p))
 	}
 	paths = append(paths, "GET /nothing/here", "DELETE /v1/tasks")
 	for _, p := range paths {
@@ -395,27 +428,36 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 	for name, tc := range map[string]struct {
 		method, path, body string
 	}{
-		"list":          {"GET", "/v1/tasks", ""},
-		"list-active":   {"GET", "/v1/tasks?active=true", ""},
-		"show":          {"GET", "/v1/tasks/t2", ""},
-		"inbox":         {"GET", "/v1/inbox", ""},
-		"workspaces":    {"GET", "/v1/workspaces", ""},
-		"run":           {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/7","agent":"docs-ws/docs"}`},
-		"say":           {"POST", "/v1/tasks/t2/say", `{"message":"use the helper"}`},
-		"cancel":        {"POST", "/v1/tasks/t2/cancel", ``},
-		"answer":        {"POST", "/v1/decisions/d1/answer", `{"option":"allow","sha":"abc123"}`},
-		"not-found":     {"GET", "/v1/tasks/nope", ""},
-		"unknown-route": {"GET", "/v1/nothing", ""},
-		"wrong-method":  {"DELETE", "/v1/tasks", ""},
-		"bad-body":      {"POST", "/v1/tasks/t2/say", `{"message":`},
-		"unknown-field": {"POST", "/v1/tasks/t2/say", `{"message":"x","extra":1}`},
-		"two-values":    {"POST", "/v1/tasks/t2/say", `{"message":"x"}{"message":"y"}`},
-		"empty-message": {"POST", "/v1/tasks/t2/say", `{"message":"  "}`},
-		"empty-option":  {"POST", "/v1/decisions/d1/answer", `{"option":""}`},
-		"bad-since":     {"GET", "/v1/tasks/t2/events?since=abc", ""},
-		"log":           {"GET", "/v1/tasks/t2/log?since=4&limit=10", ""},
-		"log-not-found": {"GET", "/v1/tasks/nope/log", ""},
-		"log-bad-limit": {"GET", "/v1/tasks/t2/log?limit=0", ""},
+		"list":                           {"GET", "/v1/tasks", ""},
+		"list-active":                    {"GET", "/v1/tasks?active=true", ""},
+		"show":                           {"GET", "/v1/tasks/t2", ""},
+		"inbox":                          {"GET", "/v1/inbox", ""},
+		"workspaces":                     {"GET", "/v1/workspaces", ""},
+		"run":                            {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/7","agent":"docs-ws/docs"}`},
+		"say":                            {"POST", "/v1/tasks/t2/say", `{"message":"use the helper"}`},
+		"cancel":                         {"POST", "/v1/tasks/t2/cancel", ``},
+		"answer":                         {"POST", "/v1/decisions/d1/answer", `{"option":"allow","sha":"abc123"}`},
+		"not-found":                      {"GET", "/v1/tasks/nope", ""},
+		"unknown-route":                  {"GET", "/v1/nothing", ""},
+		"wrong-method":                   {"DELETE", "/v1/tasks", ""},
+		"bad-body":                       {"POST", "/v1/tasks/t2/say", `{"message":`},
+		"unknown-field":                  {"POST", "/v1/tasks/t2/say", `{"message":"x","extra":1}`},
+		"two-values":                     {"POST", "/v1/tasks/t2/say", `{"message":"x"}{"message":"y"}`},
+		"empty-message":                  {"POST", "/v1/tasks/t2/say", `{"message":"  "}`},
+		"empty-option":                   {"POST", "/v1/decisions/d1/answer", `{"option":""}`},
+		"bad-since":                      {"GET", "/v1/tasks/t2/events?since=abc", ""},
+		"log":                            {"GET", "/v1/tasks/t2/log?since=4&limit=10", ""},
+		"log-not-found":                  {"GET", "/v1/tasks/nope/log", ""},
+		"log-bad-limit":                  {"GET", "/v1/tasks/t2/log?limit=0", ""},
+		"create-workspace":               {"POST", "/v1/workspaces", `{"name":"docs-ws","path":"/Users/h/ws/docs","repo":"wstein/workharbor","role":"docs","source":"/Users/h/src/repo"}`},
+		"create-workspace-taken":         {"POST", "/v1/workspaces", `{"name":"taken","path":"/x","repo":"a/b","role":"docs"}`},
+		"create-workspace-unknown-field": {"POST", "/v1/workspaces", `{"name":"x","path":"/x","repo":"a/b","role":"docs","mount":"/etc"}`},
+		"remove-workspace":               {"DELETE", "/v1/workspaces/docs-ws", ""},
+		"remove-workspace-busy":          {"DELETE", "/v1/workspaces/busy", ""},
+		"add-agent":                      {"POST", "/v1/workspaces/docs-ws/agents", `{"role":"runtime"}`},
+		"add-agent-unknown-workspace":    {"POST", "/v1/workspaces/nope/agents", `{"role":"runtime"}`},
+		"remove-agent":                   {"DELETE", "/v1/workspaces/docs-ws/agents/runtime", ""},
+		"remove-agent-busy":              {"DELETE", "/v1/workspaces/docs-ws/agents/busy", ""},
 	} {
 		status, _, body := r.do(tc.method, tc.path, tc.body)
 		golden(t, name, status, body)
@@ -673,8 +715,26 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 12 {
+	if got := Routes(); len(got) != 16 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
+	}
+}
+
+func TestCreateWorkspaceDefaultsTheIntegrationBranchAndPassesTheSource(t *testing.T) {
+	r := newRig(t)
+	status, _, body := r.do("POST", "/v1/workspaces", `{"name":"w","path":"/p","repo":"a/b","role":"docs","source":"/src"}`)
+	if status != 201 {
+		t.Fatalf("%d %s", status, body)
+	}
+	got := r.be.created[0]
+	if got.Integration != "main" || got.Source != "/src" || got.Role != "docs" || got.Path != "/p" {
+		t.Errorf("request = %+v", got)
+	}
+	// An idempotency key makes a retry safe: the workspace is made once.
+	r.do("POST", "/v1/workspaces", `{"name":"w2","path":"/p2","repo":"a/b","role":"docs"}`, "Idempotency-Key", "ws-1")
+	r.do("POST", "/v1/workspaces", `{"name":"w2","path":"/p2","repo":"a/b","role":"docs"}`, "Idempotency-Key", "ws-1")
+	if len(r.be.created) != 2 {
+		t.Errorf("%d creations, want 2 (the retry must not create again)", len(r.be.created))
 	}
 }

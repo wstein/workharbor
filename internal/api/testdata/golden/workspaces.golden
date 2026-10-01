@@ -8,6 +8,7 @@ HTTP OK (200)
       "name": "docs-ws",
       "repo": "wstein/workharbor",
       "integration": "main",
+      "path": "",
       "agents": [
         {
           "id": "a1",

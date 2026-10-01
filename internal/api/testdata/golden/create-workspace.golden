@@ -1,0 +1,20 @@
+HTTP Created (201)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "id": "w9",
+    "name": "docs-ws",
+    "repo": "wstein/workharbor",
+    "integration": "main",
+    "path": "/Users/h/ws/docs",
+    "agents": [
+      {
+        "id": "a9",
+        "role": "docs",
+        "branch": "agent/docs"
+      }
+    ]
+  }
+}
+

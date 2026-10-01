@@ -20,13 +20,14 @@ type taskSummaryView struct {
 	Issue     string    `json:"issue"`
 	State     string    `json:"state"`
 	AgentID   string    `json:"agent_id,omitempty"`
+	Agent     string    `json:"agent,omitempty"` // <workspace>/<role>
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func summaries(in []store.TaskSummary) []taskSummaryView {
 	out := make([]taskSummaryView, 0, len(in))
 	for _, t := range in {
-		out = append(out, taskSummaryView{ID: string(t.ID), Repo: t.Repo, Issue: t.Issue, State: string(t.State), AgentID: string(t.AgentID), CreatedAt: t.CreatedAt})
+		out = append(out, taskSummaryView{ID: string(t.ID), Repo: t.Repo, Issue: t.Issue, State: string(t.State), AgentID: string(t.AgentID), Agent: t.Agent, CreatedAt: t.CreatedAt})
 	}
 	return out
 }
@@ -87,7 +88,7 @@ func taskOf(v service.TaskView) taskView {
 	out := taskView{
 		taskSummaryView: taskSummaryView{
 			ID: string(v.Task.ID), Repo: v.Task.Repo, Issue: v.Task.Issue, State: string(v.Task.State),
-			AgentID: string(v.Task.AgentID), CreatedAt: v.Task.CreatedAt,
+			AgentID: string(v.Task.AgentID), Agent: v.Agent, CreatedAt: v.Task.CreatedAt,
 		},
 		Runs: make([]runView, 0, len(v.Runs)), Open: make([]decisionView, 0, len(v.Open)),
 	}
@@ -114,13 +115,14 @@ type workspaceView struct {
 	Name        string      `json:"name"`
 	Repo        string      `json:"repo"`
 	Integration string      `json:"integration"`
+	Path        string      `json:"path"`
 	Agents      []agentView `json:"agents"`
 }
 
 func workspacesOf(in []service.WorkspaceView) []workspaceView {
 	out := make([]workspaceView, 0, len(in))
 	for _, w := range in {
-		v := workspaceView{ID: string(w.Workspace.ID), Name: w.Workspace.Name, Repo: w.Workspace.Repo, Integration: w.Workspace.Integration, Agents: make([]agentView, 0, len(w.Agents))}
+		v := workspaceView{ID: string(w.Workspace.ID), Name: w.Workspace.Name, Repo: w.Workspace.Repo, Integration: w.Workspace.Integration, Path: w.Workspace.Path, Agents: make([]agentView, 0, len(w.Agents))}
 		for _, a := range w.Agents {
 			v.Agents = append(v.Agents, agentView{ID: string(a.ID), Role: a.Role, Branch: a.Branch})
 		}

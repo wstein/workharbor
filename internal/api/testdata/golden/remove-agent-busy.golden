@@ -1,0 +1,11 @@
+HTTP Conflict (409)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "conflict",
+    "exit_code": 5,
+    "message": "agent busy has 1 unfinished task(s)"
+  }
+}
+

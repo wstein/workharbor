@@ -40,6 +40,10 @@ type Backend interface {
 	Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error)
 	Inbox(ctx context.Context) ([]domain.Decision, error)
 	WorkspaceList(ctx context.Context) ([]service.WorkspaceView, error)
+	CreateWorkspace(ctx context.Context, req service.CreateRequest) (domain.Workspace, domain.Agent, error)
+	RemoveWorkspace(ctx context.Context, workspace string) error
+	AddAgent(ctx context.Context, workspace, role, instructions, profile string) (domain.Agent, error)
+	RemoveAgent(ctx context.Context, workspace, role string) error
 	Subscribe(ctx context.Context, task domain.ID, since int64) (<-chan domain.Event, error)
 	Log(ctx context.Context, task domain.ID, since int64, limit int) ([]domain.Event, error)
 }
@@ -47,6 +51,16 @@ type Backend interface {
 type backend struct {
 	*service.Service
 	*service.Workspaces
+}
+
+// CreateWorkspace, RemoveWorkspace and the agent methods give the API's names to
+// the workspace operations.
+func (b backend) CreateWorkspace(ctx context.Context, req service.CreateRequest) (domain.Workspace, domain.Agent, error) {
+	return b.Create(ctx, req)
+}
+
+func (b backend) RemoveWorkspace(ctx context.Context, workspace string) error {
+	return b.Remove(ctx, workspace)
 }
 
 // NewBackend joins the service and the workspace operations into a Backend.
@@ -137,6 +151,10 @@ var routes = []route{
 	{http.MethodGet, "/v1/inbox", (*Server).inbox},
 	{http.MethodPost, "/v1/decisions/{decision}/answer", (*Server).answer},
 	{http.MethodGet, "/v1/workspaces", (*Server).workspaces},
+	{http.MethodPost, "/v1/workspaces", (*Server).createWorkspace},
+	{http.MethodDelete, "/v1/workspaces/{workspace}", (*Server).removeWorkspace},
+	{http.MethodPost, "/v1/workspaces/{workspace}/agents", (*Server).addAgent},
+	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
 }
 
 // Routes returns the "METHOD path" of every route, for the contract test.
@@ -443,4 +461,100 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		s.internal(err)
 	}
 	writeError(w, err)
+}
+
+type createWorkspaceBody struct {
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Repo         string `json:"repo"`
+	Integration  string `json:"integration,omitempty"` // default main
+	Source       string `json:"source,omitempty"`      // a path or an https URL; default the forge's URL of repo
+	Role         string `json:"role"`
+	Instructions string `json:"instructions,omitempty"`
+	Profile      string `json:"profile,omitempty"`
+}
+
+// createWorkspace creates a workspace and its first agent. It takes a while (the
+// clone, the environment, the worktree), and the request context ends it: a
+// client that hangs up takes back what was made.
+func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
+	var b createWorkspaceBody
+	raw, err := readBody(w, r, &b)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if b.Integration == "" {
+		b.Integration = "main"
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		ws, ag, err := s.be.CreateWorkspace(r.Context(), service.CreateRequest{
+			Name: b.Name, Path: b.Path, Repo: b.Repo, Integration: b.Integration, Source: b.Source,
+			Role: b.Role, Instructions: b.Instructions, Profile: b.Profile,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, workspacesOf([]service.WorkspaceView{{Workspace: ws, Agents: []domain.Agent{ag}}})[0], nil
+	})
+}
+
+func (s *Server) removeWorkspace(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, nil, func() (int, any, error) {
+		if err := s.be.RemoveWorkspace(r.Context(), string(name)); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+type addAgentBody struct {
+	Role         string `json:"role"`
+	Instructions string `json:"instructions,omitempty"`
+	Profile      string `json:"profile,omitempty"`
+}
+
+func (s *Server) addAgent(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var b addAgentBody
+	raw, err := readBody(w, r, &b)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		a, err := s.be.AddAgent(r.Context(), string(name), b.Role, b.Instructions, b.Profile)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, agentView{ID: string(a.ID), Role: a.Role, Branch: a.Branch}, nil
+	})
+}
+
+func (s *Server) removeAgent(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	role, err := idParam(r, "role")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, nil, func() (int, any, error) {
+		if err := s.be.RemoveAgent(r.Context(), string(name), string(role)); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]string{}, nil
+	})
 }
