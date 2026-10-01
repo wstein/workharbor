@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate only keeps the tool versions pinned in the Makefile and the workflows current. Dependabot handles actions and Go modules (.github/dependabot.yml).",
+  "enabledManagers": [
+    "custom.regex"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "commitMessagePrefix": "build(deps):",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Go tools run with go run module/path@version",
+      "managerFilePatterns": [
+        "/(^|/)Makefile$/",
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/v[0-9]+)?)(?:/cmd/[A-Za-z0-9_-]+)?@(?<currentValue>v[0-9][0-9A-Za-z.+-]*)",
+        "(?<depName>golang\\.org/x/[A-Za-z0-9_.-]+)/cmd/[A-Za-z0-9_-]+@(?<currentValue>v[0-9][0-9A-Za-z.+-]*)"
+      ],
+      "datasourceTemplate": "go"
+    }
+  ]
+}
