@@ -50,6 +50,8 @@ const (
 	AnswerResumeAtReset = "resume_at_reset"
 	AnswerRetry         = "retry"
 	AnswerCancel        = "cancel"
+	// AnswerRework starts a new run on the agent after a rebase conflict.
+	AnswerRework = "rework"
 )
 
 // DecisionCause says why a run blocked on a question that nothing waits on:
@@ -60,6 +62,9 @@ const (
 	CauseAuthExpired    DecisionCause = "auth_expired"
 	CauseQuotaExhausted DecisionCause = "quota_exhausted"
 	CauseRunFailed      DecisionCause = "run_failed"
+	// CauseRebaseConflict is raised for a stopped run whose branch does not
+	// rebase onto the integration branch before the export (design §4.2).
+	CauseRebaseConflict DecisionCause = "rebase_conflict"
 )
 
 const (

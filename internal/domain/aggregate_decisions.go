@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -230,6 +231,36 @@ func (a *TaskAggregate) FailRun(runID, decisionID ID, now time.Time) (Decision, 
 		return Decision{}, err
 	}
 	a.supersedeOpen(runID)
+	a.addDecision(d)
+	return *d, nil
+}
+
+// RaiseRebaseConflict opens the blocking question for a stopped run whose
+// branch does not rebase onto the integration branch before the export (design
+// §4.2), as the login and quota questions are raised for a paused run: the
+// task moves to awaiting_guidance with no change to the state machines. The
+// options are fixed: rework (a new run on the agent), retry after the human
+// fixed it in the console, and cancel. The conflicting paths go in the input as
+// untrusted data, capped like any agent input.
+func (a *TaskAggregate) RaiseRebaseConflict(runID, decisionID ID, target string, paths []string, now time.Time) (Decision, error) {
+	run, err := a.run(runID)
+	if err != nil {
+		return Decision{}, err
+	}
+	if run.State != RunStopped {
+		return Decision{}, conflict(RuleRunLive, "run %s is %s: a rebase conflict is raised for a stopped run", run.ID, run.State)
+	}
+	if _, err := a.decision(decisionID); err == nil {
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists in task %s", decisionID, a.task.ID)
+	}
+	d, err := raise(NewDecision{
+		ID: decisionID, TaskID: a.task.ID, RunID: runID, Kind: DecisionQuestion, Blocking: true,
+		Subject: "The agent's branch does not rebase onto " + target, Input: strings.Join(paths, "\n"),
+		Options: []string{AnswerRework, AnswerRetry, AnswerCancel}, Cause: CauseRebaseConflict, Now: now,
+	})
+	if err != nil {
+		return Decision{}, err
+	}
 	a.addDecision(d)
 	return *d, nil
 }
