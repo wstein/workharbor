@@ -61,6 +61,7 @@ The pre-commit hook scans the staged change for secrets (gitleaks), then runs th
 - `whr` output contract: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
 - Dependencies and CI: pin every GitHub Action to a full commit SHA with its version in a comment (`uses: owner/action@<sha> # vX.Y.Z`) and keep job-level least-privilege `permissions`. Never use `pull_request_target`, and pass event data to scripts through `env`, not `${{ }}` in `run`. Dependabot (actions and both Go modules) and Renovate (tool versions pinned with `go run ...@version` in the Makefile and workflows) open update pull requests; their commits are exempt from the subject length and `Signed-off-by` rules. CI runs `actionlint`, `zizmor`, `govulncheck`, dependency review, `lychee`, `typos`, `gitleaks` (history, `.gitleaks.toml`), `osv-scanner` on the docs module, CodeQL for Go and OpenSSF Scorecard.
+- Name: the product is **workharbor**, lowercase, in prose, code, paths, URLs and packages, and the CLI is `whr`. Only the wordmark (the logo and the banner) sets it as **WorkHarbor**; never write WorkHarbor, Workharbor or Work Harbor in text (#134).
 - README: keep it a short landing page (what it is, concept bullets, build or usage snippet, key links, contributing, license). Put detail in `docs/`, and mark provisional commands as provisional.
 
 ## Hard rules
