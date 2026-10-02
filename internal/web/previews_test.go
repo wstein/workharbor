@@ -184,3 +184,41 @@ func TestAPreviewEndsWhenItsSessionIsSignedOutOrRevoked(t *testing.T) {
 		t.Errorf("sessions heard as ended = %v, want both, by their device IDs", ended)
 	}
 }
+
+// A session that idles out with no request at all still ends, and what it opened
+// with it: a lost phone's preview does not stay open on the strength of its own
+// cookie.
+func TestAnIdleSessionEndsOnTheSweepWithoutAnyRequest(t *testing.T) {
+	r := newRig(t)
+	var mu sync.Mutex
+	var ended []string
+	r.auth.OnSessionEnd(func(id string) { mu.Lock(); ended = append(ended, id); mu.Unlock() })
+	phone := r.browser()
+	phone.hd.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1")
+	phone.signIn()
+	laptop := r.browser()
+	laptop.signIn()
+
+	r.auth.Sweep() // nothing is idle yet
+	mu.Lock()
+	n := len(ended)
+	mu.Unlock()
+	if n != 0 {
+		t.Fatalf("a fresh session ended: %v", ended)
+	}
+	r.advance(16 * time.Minute) // past a phone's 15 minutes, well inside a laptop's 8 hours
+	r.auth.Sweep()
+	mu.Lock()
+	n = len(ended)
+	mu.Unlock()
+	if n != 1 {
+		t.Fatalf("after the phone's idle limit %d sessions ended, want only the phone's", n)
+	}
+	r.advance(13 * time.Hour) // past the absolute limit of 12 hours
+	r.auth.Sweep()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(ended) != 2 {
+		t.Errorf("after the absolute limit %d sessions ended, want both", len(ended))
+	}
+}

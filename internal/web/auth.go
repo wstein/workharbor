@@ -301,6 +301,23 @@ func (a *TokenAuth) OnSessionEnd(f func(sessionID string)) {
 	a.mu.Unlock()
 }
 
+// Sweep ends the sessions that expired or sat idle past their limit, so what they
+// opened (a preview, D33) ends with them even if nobody comes back to that cookie.
+// Without it an idle or lost phone's session would end only when its cookie was
+// next seen. whr serve calls it every minute.
+func (a *TokenAuth) Sweep() {
+	now := a.now()
+	a.mu.Lock()
+	var ends []func()
+	for key, s := range a.sessions {
+		if !now.Before(s.expires) || now.Sub(s.lastSeen) > s.idle {
+			ends = append(ends, a.dropLocked(key)...)
+		}
+	}
+	a.mu.Unlock()
+	runAll(ends)
+}
+
 // SetPublicHost names the HTTPS forwarder's host from public_url (D29). A request
 // is HTTPS when it came over TLS itself or by that name: the forwarder terminates
 // TLS, and what the request says about its own scheme (X-Forwarded-Proto) is never

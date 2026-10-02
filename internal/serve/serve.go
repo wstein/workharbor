@@ -210,6 +210,24 @@ func Run(ctx context.Context, d Deps) error {
 		go func() { defer close(swept); previews.Manager().Run(sweepCtx, 0) }()
 		defer func() { stopSweep(); <-swept }()
 	}
+	// Sessions that idle out or expire end on a clock of their own, not only when
+	// their cookie comes back, so what they opened ends with them.
+	sessCtx, stopSess := context.WithCancel(ctx)
+	sessDone := make(chan struct{})
+	go func() {
+		defer close(sessDone)
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-sessCtx.Done():
+				return
+			case <-t.C:
+				auth.Sweep()
+			}
+		}
+	}()
+	defer func() { stopSess(); <-sessDone }()
 	apiOpt := api.Options{Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
 	webOpt := web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }}
 	if previews != nil {
