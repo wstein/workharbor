@@ -219,8 +219,8 @@ func TestTheQueueQuestionShowsTheAgentAndTheIssue(t *testing.T) {
 }
 
 // A failure that is not a decision about the card is not remembered: the next poll
-// tries again, and reports once.
-func TestATransientQueueFailureIsRetriedOnTheNextPoll(t *testing.T) {
+// tries again after a short backoff (one poll skipped), and reports once.
+func TestATransientQueueFailureIsRetriedAfterABackoff(t *testing.T) {
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -233,6 +233,9 @@ func TestATransientQueueFailureIsRetriedOnTheNextPoll(t *testing.T) {
 		t.Errorf("reported = %v", errs)
 	}
 	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+	if _, err := r.ws.PollQueue(bg); err != nil { // skipped: backed off for one poll
+		t.Fatal(err)
+	}
 	if n, err := r.ws.PollQueue(bg); err != nil || n != 1 {
 		t.Errorf("the card was not retried: %d, %v", n, err)
 	}
@@ -277,7 +280,8 @@ func TestHoldingAnIssueTwiceRaisesOnlyOneQuestion(t *testing.T) {
 }
 
 // A card that keeps failing the same way is reported once, not every poll, and its
-// failures count toward the cap of one poll.
+// failures count toward the cap of one poll. A failing card is then skipped for a
+// while, and a skipped card does not count toward the cap, so the others are reached.
 func TestAFailingCardIsReportedOnceAndCountsTowardTheCap(t *testing.T) {
 	r := newWsRig(t)
 	r.create("q")
@@ -298,9 +302,85 @@ func TestAFailingCardIsReportedOnceAndCountsTowardTheCap(t *testing.T) {
 	if _, err := r.ws.PollQueue(bg); err != nil {
 		t.Fatal(err)
 	}
-	// the five known failures stay quiet; the cap is spent on them, so the other two wait
-	if errs := r.reported(); len(errs) != 0 {
-		t.Errorf("second poll reported %v, want nothing", errs)
+	// the five known failures are backed off and cost nothing; the other two are tried
+	if errs := r.reported(); len(errs) != 2 {
+		t.Errorf("second poll reported %v, want the two cards not tried before", errs)
+	}
+}
+
+func (r *wsRig) failureCount(issue int) int {
+	r.ws.failMu.Lock()
+	defer r.ws.failMu.Unlock()
+	if f := r.ws.failures["wstein/workharbor#"+strconv.Itoa(issue)]; f != nil {
+		return f.count
+	}
+	return 0
+}
+
+// Permanently failing cards must not starve the rest of the queue: each poll starts
+// after the card it handled last, and a failing card is skipped for 1, 2, 4 ... polls.
+func TestFailingCardsDoNotStarveTheQueue(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	var cards []forge.QueuedCard
+	for i := 1; i <= 12; i++ {
+		if i > 5 { // the first five can never be loaded
+			r.issues.Issues["wstein/workharbor#"+strconv.Itoa(i)] = forge.Issue{Repo: "wstein/workharbor", Number: i, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+		}
+		cards = append(cards, r.card(i, "", r.clock.now))
+	}
+	r.issues.SetQueue(cards...)
+	total := 0
+	for poll := 1; poll <= 3; poll++ {
+		n, err := r.ws.PollQueue(bg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += n
+	}
+	if total != 7 {
+		t.Errorf("raised %d questions in three polls, want all 7 loadable cards", total)
+	}
+}
+
+func TestAFailingCardIsRetriedAfterOneTwoFourPollsAndResetsOnSuccess(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.SetQueue(r.card(7, "", r.clock.now)) // the issue cannot be loaded
+	want := []int{1, 1, 2, 2, 2, 3, 3, 3, 3, 3}   // polls 1 to 10: failures after each
+	for i, w := range want {
+		if _, err := r.ws.PollQueue(bg); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.failureCount(7); got != w {
+			t.Fatalf("after poll %d: %d consecutive failures, want %d", i+1, got, w)
+		}
+	}
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 1 { // poll 11: skipped 4 polls, retried
+		t.Fatalf("poll 11 = %d, %v", n, err)
+	}
+	if got := r.failureCount(7); got != 0 {
+		t.Errorf("backoff not reset after success: %d", got)
+	}
+}
+
+func TestTheBackoffEndsWhenTheCardLeavesTheQueue(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.SetQueue(r.card(7, "", r.clock.now))
+	if _, err := r.ws.PollQueue(bg); err != nil {
+		t.Fatal(err)
+	}
+	r.issues.SetQueue()
+	if _, err := r.ws.PollQueue(bg); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.failureCount(7); got != 0 {
+		t.Errorf("a card that left the queue keeps its backoff: %d", got)
 	}
 }
 
@@ -317,5 +397,30 @@ func TestTheQueueQuestionHasNoMovedByLineWhenTheMoverIsUnknown(t *testing.T) {
 	tasks, _ := r.store.Tasks(bg, true)
 	if d := r.holdOf(tasks[0].ID); strings.Contains(d.Input, "moved by") {
 		t.Errorf("the question names a mover nobody knows: %q", d.Input)
+	}
+}
+
+// A refusal is remembered in the store, so it leaves the failure memory: the card
+// refused again after it was moved is reported again.
+func TestAMovedCardRefusedAgainIsReportedAgain(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+	r.issues.SetQueue(r.card(7, "nobody/none", r.clock.now))
+	r.forget()
+	if _, err := r.ws.PollQueue(bg); err != nil {
+		t.Fatal(err)
+	}
+	if errs := r.reported(); len(errs) != 1 {
+		t.Fatalf("first refusal reported %v", errs)
+	}
+	r.forget()
+	r.issues.SetQueue(r.card(7, "nobody/none", r.clock.now.Add(time.Hour)))
+	if _, err := r.ws.PollQueue(bg); err != nil {
+		t.Fatal(err)
+	}
+	if errs := r.reported(); len(errs) != 1 {
+		t.Errorf("the moved card was not reported again: %v", errs)
 	}
 }

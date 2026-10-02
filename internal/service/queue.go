@@ -59,9 +59,10 @@ func (w *Workspaces) RunQueue(ctx context.Context, every time.Duration) {
 // is acted on once per state: one whose agent cannot be found, whose issue is not
 // trusted to start a run or that already has an unfinished task is reported or
 // skipped and remembered, so it asks again only after it is moved. A transient
-// failure (the store, the forge) is reported and not remembered, so the next poll
-// tries the card again, and the error is reported once per poll. A poll raises at
-// most maxQueueQuestions questions; the other cards wait for the next poll.
+// failure (the store, the forge) is reported and not remembered, so a later poll
+// tries the card again after a backoff of 1, 2, 4 ... polls (at most maxBackoffPolls),
+// and the error is reported once. A poll raises at most maxQueueQuestions questions
+// and starts after the card handled last, so a failing card cannot starve the others.
 func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 	reader, ok := w.cfg.Issues.(forge.QueueReader)
 	if !ok || w.cfg.QueueStatus == "" {
@@ -71,10 +72,31 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	w.failMu.Lock()
+	w.polls++
+	poll, start := w.polls, 0
+	inQueue := make(map[string]bool, len(cards))
+	for i, c := range cards {
+		key := cardKey(c)
+		inQueue[key] = true
+		if key == w.lastCard {
+			start = i + 1 // begin after the card handled last, so later cards are reached
+		}
+	}
+	for key := range w.failures {
+		if !inQueue[key] {
+			delete(w.failures, key) // the card left the queue: its backoff ends
+		}
+	}
+	w.failMu.Unlock()
 	raised, tried := 0, 0
-	for _, c := range cards {
+	for i := range cards {
 		if raised >= maxQueueQuestions || tried >= maxQueueQuestions {
 			break
+		}
+		c := cards[(start+i)%len(cards)]
+		if w.backedOff(c, poll) {
+			continue // a skipped card does not count toward the cap
 		}
 		seen, ok, err := w.svc.store.QueueSeen(ctx, c.Repo, c.Issue)
 		if err != nil {
@@ -83,20 +105,25 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 		if ok && !c.UpdatedAt.After(seen) {
 			continue
 		}
+		w.setLast(c)
 		task, err := w.acceptCard(ctx, c)
+		refused := err != nil && errors.As(err, new(refusal))
 		if err != nil {
 			tried++ // a failing card counts toward the cap, so a bad board does not cost unbounded forge calls
-			if w.firstFailure(c, err) {
+			if w.firstFailure(c, err, poll, refused) {
 				w.svc.report(fmt.Errorf("the card of %s#%d is not queued: %w", c.Repo, c.Issue, err))
 			}
-			if !errors.As(err, new(refusal)) {
-				continue // transient: not remembered, so the next poll tries again
+			if !refused {
+				continue // transient: not remembered, so a later poll tries again
 			}
 		} else {
 			w.clearFailure(c)
 		}
 		if err := w.svc.store.RememberQueue(ctx, c.Repo, c.Issue, c.UpdatedAt, string(task)); err != nil {
 			return raised, err
+		}
+		if refused {
+			w.clearFailure(c) // remembered in the store: asked again only after a move, and reported again then
 		}
 		if task != "" {
 			raised++
@@ -108,26 +135,69 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 // maxFailureMemory bounds the failures remembered so each is reported once.
 const maxFailureMemory = 1000
 
-// firstFailure reports whether this is the first time the card fails with this error
-// text since it last succeeded or the process started, and remembers it. The memory is
-// bounded: when full it is dropped, which at worst reports a failure again.
-func (w *Workspaces) firstFailure(c forge.QueuedCard, err error) bool {
-	key, text := c.Repo+"#"+strconv.Itoa(c.Issue), err.Error()
+// maxBackoffPolls caps how many polls a failing card is skipped: one hour of polls at
+// DefaultQueueEvery. It is a count of polls, so a different interval stretches it.
+const maxBackoffPolls = int(time.Hour / DefaultQueueEvery)
+
+// cardFailure is what the queue remembers of a card that fails: the error text last
+// reported, the consecutive transient failures, and the poll it is tried again at.
+type cardFailure struct {
+	text    string
+	count   int
+	retryAt uint64
+}
+
+func cardKey(c forge.QueuedCard) string { return c.Repo + "#" + strconv.Itoa(c.Issue) }
+
+func (w *Workspaces) setLast(c forge.QueuedCard) {
+	w.failMu.Lock()
+	w.lastCard = cardKey(c)
+	w.failMu.Unlock()
+}
+
+// backedOff reports whether the card is still being skipped at this poll.
+func (w *Workspaces) backedOff(c forge.QueuedCard, poll uint64) bool {
 	w.failMu.Lock()
 	defer w.failMu.Unlock()
-	if w.failures[key] == text {
-		return false
+	f := w.failures[cardKey(c)]
+	return f != nil && poll < f.retryAt
+}
+
+// firstFailure records a failure of the card at this poll and reports whether this is
+// the first time it fails with this error text since it last succeeded or the process
+// started. A transient failure doubles the polls the card is skipped (1, 2, 4 ... up to
+// maxBackoffPolls); a refusal is remembered in the store, so it needs no backoff. The
+// memory is bounded: when full it is dropped, which at worst reports a failure again.
+func (w *Workspaces) firstFailure(c forge.QueuedCard, err error, poll uint64, refused bool) bool {
+	key, text := cardKey(c), err.Error()
+	w.failMu.Lock()
+	defer w.failMu.Unlock()
+	f := w.failures[key]
+	if f == nil {
+		if w.failures == nil || len(w.failures) >= maxFailureMemory {
+			w.failures = map[string]*cardFailure{}
+		}
+		f = &cardFailure{}
+		w.failures[key] = f
 	}
-	if w.failures == nil || len(w.failures) >= maxFailureMemory {
-		w.failures = map[string]string{}
+	first := f.text != text
+	f.text = text
+	if refused {
+		f.count, f.retryAt = 0, 0
+		return first
 	}
-	w.failures[key] = text
-	return true
+	f.count++
+	skip := maxBackoffPolls
+	if f.count-1 < 6 && 1<<(f.count-1) < skip {
+		skip = 1 << (f.count - 1)
+	}
+	f.retryAt = poll + 1 + uint64(skip)
+	return first
 }
 
 func (w *Workspaces) clearFailure(c forge.QueuedCard) {
 	w.failMu.Lock()
-	delete(w.failures, c.Repo+"#"+strconv.Itoa(c.Issue))
+	delete(w.failures, cardKey(c))
 	w.failMu.Unlock()
 }
 

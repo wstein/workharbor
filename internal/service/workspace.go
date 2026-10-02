@@ -93,10 +93,14 @@ type Workspaces struct {
 	// run, under the same lock, so the two cannot pass each other's check.
 	mu sync.Mutex
 
-	// failures remembers, per card, the last error text reported by the queue poll
-	// (guarded by failMu), so a failing card is reported once, not every poll.
+	// failures remembers, per card, the last error reported by the queue poll and its
+	// backoff (guarded by failMu), so a failing card is reported once, not every poll,
+	// and is skipped for a growing number of polls. polls counts the polls read so far
+	// and lastCard is the card handled last, where the next poll starts (round robin).
 	failMu   sync.Mutex
-	failures map[string]string
+	failures map[string]*cardFailure
+	polls    uint64
+	lastCard string
 }
 
 // NewWorkspaces returns the workspace operations of a service.
