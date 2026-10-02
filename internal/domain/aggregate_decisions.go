@@ -319,15 +319,19 @@ func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, t
 // RaiseQueueHold holds a task that a card started: an issue's card was moved to the
 // board's agent queue (D30, D40, issue #71). A card never starts a run: this asks the
 // human "Accept this task?", with the issue's author and text as untrusted data and
-// who moved the card (mover is empty when the board does not say). A task whose
+// who moved the card (mover is empty when the board does not say). The first line
+// is supervisor facts, the agent as resolved, the repository and the issue number,
+// and says that the board named them: a card's Session field is writable by anyone
+// who can write the board, so the human sees where the task would run. A task whose
 // issue is by a non-trusted author is marked as having untrusted input, as in #53.
-func (a *TaskAggregate) RaiseQueueHold(decisionID ID, author, association, mover, text string, untrustedAuthor bool, now time.Time) (Decision, error) {
+func (a *TaskAggregate) RaiseQueueHold(decisionID ID, agent, repo string, issue int, author, association, mover, text string, untrustedAuthor bool, now time.Time) (Decision, error) {
 	moved := mover
 	if moved == "" {
 		moved = "unknown (the board does not say)"
 	}
 	d, err := a.raiseHold(decisionID, CauseBoardQueue, "Accept this task? Its card was moved to the agent queue",
-		"moved by: "+moved+"\nauthor: "+author+" ("+association+")\n"+text,
+		fmt.Sprintf("from the board (supervisor facts, not issue text): agent %s, repository %s, issue #%d\n", agent, repo, issue)+
+			"moved by: "+moved+"\nauthor: "+author+" ("+association+")\n"+text,
 		TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text), Source: "board", Mover: mover}, now)
 	if err == nil && untrustedAuthor {
 		a.task.Untrusted = true

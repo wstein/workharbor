@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -195,5 +196,82 @@ func TestACardNeedsAnAgentWhenTheRepositoryHasSeveral(t *testing.T) {
 	r.issues.SetQueue(r.card(8, "", r.clock.now.Add(2*time.Hour)))
 	if n, err := r.ws.PollQueue(bg); err != nil || n != 0 {
 		t.Errorf("an unconfigured queue: %d, %v", n, err)
+	}
+}
+
+// The question names the agent as resolved, the repository and the issue number as
+// supervisor facts from the board, whatever the card's Session said.
+func TestTheQueueQuestionShowsTheAgentAndTheIssue(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Body: "y", Author: "w", AuthorAssociation: "OWNER"}
+	r.issues.SetQueue(r.card(7, "", r.clock.now))
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 1 {
+		t.Fatalf("poll = %d, %v", n, err)
+	}
+	tasks, _ := r.store.Tasks(bg, true)
+	d := r.holdOf(tasks[0].ID)
+	want := "from the board (supervisor facts, not issue text): agent " + tasks[0].Agent + ", repository wstein/workharbor, issue #7"
+	if tasks[0].Agent == "" || !strings.HasPrefix(d.Input, want) {
+		t.Errorf("the question does not start with %q: %q", want, d.Input)
+	}
+}
+
+// A failure that is not a decision about the card is not remembered: the next poll
+// tries again, and reports once.
+func TestATransientQueueFailureIsRetriedOnTheNextPoll(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.SetQueue(r.card(7, "", r.clock.now)) // the issue cannot be loaded yet
+	r.forget()
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 0 {
+		t.Fatalf("poll = %d, %v", n, err)
+	}
+	if errs := r.reported(); len(errs) != 1 {
+		t.Errorf("reported = %v", errs)
+	}
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 1 {
+		t.Errorf("the card was not retried: %d, %v", n, err)
+	}
+}
+
+// One poll raises a few questions at most; the rest wait for the next poll.
+func TestAPollRaisesAtMostAFewQuestions(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	var cards []forge.QueuedCard
+	for i := 1; i <= 7; i++ {
+		r.issues.Issues["wstein/workharbor#"+strconv.Itoa(i)] = forge.Issue{Repo: "wstein/workharbor", Number: i, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+		cards = append(cards, r.card(i, "", r.clock.now))
+	}
+	r.issues.SetQueue(cards...)
+	if n, err := r.ws.PollQueue(bg); err != nil || n != maxQueueQuestions {
+		t.Fatalf("first poll = %d, %v", n, err)
+	}
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 7-maxQueueQuestions {
+		t.Errorf("second poll = %d, %v", n, err)
+	}
+}
+
+// Holding an issue that got an unfinished task meanwhile raises nothing: the check is
+// part of the save, not a read before it.
+func TestHoldingAnIssueTwiceRaisesOnlyOneQuestion(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
+	list, _ := r.store.Workspaces(bg)
+	agents, _ := r.store.Agents(bg, list[0].ID)
+	for i, want := range []bool{true, false} {
+		res, err := r.ws.holdFor(bg, agents[0], list[0], r.issues.Issues["wstein/workharbor#7"], 7, true)
+		if err != nil || res.Held != want {
+			t.Fatalf("hold %d = %+v, %v", i, res, err)
+		}
+	}
+	if tasks, _ := r.store.Tasks(bg, true); len(tasks) != 1 {
+		t.Errorf("%d tasks", len(tasks))
 	}
 }

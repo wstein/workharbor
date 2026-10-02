@@ -18,6 +18,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/policy"
+	"github.com/wstein/workharbor/internal/store"
 )
 
 // IssueSource loads an issue from the forge. forge.Adapter and forge.Guard both
@@ -173,14 +174,23 @@ func (w *Workspaces) holdFor(ctx context.Context, a domain.Agent, ws domain.Work
 	})
 	var err error
 	if fromBoard {
-		_, err = agg.RaiseQueueHold(dec, issue.Author, issue.AuthorAssociation, "", heldText(issue), policy.TierOf(issue.AuthorAssociation) != policy.Trusted, w.svc.clock.Now())
+		_, err = agg.RaiseQueueHold(dec, ws.Name+"/"+a.Role, ws.Repo, number, issue.Author, issue.AuthorAssociation, "", heldText(issue), policy.TierOf(issue.AuthorAssociation) != policy.Trusted, w.svc.clock.Now())
 	} else {
 		_, err = agg.RaiseUntrustedHold(dec, issue.Author, issue.AuthorAssociation, heldText(issue), w.svc.clock.Now())
 	}
 	if err != nil {
 		return RunResult{}, err
 	}
-	saved, err := w.svc.store.SaveTask(ctx, agg)
+	save := w.svc.store.SaveTask
+	if fromBoard {
+		// the check for an unfinished task of the issue and the save are one
+		// transaction, so two polls cannot both hold it
+		save = w.svc.store.SaveNewTaskOnce
+	}
+	saved, err := save(ctx, agg)
+	if errors.Is(err, store.ErrIssueActive) {
+		return RunResult{}, nil // already queued or running: nothing to ask
+	}
 	if err != nil {
 		return RunResult{}, err
 	}
