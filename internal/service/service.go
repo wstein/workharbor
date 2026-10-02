@@ -82,12 +82,13 @@ type Service struct {
 	clock Clock
 	cfg   Config
 
-	wg       sync.WaitGroup
-	mu       sync.Mutex
-	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
-	closing  bool                // set by Shutdown: no session joins the wait group any more
-	async    *notify.Async       // the queue that delivers cfg.Notifier's messages, when set
-	bus      bus                 // live events for subscribers (design §5.3)
+	wg        sync.WaitGroup
+	mu        sync.Mutex
+	sessions  map[domain.ID]*slot               // by run: the sessions the service owns, and launches in progress
+	closing   bool                              // set by Shutdown: no session joins the wait group any more
+	async     *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
+	bus       bus                               // live events for subscribers (design §5.3)
+	approvals map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent
@@ -112,7 +113,7 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 	if cfg.ReadyInterval <= 0 {
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
-	s := &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}}
+	s := &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
 	if cfg.Notifier != nil {
 		// A slow relay must never hold up a reconcile pass or a session
 		// handler: messages go through a bounded queue (design §9.4).
@@ -324,13 +325,21 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	if err != nil {
 		return err
 	}
+	if row.Kind == domain.DecisionApproval && row.Status == domain.DecisionOpen && !s.approvalWaiting(id) {
+		// The agent that asked is gone (stopped, paused, or the supervisor
+		// restarted), so there is nothing to answer: refused, not stored (D23).
+		return domain.NewConflict(domain.RuleDecisionClosed, "no agent is waiting for approval %s: its run was stopped or the supervisor restarted; the agent asks again after it resumes", id)
+	}
 	resumes := r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && row.RunID != ""
 	var sl *slot
 	if resumes {
 		sl = s.begin(row.RunID) // the run is about to start: it is not lost
 	}
-	_, answered, err := s.store.RespondDecision(ctx, id, r)
+	d, answered, err := s.store.RespondDecision(ctx, id, r)
 	s.publish(answered)
+	if err == nil {
+		s.deliverApproval(d)
+	}
 	if err != nil {
 		if sl != nil {
 			s.end(row.RunID, sl)

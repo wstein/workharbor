@@ -340,6 +340,7 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 	w.svc.publish(saved)
 
 	spec := w.svc.cfg.Spec(agg.Task(), r)
+	w.svc.fillApprover(&spec, task, run)
 	spec.EnvID, spec.Workdir = string(ws.EnvID), a.Worktree
 	if prompt != "" {
 		spec.Prompt = prompt

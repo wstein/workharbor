@@ -210,6 +210,7 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 		return &domain.NotFoundError{Kind: "run", ID: string(run)}
 	}
 	spec := s.cfg.Spec(agg.Task(), r)
+	s.fillApprover(&spec, task, run)
 	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
 	spec.EnvID, spec.Env = string(r.EnvID), append(spec.Env, s.agentEnv(ctx, r.EnvID)...)
 	if r.AgentID != "" { // a resumed agent works in its own worktree, as a started one does
