@@ -358,6 +358,11 @@ func (m *Manager) hostOK(r *http.Request) bool {
 
 func (m *Manager) handler(p *live) http.Handler {
 	cookieName := OwnCookiePrefix + "preview_" + strings.TrimPrefix(p.ID, "pv-")
+	if m.cfg.Scheme == "https" {
+		// A __Host- cookie is accepted by a browser only when it is Secure, has no
+		// Domain and Path=/, so one set without those (by the app, say) is not this one.
+		cookieName = "__Host-" + cookieName
+	}
 	target := "localhost:" + strconv.Itoa(p.Port)
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {

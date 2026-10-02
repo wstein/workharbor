@@ -467,3 +467,46 @@ func TestTheLinkUsesTheForwardersNameAndHttps(t *testing.T) {
 		t.Errorf("exchange via the forwarder's name: %d %+v", resp.StatusCode, resp.Cookies())
 	}
 }
+
+// Over https the cookie carries the __Host- prefix, and a cookie the server did not
+// issue, whatever its name or value, opens nothing.
+func TestTheCookieIsHostPrefixedOverHttpsAndOthersAreIgnored(t *testing.T) {
+	r := newRig(t, func(c *Config) { c.Scheme, c.Host = "https", "whr.example.test" })
+	p := r.open()
+	link, _ := r.m.Grant(p.ID)
+	u, _ := url.Parse(link)
+	req, _ := http.NewRequestWithContext(bg, "GET", "http://127.0.0.1:"+fmt.Sprint(p.Listen)+"/?"+u.RawQuery, nil)
+	req.Host = "whr.example.test"
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	cs := resp.Cookies()
+	if len(cs) != 1 || !strings.HasPrefix(cs[0].Name, "__Host-whr_preview_") || !cs[0].Secure || cs[0].Path != "/" || cs[0].Domain != "" {
+		t.Fatalf("cookies = %+v", cs)
+	}
+	base := "http://127.0.0.1:" + fmt.Sprint(p.Listen) + "/"
+	try := func(c *http.Cookie) int {
+		q, _ := http.NewRequestWithContext(bg, "GET", base, nil)
+		q.Host = "whr.example.test"
+		q.AddCookie(c)
+		a, err := noRedirect.Do(q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = a.Body.Close()
+		return a.StatusCode
+	}
+	if got := try(cs[0]); got != 200 {
+		t.Errorf("the issued cookie: %d", got)
+	}
+	plain := &http.Cookie{Name: strings.TrimPrefix(cs[0].Name, "__Host-"), Value: cs[0].Value} //nolint:gosec // a request cookie
+	if got := try(plain); got != http.StatusUnauthorized {
+		t.Errorf("the right value under a name the server did not issue: %d", got)
+	}
+	forged := &http.Cookie{Name: cs[0].Name, Value: "forged"} //nolint:gosec // a request cookie
+	if got := try(forged); got != http.StatusUnauthorized {
+		t.Errorf("a cookie the server did not issue: %d", got)
+	}
+}
