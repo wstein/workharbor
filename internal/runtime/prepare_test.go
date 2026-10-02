@@ -205,3 +205,56 @@ func TestPrepareRefusesAResolvedSourceWithAColon(t *testing.T) {
 		t.Errorf("Prepare = %v, want a refusal of the ':'", err)
 	}
 }
+
+// swapFS answers the first resolution of one path truthfully and every later one
+// with another place: a source swapped for a symlink between two lookups.
+type swapFS struct {
+	OSFS
+	path  string
+	to    string
+	calls int
+}
+
+func (f *swapFS) EvalSymlinks(p string) (string, error) {
+	if filepath.Clean(p) == f.path {
+		f.calls++
+		if f.calls > 1 {
+			return f.to, nil
+		}
+	}
+	return f.OSFS.EvalSymlinks(p)
+}
+
+// A mount source is resolved once. The roots are checked against the path the
+// deny-list passed, which is the path that is mounted: a link swapped between two
+// lookups (the audit's TOCTOU) cannot pass the checks and mount something else.
+func TestAMountSourceIsResolvedOnceSoASwappedLinkCannotPassTheRootCheck(t *testing.T) {
+	r := newPrepRig(t)
+	root := filepath.Join(r.home, "ws")
+	inside := filepath.Join(root, "docs")
+	outside := filepath.Join(r.home, "elsewhere")
+	mkdirs(t, inside, outside)
+	r.opts.Roots = []string{root}
+	fsys := &swapFS{OSFS: OSFS{}, path: inside, to: outside}
+	r.opts.FS = fsys
+	spec := goodSpec()
+	spec.Mounts = []Mount{{Source: inside, Target: "/ws"}}
+	p, err := Prepare(r.opts, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fsys.calls != 1 {
+		t.Errorf("the source was resolved %d times, want once", fsys.calls)
+	}
+	if got := p.Spec().Mounts; len(got) != 1 || got[0].Source != inside {
+		t.Errorf("mounted %+v, want the path that was checked, %s", got, inside)
+	}
+	// The same for the checker that Prepare shares its rule with.
+	fsys = &swapFS{OSFS: OSFS{}, path: inside, to: outside}
+	if err := CheckMountsWithin(fsys, r.home, []string{root}, []Mount{{Source: inside, Target: "/ws"}}); err != nil {
+		t.Fatal(err)
+	}
+	if fsys.calls != 1 {
+		t.Errorf("CheckMountsWithin resolved the source %d times, want once", fsys.calls)
+	}
+}

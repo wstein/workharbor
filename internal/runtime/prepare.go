@@ -94,7 +94,7 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 				return PreparedSpec{}, err
 			}
 			if len(opts.Roots) > 0 {
-				if err := withinRoots(opts.FS, opts.Roots, m.Source); err != nil {
+				if err := withinRoots(opts.FS, opts.Roots, m.Source, resolved); err != nil {
 					return PreparedSpec{}, err
 				}
 			}

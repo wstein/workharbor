@@ -232,9 +232,12 @@ func CheckMountsWithin(fsys FS, home string, roots []string, mounts []Mount) err
 		if m.Kind == MountVolume {
 			continue // a named volume is not a host path
 		}
-		err := CheckMount(fsys, home, m.Source)
+		// One resolution: the path the deny-list passed is the path the roots are
+		// checked against, so a link swapped between the two cannot pass one check
+		// and mount something else.
+		resolved, err := ResolveMount(fsys, home, m.Source)
 		if err == nil && len(roots) > 0 {
-			err = withinRoots(fsys, roots, m.Source)
+			err = withinRoots(fsys, roots, m.Source, resolved)
 		}
 		if err != nil {
 			errs = append(errs, err)
@@ -244,12 +247,9 @@ func CheckMountsWithin(fsys FS, home string, roots []string, mounts []Mount) err
 }
 
 // withinRoots reports ReasonOutsideRoots unless the resolved source is a root
-// or lies below one. A root that cannot be examined holds nothing.
-func withinRoots(fsys FS, roots []string, source string) error {
-	resolved, err := fsys.EvalSymlinks(filepath.Clean(source))
-	if err != nil {
-		return &MountError{Source: source, Reason: ReasonUnresolvable, Err: err}
-	}
+// or lies below one. It takes the path the deny-list already resolved, and does
+// not resolve the source again. A root that cannot be examined holds nothing.
+func withinRoots(fsys FS, roots []string, source, resolved string) error {
 	ids := &identities{fsys: fsys, info: map[string]fs.FileInfo{}}
 	for _, root := range roots {
 		if r, err := fsys.EvalSymlinks(filepath.Clean(root)); err == nil && ids.within(resolved, r) {
