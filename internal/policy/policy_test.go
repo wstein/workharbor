@@ -118,3 +118,24 @@ func TestACeilingStillAllowsTighteningEverywhere(t *testing.T) {
 		}
 	}
 }
+
+func TestStricterTakesTheStricterModeOfEachRowAndKeepsRowsOnlyOneListed(t *testing.T) {
+	configured := Table{Commit: Ask, OpenPR: Auto, Merge: Forbid, "weird": "yolo"}
+	preset := Table{Commit: Auto, OpenPR: Ask, FastForwardBranch: Ask, Tag: Forbid}
+	got := configured.Stricter(preset)
+	for a, want := range map[Action]Mode{
+		Commit: Ask, OpenPR: Ask, FastForwardBranch: Ask, Merge: Forbid, Tag: Forbid, "weird": Forbid,
+	} {
+		if got[a] != want {
+			t.Errorf("%s = %q, want %q", a, got[a], want)
+		}
+	}
+	// neither input is changed
+	if configured[Commit] != Ask || preset[Commit] != Auto {
+		t.Error("an input table was changed")
+	}
+	// loosening is impossible in either direction
+	if m := preset.Stricter(Table{OpenPR: Forbid}).Decide(OpenPR); m != Forbid {
+		t.Errorf("a stricter table was loosened: %s", m)
+	}
+}

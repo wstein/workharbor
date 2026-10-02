@@ -156,11 +156,13 @@ func (g *Guard) OpenPR(ctx context.Context, repo, branch string, ap Approval, ti
 	return g.inner.OpenPR(ctx, repo, branch, ap.SHA, title, body)
 }
 
-// WithTable returns a Guard that decides with another table, such as the one of
-// a repository's workflow preset (D47). The ceilings still apply to it.
+// WithTable returns a Guard that decides with the stricter of its own table and
+// another, such as the one of a repository's workflow preset (D47): a preset can
+// tighten what the supervisor was configured with but never loosen it. The
+// ceilings still apply.
 func (g *Guard) WithTable(t policy.Table) *Guard {
 	cp := *g
-	cp.table = t
+	cp.table = g.table.Stricter(t)
 	return &cp
 }
 

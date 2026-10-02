@@ -360,3 +360,31 @@ func TestAPullRequestIntoAnotherBranch(t *testing.T) {
 		t.Errorf("a prototype PR: %v", err)
 	}
 }
+
+// A preset's table tightens the configured one and never loosens it (D47).
+func TestWithTableNeverLoosensTheConfiguredTable(t *testing.T) {
+	configured := policy.Default()
+	configured[policy.OpenPR] = policy.Ask
+	configured[policy.CommentIssue] = policy.Forbid
+	f := forgetest.NewFake()
+	g := forge.NewGuard(f, f, configured, approvals{"d1": "aaa111"})
+	f.Issues["wstein/workharbor#1"] = forge.Issue{Number: 1}
+	// the integration preset's table says auto for both; the configured one stays
+	pg := g.WithTable(policy.Integration.Table())
+	if err := pg.CommentIssue(bg, "wstein/workharbor", 1, "hi"); !errors.Is(err, forge.ErrForbidden) {
+		t.Errorf("a configured forbid was loosened by the preset: %v", err)
+	}
+	if len(f.Comments) != 0 {
+		t.Errorf("a refused comment reached the forge: %v", f.Comments)
+	}
+	// and the preset can still tighten: published forbids the fast-forward the
+	// configured default table does not list
+	if err := g.WithTable(policy.Published.Table()).FastForward(bg, "wstein/workharbor", "agent/topic", "develop", forge.Approval{DecisionID: "d1", SHA: "aaa111"}); !errors.Is(err, forge.ErrForbidden) {
+		t.Errorf("published fast-forward: %v", err)
+	}
+	// the prototype's own row survives the merge with a table that lists nothing for it
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	if err := g.WithTable(policy.Prototype.Table()).FastForward(bg, "wstein/workharbor", "agent/topic", "develop", forge.Approval{DecisionID: "d1", SHA: "aaa111"}); err != nil {
+		t.Errorf("a prototype fast-forward under the default table: %v", err)
+	}
+}

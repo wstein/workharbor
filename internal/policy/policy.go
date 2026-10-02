@@ -104,6 +104,31 @@ func (t Table) Decide(a Action) Mode {
 	return m
 }
 
+// Stricter returns a table that is the stricter of t and other for each action:
+// an action only one of them lists keeps that mode (an unlisted action is not an
+// opinion here, though Decide forbids it when no table lists it), and an invalid
+// mode counts as forbid. A preset's table can therefore tighten a configured one
+// but never loosen it (D47).
+func (t Table) Stricter(other Table) Table {
+	out := Table{}
+	norm := func(m Mode) Mode {
+		if !m.Valid() {
+			return Forbid
+		}
+		return m
+	}
+	for a, m := range t {
+		out[a] = norm(m)
+	}
+	for a, m := range other {
+		m = norm(m)
+		if cur, ok := out[a]; !ok || m.rank() < cur.rank() {
+			out[a] = m
+		}
+	}
+	return out
+}
+
 // Validate reports every unknown action and every mode that is not auto, ask
 // or forbid, for a caller that loads a table from configuration. Decide
 // forbids them either way.
