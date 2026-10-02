@@ -48,24 +48,36 @@ func (r *Repo) EditorCopy(ctx context.Context, dest, branch string) ([]string, e
 		return nil, fmt.Errorf("%w: %q", ErrInsideWorkspace, dest)
 	}
 
-	// The copy is a checkout on the host: check how large the tree expands to first.
-	if err := r.CheckTree(ctx, "refs/heads/"+branch); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, EditorCopyTimeout)
+	defer cancel()
+	// The copy is a checkout on the host: check how large the tree expands to first,
+	// and check out that same commit, so a branch that moves meanwhile cannot slip past.
+	tip, err := r.revParse(ctx, "refs/heads/"+branch)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.CheckTree(ctx, tip); err != nil {
 		return nil, err
 	}
 	if _, err := os.Lstat(dest); errors.Is(err, os.ErrNotExist) {
 		if _, err := r.g.run(ctx, parent, true, nil, "clone", "--quiet", "--no-hardlinks", "--no-tags", "--template=",
-			"--branch", branch, "--", r.path, dest); err != nil {
+			"--no-checkout", "--", r.path, dest); err != nil {
 			return nil, err
 		}
-	} else if err := r.refreshCopy(ctx, dest, branch); err != nil {
+		if _, err := r.g.run(ctx, dest, false, nil, "checkout", "--quiet", "-B", branch, tip); err != nil {
+			return nil, err
+		}
+		// The developer's plain `git pull` should follow the branch, as after `clone --branch`.
+		_, _ = r.g.run(ctx, dest, false, nil, "branch", "--quiet", "--set-upstream-to=origin/"+branch, branch)
+	} else if err := r.refreshCopy(ctx, dest, branch, tip); err != nil {
 		return nil, err
 	}
 	return autoRun(dest), nil
 }
 
-// refreshCopy fast-forwards an existing copy to the branch, after checking
+// refreshCopy fast-forwards an existing copy to tip (the checked commit), after checking
 // that it is a copy of this repository.
-func (r *Repo) refreshCopy(ctx context.Context, dest, branch string) error {
+func (r *Repo) refreshCopy(ctx context.Context, dest, branch, tip string) error {
 	out, err := r.g.run(ctx, dest, false, nil, "config", "--get", "remote.origin.url")
 	if err != nil || strings.TrimSpace(string(out)) != r.path {
 		return fmt.Errorf("%w: %q", ErrNotACopy, dest)
@@ -74,7 +86,7 @@ func (r *Repo) refreshCopy(ctx context.Context, dest, branch string) error {
 		"origin", "+refs/heads/"+branch+":refs/remotes/origin/"+branch); err != nil {
 		return err
 	}
-	if _, err := r.g.run(ctx, dest, false, nil, "merge", "--quiet", "--ff-only", "refs/remotes/origin/"+branch); err != nil {
+	if _, err := r.g.run(ctx, dest, false, nil, "merge", "--quiet", "--ff-only", tip); err != nil {
 		return fmt.Errorf("%w: %v", ErrCopyDiverged, err) //nolint:errorlint // the git output is the detail
 	}
 	return nil

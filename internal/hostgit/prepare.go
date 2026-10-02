@@ -104,14 +104,13 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 	if spec.Committer.Name == "" || spec.Committer.Email == "" {
 		return Prepared{}, fmt.Errorf("%w: no committer identity", ErrNoSigningKey)
 	}
+	ctx, cancel := context.WithTimeout(ctx, PrepareTimeout)
+	defer cancel()
 	topicRef, targetRef := "refs/heads/"+spec.Topic, "refs/heads/"+spec.Target
+	// The topic is resolved once: the check and the checkout use this commit ID, so a
+	// branch that moves meanwhile cannot slip past the check.
 	oldTip, err := r.revParse(ctx, topicRef)
 	if err != nil {
-		return Prepared{}, err
-	}
-	// The topic is checked out in a worktree on the host: its expanded size is
-	// checked first (a small bundle can name billions of paths).
-	if err := r.CheckTree(ctx, topicRef); err != nil {
 		return Prepared{}, err
 	}
 	base := targetRef // what the topic is rebased onto, and what its commits are counted from
@@ -135,6 +134,22 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		rebaseArgs = []string{"--onto", spec.Onto, spec.Upstream}
 	}
 
+	// The rebase writes every commit it replays to a worktree on the host, so the
+	// expanded size of each is checked first (a small bundle can name billions of
+	// paths, and a later commit may delete what an earlier one added).
+	exclude := targetRef
+	if spec.Upstream != "" {
+		exclude = spec.Upstream
+	}
+	if exclude != "" {
+		if exclude, err = r.revParse(ctx, exclude); err != nil {
+			return Prepared{}, err
+		}
+	}
+	if err := r.CheckCommits(ctx, oldTip, exclude); err != nil {
+		return Prepared{}, err
+	}
+
 	dir, err := os.MkdirTemp("", "whr-prepare-")
 	if err != nil {
 		return Prepared{}, err
@@ -144,7 +159,7 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		_ = os.RemoveAll(dir)
 		_, _ = r.g.run(ctx, r.path, false, nil, "worktree", "prune")
 	}()
-	if _, err := r.g.run(ctx, r.path, false, nil, "worktree", "add", "--quiet", "--detach", dir, topicRef); err != nil {
+	if _, err := r.g.run(ctx, r.path, false, nil, "worktree", "add", "--quiet", "--detach", dir, oldTip); err != nil {
 		return Prepared{}, err
 	}
 
