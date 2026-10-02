@@ -393,6 +393,24 @@ func TestSigningInNeedsTheTokenAndSetsAStrictCookie(t *testing.T) {
 	if resp, _ := b4.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("a cookie under the plain name over https opened the session: %d", resp.StatusCode)
 	}
+	// by the forwarder's name the request is https even without X-Forwarded-Proto
+	r.auth.SetPublicHost("whr.example.test")
+	b5 := r.browser()
+	req5, _ := http.NewRequestWithContext(bg, "POST", r.srv.URL+"/login", strings.NewReader(url.Values{"token": {token}}.Encode()))
+	req5.Host = "whr.example.test"
+	req5.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp5, err := b5.c.Do(req5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp5.Body.Close()
+	if cs := resp5.Cookies(); len(cs) != 1 || !cs[0].Secure || cs[0].Name != "__Host-"+cookieName {
+		t.Errorf("by the forwarder's name without X-Forwarded-Proto: %+v", cs)
+	}
+	// loopback stays plain http
+	if resp, _ := r.browser().do("POST", "/login", url.Values{"token": {token}}); resp.Cookies()[0].Secure {
+		t.Error("a loopback request became https")
+	}
 	// a cross-site sign-in form is refused
 	b3 := r.browser()
 	b3.hd.Set("Origin", "https://evil.example")

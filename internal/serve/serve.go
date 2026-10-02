@@ -165,6 +165,9 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
+	if origin, host := d.Config.PublicOrigin(); origin != "" {
+		auth.SetPublicHost(host) // a request by the forwarder's name is https
+	}
 	// Passkeys (D45) are bound to whr's HTTPS name, so they need public_url.
 	var keys *passkey.Service
 	if origin, host := d.Config.PublicOrigin(); origin != "" {
