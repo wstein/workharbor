@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -629,5 +630,48 @@ func TestADecisionKeepsTheCallersTruncation(t *testing.T) {
 	}
 	if !d.InputTruncated || d.Input != "make" {
 		t.Errorf("Decision input %q truncated %v, want %q true", d.Input, d.InputTruncated, "make")
+	}
+}
+
+// Approving "Ready to push?" writes its own audit entry with the commit, who approved
+// it and the size of the change the candidate was pinned with; a denial writes none.
+func TestApprovingAReviewRecordsTheDiffStat(t *testing.T) {
+	for _, tc := range []struct {
+		option string
+		want   bool
+	}{{AnswerAllow, true}, {AnswerDeny, false}} {
+		a := newStoppedAggregate(t)
+		if _, err := a.PinPreparedStat("r1", "agent/topic", "bbb222", "src111", DiffStat{Files: 3, Added: 40, Removed: 7}); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.MarkReady(false); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.RaiseDecision(NewDecision{ID: "rv1", Kind: DecisionReview, Blocking: true, SHA: "bbb222", Now: tNow}); err != nil {
+			t.Fatal(err)
+		}
+		a.TakeEvents()
+		if err := a.Answer("rv1", Response{By: "web+passkey", Option: tc.option, SHA: "bbb222", At: tNow}); err != nil {
+			t.Fatal(err)
+		}
+		var got []ReviewApproved
+		for _, e := range a.TakeEvents() {
+			if e.Kind == EventReviewApproved {
+				var r ReviewApproved
+				if err := json.Unmarshal(e.Payload, &r); err != nil {
+					t.Fatal(err)
+				}
+				if e.Tier != TierAudit {
+					t.Errorf("tier = %s, want audit", e.Tier)
+				}
+				got = append(got, r)
+			}
+		}
+		switch {
+		case tc.want && (len(got) != 1 || got[0] != ReviewApproved{Decision: "rv1", SHA: "bbb222", By: "web+passkey", Files: 3, Added: 40, Removed: 7}):
+			t.Errorf("%s: approvals = %+v", tc.option, got)
+		case !tc.want && len(got) != 0:
+			t.Errorf("%s: a denial recorded an approval: %+v", tc.option, got)
+		}
 	}
 }

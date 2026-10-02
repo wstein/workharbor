@@ -3578,7 +3578,8 @@
           "by_agent",
           "by_model",
           "windows",
-          "subscription"
+          "subscription",
+          "code"
         ],
         "properties": {
           "period": {
@@ -3675,6 +3676,30 @@
           "subscription": {
             "type": "boolean",
             "description": "Some turns ran on a subscription: the usage windows lead and the cost is API-equivalent, not billed."
+          },
+          "code": {
+            "type": "object",
+            "required": [
+              "approvals",
+              "files",
+              "added",
+              "removed"
+            ],
+            "description": "The commits a human approved in the period: how many, and the files and lines of their diff stats, from the review.approved audit entries.",
+            "properties": {
+              "approvals": {
+                "type": "integer"
+              },
+              "files": {
+                "type": "integer"
+              },
+              "added": {
+                "type": "integer"
+              },
+              "removed": {
+                "type": "integer"
+              }
+            }
           }
         }
       }

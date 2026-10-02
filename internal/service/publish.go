@@ -133,7 +133,7 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 	}
 
 	err = s.update(ctx, req.Task, func(a *domain.TaskAggregate) error {
-		if _, err := a.PinPrepared(last.ID, req.Branch, prepared.SHA, prepared.Source); err != nil {
+		if _, err := a.PinPreparedStat(last.ID, req.Branch, prepared.SHA, prepared.Source, domain.DiffStat{Files: prepared.Files, Added: prepared.Added, Removed: prepared.Removed}); err != nil {
 			return err
 		}
 		if err := a.MarkReady(false); err != nil {
@@ -141,7 +141,7 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 		}
 		_, err := a.RaiseDecision(domain.NewDecision{
 			ID: req.DecisionID, Kind: domain.DecisionReview, Blocking: true, SHA: prepared.SHA,
-			Subject: fmt.Sprintf("Ready to push? %d commits on %s", len(prepared.Commits), req.Branch), Now: s.clock.Now(),
+			Subject: fmt.Sprintf("Ready to push? %d commits on %s (%d files, +%d −%d)", len(prepared.Commits), req.Branch, prepared.Files, prepared.Added, prepared.Removed), Now: s.clock.Now(),
 		})
 		return err
 	})

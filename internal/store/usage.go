@@ -352,3 +352,42 @@ func (s *Store) UsageBuckets(ctx context.Context, f UsageFilter, loc *time.Locat
 	})
 	return out, nil
 }
+
+// CodeChanges is the size of the commits a human approved in a period: how many
+// approvals, and the files and lines of their diff stats.
+type CodeChanges struct {
+	Approvals int64 `json:"approvals"`
+	Files     int64 `json:"files"`
+	Added     int64 `json:"added"`
+	Removed   int64 `json:"removed"`
+}
+
+// CodeChanges sums the review.approved audit entries in a period: the code of the
+// commits the human approved with "Ready to push?". It reads only those entries, so
+// a purge of the transcript changes nothing.
+func (s *Store) CodeChanges(ctx context.Context, since, until time.Time) (CodeChanges, error) {
+	where := []string{`kind = ?`}
+	args := []any{string(domain.EventReviewApproved)}
+	if !since.IsZero() {
+		where, args = append(where, `at >= ?`), append(args, since.UnixNano())
+	}
+	if !until.IsZero() {
+		where, args = append(where, `at < ?`), append(args, until.UnixNano())
+	}
+	var c CodeChanges
+	err := s.db.QueryRowContext(ctx, codeTemplate(strings.Join(where, ` AND `)), args...).Scan(&c.Approvals, &c.Files, &c.Added, &c.Removed)
+	if err != nil {
+		return CodeChanges{}, fmt.Errorf("store: code changes: %w", err)
+	}
+	return c, nil
+}
+
+// codeTemplate splices the conditions, which come from constants of this file, into
+// the query; every value is an argument.
+func codeTemplate(where string) string {
+	return strings.Replace(`SELECT COUNT(*),
+	COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.files')), 0),
+	COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.added')), 0),
+	COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.removed')), 0)
+	FROM events WHERE {WHERE}`, "{WHERE}", where, 1)
+}

@@ -164,6 +164,9 @@ func (s *Server) usageCardOf(ctx context.Context, period, sortBy string) *usageC
 			c.Windows = append(c.Windows, row)
 		}
 	}
+	if n := rep.Code; n.Approvals > 0 {
+		c.Code = fmt.Sprintf("%d approved commit set(s): %d file(s), +%d −%d lines", n.Approvals, n.Files, n.Added, n.Removed)
+	}
 	if rep.Balance != nil {
 		c.Balance = service.FormatMicroUSD(rep.Balance.RemainingMicroUSD) + " left, as the agent reported"
 	}

@@ -127,6 +127,16 @@ func (a *TaskAggregate) Answer(id ID, r Response) error {
 		a.settle()
 		return respErr
 	}
+	if d.Kind == DecisionReview && d.Answer == AnswerAllow {
+		// the approval is an audit entry of its own, with the size of what was approved
+		rec := ReviewApproved{Decision: d.ID, SHA: d.SHA, By: r.By}
+		for _, c := range a.candidates {
+			if c.SHA == d.SHA {
+				rec.Files, rec.Added, rec.Removed = c.Files, c.Added, c.Removed
+			}
+		}
+		a.record(EventReviewApproved, rec)
+	}
 	switch {
 	case d.Cause != "" && d.Answer == AnswerCancel:
 		return a.Cancel()

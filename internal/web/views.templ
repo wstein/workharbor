@@ -235,6 +235,9 @@ templ usageSection(c *usageCard) {
 			</div>
 			@usageTable("Agent", c.ByAgent, c)
 			@usageTable("Model", c.ByModel, c)
+			if c.Code != "" {
+				<p class="muted">Code changes: { c.Code }</p>
+			}
 			if c.Balance != "" {
 				<p class="muted">Balance: { c.Balance }</p>
 			}

@@ -73,11 +73,13 @@ type usageCard struct {
 	Subscription bool
 	Windows      []windowRow
 	Balance      string
-	Total        []usageRowView
-	ByAgent      []usageRowView
-	ByModel      []usageRowView
-	Sort         string
-	SortLinks    map[string]string
+	// Code is the line for the commits approved in the period, or empty.
+	Code      string
+	Total     []usageRowView
+	ByAgent   []usageRowView
+	ByModel   []usageRowView
+	Sort      string
+	SortLinks map[string]string
 }
 
 type usagePeriodLink struct {

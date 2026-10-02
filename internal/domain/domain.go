@@ -106,7 +106,14 @@ type ReviewCandidate struct {
 	// pushed revision, so pushed commits are never rewritten (design §4.5).
 	Source string
 	Pushed bool // the revision reached the forge
+	// Files, Added and Removed are the diff stat of the revision against what it was
+	// prepared onto: the files it changes and its lines added and removed (binary
+	// files count as a file and no lines). Zero when it was not measured.
+	Files, Added, Removed int64
 }
+
+// DiffStat is the size of a change.
+type DiffStat struct{ Files, Added, Removed int64 }
 
 // CIState is the result of a CI pipeline for one commit.
 type CIState string

@@ -27,7 +27,7 @@ func urow(key, auth string, turns, in, out, cr, cw, reported, estimated, api, wa
 
 func usageFake(period string) service.UsageSummary {
 	return service.UsageSummary{
-		Period: period, Until: t0, Subscription: true,
+		Period: period, Until: t0, Subscription: true, Code: store.CodeChanges{Approvals: 2, Files: 9, Added: 150, Removed: 57},
 		Windows: []store.WindowReading{{Account: "claude", Name: "five_hour", Utilization: 0.42, ResetsAt: t0.Add(3 * time.Hour), At: t0}},
 		Total:   []service.UsageRow{urow("all", "subscription", 5, 1000, 500, 4000, 100, 9000, 0, 90_000, 125_000, 0.8, "reported")},
 		ByAgent: []service.UsageRow{
@@ -54,7 +54,8 @@ func TestTheHarborShowsTheUsageCardForAPeriod(t *testing.T) {
 		"docs/review", "docs/code", "claude-opus-4-1",
 		"$0.0090 + $0.0007", "mixed, spend", // an estimate is shown apart, and a key's cost is spend
 		"80%", "50%", // the cache share
-		`href="/?agent=docs%2Freview&amp;period=7d"`, // a row links to that agent's tasks
+		"Code changes: 2 approved commit set(s): 9 file(s), +150 −57 lines", // the size of what was approved
+		`href="/?agent=docs%2Freview&amp;period=7d"`,                        // a row links to that agent's tasks
 		`href="/?period=7d&amp;sort=cost"`,
 	} {
 		if !strings.Contains(page, want) {

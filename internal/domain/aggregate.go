@@ -282,6 +282,12 @@ func (a *TaskAggregate) PinRevision(runID ID, branch, sha string) (ReviewCandida
 // agent's own tip it was prepared from (source), which a follow-up round
 // rebases from.
 func (a *TaskAggregate) PinPrepared(runID ID, branch, sha, source string) (ReviewCandidate, error) {
+	return a.PinPreparedStat(runID, branch, sha, source, DiffStat{})
+}
+
+// PinPreparedStat is PinPrepared with the diff stat of the revision, which the
+// approval of "Ready to push?" records (issue #111).
+func (a *TaskAggregate) PinPreparedStat(runID ID, branch, sha, source string, stat DiffStat) (ReviewCandidate, error) {
 	if _, err := a.run(runID); err != nil {
 		return ReviewCandidate{}, err
 	}
@@ -296,9 +302,9 @@ func (a *TaskAggregate) PinPrepared(runID ID, branch, sha, source string) (Revie
 			return ReviewCandidate{}, conflict(RulePinnedSHA, "commit %s is already pinned", sha)
 		}
 	}
-	c := &ReviewCandidate{TaskID: a.task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending, Source: source}
+	c := &ReviewCandidate{TaskID: a.task.ID, RunID: runID, Branch: branch, SHA: sha, CI: CIPending, Source: source, Files: stat.Files, Added: stat.Added, Removed: stat.Removed}
 	a.candidates = append(a.candidates, c)
-	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha, Source: source})
+	a.record(EventRevisionPinned, RevisionPinned{RunID: runID, Branch: branch, SHA: sha, Source: source, Files: stat.Files, Added: stat.Added, Removed: stat.Removed})
 	return *c, nil
 }
 

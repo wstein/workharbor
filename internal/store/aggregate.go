@@ -114,8 +114,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 	for i, c := range snap.Candidates {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO candidates (task_id, sha, run_id, branch, pr_url, ci, source, pushed, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			string(t.ID), c.SHA, string(c.RunID), rd.String(c.Branch), rd.String(c.PRURL), string(c.CI), c.Source, c.Pushed, i); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO candidates (task_id, sha, run_id, branch, pr_url, ci, source, pushed, files, added, removed, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(t.ID), c.SHA, string(c.RunID), rd.String(c.Branch), rd.String(c.PRURL), string(c.CI), c.Source, c.Pushed, c.Files, c.Added, c.Removed, i); err != nil {
 			return nil, fmt.Errorf("store: save candidate %s: %w", c.SHA, err)
 		}
 	}
@@ -197,14 +197,14 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	cands, err := tx.tx.QueryContext(ctx, `SELECT sha, run_id, branch, pr_url, ci, source, pushed FROM candidates WHERE task_id = ? ORDER BY ord`, string(id))
+	cands, err := tx.tx.QueryContext(ctx, `SELECT sha, run_id, branch, pr_url, ci, source, pushed, files, added, removed FROM candidates WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	for cands.Next() {
 		c := domain.ReviewCandidate{TaskID: id}
 		var run, ci string
-		if err := cands.Scan(&c.SHA, &run, &c.Branch, &c.PRURL, &ci, &c.Source, &c.Pushed); err != nil {
+		if err := cands.Scan(&c.SHA, &run, &c.Branch, &c.PRURL, &ci, &c.Source, &c.Pushed, &c.Files, &c.Added, &c.Removed); err != nil {
 			_ = cands.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}

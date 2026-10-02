@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"time"
 
@@ -179,5 +180,33 @@ func TestAnEstimateIsNeverShownAsReportedAndAuthModesStayApart(t *testing.T) {
 		if row.Auth == "api-key" && row.CostLabel != "mixed" {
 			t.Errorf("label = %q", row.CostLabel)
 		}
+	}
+}
+
+// The summary carries the size of the commits approved in the period, from the
+// approval entries only: a denial or an unapproved revision adds nothing.
+func TestTheSummaryCarriesTheCodeOfApprovedCommits(t *testing.T) {
+	r := newRig(t)
+	zone := time.FixedZone("UTC+10", 10*3600)
+	r.svc.cfg.Location = zone
+	approve := func(at time.Time, files, added, removed int64) {
+		ev := domain.Event{
+			TaskID: "t1", Kind: domain.EventReviewApproved, Tier: domain.TierAudit, At: at,
+			Payload: []byte(fmt.Sprintf(`{"decision":"d","sha":"s","by":"x","files":%d,"added":%d,"removed":%d}`, files, added, removed)),
+		}
+		if _, err := r.store.Append(bg, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approve(time.Date(2026, 10, 1, 23, 50, 0, 0, zone), 3, 40, 7) // yesterday, the supervisor's day
+	approve(time.Date(2026, 10, 2, 0, 10, 0, 0, zone), 1, 10, 2)  // today
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, zone)
+	today, err := r.svc.UsageSummary(bg, PeriodToday, now)
+	if err != nil || today.Code != (store.CodeChanges{Approvals: 1, Files: 1, Added: 10, Removed: 2}) {
+		t.Fatalf("today = %+v, %v", today.Code, err)
+	}
+	week, _ := r.svc.UsageSummary(bg, Period7Days, now)
+	if week.Code != (store.CodeChanges{Approvals: 2, Files: 4, Added: 50, Removed: 9}) {
+		t.Errorf("7d = %+v", week.Code)
 	}
 }
