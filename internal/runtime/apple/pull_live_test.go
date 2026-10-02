@@ -39,6 +39,18 @@ func TestMissingBuiltImageIsNeverFetchedLive(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("the refusal took %s: it reached the network", d)
 	}
+	// The egress sidecar's image is checked the same way, before the network.
+	spec.Image = "fedora"
+	home, proxy := proxyIn(t)
+	spec.Egress = &runtime.Egress{Image: runtime.BuiltImageHost + "whtmp-missing-sidecar:none", Proxy: proxy, Allow: []string{"example.com"}}
+	start = time.Now()
+	_, err = a.Provision(ctx, preparedIn(t, home, spec))
+	if !errors.Is(err, runtime.ErrInvalidSpec) || !strings.Contains(err.Error(), "is not here") {
+		t.Fatalf("sidecar: err = %v", err)
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("the sidecar refusal took %s: it reached the network", d)
+	}
 	out, err := exec.CommandContext(ctx, "container", "create", "--name", "whtmp-pull-probe", //nolint:gosec // fixed arguments
 		"--label", "workharbor.temp=true", "--label", "workharbor.lane=wh/runtime", "--label", "workharbor.purpose=pull-live",
 		spec.Image).CombinedOutput()

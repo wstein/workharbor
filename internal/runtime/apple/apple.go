@@ -290,6 +290,11 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 	if err := a.requireLocalBuilt(ctx, spec.Image); err != nil {
 		return "", err
 	}
+	if spec.Egress != nil { // the sidecar's image too: in serve it is a built image
+		if err := a.requireLocalBuilt(ctx, spec.Egress.Image); err != nil {
+			return "", err
+		}
+	}
 	nets, err := a.listNamed(ctx, "network")
 	if err != nil {
 		return "", err
@@ -374,8 +379,10 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 // (container 1.5.0: only `build` has --pull), so on a local miss it asks the
 // registry, and for a bare name that is docker.io: the adapter asks the local
 // store first and fails with a clear error instead of letting the CLI go to the
-// network. Before anything is created, so a miss leaves nothing behind. Other
-// images (a repository's own `image`, the egress sidecar's) keep the CLI's
+// network. Before anything is created, so a miss leaves nothing behind. It is
+// asked of the environment's image and of the egress sidecar's (the environment's
+// own image in serve, the console's for the console): both are built images.
+// Only an image outside that host (an operator's configured one) keeps the CLI's
 // behaviour.
 func (a *Adapter) requireLocalBuilt(ctx context.Context, image string) error {
 	if !runtime.IsBuiltImage(image) {
@@ -914,6 +921,9 @@ func (a *Adapter) UpdateEgress(ctx context.Context, id string, prep runtime.Prep
 	}
 	if spec.Egress == nil || spec.Network.Name == "" || spec.Network.Name != c.Configuration.Labels[netLabel] {
 		return &runtime.SpecError{Problems: []string{"the spec must carry an Egress and the environment's own network"}}
+	}
+	if err := a.requireLocalBuilt(ctx, spec.Egress.Image); err != nil { // before the old sidecar is touched
+		return err
 	}
 	if old, err := a.sidecarOf(ctx, id); err != nil {
 		return err

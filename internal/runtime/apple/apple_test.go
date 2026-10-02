@@ -414,3 +414,72 @@ func TestProvisionLeavesOtherImagesToTheCLI(t *testing.T) {
 		}
 	}
 }
+
+// missingBuiltRun answers every image inspect with "not found" and records the rest.
+func missingBuiltRun(calls *[][]string, listJSON string) func(context.Context, io.Reader, ...string) ([]byte, []byte, error) {
+	return func(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+		*calls = append(*calls, args)
+		if len(args) > 1 && args[0] == "image" && args[1] == "inspect" {
+			return nil, nil, &ExitError{Args: args, Err: errors.New("exit status 1"), Stderr: "Error: image not found"}
+		}
+		if slices.Contains(args, "list") {
+			return []byte(listJSON), nil, nil
+		}
+		return nil, nil, nil
+	}
+}
+
+// proxyIn makes a home with a stand-in proxy binary in it.
+func proxyIn(t *testing.T) (home, proxy string) {
+	t.Helper()
+	home = testHome(t)
+	proxy = filepath.Join(home, "whr-proxy")
+	if err := os.WriteFile(proxy, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home, proxy
+}
+
+func noWriteCalls(t *testing.T, calls [][]string) {
+	t.Helper()
+	for _, c := range calls {
+		if c[0] == "create" || c[0] == "network" || c[0] == "volume" || c[0] == "stop" || c[0] == "delete" || c[0] == "image" && c[1] == "pull" {
+			t.Errorf("a missing built sidecar image ran %v", c)
+		}
+	}
+}
+
+func TestProvisionNeverPullsAMissingBuiltSidecarImage(t *testing.T) {
+	for name, envImage := range map[string]string{
+		"operator image": "fedora",                                      // only the sidecar is built
+		"console shape":  runtime.BuiltImageHost + "whr-console/o1:abc", // both are built; the first miss refuses
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls [][]string
+			a := &Adapter{owner: "o1", run: missingBuiltRun(&calls, "[]")}
+			home, proxy := proxyIn(t)
+			spec := baseSpec()
+			spec.Image = envImage
+			spec.Egress = &runtime.Egress{Image: runtime.BuiltImageHost + "whr-console/o1:abc", Proxy: proxy, Allow: []string{"api.anthropic.com"}}
+			_, err := a.Provision(context.Background(), preparedIn(t, home, spec))
+			if !errors.Is(err, runtime.ErrInvalidSpec) || !strings.Contains(err.Error(), "built by whr and is not here") {
+				t.Fatalf("err = %v", err)
+			}
+			noWriteCalls(t, calls)
+		})
+	}
+}
+
+func TestUpdateEgressNeverPullsAMissingBuiltSidecarImage(t *testing.T) {
+	var calls [][]string
+	list := `[{"configuration":{"id":"env-1","labels":{"` + runtime.OwnerLabel + `":"o1","` + roleLabel + `":"` + roleEnv + `","` + netLabel + `":"wh-net-1"}},"status":{"state":"running"}}]`
+	a := &Adapter{owner: "o1", run: missingBuiltRun(&calls, list)}
+	home, proxy := proxyIn(t)
+	spec := baseSpec()
+	spec.Egress = &runtime.Egress{Image: runtime.BuiltImageHost + "whr-base/o1:abc", Proxy: proxy, Allow: []string{"api.anthropic.com"}}
+	err := a.UpdateEgress(context.Background(), "env-1", preparedIn(t, home, spec))
+	if !errors.Is(err, runtime.ErrInvalidSpec) || !strings.Contains(err.Error(), "built by whr and is not here") {
+		t.Fatalf("err = %v", err)
+	}
+	noWriteCalls(t, calls)
+}
