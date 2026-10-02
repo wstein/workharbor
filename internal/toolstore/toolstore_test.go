@@ -438,3 +438,34 @@ func TestVerifyHandlesAnEntryWithoutARecordedHash(t *testing.T) {
 	}
 	makeWritable(s.Root)
 }
+
+// The record and the tool are written by the same user, so a tool and a record
+// changed together agree with each other; only the pin, compiled into the binary,
+// catches it.
+func TestAPinDecidesEvenWhenTheRecordAgreesWithATamperedTool(t *testing.T) {
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	s := newStore(t)
+	dir := filepath.Join(s.Root, "store", fmt.Sprintf("%s-%s-%s-%s", pin.SHA256[:8], pin.Name, pin.Version, pin.Platform))
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	evil := []byte("a tampered tool")
+	if err := os.WriteFile(filepath.Join(dir, "bin", pin.Name), evil, 0o555); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(evil)
+	// A record in the entry, valid in form (a SHA-256 that starts with the name's
+	// digits), as whoever changed the tool could have written it.
+	forged := pin.SHA256[:8] + hex.EncodeToString(sum[:])[8:]
+	if err := os.WriteFile(filepath.Join(dir, RecordedHashFile), []byte(forged+"\n"), 0o444); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if got := joinProblems(s.Verify()); !strings.Contains(got, "the pin says") {
+		t.Errorf("a tampered pinned tool was not caught against its pin: %s", got)
+	}
+	makeWritable(s.Root)
+}

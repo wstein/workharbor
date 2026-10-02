@@ -480,14 +480,21 @@ func (s *Store) Verify() []Problem {
 				bad(true, "%v", err)
 				continue
 			}
+			// A pin is compiled into the binary; the record and the tool are written by
+			// the same user, so whoever can change one can change both. A pin therefore
+			// decides whenever there is one, and the record only for a tool without a
+			// pin (one added from a file).
 			switch {
-			case want.sum != "":
-				if sum != want.sum {
-					bad(true, "the content hashes to %s, but %s was recorded", sum, want.sum)
-				}
 			case pinned != "":
 				if sum != pinned {
 					bad(true, "the content hashes to %s, but the pin says %s", sum, pinned)
+				}
+				if want.sum != "" && want.sum != pinned {
+					bad(true, "the recorded hash %s is not the pin %s", want.sum, pinned)
+				}
+			case want.sum != "":
+				if sum != want.sum {
+					bad(true, "the content hashes to %s, but %s was recorded", sum, want.sum)
 				}
 			case !strings.HasPrefix(sum, parts[0]):
 				bad(true, "the content hashes to %s, not the hash in the name", sum[:8])
