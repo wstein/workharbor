@@ -202,3 +202,15 @@ func TestTheReleaseRepoOverrideNeedsConfirmation(t *testing.T) {
 		t.Errorf("a confirmed override: %v\n%s", err, out)
 	}
 }
+
+// A source install does not write a VERSION file, so it removes the one an earlier
+// release install left: a stale one would misguide the downgrade check.
+func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
+	out, err := bash(t, nil, `cd .. && make -n -o check-clean -o check-main install PREFIX=/p`)
+	if err != nil {
+		t.Fatalf("make -n install: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "rm -f /p/libexec/whr/VERSION") {
+		t.Errorf("the install target does not remove the stale VERSION file:\n%s", out)
+	}
+}

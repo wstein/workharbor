@@ -26,7 +26,9 @@ LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(
 # tree and a commit that is not on origin/main, so the supervisor always runs
 # approved, committed code (D34), and builds with GOWORK=off and no GOFLAGS, so
 # a parent go.work or the environment cannot change what is built. The whr user
-# runs it with PREFIX=$$HOME/.local, or any PREFIX it can write.
+# runs it with PREFIX=$$HOME/.local, or any PREFIX it can write. It removes
+# libexec/whr/VERSION, which only install-release writes: after a source install
+# the version is unknown, and install-release then needs --allow-downgrade.
 PREFIX ?= $(HOME)/.local
 INSTALL_GO = GOWORK=off GOFLAGS= go
 
@@ -44,6 +46,7 @@ check-main:
 
 install: check-clean check-main
 	mkdir -p $(PREFIX)/bin $(PREFIX)/libexec/whr
+	rm -f $(PREFIX)/libexec/whr/VERSION
 	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/bin/whr ./cmd/whr
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-proxy-linux-arm64 ./cmd/whr-proxy
