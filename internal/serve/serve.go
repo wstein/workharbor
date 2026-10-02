@@ -12,6 +12,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/wstein/workharbor/internal/agent"
@@ -56,6 +57,11 @@ type Deps struct {
 	// ReconcileEvery is how often the reconciler compares the database with the
 	// runtime. Default 30 s.
 	ReconcileEvery time.Duration
+	// AcceptWorkflowChange confirms that a repository's workflow preset in the
+	// configuration may differ from the one recorded: a policy change, which the
+	// operator confirms on the host CLI (`whr serve --accept-workflow-change`)
+	// until the passkey of D45 exists.
+	AcceptWorkflowChange bool
 	// Ready, if set, is called with the address the API is listening on.
 	Ready func(addr net.Addr)
 }
@@ -93,7 +99,18 @@ func Run(ctx context.Context, d Deps) error {
 	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
+	if err := applyWorkflows(ctx, d, logf); err != nil {
+		return err
+	}
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
+		Workflow: func(repo string) string {
+			for _, r := range d.Config.Repositories {
+				if strings.EqualFold(r.Name, repo) {
+					return string(r.Preset())
+				}
+			}
+			return ""
+		},
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
 		Topics: d.Topics, EditorDir: d.EditorDir,
 	})
@@ -193,4 +210,31 @@ func addRevoker(scfg *service.Config, d Deps) {
 	}); ok {
 		scfg.RevokeTokens = r.RevokeTokens
 	}
+}
+
+// applyWorkflows records the preset of each configured repository. A change of
+// one is a policy change: it is refused unless the operator confirmed it, and when
+// confirmed it is appended to the audit log of changes. A task already started
+// keeps the preset it started under either way.
+func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) error {
+	for _, r := range d.Config.Repositories {
+		want := string(r.Preset())
+		prev, ok, err := d.Store.RecordedWorkflow(ctx, r.Name)
+		if err != nil {
+			return err
+		}
+		if ok && prev != want && !d.AcceptWorkflowChange {
+			return fmt.Errorf("the workflow of %s is %s in the configuration and was %s: that is a policy change; check it and start with --accept-workflow-change to confirm it (tasks already started keep the %s they started under)", r.Name, want, prev, prev)
+		}
+		by := "serve"
+		if d.AcceptWorkflowChange {
+			by = "host-cli"
+		}
+		if _, changed, err := d.Store.ApplyWorkflow(ctx, r.Name, want, by, time.Now()); err != nil {
+			return err
+		} else if changed {
+			logf("workflow of %s changed from %s to %s (confirmed on the host CLI)", r.Name, prev, want)
+		}
+	}
+	return nil
 }

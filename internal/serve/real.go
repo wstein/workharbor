@@ -17,6 +17,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/redact"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/apple"
@@ -85,6 +86,52 @@ func AgentSpec(mode agent.PermissionMode, allowed []string, auth agent.AuthMode)
 			// agent's own config lookups) use the agent home volume.
 			Env: []string{"HOME=" + GuestHome},
 		}
+	}
+}
+
+// modeOf is the permission mode a repository's agent runs in: the human's
+// override (agent_permission_mode) if there is one, else what the repository's
+// workflow preset sets (D47): manual for published, dontAsk for the others.
+func modeOf(c *config.Config, repo string) agent.PermissionMode {
+	return modeFor(c, repo, "")
+}
+
+// modeFor is modeOf for a task that kept the preset it started under: that preset
+// decides, not the repository's current one (D47).
+func modeFor(c *config.Config, repo, taskWorkflow string) agent.PermissionMode {
+	if c.AgentPermissionMode != "" {
+		return agent.PermissionMode(c.AgentPermissionMode)
+	}
+	if p, err := policy.ParsePreset(taskWorkflow); err == nil && taskWorkflow != "" {
+		return agent.PermissionMode(p.AgentMode())
+	}
+	for _, r := range c.Repositories {
+		if strings.EqualFold(r.Name, repo) {
+			return agent.PermissionMode(r.Preset().AgentMode())
+		}
+	}
+	return agent.PermissionDontAsk
+}
+
+// needsAllowlist reports whether any repository runs in dontAsk mode, which
+// cannot start without an allowlist.
+func needsAllowlist(c *config.Config) bool {
+	if len(c.Repositories) == 0 {
+		return modeOf(c, "") == agent.PermissionDontAsk
+	}
+	for _, r := range c.Repositories {
+		if modeOf(c, r.Name) == agent.PermissionDontAsk {
+			return true
+		}
+	}
+	return false
+}
+
+// AgentSpecFor returns the StartSpec factory for the configuration: the mode of a
+// run is that of its repository's workflow, unless the human overrode it.
+func AgentSpecFor(c *config.Config, auth agent.AuthMode) func(domain.Task, domain.Run) agent.StartSpec {
+	return func(t domain.Task, r domain.Run) agent.StartSpec {
+		return AgentSpec(modeFor(c, t.Repo, t.Workflow), c.AgentAllowedTools, auth)(t, r)
 	}
 }
 
@@ -162,12 +209,8 @@ func StateDir(c *config.Config, home string) string {
 // and the spec factory. exe is the path of the running whr, which says where
 // the installed egress proxy is. The returned function releases what was opened.
 func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps, func(), error) {
-	permission := agent.PermissionMode(c.AgentPermissionMode)
-	if permission == "" {
-		permission = agent.PermissionDontAsk
-	}
-	if permission == agent.PermissionDontAsk && len(c.AgentAllowedTools) == 0 {
-		return Deps{}, nil, errors.New("agent_allowed_tools is needed in the dontAsk mode: only the tools you list may run (or set agent_permission_mode to manual to approve each one yourself, D26)")
+	if needsAllowlist(c) && len(c.AgentAllowedTools) == 0 {
+		return Deps{}, nil, errors.New("agent_allowed_tools is needed: a repository runs its agent in the dontAsk mode, where only the tools you list may run (a published repository asks for each tool instead, and agent_permission_mode: manual does so for all, D26, D47)")
 	}
 	profile, err := toolProfile(c)
 	if err != nil {
@@ -251,7 +294,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
-		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpec(permission, c.AgentAllowedTools, mode), Logf: logf,
+		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 	}, func() {
 		_ = git.Close()
 		_ = st.Close()

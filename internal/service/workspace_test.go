@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 	"github.com/wstein/workharbor/internal/store"
@@ -585,5 +586,49 @@ func TestCreateRefusesAnImageWithoutGit(t *testing.T) {
 	}
 	if inv, err := r.rt.Adapter.Inventory(bg); err != nil || len(inv.Networks)+len(inv.Sidecars)+len(inv.Volumes) != 0 {
 		t.Errorf("runtime resources left behind: %+v, %v", inv, err)
+	}
+}
+
+// A task keeps the preset its repository had when it started: a later change of
+// the configuration, even to a looser preset, does not apply to it (D47).
+func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
+	r := newWsRig(t)
+	current := "published"
+	r.ws.cfg.Workflow = func(string) string { return current }
+	_, a := r.create("keep")
+	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = "prototype" // the configuration loosens
+	agg, _ := r.store.LoadTask(bg, task)
+	if agg.Task().Workflow != "published" {
+		t.Errorf("the task's preset is %q, want the published it started under", agg.Task().Workflow)
+	}
+	if got := effectivePreset(agg.Task().Workflow, policy.Prototype); got != policy.Published {
+		t.Errorf("a published task under a prototype configuration publishes as %s", got)
+	}
+	// a repository with nothing configured gets the default
+	r.ws.cfg.Workflow = nil
+	if got := r.ws.workflowOf("a/b"); got != "integration" {
+		t.Errorf("default %q", got)
+	}
+}
+
+func TestTheEffectivePresetPrefersTheTasksOwn(t *testing.T) {
+	for _, c := range []struct {
+		task string
+		repo policy.Preset
+		want policy.Preset
+	}{
+		{"published", policy.Prototype, policy.Published},
+		{"prototype", policy.Published, policy.Prototype},
+		{"", policy.Prototype, policy.Prototype},
+		{"", "", policy.Integration},
+		{"nonsense", policy.Published, policy.Published},
+	} {
+		if got := effectivePreset(c.task, c.repo); got != c.want {
+			t.Errorf("task %q repo %q = %s, want %s", c.task, c.repo, got, c.want)
+		}
 	}
 }

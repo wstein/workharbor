@@ -162,7 +162,7 @@ func heldText(issue forge.Issue) string { return issue.Title + "\n\n" + issue.Bo
 func (w *Workspaces) hold(ctx context.Context, a domain.Agent, ws domain.Workspace, issue forge.Issue, number int) (RunResult, error) {
 	task, dec := w.cfg.NewID(), w.cfg.NewID()
 	agg := domain.NewTaskAggregate(domain.Task{
-		ID: task, Repo: ws.Repo, Issue: "#" + strconv.Itoa(number), State: domain.TaskQueued, AgentID: a.ID, CreatedAt: w.svc.clock.Now(),
+		ID: task, Repo: ws.Repo, Issue: "#" + strconv.Itoa(number), State: domain.TaskQueued, AgentID: a.ID, Workflow: w.workflowOf(ws.Repo), CreatedAt: w.svc.clock.Now(),
 	})
 	if _, err := agg.RaiseUntrustedHold(dec, issue.Author, issue.AuthorAssociation, heldText(issue), w.svc.clock.Now()); err != nil {
 		return RunResult{}, err

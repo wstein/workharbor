@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/wstein/workharbor/internal/domain"
 )
 
 var bg = context.Background()
@@ -50,7 +52,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 10 || name != "0010_audit_chain.sql" || applied != fixed.UnixNano() {
+	if n != 11 || name != "0011_workflows.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -84,8 +86,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 10 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 10", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 11 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 11", n, err)
 	}
 }
 
@@ -124,5 +126,45 @@ func TestLoadMigrationsAreOrderedAndNamed(t *testing.T) {
 		if ms[i].version <= ms[i-1].version {
 			t.Errorf("migrations are not in order: %d after %d", ms[i].version, ms[i-1].version)
 		}
+	}
+}
+
+// A task keeps the preset it started under, and a change of a repository's preset
+// is an audit entry (D47).
+func TestWorkflowsAreRecordedAndChangesAreAudited(t *testing.T) {
+	s := openTemp(t)
+	at := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	if _, ok, err := s.RecordedWorkflow(bg, "a/b"); err != nil || ok {
+		t.Fatalf("nothing recorded yet: %v %v", ok, err)
+	}
+	if prev, changed, err := s.ApplyWorkflow(bg, "a/b", "integration", "serve", at); err != nil || changed || prev != "" {
+		t.Errorf("the first record is not a change: %q %v %v", prev, changed, err)
+	}
+	if _, changed, _ := s.ApplyWorkflow(bg, "a/b", "integration", "serve", at.Add(time.Hour)); changed {
+		t.Error("the same preset was a change")
+	}
+	prev, changed, err := s.ApplyWorkflow(bg, "a/b", "prototype", "host-cli", at.Add(2*time.Hour))
+	if err != nil || !changed || prev != "integration" {
+		t.Fatalf("a change: %q %v %v", prev, changed, err)
+	}
+	if w, _, _ := s.RecordedWorkflow(bg, "a/b"); w != "prototype" {
+		t.Errorf("recorded %q", w)
+	}
+	ch, err := s.WorkflowChanges(bg, "a/b")
+	if err != nil || len(ch) != 1 || ch[0].From != "integration" || ch[0].To != "prototype" || ch[0].ConfirmedBy != "host-cli" || !ch[0].At.Equal(at.Add(2*time.Hour)) {
+		t.Errorf("changes %+v, %v", ch, err)
+	}
+	if _, _, err := s.ApplyWorkflow(bg, "", "x", "y", at); err == nil {
+		t.Error("an empty repository was recorded")
+	}
+
+	// the task keeps the preset it started under, across a save and a load
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t-wf", Repo: "a/b", State: domain.TaskQueued, Workflow: "published", CreatedAt: at})
+	if _, err := s.SaveTask(bg, agg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadTask(bg, "t-wf")
+	if err != nil || got.Task().Workflow != "published" {
+		t.Errorf("task workflow %q, %v", got.Task().Workflow, err)
 	}
 }

@@ -17,7 +17,7 @@ import (
 // configuration's loopback address (design §9.7). It validates the whole
 // configuration at start and reports every problem with its key.
 func serveCommand(stderr io.Writer) *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the supervisor: the reconciler and the JSON API on a loopback address",
 		Args:  cobra.NoArgs,
@@ -44,8 +44,11 @@ func serveCommand(stderr io.Writer) *cobra.Command {
 				return err
 			}
 			defer closeAll()
+			deps.AcceptWorkflowChange, _ = cmd.Flags().GetBool("accept-workflow-change")
 			deps.Ready = func(a net.Addr) { logf("listening on %s", a) }
 			return serve.Run(cmd.Context(), deps)
 		},
 	}
+	c.Flags().Bool("accept-workflow-change", false, "confirm that a repository's workflow preset in the configuration differs from the recorded one (a policy change, D47)")
+	return c
 }

@@ -337,3 +337,102 @@ func TestPrepareNeedsChecks(t *testing.T) {
 		t.Fatalf("Prepare without checks = %v, want ErrNoChecks", err)
 	}
 }
+
+func hasCall(f *remoteForge, prefix string) bool {
+	for _, c := range f.Calls {
+		if strings.HasPrefix(c, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// prepared returns an approved rig set to a workflow.
+func approvedUnder(t *testing.T, preset policy.Preset, branch string) (*pubRig, string) {
+	t.Helper()
+	p := newPubRig(t)
+	p.pub.cfg.Workflow, p.pub.cfg.Branch = preset, branch
+	prepared, err := p.pub.Prepare(bg, p.req)
+	must(t, err)
+	must(t, p.allow(prepared.SHA))
+	return p, prepared.SHA
+}
+
+// Prototype: the approved commit is pushed and the integration branch is moved to
+// it as a fast-forward; there is no pull request (D47).
+func TestThePrototypeFastForwardsTheIntegrationBranchWithoutAPR(t *testing.T) {
+	p, sha := approvedUnder(t, policy.Prototype, "develop")
+	pr, err := p.pub.Publish(bg, "t1", "review-1", "t", "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := p.forge.BranchSHA(bg, "", "agent/topic"); got != sha {
+		t.Errorf("the agent branch is at %s, want the approved %s", got, sha)
+	}
+	if len(p.forge.FastForwards) != 1 || p.forge.FastForwards[0] != "wstein/workharbor:develop@"+sha {
+		t.Errorf("moves %v", p.forge.FastForwards)
+	}
+	if len(p.forge.PRs) != 0 || pr.URL != "" || hasCall(p.forge, "OpenPR") {
+		t.Errorf("a prototype opened a PR: %+v %v", p.forge.PRs, p.forge.Calls)
+	}
+	if _, pushed := p.load().LastPushed(); !pushed {
+		t.Error("the approved commit is not recorded as pushed")
+	}
+}
+
+func TestAPrototypeBranchThatMovedIsRefusedAndNeverForced(t *testing.T) {
+	p, _ := approvedUnder(t, policy.Prototype, "develop")
+	p.forge.NotFF = true
+	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotFastForward) {
+		t.Fatalf("a moved branch = %v, want ErrNotFastForward", err)
+	}
+	if _, pushed := p.load().LastPushed(); pushed {
+		t.Error("a refused fast-forward was recorded as pushed")
+	}
+	if len(p.forge.FastForwards) != 0 {
+		t.Errorf("moves %v", p.forge.FastForwards)
+	}
+	// without a branch to move there is nothing to do
+	q, _ := approvedUnder(t, policy.Prototype, "")
+	if _, err := q.pub.Publish(bg, "t1", "review-1", "t", "b"); err == nil {
+		t.Error("a prototype without an integration branch published")
+	}
+}
+
+func TestIntegrationOpensAPRIntoTheIntegrationBranchAndPublishedIntoTheDefault(t *testing.T) {
+	p, _ := approvedUnder(t, policy.Integration, "develop")
+	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if !hasCall(p.forge, "OpenPRInto wstein/workharbor:develop<-agent/topic@") || len(p.forge.FastForwards) != 0 {
+		t.Errorf("integration: %v, moves %v", p.forge.Calls, p.forge.FastForwards)
+	}
+	q, _ := approvedUnder(t, policy.Published, "ignored")
+	if _, err := q.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if hasCall(q.forge, "OpenPRInto") || !hasCall(q.forge, "OpenPR wstein/workharbor:agent/topic@") || len(q.forge.FastForwards) != 0 {
+		t.Errorf("published: %v", q.forge.Calls)
+	}
+	// the default when nothing is set is integration
+	d, _ := approvedUnder(t, "", "develop")
+	if _, err := d.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil || !hasCall(d.forge, "OpenPRInto") {
+		t.Errorf("the default workflow: %v %v", err, d.forge.Calls)
+	}
+}
+
+// No preset sends anything without the approval of exactly the pinned commit.
+func TestEveryPresetNeedsTheApprovalOfTheCommit(t *testing.T) {
+	for _, preset := range []policy.Preset{policy.Prototype, policy.Integration, policy.Published} {
+		p := newPubRig(t)
+		p.pub.cfg.Workflow, p.pub.cfg.Branch = preset, "develop"
+		_, err := p.pub.Prepare(bg, p.req)
+		must(t, err)
+		if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotApproved) {
+			t.Errorf("%s: an open decision = %v", preset, err)
+		}
+		if p.remoteHas() || len(p.forge.PRs) != 0 || len(p.forge.FastForwards) != 0 {
+			t.Errorf("%s: a refused publish reached the forge: %v", preset, p.forge.Calls)
+		}
+	}
+}

@@ -35,7 +35,14 @@ type PublishConfig struct {
 	Checks  Checker
 	// ForgeRepo is the repository name on the forge ("owner/name").
 	ForgeRepo string
-	Deepen    hostgit.DeepenOptions
+	// Workflow is the repository's preset (D47); empty means integration. It
+	// chooses the table the Guard decides with and where approved commits go.
+	Workflow policy.Preset
+	// Branch is the integration branch approved commits go to: the target of the
+	// prototype's fast-forward and of the integration workflow's pull request. A
+	// published repository's pull request goes to the default branch and has none.
+	Branch string
+	Deepen hostgit.DeepenOptions
 	// Workspaces lets Prepare and OpenCopy export an agent's branch out of its
 	// environment as a bundle (D42). Without it only the older fetch from a
 	// stopped environment's checkout works.
@@ -172,27 +179,72 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	// The guard decides with the run's context: an untrusted input asks where the
 	// table would let an action run on its own. The supervisor does not know
 	// whether the repository is private, so it assumes it is (design §7.1).
-	guard := p.cfg.Guard.For(policy.Context{UntrustedInput: agg.Task().Untrusted, PrivateData: true, Egress: true})
+	preset := effectivePreset(agg.Task().Workflow, p.cfg.Workflow)
+	guard := p.cfg.Guard.WithTable(preset.Table()).For(policy.Context{UntrustedInput: agg.Task().Untrusted, PrivateData: true, Egress: true})
 	if err := guard.Push(ctx, p.cfg.ForgeRepo, cand.Branch, ap); err != nil {
 		return forge.PullRequest{}, err
 	}
 	var pr forge.PullRequest
-	if cand.PRURL != "" {
+	switch {
+	case !preset.OpensPR():
+		// prototype: the integration branch moves to the approved commit, only as
+		// a fast-forward and never forced; there is no pull request (D47).
+		if p.cfg.Branch == "" {
+			return forge.PullRequest{}, errors.New("the prototype workflow needs the integration branch to move")
+		}
+		if err := guard.FastForward(ctx, p.cfg.ForgeRepo, cand.Branch, p.cfg.Branch, ap); err != nil {
+			return forge.PullRequest{}, err
+		}
+		pr = forge.PullRequest{Repo: p.cfg.ForgeRepo, Branch: cand.Branch, SHA: cand.SHA}
+	case cand.PRURL != "":
 		pr = forge.PullRequest{Repo: p.cfg.ForgeRepo, Branch: cand.Branch, URL: cand.PRURL, SHA: cand.SHA}
 		pr.Number = parsePRNumber(cand.PRURL)
 		if err := guard.UpdatePR(ctx, pr, ap, title, body); err != nil {
 			return forge.PullRequest{}, err
 		}
-	} else if pr, err = guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body); err != nil {
-		return forge.PullRequest{}, err
+	default:
+		var err error
+		if base := p.prBase(preset); base != "" {
+			pr, err = guard.OpenPRInto(ctx, p.cfg.ForgeRepo, base, cand.Branch, ap, title, body)
+		} else {
+			pr, err = guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body)
+		}
+		if err != nil {
+			return forge.PullRequest{}, err
+		}
 	}
 	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		if err := a.RecordPushed(cand.SHA); err != nil {
 			return err
 		}
+		if pr.URL == "" { // no pull request: the prototype moved the branch
+			return nil
+		}
 		return a.RecordPR(cand.SHA, pr.URL)
 	})
 	return pr, err
+}
+
+// effectivePreset is the preset a task publishes under: its own, from when it
+// started, wins over the repository's current one, so a looser preset never
+// applies to a run already started (D47); without either it is the default.
+func effectivePreset(task string, repo policy.Preset) policy.Preset {
+	if p, err := policy.ParsePreset(task); err == nil && task != "" {
+		return p
+	}
+	if repo != "" {
+		return repo
+	}
+	return policy.DefaultPreset
+}
+
+// prBase is the branch a pull request goes into: the integration branch, or the
+// default branch (empty) for a published repository.
+func (p *Publisher) prBase(preset policy.Preset) string {
+	if preset.ToDefaultBranch() {
+		return ""
+	}
+	return p.cfg.Branch
 }
 
 func parsePRNumber(url string) int {

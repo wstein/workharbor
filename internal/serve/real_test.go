@@ -248,3 +248,36 @@ func TestTopicsOpensTheMirrorAndTheSupervisorsOwnRepository(t *testing.T) {
 		t.Error("a repository name that is a path was accepted")
 	}
 }
+
+// The agent's mode follows the repository's workflow unless the human overrides it.
+func TestTheAgentModeFollowsTheWorkflow(t *testing.T) {
+	c := &config.Config{
+		Repositories:      []config.Repository{{Name: "a/proto", Workflow: "prototype"}, {Name: "a/integ"}, {Name: "a/pub", Workflow: "published"}},
+		AgentAllowedTools: []string{"Read"},
+	}
+	for repo, want := range map[string]agent.PermissionMode{"a/proto": agent.PermissionDontAsk, "a/integ": agent.PermissionDontAsk, "a/pub": agent.PermissionManual, "unknown/x": agent.PermissionDontAsk} {
+		spec := AgentSpecFor(c, agent.AuthSubscription)(domain.Task{Repo: repo}, domain.Run{})
+		if spec.PermissionMode != want {
+			t.Errorf("%s: %s, want %s", repo, spec.PermissionMode, want)
+		}
+		if want == agent.PermissionManual && len(spec.AllowedTools) != 0 {
+			t.Errorf("%s: a manual run has an allowlist", repo)
+		}
+		if want == agent.PermissionDontAsk && len(spec.AllowedTools) != 1 {
+			t.Errorf("%s: no allowlist in dontAsk", repo)
+		}
+	}
+	// the human's override wins, for every repository
+	c.AgentPermissionMode = "dontAsk"
+	if m := AgentSpecFor(c, agent.AuthSubscription)(domain.Task{Repo: "a/pub"}, domain.Run{}).PermissionMode; m != agent.PermissionDontAsk {
+		t.Errorf("an override of a published repository: %s", m)
+	}
+	// only published repositories: no allowlist needed
+	only := &config.Config{Repositories: []config.Repository{{Name: "a/pub", Workflow: "published"}}}
+	if needsAllowlist(only) {
+		t.Error("a published-only supervisor needs no allowlist")
+	}
+	if !needsAllowlist(c) {
+		t.Error("dontAsk repositories need one")
+	}
+}

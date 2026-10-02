@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -225,5 +226,47 @@ func TestKillAllGetsTheForgesRevoker(t *testing.T) {
 	}
 	if n, err := scfg.RevokeTokens(context.Background()); n != 3 || err != nil || f.calls != 1 {
 		t.Errorf("revoked %d, %v, calls %d", n, err, f.calls)
+	}
+}
+
+// A change of a repository's preset is a policy change: refused unless the
+// operator confirmed it on the host CLI, and then audited (D47).
+func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "workharbor.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	cfg := func(workflow string) Deps {
+		return Deps{Config: &config.Config{Repositories: []config.Repository{{Name: "wstein/workharbor", Workflow: workflow}}}, Store: st}
+	}
+	var logs []string
+	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	ctx := context.Background()
+
+	if err := applyWorkflows(ctx, cfg(""), logf); err != nil { // the first start records the default
+		t.Fatal(err)
+	}
+	if err := applyWorkflows(ctx, cfg("integration"), logf); err != nil {
+		t.Errorf("the same preset: %v", err)
+	}
+	err = applyWorkflows(ctx, cfg("prototype"), logf)
+	if err == nil || !strings.Contains(err.Error(), "--accept-workflow-change") || !strings.Contains(err.Error(), "policy change") {
+		t.Fatalf("an unconfirmed change = %v", err)
+	}
+	if w, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); w != "integration" {
+		t.Errorf("a refused change was recorded: %q", w)
+	}
+	d := cfg("prototype")
+	d.AcceptWorkflowChange = true
+	if err := applyWorkflows(ctx, d, logf); err != nil {
+		t.Fatal(err)
+	}
+	ch, _ := st.WorkflowChanges(ctx, "wstein/workharbor")
+	if len(ch) != 1 || ch[0].From != "integration" || ch[0].To != "prototype" || ch[0].ConfirmedBy != "host-cli" {
+		t.Errorf("audit %+v", ch)
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "changed from integration to prototype") {
+		t.Errorf("logs %v", logs)
 	}
 }

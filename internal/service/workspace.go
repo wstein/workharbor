@@ -12,6 +12,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -45,6 +46,9 @@ type WorkspaceConfig struct {
 	// Optional.
 	Topics    TopicsFunc
 	EditorDir string
+	// Workflow returns the preset a repository runs under (D47); a task keeps the
+	// one it started under. Nil means the default preset.
+	Workflow func(repo string) string
 	// Trust is the trust tier of issue #53: it says whether an issue may start
 	// a run. Nil allows every issue, today. It is the place to add the tiers,
 	// not a way around them.
@@ -275,7 +279,7 @@ func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID
 	}
 	task, run := w.cfg.NewID(), w.cfg.NewID()
 	agg := domain.NewTaskAggregate(domain.Task{
-		ID: task, Repo: ws.Repo, Issue: req.Issue, State: domain.TaskQueued, AgentID: a.ID, CreatedAt: w.svc.clock.Now(),
+		ID: task, Repo: ws.Repo, Issue: req.Issue, State: domain.TaskQueued, AgentID: a.ID, Workflow: w.workflowOf(ws.Repo), CreatedAt: w.svc.clock.Now(),
 	})
 	agg.AddEnvironment(domain.Environment{ID: ws.EnvID, Backend: w.svc.rt.Name(), State: domain.EnvRunning})
 	if err := w.launch(ctx, agg, ws, a, run, req.Prompt); err != nil {
@@ -543,4 +547,15 @@ func (w *Workspaces) Remove(ctx context.Context, workspace string) error {
 		}
 	}
 	return w.svc.store.RemoveWorkspace(ctx, ws, domain.RemovedWorkspaceEvent(ws, w.svc.clock.Now()))
+}
+
+// workflowOf is the preset a task started now would keep.
+func (w *Workspaces) workflowOf(repo string) string {
+	if w.cfg.Workflow == nil {
+		return string(policy.DefaultPreset)
+	}
+	if p := w.cfg.Workflow(repo); p != "" {
+		return p
+	}
+	return string(policy.DefaultPreset)
 }

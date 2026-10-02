@@ -58,6 +58,9 @@ type Task struct {
 	// Untrusted is set when text from an untrusted author is part of the task
 	// (design §6): the policy decides with that context.
 	Untrusted bool
+	// Workflow is the repository's preset when the task started (D47). A looser
+	// preset never applies to a task already started. Empty means the default.
+	Workflow  string
 	CreatedAt time.Time
 }
 

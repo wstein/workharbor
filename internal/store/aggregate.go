@@ -64,8 +64,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 	t := &snap.Task
 	expected := t.Version
 	if expected == 0 {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, agent_id, untrusted, created_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
-			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.AgentID), boolInt(t.Untrusted), toNano(t.CreatedAt)); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO tasks (id, version, repo, issue, state, agent_id, untrusted, workflow, created_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)`,
+			string(t.ID), rd.String(t.Repo), rd.String(t.Issue), string(t.State), string(t.AgentID), boolInt(t.Untrusted), t.Workflow, toNano(t.CreatedAt)); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM tasks WHERE id = ?`, string(t.ID)).Scan(&exists) == nil {
 				return nil, fmt.Errorf("task %s: %w", t.ID, ErrStale)
@@ -150,8 +150,8 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 	var state, agent string
 	var untrusted bool
 	var created int64
-	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, agent_id, untrusted, created_at FROM tasks WHERE id = ?`, string(id)).
-		Scan(&t.Version, &t.Repo, &t.Issue, &state, &agent, &untrusted, &created)
+	err := tx.tx.QueryRowContext(ctx, `SELECT version, repo, issue, state, agent_id, untrusted, workflow, created_at FROM tasks WHERE id = ?`, string(id)).
+		Scan(&t.Version, &t.Repo, &t.Issue, &state, &agent, &untrusted, &t.Workflow, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Kind: "task", ID: string(id)}
 	}
