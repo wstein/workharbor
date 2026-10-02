@@ -32,13 +32,16 @@
       "Bash(df -h)",
       "Bash(container ls)",
       "Bash(container ls --all)",
-      "Bash(container image ls)"
+      "Bash(container image ls)",
+      "Bash(gh api repos/wstein/workharbor/code-scanning/alerts)",
+      "Bash(gh api repos/wstein/workharbor/dependabot/alerts)",
+      "Bash(gh api repos/wstein/workharbor/secret-scanning/alerts)",
+      "Bash(gh api repos/wstein/workharbor/rulesets)"
     ],
     "deny": [
       "Bash(sudo:*)",
       "Bash(security:*)",
       "Bash(gh auth:*)",
-      "Bash(gh api:*)",
       "Bash(git credential:*)",
       "Bash(git push:*)",
       "Bash(git merge:*)",

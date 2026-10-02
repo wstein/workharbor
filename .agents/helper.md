@@ -40,7 +40,7 @@ commands and reads of the secret directories are denied. Two limits stay:
 only while every writer of the worktree is trusted (accepted risk), and a
 prefix deny cannot catch every way to read a file, so the secret directories
 are protected by permissions, not by a sandbox ((open) whether one
-is available). Do not add an allow rule for a command that takes a flag to run
+is available). `gh api` asks by default; only four exact list calls (code-scanning, Dependabot and secret-scanning alerts, rulesets) are allowed, without extra arguments, because any prefix would also allow `-X PATCH` or `-f` writes with the human's token. Do not add an allow rule for a command that takes a flag to run
 another program, write a file or fetch a URL (`rg --pre`, `git grep -O`,
 `go test -exec`, `--output`, `WebFetch`).
 
