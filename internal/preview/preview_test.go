@@ -124,7 +124,7 @@ func (r *rig) advance(d time.Duration) { r.mu.Lock(); r.now = r.now.Add(d); r.mu
 
 func (r *rig) open() Preview {
 	r.t.Helper()
-	p, _, err := r.m.Open(bg, "t1", "env1", 3000)
+	p, _, err := r.m.Open(bg, "t1", "env1", 3000, "")
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestAStoppedEnvironmentsPreviewRefusesAndCloses(t *testing.T) {
 	if len(r.m.List()) != 0 {
 		t.Errorf("the preview stayed open: %+v", r.m.List())
 	}
-	if _, _, err := r.m.Open(bg, "t1", "env1", 3000); !errors.Is(err, ErrNotRunning) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 3000, ""); !errors.Is(err, ErrNotRunning) {
 		t.Errorf("open on a stopped environment: %v", err)
 	}
 	if c, err := (&net.Dialer{Timeout: time.Second}).DialContext(bg, "tcp", strings.TrimPrefix(b, "http://")); err == nil {
@@ -334,7 +334,7 @@ func TestAStoppedEnvironmentsPreviewRefusesAndCloses(t *testing.T) {
 func TestASweepClosesWhatTheEnvironmentLeftAndWhatGrewOld(t *testing.T) {
 	r := newRig(t)
 	p := r.open()
-	q, _, _ := r.m.Open(bg, "t2", "env2", 3000)
+	q, _, _ := r.m.Open(bg, "t2", "env2", 3000, "")
 	r.setRunning("env1", false)
 	r.advance(liveFor + time.Second)
 	r.m.Sweep(bg)
@@ -400,21 +400,21 @@ func TestPortsComeFromTheRangeAndOneEnvironmentPortHasOnePreview(t *testing.T) {
 		t.Skip("no two ports close together")
 	}
 	r := newRig(t, func(c *Config) { c.FirstPort, c.LastPort = lo, hi })
-	a, _, err := r.m.Open(bg, "t1", "env1", 3000)
+	a, _, err := r.m.Open(bg, "t1", "env1", 3000, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if a.Listen < lo || a.Listen > hi {
 		t.Errorf("listening on %d, outside %d-%d", a.Listen, lo, hi)
 	}
-	if again, created, _ := r.m.Open(bg, "t1", "env1", 3000); again.ID != a.ID || created {
+	if again, created, _ := r.m.Open(bg, "t1", "env1", 3000, ""); again.ID != a.ID || created {
 		t.Errorf("the same port of the same environment opened a second preview")
 	}
-	if _, _, err := r.m.Open(bg, "t1", "env1", 3001); err != nil && !errors.Is(err, ErrNoPort) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 3001, ""); err != nil && !errors.Is(err, ErrNoPort) {
 		t.Fatal(err)
 	}
 	for port := 4000; ; port++ {
-		if _, _, err := r.m.Open(bg, "t1", "env1", port); err != nil {
+		if _, _, err := r.m.Open(bg, "t1", "env1", port, ""); err != nil {
 			if !errors.Is(err, ErrNoPort) {
 				t.Fatal(err)
 			}
@@ -424,7 +424,7 @@ func TestPortsComeFromTheRangeAndOneEnvironmentPortHasOnePreview(t *testing.T) {
 			t.Fatal("the range never ran out")
 		}
 	}
-	if _, _, err := r.m.Open(bg, "t1", "env1", 70000); !errors.Is(err, ErrBadPort) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 70000, ""); !errors.Is(err, ErrBadPort) {
 		t.Errorf("a bad port: %v", err)
 	}
 }
@@ -540,5 +540,45 @@ func TestAReusedOriginStartsCleanAndCannotKeepAServiceWorker(t *testing.T) {
 	ans, _ := get(t, b+"/", cookie)
 	if ans.Header.Get("Strict-Transport-Security") != "" || ans.Header.Get("Clear-Site-Data") != "" {
 		t.Errorf("the app's HSTS or Clear-Site-Data reached the browser: %v", ans.Header)
+	}
+}
+
+// Every proxied response carries the proxy's policy instead of the app's own.
+func TestTheProxyReplacesTheAppsContentSecurityPolicy(t *testing.T) {
+	r := newRig(t)
+	p := r.open()
+	cookie, link := r.enter(p)
+	ans, _ := get(t, base(link)+"/", cookie)
+	if got := ans.Header.Get("Content-Security-Policy"); got != PreviewCSP {
+		t.Errorf("Content-Security-Policy = %q, want %q", got, PreviewCSP)
+	}
+	if ans.Header.Get("Content-Security-Policy-Report-Only") != "" {
+		t.Error("the app's report-only policy was passed")
+	}
+}
+
+// No preview outlives the sessions that opened it, and one the host opened stays.
+func TestAPreviewEndsWithTheLastSessionThatOpenedIt(t *testing.T) {
+	r := newRig(t)
+	a, _, _ := r.m.Open(bg, "t1", "env1", 3000, "sess-a")
+	if again, created, _ := r.m.Open(bg, "t1", "env1", 3000, "sess-b"); again.ID != a.ID || created {
+		t.Fatal("the second session did not share the preview")
+	}
+	r.m.CloseOwner("sess-a", "its session ended")
+	if len(r.m.List()) != 1 {
+		t.Fatal("a preview closed while another session still owned it")
+	}
+	r.m.CloseOwner("sess-b", "its session ended")
+	if len(r.m.List()) != 0 {
+		t.Error("a preview outlived the sessions that opened it")
+	}
+	// one the host opened (the CLI) is not ended by a session
+	h, _, _ := r.m.Open(bg, "t1", "env1", 3000, "")
+	if _, _, err := r.m.Open(bg, "t1", "env1", 3000, "sess-c"); err != nil {
+		t.Fatal(err)
+	}
+	r.m.CloseOwner("sess-c", "its session ended")
+	if got := r.m.List(); len(got) != 1 || got[0].ID != h.ID {
+		t.Errorf("a host-opened preview was closed by a session: %+v", got)
 	}
 }

@@ -159,3 +159,29 @@ func TestPreviewsSayWhenTheRuntimeCannotReachAPort(t *testing.T) {
 		t.Error("a listener was opened for nothing")
 	}
 }
+
+// A preview a web session opened closes, and is audited, when that session ends; one
+// the CLI or API opened is not touched.
+func TestAPreviewEndsWithTheWebSessionThatOpenedIt(t *testing.T) {
+	r := newWsRig(t)
+	p := r.withPreviewPorts()
+	_, a := r.create("run")
+	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Open(bg, task, 3000, "web:s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Open(bg, task, 8080, "api"); err != nil {
+		t.Fatal(err)
+	}
+	p.CloseSession("s1")
+	got := p.List(bg)
+	if len(got) != 1 || got[0].Port != 8080 {
+		t.Fatalf("after the session ended: %+v, want only the API-opened one", got)
+	}
+	if closed := r.supervisorEvents(domain.EventPreviewClosed); len(closed) != 1 || !strings.Contains(string(closed[0].Payload), "its session ended") {
+		t.Errorf("closed = %+v", closed)
+	}
+}

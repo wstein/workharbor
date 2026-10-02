@@ -49,6 +49,12 @@ const (
 	OwnCookiePrefix = "whr_"
 )
 
+// PreviewCSP is the policy every proxied response carries instead of the app's own.
+//
+// The fetch directives stay 'self', so the app can load and call only itself;
+// inline script and eval are allowed because dev servers need them (D33, §7.5).
+const PreviewCSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+
 // Errors a caller can tell apart.
 var (
 	ErrUnavailable = errors.New("preview: this runtime cannot reach an environment's ports")
@@ -102,11 +108,15 @@ type Manager struct {
 
 type live struct {
 	Preview
-	cookie string // the secret the cookie carries
-	grants map[[32]byte]time.Time
-	ln     net.Listener
-	srv    *http.Server
-	cancel context.CancelFunc
+	// owners are the web sessions that opened it; hostOwned says the host's CLI or
+	// API did, which no session ends. It closes when its last session owner ends.
+	owners    map[string]bool
+	hostOwned bool
+	cookie    string // the secret the cookie carries
+	grants    map[[32]byte]time.Time
+	ln        net.Listener
+	srv       *http.Server
+	cancel    context.CancelFunc
 }
 
 // New returns a Manager.
@@ -137,7 +147,7 @@ func randomHex(n int) string {
 // Open opens a preview of one port of one environment for a task, or returns the
 // one already open for that pair (created is false then). The caller has checked that the port is one the
 // environment declares and that the human may open it.
-func (m *Manager) Open(ctx context.Context, task, env string, port int) (pv Preview, created bool, err error) {
+func (m *Manager) Open(ctx context.Context, task, env string, port int, owner string) (pv Preview, created bool, err error) {
 	if port < 1 || port > 65535 {
 		return Preview{}, false, ErrBadPort
 	}
@@ -148,6 +158,7 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int) (pv Prev
 	defer m.mu.Unlock()
 	for _, p := range m.previews {
 		if p.Env == env && p.Port == port {
+			p.own(owner)
 			return p.Preview, false, nil
 		}
 	}
@@ -158,8 +169,9 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int) (pv Prev
 	now := m.cfg.Now()
 	p := &live{
 		Preview: Preview{ID: "pv-" + randomHex(6), Task: task, Env: env, Port: port, Listen: ln.Addr().(*net.TCPAddr).Port, Opened: now, Expires: now.Add(m.cfg.MaxAge)},
-		cookie:  randomHex(32), grants: map[[32]byte]time.Time{}, ln: ln,
+		cookie:  randomHex(32), grants: map[[32]byte]time.Time{}, ln: ln, owners: map[string]bool{},
 	}
+	p.own(owner)
 	ctx2, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.srv = &http.Server{
@@ -175,6 +187,36 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int) (pv Prev
 		}
 	}()
 	return p.Preview, true, nil
+}
+
+// own records who opened a preview: a web session, or (empty) the host.
+func (p *live) own(owner string) {
+	if owner == "" {
+		p.hostOwned = true
+		return
+	}
+	p.owners[owner] = true
+}
+
+// CloseOwner is told a web session ended: it leaves the owners of every preview it
+// opened, and a preview that no session owns any more, and the host did not open,
+// closes with it. No preview outlives the session that opened it (D33, D45).
+func (m *Manager) CloseOwner(owner, reason string) {
+	m.mu.Lock()
+	var gone []string
+	for id, p := range m.previews {
+		if !p.owners[owner] {
+			continue
+		}
+		delete(p.owners, owner)
+		if len(p.owners) == 0 && !p.hostOwned {
+			gone = append(gone, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range gone {
+		m.Close(id, reason)
+	}
 }
 
 // listen takes the first free port of the range, or an ephemeral one.
@@ -402,6 +444,11 @@ func (m *Manager) handler(p *live) http.Handler {
 			// what the UI keeps for the host name
 			resp.Header.Del("Strict-Transport-Security")
 			resp.Header.Del("Clear-Site-Data")
+			// The app is untrusted: its own policy is replaced by one that lets it load
+			// only from itself and keeps it from framing or posting elsewhere (D33). A
+			// page can still leave by navigation, which the threat model accepts.
+			resp.Header.Del("Content-Security-Policy-Report-Only")
+			resp.Header.Set("Content-Security-Policy", PreviewCSP)
 			if resp.Header.Get("Referrer-Policy") == "" {
 				resp.Header.Set("Referrer-Policy", "no-referrer")
 			}

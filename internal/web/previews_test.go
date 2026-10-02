@@ -161,3 +161,26 @@ func TestPreviewRoutesNeedASessionAndTheProxy(t *testing.T) {
 		t.Error("the task page offers previews without the proxy")
 	}
 }
+
+// A device's previews close when it signs out or is revoked: the session hears
+// that it ended, whatever ended it.
+func TestAPreviewEndsWhenItsSessionIsSignedOutOrRevoked(t *testing.T) {
+	r := newRig(t)
+	var mu sync.Mutex
+	var ended []string
+	r.auth.OnSessionEnd(func(id string) { mu.Lock(); ended = append(ended, id); mu.Unlock() })
+	a, b := r.browser(), r.browser()
+	a.signIn()
+	b.signIn()
+	csrf, _ := a.form("/inbox")
+	if resp, _ := a.do("POST", "/logout", url.Values{"csrf": {csrf}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("sign-out: %d", resp.StatusCode)
+	}
+	// the other device revokes nobody here; end the remaining session by a sweep
+	r.auth.EndSessions(func(string) bool { return true })
+	mu.Lock()
+	defer mu.Unlock()
+	if len(ended) != 2 || ended[0] == "" || ended[0] == ended[1] {
+		t.Errorf("sessions heard as ended = %v, want both, by their device IDs", ended)
+	}
+}

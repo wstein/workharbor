@@ -127,8 +127,10 @@ type TokenAuth struct {
 	// one that checked before a sweep cannot start after it.
 	gen uint64
 	// httpsHost is the host name of the HTTPS forwarder (public_url): a request to
-	// it is HTTPS even when the forwarder sends no X-Forwarded-Proto.
+	// it is HTTPS; X-Forwarded-Proto is never believed.
 	httpsHost string
+	// onEnd hears every session that ends, whatever ended it.
+	onEnd func(sessionID string)
 }
 
 type tokenSession struct {
@@ -291,20 +293,27 @@ func (a *TokenAuth) cookieFor(r *http.Request) string {
 	return cookieName
 }
 
-// SetPublicHost names the HTTPS forwarder's host (public_url, D29). A request whose
-// Host is that name came through the forwarder, which terminates TLS, so it is
-// HTTPS even if the forwarder sends no X-Forwarded-Proto (unverified for
-// tailscale serve and a pf proxy). Loopback keeps plain HTTP.
+// OnSessionEnd sets what hears every session that ends: a sign-out, a revoke, a
+// sweep and an expiry. What a session opened (a preview, D33) ends with it.
+func (a *TokenAuth) OnSessionEnd(f func(sessionID string)) {
+	a.mu.Lock()
+	a.onEnd = f
+	a.mu.Unlock()
+}
+
+// SetPublicHost names the HTTPS forwarder's host from public_url (D29). A request
+// is HTTPS when it came over TLS itself or by that name: the forwarder terminates
+// TLS, and what the request says about its own scheme (X-Forwarded-Proto) is never
+// believed. Without public_url, and on loopback, it is plain HTTP.
 func (a *TokenAuth) SetPublicHost(host string) {
 	a.mu.Lock()
 	a.httpsHost = strings.ToLower(host)
 	a.mu.Unlock()
 }
 
-// isHTTPS reports whether the browser reached the UI over HTTPS: directly, through
-// the forwarder (D29) that terminates TLS and says so, or by the forwarder's name.
+// isHTTPS reports whether the browser reached the UI over HTTPS.
 func (a *TokenAuth) isHTTPS(r *http.Request) bool {
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if r.TLS != nil {
 		return true
 	}
 	a.mu.Lock()
@@ -379,8 +388,13 @@ func (a *TokenAuth) EndSessions(match func(passkeyID string) bool) {
 // dropLocked deletes a session and returns what watches it, which the caller runs
 // after it has released the lock.
 func (a *TokenAuth) dropLocked(key [sha256.Size]byte) []func() {
+	sess, had := a.sessions[key]
 	delete(a.sessions, key)
 	var ends []func()
+	if had && a.onEnd != nil {
+		id, f := sess.id, a.onEnd
+		ends = append(ends, func() { f(id) })
+	}
 	for _, f := range a.watchers[key] {
 		ends = append(ends, f)
 	}

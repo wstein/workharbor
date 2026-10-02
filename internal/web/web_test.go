@@ -373,43 +373,56 @@ func TestSigningInNeedsTheTokenAndSetsAStrictCookie(t *testing.T) {
 	if strings.Contains(c.Value, token) {
 		t.Error("the cookie holds the token")
 	}
-	// behind the HTTPS forwarder the cookie is Secure
-	b2 := r.browser()
-	b2.hd.Set("X-Forwarded-Proto", "https")
-	resp, _ = b2.do("POST", "/login", url.Values{"token": {token}})
-	c = resp.Cookies()[0]
-	if !c.Secure || c.Name != "__Host-"+cookieName || c.Path != "/" || c.Domain != "" {
-		t.Errorf("cookie %+v behind the forwarder: want Secure, __Host- prefixed, Path=/ and no Domain", c)
+	// whether a request is https comes from public_url, never from what the request
+	// says: a spoofed X-Forwarded-Proto on loopback is still plain http
+	loginAs := func(host, xfp string) []*http.Cookie {
+		req, _ := http.NewRequestWithContext(bg, "POST", r.srv.URL+"/login", strings.NewReader(url.Values{"token": {token}}.Encode()))
+		if host != "" {
+			req.Host = host
+		}
+		if xfp != "" {
+			req.Header.Set("X-Forwarded-Proto", xfp)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := r.browser().c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.Cookies()
 	}
+	r.auth.SetPublicHost("whr.example.test")
+	if cs := loginAs("", "https"); len(cs) != 1 || cs[0].Secure || cs[0].Name != cookieName {
+		t.Errorf("a spoofed X-Forwarded-Proto on loopback: %+v", cs)
+	}
+	cs := loginAs("whr.example.test", "")
+	if len(cs) != 1 || !cs[0].Secure || cs[0].Name != "__Host-"+cookieName || cs[0].Path != "/" || cs[0].Domain != "" {
+		t.Fatalf("by the forwarder's name: %+v, want Secure, __Host- prefixed, Path=/ and no Domain", cs)
+	}
+	c = cs[0]
 	// over https only the prefixed name is the session: the same value under the plain
 	// name, as another port of this host name could toss it (a preview, D33), is not
-	b4 := r.browser()
-	b4.hd.Set("X-Forwarded-Proto", "https")
-	b4.hd.Set("Cookie", c.Name+"="+c.Value)
-	if resp, _ := b4.do("GET", "/inbox", nil); resp.StatusCode != http.StatusOK {
-		t.Errorf("the issued cookie: %d", resp.StatusCode)
+	getInbox := func(cookie string) int {
+		req, _ := http.NewRequestWithContext(bg, "GET", r.srv.URL+"/inbox", nil)
+		req.Host = "whr.example.test"
+		req.Header.Set("Cookie", cookie)
+		resp, err := r.browser().c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
 	}
-	b4.hd.Set("Cookie", cookieName+"="+c.Value)
-	if resp, _ := b4.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("a cookie under the plain name over https opened the session: %d", resp.StatusCode)
+	if got := getInbox(c.Name + "=" + c.Value); got != http.StatusOK {
+		t.Errorf("the issued cookie: %d", got)
 	}
-	// by the forwarder's name the request is https even without X-Forwarded-Proto
-	r.auth.SetPublicHost("whr.example.test")
-	b5 := r.browser()
-	req5, _ := http.NewRequestWithContext(bg, "POST", r.srv.URL+"/login", strings.NewReader(url.Values{"token": {token}}.Encode()))
-	req5.Host = "whr.example.test"
-	req5.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp5, err := b5.c.Do(req5)
-	if err != nil {
-		t.Fatal(err)
+	if got := getInbox(cookieName + "=" + c.Value); got != http.StatusSeeOther {
+		t.Errorf("a cookie under the plain name over https opened the session: %d", got)
 	}
-	_ = resp5.Body.Close()
-	if cs := resp5.Cookies(); len(cs) != 1 || !cs[0].Secure || cs[0].Name != "__Host-"+cookieName {
-		t.Errorf("by the forwarder's name without X-Forwarded-Proto: %+v", cs)
-	}
-	// loopback stays plain http
-	if resp, _ := r.browser().do("POST", "/login", url.Values{"token": {token}}); resp.Cookies()[0].Secure {
-		t.Error("a loopback request became https")
+	// without public_url nothing is https
+	r.auth.SetPublicHost("")
+	if cs := loginAs("whr.example.test", "https"); len(cs) != 1 || cs[0].Secure {
+		t.Errorf("without public_url: %+v", cs)
 	}
 	// a cross-site sign-in form is refused
 	b3 := r.browser()

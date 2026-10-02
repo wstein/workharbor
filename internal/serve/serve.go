@@ -199,6 +199,7 @@ func Run(ctx context.Context, d Deps) error {
 		if previews, err = service.NewPreviews(svc, ws, pcfg); err != nil {
 			return err
 		}
+		auth.OnSessionEnd(previews.CloseSession) // a preview ends with the session that opened it
 		sweepCtx, stopSweep := context.WithCancel(ctx)
 		swept := make(chan struct{})
 		go func() { defer close(swept); previews.Manager().Run(sweepCtx, 0) }()

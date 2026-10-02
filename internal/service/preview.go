@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strings"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/preview"
@@ -116,7 +117,7 @@ func (p *Previews) Open(ctx context.Context, task domain.ID, port int, actor str
 	if !slices.Contains(ports, port) {
 		return preview.Preview{}, ErrNoPreviewPort
 	}
-	pv, created, err := p.mgr.Open(ctx, string(task), env, port)
+	pv, created, err := p.mgr.Open(ctx, string(task), env, port, sessionOf(actor))
 	if errors.Is(err, preview.ErrNotRunning) {
 		return preview.Preview{}, domain.NewConflict(domain.RuleEnvRunning, "the environment is not running, so there is nothing to preview")
 	}
@@ -127,6 +128,21 @@ func (p *Previews) Open(ctx context.Context, task domain.ID, port int, actor str
 		p.audit(ctx, domain.EventPreviewOpened, pv, actor, "")
 	}
 	return pv, nil
+}
+
+// sessionOf is the web session an actor names ("web:<session>"), or empty for the
+// host's CLI and API, which no session ends.
+func sessionOf(actor string) string {
+	if id, ok := strings.CutPrefix(actor, "web:"); ok {
+		return id
+	}
+	return ""
+}
+
+// CloseSession closes the previews that only this web session opened: no preview
+// outlives the session that opened it.
+func (p *Previews) CloseSession(sessionID string) {
+	p.mgr.CloseOwner(sessionID, "its session ended")
 }
 
 // Link returns a link that opens a preview in a browser once, for five minutes.
