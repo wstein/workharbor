@@ -42,7 +42,8 @@ func (w *Workspaces) Rebuild(ctx context.Context, workspace, actor string) (Rebu
 	if ws.EnvID == "" {
 		return RebuildResult{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment to rebuild", ws.Name)
 	}
-	if err := w.beginRebuild(ctx, ws); err != nil {
+	ws, err = w.beginRebuild(ctx, ws)
+	if err != nil {
 		return RebuildResult{}, err
 	}
 	defer w.endRebuild(ws)
@@ -108,26 +109,40 @@ func (w *Workspaces) Rebuild(ctx context.Context, workspace, actor string) (Rebu
 }
 
 // beginRebuild refuses a workspace with an unfinished run (live or interrupted),
-// naming it, and marks the
-// workspace as being rebuilt, under the lock a run's start takes.
-func (w *Workspaces) beginRebuild(ctx context.Context, ws domain.Workspace) error {
+// naming it, and one on whose environment an operation holds a lease (it is
+// starting or using it), and marks the workspace as being rebuilt, under the lock
+// a run's start takes. The record is read again inside that lock and the fresh one
+// returned: a caller that loaded it before another rebuild switched the
+// environment must not rebuild, or swap from, the old one.
+func (w *Workspaces) beginRebuild(ctx context.Context, ws domain.Workspace) (domain.Workspace, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.svc.rebuilding(ws.ID) {
-		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
+		return ws, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
+	}
+	ws, err := w.svc.store.Workspace(ctx, string(ws.ID))
+	if err != nil {
+		return ws, err
+	}
+	if ws.EnvID == "" {
+		return ws, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment to rebuild", ws.Name)
 	}
 	open, err := w.svc.store.UnfinishedRuns(ctx, ws.EnvID)
 	if err != nil {
-		return err
+		return ws, err
 	}
 	if len(open) > 0 {
 		r := open[0]
-		return domain.NewConflict(domain.RuleAgentActive, "workspace %s has run %s (%s) of agent %s: finish, stop or fail it before a rebuild", ws.Name, r.ID, r.State, r.AgentID)
+		return ws, domain.NewConflict(domain.RuleAgentActive, "workspace %s has run %s (%s) of agent %s: finish, stop or fail it before a rebuild", ws.Name, r.ID, r.State, r.AgentID)
 	}
-	if !w.svc.markRebuilding(ws.ID) {
-		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
+	marked, leased := w.svc.markRebuilding(ws.ID)
+	if leased {
+		return ws, domain.NewConflict(domain.RuleEnvRunning, "workspace %s: an operation is starting or using the environment: try the rebuild again when it is done", ws.Name)
 	}
-	return nil
+	if !marked {
+		return ws, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
+	}
+	return ws, nil
 }
 
 func (w *Workspaces) endRebuild(ws domain.Workspace) {

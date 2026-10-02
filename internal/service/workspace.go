@@ -392,9 +392,11 @@ func (w *Workspaces) AddAgent(ctx context.Context, workspace, role, instructions
 	if ws.EnvID == "" {
 		return domain.Agent{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
-	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+	release, err := w.svc.leaseEnvironment(ws)
+	if err != nil {
 		return domain.Agent{}, err
 	}
+	defer release()
 	a, ev, err := domain.NewAgent(w.cfg.NewID(), ws.ID, role, instructions, profile, w.svc.clock.Now())
 	if err != nil {
 		return domain.Agent{}, err
@@ -462,9 +464,11 @@ func (w *Workspaces) agentAndWorkspace(ctx context.Context, agentID domain.ID) (
 // ensureEnvironment starts the workspace's environment if it is not running and
 // waits until exec answers.
 func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace) error {
-	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+	release, err := w.svc.leaseEnvironment(ws)
+	if err != nil {
 		return err
 	}
+	defer release()
 	info, err := w.svc.rt.Inspect(ctx, string(ws.EnvID))
 	if err != nil {
 		return err
@@ -834,9 +838,11 @@ func (w *Workspaces) Rebase(ctx context.Context, agentID domain.ID) error {
 	if ws.EnvID == "" {
 		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
-	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+	release, err := w.svc.leaseEnvironment(ws)
+	if err != nil {
 		return err
 	}
+	defer release()
 	live, err := w.svc.store.LiveRuns(ctx, ws.EnvID)
 	if err != nil {
 		return err

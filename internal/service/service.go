@@ -131,6 +131,9 @@ type Service struct {
 	// Every path that starts or uses a workspace's environment asks it.
 	rebuildMu sync.Mutex
 	rebuilds  map[domain.ID]bool
+	// leases counts the operations that are starting or using a workspace's
+	// environment (see leaseEnvironment), also under rebuildMu.
+	leases map[domain.ID]int
 }
 
 // rebuilding reports whether the workspace's environment is being replaced.
@@ -140,18 +143,22 @@ func (s *Service) rebuilding(ws domain.ID) bool {
 	return s.rebuilds[ws]
 }
 
-// markRebuilding marks the workspace as being rebuilt; false if it already was.
-func (s *Service) markRebuilding(ws domain.ID) bool {
+// markRebuilding marks the workspace as being rebuilt; false if it already was
+// or an operation holds a lease on its environment (leased says which).
+func (s *Service) markRebuilding(ws domain.ID) (marked, leased bool) {
 	s.rebuildMu.Lock()
 	defer s.rebuildMu.Unlock()
 	if s.rebuilds[ws] {
-		return false
+		return false, false
+	}
+	if s.leases[ws] > 0 {
+		return false, true
 	}
 	if s.rebuilds == nil {
 		s.rebuilds = map[domain.ID]bool{}
 	}
 	s.rebuilds[ws] = true
-	return true
+	return true, false
 }
 
 func (s *Service) unmarkRebuilding(ws domain.ID) {
@@ -160,14 +167,31 @@ func (s *Service) unmarkRebuilding(ws domain.ID) {
 	s.rebuildMu.Unlock()
 }
 
-// refuseWhileRebuilding is the conflict a path that would start or use the
-// workspace's environment gets while it is being replaced: the old one is not
-// started, and the caller tries again when the rebuild is done.
-func (s *Service) refuseWhileRebuilding(ws domain.Workspace) error {
-	if s.rebuilding(ws.ID) {
-		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: try again when it is done", ws.Name)
+// leaseEnvironment is what a path that would start or use the workspace's
+// environment takes first: a conflict while it is being replaced (the old one is
+// not started, and the caller tries again when the rebuild is done), otherwise a
+// lease that keeps a rebuild from beginning until release is called. Check and
+// lease are one step under rebuildMu, which is never held across a call out.
+func (s *Service) leaseEnvironment(ws domain.Workspace) (release func(), err error) {
+	s.rebuildMu.Lock()
+	defer s.rebuildMu.Unlock()
+	if s.rebuilds[ws.ID] {
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: try again when it is done", ws.Name)
 	}
-	return nil
+	if s.leases == nil {
+		s.leases = map[domain.ID]int{}
+	}
+	s.leases[ws.ID]++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.rebuildMu.Lock()
+			defer s.rebuildMu.Unlock()
+			if s.leases[ws.ID]--; s.leases[ws.ID] <= 0 {
+				delete(s.leases, ws.ID)
+			}
+		})
+	}, nil
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent

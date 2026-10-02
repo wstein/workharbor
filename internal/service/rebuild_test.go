@@ -323,3 +323,88 @@ func TestARunIsNotSavedAgainstAnEnvironmentThatWasRebuiltMeanwhile(t *testing.T)
 		t.Error("the run was saved against the old environment")
 	}
 }
+
+func TestALeaseKeepsARebuildOutAndARebuildKeepsALeaseOut(t *testing.T) {
+	r := newWsRig(t)
+	ws, _ := r.create("docs-ws")
+	release, err := r.svc.leaseEnvironment(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.ws.Rebuild(bg, "docs-ws", "werner")
+	var ce *domain.ConflictError
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "starting or using") {
+		t.Fatalf("a rebuild under a lease: %v, want a conflict", err)
+	}
+	release()
+	release() // a second release changes nothing
+	if r.svc.rebuilding(ws.ID) {
+		t.Error("a refused rebuild left the workspace marked")
+	}
+	var leaseErr error
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+		if len(cmd) == 2 && cmd[0] == "git" && cmd[1] == "--version" {
+			var rel func()
+			if rel, leaseErr = r.svc.leaseEnvironment(ws); rel != nil {
+				rel()
+			}
+		}
+		return nil, "", 0, false
+	}
+	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.As(leaseErr, &ce) || !strings.Contains(leaseErr.Error(), "being rebuilt") {
+		t.Errorf("a lease during the rebuild: %v, want a conflict", leaseErr)
+	}
+}
+
+func TestTheLeaseIsReleasedWhenTheStartOrTheExportIsDone(t *testing.T) {
+	r := newWsRig(t)
+	ws, a := r.create("docs-ws")
+	if err := r.ws.ensureEnvironment(bg, ws); err != nil {
+		t.Fatal(err)
+	}
+	if n := r.svc.leases[ws.ID]; n != 0 {
+		t.Errorf("leases after ensureEnvironment = %d", n)
+	}
+	pub := NewPublisher(r.svc, PublishConfig{Workspaces: r.ws})
+	_ = pub.exportBranch(bg, Request{Agent: a.ID, Branch: a.Branch}, "r-none", false) // whatever it answers
+	if n := r.svc.leases[ws.ID]; n != 0 {
+		t.Errorf("leases after exportBranch = %d", n)
+	}
+	if err := r.ws.Rebase(bg, a.ID); err != nil {
+		t.Logf("rebase: %v", err)
+	}
+	if n := r.svc.leases[ws.ID]; n != 0 {
+		t.Errorf("leases after Rebase = %d", n)
+	}
+	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
+		t.Errorf("a rebuild after the operations: %v", err)
+	}
+}
+
+func TestARebuildFromAStaleRecordDoesNotSwapFromAStaleEnvironment(t *testing.T) {
+	r := newWsRig(t)
+	stale, _ := r.create("docs-ws")
+	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
+		t.Fatal(err)
+	}
+	cur, err := r.store.Workspace(bg, string(stale.ID))
+	if err != nil || cur.EnvID == stale.EnvID {
+		t.Fatalf("setup: the environment did not change (%v)", err)
+	}
+	got, err := r.ws.beginRebuild(bg, stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.ws.endRebuild(got)
+	if got.EnvID != cur.EnvID {
+		t.Errorf("beginRebuild returned env %s, want the fresh %s", got.EnvID, cur.EnvID)
+	}
+	// The compare-and-set the swap uses refuses the stale environment.
+	ev := domain.NewWorkspaceRebuiltEvent(domain.WorkspaceRebuilt{ID: stale.ID, Name: stale.Name, OldEnv: stale.EnvID, NewEnv: "x"}, r.svc.clock.Now())
+	if err := r.store.SwapWorkspaceEnv(bg, stale.ID, stale.EnvID, "x", ev); err == nil {
+		t.Error("a swap from the stale environment succeeded")
+	}
+}

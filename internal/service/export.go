@@ -68,9 +68,11 @@ func (p *Publisher) exportBranch(ctx context.Context, req Request, run domain.ID
 	if ws.EnvID == "" {
 		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
-	if err := p.svc.refuseWhileRebuilding(ws); err != nil {
+	release, err := p.svc.leaseEnvironment(ws)
+	if err != nil {
 		return err
 	}
+	defer release()
 	info, err := p.svc.rt.Inspect(ctx, string(ws.EnvID))
 	if err != nil {
 		return err
