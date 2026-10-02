@@ -276,3 +276,34 @@ func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
 		t.Errorf("a normal topic: %v", err)
 	}
 }
+
+// A fixup chain that re-adds one big blob at new paths counts every copy: the
+// autosquash writes each of them, though a bundle stores the blob once.
+func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
+	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "r.git")
+	r, err := g.InitBare(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := plumbEnv(t)
+	blob := plumb(t, env, path, strings.Repeat("z", 100), "hash-object", "-w", "--stdin")
+	base := plumb(t, env, path, "", "commit-tree", plumb(t, env, path, "", "mktree"), "-m", "base")
+	var b strings.Builder
+	tip := base
+	for i := range 20 {
+		fmt.Fprintf(&b, "100644 blob %s\tp%d\n", blob, i)
+		tip = plumb(t, env, path, "", "commit-tree", plumb(t, env, path, b.String(), "mktree"), "-p", tip, "-m", "fixup! x")
+	}
+	oldEntries, oldBytes := topicEntryLimit, topicByteLimit
+	t.Cleanup(func() { topicEntryLimit, topicByteLimit = oldEntries, oldBytes })
+	topicEntryLimit, topicByteLimit = 1000, 500 // 20 copies of 100 bytes are 2000
+	if err := r.CheckCommits(ctx, tip, base); !errors.Is(err, ErrTreeTooLarge) {
+		t.Errorf("one blob re-added at many paths = %v, want ErrTreeTooLarge", err)
+	}
+	topicByteLimit = 5000
+	if err := r.CheckCommits(ctx, tip, base); err != nil {
+		t.Errorf("within the budget: %v", err)
+	}
+}

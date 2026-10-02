@@ -112,7 +112,7 @@ func (r *Repo) checkCommits(ctx context.Context, tip, exclude string, maxEntries
 
 // checkAdditions streams the raw diff of every non-merge commit against its parent
 // and sums the entries it adds or changes (deletions add nothing), then the sizes of
-// the distinct new blobs.
+// the new blobs, each counted once per occurrence.
 func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, maxBytes int64) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -131,7 +131,7 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 	// target's own tree (trusted) and the included side is checked above, so their
 	// count is bounded by MaxTreeEntries per commit; this stops a pathological one.
 	var entries, lines int64
-	blobs := map[string]bool{}
+	blobs := map[string]int64{} // new blob id -> how many times the topic adds it
 	over := false
 	br := bufio.NewReaderSize(pipe, 1<<16)
 	for {
@@ -146,7 +146,7 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 			if len(f) == 5 && f[4] != "D" {
 				entries++
 				if f[1] != "040000" && f[1] != "160000" {
-					blobs[f[3]] = true
+					blobs[f[3]]++
 				}
 				if entries > maxEntries {
 					over = true
@@ -172,8 +172,12 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 	if len(blobs) == 0 {
 		return nil
 	}
+	// Count per occurrence, like checkTree's per-path rule: a bundle stores a blob
+	// once, but the autosquash writes a copy at every path that re-adds it.
 	var in strings.Builder
+	ids := make([]string, 0, len(blobs))
 	for id := range blobs {
+		ids = append(ids, id)
 		in.WriteString(id + "\n")
 	}
 	sc := r.g.command(ctx, r.path, false, nil, "cat-file", "--batch-check=%(objectsize)")
@@ -185,9 +189,13 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 		return fmt.Errorf("git cat-file: %w: %s", err, strings.TrimSpace(serr.String()))
 	}
 	var total int64
-	for _, f := range strings.Fields(string(sizes)) {
-		if n, perr := strconv.ParseInt(f, 10, 64); perr == nil {
-			total += n
+	for i, f := range strings.Fields(string(sizes)) {
+		if n, perr := strconv.ParseInt(f, 10, 64); perr == nil && i < len(ids) {
+			if n > 0 && blobs[ids[i]] > (maxBytes-total)/n {
+				total = maxBytes + 1
+				break
+			}
+			total += n * blobs[ids[i]]
 		}
 	}
 	if total > maxBytes {
