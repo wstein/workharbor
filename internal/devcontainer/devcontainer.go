@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/wstein/workharbor/internal/devcontainer/feature"
 	"github.com/wstein/workharbor/internal/domain"
@@ -152,33 +153,73 @@ func RefuseBuiltFrom(dockerfile []byte) error {
 	return nil
 }
 
-// syntaxDirectiveRe is a `# syntax=` parser directive in a comment line, the key
-// in any letter case and with or without spaces around the equals sign.
-var syntaxDirectiveRe = regexp.MustCompile(`(?i)^#\s*syntax\s*=\s*(.*)$`)
-
 // officialFrontendRe is the one Dockerfile frontend a repository may name: the
 // official image, optionally with a tag and a digest.
 var officialFrontendRe = regexp.MustCompile(`^docker/dockerfile(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(@sha256:[0-9a-f]{64})?)?$`)
 
-// RefuseSyntaxDirective returns an error when the leading comment block of a
-// Dockerfile, before its first instruction, has a `# syntax=` parser directive
-// naming anything but the official frontend (`docker/dockerfile`, with an optional
-// tag and digest). A custom frontend is an image the builder pulls and runs: it
-// could be a `whr.invalid/` image, or code that runs at build time. After the
-// first instruction a `# syntax=` line is only a comment, as Docker treats it.
+// syntaxDirective reports whether a comment line is a parser directive for the
+// key `syntax`, and its value. BuildKit's own detection accepts `#` and `//` as
+// the comment marker, any letter case, and white space around the key and the
+// equals sign; unicode.IsSpace is used so that a vertical tab or a no-break space
+// does not hide one (Go's regexp `\s` is ASCII-only).
+func syntaxDirective(line string) (string, bool) {
+	switch {
+	case strings.HasPrefix(line, "#"):
+		line = line[1:]
+	case strings.HasPrefix(line, "//"):
+		line = line[2:]
+	default:
+		return "", false
+	}
+	line = strings.TrimLeftFunc(line, unicode.IsSpace)
+	const key = "syntax"
+	if len(line) < len(key) || !strings.EqualFold(line[:len(key)], key) {
+		return "", false
+	}
+	line = strings.TrimLeftFunc(line[len(key):], unicode.IsSpace)
+	if !strings.HasPrefix(line, "=") {
+		return "", false
+	}
+	return strings.TrimSpace(line[1:]), true
+}
+
+// RefuseSyntaxDirective returns an error when a Dockerfile has a `syntax` parser
+// directive naming anything but the official frontend (`docker/dockerfile`, with
+// an optional tag and digest). A custom frontend is an image the builder pulls
+// and runs: it could be a `whr.invalid/` image, or code that runs at build time.
+// It is at least as strict as BuildKit's detection: the markers `#` and `//`, any
+// Unicode white space, and a file that starts with `{`, which BuildKit reads as
+// JSON, is refused when it has a "syntax" key (or does not decode, and mentions
+// one). After the first instruction a `# syntax=` line is only a comment, as
+// Docker treats it. When unsure, it refuses: an odd first comment line can cost
+// a Dockerfile its build.
 func RefuseSyntaxDirective(dockerfile []byte) error {
-	for _, line := range strings.Split(string(dockerfile), "\n") {
-		line = strings.TrimSpace(strings.TrimPrefix(line, "\ufeff"))
+	text := strings.TrimSpace(strings.TrimPrefix(string(dockerfile), "\ufeff"))
+	if strings.HasPrefix(text, "{") {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(text), &raw); err != nil {
+			if strings.Contains(strings.ToLower(text), `"syntax"`) {
+				return fmt.Errorf("devcontainer: the Dockerfile is JSON that mentions a syntax directive key: a frontend is an image the builder runs")
+			}
+		} else {
+			for k := range raw {
+				if strings.EqualFold(k, "syntax") {
+					return fmt.Errorf("devcontainer: the Dockerfile is JSON with a syntax directive key: a frontend is an image the builder runs")
+				}
+			}
+		}
+		return nil
+	}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		if !strings.HasPrefix(line, "#") {
+		if !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "//") {
 			return nil // the first instruction: directives end here
 		}
-		if m := syntaxDirectiveRe.FindStringSubmatch(line); m != nil {
-			if v := strings.TrimSpace(m[1]); !officialFrontendRe.MatchString(v) {
-				return fmt.Errorf("devcontainer: the Dockerfile has a syntax directive naming %q: only docker/dockerfile, with an optional tag and digest, is allowed, because a frontend is an image the builder runs", v)
-			}
+		if v, ok := syntaxDirective(line); ok && !officialFrontendRe.MatchString(v) {
+			return fmt.Errorf("devcontainer: the Dockerfile has a syntax directive naming %q: only docker/dockerfile, with an optional tag and digest, is allowed, because a frontend is an image the builder runs", v)
 		}
 	}
 	return nil

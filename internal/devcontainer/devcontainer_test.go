@@ -412,6 +412,8 @@ func TestRefuseSyntaxDirective(t *testing.T) {
 		"spaces around":       "# syntax = docker/dockerfile:1\nFROM fedora\n",
 		"after instruction":   "FROM fedora\n# syntax=whr.invalid/x\nRUN true\n",
 		"after other comment": "# a note\n# syntax=docker/dockerfile:1\nFROM fedora\n",
+		"slashes official":    "//syntax=docker/dockerfile:1\nFROM fedora\n",
+		"json without syntax": "{\"other\": 1}\n",
 	}
 	for name, df := range accepted {
 		if err := RefuseSyntaxDirective([]byte(df)); err != nil {
@@ -432,6 +434,14 @@ func TestRefuseSyntaxDirective(t *testing.T) {
 		"crlf":            "# syntax=evil/x\r\nFROM fedora\r\n",
 		"after a comment": "# a note\n\n# syntax=evil/x\nFROM fedora\n",
 		"bom":             "\xef\xbb\xbf# syntax=evil/x\nFROM fedora\n",
+		"vertical tab":    "#\v syntax=evil\nFROM fedora\n",
+		"no-break space":  "#\u00a0syntax=evil\nFROM fedora\n",
+		"space before eq": "# syntax\u00a0=evil\nFROM fedora\n",
+		"slashes":         "// syntax=evil\nFROM fedora\n",
+		"slashes crlf":    "//syntax=evil\r\nFROM fedora\r\n",
+		"json key":        "{\"syntax\":\"evil\"}\n",
+		"json key case":   "  {\"Syntax\": \"evil\"}\n",
+		"broken json":     "{\"syntax\":\"evil\"\n",
 	}
 	for name, df := range refused {
 		err := RefuseSyntaxDirective([]byte(df))
