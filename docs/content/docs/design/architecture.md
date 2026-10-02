@@ -127,7 +127,7 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
 | Headless, typed events | Yes (`stream-json` in and out) | `exec --json`; only start and error events seen | Yes (`--output-format stream-json`) |
 | Mid-run message | Yes, picked up at the next model step | Not found in `exec` (unverified) | No: one prompt per run |
 | Resume | Yes (`--resume`), same session ID | `exec resume` exists, untested | `--conversation <id>`, untested |
-| Approvals to the host | Yes, on the host through an MCP prompt tool; in a container, the stdio control protocol (D26, evidence pending in #7) | Untested | None found in print mode; the run ends in `ERROR` on a denial |
+| Approvals to the host | Yes, on the host through an MCP prompt tool; in a container, the stdio control protocol (D26, measured in spike #7) | Untested | None found in print mode; the run ends in `ERROR` on a denial |
 | Usage window | Structured: five-hour and seven-day windows with reset time | Text only, reset time inside the message | Not observed |
 | Cancel | Hard interrupt only, session stays resumable | Untested | Untested |
 

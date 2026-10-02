@@ -4,9 +4,9 @@ description: "Routing Claude Code's permission prompts over the stdio control pr
 weight: 3
 ---
 
-> Source: [`spike/agent-approval`](https://github.com/wstein/workharbor/tree/spike/agent-approval/spikes/agent-approval) at `22ddc7f32b9a55817b56d094a0f5d791aefdb219`, with the scripts and raw output next to the results. Tracks [#7](https://github.com/wstein/workharbor/issues/7), [#10](https://github.com/wstein/workharbor/issues/10). Published as recorded on 1 October 2026.
+> Source: [`spike/agent-approval`](https://github.com/wstein/workharbor/tree/spike/agent-approval/spikes/agent-approval) at `567b5ad2d3d33f66ac60c054d2ebbadb8a80e64b`, with the scripts and raw output next to the results. Tracks [#7](https://github.com/wstein/workharbor/issues/7), [#10](https://github.com/wstein/workharbor/issues/10). Published as recorded on 1 October 2026.
 >
-> **Since then:** Issue #7 is reopened for reproducible evidence. The resume remedy named below as "D23 / #23" is recorded as **D27** (resume briefing) in the decision table.
+> **Since then:** D26 cites this run as its evidence. Case 7's resume finding is what the resume briefing, **D27**, answers.
 
 Measured on 1 October 2026 on Mac mini (Apple silicon, 16 GiB, macOS 26.6.2) with Apple Container CLI 1.5.0, guest Linux 6.12.28 on `fedora:latest`, Claude Code 2.1.285 (linux-arm64), and `whr-shim` (static linux-arm64).
 
@@ -125,7 +125,7 @@ A long-running execution (`for i in $(seq 1 30); do sleep 1; done && echo DONE >
       > *"The command was never executed. The Bash tool use was rejected during the permission prompt, so the command never ran. The 30-second sleep loop and file write to `/work/done.txt` did not happen."*
     - This statement is **false**: the command was approved and ran for 3 seconds before being cancelled by `whr-shim`. Claude Code told the model that the tool was rejected before running rather than interrupted mid-execution.
     - **Resume Accuracy Evaluation:** **FAIL**. Because Claude Code tells the model a false story on resume after a cancel, a resumed agent may repeat or incorrectly skip work.
-    - **Architectural Remedy (D23 / #23):** On resume after a cancel or pause, the supervisor must inject a synthetic message informing the agent which tool call was interrupted and that its partial effects are unknown.
+    - **Architectural Remedy (D27 / #66):** On resume after a cancel or pause, the supervisor must inject a synthetic message informing the agent which tool call was interrupted and that its partial effects are unknown.
 
 ---
 
