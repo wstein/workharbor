@@ -28,7 +28,7 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 
 | Asset | Size | C | Tagline |
 | --- | --- | --- | --- |
-| README banner | 1000 × 150 | 45 px (anchor 108 px, about 21 px above and below, as Werner approved) | yes |
+| README banner | 1000 × 150 | 45 px (anchor 108 px as Werner approved; the block leaves about 15 px, 0.33 × C, above and below) | yes |
 | Social preview | 1280 × 640, lockup centred | 80 px (anchor 192 px) | yes |
 | Docs navbar | the navbar's height | 0.4 × navbar height (anchor about 54 px) | no |
 
