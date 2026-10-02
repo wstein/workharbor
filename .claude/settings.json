@@ -25,6 +25,7 @@
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)",
       "Bash(gh project item-list:*)",
+      "Bash(scripts/board-snapshot.sh:*)",
       "Bash(gh project field-list:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",

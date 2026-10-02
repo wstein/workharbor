@@ -3,9 +3,12 @@ description: Check the project board against the issues and main, and list the d
 argument-hint: "[--fix to correct your own lane's cards]"
 ---
 
-Check project 6 (`gh project item-list 6 --owner wstein --format json --limit
-200`) against the issues and the repository. Only `wh/design` runs this board-wide
-check (AGENTS.md, GitHub rate limit); other lanes check their own cards. $ARGUMENTS
+Check project 6 against the issues and the repository. Read the board through
+the snapshot (`scripts/board-snapshot.sh`, at most one query per 5 minutes for
+all lanes; add `--refresh` only after you moved a card), never with
+`gh project item-list` yourself. Only `wh/design` runs this board-wide check
+(AGENTS.md, GitHub rate limit); other lanes check their own cards
+(`scripts/board-snapshot.sh card <number>`). $ARGUMENTS
 
 Report each drift with the issue number:
 

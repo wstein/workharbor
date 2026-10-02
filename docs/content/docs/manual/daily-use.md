@@ -60,3 +60,18 @@ whr usage [--by task|run|repo|agent|model|day|month|all] [--repo owner/name] [--
 ## In an emergency
 
 `whr kill-all` stops every run, cancels every unfinished task and revokes the forge tokens the supervisor holds. It cannot revoke the agent's own credentials, which stay with you. Without `--yes` it asks you to type `kill-all`.
+
+## Reading the project board from the agent lanes
+
+The sessions that build workharbor share one GitHub token, and a board query is the expensive call. `scripts/board-snapshot.sh` (needs `bash`, `jq` and a logged-in `gh`; it holds no token and writes none) is the one way they read the board:
+
+```text
+scripts/board-snapshot.sh                  # the snapshot JSON: {"fetched_at": <unix>, "items": [...]}
+scripts/board-snapshot.sh queue wh/platform   # the lane's Todo cards, P1 first, then by issue number
+scripts/board-snapshot.sh card 132         # one card: status, session, priority, title
+scripts/board-snapshot.sh --refresh        # force a query
+```
+
+The snapshot is one file, `${XDG_CACHE_HOME:-$HOME/.cache}/workharbor/board.json` (`WHR_BOARD_SNAPSHOT` overrides the absolute path), in a `0700` directory with mode `0600`, outside the repository and never committed. While it is younger than 5 minutes (`WHR_BOARD_MAX_AGE`, in seconds) the script prints it and makes no GitHub call. Past that, one caller takes a lock and makes one query; lanes asking at the same moment wait and share the result. No timer and no daemon run: nothing is queried while nobody asks. If the query fails (rate limit), the script keeps the old file, prints it, says `stale` on stderr and exits 0; with no file at all it exits 1.
+
+A card move or comment goes straight to GitHub by URL and does not touch the file. A lane that wrote a card passes `--refresh` on its next read, or the snapshot still shows the old state for up to 5 minutes.
