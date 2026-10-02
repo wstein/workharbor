@@ -330,6 +330,14 @@ func TestExtractRefusesWhatCouldEscapeOrLinkOut(t *testing.T) {
 	if err := Extract(bytes.NewReader(makeTar(t, many...)), t.TempDir(), ExtractLimits{Files: 10, Bytes: 1 << 20, Depth: 4}); !errors.Is(err, ErrUnsafeArchive) {
 		t.Errorf("too many files: %v", err)
 	}
+	// directories count against the same limit: a bomb of empty directories is refused too
+	dirs := make([]tarEntry, 0, 11)
+	for i := range 11 {
+		dirs = append(dirs, tarEntry{name: fmt.Sprintf("d%d", i), typ: tar.TypeDir})
+	}
+	if err := Extract(bytes.NewReader(makeTar(t, dirs...)), t.TempDir(), ExtractLimits{Files: 10, Bytes: 1 << 20, Depth: 4}); !errors.Is(err, ErrUnsafeArchive) {
+		t.Errorf("too many directories: %v", err)
+	}
 	if err := Extract(bytes.NewReader(makeTar(t, tarEntry{name: "big", body: strings.Repeat("x", 100)})), t.TempDir(), ExtractLimits{Files: 10, Bytes: 50, Depth: 4}); !errors.Is(err, ErrUnsafeArchive) {
 		t.Errorf("too many bytes: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -287,5 +288,27 @@ func TestFeaturesApplyOnTopOfADockerfileImage(t *testing.T) {
 	df, _ := os.ReadFile(second.Dockerfile)
 	if second.Tag != final || !strings.HasPrefix(string(df), "FROM "+base+"\n") {
 		t.Errorf("second build %s from:\n%s", second.Tag, df)
+	}
+}
+
+// A devcontainer.json asks for at most MaxFeatures features: more is refused whole.
+func TestTooManyFeaturesRefuseTheFile(t *testing.T) {
+	file := func(n int) []byte {
+		var b strings.Builder
+		b.WriteString(`{"image":"i","features":{`)
+		for i := range n {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			fmt.Fprintf(&b, `"ghcr.io/devcontainers/features/f%d:1":{}`, i)
+		}
+		b.WriteString("}}")
+		return []byte(b.String())
+	}
+	if _, err := Parse(file(MaxFeatures)); err != nil {
+		t.Errorf("%d features: %v", MaxFeatures, err)
+	}
+	if _, err := Parse(file(MaxFeatures + 1)); err == nil || !strings.Contains(err.Error(), fmt.Sprint(MaxFeatures)) {
+		t.Errorf("%d features: err = %v, want a refusal naming the cap", MaxFeatures+1, err)
 	}
 }

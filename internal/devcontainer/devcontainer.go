@@ -482,6 +482,10 @@ func dropTrailingCommas(in []byte) []byte {
 	return out.Bytes()
 }
 
+// MaxFeatures is the most features one devcontainer.json may apply; a file with more
+// is refused whole, since every feature is a fetch and a root install step.
+const MaxFeatures = 20
+
 // featureRequests reads the features object in the order of the file, with each
 // feature's options as the strings an install script reads: a string value is the
 // "version" option, true or an empty object sets nothing, an object gives its options.
@@ -511,6 +515,9 @@ func featureRequests(raw json.RawMessage) ([]feature.Request, error) {
 			return nil, fmt.Errorf("%s: %w", id, err)
 		}
 		if !off {
+			if len(out) == MaxFeatures {
+				return nil, fmt.Errorf("more than %d features: the file is refused, each one is fetched and built as root", MaxFeatures)
+			}
 			out = append(out, feature.Request{ID: id, Options: opts})
 		}
 	}

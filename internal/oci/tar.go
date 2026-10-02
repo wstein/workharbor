@@ -15,7 +15,7 @@ import (
 
 // ExtractLimits bound what a feature archive may unpack to.
 type ExtractLimits struct {
-	Files int   // regular files
+	Files int   // entries: regular files and directories alike
 	Bytes int64 // total bytes of regular files
 	Depth int   // path elements
 }
@@ -55,7 +55,7 @@ func Extract(r io.Reader, dir string, lim ExtractLimits) error {
 	}
 	tr := tar.NewReader(r)
 	seen := map[string]bool{}
-	var files int
+	var entries int
 	var total int64
 	for {
 		h, err := tr.Next()
@@ -76,6 +76,10 @@ func Extract(r io.Reader, dir string, lim ExtractLimits) error {
 			return fmt.Errorf("%w: %q appears twice", ErrUnsafeArchive, h.Name)
 		}
 		seen[name] = true
+		// every entry counts, directories too: 16 MiB of gzip holds hundreds of thousands
+		if entries++; entries > lim.Files {
+			return fmt.Errorf("%w: more than %d entries", ErrUnsafeArchive, lim.Files)
+		}
 		target := filepath.Join(root, filepath.FromSlash(name))
 		switch h.Typeflag {
 		case tar.TypeDir:
@@ -83,9 +87,6 @@ func Extract(r io.Reader, dir string, lim ExtractLimits) error {
 				return err
 			}
 		case tar.TypeReg:
-			if files++; files > lim.Files {
-				return fmt.Errorf("%w: more than %d files", ErrUnsafeArchive, lim.Files)
-			}
 			if h.Size < 0 || total+h.Size > lim.Bytes {
 				return fmt.Errorf("%w: more than %d bytes", ErrUnsafeArchive, lim.Bytes)
 			}
