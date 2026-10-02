@@ -69,6 +69,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
       - name: Tag the runner's copy only, for the SBOM's version (never pushed)
         run: git -c tag.gpgsign=false tag v0.0.0-snapshot
       - name: Build a snapshot
