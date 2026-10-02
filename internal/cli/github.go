@@ -44,6 +44,7 @@ func newAppCreate(st *state) *cobra.Command {
 	var (
 		publicURL, listen, keyDir, name, org string
 		ttl                                  time.Duration
+		board                                bool
 		githubURL, apiURL                    string
 	)
 	cmd := &cobra.Command{
@@ -88,7 +89,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 			}
 			rd := redact.New()
 			setup, err := githubapp.NewSetup(githubapp.Config{
-				PublicURL: publicURL, Name: name, Org: org, KeyDir: keyDir, TTL: ttl,
+				PublicURL: publicURL, Name: name, Org: org, KeyDir: keyDir, TTL: ttl, Board: board,
 				GitHubURL: githubURL, APIURL: apiURL, Redactor: rd,
 			})
 			if err != nil {
@@ -140,6 +141,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 	f.StringVar(&keyDir, "key-dir", "", "where to write the private key (default: the configuration's directory)")
 	f.StringVar(&name, "name", "", "the App's name, unique on GitHub (default workharbor-<random>)")
 	f.StringVar(&org, "org", "", "create the App in this organization instead of your account")
+	f.BoolVar(&board, "board", false, "also ask for the permission to write an organization's project board (D30)")
 	f.DurationVar(&ttl, "ttl", 10*time.Minute, "how long the link stays valid")
 	f.StringVar(&githubURL, "github-url", "", "GitHub's web address, for a test double")
 	f.StringVar(&apiURL, "api-url", "", "GitHub's API address, for a test double")

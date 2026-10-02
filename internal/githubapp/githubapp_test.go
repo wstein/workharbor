@@ -211,6 +211,18 @@ func TestTheManifestAsksForExactlyWhatWorkharborNeeds(t *testing.T) {
 	}
 }
 
+// A configured board adds its permission to the manifest, and only then.
+func TestTheManifestAddsTheBoardPermissionOnlyWhenAsked(t *testing.T) {
+	plain := newRig(t, nil)
+	if p := plain.setup.Manifest()["default_permissions"].(map[string]string); p[github.BoardPermission] != "" || len(p) != 4 {
+		t.Errorf("without a board: %v", p)
+	}
+	withBoard := newRig(t, func(c *Config) { c.Board = true })
+	if p := withBoard.setup.Manifest()["default_permissions"].(map[string]string); p[github.BoardPermission] != "write" || len(p) != 5 {
+		t.Errorf("with a board: %v", p)
+	}
+}
+
 func TestAForgedStateIsRefusedAndLeavesNothing(t *testing.T) {
 	r := newRig(t, nil)
 	start, _ := r.setup.StartURL()

@@ -144,6 +144,35 @@ func Checks(d Deps) []Check {
 			}
 			return Fail, strings.Join(bad, "; ")
 		}},
+		{"forge-board", 2, func(ctx context.Context) (Status, string) {
+			c, err := load()
+			if err != nil {
+				return Fail, "needs a valid configuration (see the config check)"
+			}
+			if c.Board == nil {
+				return OK, "no project board is configured"
+			}
+			mk := d.GitHub
+			if mk == nil {
+				mk = NewGitHub
+			}
+			gh, err := mk(c)
+			if err != nil {
+				return Fail, "github: " + oneLine(err.Error())
+			}
+			rep, err := gh.CheckBoard(ctx)
+			switch {
+			case errors.Is(err, github.ErrBoardNotWritable):
+				return Fail, fmt.Sprintf("board not writable: the App cannot reach project %d of %s (it lacks the Projects permission, or this is a user-owned project, which an App's token may not reach: use an organization's project, D30)", c.Board.Number, c.Board.Owner)
+			case errors.Is(err, github.ErrBoard):
+				return Fail, oneLine(err.Error())
+			case err != nil:
+				return NotVerified, "GitHub could not be asked: " + oneLine(err.Error())
+			case len(rep.MissingStatuses) > 0:
+				return Fail, "the project's Status field lacks the options " + strings.Join(rep.MissingStatuses, ", ")
+			}
+			return NotVerified, "the project and its four Status options were found; writing a card is not tested until a task changes state"
+		}},
 		{"forge-limits", 2, notVerified("that the bot cannot bypass branch protection, and that merge, tag, release and deploy stay forbidden, is enforced by the forge adapter but not checked against your repositories")},
 		{"agent-login", 3, needCfg(func(c *config.Config) (Status, string) {
 			if c.AgentAPIKeyEnvFile != "" {
@@ -214,7 +243,11 @@ func NewGitHub(c *config.Config) (*github.Client, error) {
 	for i, r := range c.Repositories {
 		repos[i] = r.Name
 	}
-	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, BaseURL: c.GitHub.APIURL})
+	gc := github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, BaseURL: c.GitHub.APIURL}
+	if b := c.Board; b != nil { // the App is expected to have the board's permission too
+		gc.Board = &github.BoardConfig{Owner: b.Owner, Organization: b.Organization, Number: b.Number}
+	}
+	return github.New(gc)
 }
 
 // DefaultLookPath is exec.LookPath.

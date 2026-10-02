@@ -40,6 +40,8 @@ type Config struct {
 	// Name is the App's name (GitHub App names are unique and at most 34
 	// characters).
 	Name string
+	// Board adds the project board's permission to the manifest (D30).
+	Board bool
 	// Org, if set, creates the App in that organization instead of the
 	// operator's account.
 	Org string
@@ -147,7 +149,7 @@ func (s *Setup) Manifest() map[string]any {
 		"hook_attributes":     map[string]any{"url": hook.String(), "active": false},
 		"redirect_url":        redirect.String(),
 		"public":              false,
-		"default_permissions": github.AppPermissions(),
+		"default_permissions": github.AppPermissionsFor(s.cfg.Board),
 		"default_events":      []string{},
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +27,7 @@ type rig struct {
 	instStatus   int
 	instPerms    map[string]string
 	appStatus    int
+	graphql      func() string // the body answered for POST /graphql
 }
 
 func newRig(t *testing.T) *rig {
@@ -65,6 +67,11 @@ func newRig(t *testing.T) *rig {
 		case strings.HasSuffix(req.URL.Path, "/installation"):
 			w.WriteHeader(r.instStatus)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": 5, "permissions": r.instPerms, "message": "Not Found"})
+		case strings.HasSuffix(req.URL.Path, "/access_tokens"):
+			w.WriteHeader(201)
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "ghs_installationtoken0123456789", "expires_at": "2099-01-01T00:00:00Z"})
+		case req.URL.Path == "/graphql" && r.graphql != nil:
+			_, _ = io.WriteString(w, r.graphql())
 		default:
 			w.WriteHeader(404)
 		}
@@ -98,7 +105,11 @@ func (r *rig) deps() Deps {
 		LookPath: func(string) (string, error) { return "/usr/local/bin/container", nil },
 		Probe:    func(context.Context) error { return nil },
 		GitHub: func(c *config.Config) (*github.Client, error) {
-			return github.New(github.Config{AppID: c.GitHub.AppID, Key: testKey, Repos: []string{"wstein/workharbor"}, BaseURL: r.gh.URL})
+			gc := github.Config{AppID: c.GitHub.AppID, Key: testKey, Repos: []string{"wstein/workharbor"}, BaseURL: r.gh.URL}
+			if c.Board != nil {
+				gc.Board = &github.BoardConfig{Owner: c.Board.Owner, Organization: c.Board.Organization, Number: c.Board.Number}
+			}
+			return github.New(gc)
 		},
 	}
 }
@@ -127,7 +138,7 @@ func TestAHealthyHostPassesAndStillSaysWhatIsNotVerified(t *testing.T) {
 		t.Fatalf("failed: %+v", rs)
 	}
 	got := statuses(rs)
-	for _, name := range []string{"config", "server", "forge-key", "forge-app", "agent-login", "runtime", "mounts"} {
+	for _, name := range []string{"config", "server", "forge-key", "forge-app", "forge-board", "agent-login", "runtime", "mounts"} {
 		if got[name] != OK {
 			t.Errorf("%s = %s, want ok", name, got[name])
 		}
@@ -247,4 +258,54 @@ func TestForgeAppChecksTheInstallationAndItsPermissions(t *testing.T) {
 	if st := statuses(run(r.deps()))["forge-app"]; st != NotVerified {
 		t.Errorf("unreachable: %s, want not_verified", st)
 	}
+}
+
+const boardProject = `{"data":{"organization":{"projectV2":{"id":"P1","fields":{"nodes":[
+{"id":"F1","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"a","name":"Needs you"},{"id":"b","name":"In progress"},{"id":"c","name":"Ready to push"},{"id":"d","name":"Done"}]}]}}}}}`
+
+func (r *rig) withBoard(t *testing.T) {
+	t.Helper()
+	r.cfg.Board = &config.Board{Owner: "acme", Organization: true, Number: 3}
+	r.write(t)
+}
+
+func TestForgeBoardNamesARefusalAndNeverCallsAReadAWrite(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+	if rs := run(r.deps()); statuses(rs)["forge-board"] != OK {
+		t.Errorf("no board: %+v", rs)
+	}
+
+	r.withBoard(t)
+	r.graphql = func() string { return boardProject }
+	rs := run(r.deps())
+	// the project is found, but a write was never tried: not verified, not passed
+	if st := statuses(rs)["forge-board"]; st != NotVerified || !strings.Contains(forgeBoardDetail(rs), "not tested") {
+		t.Errorf("a readable board: %s %q", st, forgeBoardDetail(rs))
+	}
+
+	r.graphql = func() string {
+		return `{"data":null,"errors":[{"type":"FORBIDDEN","message":"Resource not accessible by integration"}]}`
+	}
+	rs = run(r.deps())
+	if st := statuses(rs)["forge-board"]; st != Fail || !strings.Contains(forgeBoardDetail(rs), "board not writable") || !strings.Contains(forgeBoardDetail(rs), "organization") {
+		t.Errorf("a refused board: %s %q", st, forgeBoardDetail(rs))
+	}
+
+	r.graphql = func() string {
+		return strings.Replace(boardProject, `{"id":"d","name":"Done"}`, `{"id":"e","name":"Shipped"}`, 1)
+	}
+	rs = run(r.deps())
+	if st := statuses(rs)["forge-board"]; st != Fail || !strings.Contains(forgeBoardDetail(rs), "Done") {
+		t.Errorf("a missing option: %s %q", st, forgeBoardDetail(rs))
+	}
+}
+
+func forgeBoardDetail(rs []Result) string {
+	for _, r := range rs {
+		if r.Check == "forge-board" {
+			return r.Detail
+		}
+	}
+	return ""
 }
