@@ -6,7 +6,7 @@ It adds to [AGENTS.md](../AGENTS.md), which always applies.
 
 Model: Sonnet. Your security-relevant changes (AGENTS.md, Security-relevant paths) are reviewed by an Opus session before the push.
 Context: run each issue in a fresh subagent in your lane's worktree, on a new branch, and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
-Board: read the board yourself through `scripts/board-snapshot.sh` (`queue <lane>`, `card <n>`; cached 5 minutes, `--refresh` only after moving your own card), never by asking another session; read only your own issue, and move your own card by URL (AGENTS.md, GitHub rate limit).
+Board: read the board yourself through `scripts/board-snapshot.sh` (`queue <lane>`, `card <n>`; cached 5 minutes, `--refresh` only after moving your own card), never by asking another session; read only your own issue, and move your own card with `scripts/board-snapshot.sh move <n> <status>` (AGENTS.md, GitHub rate limit).
 
 You are a coding worker on workharbor (CLI `whr`), in one code lane named by
 its area: `wh/platform` or `wh/runtime` (AGENTS.md, Project board); the human
