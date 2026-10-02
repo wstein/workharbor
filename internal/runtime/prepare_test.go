@@ -161,7 +161,8 @@ func TestPrepareChecksTheEgressSidecar(t *testing.T) {
 		"a relative proxy":    func(e *Egress) { e.Proxy = "proxy" },
 		"a proxy in ~/.ssh":   func(e *Egress) { e.Proxy = filepath.Join(r.home, ".ssh") },
 		"a raw IP":            func(e *Egress) { e.Allow = []string{"1.1.1.1"} },
-		"a wildcard":          func(e *Egress) { e.Allow = []string{"*.example.com"} },
+		"a bare star":         func(e *Egress) { e.Allow = []string{"*"} },
+		"a wildcard of a TLD": func(e *Egress) { e.Allow = []string{"*.com"} },
 		"a host with a path":  func(e *Egress) { e.Allow = []string{"example.com/x"} },
 		"a single-label host": func(e *Egress) { e.Allow = []string{"localhost"} },
 		"an empty entry":      func(e *Egress) { e.Allow = []string{""} },
@@ -256,5 +257,28 @@ func TestAMountSourceIsResolvedOnceSoASwappedLinkCannotPassTheRootCheck(t *testi
 	}
 	if fsys.calls != 1 {
 		t.Errorf("CheckMountsWithin resolved the source %d times, want once", fsys.calls)
+	}
+}
+
+// An allowlist entry is a host name or a *.name wildcard, and nothing else with a
+// "*" (design §7.2); the sidecar's proxy reads the same two forms.
+func TestPrepareAcceptsAWildcardEntryAndRefusesOtherStars(t *testing.T) {
+	r := newPrepRig(t)
+	proxy := filepath.Join(r.home, "bin", "proxy")
+	try := func(entry string) error {
+		spec := goodSpec()
+		spec.Egress = &Egress{Image: "debian", Proxy: proxy, Allow: []string{"api.anthropic.com", entry}}
+		_, err := Prepare(r.opts, spec)
+		return err
+	}
+	for _, good := range []string{"*.example.com", "*.github.io", "example.com"} {
+		if err := try(good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+	}
+	for _, bad := range []string{"*", "*.com", "**.example.com", "a*.example.com", "*.*.example.com", "*example.com", "example.*", "*.", "*.10.0.0.1", "*.example.com:443"} {
+		if err := try(bad); !errors.Is(err, ErrInvalidSpec) {
+			t.Errorf("%q: err = %v, want ErrInvalidSpec", bad, err)
+		}
 	}
 }

@@ -20,11 +20,12 @@ type logs struct {
 
 func (l *logs) add(s string) { l.mu.Lock(); l.lines = append(l.lines, s); l.mu.Unlock() }
 
-func TestAllowedByNameAndSubdomainNeverByIP(t *testing.T) {
+func TestAllowedByExactNameNeverBySubdomainOrIP(t *testing.T) {
 	p := New([]string{"api.anthropic.com", "Example.COM", " ", "proxy.golang.org."})
 	for host, want := range map[string]bool{
-		"api.anthropic.com": true, "API.Anthropic.com": true, "example.com": true, "www.example.com": true, "a.b.example.com": true,
-		"proxy.golang.org": true, "api.anthropic.com.": true,
+		"api.anthropic.com": true, "API.Anthropic.com": true, "example.com": true, "proxy.golang.org": true, "api.anthropic.com.": true,
+		// An entry is one host: a subdomain is not admitted by it (§7.2).
+		"www.example.com": false, "a.b.example.com": false, "x.api.anthropic.com": false,
 		"github.com": false, "notexample.com": false, "example.com.evil.test": false, "anthropic.com": false,
 		"": false, "1.1.1.1": false, "[2606:4700:4700::1111]": false, "2606:4700:4700::1111": false,
 	} {
@@ -220,5 +221,22 @@ func TestBytesSentWithTheConnectReachTheUpstream(t *testing.T) {
 	}
 	if !strings.Contains(all.String(), "200 Connection Established") || !strings.Contains(all.String(), "echo:client-hello") {
 		t.Errorf("the client read %q", all.String())
+	}
+}
+
+// A wildcard entry admits every subdomain and not the bare name; only a leading
+// "*." is a wildcard, and a "*" anywhere else allows nothing (§7.2).
+func TestAWildcardEntryAdmitsSubdomainsAndNotTheBareName(t *testing.T) {
+	p := New([]string{"*.example.com", "github.com", "*.", "*", "*.*.evil.test", "a*.bad.test", "*.b*.bad.test", "mid.*.bad.test", "**.bad.test"})
+	for host, want := range map[string]bool{
+		"www.example.com": true, "a.b.example.com": true, "WWW.EXAMPLE.COM": true, "www.example.com.": true,
+		"example.com": false, "notexample.com": false, "www.example.com.evil.test": false, "xexample.com": false,
+		"github.com": true, "api.github.com": false,
+		"evil.test": false, "x.evil.test": false, "a.bad.test": false, "ab.bad.test": false, "mid.x.bad.test": false, "x.bad.test": false,
+		"anything.at.all": false, "": false, "1.1.1.1": false,
+	} {
+		if got := p.Allowed(host); got != want {
+			t.Errorf("Allowed(%q) = %v, want %v", host, got, want)
+		}
 	}
 }

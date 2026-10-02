@@ -107,7 +107,7 @@ func TestASubdomainResolvingToAPrivateAddressIsRefused(t *testing.T) {
 	} {
 		dns := &fakeDNS{answers: [][]string{answer}}
 		var l logs
-		p := New([]string{"example.test"})
+		p := New([]string{"evil.example.test"})
 		p.Log = l.add
 		p.lookup, p.dialAddr = dns.lookup, dns.dial
 		srv := httptest.NewServer(p)
@@ -134,7 +134,7 @@ func TestASubdomainResolvingToAPrivateAddressIsRefused(t *testing.T) {
 // dials the address literal it checked, so the private answer is never used.
 func TestDNSRebindingCannotSlipBetweenCheckAndDial(t *testing.T) {
 	dns := &fakeDNS{answers: [][]string{{"203.0.113.7"}, {"192.168.64.1"}}}
-	p := New([]string{"example.test"})
+	p := New([]string{"rebind.example.test"})
 	p.lookup, p.dialAddr = dns.lookup, dns.dial
 	ctx := context.Background()
 	c, err := p.dialPublic(ctx, "tcp", "rebind.example.test:443")

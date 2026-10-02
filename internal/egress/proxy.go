@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,7 +35,8 @@ const DefaultIdleTimeout = 5 * time.Minute
 
 // Proxy is an allowlist HTTP and HTTPS (CONNECT) proxy.
 type Proxy struct {
-	allow []string
+	allow []string // exact host names
+	wild  []string // suffixes of `*.suffix` entries: every subdomain, not the bare name
 	// Log receives one line per decision: time, verdict, method, host and source.
 	Log func(line string)
 	// Dial connects to an allowed destination; by default the name is resolved,
@@ -58,7 +60,12 @@ type Proxy struct {
 	transport http.RoundTripper
 }
 
-// New returns a proxy that allows the given host names and their subdomains.
+// New returns a proxy that allows the given entries. An entry matches exactly
+// one host name: `github.com` admits `github.com` and not `api.github.com`
+// (design §7.2). An entry `*.example.com` admits every subdomain and not the bare
+// name; the supervisor writes one only from its own configuration and its built-in
+// list, never from a repository's request. Anything else with a `*` is dropped: an
+// entry that cannot be read as a name allows nothing.
 func New(allow []string) *Proxy {
 	p := &Proxy{}
 	p.transport = &http.Transport{
@@ -69,24 +76,31 @@ func New(allow []string) *Proxy {
 		MaxIdleConns:          16,
 	}
 	for _, h := range allow {
-		if h = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(h, "."))); h != "" {
+		h = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(h, ".")))
+		switch suffix, wild := strings.CutPrefix(h, "*."); {
+		case h == "":
+		case wild && suffix != "" && !strings.Contains(suffix, "*"):
+			p.wild = append(p.wild, suffix)
+		case !strings.Contains(h, "*"):
 			p.allow = append(p.allow, h)
 		}
 	}
 	return p
 }
 
-// Allowed reports whether a host may be reached. A host matches an entry when
-// it is that name or a subdomain of it. An IP address never matches, whatever
-// the list says: the allowlist is by name, and the name is what the proxy
-// resolves.
+// Allowed reports whether a host may be reached: it is an entry, or it is below
+// a wildcard entry. An IP address never matches, whatever the list says: the
+// allowlist is by name, and the name is what the proxy resolves.
 func (p *Proxy) Allowed(host string) bool {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	if host == "" || net.ParseIP(strings.Trim(host, "[]")) != nil {
 		return false
 	}
-	for _, a := range p.allow {
-		if host == a || strings.HasSuffix(host, "."+a) {
+	if slices.Contains(p.allow, host) {
+		return true
+	}
+	for _, w := range p.wild {
+		if strings.HasSuffix(host, "."+w) { // below it, never the bare name
 			return true
 		}
 	}

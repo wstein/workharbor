@@ -347,9 +347,31 @@ func TestConsoleDefaultsAndValidation(t *testing.T) {
 	if _, err := r.parse(t); err != nil {
 		t.Errorf("a good console: %s", problems(err))
 	}
+	// The supervisor's own configuration may hold a wildcard: every subdomain, not
+	// the bare name (§7.2).
+	r.cfg.Console = Console{EgressAllow: []string{"*.github.io", "github.com"}}
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("a wildcard from the configuration: %s", problems(err))
+	}
+	for _, bad := range []string{"*", "*.com", "**.example.com", "a*.example.com", "*.*.example.com", "example.*", "*example.com", "*.", "*.example.com:443", "*.10.0.0.1"} {
+		r.cfg.Console = Console{EgressAllow: []string{bad}}
+		if _, err := r.parse(t); !strings.Contains(problems(err), "console.egress_allow") {
+			t.Errorf("%q was accepted as a console entry: %s", bad, problems(err))
+		}
+		r.cfg.Console = Console{}
+		r.cfg.Environment = Environment{EgressAllow: []string{bad}}
+		if _, err := r.parse(t); !strings.Contains(problems(err), "environment.egress_allow") {
+			t.Errorf("%q was accepted as an environment entry: %s", bad, problems(err))
+		}
+		r.cfg.Environment = Environment{}
+	}
+	r.cfg.Environment = Environment{EgressAllow: []string{"api.anthropic.com", "*.example.com"}}
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("a wildcard in the environment's list: %s", problems(err))
+	}
+	r.cfg.Environment = Environment{}
 	for name, c := range map[string]Console{
-		"console.egress_allow": {EgressAllow: []string{"*.evil.com"}},
-		"console":              {MemoryMB: -1},
+		"console": {MemoryMB: -1},
 	} {
 		r.cfg.Console = c
 		if _, err := r.parse(t); !strings.Contains(problems(err), name) {

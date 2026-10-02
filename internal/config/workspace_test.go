@@ -123,7 +123,7 @@ func TestEnvironmentAndStateDirAreChecked(t *testing.T) {
 	if _, err := r.parse(t); err != nil {
 		t.Fatalf("a valid environment: %v", err)
 	}
-	for _, bad := range []string{"1.2.3.4", "*.example.com", "example.com:443", "a b.com", "localhost", "-x.com", "x..com", "x.com/path", ""} {
+	for _, bad := range []string{"1.2.3.4", "*", "*.com", "example.com:443", "a b.com", "localhost", "-x.com", "x..com", "x.com/path", ""} {
 		r.cfg.Environment.EgressAllow = []string{bad}
 		if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "environment.egress_allow") {
 			t.Errorf("egress host %q = %v", bad, err)

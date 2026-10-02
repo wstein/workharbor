@@ -329,6 +329,8 @@ func customizations(v json.RawMessage, notes []string) ([]string, Hints, []strin
 		for _, h := range w.Egress {
 			h = strings.ToLower(strings.TrimSpace(h))
 			switch {
+			case strings.Contains(h, "*"):
+				notes = append(notes, "customizations.workharbor.egress: "+strconv.Quote(h)+" is a wildcard, which only the supervisor's own configuration may allow; a repository asks for one exact host, ignored")
 			case !ValidHost(h):
 				notes = append(notes, "customizations.workharbor.egress: "+strconv.Quote(h)+" is not a host name, ignored")
 			case !seen[h]:

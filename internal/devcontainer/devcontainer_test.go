@@ -320,7 +320,13 @@ func TestWorkharborHints(t *testing.T) {
 	if !reflect.DeepEqual(c.EgressRequests, []string{"proxy.golang.org"}) {
 		t.Errorf("only a real host name may be requested, once: %v", c.EgressRequests)
 	}
-	if n := strings.Count(strings.Join(c.Notes, "|"), "is not a host name"); n != 4 {
-		t.Errorf("want 4 refused hosts noted, got %d: %v", n, c.Notes)
+	joined := strings.Join(c.Notes, "|")
+	if n := strings.Count(joined, "is not a host name"); n != 3 {
+		t.Errorf("want 3 refused hosts noted, got %d: %v", n, c.Notes)
+	}
+	// A wildcard is refused with a note of its own: a repository asks for one exact
+	// host, and only the supervisor's configuration may allow a wildcard (§7.2).
+	if n := strings.Count(joined, `"*.evil.com" is a wildcard`); n != 1 {
+		t.Errorf("want the wildcard named in a note, got %d: %v", n, c.Notes)
 	}
 }

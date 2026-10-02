@@ -200,7 +200,8 @@ type Config struct {
 type Console struct {
 	// EgressAllow are the host names the console may reach through its egress
 	// proxy: package registries and the forge for read-only fetches by default.
-	// Names only: no IP, no wildcard. The console holds no credentials.
+	// An entry is one exact host name, or `*.name` for every subdomain and not the
+	// bare name (§7.2); no IP, port or path. The console holds no credentials.
 	EgressAllow []string `json:"egress_allow,omitempty"`
 	CPUs        int      `json:"cpus,omitempty"`      // default 2
 	MemoryMB    int      `json:"memory_mb,omitempty"` // default 2048
@@ -215,10 +216,17 @@ type Console struct {
 	Base string `json:"base,omitempty"`
 }
 
-// DefaultConsoleEgress are the hosts a console may reach by default: the package
-// registries of the toolchains workharbor knows, and GitHub for read-only fetches.
+// DefaultConsoleEgress are the hosts a console may reach by default, each exactly
+// (§7.2: an entry matches one host, so none of these admits a subdomain): the
+// package registries of the toolchains workharbor knows, and GitHub for read-only
+// fetches. No wildcard is deliberate here.
 var DefaultConsoleEgress = []string{
-	"github.com", "proxy.golang.org", "sum.golang.org", "registry.npmjs.org", "pypi.org", "files.pythonhosted.org",
+	"github.com",             // git clone and fetch over https: the smart protocol is served from this one host
+	"proxy.golang.org",       // Go module downloads
+	"sum.golang.org",         // Go checksum database
+	"registry.npmjs.org",     // npm packages and metadata
+	"pypi.org",               // Python package index
+	"files.pythonhosted.org", // Python package files, which pypi.org redirects to
 }
 
 // Resolved returns the console with the defaults filled in.
@@ -281,7 +289,8 @@ type Environment struct {
 	// default, or "ubuntu" (D43, D44).
 	Base string `json:"base,omitempty"`
 	// EgressAllow are the host names the agent may reach through the egress
-	// proxy, `api.anthropic.com` by default. Names only: no IP, no wildcard.
+	// proxy, `api.anthropic.com` by default. An entry is one exact host name, or
+	// `*.name` for every subdomain and not the bare name (§7.2); no IP, port or path.
 	EgressAllow []string `json:"egress_allow,omitempty"`
 	CPUs        int      `json:"cpus,omitempty"`      // default 2
 	MemoryMB    int      `json:"memory_mb,omitempty"` // default 4096
@@ -400,8 +409,8 @@ func (c *Config) Validate() error {
 		}
 	}
 	for i, h := range c.Console.EgressAllow {
-		if !validEgressHost(h) {
-			add("console.egress_allow[%d]: %q is not a host name (no address, wildcard, port or path)", i, h)
+		if !validEgressEntry(h) {
+			add("console.egress_allow[%d]: %q is not a host name or a *.name wildcard (no address, port or path)", i, h)
 		}
 	}
 	if b := c.Console.Base; b != "" && b != "alpine" && !baseimage.Distro(b).Valid() {
@@ -500,8 +509,8 @@ func (c *Config) Validate() error {
 		}
 	}
 	for _, h := range c.Environment.EgressAllow {
-		if !validEgressHost(h) {
-			add("environment.egress_allow: %q is not a host name (no IP address, wildcard, port or path)", h)
+		if !validEgressEntry(h) {
+			add("environment.egress_allow: %q is not a host name or a *.name wildcard (no IP address, port or path)", h)
 		}
 	}
 
@@ -831,6 +840,16 @@ func (c *Config) CheckWorkspacePath(path string) (string, error) {
 		return "", fmt.Errorf("workspace path: %s is not empty: the agent clone is created in it", resolved)
 	}
 	return resolved, nil
+}
+
+// validEgressEntry accepts an entry of the supervisor's own allowlists: a host
+// name, or `*.` and a host name (every subdomain, not the bare name; design §7.2).
+// A repository cannot write one: its egress request is one exact host.
+func validEgressEntry(h string) bool {
+	if rest, wild := strings.CutPrefix(h, "*."); wild {
+		return validEgressHost(rest)
+	}
+	return validEgressHost(h)
 }
 
 // validEgressHost accepts a plain DNS name: letters, digits, '-' and '.',

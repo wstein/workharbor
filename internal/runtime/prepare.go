@@ -138,8 +138,8 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 			out.Egress = &e2
 		}
 		for _, h := range e.Allow {
-			if !validHost(h) {
-				add("allowlist entry %q is not a host name", h)
+			if !validAllowEntry(h) {
+				add("allowlist entry %q is not a host name or a *.name wildcard", h)
 			}
 		}
 	}
@@ -159,6 +159,17 @@ func insideAny(fsys FS, roots []string, path string) bool {
 		}
 	}
 	return false
+}
+
+// validAllowEntry accepts an allowlist entry: a host name, or `*.` and a host
+// name (every subdomain, not the bare name; design §7.2). A repository's request
+// never reaches here as a wildcard: the Decision names one exact host. Anything
+// else with a `*` is refused.
+func validAllowEntry(h string) bool {
+	if rest, wild := strings.CutPrefix(h, "*."); wild {
+		return validHost(rest)
+	}
+	return validHost(h)
 }
 
 // validHost accepts a DNS name with at least two labels whose last label is not
