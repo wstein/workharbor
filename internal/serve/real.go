@@ -300,7 +300,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	prepare := func(s runtime.Spec) (runtime.PreparedSpec, error) {
 		return runtime.Prepare(runtime.PrepareOptions{
 			FS: runtime.OSFS{}, Home: home, Roots: roots,
-			Owns: func(volume string) bool { return len(volume) > len(Owner)+1 && volume[:len(Owner)+1] == Owner+"-" },
+			Owns: ownsVolumes(s),
 		}, s)
 	}
 	consoleDistro := baseimage.Distro(spec.Base)
@@ -460,6 +460,27 @@ func (o ConsoleOptions) Dir(w domain.Workspace) string {
 		return dir
 	}
 	return WorkspacesMount
+}
+
+// ownsVolumes says which named volumes a spec may mount: exactly the ones of its own
+// environment, found from the network it names (owner-net-<workspace>): the home and
+// build volumes of that workspace, or the console's home for the console. Another
+// workspace's volume, the console's from a workspace spec and any other volume that
+// merely starts with the owner's prefix are refused (a volume holds an agent's login).
+func ownsVolumes(s runtime.Spec) func(string) bool {
+	owner := Owner
+	id, ok := strings.CutPrefix(s.Network.Name, owner+"-net-")
+	if !ok || id == "" {
+		return func(string) bool { return false }
+	}
+	allowed := map[string]bool{}
+	if id == "console" {
+		allowed[owner+"-console-home"] = true
+	} else {
+		allowed[owner+"-home-"+id] = true
+		allowed[owner+"-build-"+id] = true
+	}
+	return func(volume string) bool { return allowed[volume] }
 }
 
 // For returns the console's spec: hardened like an agent's environment, on an

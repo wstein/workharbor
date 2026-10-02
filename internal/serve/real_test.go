@@ -384,3 +384,45 @@ func TestTheConsoleSpecIsHardenedReadOnlyByDefaultAndHasNoSecrets(t *testing.T) 
 		}
 	}
 }
+
+// A spec may mount only the volumes of its own environment: another workspace's
+// volume, the console's from a workspace and a stranger with the owner's prefix are
+// refused.
+func TestASpecMountsOnlyTheVolumesOfItsOwnEnvironment(t *testing.T) {
+	proxy := filepath.Join(t.TempDir(), "whr-proxy")
+	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	ws := SpecOptions{Owner: Owner, Env: config.Environment{Image: "img", CPUs: 1, MemoryMB: 512, DiskMB: 1024}, ToolStore: t.TempDir(), Proxy: proxy}.For(domain.Workspace{ID: "w1"})
+	own := ownsVolumes(ws)
+	for _, v := range []string{"whr-home-w1", "whr-build-w1"} {
+		if !own(v) {
+			t.Errorf("a workspace's own volume %q was refused", v)
+		}
+	}
+	for _, v := range []string{"whr-home-w2", "whr-build-w2", "whr-console-home", "whr-anything", "whr-home-w1-extra", "other-home-w1", "whr-", ""} {
+		if own(v) {
+			t.Errorf("volume %q was accepted for workspace w1", v)
+		}
+	}
+	console := ownsVolumes(ConsoleOptions{Owner: Owner}.For(nil))
+	if !console("whr-console-home") || console("whr-home-w1") || console("whr-build-w1") {
+		t.Error("the console may mount its own home and nothing else")
+	}
+	if ownsVolumes(runtime.Spec{})("whr-home-w1") || ownsVolumes(runtime.Spec{Network: runtime.Network{Name: "whr-net-"}})("whr-home-") {
+		t.Error("a spec with no workspace identity owns volumes")
+	}
+	// the whole check: Prepare refuses another workspace's volume in a spec
+	spec := ws
+	spec.Egress = nil
+	spec.Mounts = nil // only the volumes: a bind mount of a temporary directory is refused as a system directory on macOS
+	for _, m := range ws.Mounts {
+		if m.Kind == runtime.MountVolume {
+			spec.Mounts = append(spec.Mounts, m)
+		}
+	}
+	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whr-home-w2", Target: "/other"})
+	if _, err := runtime.Prepare(runtime.PrepareOptions{FS: runtime.OSFS{}, Home: t.TempDir(), Owns: ownsVolumes(spec)}, spec); err == nil || !strings.Contains(err.Error(), "does not belong") {
+		t.Errorf("Prepare accepted another workspace's volume: %v", err)
+	}
+}
