@@ -27,6 +27,8 @@ const (
 	roleLabel = "workharbor.role"
 	envLabel  = "workharbor.env"
 	netLabel  = "workharbor.network"
+	// egressLabel is on the sidecar: the hosts it allows, sorted and comma-separated.
+	egressLabel = "workharbor.egress"
 
 	roleEnv     = "environment"
 	roleSidecar = "sidecar"
@@ -395,7 +397,9 @@ func (a *Adapter) sidecarArgs(id string, spec runtime.Spec) []string {
 		"--network", "default", "--network", spec.Network.Name,
 		"-v", e.Proxy + ":" + guestProxy + ":ro",
 	}
-	args = append(args, a.labelArgs(roleSidecar, id, nil)...)
+	allow := append([]string(nil), e.Allow...)
+	sort.Strings(allow)
+	args = append(args, a.labelArgs(roleSidecar, id, map[string]string{egressLabel: strings.Join(allow, ",")})...)
 	return append(args, e.Image, guestProxy, "-listen", "0.0.0.0:"+proxyPort, "-allow", strings.Join(e.Allow, ","))
 }
 
@@ -473,6 +477,21 @@ func isReadOnly(opts []string) bool {
 		}
 	}
 	return false
+}
+
+// sidecarListing returns the environment's sidecar as `container list` shows it.
+func (a *Adapter) sidecarListing(ctx context.Context, id string) (listing, bool) {
+	all, err := a.containers(ctx)
+	if err != nil {
+		return listing{}, false
+	}
+	for _, o := range all {
+		l := o.Configuration.Labels
+		if l[roleLabel] == roleSidecar && l[envLabel] == id && l[runtime.OwnerLabel] == a.owner {
+			return o, true
+		}
+	}
+	return listing{}, false
 }
 
 // sidecarOf returns the environment's sidecar container name, or "".
@@ -586,9 +605,13 @@ func (a *Adapter) Inspect(ctx context.Context, id string) (runtime.Info, error) 
 		return runtime.Info{}, err
 	}
 	info := a.info(c)
-	if info.State == domain.EnvRunning {
-		if sc, err := a.sidecarOf(ctx, id); err == nil && sc != "" {
-			info.Proxy = a.proxyURL(ctx, sc, c.Configuration.Labels[netLabel])
+	if sc, ok := a.sidecarListing(ctx, id); ok {
+		info.EgressAllow = []string{}
+		if v := sc.Configuration.Labels[egressLabel]; v != "" {
+			info.EgressAllow = strings.Split(v, ",")
+		}
+		if info.State == domain.EnvRunning {
+			info.Proxy = a.proxyURL(ctx, sc.Configuration.ID, c.Configuration.Labels[netLabel])
 		}
 	}
 	return info, nil
@@ -796,3 +819,43 @@ func (a *Adapter) HasImage(ctx context.Context, tag string) (bool, error) {
 	}
 	return false, err
 }
+
+// UpdateEgress implements runtime.EgressUpdater: it replaces the environment's
+// egress sidecar with one that has the allowlist of the prepared spec. The old
+// sidecar is stopped and deleted first, the new one created on the same networks
+// and, if the environment runs, started. The sidecar's address changes, so the
+// caller does it only before an agent process starts (design §4.2).
+func (a *Adapter) UpdateEgress(ctx context.Context, id string, prep runtime.PreparedSpec) error {
+	if !prep.Prepared() {
+		return runtime.ErrNotPrepared
+	}
+	spec := prep.Spec()
+	c, err := a.find(ctx, id)
+	if err != nil {
+		return err
+	}
+	if spec.Egress == nil || spec.Network.Name == "" || spec.Network.Name != c.Configuration.Labels[netLabel] {
+		return &runtime.SpecError{Problems: []string{"the spec must carry an Egress and the environment's own network"}}
+	}
+	if old, err := a.sidecarOf(ctx, id); err != nil {
+		return err
+	} else if old != "" {
+		if _, _, err := a.run(ctx, nil, "stop", old); err != nil && !strings.Contains(stderrOf(err), "not running") {
+			return fmt.Errorf("stop the old sidecar: %w", err)
+		}
+		if _, _, err := a.run(ctx, nil, "delete", old); err != nil {
+			return fmt.Errorf("delete the old sidecar: %w", err)
+		}
+	}
+	if _, _, err := a.run(ctx, nil, a.sidecarArgs(id, spec)...); err != nil {
+		return err
+	}
+	if c.Status.State == "running" {
+		if _, _, err := a.run(ctx, nil, "start", sidecarName(id)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var _ runtime.EgressUpdater = (*Adapter)(nil)

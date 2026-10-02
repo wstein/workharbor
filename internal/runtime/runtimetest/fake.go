@@ -71,6 +71,8 @@ type fakeEnv struct {
 	mounts  []runtime.Mount
 	network string
 	sidecar string
+	allow   []string // the hosts the sidecar allows
+	proxies int      // how many sidecars the environment has had: a new one has a new address
 }
 
 // NewFake returns a fake that acts for owner. Bind mounts are vetted against
@@ -125,6 +127,7 @@ func (f *Fake) Provision(_ context.Context, prep runtime.PreparedSpec) (string, 
 	if spec.Egress != nil {
 		env.sidecar = id + "-proxy"
 		f.sidecars[env.sidecar] = true
+		env.allow = sortedCopy(spec.Egress.Allow)
 	}
 	for _, m := range spec.Mounts {
 		if m.Kind == runtime.MountVolume {
@@ -283,8 +286,11 @@ func (f *Fake) info(e *fakeEnv) runtime.Info {
 		labels[k] = v
 	}
 	info := runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
+	if e.sidecar != "" {
+		info.EgressAllow = append([]string(nil), e.allow...)
+	}
 	if e.sidecar != "" && e.state == domain.EnvRunning {
-		info.Proxy = "http://" + e.addr + ":3128"
+		info.Proxy = "http://" + e.addr + ":" + strconv.Itoa(3128+e.proxies)
 	}
 	return info
 }
@@ -376,4 +382,32 @@ func (f *Fake) logLine(id, line string) {
 	if e, ok := f.envs[id]; ok {
 		e.logs = append(e.logs, []byte(strings.TrimRight(line, "\n")+"\n")...)
 	}
+}
+
+func sortedCopy(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
+}
+
+// UpdateEgress implements runtime.EgressUpdater: the sidecar is replaced by one
+// with the new allowlist, as a real adapter does, so the environment's proxy
+// address changes.
+func (f *Fake) UpdateEgress(_ context.Context, id string, prep runtime.PreparedSpec) error {
+	if !prep.Prepared() {
+		return runtime.ErrNotPrepared
+	}
+	spec := prep.Spec()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, err := f.own(id)
+	if err != nil {
+		return err
+	}
+	if spec.Egress == nil || e.sidecar == "" || spec.Network.Name != e.network {
+		return &runtime.SpecError{Problems: []string{"the spec must carry an Egress and the environment's own network"}}
+	}
+	e.allow = sortedCopy(spec.Egress.Allow)
+	e.proxies++ // a new sidecar is a new address
+	return nil
 }

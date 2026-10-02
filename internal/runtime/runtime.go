@@ -62,6 +62,22 @@ type Info struct {
 	// the environment runs and has an egress sidecar. Like Addr it is read each
 	// time and never stored.
 	Proxy string
+	// EgressAllow are the hosts the environment's egress sidecar allows, sorted.
+	// Nil without a sidecar. Inspect reports it; List need not.
+	EgressAllow []string
+}
+
+// EgressUpdater is implemented by an adapter that can change what an
+// environment's egress sidecar allows (design §4.2, D38). It is for the one moment
+// it is safe: before an agent process starts in the environment, because the
+// sidecar's address changes and a process that already runs keeps the old one.
+type EgressUpdater interface {
+	// UpdateEgress recreates the egress sidecar of an environment with the
+	// allowlist of a prepared spec. The spec must name the environment's own
+	// network and carry an Egress; nothing else of it is applied. It works on a
+	// stopped and on a running environment (a running one gets the new sidecar
+	// started), and fails with ErrNotFound or ErrNotOwned like every method.
+	UpdateEgress(ctx context.Context, envID string, prep PreparedSpec) error
 }
 
 // Resources are what an environment depends on besides its own container.

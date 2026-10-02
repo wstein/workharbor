@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +91,7 @@ func Checks() []Check {
 		{"exec passes stdin to the command, also while it runs", checkStdin},
 		{"cancelling an exec ends the process in the guest", checkCancelKillsGuestProcess},
 		{"the network, volume and sidecar are created and removed", checkSurroundings},
+		{"the egress allowlist can be changed, and only through a prepared spec", checkUpdateEgress},
 		{"a writable volume has one running writer", checkVolumeExclusive},
 		{"the prepared mounts are what the runtime mounts", checkMountsAsPrepared},
 		{"delete is by exact ID only", checkDeleteExact},
@@ -744,6 +746,93 @@ func checkSurroundings(ctx context.Context, h Harness) error {
 		return fmt.Errorf("removing a volume that is gone must succeed: %w", err)
 	}
 	return nil
+}
+
+// checkUpdateEgress needs an adapter that implements runtime.EgressUpdater; one
+// that does not has nothing to check, since the allowlist then never changes.
+func checkUpdateEgress(ctx context.Context, h Harness) error {
+	a := h.Adapter
+	up, ok := a.(runtime.EgressUpdater)
+	if !ok {
+		return nil
+	}
+	spec := withEgress(h, "")
+	spec.Network.Name = "wh-conformance-net-egress"
+	id, err := h.provision(ctx, spec)
+	if err != nil {
+		return err
+	}
+	info, err := a.Inspect(ctx, id)
+	if err != nil || !reflect.DeepEqual(info.EgressAllow, []string{"api.anthropic.com"}) {
+		return fmt.Errorf("a provisioned sidecar must report its allowlist: %+v (%s)", info.EgressAllow, show(err))
+	}
+	wider := spec
+	wider.Egress = &runtime.Egress{Image: spec.Egress.Image, Proxy: spec.Egress.Proxy, Allow: []string{"proxy.golang.org", "api.anthropic.com"}}
+	prep, err := h.Prepare(wider)
+	if err != nil {
+		return err
+	}
+	if err := up.UpdateEgress(ctx, id, prep); err != nil {
+		return fmt.Errorf("UpdateEgress on a stopped environment: %w", err)
+	}
+	if info, err = a.Inspect(ctx, id); err != nil || !reflect.DeepEqual(info.EgressAllow, []string{"api.anthropic.com", "proxy.golang.org"}) {
+		return fmt.Errorf("after the update the allowlist must be the new one, sorted: %+v (%s)", info.EgressAllow, show(err))
+	}
+	if err := a.Start(ctx, id); err != nil {
+		return err
+	}
+	if info, err = a.Inspect(ctx, id); err != nil || !strings.HasPrefix(info.Proxy, "http://") {
+		return fmt.Errorf("an environment started after an update must report its proxy: %+v (%s)", info, show(err))
+	}
+	// On a running environment the new sidecar is started too.
+	narrower := spec
+	narrower.Egress = &runtime.Egress{Image: spec.Egress.Image, Proxy: spec.Egress.Proxy, Allow: []string{"proxy.golang.org"}}
+	prep, err = h.Prepare(narrower)
+	if err != nil {
+		return err
+	}
+	if err := up.UpdateEgress(ctx, id, prep); err != nil {
+		return fmt.Errorf("UpdateEgress on a running environment: %w", err)
+	}
+	if info, err = a.Inspect(ctx, id); err != nil || !reflect.DeepEqual(info.EgressAllow, []string{"proxy.golang.org"}) || !strings.HasPrefix(info.Proxy, "http://") || info.State != domain.EnvRunning {
+		return fmt.Errorf("after an update of a running environment: %+v (%s)", info, show(err))
+	}
+	// One sidecar, not two.
+	res, err := a.Resources(ctx, id)
+	if err != nil || res.Sidecar == "" {
+		return fmt.Errorf("Resources after the updates: %+v (%s)", res, show(err))
+	}
+	inv, err := a.Inventory(ctx)
+	if err != nil || len(inv.Sidecars) != 1 {
+		return fmt.Errorf("an update must replace the sidecar, not add one: %+v (%s)", inv.Sidecars, show(err))
+	}
+	// Only a prepared spec, only for the environment's own network, only with an egress.
+	if err := up.UpdateEgress(ctx, id, runtime.PreparedSpec{}); !errors.Is(err, runtime.ErrNotPrepared) {
+		return fmt.Errorf("UpdateEgress with an unprepared spec = %s, want ErrNotPrepared", show(err))
+	}
+	other := narrower
+	other.Network.Name = "wh-conformance-net-other"
+	if prep, err = h.Prepare(other); err != nil {
+		return err
+	}
+	if err := up.UpdateEgress(ctx, id, prep); !errors.Is(err, runtime.ErrInvalidSpec) {
+		return fmt.Errorf("UpdateEgress naming another network = %s, want ErrInvalidSpec", show(err))
+	}
+	bare := narrower
+	bare.Egress = nil
+	if prep, err = h.Prepare(bare); err != nil {
+		return err
+	}
+	if err := up.UpdateEgress(ctx, id, prep); !errors.Is(err, runtime.ErrInvalidSpec) {
+		return fmt.Errorf("UpdateEgress without an Egress = %s, want ErrInvalidSpec", show(err))
+	}
+	if err := up.UpdateEgress(ctx, "no-such-environment", prep); !errors.Is(err, runtime.ErrNotFound) && !errors.Is(err, runtime.ErrNotOwned) && !errors.Is(err, runtime.ErrInvalidSpec) {
+		return fmt.Errorf("UpdateEgress of an unknown environment = %s", show(err))
+	}
+	if err := a.Stop(ctx, id); err != nil {
+		return err
+	}
+	return a.Delete(ctx, id)
 }
 
 func checkVolumeExclusive(ctx context.Context, h Harness) error {

@@ -162,6 +162,24 @@ func TestEgressThroughTheSidecar(t *testing.T) {
 	if out, _ := run(curl, "-x", info.Proxy, "https://github.com"); !strings.Contains(out, "403") {
 		t.Errorf("a host off the allowlist = %q, want 403", out)
 	}
+
+	// The allowlist changes while the environment runs and no agent does (design
+	// §4.2): github.com is allowed and example.com is not, through a new sidecar.
+	next := spec
+	next.Egress = &runtime.Egress{Image: "fedora", Proxy: h.ProxyBinary, Allow: []string{"github.com"}}
+	if err := h.Adapter.(runtime.EgressUpdater).UpdateEgress(ctx, id, mustPrepare(t, h, next)); err != nil {
+		t.Fatal(err)
+	}
+	info, err = h.Adapter.Inspect(ctx, id)
+	if err != nil || info.Proxy == "" || len(info.EgressAllow) != 1 || info.EgressAllow[0] != "github.com" {
+		t.Fatalf("after the update: %+v, %v", info, err)
+	}
+	if out, _ := run(curl, "-x", info.Proxy, "https://github.com"); out != "200" {
+		t.Errorf("a newly allowed host through the new proxy = %q, want 200", out)
+	}
+	if out, _ := run(curl, "-x", info.Proxy, "https://example.com"); !strings.Contains(out, "403") {
+		t.Errorf("a host that is no longer allowed = %q, want 403", out)
+	}
 }
 
 func mustPrepare(t *testing.T, h runtimetest.Harness, spec runtime.Spec) runtime.PreparedSpec {
