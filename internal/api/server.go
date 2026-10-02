@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
 	"github.com/wstein/workharbor/internal/version"
@@ -59,6 +60,37 @@ type Backend interface {
 type backend struct {
 	*service.Service
 	*service.Workspaces
+	consoles *service.Consoles
+}
+
+// The console operations, under the API's names. They answer with a conflict
+// when the supervisor was built without a console.
+func (b backend) ConsoleOpen(ctx context.Context, rw []string) (service.ConsoleInfo, error) {
+	if b.consoles == nil {
+		return service.ConsoleInfo{}, errNoConsole
+	}
+	return b.consoles.Open(ctx, rw)
+}
+
+func (b backend) ConsoleStatus(ctx context.Context) (*service.ConsoleInfo, error) {
+	if b.consoles == nil {
+		return nil, nil
+	}
+	return b.consoles.Status(ctx)
+}
+
+func (b backend) ConsoleClose(ctx context.Context) error {
+	if b.consoles == nil {
+		return errNoConsole
+	}
+	return b.consoles.Close(ctx)
+}
+
+func (b backend) ConsoleShell(ctx context.Context, req service.ShellRequest) (runtime.Terminal, error) {
+	if b.consoles == nil {
+		return nil, errNoConsole
+	}
+	return b.consoles.Shell(ctx, req)
 }
 
 // CreateWorkspace, RemoveWorkspace and the agent methods give the API's names to
@@ -71,8 +103,11 @@ func (b backend) RemoveWorkspace(ctx context.Context, workspace string) error {
 	return b.Remove(ctx, workspace)
 }
 
-// NewBackend joins the service and the workspace operations into a Backend.
-func NewBackend(s *service.Service, w *service.Workspaces) Backend { return backend{s, w} }
+// NewBackend joins the service, the workspace operations and the console (nil
+// when there is none) into a Backend.
+func NewBackend(s *service.Service, w *service.Workspaces, c *service.Consoles) Backend {
+	return backend{Service: s, Workspaces: w, consoles: c}
+}
 
 // Options configures a Server.
 type Options struct {
@@ -163,6 +198,10 @@ var routes = []route{
 	{http.MethodGet, "/v1/tasks/{task}/transcript", (*Server).transcriptSize},
 	{http.MethodPost, "/v1/tasks/{task}/purge", (*Server).purge},
 	{http.MethodPost, "/v1/kill-all", (*Server).killAll},
+	{http.MethodGet, "/v1/console", (*Server).consoleStatus},
+	{http.MethodPost, "/v1/console", (*Server).consoleOpen},
+	{http.MethodDelete, "/v1/console", (*Server).consoleClose},
+	{http.MethodGet, "/v1/console/shell", (*Server).consoleShell},
 	{http.MethodGet, "/v1/usage", (*Server).usage},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -31,6 +33,9 @@ type ConsoleConfig struct {
 	// EnsureImage makes sure the console image exists, building it on first use.
 	// Optional.
 	EnsureImage func(ctx context.Context) error
+	// Dir returns the directory a workspace has in the console. Optional: without
+	// it a shell starts in /workspaces.
+	Dir func(w domain.Workspace) string
 }
 
 // Consoles opens and closes the console environment of design D43: an
@@ -38,6 +43,10 @@ type ConsoleConfig struct {
 type Consoles struct {
 	svc *Service
 	cfg ConsoleConfig
+
+	mu     sync.Mutex
+	shells int                           // the shells open now
+	open   map[*countedTerminal]struct{} // the same, to close them at shutdown
 }
 
 // NewConsoles returns the console operations of a service.
@@ -194,4 +203,120 @@ func (c *Consoles) Close(ctx context.Context) error {
 		return fmt.Errorf("delete the console %s: %w", cur.ID, err)
 	}
 	return nil
+}
+
+// ShellRequest is a shell to open in the console.
+type ShellRequest struct {
+	Workspace  string // the workspace to start in, by name or ID; empty for the workspaces' root
+	Term       string // the client's TERM, used if it is a plain terminal name
+	Cols, Rows uint16
+	Actor      string // who asked, for the audit entry
+}
+
+// maxShells is how many shells the console serves at once.
+const maxShells = 8
+
+// termRe is a TERM value worth passing on: a terminfo name. Anything else is the
+// default, because the value comes from the client's environment.
+var termRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$`)
+
+// Shell opens a login shell in the open console, as the console's user, in the
+// directory of the workspace asked for, with the client's terminal name and size
+// and the egress proxy's variables, and records it as an audit entry. The console
+// must be open (Open), and the runtime must have terminals. The shell ends when
+// the returned terminal is closed or the command ends; the caller pumps it.
+func (c *Consoles) Shell(ctx context.Context, req ShellRequest) (runtime.Terminal, error) {
+	ta, ok := c.svc.rt.(runtime.TerminalAdapter)
+	if !ok {
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "this runtime has no terminals, so there is no console shell")
+	}
+	cur, err := c.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if cur == nil || cur.State != domain.EnvRunning {
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "the console is not open: open it first")
+	}
+	dir := "/workspaces"
+	if req.Workspace != "" {
+		ws, err := c.svc.store.Workspace(ctx, req.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		if c.cfg.Dir != nil {
+			dir = c.cfg.Dir(ws)
+		}
+	}
+	term := req.Term
+	if !termRe.MatchString(term) {
+		term = "xterm-256color"
+	}
+	env := append([]string{
+		"HOME=/home/whr", "USER=whr", "LOGNAME=whr", "SHELL=/bin/zsh", "LANG=C.UTF-8", "TERM=" + term, "WHR_CONSOLE=1",
+	}, c.svc.agentEnv(ctx, domain.ID(cur.ID))...)
+
+	c.mu.Lock()
+	if c.shells >= maxShells {
+		c.mu.Unlock()
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "the console already serves %d shells: close one first", maxShells)
+	}
+	c.shells++
+	c.mu.Unlock()
+	tm, err := ta.Terminal(ctx, cur.ID, runtime.TerminalRequest{Cmd: []string{"/bin/zsh", "-l"}, Env: env, Dir: dir, Cols: req.Cols, Rows: req.Rows})
+	if err != nil {
+		c.mu.Lock()
+		c.shells--
+		c.mu.Unlock()
+		return nil, err
+	}
+	var rw []string
+	if st, err := c.Status(ctx); err == nil && st != nil {
+		rw = st.ReadWrite
+	}
+	if saved, err := c.svc.store.Append(ctx, domain.NewConsoleEvent(domain.ConsoleOpened{Actor: req.Actor, Workspace: req.Workspace, ReadWrite: rw}, c.svc.clock.Now())); err != nil {
+		c.svc.report(fmt.Errorf("audit the console shell: %w", err))
+	} else {
+		c.svc.publish(saved)
+	}
+	ct := &countedTerminal{Terminal: tm}
+	ct.release = func() {
+		c.mu.Lock()
+		c.shells--
+		delete(c.open, ct)
+		c.mu.Unlock()
+	}
+	c.mu.Lock()
+	if c.open == nil {
+		c.open = map[*countedTerminal]struct{}{}
+	}
+	c.open[ct] = struct{}{}
+	c.mu.Unlock()
+	return ct, nil
+}
+
+// CloseShells hangs up every shell that is open: the supervisor is stopping, and
+// a shell must not outlive the stream that carries it.
+func (c *Consoles) CloseShells() {
+	c.mu.Lock()
+	shells := make([]*countedTerminal, 0, len(c.open))
+	for t := range c.open {
+		shells = append(shells, t)
+	}
+	c.mu.Unlock()
+	for _, t := range shells {
+		_ = t.Close()
+	}
+}
+
+// countedTerminal gives a shell back to the console's count once, when it is closed.
+type countedTerminal struct {
+	runtime.Terminal
+	release func()
+	once    sync.Once
+}
+
+func (t *countedTerminal) Close() error {
+	err := t.Terminal.Close()
+	t.once.Do(t.release)
+	return err
 }

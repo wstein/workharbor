@@ -23,6 +23,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -42,13 +43,17 @@ type fake struct {
 	created  []service.CreateRequest
 	events   chan domain.Event
 
-	onRun        func(service.RunRequest) (service.RunResult, error)
-	onShow       func(domain.ID) (service.TaskView, error)
-	onSay        func(domain.ID, string) (agent.Delivery, error)
-	onCancel     func(domain.ID) error
-	onKill       func(actor string) (service.KillReport, error)
-	usageQueries []service.UsageQuery
-	onAnswer     func(domain.ID, domain.Response) (domain.ID, error)
+	onRun         func(service.RunRequest) (service.RunResult, error)
+	onShow        func(domain.ID) (service.TaskView, error)
+	onSay         func(domain.ID, string) (agent.Delivery, error)
+	onCancel      func(domain.ID) error
+	onKill        func(actor string) (service.KillReport, error)
+	usageQueries  []service.UsageQuery
+	consoleOpen   bool
+	shells        []service.ShellRequest
+	onConsoleOpen func(rw []string) (service.ConsoleInfo, error)
+	onShell       func(service.ShellRequest) (runtime.Terminal, error)
+	onAnswer      func(domain.ID, domain.Response) (domain.ID, error)
 }
 
 func (f *fake) List(_ context.Context, active bool) ([]store.TaskSummary, error) {
@@ -133,6 +138,32 @@ func (f *fake) PurgeTranscript(_ context.Context, id domain.ID, _ string) (store
 		return store.PurgeResult{}, domain.NewConflict(domain.RuleTransition, "run r1 is running and still writing its transcript: pause or stop it first")
 	}
 	return store.PurgeResult{Events: 12, Bytes: 3400, Digest: "abc123"}, nil
+}
+
+func (f *fake) ConsoleOpen(_ context.Context, rw []string) (service.ConsoleInfo, error) {
+	if f.onConsoleOpen != nil {
+		return f.onConsoleOpen(rw)
+	}
+	return service.ConsoleInfo{EnvID: "env-1", ReadWrite: append([]string{}, rw...)}, nil
+}
+
+func (f *fake) ConsoleStatus(context.Context) (*service.ConsoleInfo, error) {
+	if f.consoleOpen {
+		return &service.ConsoleInfo{EnvID: "env-1", ReadWrite: []string{"docs-ws"}, Reused: true}, nil
+	}
+	return nil, nil
+}
+
+func (f *fake) ConsoleClose(context.Context) error { return nil }
+
+func (f *fake) ConsoleShell(_ context.Context, req service.ShellRequest) (runtime.Terminal, error) {
+	f.mu.Lock()
+	f.shells = append(f.shells, req)
+	f.mu.Unlock()
+	if f.onShell != nil {
+		return f.onShell(req)
+	}
+	return nil, domain.NewConflict(domain.RuleEnvRunning, "the console is not open: open it first")
 }
 
 func (f *fake) Usage(_ context.Context, q service.UsageQuery) (service.UsageReport, error) {
@@ -516,6 +547,12 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"purge-unconfirmed":              {"POST", "/v1/tasks/t1/purge", `{"confirm":false}`},
 		"purge-empty":                    {"POST", "/v1/tasks/t1/purge", ``},
 		"purge-running":                  {"POST", "/v1/tasks/t2/purge", `{"confirm":true}`},
+		"console-status-none":            {"GET", "/v1/console", ""},
+		"console-open":                   {"POST", "/v1/console", `{"read_write":["docs-ws"]}`},
+		"console-open-empty":             {"POST", "/v1/console", `{}`},
+		"console-open-unknown-field":     {"POST", "/v1/console", `{"mount":"/etc"}`},
+		"console-close":                  {"DELETE", "/v1/console", ""},
+		"console-shell-no-upgrade":       {"GET", "/v1/console/shell", ""},
 		"usage":                          {"GET", "/v1/usage", ""},
 		"usage-filtered":                 {"GET", "/v1/usage?task=t2&repo=wstein/workharbor&since=2026-10-01T00:00:00Z&until=2026-10-02T00:00:00Z&by=day", ""},
 		"usage-bad-since":                {"GET", "/v1/usage?since=yesterday", ""},
@@ -807,7 +844,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 30 {
+	if got := Routes(); len(got) != 34 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

@@ -43,6 +43,10 @@ func TestOnlyTheStoreUsesSnapshotAndRestore(t *testing.T) {
 			}
 			switch sel.Sel.Name {
 			case "Snapshot", "Restore", "MarkSaved":
+				// golang.org/x/term has a Restore of its own (a terminal's mode).
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == "term" && sel.Sel.Name == "Restore" {
+					return true
+				}
 				// A Snapshot method on another type would be a false alarm; the
 				// names are reserved in this code base, so report them all.
 				t.Errorf("%s: %s is for the store only", fset.Position(sel.Pos()), sel.Sel.Name)

@@ -305,7 +305,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	}
 	return Deps{
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
-		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole,
+		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
 		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
@@ -414,6 +414,27 @@ func rootNames(roots []string) []string {
 	return names
 }
 
+// dir returns where a workspace is in the console: its place in its root below
+// WorkspacesMount. A workspace outside every root has none.
+func (o ConsoleOptions) dir(w domain.Workspace) (string, bool) {
+	names := rootNames(o.Roots)
+	for i, root := range o.Roots {
+		if rel, err := filepath.Rel(root, w.Path); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+			return WorkspacesMount + "/" + names[i] + "/" + filepath.ToSlash(rel), true
+		}
+	}
+	return "", false
+}
+
+// Dir returns the directory a shell for a workspace starts in: the workspace's
+// place in the console, or the workspaces' root for one outside every root.
+func (o ConsoleOptions) Dir(w domain.Workspace) string {
+	if dir, ok := o.dir(w); ok {
+		return dir
+	}
+	return WorkspacesMount
+}
+
 // For returns the console's spec: hardened like an agent's environment, on an
 // internal network of its own behind the egress proxy, with every workspace root
 // mounted read-only and each workspace in rw mounted read-write over its place in
@@ -428,11 +449,8 @@ func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
 		mounts = append(mounts, runtime.Mount{Kind: runtime.MountBind, Source: root, Target: WorkspacesMount + "/" + names[i], ReadOnly: true})
 	}
 	for _, w := range rw {
-		for i, root := range o.Roots {
-			if rel, err := filepath.Rel(root, w.Path); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-				mounts = append(mounts, runtime.Mount{Kind: runtime.MountBind, Source: w.Path, Target: WorkspacesMount + "/" + names[i] + "/" + filepath.ToSlash(rel)})
-				break
-			}
+		if dir, ok := o.dir(w); ok {
+			mounts = append(mounts, runtime.Mount{Kind: runtime.MountBind, Source: w.Path, Target: dir})
 		}
 	}
 	mounts = append(mounts, runtime.Mount{Kind: runtime.MountVolume, Source: o.Owner + "-console-home", Target: GuestConsoleHome})

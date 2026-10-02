@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -56,6 +57,9 @@ type Client struct {
 	base  string
 	token string
 	hc    *http.Client
+	// dial opens a connection to the supervisor, for a stream (Upgrade). Nil
+	// means TCP to the host of base, as in tests.
+	dial func(ctx context.Context) (net.Conn, error)
 }
 
 // ClientConfig is the part of the configuration file a client needs. Listen is the
@@ -110,7 +114,11 @@ func newSocketClient(sock, token string) *Client {
 		var d net.Dialer
 		return d.DialContext(ctx, "unix", sock)
 	}}
-	return &Client{base: "http://whr", token: token, hc: &http.Client{Timeout: 30 * time.Second, Transport: tr}}
+	dial := func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "unix", sock)
+	}
+	return &Client{base: "http://whr", token: token, hc: &http.Client{Timeout: 30 * time.Second, Transport: tr}, dial: dial}
 }
 
 // NewClientFor is for tests and wiring that already know the address and token.
@@ -217,4 +225,55 @@ func (c *Client) Stream(ctx context.Context, path, lastEventID string) (*http.Re
 		return nil, fmt.Errorf("the server answered %d", resp.StatusCode)
 	}
 	return resp, nil
+}
+
+// Upgrade opens a stream on the supervisor: it sends the request with the token
+// and an Upgrade header and, on 101 Switching Protocols, returns the connection
+// and a reader on it, which may already hold bytes the server sent after the
+// headers. Any other answer is the ordinary error envelope. The caller closes the
+// connection. The token goes over the private socket NewClient dials.
+func (c *Client) Upgrade(ctx context.Context, path, protocol string) (net.Conn, *bufio.Reader, error) {
+	dial := c.dial
+	if dial == nil {
+		u, err := url.Parse(c.base)
+		if err != nil {
+			return nil, nil, err
+		}
+		dial = func(ctx context.Context) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", u.Host)
+		}
+	}
+	conn, err := dial(ctx)
+	if err != nil {
+		return nil, nil, connError{err}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", protocol)
+	if err := req.Write(conn); err != nil {
+		_ = conn.Close()
+		return nil, nil, connError{err}
+	}
+	br := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(br, req)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, connError{err}
+	}
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		defer func() { _ = conn.Close(); _ = resp.Body.Close() }()
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		var env envelope
+		if json.Unmarshal(raw, &env) == nil && env.Error != nil {
+			return nil, nil, &RemoteError{Code: env.Error.Code, Exit: env.Error.ExitCode, Message: env.Error.Message}
+		}
+		return nil, nil, fmt.Errorf("the server answered %d instead of switching protocols", resp.StatusCode)
+	}
+	return conn, br, nil
 }

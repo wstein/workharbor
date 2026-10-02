@@ -2136,6 +2136,270 @@
         ],
         "description": "The tokens, the cost and the number of turns the agents reported, grouped, from the audit entries (design \u00a75.7). A row is one group and one auth mode, so the notional cost of a subscription is never added to the spend of an API key; a turn without tokens or without a cost is counted, not read as zero. `windows` are the account's own usage windows and `balance` the latest balance the agent reported, if it reported one."
       }
+    },
+    "/v1/console": {
+      "get": {
+        "operationId": "consoleStatus",
+        "summary": "Is a console open",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the open console, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/ConsoleInfo"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "The console of design D43: an environment without an agent for the human's shell work. `data` is null when none is open."
+      },
+      "post": {
+        "operationId": "consoleOpen",
+        "summary": "Open the console",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the open console",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ConsoleInfo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "description": "Opens the console, or returns the one that is open, with the named workspaces mounted read-write and every other workspace read-only. The first open builds the image and takes a while. An open console with other writable workspaces is a conflict: close it first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleOpenRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "consoleClose",
+        "summary": "Close the console",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "description": "Stops and deletes the console, its network and its proxy sidecar. Its home volume stays."
+      }
+    },
+    "/v1/console/shell": {
+      "get": {
+        "operationId": "consoleShell",
+        "summary": "Open a shell in the console as a terminal stream",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols: the connection is now a terminal stream"
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "cols",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          {
+            "name": "rows",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          {
+            "name": "Connection",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "Upgrade"
+            }
+          },
+          {
+            "name": "Upgrade",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "whr-terminal/1"
+            }
+          }
+        ],
+        "description": "Needs `Connection: Upgrade` and `Upgrade: whr-terminal/1`. Everything that can fail does so as an ordinary error before the upgrade. The answer is `101 Switching Protocols`, and then the connection carries frames both ways: one type byte, a four-byte big-endian length and the payload (at most 64 KiB). The client sends data (`D`, the terminal's input) and its size (`R`, two big-endian uint16: columns, rows); the server sends data (`D`, the terminal's output) and, last, the exit code (`X`, a big-endian int32). A client that disconnects hangs the terminal up. The route is behind the API token, which listens on loopback only: a web session does not reach it."
+      }
     }
   },
   "components": {
@@ -2915,6 +3179,42 @@
                 "format": "date-time"
               }
             }
+          }
+        }
+      },
+      "ConsoleOpenRequest": {
+        "type": "object",
+        "properties": {
+          "read_write": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConsoleInfo": {
+        "type": "object",
+        "required": [
+          "env_id",
+          "read_write",
+          "reused"
+        ],
+        "properties": {
+          "env_id": {
+            "type": "string"
+          },
+          "read_write": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reused": {
+            "type": "boolean"
           }
         }
       }

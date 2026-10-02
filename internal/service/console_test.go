@@ -1,8 +1,11 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor/internal/domain"
@@ -16,9 +19,13 @@ func (r *wsRig) consoles() *Consoles {
 		Spec: func([]domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
 			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-console-home", Target: "/home/whr"})
+			if r.egress {
+				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"github.com"}}
+			}
 			return spec
 		},
 		Prepare: r.rt.Prepare,
+		Dir:     func(w domain.Workspace) string { return "/workspaces/ws/" + w.Name },
 	})
 }
 
@@ -148,5 +155,109 @@ func TestAConsoleThatCannotBePreparedLeavesNothing(t *testing.T) {
 	}
 	if inv, _ := r.rt.Adapter.Inventory(bg); len(inv.Networks)+len(inv.Sidecars)+len(inv.Volumes) != 0 {
 		t.Errorf("resources left behind: %+v", inv)
+	}
+}
+
+func TestAShellStartsInTheWorkspaceWithTheClientsTerminalAndIsAudited(t *testing.T) {
+	r := newWsRig(t)
+	r.egress = true
+	r.create("docs-ws")
+	c := r.consoles()
+	if _, err := c.Shell(bg, ShellRequest{Actor: "werner"}); err == nil {
+		t.Fatal("a shell without an open console")
+	} else if !errors.As(err, new(*domain.ConflictError)) {
+		t.Errorf("err = %v, want a conflict: open it first", err)
+	}
+	if _, err := c.Open(bg, []string{"docs-ws"}); err != nil {
+		t.Fatal(err)
+	}
+	tm, err := c.Shell(bg, ShellRequest{Workspace: "docs-ws", Term: "xterm-kitty", Cols: 132, Rows: 43, Actor: "werner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := r.fake.Terminals()
+	if len(calls) != 1 {
+		t.Fatalf("terminals = %+v", calls)
+	}
+	q := calls[0].Req
+	if !reflect.DeepEqual(q.Cmd, []string{"/bin/zsh", "-l"}) || q.Dir != "/workspaces/ws/docs-ws" || q.Cols != 132 || q.Rows != 43 {
+		t.Errorf("request = %+v", q)
+	}
+	for _, want := range []string{"HOME=/home/whr", "USER=whr", "TERM=xterm-kitty", "WHR_CONSOLE=1"} {
+		if !slices.Contains(q.Env, want) {
+			t.Errorf("env lacks %s: %v", want, q.Env)
+		}
+	}
+	// The console reaches the network through the sidecar only: its address is passed on.
+	var proxy bool
+	for _, e := range q.Env {
+		if strings.HasPrefix(e, "HTTPS_PROXY=http://") {
+			proxy = true
+		}
+		for _, secret := range []string{"TOKEN", "KEY", "SECRET", "ANTHROPIC", "CLAUDE"} {
+			if strings.Contains(strings.ToUpper(strings.SplitN(e, "=", 2)[0]), secret) {
+				t.Errorf("the console shell has a secret-looking variable: %s", e)
+			}
+		}
+	}
+	if !proxy {
+		t.Errorf("the shell has no proxy: %v", q.Env)
+	}
+	evs, err := r.store.EventsSince(bg, domain.SupervisorStream, 0, 10)
+	if err != nil || len(evs) != 1 || evs[0].Kind != domain.EventConsole || evs[0].Tier != domain.TierAudit {
+		t.Fatalf("audit = %+v, %v", evs, err)
+	}
+	var got domain.ConsoleOpened
+	if err := json.Unmarshal(evs[0].Payload, &got); err != nil || got.Actor != "werner" || got.Workspace != "docs-ws" || !reflect.DeepEqual(got.ReadWrite, []string{"docs-ws"}) {
+		t.Errorf("payload = %+v, %v", got, err)
+	}
+	_ = tm.Close()
+
+	// A TERM that is not a terminal name is replaced, because it comes from the client.
+	for _, bad := range []string{"$(touch /tmp/x)", "xterm; rm -rf /", "", "a b", strings.Repeat("x", 80), "-x"} {
+		tm, err := c.Shell(bg, ShellRequest{Term: bad, Actor: "werner"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = tm.Close()
+		env := r.fake.Terminals()[len(r.fake.Terminals())-1].Req.Env
+		if !slices.Contains(env, "TERM=xterm-256color") {
+			t.Errorf("TERM %q reached the shell: %v", bad, env)
+		}
+	}
+	if _, err := c.Shell(bg, ShellRequest{Workspace: "nope", Actor: "werner"}); err == nil {
+		t.Error("an unknown workspace was accepted")
+	}
+}
+
+func TestTheConsoleServesAtMostEightShellsAtOnce(t *testing.T) {
+	r := newWsRig(t)
+	c := r.consoles()
+	if _, err := c.Open(bg, nil); err != nil {
+		t.Fatal(err)
+	}
+	var open []runtime.Terminal
+	for range maxShells {
+		tm, err := c.Shell(bg, ShellRequest{Actor: "werner"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		open = append(open, tm)
+	}
+	if _, err := c.Shell(bg, ShellRequest{Actor: "werner"}); !errors.As(err, new(*domain.ConflictError)) {
+		t.Fatalf("the ninth shell: %v", err)
+	}
+	_ = open[0].Close()
+	_ = open[0].Close() // closing twice gives the place back once
+	tm, err := c.Shell(bg, ShellRequest{Actor: "werner"})
+	if err != nil {
+		t.Fatalf("a place was given back: %v", err)
+	}
+	if _, err := c.Shell(bg, ShellRequest{Actor: "werner"}); err == nil {
+		t.Error("closing a shell twice freed two places")
+	}
+	_ = tm.Close()
+	for _, o := range open[1:] {
+		_ = o.Close()
 	}
 }

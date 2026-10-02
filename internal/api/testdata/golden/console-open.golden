@@ -1,0 +1,13 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "env_id": "env-1",
+    "read_write": [
+      "docs-ws"
+    ],
+    "reused": false
+  }
+}
+

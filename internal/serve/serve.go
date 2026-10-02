@@ -56,6 +56,7 @@ type Deps struct {
 	// Both are optional: without them there is no console.
 	ConsoleSpec  func(rw []domain.Workspace) runtime.Spec
 	ConsoleImage func(ctx context.Context) error
+	ConsoleDir   func(w domain.Workspace) string
 	// Environment reads a repository's environment from the supervisor's own
 	// copy of its default branch (D38), for the egress requests a run's start
 	// asks about. Optional.
@@ -154,7 +155,12 @@ func Run(ctx context.Context, d Deps) error {
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
 		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment,
 	})
-	be := api.NewBackend(svc, ws)
+	var consoles *service.Consoles
+	if d.ConsoleSpec != nil {
+		consoles = service.NewConsoles(svc, service.ConsoleConfig{Spec: d.ConsoleSpec, Prepare: d.Prepare, EnsureImage: d.ConsoleImage, Dir: d.ConsoleDir})
+		defer consoles.CloseShells() // a shell does not outlive the supervisor
+	}
+	be := api.NewBackend(svc, ws, consoles)
 	auth, err := web.NewTokenAuth(token, nil)
 	if err != nil {
 		return err
