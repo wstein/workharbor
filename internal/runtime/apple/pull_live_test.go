@@ -51,9 +51,11 @@ func TestMissingBuiltImageIsNeverFetchedLive(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("the sidecar refusal took %s: it reached the network", d)
 	}
+	// The probe is the CLI itself on an image that is not here: a name under the
+	// reserved host that no registry answers (spec.Image was changed above).
 	out, err := exec.CommandContext(ctx, "container", "create", "--name", "whtmp-pull-probe", //nolint:gosec // fixed arguments
 		"--label", "workharbor.temp=true", "--label", "workharbor.lane=wh/runtime", "--label", "workharbor.purpose=pull-live",
-		spec.Image).CombinedOutput()
+		runtime.BuiltImageHost+"whtmp-missing:none").CombinedOutput()
 	t.Cleanup(func() { _ = exec.Command("container", "delete", "whtmp-pull-probe").Run() }) //nolint:gosec,noctx // test cleanup
 	if err == nil || !strings.Contains(string(out), "failed to resolve") {
 		t.Errorf("container create of a missing image: err %v, output %q", err, out)
