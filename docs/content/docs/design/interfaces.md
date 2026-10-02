@@ -63,6 +63,8 @@ Because the app is a remote for coding agents (§1), v0 also carries the core re
 - **Answer Decisions**, as before.
 - **History controls.** *Clear view* hides older events and loads them on request, without deleting anything. *Purge transcript* deletes the stored transcript content after a confirmation that states what goes (event count and size), what stays (the audit entries and a record of the purge) and that it cannot be undone. A chat is paged and virtualized, so a very long one stays usable on a phone.
 
+**Usage on the dashboard** (issue #111). The Harbor page summarises what every agent used over a period: total cost, API and wall time, code changes in approved commits and the number of runs, then the same broken down by agent (`<workspace>/<role>`) and by model (input, output, cache-read and cache-write tokens, cost, cache share). Every cost is labelled `reported` or `estimated`; in `subscription` mode it is API-equivalent and not billed, and the account's usage window leads (§5.7, D40); in `api-key` mode it is real spend, shown against the daily budget (D48). `whr usage --by agent|model|day` gives the same numbers from the same service method.
+
 Writes in v0 are therefore: answer Decisions, send messages, start tasks, pause/resume/cancel, and purge a transcript. Editor launch and takeover (`whr ssh --takeover`) come after v0.
 
 **Previews (D33).** A web app the agent runs is previewed through `whr`'s preview proxy on its own origin, never the UI's, opened on request and closed with its environment (issue #72).
