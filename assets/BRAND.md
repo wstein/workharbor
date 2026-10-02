@@ -13,6 +13,17 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
   the docs navbar): the bare teal anchor, no tile, then the wordmark. A tile never
   appears in a lockup, and a lockup never appears in a square place.
 
+## Exception: the README banner and the social preview
+
+By Werner's decision (#143), these two assets keep the design of d466a1d:
+the anchor on its rounded tile beside the wordmark, "Harbor" in teal, and the
+IBM Plex Sans tagline. The tile is allowed there as an exception to "a tile never
+appears in a lockup": 96 px in the banner (64 units at scale 1.5) and 288 px in
+the social preview (scale 4.5). Still no third line: the social preview drops
+"Self-hosted · isolated workspaces · whr CLI". The docs navbar keeps the bare
+anchor, and every icon and logo follows the rules below; it stays one family
+(the same anchor, tile, wordmark, colours and type).
+
 ## The lockup, in proportions of the wordmark's cap height C
 
 | Element | Rule |
