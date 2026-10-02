@@ -23,6 +23,7 @@ func bash(t *testing.T, env []string, script string) (string, error) {
 
 // semver_lt decides whether a tag is a downgrade.
 func TestSemverLt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		a, b  string
 		older bool
@@ -119,6 +120,7 @@ func (r release) run(t *testing.T, args ...string) (string, error) {
 // The attestation is pinned to this tag, its commit and a hosted runner, and the
 // repository whose attestations are trusted is named.
 func TestTheAttestationIsPinnedToTheTag(t *testing.T) {
+	t.Parallel()
 	r := newRelease(t, "0.2.0", "")
 	out, err := r.run(t, "v0.2.0", r.prefix)
 	if err != nil {
@@ -141,6 +143,7 @@ func TestTheAttestationIsPinnedToTheTag(t *testing.T) {
 // An older release than the installed one is refused unless the human says so, and an
 // installed version that cannot be read counts as a reason to ask.
 func TestAnOlderReleaseIsRefusedUnlessAllowed(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -167,6 +170,7 @@ func TestAnOlderReleaseIsRefusedUnlessAllowed(t *testing.T) {
 // The installed whr is never run before the release is verified: its version comes
 // from the file the installer wrote.
 func TestTheInstalledBinaryIsNotRunBeforeVerification(t *testing.T) {
+	t.Parallel()
 	r := newRelease(t, "0.1.0", "v0.2.0")
 	if out, err := r.run(t, "v0.1.0", r.prefix); err == nil {
 		t.Fatalf("a downgrade was not refused:\n%s", out)
@@ -188,6 +192,7 @@ func TestTheInstalledBinaryIsNotRunBeforeVerification(t *testing.T) {
 
 // WHR_RELEASE_REPO must be owner/name and is refused without --trust-release-repo.
 func TestTheReleaseRepoOverrideNeedsConfirmation(t *testing.T) {
+	t.Parallel()
 	r := newRelease(t, "0.2.0", "")
 	run := func(repo string, args ...string) (string, error) {
 		return bash(t, []string{"PATH=" + r.bin + ":" + os.Getenv("PATH"), "WHR_RELEASE_DIR=" + r.dir, "WHR_RELEASE_REPO=" + repo},
@@ -209,6 +214,7 @@ func TestTheReleaseRepoOverrideNeedsConfirmation(t *testing.T) {
 // A source install does not write a VERSION file, so it removes the one an earlier
 // release install left: a stale one would misguide the downgrade check.
 func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
+	t.Parallel()
 	out, err := bash(t, nil, `cd .. && make -n -o check-clean -o check-main install PREFIX=/p`)
 	if err != nil {
 		t.Fatalf("make -n install: %v\n%s", err, out)

@@ -101,6 +101,7 @@ func (b board) age(t *testing.T, seconds int) {
 }
 
 func TestBoardSnapshotFreshMakesNoCall(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	if _, se, err := b.run(t); err != nil {
 		t.Fatalf("first run: %v %s", err, se)
@@ -122,6 +123,7 @@ func TestBoardSnapshotFreshMakesNoCall(t *testing.T) {
 }
 
 func TestBoardSnapshotStaleQueriesOnceWithModes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -148,6 +150,7 @@ func TestBoardSnapshotStaleQueriesOnceWithModes(t *testing.T) {
 }
 
 func TestBoardSnapshotConcurrentCallsQueryOnce(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -173,6 +176,7 @@ func TestBoardSnapshotConcurrentCallsQueryOnce(t *testing.T) {
 }
 
 func TestBoardSnapshotFailureKeepsOldFile(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -203,6 +207,7 @@ func TestBoardSnapshotFailureKeepsOldFile(t *testing.T) {
 }
 
 func TestBoardSnapshotRefreshForcesCall(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	if _, _, err := b.run(t); err != nil {
 		t.Fatal(err)
@@ -213,6 +218,7 @@ func TestBoardSnapshotRefreshForcesCall(t *testing.T) {
 }
 
 func TestBoardSnapshotReaders(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	out, se, err := b.run(t, "queue", "wh/platform")
 	if err != nil {
@@ -235,6 +241,7 @@ func TestBoardSnapshotReaders(t *testing.T) {
 }
 
 func TestBoardSnapshotRejectsBadEnv(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	for _, env := range [][]string{
 		{"WHR_BOARD_SNAPSHOT=relative/board.json"},
@@ -273,6 +280,7 @@ func (b board) card(t *testing.T, n string) string {
 }
 
 func TestBoardSnapshotMovePatchesCache(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -314,6 +322,7 @@ func TestBoardSnapshotMovePatchesCache(t *testing.T) {
 }
 
 func TestBoardSnapshotFailedMoveKeepsCache(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -335,6 +344,7 @@ func TestBoardSnapshotFailedMoveKeepsCache(t *testing.T) {
 }
 
 func TestBoardSnapshotConcurrentMoves(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -361,6 +371,7 @@ func TestBoardSnapshotConcurrentMoves(t *testing.T) {
 }
 
 func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -391,6 +402,7 @@ func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
 }
 
 func TestBoardSnapshotAdd(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	if _, _, err := b.run(t); err != nil {
 		t.Fatal(err)
@@ -409,6 +421,7 @@ func TestBoardSnapshotAdd(t *testing.T) {
 }
 
 func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
+	t.Parallel()
 	b := newBoard(t)
 	if _, _, err := b.run(t); err != nil {
 		t.Fatal(err)
@@ -457,6 +470,7 @@ func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
 }
 
 func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
@@ -482,6 +496,7 @@ func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
 }
 
 func TestBoardSnapshotStaleLockTakeoverConcurrent(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
 	}
