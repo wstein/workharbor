@@ -4,7 +4,7 @@ cascade:
   type: docs
 ---
 
-Design and reference documentation for workharbor. The project is building release 1, dogfood first (D34): the supervisor (`whr serve`), the CLI, the web UI, workspaces with named agents, the console, the Apple Container adapter with its egress proxy, the Claude Code adapter and the tool store exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next.
+workharbor is a self-hosted supervisor for AI coding agents: isolated workspaces, your approval for every push, one dashboard on every device. This is its design and reference documentation. The project is building release 1, dogfood first (D34): the supervisor (`whr serve`), the CLI, the web UI, workspaces with named agents, the console, the Apple Container adapter with its egress proxy, the Claude Code adapter and the tool store exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next.
 
 {{< cards >}}
   {{< card link="design" title="Design" subtitle="Architecture, domain model, security, CLI and delivery plan." icon="book-open" >}}

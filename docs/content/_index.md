@@ -16,7 +16,7 @@ layout: hextra-home
 
 <div class="hx:mb-12">
 {{< hextra/hero-subtitle >}}
-  Agents work on your repository issues in isolated workspaces while you answer questions, intervene, review and approve. The command-line tool is&nbsp;<code>whr</code>.
+  Self-hosted: agents work on your repository issues in isolated workspaces while you answer questions, intervene, review and approve every push from one dashboard on every device. The command-line tool is&nbsp;<code>whr</code>.
 {{< /hextra/hero-subtitle >}}
 </div>
 
@@ -28,8 +28,8 @@ layout: hextra-home
 
 {{< hextra/feature-grid >}}
   {{< hextra/feature-card
-    title="Task supervision, not an IDE"
-    subtitle="Tasks, workspaces, runs and environments are separate objects. Attaching or detaching an editor never interrupts the agent."
+    title="A supervisor with a dashboard, not an IDE"
+    subtitle="Tasks, runs, workspaces and environments are separate objects you watch and steer from the dashboard on any device or the CLI. Attaching or detaching an editor never interrupts the agent."
     icon="adjustments"
   >}}
   {{< hextra/feature-card
@@ -44,7 +44,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Approval boundaries are policy"
-    subtitle="Agents commit in their own checkouts. After your approval the supervisor pushes the branch and opens the pull request. Merge, release and deploy stay with you."
+    subtitle="Agents commit inside their environment; the host never runs git there. Their commits leave as a bundle, are checked against the supervisor's mirror and are pushed only after you approve the exact commit. Merge, tag, release and deploy stay with you."
     icon="badge-check"
   >}}
   {{< hextra/feature-card

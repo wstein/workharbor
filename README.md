@@ -3,20 +3,22 @@
 </h1>
 
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
+[![CI](https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wstein/workharbor/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge)](https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor)
 [![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
-[![Status: building release 1](https://img.shields.io/badge/status-building%20release%201-orange.svg)](docs/content/docs/design/_index.md)
+[![Status: dogfooding release 1](https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg)](docs/content/docs/design/roadmap.md)
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
 > [!WARNING]
 > **Work in progress: no release yet.** The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
 
-A self-hosted supervisor for AI coding agents. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
+A self-hosted supervisor for AI coding agents: isolated workspaces, your approval for every push, one dashboard on every device. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
 The command-line tool is **`whr`**.
 
 ## Concept
 
-- **A supervisor for coding agents, not an IDE.** Tasks, runs, workspaces and environments are separate objects; attaching or detaching an editor never interrupts the agent.
+- **A supervisor with a dashboard, not an IDE.** Tasks, runs, workspaces and environments are separate objects you watch and steer from the dashboard (web, phone) or the CLI; attaching or detaching an editor never interrupts the agent.
 - **Workspaces with named agents.** A workspace is a folder with its own isolated environment; each named agent (`<workspace>/<role>`) works on its own branch there. A console environment gives you a shell next to them, without logging in to the host.
 - **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from your phone, the web app or the CLI.
 - **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each agent in its own lightweight VM, reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. Other runtimes follow through adapters.
