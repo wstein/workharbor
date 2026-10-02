@@ -23,6 +23,7 @@ make docs          # build the Hugo documentation site into _site
 make docs-serve    # serve the docs locally with live reload
 make hooks         # enable hooks and the commit template (once per clone)
 make install       # install whr, whr-shim and whr-proxy from a clean commit on origin/main (D34)
+make install-release VERSION=<tag>  # install a (draft) release after checking checksums and attestation (D24)
 make check-ci      # what CI runs beyond make check: docs build, typos, lychee (online), gitleaks, actionlint
 make land          # from your worktree: check, then fast-forward main if the shared checkout is on main
 ```

@@ -45,6 +45,8 @@ make build         # bin/whr: whr version and whr tools build work today
 make install       # whr, whr-shim and whr-proxy from a clean commit on origin/main
 ```
 
+The dogfood host installs a draft release instead (`make install-release VERSION=<tag>`); from `v0.1.0` on, `brew install wstein/tap/whr`.
+
 Setting up the host is in the [manual](https://wstein.github.io/workharbor/docs/manual/).
 
 ## Stack

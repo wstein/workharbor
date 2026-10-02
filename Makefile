@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: release-prep release-snapshot build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
+.PHONY: release-prep release-snapshot build install install-release check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -49,6 +49,13 @@ install: check-clean check-main
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-proxy-linux-arm64 ./cmd/whr-proxy
 	@echo "installed whr $$($(PREFIX)/bin/whr version), whr-shim and whr-proxy (linux-arm64) under $(PREFIX)"
 	@echo "next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64"
+
+# Install a release, a dogfood draft included (D24, D34), as the administrator
+# into a prefix whr cannot write: make install-release VERSION=v0.1.0-alpha.1
+# [PREFIX=/opt/whr]. It checks the checksums and the provenance attestation.
+install-release:
+	@test -n "$(VERSION)" || { echo "usage: make install-release VERSION=<tag> [PREFIX=/opt/whr]" >&2; exit 2; }
+	scripts/install-release.sh "$(VERSION)" "$(if $(filter command line,$(origin PREFIX)),$(PREFIX),/opt/whr)"
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/whr
