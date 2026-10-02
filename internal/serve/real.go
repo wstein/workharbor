@@ -337,7 +337,8 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}
 		spec.Image = tag
 	}
-	opts := SpecOptions{Owner: Owner, Env: spec, ToolStore: c.Roots.ToolStore, Proxy: proxy, HostPrefixes: HostIPv6Prefixes}
+	hostPrefixes := func() []string { return HostIPv6Prefixes(logf) }
+	opts := SpecOptions{Owner: Owner, Env: spec, ToolStore: c.Roots.ToolStore, Proxy: proxy, HostPrefixes: hostPrefixes}
 	roots := append(append([]string(nil), c.Roots.Workspaces...), c.Roots.ToolStore, filepath.Dir(proxy))
 	prepare := func(s runtime.Spec) (runtime.PreparedSpec, error) {
 		return runtime.Prepare(runtime.PrepareOptions{
@@ -355,7 +356,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		_ = st.Close()
 		return Deps{}, nil, err
 	}
-	consoleOpts := ConsoleOptions{Owner: Owner, Image: consoleTag, Console: c.Console.Resolved(), Roots: c.Roots.Workspaces, Proxy: proxy, HostPrefixes: HostIPv6Prefixes}
+	consoleOpts := ConsoleOptions{Owner: Owner, Image: consoleTag, Console: c.Console.Resolved(), Roots: c.Roots.Workspaces, Proxy: proxy, HostPrefixes: hostPrefixes}
 	ensureConsole := func(ctx context.Context) error {
 		_, built, err := console.Ensure(ctx, rt, consoleDistro, filepath.Join(dir, "build"))
 		if built {
