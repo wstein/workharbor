@@ -38,6 +38,10 @@ type Backend interface {
 	Run(ctx context.Context, req service.RunRequest) (service.RunResult, error)
 	Say(ctx context.Context, task domain.ID, message string) (agent.Delivery, error)
 	Cancel(ctx context.Context, task domain.ID) error
+	Pause(ctx context.Context, task domain.ID) error
+	Resume(ctx context.Context, task domain.ID) (domain.ID, error)
+	TranscriptSize(ctx context.Context, task domain.ID) (service.TranscriptSize, error)
+	PurgeTranscript(ctx context.Context, task domain.ID, actor string) (store.PurgeResult, error)
 	KillAll(ctx context.Context, actor string) (service.KillReport, error)
 	Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error)
 	Inbox(ctx context.Context) ([]domain.Decision, error)
@@ -151,6 +155,10 @@ var routes = []route{
 	{http.MethodGet, "/v1/tasks/{task}", (*Server).showTask},
 	{http.MethodPost, "/v1/tasks/{task}/say", (*Server).say},
 	{http.MethodPost, "/v1/tasks/{task}/cancel", (*Server).cancel},
+	{http.MethodPost, "/v1/tasks/{task}/pause", (*Server).pause},
+	{http.MethodPost, "/v1/tasks/{task}/resume", (*Server).resume},
+	{http.MethodGet, "/v1/tasks/{task}/transcript", (*Server).transcriptSize},
+	{http.MethodPost, "/v1/tasks/{task}/purge", (*Server).purge},
 	{http.MethodPost, "/v1/kill-all", (*Server).killAll},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},
@@ -422,6 +430,81 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+func (s *Server) pause(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r, "task")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, nil, func() (int, any, error) {
+		if err := s.be.Pause(r.Context(), id); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r, "task")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, nil, func() (int, any, error) {
+		run, err := s.be.Resume(r.Context(), id)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]string{"run_id": string(run)}, nil
+	})
+}
+
+// transcriptSize says what a purge would delete, for the confirmation.
+func (s *Server) transcriptSize(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r, "task")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	size, err := s.be.TranscriptSize(r.Context(), id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeOK(w, http.StatusOK, map[string]any{"events": size.Events, "bytes": size.Bytes})
+}
+
+type purgeBody struct {
+	Confirm bool `json:"confirm"`
+}
+
+// purge deletes a task's transcript content (design §5.4). It keeps the audit
+// entries, usage rows and Decisions, and is refused without a confirmation.
+func (s *Server) purge(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r, "task")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var body purgeBody
+	raw, err := readBody(w, r, &body)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !body.Confirm {
+		writeError(w, usageError{`purge needs {"confirm": true}`})
+		return
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		res, err := s.be.PurgeTranscript(r.Context(), id, "api")
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]any{"events": res.Events, "bytes": res.Bytes, "digest": res.Digest}, nil
 	})
 }
 

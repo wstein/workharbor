@@ -1,0 +1,10 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "bytes": 3400,
+    "events": 12
+  }
+}
+

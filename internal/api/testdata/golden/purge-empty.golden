@@ -1,0 +1,11 @@
+HTTP Bad Request (400)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "usage",
+    "exit_code": 2,
+    "message": "the request body is not valid: EOF"
+  }
+}
+

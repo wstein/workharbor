@@ -103,6 +103,37 @@ func (f *fake) Cancel(_ context.Context, id domain.ID) error {
 	return nil
 }
 
+func (f *fake) Pause(_ context.Context, id domain.ID) error {
+	switch id {
+	case "nope":
+		return &domain.NotFoundError{Kind: "task", ID: "nope"}
+	case "paused":
+		return domain.NewConflict(domain.RuleTransition, "task paused has no run to pause")
+	}
+	return nil
+}
+
+func (f *fake) Resume(_ context.Context, id domain.ID) (domain.ID, error) {
+	if id == "waiting" {
+		return "", domain.NewConflict(domain.RuleDecisionOpen, "run r1 cannot resume: decision d1 (auth_expired) is still open")
+	}
+	return "r1", nil
+}
+
+func (f *fake) TranscriptSize(_ context.Context, id domain.ID) (service.TranscriptSize, error) {
+	if id == "nope" {
+		return service.TranscriptSize{}, &domain.NotFoundError{Kind: "task", ID: "nope"}
+	}
+	return service.TranscriptSize{Events: 12, Bytes: 3400}, nil
+}
+
+func (f *fake) PurgeTranscript(_ context.Context, id domain.ID, _ string) (store.PurgeResult, error) {
+	if id == "t2" {
+		return store.PurgeResult{}, domain.NewConflict(domain.RuleTransition, "run r1 is running and still writing its transcript: pause or stop it first")
+	}
+	return store.PurgeResult{Events: 12, Bytes: 3400, Digest: "abc123"}, nil
+}
+
 func (f *fake) KillAll(_ context.Context, actor string) (service.KillReport, error) {
 	if f.onKill != nil {
 		return f.onKill(actor)
@@ -458,6 +489,17 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"run-held":                       {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/666","agent":"docs-ws/docs"}`},
 		"say":                            {"POST", "/v1/tasks/t2/say", `{"message":"use the helper"}`},
 		"cancel":                         {"POST", "/v1/tasks/t2/cancel", ``},
+		"pause":                          {"POST", "/v1/tasks/t2/pause", ``},
+		"pause-unknown":                  {"POST", "/v1/tasks/nope/pause", ``},
+		"pause-not-running":              {"POST", "/v1/tasks/paused/pause", ``},
+		"resume":                         {"POST", "/v1/tasks/t2/resume", ``},
+		"resume-question-open":           {"POST", "/v1/tasks/waiting/resume", ``},
+		"transcript-size":                {"GET", "/v1/tasks/t1/transcript", ""},
+		"transcript-size-unknown":        {"GET", "/v1/tasks/nope/transcript", ""},
+		"purge":                          {"POST", "/v1/tasks/t1/purge", `{"confirm":true}`},
+		"purge-unconfirmed":              {"POST", "/v1/tasks/t1/purge", `{"confirm":false}`},
+		"purge-empty":                    {"POST", "/v1/tasks/t1/purge", ``},
+		"purge-running":                  {"POST", "/v1/tasks/t2/purge", `{"confirm":true}`},
 		"kill-all":                       {"POST", "/v1/kill-all", `{"confirm":true}`},
 		"kill-all-unconfirmed":           {"POST", "/v1/kill-all", `{"confirm":false}`},
 		"kill-all-empty":                 {"POST", "/v1/kill-all", ``},
@@ -744,7 +786,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 21 {
+	if got := Routes(); len(got) != 25 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}
