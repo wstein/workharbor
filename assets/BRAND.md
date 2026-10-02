@@ -8,7 +8,7 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 - **App icon** (square places only: `favicon.svg`, `favicon.ico`, the
   `favicon-*.png`, `apple-touch-icon.png`, the `android-chrome-*.png`,
   `logo.svg`/`logo.png`): the teal anchor on a rounded navy tile. Tile corner
-  radius 22 % of the side; the anchor's drawn height 60 % of the side, centred.
+  radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px.
 - **Horizontal lockup** (everything wide: the README banner, the social preview,
   the docs navbar): the bare teal anchor, no tile, then the wordmark. A tile never
   appears in a lockup, and a lockup never appears in a square place.
@@ -18,19 +18,19 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 | Element | Rule |
 | --- | --- |
 | Wordmark | "WorkHarbor" in Bricolage Grotesque Bold, outlined: "Work" in the text colour, "Harbor" in teal |
-| Anchor | drawn height 2.0 × C, vertically centred on the wordmark's cap height |
+| Anchor | drawn height 2.4 × C, vertically centred on the wordmark's cap height; stroke 5.5 in the anchor's 64-unit drawing (4 in the app icon), so it holds its own beside the bold wordmark |
 | Gap anchor to wordmark | 0.6 × C |
 | Tagline (optional) | "Supervise AI coding agents. Stay in the loop.", IBM Plex Sans, outlined, cap height 0.4 × C, teal; baseline 0.85 × C below the wordmark's baseline, left-aligned with the wordmark |
 | Third line | none, anywhere |
-| Clear space | 0.6 × C on every side, and the left margin |
+| Clear space | 0.6 × C to the left and right; at least 0.45 × C above and below |
 
 ## Sizes
 
 | Asset | Size | C | Tagline |
 | --- | --- | --- | --- |
-| README banner | 1000 × 150 | 45 px (anchor 90 px) | yes |
-| Social preview | 1280 × 640, lockup centred | 80 px | yes |
-| Docs navbar | the navbar's height | 0.4 × navbar height | no |
+| README banner | 1000 × 150 | 45 px (anchor 108 px, about 21 px above and below, as Werner approved) | yes |
+| Social preview | 1280 × 640, lockup centred | 80 px (anchor 192 px) | yes |
+| Docs navbar | the navbar's height | 0.4 × navbar height (anchor about 54 px) | no |
 
 ## Colours
 
