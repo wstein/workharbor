@@ -5,7 +5,9 @@ max_concurrency = 2
 timeout = 20
 max_retries = 3
 retry_wait_time = 2
-# 429 and 503 mean rate limited or server temporarily overloaded, not broken.
+# 429 and 503 mean rate limited or overloaded, not broken. An accepted status is
+# not retried, and it is accepted for every host: a page that only ever answers
+# 503 passes. Retries cover timeouts and the other 5xx.
 accept = ["200..=299", "429", "503"]
 # CHANGELOG.md is generated from commits; its commit links only resolve after a push.
 exclude_path = ["CHANGELOG.md", "docs/vendor", "_site"]
