@@ -42,6 +42,11 @@ func (tx *Tx) Append(ctx context.Context, events ...domain.Event) ([]domain.Even
 			return nil, fmt.Errorf("store: append %s: %w", e.Kind, err)
 		}
 		e.Seq, e.Payload = seq, payload
+		if e.Tier == domain.TierAudit {
+			if err := tx.chain(ctx, seq, e, payload); err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, e)
 	}
 	return out, nil
