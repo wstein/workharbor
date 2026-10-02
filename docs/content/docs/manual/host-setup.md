@@ -178,6 +178,16 @@ Whether GitHub accepts the manifest as `whr` sends it (its inactive webhook, a p
 3. **Install it** (**Install App**) on your account with **Only select repositories** and pick the repositories workharbor works on. `whr` finds the installation by itself. **One App serves all your repositories**: to add one later, add it to the installation's repository list and to `repositories` in the configuration; each token `whr` mints still covers one repository only. Repositories of an organization need the App installed there too, which takes **Any account** in step 1, or a second App owned by the organization.
 4. **Check the ruleset of `main`** (the repository's **Settings → Rules → Rulesets**): changes need a pull request with a human review, force pushes are blocked, and the App is **not** in the bypass list (D15). The supervisor pushes only `agent/*` branches and opens pull requests; merging stays with you.
 
+    **Which ruleset each workflow needs** (D47; set per repository in the configuration as `"workflow"`, default `integration`; `whr doctor` checks it as `forge-workflow`):
+
+    | Workflow | Where approved commits go | The ruleset to set up |
+    | --- | --- | --- |
+    | `prototype` | the supervisor fast-forwards the integration branch (`integration_branch`, default the repository's default branch) to the approved commit; no pull request | force pushes blocked on that branch, and only the App and you may write to it ({{< status unverified >}}: whether a ruleset can name the App as the only other writer) |
+    | `integration` (default) | a pull request into `integration_branch` (default `develop`) that you merge and promote to `main` | that branch protected, a pull request required |
+    | `published` | a pull request into the default branch; the agent asks for every tool (`manual`) | the default branch requires a pull request with a review and status checks and signed commits, and has **no bypass actor** |
+
+    Whether the App's token can read these rulesets (and a ruleset's bypass list) is {{< status unverified >}}: where it cannot, `whr doctor` says "not verified", never "ok". Changing a repository's workflow in the configuration is a policy change: `whr serve` refuses to start until you confirm it with `--accept-workflow-change`, the change is recorded, and tasks already started keep the workflow they started under.
+
 ## 12. Secrets
 
 Every secret is a file with mode `0600`, owned by the `whr` user, outside the workspace roots and the tool store, and the configuration names only its path. Never paste a secret into a chat, an agent session, a command line, a script or an issue: an agent never needs the value, only the path. `whr serve` refuses a secret file that is not `0600`, belongs to another user, is a link or has a second hard link, or lies inside a workspace root or the tool store.
