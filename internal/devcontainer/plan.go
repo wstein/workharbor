@@ -116,12 +116,18 @@ const (
 	FromLockfile     = "a lockfile"
 )
 
+// LockfileDigest is the source an answer to a lockfile suggestion records.
+const LockfileDigest = "lockfile"
+
 // HostRequest is an egress host the human has not answered yet. Nothing is
 // allowed by being requested or suggested: the supervisor raises a Decision,
 // and only an allow, stored on the supervisor's side, opens the host (D38).
 type HostRequest struct {
 	Host   string
 	Source string // FromDevcontainer or FromLockfile
+	// Digest is what the answer will remember the request by: the digest of the
+	// devcontainer.json for FromDevcontainer, LockfileDigest for FromLockfile.
+	Digest string
 }
 
 // HostRequests lists the hosts to ask the human about: those the file requests
@@ -131,17 +137,17 @@ type HostRequest struct {
 func (e Environment) HostRequests(answered map[string]bool) []HostRequest {
 	seen := map[string]bool{}
 	var out []HostRequest
-	add := func(h, source string) {
+	add := func(h, source, digest string) {
 		if !answered[h] && !seen[h] {
 			seen[h] = true
-			out = append(out, HostRequest{Host: h, Source: source})
+			out = append(out, HostRequest{Host: h, Source: source, Digest: digest})
 		}
 	}
 	for _, h := range e.Config.EgressRequests {
-		add(h, FromDevcontainer)
+		add(h, FromDevcontainer, e.Config.SourceDigest)
 	}
 	for _, h := range e.SuggestedHosts {
-		add(h, FromLockfile)
+		add(h, FromLockfile, LockfileDigest)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Host < out[j].Host })
 	return out

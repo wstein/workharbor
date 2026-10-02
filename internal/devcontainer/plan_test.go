@@ -72,7 +72,7 @@ func TestHostRequestsAreAskedNeverAssumed(t *testing.T) {
 	}
 	got := env.HostRequests(map[string]bool{"registry.npmjs.org": true})
 	want := []HostRequest{
-		{"example.org", FromDevcontainer}, {"proxy.golang.org", FromDevcontainer}, {"sum.golang.org", FromLockfile},
+		{"example.org", FromDevcontainer, ""}, {"proxy.golang.org", FromDevcontainer, ""}, {"sum.golang.org", FromLockfile, LockfileDigest},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("HostRequests = %+v", got)

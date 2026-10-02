@@ -101,11 +101,14 @@ type Service struct {
 	// egressWaits are the runs that stay starting until their egress requests are
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
-	closing     bool                              // set by Shutdown: no session joins the wait group any more
-	async       *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
-	bus         bus                               // live events for subscribers (design §5.3)
-	board       boardQueue                        // card updates waiting for the worker (D30)
-	approvals   map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
+	// egressSources is what each open egress request was asked about (its
+	// devcontainer.json digest), kept to store with the answer.
+	egressSources map[domain.ID]string
+	closing       bool                              // set by Shutdown: no session joins the wait group any more
+	async         *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
+	bus           bus                               // live events for subscribers (design §5.3)
+	board         boardQueue                        // card updates waiting for the worker (D30)
+	approvals     map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent

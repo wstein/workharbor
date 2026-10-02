@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/domain"
@@ -12,10 +13,34 @@ import (
 // repository: the hosts its devcontainer.json requests and its lockfiles
 // suggest, without those already answered for the repository, allowed or
 // denied. Nothing in the repository allows a host (design §4.2, D38).
-func (s *Service) PendingEgress(ctx context.Context, repo string, env devcontainer.Environment) ([]devcontainer.HostRequest, error) {
+//
+// Under the published preset (D47) a host is asked again when its source changed:
+// an answer is kept only while it was given for the devcontainer.json of the
+// commit the environment is built from, so one given for another version of the
+// file, for a lockfile suggestion, or from before sources were recorded is
+// forgotten here and counts as unanswered, neither allowed nor denied. Lockfile
+// suggestions are ignored. The other presets ask once per repository.
+func (s *Service) PendingEgress(ctx context.Context, repo string, env devcontainer.Environment, published bool) ([]devcontainer.HostRequest, error) {
 	answers, err := s.store.EgressHosts(ctx, repo)
 	if err != nil {
 		return nil, err
+	}
+	if !published {
+		return env.HostRequests(answers.Answered), nil
+	}
+	env.SuggestedHosts = nil
+	var stale []string
+	for host, source := range answers.Sources {
+		if env.Config.SourceDigest == "" || source != env.Config.SourceDigest {
+			stale = append(stale, host)
+			delete(answers.Answered, host)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		if err := s.store.ForgetEgressHosts(ctx, repo, stale); err != nil {
+			return nil, err
+		}
 	}
 	return env.HostRequests(answers.Answered), nil
 }
@@ -36,6 +61,7 @@ func (s *Service) RequestEgress(ctx context.Context, task, run domain.ID, reqs [
 			return nil, fmt.Errorf("egress request: %q is not a host name that can be asked about", r.Host)
 		}
 	}
+	digests := make(map[domain.ID]string, len(reqs))
 	ids := make([]domain.ID, 0, len(reqs))
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		ids = ids[:0]
@@ -45,12 +71,21 @@ func (s *Service) RequestEgress(ctx context.Context, task, run domain.ID, reqs [
 				return fmt.Errorf("egress request for %q: %w", r.Host, err)
 			}
 			ids = append(ids, id)
+			digests[id] = r.Digest
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	if s.egressSources == nil {
+		s.egressSources = map[domain.ID]string{}
+	}
+	for id, d := range digests {
+		s.egressSources[id] = d
+	}
+	s.mu.Unlock()
 	return ids, nil
 }
 
@@ -77,7 +112,11 @@ func (s *Service) keepEgressAnswer(ctx context.Context, d domain.Decision, optio
 	if !allowed && option != domain.AnswerDeny {
 		return nil
 	}
-	return s.store.SetEgressHost(ctx, agg.Task().Repo, d.Host, allowed, d.ID, s.clock.Now())
+	s.mu.Lock()
+	source := s.egressSources[d.ID] // what it was asked about; lost with a restart, which supersedes the request
+	delete(s.egressSources, d.ID)
+	s.mu.Unlock()
+	return s.store.SetEgressHost(ctx, agg.Task().Repo, d.Host, allowed, d.ID, source, s.clock.Now())
 }
 
 // egressWait is a run that stays starting until the human has answered every

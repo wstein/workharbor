@@ -430,7 +430,11 @@ func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws dom
 	if env.Commit == "" {
 		return false, nil // nothing was read
 	}
-	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env.Environment)
+	published := false
+	if agg, err := w.svc.store.LoadTask(ctx, task); err == nil { // the preset the task started under
+		published = policy.Preset(agg.Task().Workflow) == policy.Published
+	}
+	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env.Environment, published)
 	if err != nil {
 		return false, err
 	}

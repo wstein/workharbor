@@ -9,6 +9,8 @@ package devcontainer
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,6 +56,11 @@ type Config struct {
 	// EgressRequests are hosts customizations.workharbor.egress asks for. Each
 	// becomes a Decision for the human; none is allowed by being listed.
 	EgressRequests []string
+
+	// SourceDigest is the SHA-256 of the devcontainer.json as read, set by Resolve.
+	// An egress answer remembers it, so the published preset can ask again when
+	// the file that requested a host has changed (D47).
+	SourceDigest string
 
 	// Hints are the other customizations.workharbor values. They suggest, and
 	// the supervisor's configuration decides.
@@ -374,6 +381,8 @@ func read(ctx context.Context, r Runner, ref string) (c Config, at string, found
 		if err != nil {
 			return Config{}, p, true, err
 		}
+		sum := sha256.Sum256(data)
+		c.SourceDigest = hex.EncodeToString(sum[:])
 		if err := c.checkPaths(path.Dir(p)); err != nil {
 			return Config{}, p, true, err
 		}

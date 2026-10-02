@@ -161,7 +161,7 @@ func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
 		t.Errorf("an expiry allowed %v", allow)
 	}
 	env := devcontainer.Environment{Config: devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}}}
-	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env); len(again) != 1 {
+	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(again) != 1 {
 		t.Errorf("the host is asked again at the next start: %+v", again)
 	}
 }

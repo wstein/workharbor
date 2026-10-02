@@ -15,7 +15,7 @@ func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
 		Config:         devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}},
 		SuggestedHosts: []string{"sum.golang.org", "registry.npmjs.org"},
 	}
-	pending, err := r.svc.PendingEgress(bg, "wstein/workharbor", env)
+	pending, err := r.svc.PendingEgress(bg, "wstein/workharbor", env, false)
 	if err != nil || len(pending) != 3 {
 		t.Fatalf("pending = %+v, %v", pending, err)
 	}
@@ -62,15 +62,15 @@ func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
 
 	// Every host is answered, so none is asked again, in this task or in another
 	// workspace of the repository; a repository that was never asked is asked.
-	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env); len(again) != 0 {
+	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(again) != 0 {
 		t.Errorf("asked again for %+v (denied: %v)", again, denied)
 	}
-	if other, _ := r.svc.PendingEgress(bg, "wstein/other", env); len(other) != 3 {
+	if other, _ := r.svc.PendingEgress(bg, "wstein/other", env, false); len(other) != 3 {
 		t.Errorf("another repository must be asked for all three: %+v", other)
 	}
 	// A host the file adds later is asked at the next start.
 	env.Config.EgressRequests = append(env.Config.EgressRequests, "example.org")
-	if later, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env); len(later) != 1 || later[0].Host != "example.org" {
+	if later, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(later) != 1 || later[0].Host != "example.org" {
 		t.Errorf("later = %+v", later)
 	}
 	if len(r.errs) != 0 {
@@ -98,7 +98,7 @@ func TestAnExpiredEgressRequestIsDeniedForThisRunOnly(t *testing.T) {
 		t.Fatalf("status = %s", d.Status)
 	}
 	env := devcontainer.Environment{SuggestedHosts: []string{"proxy.golang.org"}}
-	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env); len(again) != 1 {
+	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(again) != 1 {
 		t.Errorf("an expired request must be asked again: %+v", again)
 	}
 	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
@@ -128,5 +128,102 @@ func TestNothingToAskRaisesNothing(t *testing.T) {
 	}
 	if len(r.load().Decisions()) != 0 {
 		t.Error("a refused request left a Decision behind")
+	}
+}
+
+// publishedEnv is a repository whose devcontainer.json (at the digest) requests
+// one host and whose lockfile suggests another.
+func publishedEnv(digest string) devcontainer.Environment {
+	return devcontainer.Environment{
+		Config:         devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}, SourceDigest: digest},
+		SuggestedHosts: []string{"registry.npmjs.org"},
+	}
+}
+
+// answerAll answers every pending request allow.
+func (r *rig) answerAll(repo string, env devcontainer.Environment, published bool) []devcontainer.HostRequest {
+	r.t.Helper()
+	pending, err := r.svc.PendingEgress(bg, repo, env, published)
+	must(r.t, err)
+	ids, err := r.svc.RequestEgress(bg, "t1", "r1", pending)
+	must(r.t, err)
+	for _, id := range ids {
+		must(r.t, r.svc.AnswerDecision(bg, id, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}))
+	}
+	return pending
+}
+
+// Under the published preset an answer holds for the file it was given for: a
+// changed file asks again, and the old allow counts as unanswered, not as a deny.
+func TestPublishedAsksAgainWhenTheSourceChanged(t *testing.T) {
+	r := newRig(t)
+	const repo = "wstein/workharbor"
+	first := r.answerAll(repo, publishedEnv("digest-1"), true)
+	if len(first) != 1 || first[0].Host != "proxy.golang.org" || first[0].Digest != "digest-1" {
+		t.Fatalf("first = %+v: lockfile suggestions must be ignored and the digest carried", first)
+	}
+	if got, _ := r.store.EgressHosts(bg, repo); got.Sources["proxy.golang.org"] != "digest-1" || !reflect.DeepEqual(got.Allowed, []string{"proxy.golang.org"}) {
+		t.Fatalf("the answer did not record its source: %+v", got)
+	}
+	// the same file: nothing to ask, and the allow stands
+	if again, _ := r.svc.PendingEgress(bg, repo, publishedEnv("digest-1"), true); len(again) != 0 {
+		t.Errorf("asked again for an unchanged file: %+v", again)
+	}
+	// the file changed: the host is asked again and its old allow no longer opens it
+	again, err := r.svc.PendingEgress(bg, repo, publishedEnv("digest-2"), true)
+	if err != nil || len(again) != 1 || again[0].Host != "proxy.golang.org" || again[0].Digest != "digest-2" {
+		t.Fatalf("after the change: %+v, %v", again, err)
+	}
+	got, _ := r.store.EgressHosts(bg, repo)
+	if len(got.Allowed) != 0 || got.Answered["proxy.golang.org"] {
+		t.Errorf("a stale allow must count as unanswered, not allowed and not denied: %+v", got)
+	}
+	if allow, _ := r.svc.EgressAllow(bg, repo); len(allow) != 0 {
+		t.Errorf("the stale allow still opens the host: %v", allow)
+	}
+	// the new answer carries the new digest
+	r.answerAll(repo, publishedEnv("digest-2"), true)
+	if got, _ := r.store.EgressHosts(bg, repo); got.Sources["proxy.golang.org"] != "digest-2" {
+		t.Errorf("sources = %v", got.Sources)
+	}
+}
+
+// A lockfile answer from another preset, and one from before sources were
+// recorded, do not carry over to the published preset.
+func TestPublishedForgetsLockfileAndUnrecordedAnswers(t *testing.T) {
+	r := newRig(t)
+	const repo = "wstein/workharbor"
+	must(t, r.store.SetEgressHost(bg, repo, "registry.npmjs.org", true, "d1", devcontainer.LockfileDigest, t0))
+	must(t, r.store.SetEgressHost(bg, repo, "old.example", true, "d2", "", t0))
+	if _, err := r.svc.PendingEgress(bg, repo, publishedEnv("digest-1"), true); err != nil {
+		t.Fatal(err)
+	}
+	if allow, _ := r.svc.EgressAllow(bg, repo); len(allow) != 0 {
+		t.Errorf("allowed after the published preset forgot them: %v", allow)
+	}
+	// and a repository with no devcontainer.json has nothing a published allow could rest on
+	must(t, r.store.SetEgressHost(bg, repo, "proxy.golang.org", true, "d3", "digest-1", t0))
+	if _, err := r.svc.PendingEgress(bg, repo, devcontainer.Environment{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if allow, _ := r.svc.EgressAllow(bg, repo); len(allow) != 0 {
+		t.Errorf("allowed without a devcontainer.json: %v", allow)
+	}
+}
+
+// The other presets ask once per repository, whatever changes, and still take
+// lockfile suggestions.
+func TestOtherPresetsAskOncePerRepository(t *testing.T) {
+	r := newRig(t)
+	const repo = "wstein/workharbor"
+	first := r.answerAll(repo, publishedEnv("digest-1"), false)
+	if len(first) != 2 {
+		t.Fatalf("first = %+v", first)
+	}
+	if again, _ := r.svc.PendingEgress(bg, repo, publishedEnv("digest-2"), false); len(again) != 0 {
+		t.Errorf("a changed file asked again outside published: %+v", again)
+	}
+	if allow, _ := r.svc.EgressAllow(bg, repo); len(allow) != 2 {
+		t.Errorf("allowed = %v", allow)
 	}
 }
