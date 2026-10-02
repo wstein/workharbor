@@ -29,6 +29,12 @@ type Env struct {
 	// TTY is the user's terminal, for `whr console`. Nil means the terminal that
 	// Stdin and Stdout are, if they are one.
 	TTY func() (TTY, error)
+	// SSH runs the ssh client with the arguments `whr ssh` builds and returns its
+	// exit code. Nil runs the ssh of this machine.
+	SSH func(ctx context.Context, args []string) (int, error)
+	// Executable returns the path of this binary, which ssh runs as its
+	// ProxyCommand. Nil uses os.Executable.
+	Executable func() (string, error)
 }
 
 // state is what the commands share: the flags of the root and the client, made
@@ -128,7 +134,7 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 		root.AddCommand(c)
 	}
 	for _, c := range []*cobra.Command{
-		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newPause(st), newResume(st), newPurge(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newPasskey(st), newPreview(st), newOpen(st), newKillAll(st), newUsage(st), newConsole(st), newSetup(st),
+		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newPause(st), newResume(st), newPurge(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newPasskey(st), newPreview(st), newOpen(st), newKillAll(st), newUsage(st), newConsole(st), newSSH(st), newSetup(st),
 	} {
 		add(c)
 	}
