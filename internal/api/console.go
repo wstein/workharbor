@@ -109,8 +109,8 @@ func (s *Server) consoleClose(w http.ResponseWriter, r *http.Request) {
 // consoleShell turns the connection into a terminal stream (termproto) after the
 // client asked for the upgrade. Everything that can fail does so before the
 // upgrade, as an ordinary error; after it, the stream carries the shell. It is
-// behind the API token like every route, and the API listens on loopback only
-// (D29): a web session does not reach it.
+// behind the API token like every route, and the API is served only on its
+// private unix socket (D29): a web session does not reach it.
 func (s *Server) consoleShell(w http.ResponseWriter, r *http.Request) {
 	if !strings.EqualFold(r.Header.Get("Upgrade"), termproto.Upgrade) || !headerHasToken(r.Header, "Connection", "upgrade") {
 		writeError(w, usageError{"a shell is a stream: ask for it with Connection: Upgrade and Upgrade: " + termproto.Upgrade})

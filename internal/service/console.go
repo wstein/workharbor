@@ -312,9 +312,17 @@ func (c *Consoles) CloseShells() {
 		shells = append(shells, t)
 	}
 	c.mu.Unlock()
+	// In parallel: each close can wait for the guest to end its session (the kill
+	// grace), and a supervisor stopping must not wait for them one after another.
+	var wg sync.WaitGroup
 	for _, t := range shells {
-		_ = t.Close()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = t.Close()
+		}()
 	}
+	wg.Wait()
 }
 
 // countedTerminal gives a shell back to the console's count once, when it is closed.

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -259,5 +260,33 @@ func TestTheConsoleServesAtMostEightShellsAtOnce(t *testing.T) {
 	_ = tm.Close()
 	for _, o := range open[1:] {
 		_ = o.Close()
+	}
+}
+
+// slowTerminal is a shell whose close takes a while, as the guest's kill grace does.
+type slowTerminal struct {
+	runtime.Terminal
+	wait time.Duration
+}
+
+func (s slowTerminal) Close() error { time.Sleep(s.wait); return nil }
+
+func TestShuttingDownClosesTheShellsInParallel(t *testing.T) {
+	r := newWsRig(t)
+	c := r.consoles()
+	const n, each = 6, 300 * time.Millisecond
+	for range n {
+		ct := &countedTerminal{Terminal: slowTerminal{wait: each}, release: func() {}}
+		c.mu.Lock()
+		if c.open == nil {
+			c.open = map[*countedTerminal]struct{}{}
+		}
+		c.open[ct] = struct{}{}
+		c.mu.Unlock()
+	}
+	start := time.Now()
+	c.CloseShells()
+	if took := time.Since(start); took >= n*each/2 {
+		t.Errorf("closing %d shells took %s: they were closed one after another", n, took)
 	}
 }

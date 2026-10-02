@@ -46,7 +46,7 @@ func newConsole(s *state) *cobra.Command {
 			"the workspaces' root. With --write the named workspace is mounted read-write, which needs the console " +
 			"closed first if it was opened with other writable workspaces. git in the console ignores the hooks, " +
 			"filters and aliases a repository sets, because agents write them. The first console builds its image, " +
-			"which takes a while. The shell comes through this command, over the API token on loopback; nothing logs you " +
+			"which takes a while. The shell comes through this command, over the API socket and token; nothing logs you " +
 			"in to the host. --status says whether a console is open, --close closes it (its home is kept).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
