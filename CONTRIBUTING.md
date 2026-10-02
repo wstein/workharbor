@@ -50,6 +50,17 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 - One commit per finished logical change, not per attempt: iterate in your working tree and commit once the result is final. Amend or fixup your own unpushed commits instead of adding "fix previous commit" commits.
 - Do not bypass the hooks with `--no-verify`.
 
+## Releases
+
+Only the maintainer releases (design D24). The pipeline is built but dormant until `v0.1.0`.
+
+1. **Prepare.** On a branch: `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release): prepare vX.Y.Z`. Merge it and wait for CI on `main`.
+2. **Tag.** The maintainer signs and annotates it: `git tag -s vX.Y.Z` on that commit, then pushes the tag. The workflow stops unless the tag is annotated, signed by a key in `.github/release-signers` (SSH signatures), on `main` and green in CI. Agents never tag.
+3. **Check the draft.** The `release` workflow builds `whr` (darwin/arm64, linux/arm64, linux/amd64) and the guest helpers, checksums, an SBOM and provenance attestations, with notes from git-cliff, into a **draft** release. Download the assets, `gh attestation verify` one, and read the notes.
+4. **Publish.** Publish the draft by hand. Nothing in the workflow publishes.
+
+To test the pipeline before a tag, run the `release` workflow by hand (a snapshot build that creates no release), or `make release-snapshot` locally.
+
 ## AI-assisted contributions
 
 AI tools are welcome, including coding agents. You remain responsible for everything you submit:
