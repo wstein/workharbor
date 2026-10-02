@@ -86,6 +86,7 @@ race:
 # testdata/fuzz, which is then a regression test: commit it with the fix. The
 # scheduled workflow runs this; it is not part of make check.
 FUZZTIME ?= 30s
+export FUZZTIME
 FUZZ_TARGETS = \
 	./internal/redact:FuzzRedact \
 	./internal/commitlint:FuzzLint \
@@ -97,10 +98,13 @@ FUZZ_TARGETS = \
 	./internal/service:FuzzIssuePrompt \
 	./internal/forge/github:FuzzGitHubAnswers \
 	./internal/forge/github:FuzzVerifyWebhook
+# FUZZTIME reaches the shell as an environment variable, never spliced into the
+# command, and must look like a go duration or an exec count.
 fuzz:
+	@printf '%s' "$$FUZZTIME" | grep -Eq '^[0-9]+(s|m|h|x)$$' || { echo "FUZZTIME must be like 30s, 2m, 1h or 5000x" >&2; exit 2; }
 	@set -e; for t in $(FUZZ_TARGETS); do pkg=$${t%%:*}; name=$${t##*:}; \
-		echo "fuzz $$name ($$pkg) for $(FUZZTIME)"; \
-		go test $$pkg -run '^$$' -fuzz "^$$name\$$" -fuzztime $(FUZZTIME); done
+		echo "fuzz $$name ($$pkg) for $$FUZZTIME"; \
+		go test "$$pkg" -run '^$$' -fuzz "^$$name\$$" -fuzztime "$$FUZZTIME"; done
 
 vet:
 	go vet ./...

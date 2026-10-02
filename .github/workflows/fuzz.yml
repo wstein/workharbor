@@ -31,7 +31,10 @@ jobs:
       - name: Fuzz every target
         env:
           FUZZTIME: ${{ inputs.fuzztime || '2m' }}
-        run: make fuzz FUZZTIME="$FUZZTIME"
+        run: |
+          # an input is data, not a command: only a go duration or an exec count
+          printf '%s' "$FUZZTIME" | grep -Eq '^[0-9]+(s|m|h|x)$' || { echo "fuzztime must be like 2m, 90s or 5000x" >&2; exit 2; }
+          make fuzz
       - name: Keep the inputs that crashed a target
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
