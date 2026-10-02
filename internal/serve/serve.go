@@ -157,7 +157,7 @@ func Run(ctx context.Context, d Deps) error {
 			return ""
 		},
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues, BuildDir: GuestBuild,
-		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment,
+		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment, QueueStatus: queueStatus(d.Config),
 	})
 	var consoles *service.Consoles
 	if d.ConsoleSpec != nil {
@@ -399,6 +399,14 @@ func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) (hel
 		return nil, err
 	}
 	return held, nil
+}
+
+// queueStatus is the board column whose cards ask for a run, or empty.
+func queueStatus(c *config.Config) string {
+	if c.Board == nil {
+		return ""
+	}
+	return c.Board.QueueStatus
 }
 
 // withHeld returns the configuration with each held repository back on the

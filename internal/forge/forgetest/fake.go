@@ -23,6 +23,7 @@ type Fake struct {
 	DefaultBranch string
 	Calls         []string
 	// Cards are the board updates it was asked for, in order, and CardErr is
+	queue []forge.QueuedCard // what QueuedCards returns
 	// what UpdateCard returns (a board write that fails).
 	Cards   []Card
 	CardErr error
@@ -162,4 +163,19 @@ func (f *Fake) FastForward(_ context.Context, repo, branch, sha string) error {
 func (f *Fake) OpenPRInto(ctx context.Context, repo, base, branch, sha, title, body string) (forge.PullRequest, error) {
 	f.call("OpenPRInto %s:%s<-%s@%s", repo, base, branch, sha)
 	return f.OpenPR(ctx, repo, branch, sha, title, body)
+}
+
+// SetQueue sets the cards QueuedCards returns.
+func (f *Fake) SetQueue(cards ...forge.QueuedCard) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.queue = cards
+}
+
+// QueuedCards implements forge.QueueReader.
+func (f *Fake) QueuedCards(_ context.Context, status string) ([]forge.QueuedCard, error) {
+	f.call("QueuedCards %s", status)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]forge.QueuedCard(nil), f.queue...), nil
 }

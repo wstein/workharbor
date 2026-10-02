@@ -75,6 +75,10 @@ const (
 	// CauseUntrustedInput holds a run before it starts, on an issue by an
 	// author who is not trusted.
 	CauseUntrustedInput DecisionCause = "untrusted_input"
+	// CauseBoardQueue holds a task a card started: someone moved an issue's card to
+	// the board's agent queue, which never starts a run by itself (D30, D40, issue
+	// #71). The human accepts it or cancels it.
+	CauseBoardQueue DecisionCause = "board_queue"
 )
 
 const (
@@ -184,7 +188,7 @@ func raise(spec NewDecision) (*Decision, error) {
 	case DecisionQuestion, DecisionApproval:
 		// A run raises its questions; the one hold before a run starts (an issue
 		// by an untrusted author) has none yet.
-		heldBeforeARun := spec.Kind == DecisionQuestion && spec.Cause == CauseUntrustedInput
+		heldBeforeARun := spec.Kind == DecisionQuestion && (spec.Cause == CauseUntrustedInput || spec.Cause == CauseBoardQueue)
 		if spec.RunID == "" && !heldBeforeARun {
 			return nil, ErrDecisionRun
 		}

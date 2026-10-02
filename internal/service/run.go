@@ -160,11 +160,24 @@ func heldText(issue forge.Issue) string { return issue.Title + "\n\n" + issue.Bo
 // hold records a queued task for an issue by an untrusted author, with the
 // question that asks the human to start it or cancel it.
 func (w *Workspaces) hold(ctx context.Context, a domain.Agent, ws domain.Workspace, issue forge.Issue, number int) (RunResult, error) {
+	return w.holdFor(ctx, a, ws, issue, number, false)
+}
+
+// holdFor is hold for an issue by an untrusted author (fromBoard false) or for a card
+// moved to the agent queue (true), whose question is "Accept this task?" whoever wrote
+// the issue (D40, issue #71).
+func (w *Workspaces) holdFor(ctx context.Context, a domain.Agent, ws domain.Workspace, issue forge.Issue, number int, fromBoard bool) (RunResult, error) {
 	task, dec := w.cfg.NewID(), w.cfg.NewID()
 	agg := domain.NewTaskAggregate(domain.Task{
 		ID: task, Repo: ws.Repo, Issue: "#" + strconv.Itoa(number), State: domain.TaskQueued, AgentID: a.ID, Workflow: w.workflowOf(ws.Repo), CreatedAt: w.svc.clock.Now(),
 	})
-	if _, err := agg.RaiseUntrustedHold(dec, issue.Author, issue.AuthorAssociation, heldText(issue), w.svc.clock.Now()); err != nil {
+	var err error
+	if fromBoard {
+		_, err = agg.RaiseQueueHold(dec, issue.Author, issue.AuthorAssociation, "", heldText(issue), policy.TierOf(issue.AuthorAssociation) != policy.Trusted, w.svc.clock.Now())
+	} else {
+		_, err = agg.RaiseUntrustedHold(dec, issue.Author, issue.AuthorAssociation, heldText(issue), w.svc.clock.Now())
+	}
+	if err != nil {
 		return RunResult{}, err
 	}
 	saved, err := w.svc.store.SaveTask(ctx, agg)
@@ -261,7 +274,7 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	case d.Cause == domain.CauseRunFailed && r.Option == domain.AnswerRetry:
 		run, err := w.NewRun(ctx, d.TaskID, "", "")
 		return run, w.askAgain(ctx, d, err)
-	case d.Cause == domain.CauseUntrustedInput && r.Option == domain.AnswerStart:
+	case (d.Cause == domain.CauseUntrustedInput || d.Cause == domain.CauseBoardQueue) && r.Option == domain.AnswerStart:
 		return w.startHeld(ctx, d)
 	case d.Cause == domain.CauseRebaseConflict && r.Option == domain.AnswerRework:
 		run, err := w.NewRun(ctx, d.TaskID, "Your branch did not rebase onto the integration branch. Rebase it yourself and resolve the conflicts.", d.Input)

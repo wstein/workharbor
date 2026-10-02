@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wstein/workharbor/internal/forge"
 )
@@ -388,3 +389,113 @@ func decodeInto(data map[string]any, out any) error {
 }
 
 var _ forge.Board = (*Client)(nil)
+
+const queueQuery = `query($project: ID!, $after: String) {
+	node(id: $project) {
+		... on ProjectV2 {
+			items(first: 100, after: $after) {
+				pageInfo { hasNextPage endCursor }
+				nodes {
+					updatedAt
+					content { ... on Issue { number repository { nameWithOwner } } }
+					fieldValues(first: 20) {
+						nodes {
+							... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
+							... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
+						}
+					}
+				}
+			}
+		}
+	}
+}`
+
+// maxQueuePages bounds how much of a board one poll reads.
+const maxQueuePages = 10
+
+// QueuedCards implements forge.QueueReader: the issues whose card has the named
+// status, with what its Session field says and when it was last changed. It reads
+// the board as the App and changes nothing; a card of an issue in a repository the
+// supervisor does not work on is left out. The mover is not on a project item, so it
+// is never set.
+func (c *Client) QueuedCards(ctx context.Context, status string) ([]forge.QueuedCard, error) {
+	b := c.cfg.Board
+	if b == nil {
+		return nil, errors.New("github: no project board is configured")
+	}
+	if status == "" || len(c.cfg.Repos) == 0 {
+		return nil, nil
+	}
+	repo := c.cfg.Repos[0] // the installation token is minted for a repository of the App
+	project, _, err := c.loadBoard(ctx, repo)
+	if err != nil {
+		c.forgetBoard()
+		return nil, err
+	}
+	statusName, sessionName, _ := b.fields()
+	var out []forge.QueuedCard
+	after := ""
+	for range maxQueuePages {
+		var page struct {
+			Node struct {
+				Items struct {
+					PageInfo struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
+					Nodes []struct {
+						UpdatedAt time.Time `json:"updatedAt"`
+						Content   struct {
+							Number     int `json:"number"`
+							Repository struct {
+								NameWithOwner string `json:"nameWithOwner"`
+							} `json:"repository"`
+						} `json:"content"`
+						FieldValues struct {
+							Nodes []struct {
+								Name  string `json:"name"`
+								Text  string `json:"text"`
+								Field struct {
+									Name string `json:"name"`
+								} `json:"field"`
+							} `json:"nodes"`
+						} `json:"fieldValues"`
+					} `json:"nodes"`
+				} `json:"items"`
+			} `json:"node"`
+		}
+		vars := map[string]any{"project": project, "after": nil}
+		if after != "" {
+			vars["after"] = after
+		}
+		if err := c.graphQL(ctx, repo, queueQuery, vars, &page); err != nil {
+			c.forgetBoard()
+			return nil, err
+		}
+		for _, n := range page.Node.Items.Nodes {
+			if n.Content.Number <= 0 || n.Content.Repository.NameWithOwner == "" || c.allowed(n.Content.Repository.NameWithOwner) != nil {
+				continue // a draft, a pull request or another repository
+			}
+			var inQueue bool
+			var agent string
+			for _, v := range n.FieldValues.Nodes {
+				switch {
+				case strings.EqualFold(v.Field.Name, statusName) && v.Name == status:
+					inQueue = true
+				case strings.EqualFold(v.Field.Name, sessionName):
+					agent = v.Name + v.Text
+				}
+			}
+			if inQueue {
+				out = append(out, forge.QueuedCard{Repo: n.Content.Repository.NameWithOwner, Issue: n.Content.Number, Agent: strings.TrimSpace(agent), UpdatedAt: n.UpdatedAt})
+			}
+		}
+		if !page.Node.Items.PageInfo.HasNextPage {
+			break
+		}
+		after = page.Node.Items.PageInfo.EndCursor
+	}
+	return out, nil
+}
+
+var _ forge.QueueReader = (*Client)(nil)

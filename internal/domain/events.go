@@ -216,6 +216,10 @@ type TaskHeld struct {
 	Author      string `json:"author"`
 	Association string `json:"association"`
 	TextSHA256  string `json:"text_sha256"`
+	// Source is "board" for a task a card started (issue #71), empty otherwise, and
+	// Mover who moved the card when the board says.
+	Source string `json:"source,omitempty"`
+	Mover  string `json:"mover,omitempty"`
 }
 
 // TextHash is the hash recorded for held text.

@@ -74,6 +74,10 @@ type WorkspaceConfig struct {
 	// a run. Nil allows every issue, today. It is the place to add the tiers,
 	// not a way around them.
 	Trust func(forge.Issue) error
+	// QueueStatus names the board column whose cards ask for a run (D30, D40, issue
+	// #71): a card there never starts one, it raises an "Accept this task?" Decision.
+	// Empty turns it off.
+	QueueStatus string
 }
 
 // Workspaces creates workspaces and their agents, and starts tasks on agents

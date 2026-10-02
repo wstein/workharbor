@@ -98,6 +98,11 @@ type Board struct {
 	StatusField  string `json:"status_field,omitempty"`
 	SessionField string `json:"session_field,omitempty"`
 	LinkField    string `json:"link_field,omitempty"`
+	// QueueStatus names the Status option whose cards ask for a run (D30, D40, issue
+	// #71), for example "Agent queue". A card moved there never starts one: the
+	// supervisor reads the board every minute and raises an "Accept this task?"
+	// Decision the human answers. Empty turns it off.
+	QueueStatus string `json:"queue_status,omitempty"`
 	// PublicURL is whr's HTTPS name behind the forwarder (D29): the card links
 	// to the task there. Without it the card has no link.
 	PublicURL string `json:"public_url,omitempty"`

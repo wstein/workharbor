@@ -308,6 +308,35 @@ func (a *TaskAggregate) RaiseRunFailedAgain(runID, decisionID ID, now time.Time)
 // the state machines do not change, and no run exists until the human says
 // start. The task is marked as having untrusted input.
 func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, text string, now time.Time) (Decision, error) {
+	d, err := a.raiseHold(decisionID, CauseUntrustedInput, "Start a run on an issue by an untrusted author?",
+		"author: "+author+" ("+association+")\n"+text, TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text)}, now)
+	if err == nil {
+		a.task.Untrusted = true
+	}
+	return d, err
+}
+
+// RaiseQueueHold holds a task that a card started: an issue's card was moved to the
+// board's agent queue (D30, D40, issue #71). A card never starts a run: this asks the
+// human "Accept this task?", with the issue's author and text as untrusted data and
+// who moved the card (mover is empty when the board does not say). A task whose
+// issue is by a non-trusted author is marked as having untrusted input, as in #53.
+func (a *TaskAggregate) RaiseQueueHold(decisionID ID, author, association, mover, text string, untrustedAuthor bool, now time.Time) (Decision, error) {
+	moved := mover
+	if moved == "" {
+		moved = "unknown (the board does not say)"
+	}
+	d, err := a.raiseHold(decisionID, CauseBoardQueue, "Accept this task? Its card was moved to the agent queue",
+		"moved by: "+moved+"\nauthor: "+author+" ("+association+")\n"+text,
+		TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text), Source: "board", Mover: mover}, now)
+	if err == nil && untrustedAuthor {
+		a.task.Untrusted = true
+	}
+	return d, err
+}
+
+// raiseHold raises the blocking start-or-cancel question of a task that has no run.
+func (a *TaskAggregate) raiseHold(decisionID ID, cause DecisionCause, subject, input string, held TaskHeld, now time.Time) (Decision, error) {
 	if a.task.State != TaskQueued || len(a.runs) > 0 {
 		return Decision{}, conflict(RuleTaskState, "task %s is %s: only a queued task with no run is held", a.task.ID, a.task.State)
 	}
@@ -316,16 +345,14 @@ func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, t
 	}
 	d, err := raise(NewDecision{
 		ID: decisionID, TaskID: a.task.ID, Kind: DecisionQuestion, Blocking: true,
-		Subject: "Start a run on an issue by an untrusted author?",
-		Input:   "author: " + author + " (" + association + ")\n" + text,
-		Options: []string{AnswerStart, AnswerCancel}, Cause: CauseUntrustedInput, Now: now,
+		Subject: subject, Input: input,
+		Options: []string{AnswerStart, AnswerCancel}, Cause: cause, Now: now,
 	})
 	if err != nil {
 		return Decision{}, err
 	}
-	a.task.Untrusted = true
 	a.addDecision(d)
-	a.record(EventTaskHeld, TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text)})
+	a.record(EventTaskHeld, held)
 	return *d, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 )
 
 // Issue is a forge issue. Everything in it is untrusted data.
@@ -93,6 +94,26 @@ type Board interface {
 	// UpdateCard sets the card of an issue, adding the issue to the board first
 	// when it is not on it.
 	UpdateCard(ctx context.Context, repo string, issue int, u CardUpdate) error
+}
+
+// QueuedCard is a card in the board's agent queue column (D30, issue #71).
+type QueuedCard struct {
+	Repo  string // owner/name
+	Issue int
+	// Agent is what the card's Session field says, "<workspace>/<role>", or empty.
+	Agent string
+	// Mover is who moved the card, when the board says; polling cannot know it.
+	Mover string
+	// UpdatedAt is when the card was last changed: a card that is moved again has a
+	// later one, which is what makes it a new request.
+	UpdatedAt time.Time
+}
+
+// QueueReader is the optional capability of an adapter to read the cards in the
+// board's agent queue (D30, issue #71). Reading changes nothing.
+type QueueReader interface {
+	// QueuedCards returns the cards whose status is the named column.
+	QueuedCards(ctx context.Context, status string) ([]QueuedCard, error)
 }
 
 // ErrNotFastForward is a branch update the forge refused because the branch has

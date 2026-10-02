@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,7 @@ type fakeBoard struct {
 	errs      []string // GraphQL errors to return for every call
 	owner     string   // "user" or "organization" as queried
 	noProject bool     // the project is not visible: the query answers null
+	pages     [][]any  // the project's items, a page each, for the queue query
 }
 
 func (b *fakeBoard) handler(t *testing.T, f *fakeGitHub) func(http.ResponseWriter, *http.Request) {
@@ -78,6 +80,21 @@ func (b *fakeBoard) handler(t *testing.T, f *fakeGitHub) func(http.ResponseWrite
 					session,
 					map[string]any{"id": "F-task", "name": "Task", "dataType": "TEXT"},
 				}},
+			}}})
+		case strings.Contains(req.Query, "items(first: 100"):
+			b.calls = append(b.calls, "queue")
+			page := 0
+			if after, ok := req.Variables["after"].(string); ok && after != "" {
+				page, _ = strconv.Atoi(strings.TrimPrefix(after, "cursor"))
+			}
+			next := page+1 < len(b.pages)
+			var nodes []any
+			if page < len(b.pages) {
+				nodes = b.pages[page]
+			}
+			reply(map[string]any{"node": map[string]any{"items": map[string]any{
+				"pageInfo": map[string]any{"hasNextPage": next, "endCursor": "cursor" + strconv.Itoa(page+1)},
+				"nodes":    nodes,
 			}}})
 		case strings.Contains(req.Query, "projectItems"):
 			b.calls = append(b.calls, "issue")
@@ -328,5 +345,52 @@ func TestTheBoardHasItsOwnToken(t *testing.T) {
 	}
 	if _, err := c2.GetIssue(bg, "wstein/workharbor", 7); err != nil {
 		t.Errorf("a board refusal broke issues: %v", err)
+	}
+}
+
+func queueItem(repo string, number int, status, session string, at string) map[string]any {
+	values := []any{map[string]any{"name": status, "field": map[string]string{"name": "Status"}}}
+	if session != "" {
+		values = append(values, map[string]any{"text": session, "field": map[string]string{"name": "Session"}})
+	}
+	return map[string]any{
+		"updatedAt":   at,
+		"content":     map[string]any{"number": number, "repository": map[string]string{"nameWithOwner": repo}},
+		"fieldValues": map[string]any{"nodes": values},
+	}
+}
+
+// The cards in the queue column are read as the App, across pages, with what their
+// Session says; other columns, other repositories, drafts and pull requests are left out.
+func TestQueuedCardsAreReadFromTheNamedColumn(t *testing.T) {
+	c, fb, _ := boardRig(t, nil)
+	draft := map[string]any{"updatedAt": "2026-10-02T10:00:00Z", "content": map[string]any{}, "fieldValues": map[string]any{"nodes": []any{map[string]any{"name": "Agent queue", "field": map[string]string{"name": "Status"}}}}}
+	fb.pages = [][]any{
+		{queueItem("wstein/workharbor", 7, "Agent queue", "docs/code", "2026-10-02T12:00:00Z"), queueItem("wstein/workharbor", 8, "Todo", "", "2026-10-02T12:01:00Z"), draft},
+		{queueItem("wstein/other", 9, "Agent queue", "", "2026-10-02T12:02:00Z"), queueItem("wstein/workharbor", 10, "Agent queue", "", "2026-10-02T12:03:00Z")},
+	}
+	got, err := c.QueuedCards(bg, "Agent queue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Issue != 7 || got[0].Agent != "docs/code" || got[0].Repo != "wstein/workharbor" || got[0].Mover != "" || got[1].Issue != 10 || got[1].Agent != "" {
+		t.Fatalf("cards = %+v", got)
+	}
+	if !got[0].UpdatedAt.Equal(time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)) {
+		t.Errorf("updated at = %v", got[0].UpdatedAt)
+	}
+	// nothing is asked for an empty column name, and without a board it is an error
+	if cards, err := c.QueuedCards(bg, ""); err != nil || cards != nil {
+		t.Errorf("an empty status: %v %v", cards, err)
+	}
+	noBoard := newFake(t, func() time.Time { return time.Unix(1_800_000_000, 0) }).client(t, nil)
+	if _, err := noBoard.QueuedCards(bg, "Agent queue"); err == nil {
+		t.Error("no board configured but no error")
+	}
+	// a board the App cannot read is an error, not an empty queue
+	c2, fb2, _ := boardRig(t, nil)
+	fb2.errs = []string{"Resource not accessible by integration"}
+	if _, err := c2.QueuedCards(bg, "Agent queue"); !errors.Is(err, ErrBoard) {
+		t.Errorf("an unreadable board: %v", err)
 	}
 }
