@@ -52,6 +52,11 @@ type Proxy struct {
 	// for this long; DefaultIdleTimeout when zero. A write that blocks counts
 	// as no movement, so it also bounds a stuck writer.
 	IdleTimeout time.Duration
+	// Deny are further prefixes that are refused like the private ranges: the
+	// global IPv6 prefixes of the host's own interfaces, which the supervisor
+	// reads when it starts the sidecar (design §7.2, issue #124). Set it before
+	// the proxy serves.
+	Deny []netip.Prefix
 
 	// lookup resolves a name; net.DefaultResolver by default.
 	lookup func(ctx context.Context, host string) ([]netip.Addr, error)
@@ -147,11 +152,25 @@ var reserved = []netip.Prefix{
 	netip.MustParsePrefix("64:ff9b:1::/48"),
 }
 
+// reachable is Public and not inside one of the proxy's denied prefixes.
+func (p *Proxy) reachable(a netip.Addr) bool {
+	if !Public(a) {
+		return false
+	}
+	a = a.Unmap()
+	for _, d := range p.Deny {
+		if d.Contains(a) {
+			return false
+		}
+	}
+	return true
+}
+
 // controlPublic is a net.Dialer.Control check: the socket's peer address must
 // be public. It is the last line, after dialPublic's own check.
-func controlPublic(_, address string, _ syscall.RawConn) error {
+func (p *Proxy) controlPublic(_, address string, _ syscall.RawConn) error {
 	ap, err := netip.ParseAddrPort(address)
-	if err != nil || !Public(ap.Addr()) {
+	if err != nil || !p.reachable(ap.Addr()) {
 		return fmt.Errorf("%w: %s", ErrNotPublic, address)
 	}
 	return nil
@@ -183,13 +202,13 @@ func (p *Proxy) dialPublic(ctx context.Context, network, addr string) (net.Conn,
 		return nil, fmt.Errorf("egress: %s has no address", host)
 	}
 	for _, a := range addrs {
-		if !Public(a) {
+		if !p.reachable(a) {
 			return nil, fmt.Errorf("%w: %s resolves to %s", ErrNotPublic, host, a)
 		}
 	}
 	dial := p.dialAddr
 	if dial == nil {
-		dial = (&net.Dialer{Timeout: 8 * time.Second, Control: controlPublic}).DialContext
+		dial = (&net.Dialer{Timeout: 8 * time.Second, Control: p.controlPublic}).DialContext
 	}
 	var last error
 	for _, a := range addrs {

@@ -26,10 +26,10 @@ func TestPublicRefusesNonPublicAddresses(t *testing.T) {
 			t.Errorf("Public(%s) = %v, want %v", addr, got, want)
 		}
 	}
-	if err := controlPublic("tcp4", "192.168.64.1:443", nil); !errors.Is(err, ErrNotPublic) {
+	if err := New(nil).controlPublic("tcp4", "192.168.64.1:443", nil); !errors.Is(err, ErrNotPublic) {
 		t.Errorf("control for a private address = %v", err)
 	}
-	if err := controlPublic("tcp6", "[2606:4700:4700::1111]:443", nil); err != nil {
+	if err := New(nil).controlPublic("tcp6", "[2606:4700:4700::1111]:443", nil); err != nil {
 		t.Errorf("control for a public address = %v", err)
 	}
 }
@@ -127,6 +127,56 @@ func TestASubdomainResolvingToAPrivateAddressIsRefused(t *testing.T) {
 		if !strings.Contains(strings.Join(l.lines, "\n"), "(not public)") {
 			t.Errorf("%s: the refusal was not logged: %v", name, l.lines)
 		}
+	}
+}
+
+// The host's own global IPv6 prefixes are refused like the private ranges
+// (issue #124); an address outside them is still dialled.
+func TestHostIPv6PrefixesAreRefused(t *testing.T) {
+	deny := []netip.Prefix{netip.MustParsePrefix("2001:db8:1::/64")}
+	for name, tc := range map[string]struct {
+		answer []string
+		want   bool
+	}{
+		"inside":    {[]string{"2001:db8:1::5"}, false},
+		"mixed":     {[]string{"2606:4700:4700::1111", "2001:db8:1:0:1::7"}, false},
+		"outside":   {[]string{"2001:db8:2::5"}, true},
+		"public v4": {[]string{"203.0.113.7"}, true},
+	} {
+		dns := &fakeDNS{answers: [][]string{tc.answer}}
+		p := New([]string{"lan.example.test"})
+		p.Deny = deny
+		p.lookup, p.dialAddr = dns.lookup, dns.dial
+		c, err := p.dialPublic(context.Background(), "tcp", "lan.example.test:443")
+		if c != nil {
+			_ = c.Close()
+		}
+		if tc.want && err != nil {
+			t.Errorf("%s: refused: %v", name, err)
+		}
+		if !tc.want && !errors.Is(err, ErrNotPublic) {
+			t.Errorf("%s: err = %v, want ErrNotPublic", name, err)
+		}
+		if !tc.want && len(dns.dialled) != 0 {
+			t.Errorf("%s: dialled %v", name, dns.dialled)
+		}
+	}
+	if err := (&Proxy{Deny: deny}).controlPublic("tcp6", "[2001:db8:1::9]:443", nil); !errors.Is(err, ErrNotPublic) {
+		t.Errorf("control for a host prefix = %v", err)
+	}
+	// And the proxy answers 403 and logs DENY.
+	var l logs
+	p := New([]string{"lan.example.test"})
+	p.Deny = deny
+	p.Log = l.add
+	p.lookup, p.dialAddr = (&fakeDNS{answers: [][]string{{"2001:db8:1::5"}}}).lookup, (&fakeDNS{}).dial
+	srv := httptest.NewServer(p)
+	defer srv.Close()
+	if code, _ := connect(t, strings.TrimPrefix(srv.URL, "http://"), "lan.example.test:443"); code != http.StatusForbidden {
+		t.Errorf("CONNECT = %d, want 403", code)
+	}
+	if !strings.Contains(strings.Join(l.lines, "\n"), "DENY") {
+		t.Errorf("not logged DENY: %v", l.lines)
 	}
 }
 
