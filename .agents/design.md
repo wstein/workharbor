@@ -30,10 +30,10 @@ branch per change (AGENTS.md, Working on an issue).
 - **Keep the gate.** Nothing is `Ready to push` without a `wh/review` note;
   findings that need a rule come to you, and you decide them before the fix.
 - **Keep the board honest.** Statuses and ticked criteria match what landed;
-  closed issues are `Done`; follow-ups get their own issue. You alone list the
-  whole board (`gh project item-list`, `/wh-board`), because every session
-  shares Werner's GitHub rate limit; lanes ask you or `wh/desk` for board-wide
-  status (AGENTS.md, GitHub rate limit).
+  closed issues are `Done`; follow-ups get their own issue. Board-wide status
+  comes from the shared snapshot (#132); until it exists, lanes ask `wh/desk`,
+  and you run a board-wide query only to rank or check drift (AGENTS.md, GitHub
+  rate limit).
 - **Hand over.** Tell the human, usually through `wh/desk`, what is ready to
   push, what is blocked on him, and what is unverified.
 - **Make it visible.** A subagent you run for an issue comments on it at the
