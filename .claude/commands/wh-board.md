@@ -4,7 +4,8 @@ argument-hint: "[--fix to correct your own lane's cards]"
 ---
 
 Check project 6 (`gh project item-list 6 --owner wstein --format json --limit
-200`) against the issues and the repository. $ARGUMENTS
+200`) against the issues and the repository. Only `wh/design` runs this board-wide
+check (AGENTS.md, GitHub rate limit); other lanes check their own cards. $ARGUMENTS
 
 Report each drift with the issue number:
 
