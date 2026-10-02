@@ -74,4 +74,15 @@ scripts/board-snapshot.sh --refresh        # force a query
 
 The snapshot is one file, `${XDG_CACHE_HOME:-$HOME/.cache}/workharbor/board.json` (`WHR_BOARD_SNAPSHOT` overrides the absolute path), in a `0700` directory with mode `0600`, outside the repository and never committed. While it is younger than 5 minutes (`WHR_BOARD_MAX_AGE`, in seconds) the script prints it and makes no GitHub call. Past that, one caller takes a lock and makes one query; lanes asking at the same moment wait and share the result. No timer and no daemon run: nothing is queried while nobody asks. If the query fails (rate limit), the script keeps the old file, prints it, says `stale` on stderr and exits 0; with no file at all it exits 1.
 
-A card move or comment goes straight to GitHub by URL and does not touch the file. A lane that wrote a card passes `--refresh` on its next read, or the snapshot still shows the old state for up to 5 minutes.
+Writes go through the same script, so the cache stays right without a query:
+
+```bash
+scripts/board-snapshot.sh move 132 "In review"      # Status
+scripts/board-snapshot.sh session 132 wh/review     # Session
+scripts/board-snapshot.sh priority 132 P2           # Priority
+scripts/board-snapshot.sh add 140                   # put an issue on the board
+```
+
+Each runs `gh project item-edit 6 --owner wstein --url <issue-url> --field <Field> --value <value>` (or `item-add`) with your `gh` login and makes no board query. Only if GitHub accepts the write is that one card patched in the cache, under the same lock, so two lanes writing at once both end up in it; `fetched_at` does not change, because a write does not make old data fresh. A failed write (rate limit, bad value) leaves the cache untouched, says so on stderr and exits 1. With no cache, or a stale one, the write still happens and no cache is created or patched. The number must be digits, and the status, lane and priority must be one of the board's known values (`Todo`, `In progress`, `Blocked`, `In review`, `Ready to push`, `Done`; the lanes of the project board paragraph in `AGENTS.md`; `P1`, `P2`, `P3`), checked before any call. Comments still go straight to GitHub.
+
+The limit: a card moved by hand in the browser or by another tool is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
