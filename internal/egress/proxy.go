@@ -256,7 +256,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, from, host, port string) {
 		http.Error(w, "cannot hijack", http.StatusInternalServerError)
 		return
 	}
-	src, _, err := hj.Hijack()
+	src, rw, err := hj.Hijack()
 	if err != nil {
 		_ = dst.Close()
 		return
@@ -265,6 +265,18 @@ func (p *Proxy) tunnel(w http.ResponseWriter, from, host, port string) {
 	// connection; the idle watchdog replaces them.
 	_ = src.SetDeadline(time.Time{})
 	_, _ = src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+	// Bytes the client sent in the same packet as the CONNECT (a TLS ClientHello
+	// sent without waiting for the 200) are in the server's read buffer, not on the
+	// connection: they go to the upstream first, or the tunnel stalls.
+	if n := rw.Reader.Buffered(); n > 0 {
+		if early, err := rw.Peek(n); err == nil {
+			if _, err := dst.Write(early); err != nil {
+				_ = dst.Close()
+				_ = src.Close()
+				return
+			}
+		}
+	}
 	p.pipe(src, dst)
 }
 

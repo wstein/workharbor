@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type logs struct {
@@ -163,3 +164,61 @@ func TestPlainHTTPThroughTheProxy(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// A client that sends its first bytes in the same write as the CONNECT, without
+// waiting for the 200, must still get them to the upstream (a TLS ClientHello does
+// this): they are in the server's read buffer after the hijack.
+func TestBytesSentWithTheConnectReachTheUpstream(t *testing.T) {
+	dest, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dest.Close() }()
+	got := make(chan string, 1)
+	go func() {
+		c, err := dest.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		line, _ := bufio.NewReader(c).ReadString('\n')
+		got <- line
+		fmt.Fprintf(c, "echo:%s", line)
+	}()
+	p := New([]string{"allowed.example.test"})
+	p.Dial = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, dest.Addr().String())
+	}
+	srv := httptest.NewServer(p)
+	defer srv.Close()
+	c, err := (&net.Dialer{}).DialContext(context.Background(), "tcp", strings.TrimPrefix(srv.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	// One write: the request and the first bytes of the tunnel.
+	if _, err := fmt.Fprint(c, "CONNECT allowed.example.test:443 HTTP/1.1\r\nHost: allowed.example.test:443\r\n\r\nclient-hello\n"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case line := <-got:
+		if line != "client-hello\n" {
+			t.Errorf("the upstream got %q", line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bytes sent with the CONNECT never reached the upstream")
+	}
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	br := bufio.NewReader(c)
+	var all strings.Builder
+	for !strings.Contains(all.String(), "echo:client-hello") {
+		l, err := br.ReadString('\n')
+		all.WriteString(l)
+		if err != nil {
+			break
+		}
+	}
+	if !strings.Contains(all.String(), "200 Connection Established") || !strings.Contains(all.String(), "echo:client-hello") {
+		t.Errorf("the client read %q", all.String())
+	}
+}
