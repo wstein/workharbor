@@ -6,9 +6,19 @@
 FROM docker.io/library/ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        git zsh fish jq curl ripgrep tmux vim-tiny make less util-linux procps ca-certificates \
+        git zsh fish jq curl ripgrep tmux vim-tiny make less util-linux procps ca-certificates openssh-server openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && (id ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true) \
     && useradd -u 1000 -m -s /bin/zsh whr
 COPY whr-git /usr/local/bin/git
 RUN chmod 0755 /usr/local/bin/git
+# The console's sshd (issue #32): started by the supervisor as the console user, with
+# the certificate authority's public key in WHR_SSH_CA. The configuration is in the
+# image; a login shell reads the proxy variables whr-sshd leaves in /tmp/whr-proxy-vars.
+COPY whr-sshd /usr/local/bin/whr-sshd
+COPY sshd_config /etc/whr/sshd_config
+RUN chmod 0755 /usr/local/bin/whr-sshd \
+    && chmod 0644 /etc/whr/sshd_config \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' > /etc/profile.d/whr-env.sh \
+    && mkdir -p /etc/zsh \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' >> /etc/zsh/zshenv

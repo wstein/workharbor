@@ -101,8 +101,8 @@ func TestEnsureStagesTheWrapperInTheContextAndBuildsOnce(t *testing.T) {
 	if err != nil || !built || len(fb.builds) != 1 || fb.builds[0].Tag != tag {
 		t.Fatalf("first: %q built=%v err=%v builds=%d", tag, built, err, len(fb.builds))
 	}
-	if fb.files["whr-git"] != string(GitWrapper()) || len(fb.files) != 1 {
-		t.Errorf("the context must hold exactly the wrapper: %v", fb.files)
+	if fb.files["whr-git"] != string(GitWrapper()) || fb.files["whr-sshd"] != string(SSHD()) || fb.files["sshd_config"] != string(SSHDConfig()) || len(fb.files) != 3 {
+		t.Errorf("the context must hold exactly the wrapper, the sshd launcher and its configuration: %v", fb.files)
 	}
 	want, _ := Containerfile(baseimage.Ubuntu)
 	if fb.cf != string(want) {

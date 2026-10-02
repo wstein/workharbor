@@ -16,7 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/baseimage"
 )
 
-//go:embed whr-git Containerfile.fedora Containerfile.ubuntu
+//go:embed whr-git whr-sshd sshd_config Containerfile.fedora Containerfile.ubuntu
 var files embed.FS
 
 // GitWrapper is the script installed as /usr/local/bin/git in the console image.
@@ -30,6 +30,20 @@ func GitWrapper() []byte {
 	return b
 }
 
+// SSHD is the launcher of the console's sshd (installed as /usr/local/bin/whr-sshd).
+func SSHD() []byte { return mustRead("whr-sshd") }
+
+// SSHDConfig is the console's sshd configuration (installed as /etc/whr/sshd_config).
+func SSHDConfig() []byte { return mustRead("sshd_config") }
+
+func mustRead(name string) []byte {
+	b, err := files.ReadFile(name)
+	if err != nil {
+		panic("console: the embedded " + name + " is missing: " + err.Error())
+	}
+	return b
+}
+
 // Containerfile returns the console image definition of a base.
 func Containerfile(d baseimage.Distro) ([]byte, error) {
 	if !d.Valid() {
@@ -39,8 +53,8 @@ func Containerfile(d baseimage.Distro) ([]byte, error) {
 }
 
 // Tag is the stable name of the console image of a base: a digest of the
-// Containerfile (which holds the pinned digest of the stock image) and of the git
-// wrapper, so it stays the same until either changes.
+// Containerfile (which holds the pinned digest of the stock image), of the git
+// wrapper and of the sshd launcher and configuration, so it stays the same until either changes.
 func Tag(d baseimage.Distro) (string, error) {
 	cf, err := Containerfile(d)
 	if err != nil {
@@ -50,6 +64,10 @@ func Tag(d baseimage.Distro) (string, error) {
 	h.Write(cf)
 	h.Write([]byte{0})
 	h.Write(GitWrapper())
+	h.Write([]byte{0})
+	h.Write(SSHD())
+	h.Write([]byte{0})
+	h.Write(SSHDConfig())
 	return "whr-console/" + string(d) + ":" + hex.EncodeToString(h.Sum(nil))[:12], nil
 }
 
@@ -63,6 +81,6 @@ func Ensure(ctx context.Context, b baseimage.Builder, d baseimage.Distro, workDi
 	if err != nil {
 		return "", false, err
 	}
-	built, err = baseimage.EnsureImage(ctx, b, tag, cf, map[string][]byte{"whr-git": GitWrapper()}, filepath.Join(workDir, "console-"+string(d)))
+	built, err = baseimage.EnsureImage(ctx, b, tag, cf, map[string][]byte{"whr-git": GitWrapper(), "whr-sshd": SSHD(), "sshd_config": SSHDConfig()}, filepath.Join(workDir, "console-"+string(d)))
 	return tag, built, err
 }

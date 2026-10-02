@@ -1,0 +1,52 @@
+# The console's sshd (design D43, §7.6, issue #32).
+#
+# It runs once per connection, as the console user and in inetd mode (sshd -i):
+# the supervisor starts it with `exec` and carries the connection over its API, so
+# the console listens on no port. It is not root, because the console drops every
+# capability, so it can log in only as that user and needs no privilege
+# separation. It trusts one certificate authority, the supervisor's, and nothing
+# else: no password, no authorized_keys, no keyboard-interactive. The public key
+# of the authority and the principal file are written by whr-sshd on each start.
+
+HostKey /home/whr/.whr-sshd/host_ed25519
+PidFile none
+
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+GSSAPIAuthentication no
+HostbasedAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+AuthorizedKeysFile none
+TrustedUserCAKeys /tmp/whr-ssh-ca.pub
+AuthorizedPrincipalsFile /tmp/whr-ssh-principals
+# The two files above are written by whr-sshd on every connection, in /tmp, whose
+# own mode (1777) StrictModes would refuse; sshd runs as the console user, who owns
+# them.
+StrictModes no
+AllowUsers whr
+
+# A certificate carries permit-pty, and permit-port-forwarding when the client asked
+# for it; the server allows what a certificate grants and nothing it does not.
+AllowTcpForwarding yes
+# Forwarding, where a certificate grants it, reaches the console's own ports (a dev
+# server) and no other address; unix sockets are not forwarded.
+PermitOpen 127.0.0.1:* [::1]:* localhost:*
+AllowStreamLocalForwarding no
+AllowAgentForwarding no
+X11Forwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+PermitUserRC no
+Subsystem sftp internal-sftp
+
+MaxAuthTries 3
+LoginGraceTime 20
+MaxStartups 4:50:10
+ClientAliveInterval 30
+ClientAliveCountMax 4
+LogLevel VERBOSE
+PrintMotd no

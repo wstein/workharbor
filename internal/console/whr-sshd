@@ -1,0 +1,73 @@
+#!/bin/sh
+# Runs the console's sshd for one connection (design D43, §7.6, issue #32), as the
+# console user, in inetd mode: the connection is this process's standard input
+# and output, which the supervisor carries over its API.
+#
+# The supervisor runs it in the console with the public key of its certificate
+# authority in WHR_SSH_CA and the egress proxy's variables in the environment. It
+# writes what sshd reads to /tmp (the image's root is read-only), keeps a host key
+# in the home volume so the console keeps its identity across restarts, and hands
+# the proxy variables on to login shells through /tmp/whr-proxy-vars.
+#
+#   whr-sshd            serve one connection
+#   whr-sshd hostkey    print the host's public key and exit, making the key first
+#
+# POSIX sh only: Ubuntu's /bin/sh is dash.
+set -eu
+
+umask 077
+home=${HOME:-/home/whr}
+dir=$home/.whr-sshd
+
+# ensure_key makes the host key if there is none. It is made aside and linked in,
+# so two connections at once do not both write it.
+ensure_key() {
+  mkdir -p "$dir"
+  if [ ! -s "$dir/host_ed25519" ]; then
+    tmp=$dir/host_ed25519.$$
+    ssh-keygen -q -t ed25519 -N '' -C whr-console -f "$tmp"
+    ln "$tmp.pub" "$dir/host_ed25519.pub" 2>/dev/null || :
+    ln "$tmp" "$dir/host_ed25519" 2>/dev/null || :
+    rm -f "$tmp" "$tmp.pub"
+  fi
+}
+
+if [ "${1:-}" = hostkey ]; then
+  ensure_key
+  exec cat "$dir/host_ed25519.pub"
+fi
+
+case ${WHR_SSH_CA:-} in
+ssh-ed25519\ * | ecdsa-sha2-nistp*\ *) ;;
+*)
+  echo "whr-sshd: WHR_SSH_CA must be the authority's public key" >&2
+  exit 1
+  ;;
+esac
+# One line: the value is written as a file that sshd trusts.
+case $WHR_SSH_CA in
+*'
+'*)
+  echo "whr-sshd: WHR_SSH_CA must be one line" >&2
+  exit 1
+  ;;
+esac
+
+ensure_key
+printf '%s\n' "$WHR_SSH_CA" >/tmp/whr-ssh-ca.pub
+printf 'whr\n' >/tmp/whr-ssh-principals
+
+# The proxy variables, for the login shells sshd starts (see /etc/profile.d and
+# the zsh start file): only these names, quoted.
+: >/tmp/whr-proxy-vars
+for name in HTTPS_PROXY HTTP_PROXY NO_PROXY; do
+  eval "value=\${$name:-}"
+  if [ -n "$value" ]; then
+    printf 'export %s=%s\n' "$name" "'$(printf '%s' "$value" | sed "s/'/'\\\\''/g")'" >>/tmp/whr-proxy-vars
+    lower=$(printf '%s' "$name" | tr 'A-Z' 'a-z')
+    printf 'export %s=%s\n' "$lower" "'$(printf '%s' "$value" | sed "s/'/'\\\\''/g")'" >>/tmp/whr-proxy-vars
+  fi
+done
+chmod 0644 /tmp/whr-proxy-vars
+
+exec /usr/sbin/sshd -i -e -f /etc/whr/sshd_config

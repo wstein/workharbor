@@ -5,9 +5,19 @@
 # changes the image's tag, so the next start builds it again.
 FROM docker.io/library/fedora@sha256:498c452f32a739b61f0ef215bce9924ebc4866cbe44710f58157d77723b7a6d2
 RUN dnf -y --setopt=install_weak_deps=False install \
-        git-core zsh fish jq curl ripgrep tmux vim-minimal make less util-linux util-linux-script procps-ng findutils ca-certificates \
+        git-core zsh fish jq curl ripgrep tmux vim-minimal make less util-linux util-linux-script procps-ng findutils ca-certificates openssh-server openssh-clients \
     && dnf clean all \
     && rm -rf /var/cache/dnf /var/log/dnf* \
     && useradd -u 1000 -m -s /bin/zsh whr
 COPY whr-git /usr/local/bin/git
 RUN chmod 0755 /usr/local/bin/git
+# The console's sshd (issue #32): started by the supervisor as the console user, with
+# the certificate authority's public key in WHR_SSH_CA. The configuration is in the
+# image; a login shell reads the proxy variables whr-sshd leaves in /tmp/whr-proxy-vars.
+COPY whr-sshd /usr/local/bin/whr-sshd
+COPY sshd_config /etc/whr/sshd_config
+RUN chmod 0755 /usr/local/bin/whr-sshd \
+    && chmod 0644 /etc/whr/sshd_config \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' > /etc/profile.d/whr-env.sh \
+    && mkdir -p /etc \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' >> /etc/zshenv
