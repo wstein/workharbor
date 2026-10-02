@@ -62,7 +62,8 @@ type Prepared struct {
 	Files, Added, Removed int64
 }
 
-// numstat reads `git diff --numstat -z --no-renames` output.
+// numstat reads `git diff-tree -r --numstat -z --no-renames` output: plumbing, as
+// everything that touches an agent's commits is, so no diff driver or textconv runs.
 func numstat(out []byte) (files, added, removed int64) {
 	for _, rec := range bytes.Split(out, []byte{0}) {
 		if len(rec) == 0 {
@@ -166,7 +167,7 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		return Prepared{}, err
 	}
 	out := Prepared{SHA: tip, Commits: strings.Fields(string(list)), Source: oldTip}
-	if stat, err := r.g.run(ctx, dir, false, nil, "diff", "--numstat", "-z", "--no-renames", base, tip); err == nil {
+	if stat, err := r.g.run(ctx, dir, false, nil, "diff-tree", "-r", "--numstat", "-z", "--no-renames", base, tip); err == nil {
 		out.Files, out.Added, out.Removed = numstat(stat)
 	}
 
