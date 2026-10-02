@@ -50,6 +50,11 @@ type Deps struct {
 	EditorDir string
 	Spec      func(domain.Workspace) runtime.Spec
 	Prepare   func(runtime.Spec) (runtime.PreparedSpec, error)
+	// ConsoleSpec returns the console's spec for the workspaces mounted
+	// read-write, and ConsoleImage builds the console image on first use (D43).
+	// Both are optional: without them there is no console.
+	ConsoleSpec  func(rw []domain.Workspace) runtime.Spec
+	ConsoleImage func(ctx context.Context) error
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
 	Clock     service.Clock

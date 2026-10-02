@@ -327,3 +327,37 @@ func TestRepositoriesRunUnderAWorkflow(t *testing.T) {
 		t.Error("an unknown key was accepted")
 	}
 }
+
+func TestConsoleDefaultsAndValidation(t *testing.T) {
+	d := Console{}.Resolved()
+	if d.CPUs != 2 || d.MemoryMB != 2048 || d.DiskMB != 10240 || len(d.EgressAllow) < 4 {
+		t.Errorf("defaults = %+v", d)
+	}
+	for _, h := range d.EgressAllow {
+		if !validEgressHost(h) || h == "api.anthropic.com" {
+			t.Errorf("default console host %q", h)
+		}
+	}
+	d.EgressAllow[0] = "changed.example"
+	if (Console{}).Resolved().EgressAllow[0] == "changed.example" {
+		t.Error("the default list is shared between callers")
+	}
+	r := newRig(t)
+	r.cfg.Console = Console{EgressAllow: []string{"proxy.golang.org"}, CPUs: 4}
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("a good console: %s", problems(err))
+	}
+	for name, c := range map[string]Console{
+		"console.egress_allow": {EgressAllow: []string{"*.evil.com"}},
+		"console":              {MemoryMB: -1},
+	} {
+		r.cfg.Console = c
+		if _, err := r.parse(t); !strings.Contains(problems(err), name) {
+			t.Errorf("%s: %s", name, problems(err))
+		}
+	}
+	r.cfg.Console = Console{EgressAllow: []string{"10.0.0.1"}}
+	if _, err := r.parse(t); !strings.Contains(problems(err), "console.egress_allow") {
+		t.Errorf("an IP address: %s", problems(err))
+	}
+}

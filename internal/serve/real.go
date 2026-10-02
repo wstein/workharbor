@@ -14,6 +14,7 @@ import (
 	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/console"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
@@ -291,8 +292,24 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			Owns: func(volume string) bool { return len(volume) > len(Owner)+1 && volume[:len(Owner)+1] == Owner+"-" },
 		}, s)
 	}
+	consoleDistro := baseimage.Distro(spec.Base)
+	consoleTag, err := console.Tag(consoleDistro)
+	if err != nil {
+		_ = git.Close()
+		_ = st.Close()
+		return Deps{}, nil, err
+	}
+	consoleOpts := ConsoleOptions{Owner: Owner, Image: consoleTag, Console: c.Console.Resolved(), Roots: c.Roots.Workspaces, Proxy: proxy}
+	ensureConsole := func(ctx context.Context) error {
+		_, built, err := console.Ensure(ctx, rt, consoleDistro, filepath.Join(dir, "build"))
+		if built {
+			logf("built the console image %s", consoleTag)
+		}
+		return err
+	}
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
+		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole,
 		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 	}, func() {
@@ -360,5 +377,74 @@ func Topics(git *hostgit.Git, c *config.Config, dir string) service.TopicsFunc {
 			return nil, nil, err
 		}
 		return topics, cache, nil
+	}
+}
+
+// GuestConsoleHome is the console user's home: a volume of its own, kept across
+// consoles, with the human's dotfiles and shell history. It holds no credential
+// of workharbor's and none of the agents' (D43).
+const GuestConsoleHome = "/home/whr"
+
+// WorkspacesMount is where the workspace roots are mounted in the console.
+const WorkspacesMount = "/workspaces"
+
+// ConsoleOptions is what the console's spec is made from.
+type ConsoleOptions struct {
+	Owner   string
+	Image   string         // the console image's tag
+	Console config.Console // resolved
+	Roots   []string       // the workspace roots, absolute and resolved
+	Proxy   string         // the host path of whr-proxy for linux/arm64
+}
+
+// rootName is the directory name a workspace root gets under WorkspacesMount.
+// A second root with the same base name gets a numeric suffix, so two roots
+// never share a target.
+func rootNames(roots []string) []string {
+	names := make([]string, len(roots))
+	seen := map[string]int{}
+	for i, r := range roots {
+		base := filepath.Base(r)
+		seen[base]++
+		if n := seen[base]; n > 1 {
+			base = fmt.Sprintf("%s-%d", base, n)
+		}
+		names[i] = base
+	}
+	return names
+}
+
+// For returns the console's spec: hardened like an agent's environment, on an
+// internal network of its own behind the egress proxy, with every workspace root
+// mounted read-only and each workspace in rw mounted read-write over its place in
+// its root, and a home volume. It has no tool store, no agent and no
+// credential (design D43, §7.4); the workspace's .git, which agents write, is
+// reached through the git wrapper of the image.
+func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
+	c := o.Console
+	names := rootNames(o.Roots)
+	mounts := make([]runtime.Mount, 0, len(o.Roots)+len(rw)+1)
+	for i, root := range o.Roots {
+		mounts = append(mounts, runtime.Mount{Kind: runtime.MountBind, Source: root, Target: WorkspacesMount + "/" + names[i], ReadOnly: true})
+	}
+	for _, w := range rw {
+		for i, root := range o.Roots {
+			if rel, err := filepath.Rel(root, w.Path); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+				mounts = append(mounts, runtime.Mount{Kind: runtime.MountBind, Source: w.Path, Target: WorkspacesMount + "/" + names[i] + "/" + filepath.ToSlash(rel)})
+				break
+			}
+		}
+	}
+	mounts = append(mounts, runtime.Mount{Kind: runtime.MountVolume, Source: o.Owner + "-console-home", Target: GuestConsoleHome})
+	return runtime.Spec{
+		Image: o.Image, Owner: o.Owner, CPUs: c.CPUs, MemoryMB: c.MemoryMB, DiskMB: c.DiskMB,
+		Network:      runtime.Network{Name: o.Owner + "-net-console", Internal: true},
+		User:         "1000:1000",
+		ReadOnlyRoot: true,
+		CapDrop:      []string{"ALL"},
+		Init:         true,
+		Tmpfs:        []string{"/tmp", "/run"},
+		Mounts:       mounts,
+		Egress:       &runtime.Egress{Image: o.Image, Proxy: o.Proxy, Allow: c.EgressAllow},
 	}
 }

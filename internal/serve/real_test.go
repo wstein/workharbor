@@ -281,3 +281,87 @@ func TestTheAgentModeFollowsTheWorkflow(t *testing.T) {
 		t.Error("dontAsk repositories need one")
 	}
 }
+
+func TestTheConsoleSpecIsHardenedReadOnlyByDefaultAndHasNoSecrets(t *testing.T) {
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootA, rootB := filepath.Join(home, "a", "ws"), filepath.Join(home, "b", "ws") // the same base name
+	docs := filepath.Join(rootB, "docs")
+	libexec := filepath.Join(home, "libexec")
+	for _, d := range []string{rootA, docs, libexec} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	proxy := filepath.Join(libexec, "whr-proxy-linux-arm64")
+	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
+		t.Fatal(err)
+	}
+	opts := ConsoleOptions{Owner: Owner, Image: "whr-console/fedora:abc123abc123", Console: config.Console{}.Resolved(), Roots: []string{rootA, rootB}, Proxy: proxy}
+	prepare := func(s runtime.Spec) error {
+		_, err := runtime.Prepare(runtime.PrepareOptions{
+			FS: runtime.OSFS{}, Home: home, Roots: []string{rootA, rootB, libexec},
+			Owns: func(v string) bool { return strings.HasPrefix(v, Owner+"-") },
+		}, s)
+		return err
+	}
+
+	ro := opts.For(nil)
+	if err := ro.Validate(); err != nil {
+		t.Fatalf("the spec is not valid: %v", err)
+	}
+	if err := prepare(ro); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	var targets []string
+	for _, m := range ro.Mounts {
+		targets = append(targets, m.Target)
+		if m.Kind == runtime.MountBind && !m.ReadOnly {
+			t.Errorf("a workspace root is writable by default: %+v", m)
+		}
+	}
+	want := []string{"/workspaces/ws", "/workspaces/ws-2", GuestConsoleHome}
+	if strings.Join(targets, " ") != strings.Join(want, " ") {
+		t.Errorf("targets = %v, want %v (two roots with one base name must not share a target)", targets, want)
+	}
+	if ro.Egress == nil || ro.Egress.Image != opts.Image || len(ro.Egress.Allow) == 0 || ro.Network.Name != "whr-net-console" || !ro.Network.Internal {
+		t.Errorf("egress or network: %+v %+v", ro.Egress, ro.Network)
+	}
+	for _, h := range ro.Egress.Allow {
+		if !domain.ValidHost(h) || h == "api.anthropic.com" {
+			t.Errorf("console egress host %q: the console reaches registries and the forge, not the model API", h)
+		}
+	}
+
+	// One workspace writable: a read-write bind over its place in its root.
+	rw := opts.For([]domain.Workspace{{ID: "w1", Name: "docs", Path: docs}})
+	if err := prepare(rw); err != nil {
+		t.Fatalf("Prepare with a writable workspace: %v", err)
+	}
+	var writable []runtime.Mount
+	for _, m := range rw.Mounts {
+		if m.Kind == runtime.MountBind && !m.ReadOnly {
+			writable = append(writable, m)
+		}
+	}
+	if len(writable) != 1 || writable[0].Source != docs || writable[0].Target != "/workspaces/ws-2/docs" {
+		t.Errorf("writable mounts = %+v", writable)
+	}
+	// Nothing of workharbor's or of the agents' is in the console.
+	for _, m := range append(ro.Mounts, rw.Mounts...) {
+		for _, secret := range []string{".ssh", "tools", "secrets", ".config", ".claude"} {
+			if strings.Contains(m.Source, string(filepath.Separator)+secret) {
+				t.Errorf("mount %+v looks like a secret or the tool store", m)
+			}
+		}
+	}
+	// A workspace outside every root is never mounted writable.
+	outside := opts.For([]domain.Workspace{{ID: "w2", Name: "elsewhere", Path: filepath.Join(home, "elsewhere")}})
+	for _, m := range outside.Mounts {
+		if m.Kind == runtime.MountBind && !m.ReadOnly {
+			t.Errorf("a workspace outside the roots got a writable mount: %+v", m)
+		}
+	}
+}

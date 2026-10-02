@@ -129,6 +129,8 @@ type Config struct {
 	StateDir string `json:"state_dir,omitempty"`
 	// Environment shapes the environments `whr serve` provisions. Optional.
 	Environment Environment `json:"environment,omitzero"`
+	// Console shapes the console environment (D43). Optional.
+	Console Console `json:"console,omitzero"`
 	// Budgets limit the tokens and the cost a run and a task may use (design
 	// §7.4). Optional: none means no limit.
 	Budgets Budgets `json:"budgets,omitzero"`
@@ -147,6 +149,41 @@ type Config struct {
 	// dontAsk mode (design §5.2): the supervisor's own choice, never the
 	// repository's. Required in dontAsk, and refused in manual.
 	AgentAllowedTools []string `json:"agent_allowed_tools,omitempty"`
+}
+
+// Console is the supervisor's choice of what the console environment looks like
+// (design D43). Zero values take the defaults of the field.
+type Console struct {
+	// EgressAllow are the host names the console may reach through its egress
+	// proxy: package registries and the forge for read-only fetches by default.
+	// Names only: no IP, no wildcard. The console holds no credentials.
+	EgressAllow []string `json:"egress_allow,omitempty"`
+	CPUs        int      `json:"cpus,omitempty"`      // default 2
+	MemoryMB    int      `json:"memory_mb,omitempty"` // default 2048
+	DiskMB      int      `json:"disk_mb,omitempty"`   // default 10240
+}
+
+// DefaultConsoleEgress are the hosts a console may reach by default: the package
+// registries of the toolchains workharbor knows, and GitHub for read-only fetches.
+var DefaultConsoleEgress = []string{
+	"github.com", "proxy.golang.org", "sum.golang.org", "registry.npmjs.org", "pypi.org", "files.pythonhosted.org",
+}
+
+// Resolved returns the console with the defaults filled in.
+func (c Console) Resolved() Console {
+	if len(c.EgressAllow) == 0 {
+		c.EgressAllow = append([]string(nil), DefaultConsoleEgress...)
+	}
+	if c.CPUs == 0 {
+		c.CPUs = DefaultCPUs
+	}
+	if c.MemoryMB == 0 {
+		c.MemoryMB = 2048
+	}
+	if c.DiskMB == 0 {
+		c.DiskMB = DefaultDiskMB
+	}
+	return c
 }
 
 // Budgets are the per-run and per-task limits. A soft threshold warns once; a
@@ -266,6 +303,14 @@ func (c *Config) Validate() error {
 		if l.MaxTokens < 0 || l.MaxCostUSD < 0 || math.IsNaN(l.MaxCostUSD) || math.IsInf(l.MaxCostUSD, 0) {
 			add("%s: a limit cannot be negative", name)
 		}
+	}
+	for i, h := range c.Console.EgressAllow {
+		if !validEgressHost(h) {
+			add("console.egress_allow[%d]: %q is not a host name (no address, wildcard, port or path)", i, h)
+		}
+	}
+	if c.Console.CPUs < 0 || c.Console.MemoryMB < 0 || c.Console.DiskMB < 0 {
+		add("console: cpus, memory_mb and disk_mb cannot be negative")
 	}
 	if p := c.Budgets.SoftPercent; p != 0 && (p < 1 || p > 99) {
 		add("budgets.soft_percent: %d is not from 1 to 99", p)
