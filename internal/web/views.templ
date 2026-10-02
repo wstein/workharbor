@@ -147,24 +147,98 @@ templ taskList(rows []taskRow) {
 	</ul>
 }
 
-templ usagePanel(u *usageBox) {
-	<section aria-labelledby="usage" class="usage">
-		<h2 id="usage">Usage</h2>
-		for _, w := range u.Windows {
-			<p class="window">
-				<label for={ "win-" + w.ID }>{ w.Name }</label>
-				<meter id={ "win-" + w.ID } min="0" max="100" low="70" high="90" optimum="0" value={ itoa(int64(w.Percent)) }>{ itoa(int64(w.Percent)) }%</meter>
-				<span>{ itoa(int64(w.Percent)) }%</span>
-				if w.Resets != "" {
-					<span class="muted">{ w.Resets }</span>
+templ usageRows(rows []usageRowView) {
+	for _, r := range rows {
+		<tr>
+			<td>
+				if r.Link != "" {
+					<a href={ templ.SafeURL(r.Link) }>{ r.Key }</a>
+				} else {
+					{ r.Key }
 				}
-			</p>
+			</td>
+			<td>{ r.Auth }</td>
+			<td>{ r.Turns }</td>
+			<td>{ r.In }</td>
+			<td>{ r.Out }</td>
+			<td>{ r.CacheRead }</td>
+			<td>{ r.CacheWrite }</td>
+			<td>{ r.Cache }</td>
+			<td>{ r.Cost } <span class="muted">{ r.Label }</span></td>
+		</tr>
+	}
+}
+
+templ usageTable(title string, rows []usageRowView, c *usageCard) {
+	<h3>{ title }</h3>
+	<div class="scroll">
+		<table class="usage">
+			<thead>
+				<tr>
+					<th><a href={ templ.SafeURL(c.SortLinks["name"]) }>{ title }</a></th>
+					<th>Mode</th>
+					<th><a href={ templ.SafeURL(c.SortLinks["turns"]) }>Turns</a></th>
+					<th><a href={ templ.SafeURL(c.SortLinks["tokens"]) }>In</a></th>
+					<th>Out</th>
+					<th>Cache read</th>
+					<th>Cache write</th>
+					<th><a href={ templ.SafeURL(c.SortLinks["cache"]) }>Cache share</a></th>
+					<th><a href={ templ.SafeURL(c.SortLinks["cost"]) }>Cost</a></th>
+				</tr>
+			</thead>
+			<tbody>
+				@usageRows(rows)
+			</tbody>
+		</table>
+	</div>
+}
+
+templ usageSection(c *usageCard) {
+	<section aria-labelledby="usage-h" class="usage-card">
+		<h2 id="usage-h">Usage</h2>
+		<p class="actions">
+			for _, l := range c.Periods {
+				if l.Current {
+					<a class="button primary" href={ templ.SafeURL(l.Href) } aria-current="page">{ l.Label }</a>
+				} else {
+					<a class="button" href={ templ.SafeURL(l.Href) }>{ l.Label }</a>
+				}
+			}
+		</p>
+		if c.Subscription {
+			<p class="muted">The usage window leads on a subscription: it, not the cost below, limits you. The cost is API-equivalent, not billed.</p>
+			for _, w := range c.Windows {
+				<p class="window">
+					<label for={ "win-" + w.ID }>{ w.Name }</label>
+					<meter id={ "win-" + w.ID } min="0" max="100" low="70" high="90" optimum="0" value={ itoa(int64(w.Percent)) }>{ itoa(int64(w.Percent)) }%</meter>
+					<span>{ itoa(int64(w.Percent)) }%</span>
+					if w.Resets != "" {
+						<span class="muted">{ w.Resets }</span>
+					}
+				</p>
+			}
 		}
-		if u.Totals != "" {
-			<p class="muted">{ u.Totals }</p>
-		}
-		if u.Balance != "" {
-			<p class="muted">Balance: { u.Balance }</p>
+		if len(c.Total) == 0 {
+			<p class="muted">No agent reported usage in this period.</p>
+		} else {
+			<div class="scroll">
+				<table class="usage">
+					<thead>
+						<tr><th>Total</th><th>Mode</th><th>Turns</th><th>Runs</th><th>API time</th><th>Wall time</th><th>Cost</th></tr>
+					</thead>
+					<tbody>
+						for _, r := range c.Total {
+							<tr><td>{ r.Key }</td><td>{ r.Auth }</td><td>{ r.Turns }</td><td>{ r.Runs }</td><td>{ r.APITime }</td><td>{ r.WallTime }</td><td>{ r.Cost } <span class="muted">{ r.Label }</span></td></tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			@usageTable("Agent", c.ByAgent, c)
+			@usageTable("Model", c.ByModel, c)
+			if c.Balance != "" {
+				<p class="muted">Balance: { c.Balance }</p>
+			}
+			<p class="muted">A cost is what the agent reported; an estimate is labelled as one and never added to a reported figure. Rows of different modes are never added together.</p>
 		}
 	</section>
 }
@@ -174,7 +248,10 @@ templ harborView(p harborPage) {
 		<h1>Harbor</h1>
 		@flashNote(p.Flash)
 		if p.Usage != nil {
-			@usagePanel(p.Usage)
+			@usageSection(p.Usage)
+		}
+		if p.AgentRef != "" {
+			<p class="flash">Tasks of { p.AgentRef }. <a href="/">Show all</a></p>
 		}
 		<section aria-labelledby="needs">
 			<h2 id="needs">Needs you</h2>

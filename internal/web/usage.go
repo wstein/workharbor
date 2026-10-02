@@ -3,23 +3,16 @@ package web
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
 )
-
-// usageBox is what the harbor page shows of usage (design §5.7, D40): the
-// account's own usage windows lead, because on a subscription they are the number
-// that matters and the cost is only notional; the totals of the last day follow,
-// and a balance the agent reported.
-type usageBox struct {
-	Windows []windowRow
-	Totals  string // turns, tokens and the agent's reported cost over the last day
-	Balance string
-}
 
 // windowRow is one usage window of the account, as a meter.
 type windowRow struct {
@@ -29,53 +22,162 @@ type windowRow struct {
 	Resets  string // "resets in 2h 10m", or empty
 }
 
-// usageWindow is how far back the harbor totals reach.
-const usageWindow = 24 * time.Hour
+// usagePeriods are the periods of the card, in the order of its links.
+var usagePeriods = []struct{ Key, Label string }{
+	{service.PeriodToday, "Today"}, {service.Period7Days, "7 days"}, {service.Period30Days, "30 days"}, {service.PeriodAll, "All"},
+}
 
-// usageBoxOf builds the box from a report of the last day. It returns nil when
-// there is nothing to show, so a fresh install shows no empty panel.
-func usageBoxOf(rep service.UsageReport, now time.Time) *usageBox {
-	box := &usageBox{}
-	for _, w := range rep.Windows {
-		pct := int(w.Utilization*100 + 0.5)
-		pct = min(max(pct, 0), 100)
-		row := windowRow{ID: idOf(w.Name), Name: strings.ReplaceAll(w.Name, "_", " "), Percent: pct}
-		if !w.ResetsAt.IsZero() {
-			if d := w.ResetsAt.Sub(now); d > 0 {
-				row.Resets = "resets in " + shortDuration(d)
-			} else {
-				row.Resets = "reset"
-			}
-		}
-		box.Windows = append(box.Windows, row)
+// usageSorts are the columns a breakdown can be sorted by.
+var usageSorts = map[string]func(a, b service.UsageRow) bool{
+	"cost": func(a, b service.UsageRow) bool {
+		return a.ReportedMicroUSD+a.EstimatedMicroUSD > b.ReportedMicroUSD+b.EstimatedMicroUSD
+	},
+	"tokens": func(a, b service.UsageRow) bool { return rowTokens(a) > rowTokens(b) },
+	"turns":  func(a, b service.UsageRow) bool { return a.Turns > b.Turns },
+	"cache": func(a, b service.UsageRow) bool {
+		return share(a) > share(b)
+	},
+	"name": func(a, b service.UsageRow) bool { return a.Key < b.Key },
+}
+
+func rowTokens(r service.UsageRow) int64 {
+	return r.Tokens.Input + r.Tokens.Output + r.Tokens.CacheRead + r.Tokens.CacheWrite
+}
+
+func share(r service.UsageRow) float64 {
+	if r.CacheShare == nil {
+		return -1
 	}
-	var turns, in, out, unknown, reported int64
-	notional := false
-	for _, r := range rep.Rows {
-		turns += r.Turns
-		in += r.Tokens.Input + r.Tokens.CacheRead + r.Tokens.CacheWrite
-		out += r.Tokens.Output
-		unknown += r.TurnsWithoutCost
-		reported += r.ReportedMicroUSD
-		notional = notional || r.Notional
+	return *r.CacheShare
+}
+
+// duration writes milliseconds as 1h02m, 3m04s or 12s, and "-" for none.
+func duration(ms int64) string {
+	if ms <= 0 {
+		return "-"
 	}
-	if turns > 0 {
-		cost := "cost not reported"
-		if reported > 0 || unknown == 0 {
-			cost = service.FormatMicroUSD(reported) + " reported"
-		}
-		if notional {
-			cost += ", notional (subscription)"
-		}
-		box.Totals = fmt.Sprintf("Last 24 hours: %d turns, %s in, %s out; %s", turns, service.Compact(in), service.Compact(out), cost)
+	d := time.Duration(ms) * time.Millisecond
+	switch {
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
-	if rep.Balance != nil {
-		box.Balance = service.FormatMicroUSD(rep.Balance.RemainingMicroUSD) + " left, as the agent reported"
+	return fmt.Sprintf("%ds", int(d.Seconds()))
+}
+
+// costText says what the cost is, never calling an estimate reported, and an
+// API-key figure real spend while a subscription's is API-equivalent and not billed.
+func costText(r service.UsageRow) (cost, label string) {
+	label = r.CostLabel
+	switch r.CostLabel {
+	case "none":
+		return "not reported", label
+	case "estimated":
+		cost = service.FormatMicroUSD(r.EstimatedMicroUSD)
+	case "mixed":
+		cost = service.FormatMicroUSD(r.ReportedMicroUSD) + " + " + service.FormatMicroUSD(r.EstimatedMicroUSD)
+	default:
+		cost = service.FormatMicroUSD(r.ReportedMicroUSD)
 	}
-	if len(box.Windows) == 0 && box.Totals == "" && box.Balance == "" {
+	if r.Notional {
+		label += ", API-equivalent, not billed"
+	} else if r.Auth == "api-key" {
+		label += ", spend"
+	}
+	return cost, label
+}
+
+func usageRowOf(r service.UsageRow, key string, link string) usageRowView {
+	cost, label := costText(r)
+	cache := "-"
+	if r.CacheShare != nil {
+		cache = fmt.Sprintf("%.0f%%", *r.CacheShare*100)
+	}
+	in := service.Compact(r.Tokens.Input)
+	out := service.Compact(r.Tokens.Output)
+	if r.TurnsWithoutToken == r.Turns {
+		in, out = "-", "-"
+	}
+	return usageRowView{
+		Key: key, Auth: r.Auth, Turns: fmt.Sprint(r.Turns), Runs: fmt.Sprint(r.Runs), In: in, Out: out,
+		CacheRead: service.Compact(r.Tokens.CacheRead), CacheWrite: service.Compact(r.Tokens.CacheWrite), Cache: cache,
+		Cost: cost, Label: label, APITime: duration(r.APIMillis), WallTime: duration(r.WallMillis), Link: link,
+	}
+}
+
+func rowsOf(rows []service.UsageRow, sortBy string, keyOf func(string) (string, string)) []usageRowView {
+	rows = append([]service.UsageRow(nil), rows...)
+	if less, ok := usageSorts[sortBy]; ok {
+		sort.SliceStable(rows, func(i, j int) bool { return less(rows[i], rows[j]) })
+	}
+	out := make([]usageRowView, len(rows))
+	for i, r := range rows {
+		key, link := keyOf(r.Key)
+		out[i] = usageRowOf(r, key, link)
+	}
+	return out
+}
+
+// usageCardOf builds the card for a period from the service's summary: no logic
+// of its own beyond ordering and wording (D8).
+func (s *Server) usageCardOf(ctx context.Context, period, sortBy string) *usageCard {
+	sum, ok := s.be.(api.UsageSummarizer)
+	if !ok {
 		return nil
 	}
-	return box
+	valid := false
+	for _, p := range usagePeriods {
+		valid = valid || p.Key == period
+	}
+	if !valid {
+		period = service.Period7Days
+	}
+	rep, err := sum.UsageSummary(ctx, period)
+	if err != nil {
+		if s.opt.OnError != nil {
+			s.opt.OnError(err)
+		}
+		return nil
+	}
+	if _, ok := usageSorts[sortBy]; !ok {
+		sortBy = "cost"
+	}
+	c := &usageCard{Period: period, Subscription: rep.Subscription, Sort: sortBy, SortLinks: map[string]string{}}
+	for _, p := range usagePeriods {
+		c.Periods = append(c.Periods, usagePeriodLink{Label: p.Label, Href: "/?period=" + p.Key, Current: p.Key == period})
+	}
+	for k := range usageSorts {
+		c.SortLinks[k] = "/?period=" + period + "&sort=" + k
+	}
+	if rep.Subscription { // the usage window is what limits the human: it leads
+		for _, w := range rep.Windows {
+			pct := min(max(int(w.Utilization*100+0.5), 0), 100)
+			row := windowRow{ID: idOf(w.Name), Name: strings.ReplaceAll(w.Name, "_", " "), Percent: pct}
+			if !w.ResetsAt.IsZero() {
+				if d := w.ResetsAt.Sub(s.opt.Now()); d > 0 {
+					row.Resets = "resets in " + shortDuration(d)
+				} else {
+					row.Resets = "reset"
+				}
+			}
+			c.Windows = append(c.Windows, row)
+		}
+	}
+	if rep.Balance != nil {
+		c.Balance = service.FormatMicroUSD(rep.Balance.RemainingMicroUSD) + " left, as the agent reported"
+	}
+	for _, r := range rep.Total {
+		c.Total = append(c.Total, usageRowOf(r, "All agents", ""))
+	}
+	c.ByAgent = rowsOf(rep.ByAgent, sortBy, func(k string) (string, string) {
+		if k == "" {
+			return "(no agent)", ""
+		}
+		return k, "/?agent=" + url.QueryEscape(k) + "&period=" + period
+	})
+	c.ByModel = rowsOf(rep.ByModel, sortBy, func(k string) (string, string) { return k, "" })
+	return c
 }
 
 // shortDuration writes a duration as "2h 10m" or "12m", rounded to the minute.
@@ -88,17 +190,6 @@ func shortDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh %dm", m/60, m%60)
 	}
 	return fmt.Sprintf("%dm", max(m, 1))
-}
-
-// harborUsage reads the account's usage for the harbor page. A usage that cannot
-// be read leaves the panel out and is reported: the page is for the tasks.
-func (s *Server) harborUsage(ctx context.Context) *usageBox {
-	rep, err := s.be.Usage(ctx, service.UsageQuery{Since: s.opt.Now().Add(-usageWindow), Group: store.GroupAll})
-	if err != nil {
-		s.report(fmt.Errorf("usage: %w", err))
-		return nil
-	}
-	return usageBoxOf(rep, s.opt.Now())
 }
 
 // taskUsage is the usage line of a task: its turns, tokens and cost, with the

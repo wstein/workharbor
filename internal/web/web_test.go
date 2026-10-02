@@ -48,6 +48,8 @@ type fake struct {
 	opens     []string
 	events    chan domain.Event
 
+	summary      func(period string) service.UsageSummary
+	failSummary  error
 	usage        func(service.UsageQuery) (service.UsageReport, error)
 	usageQueries []service.UsageQuery
 
@@ -156,6 +158,17 @@ func (f *fake) OpenCopy(_ context.Context, ws, role string) (service.EditorCopy,
 
 func (f *fake) KillAll(context.Context, string) (service.KillReport, error) {
 	return service.KillReport{}, errors.New("not used")
+}
+
+// UsageSummary makes the fake a UsageSummarizer: what a test sets, or an empty period.
+func (f *fake) UsageSummary(_ context.Context, period string) (service.UsageSummary, error) {
+	if f.failSummary != nil {
+		return service.UsageSummary{}, f.failSummary
+	}
+	if f.summary == nil {
+		return service.UsageSummary{Period: period}, nil
+	}
+	return f.summary(period), nil
 }
 
 func (f *fake) Usage(_ context.Context, q service.UsageQuery) (service.UsageReport, error) {

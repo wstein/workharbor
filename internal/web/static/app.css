@@ -145,6 +145,10 @@ button, .button {
 .ev .untrusted { flex: 1 1 100%; }
 /* the task list beside a task is for a wide screen in landscape only; a phone gets one column and the list stays out of the way (design §9.6) */
 .tasklist { display: none; }
+.scroll { overflow-x: auto; }
+table.usage { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+table.usage th, table.usage td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.usage th a { text-decoration: none; }
 .shortcuts { max-width: 60rem; margin: 0 auto; padding: 0 16px 16px; }
 .shortcuts summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .shortcuts dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }

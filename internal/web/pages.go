@@ -9,6 +9,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/store"
 )
 
 func newKey() string { return randomHex(16) }
@@ -138,7 +139,17 @@ func (s *Server) harbor(w http.ResponseWriter, r *http.Request, sess Session) {
 		s.fail(w, r, sess, err)
 		return
 	}
-	p := harborPage{nav: s.navOf(r, sess, "harbor"), Key: newKey(), Flash: flash(r), Usage: s.harborUsage(r.Context())}
+	p := harborPage{nav: s.navOf(r, sess, "harbor"), Key: newKey(), Flash: flash(r)}
+	p.Usage = s.usageCardOf(r.Context(), r.URL.Query().Get("period"), r.URL.Query().Get("sort"))
+	if ref := r.URL.Query().Get("agent"); ref != "" { // the tasks of one agent, linked from the usage card
+		var mine []store.TaskSummary
+		for _, t := range tasks {
+			if t.Agent == ref {
+				mine = append(mine, t)
+			}
+		}
+		tasks, p.AgentRef = mine, ref
+	}
 	p.NeedsYou, p.Others = taskRows(tasks)
 	for _, w := range ws {
 		for _, a := range w.Agents {

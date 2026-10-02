@@ -59,7 +59,34 @@ type taskRow struct {
 
 type agentChoice struct{ Ref, Repo string }
 
+// usageRowView is a row of the usage card, already written as text.
+type usageRowView struct {
+	Key, Auth, Turns, Runs, In, Out, CacheRead, CacheWrite, Cache, Cost, Label, APITime, WallTime string
+	Link                                                                                          string // the agent's tasks, for a by-agent row
+}
+
+// usageCard is the Harbor page's usage card for a period (issue #111, §9.3, §5.7).
+type usageCard struct {
+	Period  string
+	Periods []usagePeriodLink
+	// Subscription says the usage windows lead and the cost is API-equivalent.
+	Subscription bool
+	Windows      []windowRow
+	Balance      string
+	Total        []usageRowView
+	ByAgent      []usageRowView
+	ByModel      []usageRowView
+	Sort         string
+	SortLinks    map[string]string
+}
+
+type usagePeriodLink struct {
+	Label, Href string
+	Current     bool
+}
+
 type harborPage struct {
+	AgentRef string // the agent whose tasks are shown, or empty
 	nav
 	NeedsYou []taskRow
 	Others   []taskRow
@@ -68,7 +95,7 @@ type harborPage struct {
 	Flash    string
 	// Usage is the account's usage, which leads the page (§5.7); nil when there
 	// is nothing to show.
-	Usage *usageBox
+	Usage *usageCard
 }
 
 type decisionRow struct {
