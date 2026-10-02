@@ -222,3 +222,9 @@ func clip(s string) string {
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func (t taskPage) sinceURL() string { return "/tasks/" + t.ID + "/events?since=" + itoa(t.Since) }
+
+type openPage struct {
+	nav
+	ID, Repo, Issue, Path string
+	Warnings              []string // files in the copy an editor may run by itself: untrusted names
+}

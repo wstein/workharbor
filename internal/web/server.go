@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /tasks/{task}/say", s.authed(true, s.say))
 	mux.HandleFunc("GET /tasks/{task}/cancel", s.authed(false, s.cancelPage))
 	mux.HandleFunc("POST /tasks/{task}/cancel", s.authed(true, s.cancel))
+	mux.HandleFunc("POST /tasks/{task}/open", s.authed(true, s.open))
 	mux.HandleFunc("POST /decisions/{decision}/answer", s.authed(true, s.answer))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

@@ -42,6 +42,7 @@ type fake struct {
 	answers   []domain.Response
 	answerIDs []domain.ID
 	since     []int64
+	opens     []string
 	events    chan domain.Event
 
 	tasks    []store.TaskSummary
@@ -115,8 +116,11 @@ func (f *fake) AddAgent(context.Context, string, string, string, string) (domain
 	return domain.Agent{}, errors.New("not used")
 }
 func (f *fake) RemoveAgent(context.Context, string, string) error { return errors.New("not used") }
-func (f *fake) OpenCopy(context.Context, string, string) (service.EditorCopy, error) {
-	return service.EditorCopy{}, errors.New("not used")
+func (f *fake) OpenCopy(_ context.Context, ws, role string) (service.EditorCopy, error) {
+	f.mu.Lock()
+	f.opens = append(f.opens, ws+"/"+role)
+	f.mu.Unlock()
+	return service.EditorCopy{Path: "/Users/whr/open/" + ws + "." + role, Warnings: []string{".vscode/tasks.json", "<b>x</b>"}}, nil
 }
 
 func (f *fake) KillAll(context.Context, string) (service.KillReport, error) {
@@ -703,5 +707,33 @@ func TestTheVendoredFilesMatchTheirChecksums(t *testing.T) {
 		if !strings.Contains(string(notes), hex.EncodeToString(sum[:])) {
 			t.Errorf("static/%s does not match the checksum in VENDORED.md", name)
 		}
+	}
+}
+
+// The editor copy is the supervisor's, made for the task's agent; the page lists
+// the files an editor may run, as text.
+func TestTheEditorCopyIsTheSupervisorsAndItsWarningsAreText(t *testing.T) {
+	r := newRig(t)
+	b := r.browser()
+	b.signIn()
+	csrf, _ := b.form("/tasks/t1")
+	_, task := b.do("GET", "/tasks/t1", nil)
+	if !strings.Contains(task, `action="/tasks/t1/open"`) {
+		t.Error("the task page offers no editor copy")
+	}
+	resp, body := b.do("POST", "/tasks/t1/open", url.Values{"csrf": {csrf}})
+	if resp.StatusCode != 200 || len(r.be.opens) != 1 || r.be.opens[0] != "docs/runtime" {
+		t.Fatalf("%d, opens %v", resp.StatusCode, r.be.opens)
+	}
+	for _, want := range []string{"/Users/whr/open/docs.runtime", ".vscode/tasks.json", "&lt;b&gt;x&lt;/b&gt;", "not the agent's checkout"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page lacks %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "<b>x</b>") {
+		t.Error("a file name became HTML")
+	}
+	if resp, _ := b.do("POST", "/tasks/t1/open", url.Values{}); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("without the CSRF token: %d", resp.StatusCode)
 	}
 }

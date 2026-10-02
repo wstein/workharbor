@@ -270,3 +270,31 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request, sess Session) {
 	}
 	seeOther(w, r, loc)
 }
+
+// open makes the supervisor-owned copy of the agent's branch for an editor (design
+// §4.5, issue #59) and shows where it is, with the files in it that an editor may
+// run by itself. It is never the agent's checkout. Making the copy twice is
+// harmless, so it needs no idempotency key.
+func (s *Server) open(w http.ResponseWriter, r *http.Request, sess Session) {
+	id := domain.ID(r.PathValue("task"))
+	v, err := s.be.Show(r.Context(), id)
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	ws, role, ok := strings.Cut(v.Agent, "/")
+	if !ok {
+		s.fail(w, r, sess, &domain.InvalidError{Msg: "this task has no agent, so there is no branch to open"})
+		return
+	}
+	cp, err := s.be.OpenCopy(r.Context(), ws, role)
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	warnings := make([]string, 0, len(cp.Warnings))
+	for _, w := range cp.Warnings {
+		warnings = append(warnings, clip(w))
+	}
+	s.render(w, r, http.StatusOK, openView(openPage{nav: s.navOf(r, sess, "harbor"), ID: string(id), Repo: v.Task.Repo, Issue: v.Task.Issue, Path: cp.Path, Warnings: warnings}))
+}

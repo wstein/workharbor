@@ -257,6 +257,12 @@ templ taskView(p taskPage) {
 				<button class="primary">Send</button>
 			</form>
 		</section>
+		if p.Agent != "" {
+			<form method="post" action={ templ.SafeURL("/tasks/" + p.ID + "/open") } class="actions">
+				<input type="hidden" name="csrf" value={ p.CSRF }/>
+				<button>Make an editor copy</button>
+			</form>
+		}
 		if p.Cancelable {
 			<p><a class="button danger" href={ templ.SafeURL("/tasks/" + p.ID + "/cancel") }>Cancel this task…</a></p>
 		}
@@ -273,5 +279,22 @@ templ cancelView(p cancelPage) {
 			<button class="danger">Cancel the task</button>
 			<a class="button" href={ templ.SafeURL("/tasks/" + p.ID) }>Keep it running</a>
 		</form>
+	}
+}
+
+templ openView(p openPage) {
+	@layout(p.nav, "Editor copy") {
+		<h1>Editor copy of { p.Repo }{ p.Issue }</h1>
+		<p>The supervisor made its own copy of the agent's branch. It is not the agent's checkout, has no hooks and none of the agent's configuration, and is refreshed without overwriting your edits.</p>
+		<pre class="untrusted">{ p.Path }</pre>
+		if len(p.Warnings) > 0 {
+			<p class="flash">These files in the copy can run things when an editor opens the folder. Read them before you trust it:</p>
+			<ul>
+				for _, w := range p.Warnings {
+					<li><code>{ w }</code></li>
+				}
+			</ul>
+		}
+		<p><a href={ templ.SafeURL("/tasks/" + p.ID) }>Back to the task</a></p>
 	}
 }
