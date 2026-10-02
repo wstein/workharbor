@@ -3,9 +3,10 @@
 # links in every run, 2 failed none (measured 2 October 2026, lychee 0.24.2).
 max_concurrency = 2
 timeout = 20
-max_retries = 2
-# 429 means rate limited, not broken.
-accept = ["200..=299", "429"]
+max_retries = 3
+retry_wait_time = 2
+# 429 and 503 mean rate limited or server temporarily overloaded, not broken.
+accept = ["200..=299", "429", "503"]
 # CHANGELOG.md is generated from commits; its commit links only resolve after a push.
 exclude_path = ["CHANGELOG.md", "docs/vendor", "_site"]
 # GitHub user projects return 404 to unauthenticated clients.
