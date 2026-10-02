@@ -19,6 +19,20 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Container base images, pinned by digest. Whether Dependabot reads files named
+  # Containerfile.<base> is unverified; the devcontainer's Dockerfile it reads.
+  - package-ecosystem: docker
+    directories: [/.devcontainer, /internal/baseimage, /internal/console]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    labels: [dependencies]
+
   - package-ecosystem: gomod
     directory: /
     schedule:
