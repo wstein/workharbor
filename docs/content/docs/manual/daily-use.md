@@ -35,7 +35,7 @@ whr reject  <decision> [--reason <text>]
 whr answer  <decision> <option> [--reason <text>]
 ```
 
-`inbox` lists what waits for you: a tool approval, a question with options, an egress host the repository requests, and "Ready to push?". `approve` and `reject` answer an approval; `answer` picks one option of a question (resume, retry, cancel, rework, start). A "Ready to push?" review needs `--sha`, the exact commit you were shown, so the approval covers that commit and no other. On the phone the web app answers the same decisions; a review and an egress host there need your passkey.
+`inbox` lists what waits for you: a tool approval, an "Accept this task?" for a card in the agent's queue, a question with options, an egress host the repository requests, and "Ready to push?". `approve` and `reject` answer an approval; `answer` picks one option of a question (resume, retry, cancel, rework, start). A "Ready to push?" review needs `--sha`, the exact commit you were shown, so the approval covers that commit and no other. On the phone the web app answers the same decisions; a review and an egress host there need your passkey.
 
 ## Pause, resume, cancel
 
@@ -52,7 +52,7 @@ Pausing supersedes the questions and approvals the run raised. No agent can paus
 ```text
 whr open <workspace>[/<role>]   # the supervisor's own copy of the agent's branch, for your editor; prints its path
 whr purge <task> [--yes]        # deletes the stored transcript; audit entries, usage and Decisions stay
-whr usage [--by task|run|repo|day|month|all] [--repo owner/name] [--since 7d] [--task #42]
+whr usage [--by task|run|repo|agent|model|day|month|all] [--repo owner/name] [--since 7d] [--until <time>] [--task #42]
 ```
 
 `purge` is refused while the run is running (pause it first) and, without `--yes`, says what goes and asks. `usage` totals what the agents reported; on a subscription the usage windows are the number that matters, and no cost is invented.

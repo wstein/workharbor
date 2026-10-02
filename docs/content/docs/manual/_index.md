@@ -13,6 +13,7 @@ How to set up and run workharbor. workharbor is building release 1. The service 
   {{< card link="run-the-supervisor" title="Run the supervisor" subtitle="whr serve, workspaces, passkeys, previews, doctor (draft, provisional)." icon="server" >}}
   {{< card link="daily-use" title="Daily use" subtitle="Start a task, follow it, answer, pause, resume (draft, provisional)." icon="play" >}}
   {{< card link="install-upgrade-release" title="Install, upgrade and release" subtitle="Draft releases, the tap, upgrade notes, cutting a release (draft, operators)." icon="download" >}}
+  {{< card link="first-run" title="First run" subtitle="The path from a prepared host to the first task (draft, provisional)." icon="arrow-right" >}}
 {{< /cards >}}
 
 The drafts are checked against the first release, `v0.1.0` (issue #65).
