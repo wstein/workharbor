@@ -35,7 +35,6 @@
       "Bash(container image ls)",
       "Bash(gh api repos/wstein/workharbor/code-scanning/alerts)",
       "Bash(gh api repos/wstein/workharbor/dependabot/alerts)",
-      "Bash(gh api repos/wstein/workharbor/secret-scanning/alerts)",
       "Bash(gh api repos/wstein/workharbor/rulesets)"
     ],
     "deny": [
@@ -71,7 +70,8 @@
       "Bash(rg /Users/werner/.config/whr:*)",
       "Bash(rg /Users/werner/.config/gh:*)",
       "Bash(rg /Users/werner/Library/Keychains:*)",
-      "Bash(rg /Library/Keychains:*)"
+      "Bash(rg /Library/Keychains:*)",
+      "Bash(gh api repos/wstein/workharbor/secret-scanning:*)"
     ]
   }
 }
