@@ -1,5 +1,8 @@
 /* workharbor palette: navy ink and teal accents, dark by default. */
 :root {
+  /* Fonts: Hextra reads these two variables (see css/fonts.css for the files). */
+  --hx-default-font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --hx-default-mono-font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --primary-hue: 175deg;
   --primary-saturation: 77%;
   --primary-lightness: 26%;

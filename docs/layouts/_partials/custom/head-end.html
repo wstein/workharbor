@@ -10,3 +10,7 @@
     new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   })();
 </script>
+{{- with resources.Get "css/fonts.css" | resources.ExecuteAsTemplate "css/fonts.css" . | fingerprint }}
+<link rel="preload" href="{{ "fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2" | relURL }}" as="font" type="font/woff2" crossorigin />
+<link href="{{ .RelPermalink }}" rel="stylesheet" integrity="{{ .Data.Integrity }}" />
+{{- end }}

@@ -39,13 +39,13 @@ params:
     default: dark
     displayToggle: true
   navbar:
-    displayTitle: true
+    displayTitle: false
     displayLogo: true
     logo:
       path: images/logo-light.svg
       dark: images/logo-dark.svg
-      width: 28
-      height: 28
+      width: 178
+      height: 30
   search:
     enable: true
     type: flexsearch
