@@ -325,13 +325,16 @@ func (a *TaskAggregate) RaiseUntrustedHold(decisionID ID, author, association, t
 // who can write the board, so the human sees where the task would run. A task whose
 // issue is by a non-trusted author is marked as having untrusted input, as in #53.
 func (a *TaskAggregate) RaiseQueueHold(decisionID ID, agent, repo string, issue int, author, association, mover, text string, untrustedAuthor bool, now time.Time) (Decision, error) {
-	moved := mover
-	if moved == "" {
-		moved = "unknown (the board does not say)"
+	// The polled board does not say who moved a card (the GraphQL project item has no
+	// mover), so the mover is empty today and the question leaves the line out rather
+	// than claim "unknown" as if it were a fact about the card.
+	moved := ""
+	if mover != "" {
+		moved = "moved by: " + mover + "\n"
 	}
 	d, err := a.raiseHold(decisionID, CauseBoardQueue, "Accept this task? Its card was moved to the agent queue",
 		fmt.Sprintf("from the board (supervisor facts, not issue text): agent %s, repository %s, issue #%d\n", agent, repo, issue)+
-			"moved by: "+moved+"\nauthor: "+author+" ("+association+")\n"+text,
+			moved+"author: "+author+" ("+association+")\n"+text,
 		TaskHeld{DecisionID: decisionID, Author: author, Association: association, TextSHA256: TextHash(text), Source: "board", Mover: mover}, now)
 	if err == nil && untrustedAuthor {
 		a.task.Untrusted = true

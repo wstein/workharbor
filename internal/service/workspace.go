@@ -92,6 +92,11 @@ type Workspaces struct {
 	// rebuilt, and a rebuild is not started in a workspace that has an unfinished
 	// run, under the same lock, so the two cannot pass each other's check.
 	mu sync.Mutex
+
+	// failures remembers, per card, the last error text reported by the queue poll
+	// (guarded by failMu), so a failing card is reported once, not every poll.
+	failMu   sync.Mutex
+	failures map[string]string
 }
 
 // NewWorkspaces returns the workspace operations of a service.

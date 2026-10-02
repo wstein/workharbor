@@ -71,9 +71,9 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	raised := 0
+	raised, tried := 0, 0
 	for _, c := range cards {
-		if raised >= maxQueueQuestions {
+		if raised >= maxQueueQuestions || tried >= maxQueueQuestions {
 			break
 		}
 		seen, ok, err := w.svc.store.QueueSeen(ctx, c.Repo, c.Issue)
@@ -85,10 +85,15 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 		}
 		task, err := w.acceptCard(ctx, c)
 		if err != nil {
-			w.svc.report(fmt.Errorf("the card of %s#%d is not queued: %w", c.Repo, c.Issue, err))
+			tried++ // a failing card counts toward the cap, so a bad board does not cost unbounded forge calls
+			if w.firstFailure(c, err) {
+				w.svc.report(fmt.Errorf("the card of %s#%d is not queued: %w", c.Repo, c.Issue, err))
+			}
 			if !errors.As(err, new(refusal)) {
 				continue // transient: not remembered, so the next poll tries again
 			}
+		} else {
+			w.clearFailure(c)
 		}
 		if err := w.svc.store.RememberQueue(ctx, c.Repo, c.Issue, c.UpdatedAt, string(task)); err != nil {
 			return raised, err
@@ -98,6 +103,32 @@ func (w *Workspaces) PollQueue(ctx context.Context) (int, error) {
 		}
 	}
 	return raised, nil
+}
+
+// maxFailureMemory bounds the failures remembered so each is reported once.
+const maxFailureMemory = 1000
+
+// firstFailure reports whether this is the first time the card fails with this error
+// text since it last succeeded or the process started, and remembers it. The memory is
+// bounded: when full it is dropped, which at worst reports a failure again.
+func (w *Workspaces) firstFailure(c forge.QueuedCard, err error) bool {
+	key, text := c.Repo+"#"+strconv.Itoa(c.Issue), err.Error()
+	w.failMu.Lock()
+	defer w.failMu.Unlock()
+	if w.failures[key] == text {
+		return false
+	}
+	if w.failures == nil || len(w.failures) >= maxFailureMemory {
+		w.failures = map[string]string{}
+	}
+	w.failures[key] = text
+	return true
+}
+
+func (w *Workspaces) clearFailure(c forge.QueuedCard) {
+	w.failMu.Lock()
+	delete(w.failures, c.Repo+"#"+strconv.Itoa(c.Issue))
+	w.failMu.Unlock()
 }
 
 // acceptCard holds a task for one card and returns its ID, or "" when there is nothing

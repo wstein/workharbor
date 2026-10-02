@@ -61,7 +61,7 @@ func TestACardInTheQueueAsksBeforeAnyRunStarts(t *testing.T) {
 	if d.Status != domain.DecisionOpen || !d.Blocking || len(d.Options) != 2 || d.Options[0] != domain.AnswerStart || !strings.Contains(d.Subject, "Accept this task?") {
 		t.Errorf("decision = %+v", d)
 	}
-	if !strings.Contains(d.Input, "moved by: unknown") || !strings.Contains(d.Input, "author: wstein (OWNER)") || !strings.Contains(d.Input, "write the manual") {
+	if !strings.Contains(d.Input, "author: wstein (OWNER)") || !strings.Contains(d.Input, "write the manual") {
 		t.Errorf("the decision does not show who and what: %q", d.Input)
 	}
 	agg, _ := r.store.LoadTask(bg, tasks[0].ID)
@@ -273,5 +273,49 @@ func TestHoldingAnIssueTwiceRaisesOnlyOneQuestion(t *testing.T) {
 	}
 	if tasks, _ := r.store.Tasks(bg, true); len(tasks) != 1 {
 		t.Errorf("%d tasks", len(tasks))
+	}
+}
+
+// A card that keeps failing the same way is reported once, not every poll, and its
+// failures count toward the cap of one poll.
+func TestAFailingCardIsReportedOnceAndCountsTowardTheCap(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	var cards []forge.QueuedCard
+	for i := 1; i <= 7; i++ { // none of the issues can be loaded
+		cards = append(cards, r.card(i, "", r.clock.now))
+	}
+	r.issues.SetQueue(cards...)
+	r.forget()
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 0 {
+		t.Fatalf("poll = %d, %v", n, err)
+	}
+	if errs := r.reported(); len(errs) != maxQueueQuestions {
+		t.Fatalf("first poll reported %d, want the cap %d", len(errs), maxQueueQuestions)
+	}
+	r.forget()
+	if _, err := r.ws.PollQueue(bg); err != nil {
+		t.Fatal(err)
+	}
+	// the five known failures stay quiet; the cap is spent on them, so the other two wait
+	if errs := r.reported(); len(errs) != 0 {
+		t.Errorf("second poll reported %v, want nothing", errs)
+	}
+}
+
+// The board does not say who moved a card, so the question does not claim to know.
+func TestTheQueueQuestionHasNoMovedByLineWhenTheMoverIsUnknown(t *testing.T) {
+	r := newWsRig(t)
+	r.create("q")
+	r.withQueue()
+	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Body: "y", Author: "w", AuthorAssociation: "OWNER"}
+	r.issues.SetQueue(r.card(7, "", r.clock.now))
+	if n, err := r.ws.PollQueue(bg); err != nil || n != 1 {
+		t.Fatalf("poll = %d, %v", n, err)
+	}
+	tasks, _ := r.store.Tasks(bg, true)
+	if d := r.holdOf(tasks[0].ID); strings.Contains(d.Input, "moved by") {
+		t.Errorf("the question names a mover nobody knows: %q", d.Input)
 	}
 }
