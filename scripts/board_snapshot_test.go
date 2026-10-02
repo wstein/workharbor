@@ -41,8 +41,8 @@ echo "$*" >> "` + b.log + `"
 sleep 0.3
 if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exit 1; fi
 case "$1 $2" in
-"project item-edit" | "project item-add") exit 0 ;;
-"issue view") echo "A new title"; exit 0 ;;
+"project item-edit") exit 0 ;;
+"project item-add") echo '{"id":"PVTI_x","title":"A new title","type":"Issue"}'; exit 0 ;;
 esac
 cat "` + data + `"
 `
@@ -307,7 +307,7 @@ func TestBoardSnapshotFailedMoveKeepsCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
-	for _, args := range [][]string{{"move", "20", "Done"}, {"session", "20", "Werner"}, {"priority", "20", "P1"}, {"add", "99"}} {
+	for _, args := range [][]string{{"move", "20", "Blocked"}, {"session", "20", "Werner"}, {"priority", "20", "P1"}, {"add", "99"}} {
 		_, se, err := b.runEnv(t, []string{"FAKE_GH_FAIL=1"}, args...)
 		if err == nil || se == "" {
 			t.Fatalf("%v: err %v, stderr %q; want a failure with a message", args, err, se)
@@ -344,7 +344,7 @@ func TestBoardSnapshotConcurrentMoves(t *testing.T) {
 
 func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
 	b := newBoard(t)
-	_, se, err := b.run(t, "move", "20", "Done")
+	_, se, err := b.run(t, "move", "20", "Blocked")
 	if err != nil || !strings.Contains(se, "cache") {
 		t.Fatalf("err %v, stderr %q", err, se)
 	}
@@ -360,7 +360,7 @@ func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
 	}
 	b.age(t, 400)
 	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
-	if _, _, err := b.run(t, "move", "20", "Done"); err != nil {
+	if _, _, err := b.run(t, "move", "20", "Blocked"); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
@@ -378,9 +378,8 @@ func TestBoardSnapshotAdd(t *testing.T) {
 		t.Fatalf("add: %v %s", err, se)
 	}
 	l := b.lines(t)
-	if len(l) != 3 ||
-		l[1] != "project item-add 6 --owner wstein --url https://github.com/wstein/workharbor/issues/77" ||
-		l[2] != "issue view 77 --json title -q .title" {
+	if len(l) != 2 ||
+		l[1] != "project item-add 6 --owner wstein --url https://github.com/wstein/workharbor/issues/77 --format json" {
 		t.Fatalf("gh calls = %q", l)
 	}
 	if got := b.card(t, "77"); !strings.HasPrefix(got, "#77\t") || !strings.HasSuffix(got, "A new title") {
@@ -433,5 +432,62 @@ func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
 	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
 	if string(after) != string(before) {
 		t.Fatal("a rejected value changed the cache")
+	}
+}
+
+func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	base := b.calls(t)
+	for _, st := range []string{"Ready to push", "Done"} {
+		_, se, err := b.run(t, "move", "20", st)
+		if err == nil || !strings.Contains(se, "wh/review") || !strings.Contains(se, "gh project item-edit") {
+			t.Fatalf("move %q: err %v, stderr %q; want a refusal naming wh/review and gh project item-edit", st, err, se)
+		}
+	}
+	if b.calls(t) != base {
+		t.Fatalf("a refused move made a gh call: %q", b.lines(t))
+	}
+	for _, st := range []string{"Todo", "In progress", "Blocked", "In review"} {
+		if _, se, err := b.run(t, "move", "20", st); err != nil {
+			t.Fatalf("move %q: %v %s", st, err, se)
+		}
+	}
+}
+
+func TestBoardSnapshotStaleLockTakeoverConcurrent(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	lock := filepath.Join(filepath.Dir(b.snap), ".board.lock")
+	if err := os.Mkdir(lock, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := strconv.FormatInt(time.Now().Unix()-1000, 10)
+	if err := os.WriteFile(filepath.Join(lock, "ts"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nums := []string{"10", "20", "30", "40", "50"}
+	var wg sync.WaitGroup
+	for _, n := range nums {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, se, err := b.run(t, "move", n, "Blocked"); err != nil {
+				t.Errorf("move %s: %v %s", n, err, se)
+			}
+		}()
+	}
+	wg.Wait()
+	for _, n := range nums {
+		if got := b.card(t, n); !strings.Contains(got, "\tBlocked\t") {
+			t.Errorf("card %s = %q, want Blocked (a write was lost)", n, got)
+		}
+	}
+	if got := len(b.lines(t)); got != 1+len(nums) {
+		t.Errorf("gh calls = %d, want %d", got, 1+len(nums))
 	}
 }

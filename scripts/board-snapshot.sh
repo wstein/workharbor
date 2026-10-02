@@ -9,8 +9,12 @@
 #   board-snapshot.sh priority <number> <P1|P2|P3>  set a card's Priority
 #   board-snapshot.sh add <number>             add an issue to the board
 #
+# move sets only Todo, In progress, Blocked and In review: Ready to push
+# (wh/review) and Done (closing the issue, the human) are refused before any gh
+# call; they are set through `gh project item-edit` directly.
+#
 # The four writes run `gh project item-edit` / `item-add` by the issue's URL
-# and make no board query. Only when GitHub accepts the write is that one card
+# and make no board query (add runs one `item-add --format json`, the only call). Only when GitHub accepts the write is that one card
 # patched in the cache (under the lock, fetched_at unchanged: a write does not
 # make old data fresh). A failed write leaves the cache untouched and exits 1.
 # With no cache, or a stale one, the write still happens and the cache is left
@@ -66,8 +70,10 @@ move | session | priority | add)
   case $mode in
   move)
     case ${args[2]:-} in
-    "Todo" | "In progress" | "Blocked" | "In review" | "Ready to push" | "Done") ;;
-    *) die "status must be one of: Todo, In progress, Blocked, In review, Ready to push, Done" ;;
+    "Todo" | "In progress" | "Blocked" | "In review") ;;
+    "Ready to push" | "Done")
+      die "move does not set \"${args[2]}\": Ready to push is set only by wh/review and Done by closing the issue or by the human, through gh project item-edit directly" ;;
+    *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;
   session)
@@ -123,6 +129,31 @@ query() {
   mv "$tmp" "$file"
 }
 
+# lock_takeover removes a stale lock. Only the holder of $lock.takeover (a
+# mkdir mutex) checks again and renames the stale directory away, so one caller
+# cannot remove a lock another has just taken; the rename is atomic and the
+# stale copy is deleted afterwards. A takeover mutex left by a dead caller is
+# dropped after 120 seconds.
+lock_takeover() {
+  local t now
+  if mkdir "$lock.takeover" 2>/dev/null; then
+    date +%s >"$lock.takeover/ts"
+    now=$(date +%s)
+    t=$(cat "$lock/ts" 2>/dev/null || echo "$now")
+    case $t in '' | *[!0-9]*) t=$now ;; esac
+    if [ $((now - t)) -gt 120 ] && mv "$lock" "$lock.stale.$$" 2>/dev/null; then
+      rm -rf "$lock.stale.$$"
+    fi
+    rm -rf "$lock.takeover"
+  else
+    now=$(date +%s)
+    t=$(cat "$lock.takeover/ts" 2>/dev/null || echo "$now")
+    case $t in '' | *[!0-9]*) t=$now ;; esac
+    [ $((now - t)) -le 120 ] || rm -rf "$lock.takeover"
+    sleep 0.05
+  fi
+}
+
 # lock_take takes the lock directory; a lock older than 120 seconds is stale.
 lock_take() {
   local i=0 t now
@@ -132,7 +163,7 @@ lock_take() {
     t=$(cat "$lock/ts" 2>/dev/null || echo "$now")
     case $t in '' | *[!0-9]*) t=$now ;; esac
     if [ $((now - t)) -gt 120 ]; then
-      rm -rf "$lock"
+      lock_takeover
       continue
     fi
     waited=1
@@ -177,13 +208,13 @@ move | session | priority | add)
   priority) field=Priority key=priority ;;
   esac
   if [ "$mode" = add ]; then
-    gh project item-add 6 --owner wstein --url "$url" >/dev/null || die "GitHub refused the add; the cache is unchanged"
-    if title=$(gh issue view "$n" --json title -q .title) && [ -n "$title" ]; then
-      patch '.items |= (if any(.[]; .number == $n) then . else . + [{number: $n, title: $title, status: null, session: null, priority: null, labels: [], type: "Issue", url: $url}] end)' \
-        --argjson n "$n" --arg title "$title" --arg url "$url"
-    else
-      echo "board-snapshot: the card is added, but its title could not be read: the cache is not patched" >&2
-    fi
+    out=$(gh project item-add 6 --owner wstein --url "$url" --format json) || die "GitHub refused the add; the cache is unchanged"
+    # One call: its JSON names the new item; the title is taken from it when
+    # there (unverified: not measured on the live API), else the card is
+    # cached with a null title (--refresh fills it).
+    title=$(printf '%s' "$out" | jq -r '.title // empty' 2>/dev/null || true)
+    patch '.items |= (if any(.[]; .number == $n) then . else . + [{number: $n, title: (if $title == "" then null else $title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: $url}] end)' \
+      --argjson n "$n" --arg title "$title" --arg url "$url"
   else
     value=${args[2]}
     gh project item-edit 6 --owner wstein --url "$url" --field "$field" --value "$value" >/dev/null ||
