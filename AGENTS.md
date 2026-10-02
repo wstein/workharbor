@@ -94,7 +94,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 - Keep a file and what is generated from it (an SVG and its PNG export, a source and its lockfile) in the same commit, together with any link or reference fix the change caused.
 - Keep unrelated changes in separate commits, and split a large change by topic (for example one commit per document section), not by editing session.
 - To correct your own unpushed commit, amend it or use `git commit --fixup` with an autosquash rebase instead of adding a "fix the previous commit" commit.
-- Until the beta, Werner allows rewriting history on `main`: a fix to an already-pushed commit may be folded in with `git commit --fixup` and an autosquash rebase instead of a follow-up commit. Only Werner force-pushes. From the beta on, never rewrite pushed commits unless asked. Because the repository allows only rebase merges, every commit lands on `main` as written.
+- Until the beta, Werner allows rewriting history on `main`: a fix to an already-pushed commit may be folded in with `git commit --fixup` and an autosquash rebase instead of a follow-up commit. Only Werner force-pushes, and since the ruleset `main` is active (no deletion, no merge commits, no force push), a rewrite of pushed history needs him to disable it first and enable it again after. From the beta on, never rewrite pushed commits unless asked. Because the repository allows only rebase merges, every commit lands on `main` as written.
 
 | Trailer | Rule |
 | --- | --- |
