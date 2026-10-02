@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -63,6 +63,12 @@ build:
 test:
 	go test ./...
 
+# The race detector, on the packages that run goroutines of their own: the
+# service (starts, sessions, the reconciler), the API (streams), the store and
+# the runtime adapters. About a minute.
+race:
+	go test -race ./internal/service ./internal/api ./internal/store ./internal/runtime/...
+
 vet:
 	go vet ./...
 
@@ -82,7 +88,7 @@ lint:
 editorconfig:
 	go run $(EDITORCONFIG_CHECKER)
 
-check: fmt-check vet lint editorconfig test
+check: fmt-check vet lint editorconfig test race
 
 # Check commits on this branch that are not on origin/main.
 commitlint:
