@@ -45,7 +45,7 @@ func (s *Service) askHuman(ctx context.Context, task, run domain.ID, req agent.A
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		_, err := a.RaiseDecision(domain.NewDecision{
 			ID: id, RunID: run, Kind: domain.DecisionApproval, Blocking: true,
-			Subject: req.Tool, Input: req.Input, Now: s.clock.Now(), Timeout: timeout,
+			Subject: req.Tool, Input: req.Input, InputTruncated: req.Truncated, Now: s.clock.Now(), Timeout: timeout,
 		})
 		return err
 	})

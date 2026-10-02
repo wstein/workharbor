@@ -135,12 +135,15 @@ type NewDecision struct {
 	Blocking bool
 	Subject  string
 	Input    string
-	SHA      string
-	Options  []string
-	Cause    DecisionCause
-	ResumeAt time.Time
-	Now      time.Time
-	Timeout  time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
+	// InputTruncated says the caller already cut Input; the Decision is marked
+	// truncated then, as it is when Input is longer than MaxDecisionInput.
+	InputTruncated bool
+	SHA            string
+	Options        []string
+	Cause          DecisionCause
+	ResumeAt       time.Time
+	Now            time.Time
+	Timeout        time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
 }
 
 // Validation errors returned by Raise.
@@ -200,7 +203,9 @@ func raise(spec NewDecision) (*Decision, error) {
 		Status:    DecisionOpen,
 		CreatedAt: spec.Now,
 	}
-	d.Input, d.InputTruncated = capInput(spec.Input)
+	var cut bool
+	d.Input, cut = capInput(spec.Input)
+	d.InputTruncated = cut || spec.InputTruncated
 	if d.Kind != DecisionQuestion && len(d.Options) == 0 {
 		d.Options = []string{AnswerAllow, AnswerDeny}
 	}

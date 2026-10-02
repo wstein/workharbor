@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -505,6 +506,19 @@ func itoa(n int) string {
 	return string(b)
 }
 
+// maxOpenPrompts is how many permission prompts of one session may wait for
+// the human at once; one more is denied without asking. A CLI asks one at a
+// time in practice, so the limit only stops a flood.
+const maxOpenPrompts = 8
+
+// maxToolName is the longest tool name asked about; Claude Code's tool names,
+// MCP ones included, are far shorter.
+const maxToolName = 128
+
+// toolNameRe is a tool name a prompt may carry: Claude Code's own (Bash, Edit)
+// and MCP tools (mcp__server__tool).
+var toolNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]{0,127}$`)
+
 // control puts one control_request to the host. A permission prompt is asked of
 // the approver, which may take as long as a human does, so it runs apart from
 // the reader; anything else is refused at once, because an unanswered request
@@ -519,16 +533,31 @@ func (s *session) control(cr controlRequest) {
 	}
 	text, plan := approvalInput(cr.Tool, cr.Input)
 	req := agent.ApprovalRequest{ID: cr.ID, Tool: cr.Tool, Input: text, Plan: plan}
+	refuse := ""
+	if !toolNameRe.MatchString(cr.Tool) { // the name becomes the Decision's subject
+		req.Tool = capText(cr.Tool)
+		if len(req.Tool) > maxToolName {
+			req.Tool = req.Tool[:maxToolName]
+		}
+		refuse = "not a tool name: denied"
+	}
 
 	s.omu.Lock()
-	dup := s.open[cr.ID]
-	s.open[cr.ID] = true
+	switch {
+	case refuse != "":
+	case s.open[cr.ID]: // one open request per ID: a second with the same ID is not asked
+		refuse = "a request with this ID is already open: denied"
+	case len(s.open) >= maxOpenPrompts: // a flood must not fill the human's inbox
+		refuse = "too many permission prompts open at once: denied"
+	default:
+		s.open[cr.ID] = true
+	}
 	s.omu.Unlock()
 	s.asks.Add(1)
 	go func() {
 		defer s.asks.Done()
-		if dup { // one open request per ID: a second with the same ID is not asked
-			s.answer(req, agent.Approval{Reason: "a request with this ID is already open: denied"})
+		if refuse != "" {
+			s.answer(req, agent.Approval{Reason: refuse})
 			return
 		}
 		a := agent.Ask(s.actx, s.approver, s.timeout, req)

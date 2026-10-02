@@ -41,24 +41,27 @@ type runView struct {
 }
 
 type decisionView struct {
-	ID       string   `json:"id"`
-	TaskID   string   `json:"task_id"`
-	RunID    string   `json:"run_id,omitempty"`
-	Kind     string   `json:"kind"`
-	Blocking bool     `json:"blocking"`
-	Cause    string   `json:"cause,omitempty"`
-	Subject  string   `json:"subject"`
-	Input    string   `json:"input,omitempty"` // untrusted data
-	SHA      string   `json:"sha,omitempty"`
-	Options  []string `json:"options"`
-	Status   string   `json:"status"`
-	Deadline string   `json:"deadline,omitempty"`
+	ID       string `json:"id"`
+	TaskID   string `json:"task_id"`
+	RunID    string `json:"run_id,omitempty"`
+	Kind     string `json:"kind"`
+	Blocking bool   `json:"blocking"`
+	Cause    string `json:"cause,omitempty"`
+	Subject  string `json:"subject"`
+	Input    string `json:"input,omitempty"` // untrusted data
+	// InputTruncated says Input is not all of the agent's input: an approval
+	// allows what the agent asked, of which this is only the start.
+	InputTruncated bool     `json:"input_truncated,omitempty"`
+	SHA            string   `json:"sha,omitempty"`
+	Options        []string `json:"options"`
+	Status         string   `json:"status"`
+	Deadline       string   `json:"deadline,omitempty"`
 }
 
 func decisionOf(d domain.Decision) decisionView {
 	v := decisionView{
 		ID: string(d.ID), TaskID: string(d.TaskID), RunID: string(d.RunID), Kind: string(d.Kind), Blocking: d.Blocking,
-		Cause: string(d.Cause), Subject: d.Subject, Input: d.Input, SHA: d.SHA, Options: d.Options, Status: string(d.Status),
+		Cause: string(d.Cause), Subject: d.Subject, Input: d.Input, InputTruncated: d.InputTruncated, SHA: d.SHA, Options: d.Options, Status: string(d.Status),
 	}
 	if v.Options == nil {
 		v.Options = []string{}

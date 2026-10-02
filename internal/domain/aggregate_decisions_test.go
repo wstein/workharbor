@@ -618,3 +618,16 @@ func TestSupersededOfListsWhatTheAgentAsked(t *testing.T) {
 		t.Errorf("a decision raised again is not listed: %+v", got)
 	}
 }
+
+// An input the caller already cut makes a truncated Decision, though what is
+// left fits: the human must see that an allow covers more than is shown.
+func TestADecisionKeepsTheCallersTruncation(t *testing.T) {
+	a := runningTask(t)
+	d, err := a.RaiseDecision(NewDecision{ID: "d1", RunID: "r1", Kind: DecisionApproval, Blocking: true, Subject: "Bash", Input: "make", InputTruncated: true, Now: tNow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.InputTruncated || d.Input != "make" {
+		t.Errorf("Decision input %q truncated %v, want %q true", d.Input, d.InputTruncated, "make")
+	}
+}

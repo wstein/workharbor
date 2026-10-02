@@ -146,6 +146,8 @@ type decisionRow struct {
 	Subject string   `json:"subject"`
 	SHA     string   `json:"sha"`
 	Options []string `json:"options"`
+	// InputTruncated: the input shown is only the start of what the agent asked.
+	InputTruncated bool `json:"input_truncated"`
 }
 
 func (s *state) inbox(ctx context.Context) ([]decisionRow, []byte, error) {
@@ -364,7 +366,11 @@ func newInbox(s *state) *cobra.Command {
 			return s.emit(raw, func(w io.Writer) error {
 				out := make([][]string, len(rows))
 				for i, d := range rows {
-					out[i] = []string{d.ID, d.TaskID, d.Kind, d.Subject, d.SHA, strings.Join(d.Options, ",")}
+					subject := d.Subject
+					if d.InputTruncated {
+						subject += " [input cut: more than shown]"
+					}
+					out[i] = []string{d.ID, d.TaskID, d.Kind, subject, d.SHA, strings.Join(d.Options, ",")}
 				}
 				return table(w, []string{"DECISION", "TASK", "KIND", "SUBJECT", "SHA", "OPTIONS"}, out)
 			})

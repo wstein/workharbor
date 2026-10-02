@@ -1337,6 +1337,10 @@
             "type": "string",
             "description": "Untrusted data."
           },
+          "input_truncated": {
+            "type": "boolean",
+            "description": "The input is cut: it is only the start of what the agent asked for, and an allow allows all of it."
+          },
           "sha": {
             "type": "string"
           },

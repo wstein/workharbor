@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -431,6 +432,62 @@ func TestApprovalInputIsWhatTheHumanNeeds(t *testing.T) {
 		got, plan := approvalInput(tc.tool, json.RawMessage(tc.raw))
 		if got != tc.want || plan != tc.plan {
 			t.Errorf("%s %s: %q plan=%v, want %q plan=%v", tc.tool, tc.raw, got, plan, tc.want, tc.plan)
+		}
+	}
+}
+
+// A tool name that is not one is denied without asking, and so is a prompt
+// beyond maxOpenPrompts open at once: a flood never reaches the human's inbox.
+func TestBadToolNamesAndAFloodAreDeniedWithoutAsking(t *testing.T) {
+	lines := []string{initLine, ctlRequest("bad", "can_use_tool", strings.Repeat("x", 300), `{}`)}
+	for i := range maxOpenPrompts + 2 {
+		lines = append(lines, ctlRequest("p"+strconv.Itoa(i), "can_use_tool", "Bash", `{"command":"ls"}`))
+	}
+	r := &raw{lines: lines}
+	release := make(chan struct{})
+	var mu sync.Mutex
+	asked := 0
+	spec := agent.StartSpec{
+		EnvID: "e", Workdir: "/work", Prompt: "go", Auth: agent.AuthSubscription, PermissionMode: agent.PermissionManual, ApprovalTimeout: 5 * time.Second,
+		Approver: agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.Approval, error) {
+			mu.Lock()
+			asked++
+			mu.Unlock()
+			<-release
+			return agent.Approval{Allow: true}, nil
+		}),
+	}
+	s, err := New(r, Config{}).Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var emu sync.Mutex
+	var recs []agent.ApprovalRecord
+	go func() {
+		for e := range s.Events() {
+			if e.Approval != nil {
+				emu.Lock()
+				recs = append(recs, *e.Approval)
+				emu.Unlock()
+			}
+		}
+	}()
+	// The bad name and the two prompts beyond the limit are answered at once.
+	waitUntil(t, "three denials", func() bool { return len(r.written()) >= 4 })
+	mu.Lock()
+	n := asked
+	mu.Unlock()
+	close(release)
+	waitUntil(t, "all answers", func() bool { return len(r.written()) >= 1+1+maxOpenPrompts+2 })
+	_ = s.Stop(context.Background())
+	if n != maxOpenPrompts {
+		t.Errorf("the human was asked %d times, want %d", n, maxOpenPrompts)
+	}
+	emu.Lock()
+	defer emu.Unlock()
+	for _, rec := range recs {
+		if rec.ID == "bad" && (rec.Allow || !strings.Contains(rec.Reason, "not a tool name")) {
+			t.Errorf("the bad tool name got %+v", rec)
 		}
 	}
 }

@@ -517,9 +517,10 @@ func checkStopCancelsApproval(ctx context.Context, h Harness) error {
 func checkApprovalCap(ctx context.Context, h Harness) error {
 	var mu sync.Mutex
 	var seen int
+	var cut bool
 	ap := agent.ApproverFunc(func(_ context.Context, req agent.ApprovalRequest) (agent.Approval, error) {
 		mu.Lock()
-		seen = len([]rune(req.Input))
+		seen, cut = len([]rune(req.Input)), req.Truncated
 		mu.Unlock()
 		return agent.Approval{}, nil
 	})
@@ -530,6 +531,9 @@ func checkApprovalCap(ctx context.Context, h Harness) error {
 	defer mu.Unlock()
 	if seen > domain.MaxDecisionInput {
 		return fmt.Errorf("the approver saw %d characters of input, the cap is %d", seen, domain.MaxDecisionInput)
+	}
+	if !cut {
+		return errors.New("the approver was not told that the input was cut")
 	}
 	return nil
 }

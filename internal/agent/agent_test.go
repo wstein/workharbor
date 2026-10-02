@@ -112,17 +112,18 @@ func TestAskFailsClosed(t *testing.T) {
 
 func TestAskCapsTheInput(t *testing.T) {
 	var seen string
+	var cut bool
 	ap := approver(func(_ context.Context, req ApprovalRequest) (Approval, error) {
-		seen = req.Input
+		seen, cut = req.Input, req.Truncated
 		return Approval{}, nil
 	})
 	Ask(context.Background(), ap, time.Second, ApprovalRequest{Input: strings.Repeat("é", domain.MaxDecisionInput+50)})
-	if got := len([]rune(seen)); got != domain.MaxDecisionInput {
-		t.Errorf("the approver saw %d characters, want %d", got, domain.MaxDecisionInput)
+	if got := len([]rune(seen)); got != domain.MaxDecisionInput || !cut {
+		t.Errorf("the approver saw %d characters, truncated %v; want %d, true", got, cut, domain.MaxDecisionInput)
 	}
 	Ask(context.Background(), ap, time.Second, ApprovalRequest{Input: "short"})
-	if seen != "short" {
-		t.Errorf("a short input changed: %q", seen)
+	if seen != "short" || cut {
+		t.Errorf("a short input changed: %q, truncated %v", seen, cut)
 	}
 }
 

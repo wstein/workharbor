@@ -17,8 +17,12 @@ const DefaultApprovalTimeout = domain.DefaultApprovalTimeout
 type ApprovalRequest struct {
 	ID    string `json:"id"`
 	Tool  string `json:"tool"`
-	Input string `json:"input"`          // capped by Ask; all of it is untrusted
-	Plan  bool   `json:"plan,omitempty"` // an ExitPlanMode request, whose subject is the plan
+	Input string `json:"input"` // capped by Ask; all of it is untrusted
+	// Truncated says Ask cut Input to domain.MaxDecisionInput characters: what
+	// the human sees is not all the agent asked to run, which the Decision must
+	// say.
+	Truncated bool `json:"truncated,omitempty"`
+	Plan      bool `json:"plan,omitempty"` // an ExitPlanMode request, whose subject is the plan
 }
 
 // Approval is the human's answer.
@@ -52,7 +56,7 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	if timeout <= 0 {
 		timeout = DefaultApprovalTimeout
 	}
-	req.Input = capInput(req.Input)
+	req.Input, req.Truncated = capInput(req.Input)
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -79,11 +83,12 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	}
 }
 
-// capInput keeps at most domain.MaxDecisionInput characters.
-func capInput(s string) string {
+// capInput keeps at most domain.MaxDecisionInput characters and says whether
+// it cut any.
+func capInput(s string) (string, bool) {
 	if utf8.RuneCountInString(s) <= domain.MaxDecisionInput {
-		return s
+		return s, false
 	}
 	runes := []rune(s)
-	return string(runes[:domain.MaxDecisionInput])
+	return string(runes[:domain.MaxDecisionInput]), true
 }
