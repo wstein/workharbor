@@ -118,6 +118,83 @@ func hostSteps(d Deps) []Check {
 		},
 
 		{
+			Name: "autologout", Phase: PhaseHost, Step: 2, Title: "no automatic log-out after inactivity (manual step 2)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "defaults", "read", "/Library/Preferences/.GlobalPreferences", "com.apple.autologout.AutoLogOutDelay")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					// defaults exits non-zero when the key is not set, which is the
+					// default: automatic log-out is off (unverified on macOS 26).
+					return OK, "automatic log-out is not set"
+				}
+				delay := strings.TrimSpace(out)
+				if delay == "" || delay == "0" {
+					return OK, "automatic log-out is off"
+				}
+				return Fail, "the Mac logs out automatically after " + oneLine(delay) + " seconds of inactivity, which ends Apple Container's services and every agent"
+			},
+			Fix: &Fix{
+				Guide: "Open System Settings → Privacy & Security → Advanced and turn off \"Log out automatically after inactivity\". whr does not change it for you. The key it reads (com.apple.autologout.AutoLogOutDelay in /Library/Preferences/.GlobalPreferences) is unverified on macOS 26.",
+				Open:  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+			},
+		},
+
+		{
+			Name: "workspace-volume", Phase: PhaseHost, Step: 3, Title: "workspace volumes encrypted, with ownership honoured (manual step 3)",
+			Run: func(ctx context.Context) (Status, string) {
+				if d.GOOS != "darwin" || d.Runner == nil {
+					return NotVerified, "not checked: " + errNotHere.Error()
+				}
+				vols, st, msg := d.workspaceVolumes()
+				if st != "" {
+					return st, msg
+				}
+				if len(vols) == 0 {
+					return OK, "the workspace roots are on the internal disk, which FileVault covers"
+				}
+				var bad []string
+				for _, v := range vols {
+					out, err := d.output(ctx, "diskutil", "info", v)
+					if err != nil {
+						return NotVerified, "diskutil did not answer for " + v + ": " + oneLine(err.Error())
+					}
+					info := colonLines(out)
+					if enc := info["FileVault"]; !strings.HasPrefix(enc, "Yes") && !strings.HasPrefix(info["Encrypted"], "Yes") {
+						bad = append(bad, v+" is not encrypted")
+					}
+					if !strings.HasPrefix(info["Owners"], "Enabled") {
+						bad = append(bad, v+" ignores file ownership (Owners: "+orNone(info["Owners"])+")")
+					}
+				}
+				if len(bad) > 0 {
+					return Fail, strings.Join(bad, "; ")
+				}
+				return OK, "every workspace volume is encrypted and honours ownership (diskutil's output format is unverified on macOS 26)"
+			},
+			Fix: &Fix{
+				Cmds: []Cmd{{Sudo: true, Argv: []string{"diskutil", "enableOwnership", "<volume>"}}},
+				Build: func(ctx context.Context, _ Prompter) ([]Cmd, error) {
+					vols, _, msg := d.workspaceVolumes()
+					if msg != "" && len(vols) == 0 {
+						return nil, errors.New(msg)
+					}
+					var cmds []Cmd
+					for _, v := range vols {
+						out, err := d.output(ctx, "diskutil", "info", v)
+						if err == nil && !strings.HasPrefix(colonLines(out)["Owners"], "Enabled") {
+							cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"diskutil", "enableOwnership", v}})
+						}
+					}
+					return cmds, nil
+				},
+				Guide: "Ownership is turned on for you (sudo diskutil enableOwnership <volume>). Encryption is not: it needs a passphrase that only you may know, so erase the volume as APFS (Encrypted) in Disk Utility, or run `diskutil apfs encryptVolume /Volumes/<ssd> -user disk` yourself, and keep the passphrase in your password manager (manual step 3).",
+				Open:  "/System/Applications/Utilities/Disk Utility.app",
+			},
+		},
+
+		{
 			Name: "power", Phase: PhaseHost, Step: 4, Title: "never sleep, restart after a power cut (manual step 4)",
 			Run: func(ctx context.Context) (Status, string) {
 				out, err := d.output(ctx, "pmset", "-g")
@@ -902,4 +979,50 @@ func validateKeepingUnknown(m map[string]any) error {
 		delete(probe, match[1])
 	}
 	return errors.New("too many unknown keys")
+}
+
+// workspaceVolumes returns the volumes under /Volumes that hold a configured
+// workspace root, without duplicates. A status other than "" means the roots are not
+// known (no configuration yet), which is not verified rather than a failure.
+func (d Deps) workspaceVolumes() ([]string, Status, string) {
+	// Only the roots are read, and not through config.Load: this check says what is
+	// wrong with a volume even while the rest of the configuration is not valid yet.
+	raw, err := os.ReadFile(d.ConfigPath)
+	if err != nil {
+		return nil, NotVerified, "the workspace roots are not known until the configuration is written: " + oneLine(err.Error())
+	}
+	var cfg struct {
+		Roots struct {
+			Workspaces []string `json:"workspaces"`
+		} `json:"roots"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, NotVerified, "the workspace roots could not be read from the configuration: " + oneLine(err.Error())
+	}
+	var vols []string
+	seen := map[string]bool{}
+	for _, root := range cfg.Roots.Workspaces {
+		rest, ok := strings.CutPrefix(filepath.Clean(root), "/Volumes/")
+		if !ok || rest == "" {
+			continue
+		}
+		v := "/Volumes/" + strings.SplitN(rest, "/", 2)[0]
+		if !seen[v] {
+			seen[v] = true
+			vols = append(vols, v)
+		}
+	}
+	return vols, "", ""
+}
+
+// colonLines reads "Key: value" lines, as `diskutil info` prints them.
+func colonLines(out string) map[string]string {
+	m := map[string]string{}
+	for _, l := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(l, ":")
+		if ok {
+			m[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		}
+	}
+	return m
 }

@@ -411,3 +411,94 @@ func TestWriteTempRefusesADirectoryOthersControl(t *testing.T) {
 		t.Error("a linked directory was accepted")
 	}
 }
+
+const autologoutKey = "defaults read /Library/Preferences/.GlobalPreferences com.apple.autologout.AutoLogOutDelay"
+
+func TestAutomaticLogOutIsOffWhenTheKeyIsAbsentOrZero(t *testing.T) {
+	for name, tc := range map[string]struct {
+		out    scripted
+		want   Status
+		detail string
+	}{
+		"not set (defaults fails)": {scripted{}, OK, "not set"},
+		"zero":                     {scripted{autologoutKey: "0\n"}, OK, "off"},
+		"ten minutes":              {scripted{autologoutKey: "600\n"}, Fail, "after 600 seconds"},
+	} {
+		got, detail := status(steps(t, hostDeps(tc.out))["autologout"])
+		if got != tc.want || !strings.Contains(detail, tc.detail) {
+			t.Errorf("%s: %s %q, want %s with %q", name, got, detail, tc.want, tc.detail)
+		}
+	}
+	d := hostDeps(scripted{})
+	d.GOOS = "linux"
+	if got, _ := status(steps(t, d)["autologout"]); got != NotVerified {
+		t.Errorf("off a Mac: %s", got)
+	}
+	// the fix is a guide, never a command: whr changes no login setting
+	fix := steps(t, hostDeps(scripted{}))["autologout"].Fix
+	if fix == nil || len(fix.Cmds) != 0 || fix.Guide == "" || fix.Open == "" {
+		t.Errorf("fix = %+v", fix)
+	}
+}
+
+const (
+	goodVolume = "   Volume Name:               ssd\n   FileVault:                 Yes (Unlocked)\n   Owners:                    Enabled\n"
+	noOwners   = "   FileVault:                 Yes\n   Owners:                    Disabled\n"
+	plain      = "   FileVault:                 No\n   Owners:                    Enabled\n"
+)
+
+func writeRoots(t *testing.T, roots ...string) Deps {
+	t.Helper()
+	b, _ := json.Marshal(map[string]any{"roots": map[string]any{"workspaces": roots}})
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := hostDeps(nil)
+	d.ConfigPath = path
+	return d
+}
+
+func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {
+	check := func(out scripted, roots ...string) (Status, string) {
+		d := writeRoots(t, roots...)
+		d.Runner = out
+		return status(steps(t, d)["workspace-volume"])
+	}
+	if st, detail := check(scripted{"diskutil info /Volumes/ssd": goodVolume}, "/Volumes/ssd/workspaces", "/Volumes/ssd/other"); st != OK {
+		t.Errorf("a good volume: %s %q", st, detail)
+	}
+	if st, detail := check(scripted{}, "/Users/whr/workspaces"); st != OK || !strings.Contains(detail, "internal disk") {
+		t.Errorf("roots on the internal disk: %s %q", st, detail)
+	}
+	for name, tc := range map[string]struct{ out, want string }{
+		"no ownership":  {noOwners, "ignores file ownership"},
+		"not encrypted": {plain, "is not encrypted"},
+	} {
+		if st, detail := check(scripted{"diskutil info /Volumes/ssd": tc.out}, "/Volumes/ssd/workspaces"); st != Fail || !strings.Contains(detail, tc.want) {
+			t.Errorf("%s: %s %q", name, st, detail)
+		}
+	}
+	if st, _ := check(scripted{}, "/Volumes/ssd/workspaces"); st != NotVerified {
+		t.Errorf("diskutil that does not answer: %s", st)
+	}
+	// without a configuration the roots are not known: not verified, never a pass
+	d := hostDeps(scripted{})
+	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
+	if st, _ := status(steps(t, d)["workspace-volume"]); st != NotVerified {
+		t.Errorf("no configuration: %s", st)
+	}
+
+	// the fix turns ownership on for the volumes that need it, as sudo argv, and
+	// leaves encryption to the human
+	d = writeRoots(t, "/Volumes/ssd/workspaces", "/Volumes/good/w")
+	d.Runner = scripted{"diskutil info /Volumes/ssd": noOwners, "diskutil info /Volumes/good": goodVolume}
+	fix := steps(t, d)["workspace-volume"].Fix
+	cmds, err := fix.Build(context.Background(), nil)
+	if err != nil || len(cmds) != 1 || !cmds[0].Sudo || strings.Join(cmds[0].Argv, " ") != "diskutil enableOwnership /Volumes/ssd" {
+		t.Errorf("fix commands = %+v, %v", cmds, err)
+	}
+	if !strings.Contains(fix.Guide, "Encryption is not") {
+		t.Errorf("the guide does not leave encryption to the human: %q", fix.Guide)
+	}
+}
