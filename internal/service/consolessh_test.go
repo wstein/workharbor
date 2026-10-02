@@ -66,6 +66,7 @@ func clientPub(t *testing.T) string {
 }
 
 func TestWithoutAnAuthorityThereIsNoSSH(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := r.consoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -80,6 +81,7 @@ func TestWithoutAnAuthorityThereIsNoSSH(t *testing.T) {
 }
 
 func TestSSHNeedsTheConsoleOpen(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c, _ := r.sshConsoles()
 	var ce *domain.ConflictError
@@ -92,6 +94,7 @@ func TestSSHNeedsTheConsoleOpen(t *testing.T) {
 }
 
 func TestACertificateIsIssuedForTheClientsKeyAndAudited(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c, ca := r.sshConsoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -156,6 +159,7 @@ func TestACertificateIsIssuedForTheClientsKeyAndAudited(t *testing.T) {
 }
 
 func TestACertificateIsRefusedForWhatIsNotOnePublicKey(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c, _ := r.sshConsoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -177,6 +181,7 @@ func TestACertificateIsRefusedForWhatIsNotOnePublicKey(t *testing.T) {
 }
 
 func TestAnSSHConnectionCarriesBytesBothWaysAndEndsOnClose(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c, ca := r.sshConsoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -217,6 +222,7 @@ func TestAnSSHConnectionCarriesBytesBothWaysAndEndsOnClose(t *testing.T) {
 }
 
 func TestTheConsoleServesAtMostEightSSHConnections(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c, _ := r.sshConsoles()
 	if _, err := c.Open(bg, nil); err != nil {

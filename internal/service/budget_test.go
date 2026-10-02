@@ -67,6 +67,7 @@ func (r *rig) auditKinds(kind domain.EventKind) []domain.BudgetBreach {
 }
 
 func TestASoftThresholdWarnsOnceAndAHardLimitFailsTheTask(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	n := &recNotifier{}
 	r.svc.cfg.Notifier = n
@@ -120,6 +121,7 @@ func TestASoftThresholdWarnsOnceAndAHardLimitFailsTheTask(t *testing.T) {
 }
 
 func TestACostBudgetCountsOnlyWhatTheAgentReported(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.svc.cfg.Budgets = Budgets{PerRun: Limit{MaxCostMicroUSD: 1_000_000}}
 	r.turn(1, 900_000, 0) // tokens and no cost: unknown cost, not a spend
@@ -135,6 +137,7 @@ func TestACostBudgetCountsOnlyWhatTheAgentReported(t *testing.T) {
 }
 
 func TestNoBudgetsMeansNoLimit(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.turn(1, 1_000_000_000, 5_000_000_000)
 	if r.load().Task().State != domain.TaskRunning || len(r.auditKinds(domain.EventBudgetExceeded))+len(r.auditKinds(domain.EventBudgetWarned)) != 0 {
@@ -143,6 +146,7 @@ func TestNoBudgetsMeansNoLimit(t *testing.T) {
 }
 
 func TestARunBudgetSeesOnlyItsRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.svc.cfg.Budgets = Budgets{PerRun: Limit{MaxTokens: 1000}}
 	// Another run of the same task used 900 tokens earlier.
@@ -158,6 +162,7 @@ func TestARunBudgetSeesOnlyItsRun(t *testing.T) {
 }
 
 func TestSoftPercentDefaultsAndIsBounded(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[int]int64{0: 80, 50: 50, 99: 99, 100: 80, -3: 80} {
 		if got := (Budgets{SoftPercent: in}).soft(); got != want {
 			t.Errorf("SoftPercent %d = %d, want %d", in, got, want)

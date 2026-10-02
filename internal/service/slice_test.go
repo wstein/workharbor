@@ -40,6 +40,7 @@ func nextKind(t *testing.T, ch <-chan domain.Event, kind domain.EventKind) domai
 }
 
 func TestSayDeliversRecordsAndShowsTheDelivery(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	d, err := r.svc.Say(bg, "t1", "use the helper")
@@ -69,6 +70,7 @@ func TestSayDeliversRecordsAndShowsTheDelivery(t *testing.T) {
 }
 
 func TestSayNeedsARunningRunWithASession(t *testing.T) {
+	t.Parallel()
 	r := newRig(t) // the run is running in the database but no session is attached
 	var c *domain.ConflictError
 	if _, err := r.svc.Say(bg, "t1", "hello"); !asConflict(err, &c) || c.Rule != domain.RuleRunLive {
@@ -87,6 +89,7 @@ func TestSayNeedsARunningRunWithASession(t *testing.T) {
 }
 
 func TestListAndShow(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	list, err := r.svc.List(bg, true)
 	if err != nil || len(list) != 1 || list[0].ID != "t1" || list[0].State != domain.TaskRunning {
@@ -104,6 +107,7 @@ func TestListAndShow(t *testing.T) {
 // Subscribe replays what is stored, then follows live events, among them
 // ephemeral ones that were never stored.
 func TestSubscribeReplaysThenFollows(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
@@ -160,6 +164,7 @@ func TestSubscribeReplaysThenFollows(t *testing.T) {
 }
 
 func TestSubscribeFromASequenceNumberSkipsWhatWasSeen(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
 	last := stored[len(stored)-1].Seq
@@ -180,6 +185,7 @@ func TestSubscribeFromASequenceNumberSkipsWhatWasSeen(t *testing.T) {
 // events it was too slow for, and is then caught up from the store, so it stays
 // open and still gets the next durable event.
 func TestASlowSubscriberIsNotWaitedFor(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
@@ -227,6 +233,7 @@ func TestASlowSubscriberIsNotWaitedFor(t *testing.T) {
 
 // What the agent observes is stored in the transcript tier and shown live.
 func TestTheAgentsObservationsAreStoredInTheTranscriptTier(t *testing.T) {
+	t.Parallel()
 	r := newWsRigBlocking(t, false)
 	r.agent.Finish("all done")
 	_, a := r.create("transcript")
@@ -256,6 +263,7 @@ func TestTheAgentsObservationsAreStoredInTheTranscriptTier(t *testing.T) {
 func asConflict(err error, target **domain.ConflictError) bool { return errors.As(err, target) }
 
 func TestInboxAndWorkspaceList(t *testing.T) {
+	t.Parallel()
 	r := newWsRigBlocking(t, false)
 	r.agent.Finish("done")
 	_, a := r.create("inbox")
@@ -275,6 +283,7 @@ func TestInboxAndWorkspaceList(t *testing.T) {
 }
 
 func TestLogReturnsTheStoredEventsAfterASequenceNumber(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	all, err := r.svc.Log(bg, "t1", 0, 0)
 	if err != nil || len(all) < 2 {
@@ -293,6 +302,7 @@ func TestLogReturnsTheStoredEventsAfterASequenceNumber(t *testing.T) {
 // start: the store is the buffer, at the client's pace (a `whr logs -f` on any
 // real task).
 func TestSubscribeReplaysALongHistory(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const many = 3 * subBuffer
 	for i := range many {
@@ -318,6 +328,7 @@ func TestSubscribeReplaysALongHistory(t *testing.T) {
 // A subscriber that falls behind the live feed is caught up from the store,
 // so it misses no durable event.
 func TestASlowSubscriberMissesNoDurableEvent(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	stored, _ := r.store.EventsSince(bg, "t1", 0, 100)
 	last := stored[len(stored)-1].Seq
@@ -347,6 +358,7 @@ func TestASlowSubscriberMissesNoDurableEvent(t *testing.T) {
 
 // An ephemeral event is redacted like a stored one (T9).
 func TestEphemeralEventsAreRedacted(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	ctx, cancel := context.WithCancel(bg)
 	defer cancel()

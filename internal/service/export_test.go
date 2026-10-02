@@ -75,6 +75,7 @@ func (b *pubRig) ran(substr string) bool {
 // is not stopped, no git runs on the checkout from the host, and what follows
 // is as it was.
 func TestPrepareFromABundleLeavesTheEnvironmentRunning(t *testing.T) {
+	t.Parallel()
 	b := newPubRig(t)
 	if b.envState() != domain.EnvRunning {
 		t.Fatal("setup: the environment should run")
@@ -104,6 +105,7 @@ func TestPrepareFromABundleLeavesTheEnvironmentRunning(t *testing.T) {
 }
 
 func TestExportRefusesWhatIsNotWhole(t *testing.T) {
+	t.Parallel()
 	t.Run("larger than the limit", func(t *testing.T) {
 		b := newPubRig(t)
 		b.pub.cfg.MaxBundle = 10
@@ -175,6 +177,7 @@ func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 // A rebase that conflicts raises the question of design §4.2 for the stopped
 // run, with the paths as untrusted input, and exports nothing.
 func TestARebaseConflictRaisesAQuestionForTheStoppedRun(t *testing.T) {
+	t.Parallel()
 	b := newPubRig(t)
 	b.guest = func(cmd []string) ([]byte, string, int, bool) {
 		if len(cmd) < 5 {
@@ -226,6 +229,7 @@ func TestARebaseConflictRaisesAQuestionForTheStoppedRun(t *testing.T) {
 // After a push the next round is a fast-forward: no rebase before the export, and
 // a branch that rewrote the pushed commits is refused.
 func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
+	t.Parallel()
 	b := newPubRig(t)
 	first, err := b.pub.Prepare(bg, b.req)
 	must(t, err)
@@ -267,6 +271,7 @@ func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
 // The editor copy is made from a bundle whether or not the environment runs,
 // in a directory of its own, and never from the agent's checkout.
 func TestOpenCopyIsFreshWhileTheEnvironmentRunsAndNeverTheCheckout(t *testing.T) {
+	t.Parallel()
 	b := newPubRig(t)
 	dir := filepath.Join(t.TempDir(), "copy")
 	cp, err := b.pub.OpenCopy(bg, b.req, dir)
@@ -294,6 +299,7 @@ func TestOpenCopyIsFreshWhileTheEnvironmentRunsAndNeverTheCheckout(t *testing.T)
 // `whr open` finds the agent of a workspace, exports its branch and makes the
 // copy in the supervisor's editor directory.
 func TestWorkspacesOpenCopyMakesTheCopyOfTheAgentsBranch(t *testing.T) {
+	t.Parallel()
 	b := newPubRig(t)
 	editor := t.TempDir()
 	topics := func(_ context.Context, repo string) (*hostgit.Repo, *hostgit.Cache, error) {

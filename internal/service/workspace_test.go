@@ -190,6 +190,7 @@ func (r *wsRig) logs(env domain.ID) string {
 }
 
 func TestCreateMakesTheWorkspaceItsEnvironmentAndFirstAgent(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
 
@@ -226,6 +227,7 @@ func TestCreateMakesTheWorkspaceItsEnvironmentAndFirstAgent(t *testing.T) {
 }
 
 func TestCreateRefusesABadFolderAndLeavesNothing(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	outside := t.TempDir()
 	_, _, err := r.ws.Create(bg, CreateRequest{Name: "w", Path: outside, Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
@@ -250,6 +252,7 @@ func TestCreateRefusesABadFolderAndLeavesNothing(t *testing.T) {
 }
 
 func TestCreateTakesBackWhatItMadeWhenTheWorktreeFails(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
 		if len(cmd) > 3 && cmd[0] == "git" && cmd[3] == "worktree" {
@@ -283,6 +286,7 @@ func TestCreateTakesBackWhatItMadeWhenTheWorktreeFails(t *testing.T) {
 }
 
 func TestAddAgentMakesAWorktreeAndRefusesADuplicate(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, _ := r.create("multi")
 	a, err := r.ws.AddAgent(bg, "multi", "runtime", "", "")
@@ -308,6 +312,7 @@ func TestAddAgentMakesAWorktreeAndRefusesADuplicate(t *testing.T) {
 }
 
 func TestStartTaskRunsTheAgentInItsWorktree(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("run")
 	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "write the manual"})
@@ -330,6 +335,7 @@ func TestStartTaskRunsTheAgentInItsWorktree(t *testing.T) {
 // One live run per environment: a second agent is refused with a clear error
 // until several agents at once are built (#94).
 func TestASecondAgentInTheSameEnvironmentIsRefused(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, first := r.create("two")
 	second, err := r.ws.AddAgent(bg, "two", "runtime", "", "")
@@ -350,6 +356,7 @@ func TestASecondAgentInTheSameEnvironmentIsRefused(t *testing.T) {
 }
 
 func TestTwoStartsAtOnceOnlyOneWins(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, first := r.create("race")
 	second, err := r.ws.AddAgent(bg, "race", "runtime", "", "")
@@ -381,6 +388,7 @@ func btoi(b bool) int {
 // A start whose agent cannot be launched fails the run into a Decision and
 // frees the environment for the next try.
 func TestAFailedAgentStartOpensADecisionAndFreesTheEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("failstart")
 	r.failAg = true
@@ -398,6 +406,7 @@ func TestAFailedAgentStartOpensADecisionAndFreesTheEnvironment(t *testing.T) {
 }
 
 func TestRebaseRunsInTheEnvironmentAndReportsAConflict(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("rebase")
 	if err := r.ws.Rebase(bg, a.ID); err != nil {
@@ -437,6 +446,7 @@ func TestRebaseRunsInTheEnvironmentAndReportsAConflict(t *testing.T) {
 // returns at once and the agent runs for hours (found by the serve integration
 // run, where the session died with its request).
 func TestTheSessionOutlivesTheContextThatStartedIt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t) // blocking sessions
 	_, a := r.create("outlive")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -461,6 +471,7 @@ func TestTheSessionOutlivesTheContextThatStartedIt(t *testing.T) {
 
 // The agent gets the egress proxy's address and a home, and no secret.
 func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.egress = true
 	_, a := r.create("proxyenv")
@@ -492,6 +503,7 @@ func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
 // too: a volume outlives its environment, so deleting the environment is not
 // enough (found by the serve integration run).
 func TestAFailedCreateDoesNotLeakTheHomeVolume(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.home = true
 	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) { // the worktree fails after the environment and its volume exist
@@ -511,6 +523,7 @@ func TestAFailedCreateDoesNotLeakTheHomeVolume(t *testing.T) {
 }
 
 func TestRemoveAgentAndWorkspace(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.home = true
 	w, a := r.create("rm")
@@ -565,6 +578,7 @@ func TestRemoveAgentAndWorkspace(t *testing.T) {
 }
 
 func TestTasksAndShowCarryTheAgentAsWorkspaceSlashRole(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("named")
 	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
@@ -581,6 +595,7 @@ func TestTasksAndShowCarryTheAgentAsWorkspaceSlashRole(t *testing.T) {
 // An image without git is refused when the workspace is created, with a message
 // that says git is missing, not later in `git worktree add` (design D44).
 func TestCreateRefusesAnImageWithoutGit(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.home = true // the refusal also takes back the home volume
 	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
@@ -614,6 +629,7 @@ func TestCreateRefusesAnImageWithoutGit(t *testing.T) {
 // A task keeps the preset its repository had when it started: a later change of
 // the configuration, even to a looser preset, does not apply to it (D47).
 func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	current := "published"
 	r.ws.cfg.Workflow = func(string) string { return current }
@@ -638,6 +654,7 @@ func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
 }
 
 func TestTheEffectivePresetIsTheStricterOfTheTaskAndTheRepository(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		task string
 		repo policy.Preset
@@ -660,6 +677,7 @@ func TestTheEffectivePresetIsTheStricterOfTheTaskAndTheRepository(t *testing.T) 
 // puts it on the build volume, in the agent's own directory, outside the
 // bind-mounted checkout (D39).
 func TestAnAgentsToolsWriteTheirOutputToTheBuildVolumeNotTheCheckout(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.ws.cfg.BuildDir = "/var/whr/build"
 	w, a := r.create("run")
@@ -686,6 +704,7 @@ func TestAnAgentsToolsWriteTheirOutputToTheBuildVolumeNotTheCheckout(t *testing.
 }
 
 func TestWithoutABuildVolumeNothingIsRelocated(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("run")
 	if strings.Contains(r.logs(w.EnvID), "mkdir") {
@@ -727,6 +746,7 @@ func repoSizeEvents(t *testing.T, r *wsRig, task domain.ID) []domain.RepoSize {
 // A run's start counts the files its checkout tracks and records it in the task's
 // events; above 50 000 it warns (D39).
 func TestARunRecordsHowManyFilesItsCheckoutTracksAndWarnsWhenItIsVeryLarge(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		files int
 		warn  bool
@@ -753,6 +773,7 @@ func TestARunRecordsHowManyFilesItsCheckoutTracksAndWarnsWhenItIsVeryLarge(t *te
 
 // A count that cannot be made never fails the start: it is reported.
 func TestACountThatFailsIsReportedAndTheRunStartsAnyway(t *testing.T) {
+	t.Parallel()
 	for name, answer := range map[string]struct {
 		out  string
 		code int
@@ -786,6 +807,7 @@ func TestACountThatFailsIsReportedAndTheRunStartsAnyway(t *testing.T) {
 }
 
 func TestARepoSizeNeedsATaskARunAndACount(t *testing.T) {
+	t.Parallel()
 	for _, bad := range []struct {
 		task, run domain.ID
 		files     int
@@ -801,6 +823,7 @@ func TestARepoSizeNeedsATaskARunAndACount(t *testing.T) {
 // on the host. Plain git runs the planted fsmonitor on `git ls-files` (measured,
 // git 2.54), so the test is a real one.
 func TestTheGuestsGitEnvironmentStopsAPlantedFsmonitorAndHook(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
 	}
@@ -855,6 +878,7 @@ func TestTheGuestsGitEnvironmentStopsAPlantedFsmonitorAndHook(t *testing.T) {
 
 // A role that is added again later does not inherit the old one's output.
 func TestRemovingAnAgentClearsItsDirectoryOnTheBuildVolume(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.ws.cfg.BuildDir = "/var/whr/build"
 	w, _ := r.create("run")
@@ -895,6 +919,7 @@ func TestRemovingAnAgentClearsItsDirectoryOnTheBuildVolume(t *testing.T) {
 }
 
 func TestWithoutABuildVolumeRemovingAnAgentRunsNothing(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, _ := r.create("run")
 	second, err := r.ws.AddAgent(bg, w.Name, "review", "", "")

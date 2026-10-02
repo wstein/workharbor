@@ -24,6 +24,7 @@ func repoEnv(origin devcontainer.Origin, cfg devcontainer.Config, image func(con
 // A repository with a devcontainer or a Dockerfile runs its own image, built from
 // the default branch; the rest of the spec stays the supervisor's.
 func TestAWorkspaceRunsTheOwnImageOfItsRepository(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	var builds int
 	r.ws.cfg.Environment = repoEnv(devcontainer.OriginDevcontainer, devcontainer.Config{Env: map[string]string{"GOFLAGS": "-mod=mod"}},
@@ -71,6 +72,7 @@ func TestAWorkspaceRunsTheOwnImageOfItsRepository(t *testing.T) {
 // A repository whose image cannot be built asked for an environment it cannot
 // have: no workspace is made, and nothing is left behind.
 func TestAWorkspaceWhoseImageCannotBeBuiltIsRefused(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.ws.cfg.Environment = repoEnv(devcontainer.OriginDockerfile, devcontainer.Config{},
 		func(context.Context) (string, error) { return "", errors.New("step 3: dnf install failed") })
@@ -97,6 +99,7 @@ func TestAWorkspaceWhoseImageCannotBeBuiltIsRefused(t *testing.T) {
 // worktree with the agent's environment, after the allowlist is up to date and
 // before the agent starts.
 func TestPostCreateRunsOnceBeforeTheAgent(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	cmds := []devcontainer.Command{{Shell: "go mod download"}, {Argv: []string{"make", "setup"}}}
 	r.ws.cfg.Environment = repoEnv(devcontainer.OriginDevcontainer, devcontainer.Config{Image: "docker.io/library/golang:1.27.1", PostCreate: cmds}, nil)
@@ -159,6 +162,7 @@ func TestPostCreateRunsOnceBeforeTheAgent(t *testing.T) {
 // A post-create command that fails ends the run as failed, before the agent
 // starts, with the tail of its output; the human decides (retry or cancel).
 func TestAFailingPostCreateEndsTheRunBeforeTheAgent(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.ws.cfg.Environment = repoEnv(devcontainer.OriginDevcontainer, devcontainer.Config{Image: "docker.io/library/golang:1.27.1", PostCreate: []devcontainer.Command{{Shell: "go mod download"}}}, nil)
 	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {

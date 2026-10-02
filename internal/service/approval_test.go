@@ -46,6 +46,7 @@ func (r *rig) ask(ctx context.Context, input string) <-chan approved {
 // capped input, the task waits for guidance, and the human's answer is what the
 // agent is told (design §4.2, D26).
 func TestAPermissionPromptBecomesAnApprovalDecisionAndTheAnswerGoesBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		option, reason string
 		allow          bool
@@ -80,6 +81,7 @@ func TestAPermissionPromptBecomesAnApprovalDecisionAndTheAnswerGoesBack(t *testi
 // (D23): the agent's process is gone, so the answer could only reach nothing, or
 // the wrong request.
 func TestAnAnswerForAnApprovalNobodyWaitsForIsRefused(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	a := r.load()
@@ -105,9 +107,10 @@ func TestAnAnswerForAnApprovalNobodyWaitsForIsRefused(t *testing.T) {
 // No answer in time: the agent is told no, and the Decision is expired, so it
 // does not stay open for an agent that no longer waits.
 func TestAnUnansweredApprovalExpiresAndDenies(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
-	ctx, cancel := context.WithTimeout(bg, 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(bg, time.Second) // long enough that a loaded machine raises the Decision first
 	defer cancel()
 	res := r.ask(ctx, "make deploy")
 	d := r.openApproval()
@@ -131,6 +134,7 @@ func TestAnUnansweredApprovalExpiresAndDenies(t *testing.T) {
 // A pause supersedes the open approval; the stopped session's Approver gives up
 // and nothing later answers it.
 func TestPausingARunSupersedesItsApproval(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	ctx, cancel := context.WithCancel(bg)
@@ -156,6 +160,7 @@ func TestPausingARunSupersedesItsApproval(t *testing.T) {
 // Through the service's own launch: the spec has no approver, the service gives
 // it one, and the agent's prompt reaches the inbox.
 func TestTheServiceGivesAManualSpecItsApprover(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.svc.cfg.Spec = func(domain.Task, domain.Run) agent.StartSpec {
 		return agent.StartSpec{EnvID: "env", Workdir: "/work", Prompt: "continue", Auth: agent.AuthSubscription, PermissionMode: agent.PermissionManual, ApprovalTimeout: 5 * time.Second}

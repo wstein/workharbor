@@ -21,6 +21,7 @@ func turn(at time.Time, model string, in, out, cr, cw, micro, api, wall int64) a
 // The summary totals by agent and by model, each row with its cache share, its time,
 // its runs and a cost label, and one row per auth mode in the total.
 func TestTheSummaryTotalsByAgentAndModel(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, a1 := r.create("one")
 	_, a2 := r.create("two")
@@ -74,6 +75,7 @@ func TestTheSummaryTotalsByAgentAndModel(t *testing.T) {
 // Periods begin at the supervisor's midnight, not UTC's, and a run that spans
 // midnight is split between the two days by its turns.
 func TestPeriodsAndDaysAreTheSupervisorsAndARunMayStraddleMidnight(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	zone := time.FixedZone("UTC+10", 10*3600)
 	r.svc.cfg.Location = zone
@@ -131,6 +133,7 @@ func TestPeriodsAndDaysAreTheSupervisorsAndARunMayStraddleMidnight(t *testing.T)
 // An estimate is kept apart from a reported cost and labelled, whatever else a
 // group holds; a subscription row and an api-key row are never added together.
 func TestAnEstimateIsNeverShownAsReportedAndAuthModesStayApart(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	at := t0.Add(time.Minute)
 	appendRaw := func(task, runID domain.ID, auth, source string, micro int64) {
@@ -186,6 +189,7 @@ func TestAnEstimateIsNeverShownAsReportedAndAuthModesStayApart(t *testing.T) {
 // The summary carries the size of the commits approved in the period, from the
 // approval entries only: a denial or an unapproved revision adds nothing.
 func TestTheSummaryCarriesTheCodeOfApprovedCommits(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	zone := time.FixedZone("UTC+10", 10*3600)
 	r.svc.cfg.Location = zone

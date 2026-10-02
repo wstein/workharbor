@@ -39,6 +39,7 @@ func (r *wsRig) holdOf(task domain.ID) domain.Decision {
 // A card in the queue never starts a run: it raises "Accept this task?" for the
 // repository's agent, even for a trusted author, and only the human's start makes a run.
 func TestACardInTheQueueAsksBeforeAnyRunStarts(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -86,6 +87,7 @@ func TestACardInTheQueueAsksBeforeAnyRunStarts(t *testing.T) {
 // A non-trusted author's issue is marked as untrusted input; declining a card does not
 // ask again until the card is moved again.
 func TestADeclinedCardAsksAgainOnlyWhenItIsMovedAgain(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -120,6 +122,7 @@ func TestADeclinedCardAsksAgainOnlyWhenItIsMovedAgain(t *testing.T) {
 // An issue that already has an unfinished task is not queued twice, and a card whose
 // agent cannot be found is reported once and raises nothing.
 func TestAQueueCardIsSkippedOrReportedWhenItCannotBeQueued(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -171,6 +174,7 @@ func TestAQueueCardIsSkippedOrReportedWhenItCannotBeQueued(t *testing.T) {
 
 // Several agents and no Session on the card: nothing to choose from, so nothing is asked.
 func TestACardNeedsAnAgentWhenTheRepositoryHasSeveral(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	if _, err := r.ws.AddAgent(bg, "q", "review", "", ""); err != nil {
@@ -202,6 +206,7 @@ func TestACardNeedsAnAgentWhenTheRepositoryHasSeveral(t *testing.T) {
 // The question names the agent as resolved, the repository and the issue number as
 // supervisor facts from the board, whatever the card's Session said.
 func TestTheQueueQuestionShowsTheAgentAndTheIssue(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -221,6 +226,7 @@ func TestTheQueueQuestionShowsTheAgentAndTheIssue(t *testing.T) {
 // A failure that is not a decision about the card is not remembered: the next poll
 // tries again after a short backoff (one poll skipped), and reports once.
 func TestATransientQueueFailureIsRetriedAfterABackoff(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -243,6 +249,7 @@ func TestATransientQueueFailureIsRetriedAfterABackoff(t *testing.T) {
 
 // One poll raises a few questions at most; the rest wait for the next poll.
 func TestAPollRaisesAtMostAFewQuestions(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -263,6 +270,7 @@ func TestAPollRaisesAtMostAFewQuestions(t *testing.T) {
 // Holding an issue that got an unfinished task meanwhile raises nothing: the check is
 // part of the save, not a read before it.
 func TestHoldingAnIssueTwiceRaisesOnlyOneQuestion(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.issues.Issues["wstein/workharbor#7"] = forge.Issue{Repo: "wstein/workharbor", Number: 7, Title: "x", Author: "w", AuthorAssociation: "OWNER"}
@@ -283,6 +291,7 @@ func TestHoldingAnIssueTwiceRaisesOnlyOneQuestion(t *testing.T) {
 // failures count toward the cap of one poll. A failing card is then skipped for a
 // while, and a skipped card does not count toward the cap, so the others are reached.
 func TestAFailingCardIsReportedOnceAndCountsTowardTheCap(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -320,6 +329,7 @@ func (r *wsRig) failureCount(issue int) int {
 // Permanently failing cards must not starve the rest of the queue: each poll starts
 // after the card it handled last, and a failing card is skipped for 1, 2, 4 ... polls.
 func TestFailingCardsDoNotStarveTheQueue(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -345,6 +355,7 @@ func TestFailingCardsDoNotStarveTheQueue(t *testing.T) {
 }
 
 func TestAFailingCardIsRetriedAfterOneTwoFourPollsAndResetsOnSuccess(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -368,6 +379,7 @@ func TestAFailingCardIsRetriedAfterOneTwoFourPollsAndResetsOnSuccess(t *testing.
 }
 
 func TestTheBackoffEndsWhenTheCardLeavesTheQueue(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -386,6 +398,7 @@ func TestTheBackoffEndsWhenTheCardLeavesTheQueue(t *testing.T) {
 
 // The board does not say who moved a card, so the question does not claim to know.
 func TestTheQueueQuestionHasNoMovedByLineWhenTheMoverIsUnknown(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()
@@ -403,6 +416,7 @@ func TestTheQueueQuestionHasNoMovedByLineWhenTheMoverIsUnknown(t *testing.T) {
 // A refusal is remembered in the store, so it leaves the failure memory: the card
 // refused again after it was moved is reported again.
 func TestAMovedCardRefusedAgainIsReportedAgain(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.create("q")
 	r.withQueue()

@@ -11,6 +11,7 @@ import (
 )
 
 func TestKillAllStopsEveryRunCancelsTheTasksAndRevokesTokens(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live() // a session is attached to run r1 of task t1
 	// A second unfinished task, with no run.
@@ -57,6 +58,7 @@ func TestKillAllStopsEveryRunCancelsTheTasksAndRevokesTokens(t *testing.T) {
 }
 
 func TestKillAllGoesOnAfterAFailureAndSaysWhatFailed(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.svc.cfg.RevokeTokens = func(context.Context) (int, error) { return 0, errors.New("revoke the token for a/b: 500") }
 	rep, err := r.svc.KillAll(bg, "werner")
@@ -73,6 +75,7 @@ func TestKillAllGoesOnAfterAFailureAndSaysWhatFailed(t *testing.T) {
 }
 
 func TestKillAllWithNothingRunningStillWritesTheAuditEntry(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	must(t, r.svc.Cancel(bg, "t1"))
 	rep, err := r.svc.KillAll(bg, "werner")
@@ -88,6 +91,7 @@ func TestKillAllWithNothingRunningStillWritesTheAuditEntry(t *testing.T) {
 }
 
 func TestRevokeForgeTokensRevokesOnlyTokensAndLeavesAnAuditEntry(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	if _, err := r.svc.RevokeForgeTokens(bg, "web+passkey"); !errors.Is(err, ErrNoRevoker) {

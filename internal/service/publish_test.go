@@ -179,6 +179,7 @@ func (p *pubRig) remoteHas() bool {
 }
 
 func TestPrepareRefusesALiveRun(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	// A live run.
 	a := p.load()
@@ -191,6 +192,7 @@ func TestPrepareRefusesALiveRun(t *testing.T) {
 }
 
 func TestFailingChecksStopTheFlowBeforeAnyDecision(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	p.checkErr = errors.New("make check failed")
 	if _, err := p.pub.Prepare(bg, p.req); err == nil || !strings.Contains(err.Error(), "make check failed") {
@@ -202,6 +204,7 @@ func TestFailingChecksStopTheFlowBeforeAnyDecision(t *testing.T) {
 }
 
 func TestPublishNeedsTheApprovalOfExactlyThePinnedCommit(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	prepared, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
@@ -224,6 +227,7 @@ func TestPublishNeedsTheApprovalOfExactlyThePinnedCommit(t *testing.T) {
 }
 
 func TestPublishPushesTheApprovedCommitAndOpensThePR(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	prepared, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
@@ -276,6 +280,7 @@ func (p *pubRig) rework(id domain.ID, file string) {
 // #79: after a push, the next round extends the pushed commit instead of
 // rewriting it, so the second push is a fast-forward.
 func TestFollowUpRoundPushesAsAFastForward(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	first, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
@@ -311,6 +316,7 @@ func TestFollowUpRoundPushesAsAFastForward(t *testing.T) {
 
 // #79: an approval given before the task was cancelled does not publish.
 func TestCancelledTaskDoesNotPublish(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	prepared, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
@@ -331,6 +337,7 @@ func TestCancelledTaskDoesNotPublish(t *testing.T) {
 
 // #79: the repository's checks are required, never silently skipped.
 func TestPrepareNeedsChecks(t *testing.T) {
+	t.Parallel()
 	p := newPubRig(t)
 	p.pub.cfg.Checks = nil
 	if _, err := p.pub.Prepare(bg, p.req); !errors.Is(err, ErrNoChecks) {
@@ -361,6 +368,7 @@ func approvedUnder(t *testing.T, preset policy.Preset, branch string, opts ...ri
 // Prototype: the approved commit is pushed and the integration branch is moved to
 // it as a fast-forward; there is no pull request (D47).
 func TestThePrototypeFastForwardsTheIntegrationBranchWithoutAPR(t *testing.T) {
+	t.Parallel()
 	p, sha := approvedUnder(t, policy.Prototype, "develop")
 	pr, err := p.pub.Publish(bg, "t1", "review-1", "t", "b")
 	if err != nil {
@@ -381,6 +389,7 @@ func TestThePrototypeFastForwardsTheIntegrationBranchWithoutAPR(t *testing.T) {
 }
 
 func TestAPrototypeBranchThatMovedIsRefusedAndNeverForced(t *testing.T) {
+	t.Parallel()
 	p, _ := approvedUnder(t, policy.Prototype, "develop")
 	p.forge.NotFF = true
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotFastForward) {
@@ -400,6 +409,7 @@ func TestAPrototypeBranchThatMovedIsRefusedAndNeverForced(t *testing.T) {
 }
 
 func TestIntegrationOpensAPRIntoTheIntegrationBranchAndPublishedIntoTheDefault(t *testing.T) {
+	t.Parallel()
 	p, _ := approvedUnder(t, policy.Integration, "develop")
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
 		t.Fatal(err)
@@ -423,6 +433,7 @@ func TestIntegrationOpensAPRIntoTheIntegrationBranchAndPublishedIntoTheDefault(t
 
 // No preset sends anything without the approval of exactly the pinned commit.
 func TestEveryPresetNeedsTheApprovalOfTheCommit(t *testing.T) {
+	t.Parallel()
 	for _, preset := range []policy.Preset{policy.Prototype, policy.Integration, policy.Published} {
 		p := newPubRig(t)
 		p.pub.cfg.Workflow, p.pub.cfg.Branch = preset, "develop"
@@ -440,6 +451,7 @@ func TestEveryPresetNeedsTheApprovalOfTheCommit(t *testing.T) {
 // A task keeps the branch it started with, and publishes under the stricter of
 // its own preset and the repository's current one (D47, §6).
 func TestATaskPublishesToItsOwnBranchUnderTheStricterPreset(t *testing.T) {
+	t.Parallel()
 	started := func(workflow, branch string) rigOption {
 		return withTask(func(tk *domain.Task) { tk.Workflow, tk.Branch = workflow, branch })
 	}

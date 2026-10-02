@@ -56,6 +56,7 @@ func (r *wsRig) openEgress(task domain.ID) []domain.Decision {
 // answered; an allowed host is then in the sidecar before the agent starts, a
 // denied one is not, and the agent starts without it (design §4.2).
 func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withEgressRequests()
 	w, a := r.create("docs-ws")
@@ -141,6 +142,7 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 // An expired request is a denial for this run only: the run starts without the
 // host, and the host is asked again at the next start.
 func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
@@ -178,6 +180,7 @@ func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
 }
 
 func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
@@ -206,6 +209,7 @@ func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
 
 // A repository that cannot be read does not stop the run, and allows nothing.
 func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.egress = true
 	r.ws.cfg.Environment = func(context.Context, string, string) (RepoEnvironment, error) {
@@ -245,6 +249,7 @@ func eventually(t *testing.T, ok func() bool) {
 // branch, so an approved agent commit there cannot configure the next environment
 // (design §6).
 func TestTheEnvironmentIsReadAtTheDefaultBranchNotTheIntegrationBranch(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.egress = true
 	r.issues.DefaultBranch = "trunk"
@@ -269,6 +274,7 @@ func TestTheEnvironmentIsReadAtTheDefaultBranchNotTheIntegrationBranch(t *testin
 
 // A forge that cannot name the default branch gets no environment read at all.
 func TestNoEnvironmentIsReadWhenTheDefaultBranchIsUnknown(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.egress = true
 	r.ws.cfg.Issues = struct{ IssueSource }{r.issues}

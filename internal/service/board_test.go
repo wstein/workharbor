@@ -15,6 +15,7 @@ import (
 )
 
 func TestTaskStatesMapToBoardStatuses(t *testing.T) {
+	t.Parallel()
 	for state, want := range map[domain.TaskState]string{
 		domain.TaskAwaitingGuidance: forge.StatusNeedsYou,
 		domain.TaskRunning:          forge.StatusInProgress,
@@ -38,6 +39,7 @@ func stateEvent(to string) domain.Event {
 // A task awaiting guidance moves its card to "Needs you" and back when it is
 // answered; the card names the repository's issue and links the task (D30).
 func TestTheBoardFollowsTheTaskAndNeedsYouComesFirst(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	fake := forgetest.NewFake()
 	r.svc.cfg.Board = fake
@@ -64,6 +66,7 @@ func TestTheBoardFollowsTheTaskAndNeedsYouComesFirst(t *testing.T) {
 
 // A board write that fails is reported and affects nothing else.
 func TestAFailingBoardWriteNeverAffectsTheTask(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	fake := forgetest.NewFake()
 	fake.CardErr = errors.New("github: POST /graphql: 503")
@@ -91,6 +94,7 @@ func TestAFailingBoardWriteNeverAffectsTheTask(t *testing.T) {
 // Only a task that started from an issue has a card, and only a state with a
 // status changes it; the last change of a batch wins.
 func TestOnlyTasksFromIssuesAndStatesWithAStatusAreMirrored(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	fake := forgetest.NewFake()
 	r.svc.cfg.Board = fake
@@ -120,6 +124,7 @@ func TestOnlyTasksFromIssuesAndStatesWithAStatusAreMirrored(t *testing.T) {
 
 // The card's Session is the agent as <workspace>/<role>, read from the records.
 func TestTheCardNamesTheAgent(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	ws, wev, err := domain.NewWorkspace("w9", "docs-ws", "/ws/docs", "wstein/workharbor", "main", t0)
 	must(t, err)
@@ -142,6 +147,7 @@ func TestTheCardNamesTheAgent(t *testing.T) {
 
 // Shutdown writes what is queued and does not hang on a board that does not answer.
 func TestShutdownDoesNotWaitForeverForTheBoard(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	block := make(chan struct{})
 	r.svc.cfg.Board = boardFunc(func(ctx context.Context, _ string, _ int, _ forge.CardUpdate) error {
@@ -171,6 +177,7 @@ func (f boardFunc) UpdateCard(ctx context.Context, repo string, issue int, u for
 // is left (they piled up across tests and starved `make race`), a late update is
 // dropped instead of sent on a closed queue, and Shutdown twice is harmless.
 func TestShutdownStopsTheBoardWorker(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	fake := forgetest.NewFake()
 	r.svc.cfg.Board = fake

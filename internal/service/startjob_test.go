@@ -44,6 +44,7 @@ func (r *wsRig) onlyTask() (domain.ID, domain.ID) {
 // A slow post-create does not hold the request: StartTask returns with the run
 // starting, and Cancel stops the command that is already running (finding 10).
 func TestCancelStopsAPostCreateThatIsRunning(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withBlockingPostCreate()
 	_, a := r.create("docs-ws")
@@ -76,6 +77,7 @@ func TestCancelStopsAPostCreateThatIsRunning(t *testing.T) {
 
 // A post-create that does not finish fails the run with a clear reason (finding 9).
 func TestAPostCreateThatDoesNotFinishFailsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withBlockingPostCreate()
 	r.svc.cfg.PostCreateTimeout = 100 * time.Millisecond
@@ -115,6 +117,7 @@ func TestAPostCreateThatDoesNotFinishFailsTheRun(t *testing.T) {
 // An answer that arrives on a request which then ends does not fail the run
 // whose answer was stored: the start runs on its own context (finding 9).
 func TestTheStartOutlivesTheRequestThatAnsweredTheLastEgressRequest(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
@@ -152,6 +155,7 @@ func TestTheStartOutlivesTheRequestThatAnsweredTheLastEgressRequest(t *testing.T
 
 // At most one start runs per run, and a second call gets the first one's job.
 func TestAtMostOneStartPerRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	var calls atomic.Int32
 	release := make(chan struct{})
@@ -181,6 +185,7 @@ func TestAtMostOneStartPerRun(t *testing.T) {
 
 // Shutdown cancels a start that is running and waits for it.
 func TestShutdownCancelsARunningStart(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	started := make(chan struct{})
 	var ended atomic.Bool
@@ -208,6 +213,7 @@ func TestShutdownCancelsARunningStart(t *testing.T) {
 // outcome, and the check before attach only saves attaching a session that is
 // to be stopped at once.
 func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("docs-ws")
 	var task domain.ID
@@ -239,6 +245,7 @@ func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
 // The same interleaving when only the slot's stop request, not the start's
 // context, is set: the session is stopped as soon as it is attached.
 func TestAStopRequestedBeforeAttachStopsTheSession(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("docs-ws")
 	r.svc.testBeforeAttach = func(run domain.ID) { r.svc.stopSession(run) }

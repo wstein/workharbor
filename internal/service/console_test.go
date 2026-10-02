@@ -46,6 +46,7 @@ func (r *wsRig) consoleEnvs() []runtime.Info {
 }
 
 func TestTheConsoleOpensOnceAndIsReusedForTheSameWritableSet(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := r.consoles()
 	if st, err := c.Status(bg); err != nil || st != nil {
@@ -76,6 +77,7 @@ func TestTheConsoleOpensOnceAndIsReusedForTheSameWritableSet(t *testing.T) {
 }
 
 func TestAnotherWritableSetNeedsTheConsoleClosedFirst(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, _ := r.create("docs-ws")
 	c := r.consoles()
@@ -112,6 +114,7 @@ func TestAnotherWritableSetNeedsTheConsoleClosedFirst(t *testing.T) {
 // The home volume holds the human's dotfiles and history, so closing the console
 // leaves it, and the reconciler does not touch a console it did not make.
 func TestClosingTheConsoleKeepsTheHomeVolumeAndTheReconcilerLeavesItAlone(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := r.consoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -140,6 +143,7 @@ func TestClosingTheConsoleKeepsTheHomeVolumeAndTheReconcilerLeavesItAlone(t *tes
 }
 
 func TestAConsoleThatCannotBePreparedLeavesNothing(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := NewConsoles(r.svc, ConsoleConfig{
 		Spec: func([]domain.Workspace) runtime.Spec { return r.rt.NewSpec() },
@@ -160,6 +164,7 @@ func TestAConsoleThatCannotBePreparedLeavesNothing(t *testing.T) {
 }
 
 func TestAShellStartsInTheWorkspaceWithTheClientsTerminalAndIsAudited(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.egress = true
 	r.create("docs-ws")
@@ -232,6 +237,7 @@ func TestAShellStartsInTheWorkspaceWithTheClientsTerminalAndIsAudited(t *testing
 }
 
 func TestTheConsoleServesAtMostEightShellsAtOnce(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := r.consoles()
 	if _, err := c.Open(bg, nil); err != nil {
@@ -272,6 +278,7 @@ type slowTerminal struct {
 func (s slowTerminal) Close() error { time.Sleep(s.wait); return nil }
 
 func TestShuttingDownClosesTheShellsInParallel(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	c := r.consoles()
 	const n, each = 6, 300 * time.Millisecond

@@ -11,6 +11,7 @@ import (
 )
 
 func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	env := devcontainer.Environment{
 		Config:         devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}},
@@ -82,6 +83,7 @@ func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
 // An expired request is a denial for this run only: nothing is kept, so the host
 // is asked again at the next start.
 func TestAnExpiredEgressRequestIsDeniedForThisRunOnly(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	pending := []devcontainer.HostRequest{{Host: "proxy.golang.org", Source: devcontainer.FromLockfile}}
 	ids, err := r.svc.RequestEgress(bg, "t1", "r1", pending)
@@ -115,6 +117,7 @@ func TestAnExpiredEgressRequestIsDeniedForThisRunOnly(t *testing.T) {
 }
 
 func TestNothingToAskRaisesNothing(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	if ids, err := r.svc.RequestEgress(bg, "t1", "r1", nil); err != nil || len(ids) != 0 {
 		t.Errorf("ids = %v, %v", ids, err)
@@ -157,6 +160,7 @@ func (r *rig) answerAll(repo string, env devcontainer.Environment, published boo
 // Under the published preset an answer holds for the file it was given for: a
 // changed file asks again, and the old allow counts as unanswered, not as a deny.
 func TestPublishedAsksAgainWhenTheSourceChanged(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const repo = "wstein/workharbor"
 	first := r.answerAll(repo, publishedEnv("digest-1"), true)
@@ -192,6 +196,7 @@ func TestPublishedAsksAgainWhenTheSourceChanged(t *testing.T) {
 // A lockfile answer from another preset, and one from before sources were
 // recorded, do not carry over to the published preset.
 func TestPublishedForgetsLockfileAndUnrecordedAnswers(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const repo = "wstein/workharbor"
 	must(t, r.store.SetEgressHost(bg, repo, "registry.npmjs.org", true, "d1", devcontainer.LockfileDigest, t0))
@@ -215,6 +220,7 @@ func TestPublishedForgetsLockfileAndUnrecordedAnswers(t *testing.T) {
 // The other presets ask once per repository, whatever changes, and still take
 // lockfile suggestions.
 func TestOtherPresetsAskOncePerRepository(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const repo = "wstein/workharbor"
 	first := r.answerAll(repo, publishedEnv("digest-1"), false)
@@ -232,6 +238,7 @@ func TestOtherPresetsAskOncePerRepository(t *testing.T) {
 // A feature source outside the allowed one is asked once per repository and reference,
 // and the answer is kept like an egress host's (D38, issue #127).
 func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const repo = "wstein/workharbor"
 	const d1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
@@ -304,6 +311,7 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 // must not fail after the Decision is closed (the run would be left stuck), keeps
 // nothing for the digest rule and is reported once.
 func TestFeatureAnswerWithoutADigestIsNotAnError(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	d := domain.Decision{ID: "dx", TaskID: "t1", Cause: domain.CauseFeatureSource, Feature: "ghcr.io/someone/else/thing:1"}
 	before := len(r.errs)

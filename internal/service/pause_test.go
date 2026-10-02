@@ -23,6 +23,7 @@ func (r *rig) raiseApproval(id domain.ID) {
 // Pause is a hard interrupt: the run is paused, what it asked is superseded, its
 // agent is stopped and the environment keeps running.
 func TestPauseStopsTheAgentSupersedesWhatItAskedAndKeepsTheEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	r.raiseApproval("ap1")
@@ -72,6 +73,7 @@ func TestPauseStopsTheAgentSupersedesWhatItAskedAndKeepsTheEnvironment(t *testin
 // Resume relaunches the agent from its session, with the briefing that names the
 // superseded approval.
 func TestResumeRelaunchesFromTheSessionWithTheBriefing(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	r.raiseApproval("ap1")
@@ -103,6 +105,7 @@ func TestResumeRelaunchesFromTheSessionWithTheBriefing(t *testing.T) {
 
 // A run waiting on a login or quota question is not resumed behind its back.
 func TestResumeIsRefusedWhileALoginQuestionIsOpen(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	a := r.load()
 	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
@@ -123,6 +126,7 @@ func TestResumeIsRefusedWhileALoginQuestionIsOpen(t *testing.T) {
 
 // A session the agent forgot ends the run failed, not stuck starting.
 func TestResumeOfAForgottenSessionFailsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, withSession("gone"))
 	must(t, r.svc.Pause(bg, "t1"))
 	r.svc.Wait()
@@ -145,6 +149,7 @@ func (r *rig) transcript(n int) {
 // A purge deletes the transcript and nothing else: the audit entries, the usage
 // rows and the Decisions stay, and the purge is itself an audit entry.
 func TestPurgeDeletesTheTranscriptAndKeepsTheRest(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	r.raiseApproval("ap1")
@@ -200,6 +205,7 @@ func TestPurgeDeletesTheTranscriptAndKeepsTheRest(t *testing.T) {
 
 // The transcript of a running run is still being written, so it is not purged.
 func TestPurgeIsRefusedWhileTheRunIsRunning(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	base, _ := r.svc.TranscriptSize(bg, "t1")
@@ -217,6 +223,7 @@ func TestPurgeIsRefusedWhileTheRunIsRunning(t *testing.T) {
 // session is attached is remembered and honoured when the session comes up: the
 // agent never runs on after it was told to stop.
 func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
+	t.Parallel()
 	for name, stop := range map[string]func(*rig) error{
 		"pause":  func(r *rig) error { return r.svc.Pause(bg, "t1") },
 		"cancel": func(r *rig) error { return r.svc.Cancel(bg, "t1") },
@@ -252,6 +259,7 @@ func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
 // Two resumes of the same run at once start the agent once: the other is told the
 // run is running (design §4.1: one live run).
 func TestConcurrentResumesStartTheAgentOnce(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	must(t, r.svc.Pause(bg, "t1"))

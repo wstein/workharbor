@@ -46,6 +46,7 @@ func recordedUsage(t *testing.T) []agent.Event {
 }
 
 func TestUsageFromRecordedRunsAddsUpAndSurvivesAPurge(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	events := recordedUsage(t)
 	var wantTokens domain.UsageTokens
@@ -91,6 +92,7 @@ func TestUsageFromRecordedRunsAddsUpAndSurvivesAPurge(t *testing.T) {
 // workharbor never prices tokens itself: a turn the agent reported without a
 // cost has tokens and no cost, and the balance is the agent's own reading.
 func TestNothingIsEstimatedAndTheBalanceIsTheAgents(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	tokens := &agent.TokenCounts{Input: 1_000_000, Output: 1_000_000}
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, At: t0.Add(time.Minute), Usage: &agent.Usage{Model: "m", Tokens: tokens}})
@@ -121,6 +123,7 @@ func TestNothingIsEstimatedAndTheBalanceIsTheAgents(t *testing.T) {
 }
 
 func TestSubscriptionWindowIsOneFigureAcrossTasks(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	win := func(u float64) []agent.UsageWindow {
 		return []agent.UsageWindow{{Name: agent.WindowFiveHour, Utilization: u, ResetsAt: t0.Add(4 * time.Hour)}}
@@ -146,6 +149,7 @@ func TestSubscriptionWindowIsOneFigureAcrossTasks(t *testing.T) {
 }
 
 func TestAMalformedUsageReportIsDropped(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{Model: "m", Tokens: &agent.TokenCounts{Input: -1}}})
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage})
@@ -158,6 +162,7 @@ func TestAMalformedUsageReportIsDropped(t *testing.T) {
 }
 
 func TestFormatting(t *testing.T) {
+	t.Parallel()
 	for micro, want := range map[int64]string{0: "$0.0000", 5804: "$0.0058", 999_999: "$1.0000", 1_234_567: "$1.2346", 12_000_000: "$12.0000"} {
 		if got := FormatMicroUSD(micro); got != want {
 			t.Errorf("FormatMicroUSD(%d) = %s, want %s", micro, got, want)
@@ -175,6 +180,7 @@ func TestFormatting(t *testing.T) {
 
 // The JSON of a report is a contract of `whr usage --json` and the UI.
 func TestUsageReportJSONIsStable(t *testing.T) {
+	t.Parallel()
 	d := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	rep := UsageReport{
 		Group: store.GroupTask,
@@ -213,6 +219,7 @@ func TestUsageReportJSONIsStable(t *testing.T) {
 // The audit trail of a commit is read by its SHA, and a review of that commit
 // is in it: the pin, the push and the Decision about it.
 func TestTheAuditTrailOfAPinnedCommit(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	const sha = "0123456789abcdef0123456789abcdef01234567"
 	a := r.load()

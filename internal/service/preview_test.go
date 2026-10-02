@@ -57,6 +57,7 @@ func (r *wsRig) supervisorEvents(kind domain.EventKind) []domain.Event {
 // Only a port the repository's environment declares may be previewed, only while
 // the environment runs, and opening and closing are audited with who did it.
 func TestAPreviewOpensOnlyADeclaredPortOfARunningEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	ws, a := r.create("run")
@@ -105,6 +106,7 @@ func TestAPreviewOpensOnlyADeclaredPortOfARunningEnvironment(t *testing.T) {
 // A preview ends with its environment: nothing is opened on a stopped one, and a
 // sweep after a stop closes what was open and says so in the audit log.
 func TestAPreviewEndsWhenItsEnvironmentStops(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	ws, a := r.create("run")
@@ -139,6 +141,7 @@ func TestAPreviewEndsWhenItsEnvironmentStops(t *testing.T) {
 // A runtime that cannot reach an environment's ports says so when a preview is
 // asked for, instead of opening a listener that can only fail.
 func TestPreviewsSayWhenTheRuntimeCannotReachAPort(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.withPreviewPorts()
 	p, err := NewPreviews(r.svc, r.ws, PreviewConfig{})
@@ -163,6 +166,7 @@ func TestPreviewsSayWhenTheRuntimeCannotReachAPort(t *testing.T) {
 // A preview a web session opened closes, and is audited, when that session ends; one
 // the CLI or API opened is not touched.
 func TestAPreviewEndsWithTheWebSessionThatOpenedIt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	_, a := r.create("run")

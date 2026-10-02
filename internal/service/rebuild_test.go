@@ -44,6 +44,7 @@ func envCount(t *testing.T, r *wsRig) int {
 }
 
 func TestRebuildReplacesTheEnvironmentAndKeepsTheVolumesAndTheWorktrees(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.home = true
 	w, a := r.create("docs-ws")
@@ -115,6 +116,7 @@ func TestRebuildReplacesTheEnvironmentAndKeepsTheVolumesAndTheWorktrees(t *testi
 }
 
 func TestRebuildIsRefusedWhileARunIsLiveAndNamesIt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
 	_, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
@@ -141,6 +143,7 @@ func TestRebuildIsRefusedWhileARunIsLiveAndNamesIt(t *testing.T) {
 // A new environment that cannot be brought up is taken back and the old one runs
 // again, as it was.
 func TestAFailedRebuildRestoresTheOldEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	r.home = true
 	w, _ := r.create("docs-ws")
@@ -181,6 +184,7 @@ func TestAFailedRebuildRestoresTheOldEnvironment(t *testing.T) {
 
 // A task is not started while the workspace is being rebuilt.
 func TestATaskIsNotStartedWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
 	var (
@@ -209,6 +213,7 @@ func TestATaskIsNotStartedWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
 }
 
 func TestRebuildOfAnUnknownWorkspaceOrOneWithoutAnEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	if _, err := r.ws.Rebuild(bg, "nope", "werner"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("an unknown workspace: %v", err)
@@ -237,6 +242,7 @@ func interruptedRun(t *testing.T, r *wsRig, w domain.Workspace, a domain.Agent, 
 }
 
 func TestRebuildIsRefusedWhileARunIsInterruptedAndNamesIt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
 	interruptedRun(t, r, w, a, "r-int")
@@ -258,6 +264,7 @@ func TestRebuildIsRefusedWhileARunIsInterruptedAndNamesIt(t *testing.T) {
 }
 
 func TestNothingStartsTheOldEnvironmentWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
 	pub := NewPublisher(r.svc, PublishConfig{Workspaces: r.ws})
@@ -304,6 +311,7 @@ func TestNothingStartsTheOldEnvironmentWhileTheWorkspaceIsBeingRebuilt(t *testin
 }
 
 func TestARunIsNotSavedAgainstAnEnvironmentThatWasRebuiltMeanwhile(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	stale, a := r.create("docs-ws") // the record a start loaded before the swap
 	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
@@ -325,6 +333,7 @@ func TestARunIsNotSavedAgainstAnEnvironmentThatWasRebuiltMeanwhile(t *testing.T)
 }
 
 func TestALeaseKeepsARebuildOutAndARebuildKeepsALeaseOut(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	ws, _ := r.create("docs-ws")
 	release, err := r.svc.leaseEnvironment(ws)
@@ -360,6 +369,7 @@ func TestALeaseKeepsARebuildOutAndARebuildKeepsALeaseOut(t *testing.T) {
 }
 
 func TestTheLeaseIsReleasedWhenTheStartOrTheExportIsDone(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	ws, a := r.create("docs-ws")
 	if err := r.ws.ensureEnvironment(bg, ws); err != nil {
@@ -385,6 +395,7 @@ func TestTheLeaseIsReleasedWhenTheStartOrTheExportIsDone(t *testing.T) {
 }
 
 func TestARebuildFromAStaleRecordDoesNotSwapFromAStaleEnvironment(t *testing.T) {
+	t.Parallel()
 	r := newWsRig(t)
 	stale, _ := r.create("docs-ws")
 	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {

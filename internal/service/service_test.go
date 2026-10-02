@@ -196,6 +196,7 @@ func (r *rig) reconcile() Report {
 // interrupted, the environment is started, exec is awaited and the agent is
 // resumed from its session (design §5.3).
 func TestRuntimeRestartResumesTheAgentFromItsSession(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.agent.Block()
 	_ = r.rt.Restart(bg)
@@ -241,6 +242,7 @@ func contains[T comparable](list []T, want T) bool {
 // While the environment is slow to answer exec, the pass waits on the injected
 // clock and then resumes.
 func TestTheReconcilerWaitsForExec(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.agent.Block()
 	_ = r.rt.Restart(bg)
@@ -258,6 +260,7 @@ func TestTheReconcilerWaitsForExec(t *testing.T) {
 // An environment that never answers leaves the run interrupted for the next
 // pass; the error is reported, nothing is failed.
 func TestAnEnvironmentThatNeverAnswersIsRetriedLater(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.svc.cfg.ReadyCmd = []string{"exit", "1"}
@@ -282,6 +285,7 @@ func TestAnEnvironmentThatNeverAnswersIsRetriedLater(t *testing.T) {
 }
 
 func TestARunWithoutASessionFailsAndAsksWhatToDo(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, withSession("")) // the agent never reported a session
 	_ = r.rt.Restart(bg)
 
@@ -298,6 +302,7 @@ func TestARunWithoutASessionFailsAndAsksWhatToDo(t *testing.T) {
 }
 
 func TestASessionTheAgentForgotFailsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, withSession("lost-session")) // the agent no longer knows it
 	_ = r.rt.Restart(bg)
 
@@ -308,6 +313,7 @@ func TestASessionTheAgentForgotFailsTheRun(t *testing.T) {
 }
 
 func TestALostEnvironmentFailsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	// The runtime no longer lists the environment (it was removed).
 	must(t, r.rt.Restart(bg))
@@ -324,6 +330,7 @@ func TestALostEnvironmentFailsTheRun(t *testing.T) {
 // A failed resume leaves the run interrupted to try again, and a started
 // agent that dies is not forgotten.
 func TestAnAgentThatCannotStartLeavesTheRunInterrupted(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.svc.ag = failingAgent{err: errors.New("agent binary missing")}
@@ -335,6 +342,7 @@ func TestAnAgentThatCannotStartLeavesTheRunInterrupted(t *testing.T) {
 }
 
 func TestAnExpiredApprovalIsExpiredAndTheTaskIsFreed(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	a := r.load()
@@ -356,6 +364,7 @@ func TestAnExpiredApprovalIsExpiredAndTheTaskIsFreed(t *testing.T) {
 
 // "Resume at reset" resumes the run when the reset time has passed.
 func TestResumeAtReset(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	reset := t0.Add(2 * time.Hour)
 	a := r.load()
@@ -380,6 +389,7 @@ func TestResumeAtReset(t *testing.T) {
 }
 
 func TestAnsweringResumeRelaunchesTheAgent(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	a := r.load()
 	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
@@ -403,6 +413,7 @@ func TestAnsweringResumeRelaunchesTheAgent(t *testing.T) {
 }
 
 func TestACancelAnswerCancelsTheTask(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	a := r.load()
 	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
@@ -418,6 +429,7 @@ func TestACancelAnswerCancelsTheTask(t *testing.T) {
 // An agent that reports an expired login while it runs suspends its run and
 // raises the blocking question, through the aggregate.
 func TestAnAuthEventSuspendsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.agent.AuthExpires()
@@ -433,6 +445,7 @@ func TestAnAuthEventSuspendsTheRun(t *testing.T) {
 }
 
 func TestACompletedSessionStopsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.agent.Finish("all done")
@@ -467,6 +480,7 @@ func (f failingAgent) Resume(context.Context, agent.StartSpec, string) (agent.Se
 // the supervisor owned is gone: the run is lost although the environment
 // looks fine (D6).
 func TestARunWithoutASessionIsLostEvenWithAnEnvironmentThatIsUp(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.agent.Block()
 	rep := r.reconcile() // a fresh service: nothing is attached
@@ -484,6 +498,7 @@ func TestARunWithoutASessionIsLostEvenWithAnEnvironmentThatIsUp(t *testing.T) {
 
 // A shutdown ends the sessions, and the runs resume on the next start.
 func TestShutdownInterruptsRunsInsteadOfStoppingThem(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	r.svc.Shutdown()
@@ -499,6 +514,7 @@ func TestShutdownInterruptsRunsInsteadOfStoppingThem(t *testing.T) {
 }
 
 func TestResumingAfterANoSessionAnswerFailsTheRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, withSession("gone"))
 	a := r.load()
 	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
@@ -514,6 +530,7 @@ func TestResumingAfterANoSessionAnswerFailsTheRun(t *testing.T) {
 }
 
 func TestAChosenWaitForTheResetSurvivesAnInterruption(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	reset := t0.Add(2 * time.Hour)
 	a := r.load()
@@ -544,6 +561,7 @@ func (r *rig) envState() domain.EnvState {
 
 // A run that waits for a human costs no container.
 func TestNoContainerIsStartedForARunWaitingOnTheHuman(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	a := r.load()
 	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r.clock.now)
@@ -561,6 +579,7 @@ func TestNoContainerIsStartedForARunWaitingOnTheHuman(t *testing.T) {
 }
 
 func TestEveryResumeStartsWithTheBriefing(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.live()
 	a := r.load()
@@ -586,6 +605,7 @@ func TestEveryResumeStartsWithTheBriefing(t *testing.T) {
 
 // A failing agent is retried a few times and then the run fails.
 func TestAttemptsAreCountedAndUsedUp(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	must(t, r.rt.Restart(bg))
 	r.svc.ag = failingAgent{err: errors.New("agent binary missing")}
@@ -605,6 +625,7 @@ func TestAttemptsAreCountedAndUsedUp(t *testing.T) {
 
 // The old session's deferred cleanup must not remove a newer session's entry.
 func TestAnOldSessionDoesNotRemoveANewerEntry(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	old := r.svc.begin("r1")
 	fresh := r.svc.begin("r1") // a relaunch during a pass
@@ -628,6 +649,7 @@ func (p *pushes) Notify(_ context.Context, m notify.Message) error {
 // A blocking Decision, a login that expired and a failed run each notify once,
 // with IDs and a kind only (design §9.4).
 func TestBlockingDecisionsAndEndsNotify(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	rec := &pushes{}
 	r.svc.cfg.Notifier = notify.Throttled{Next: rec, Throttle: &notify.Throttle{Now: func() time.Time { return r.clock.now }}}
@@ -656,6 +678,7 @@ func TestBlockingDecisionsAndEndsNotify(t *testing.T) {
 }
 
 func TestAFailedRunNotifies(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, withSession(""))
 	rec := &pushes{}
 	r.svc.cfg.Notifier = rec
@@ -673,6 +696,7 @@ func TestAFailedRunNotifies(t *testing.T) {
 // #79: a session attached after Shutdown began is stopped at once and never
 // joins the wait group, so Shutdown neither misses it nor races wg.Wait.
 func TestSessionAttachedDuringShutdownIsStopped(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	r.agent.Block()
 	sess, err := r.agent.Start(bg, spec())
