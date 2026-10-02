@@ -17,9 +17,11 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/console"
 	"github.com/wstein/workharbor/internal/devcontainer"
+	"github.com/wstein/workharbor/internal/devcontainer/feature"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/oci"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/redact"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -363,7 +365,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		ConsoleSSH: consoleSSH,
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
-		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
+		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages, Features: &feature.Resolver{Client: oci.New(oci.Config{})}}, rt, Owner, filepath.Join(dir, "build")),
 		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {

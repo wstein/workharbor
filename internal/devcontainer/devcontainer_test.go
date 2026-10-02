@@ -282,8 +282,9 @@ func TestBuildArgsAndFeatures(t *testing.T) {
 	if !reflect.DeepEqual(c.Features, want) {
 		t.Errorf("Features = %v", c.Features)
 	}
-	if !strings.Contains(strings.Join(c.Notes, "|"), "features: requested, not applied") {
-		t.Errorf("features need a note: %v", c.Notes)
+	// the file's order is kept, with the options as strings
+	if len(c.FeatureRequests) != 2 || c.FeatureRequests[0].ID != "ghcr.io/devcontainers/features/node:1" || c.FeatureRequests[0].Options["version"] != "22" || c.FeatureRequests[1].ID != "ghcr.io/devcontainers/features/git:1" {
+		t.Errorf("FeatureRequests = %+v", c.FeatureRequests)
 	}
 	// A build argument may not carry what the supervisor sets: HTTPS_PROXY is a
 	// predefined build argument, so it would redirect the build's traffic.

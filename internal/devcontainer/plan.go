@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/wstein/workharbor/internal/devcontainer/feature"
+	"github.com/wstein/workharbor/internal/oci"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -26,6 +28,14 @@ func (e Environment) Tag(owner string) string {
 	for _, k := range names {
 		fmt.Fprintf(h, "%s=%s\x00", k, e.BuildArgs[k])
 	}
+	// the image the features are applied to and each one's manifest digest and options,
+	// in install order: a moved tag changes nothing until the next resolution (D38)
+	if len(e.Features) > 0 {
+		fmt.Fprintf(h, "features\x00%s\x00", e.Image)
+		for _, f := range e.Features {
+			fmt.Fprintf(h, "%s\x00%s\x00%v\x00", f.Ref, f.Digest, f.Vars)
+		}
+	}
 	return "whr-env/" + owner + ":" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
@@ -37,6 +47,9 @@ func (e Environment) Tag(owner string) string {
 func (e Environment) Stage(ctx context.Context, r Runner, owner, workDir string) (runtime.BuildSpec, Exported, error) {
 	if !e.Built() {
 		return runtime.BuildSpec{}, Exported{}, fmt.Errorf("devcontainer: the environment runs image %q and builds nothing", e.Image)
+	}
+	if e.Dockerfile == "" {
+		return e.stageFeatures(owner, workDir)
 	}
 	dockerfile, err := file(ctx, r, e.Commit, e.Dockerfile)
 	if err != nil {
@@ -53,6 +66,27 @@ func (e Environment) Stage(ctx context.Context, r Runner, owner, workDir string)
 	}
 	b := runtime.BuildSpec{Tag: e.Tag(owner), ContextDir: ctxDir, Dockerfile: df, Args: e.BuildArgs}
 	return b, res, b.Validate()
+}
+
+// stageFeatures writes the build of an image with devcontainer features applied: a
+// context that holds only the features, extracted again and checked, and a Dockerfile
+// that installs them in order on the environment's image (D38, issue #108). The
+// repository's own files are not part of it.
+func (e Environment) stageFeatures(owner, workDir string) (runtime.BuildSpec, Exported, error) {
+	ctxDir := filepath.Join(workDir, "context")
+	if err := os.MkdirAll(ctxDir, 0o700); err != nil {
+		return runtime.BuildSpec{}, Exported{}, err
+	}
+	text, err := feature.Stage(ctxDir, e.Image, e.Features, oci.ExtractLimits{})
+	if err != nil {
+		return runtime.BuildSpec{}, Exported{}, err
+	}
+	df := filepath.Join(workDir, "Dockerfile")
+	if err := os.WriteFile(df, []byte(text), 0o600); err != nil {
+		return runtime.BuildSpec{}, Exported{}, err
+	}
+	b := runtime.BuildSpec{Tag: e.Tag(owner), ContextDir: ctxDir, Dockerfile: df}
+	return b, Exported{}, b.Validate()
 }
 
 // Spec applies the environment to the supervisor's hardened spec. The repository

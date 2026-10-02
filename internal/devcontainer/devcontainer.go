@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wstein/workharbor/internal/devcontainer/feature"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
 )
@@ -40,10 +41,12 @@ type Config struct {
 
 	Env map[string]string // containerEnv
 
-	// Features are the ids of the devcontainer features the file asks for,
-	// sorted. They are a request only: building them on Apple Container is
-	// unverified (D38), so the builder does not apply them yet.
-	Features []string
+	// Features are the ids of the devcontainer features the file asks for, sorted.
+	// FeatureRequests are the same with their options, in the order of the file,
+	// which decides the order they install in (D38, issue #108). They are requests:
+	// Resolve fetches and checks them, and the builder applies what it accepted.
+	Features        []string
+	FeatureRequests []feature.Request
 
 	// ForwardPorts are the ports the file forwards, which become the preview
 	// ports of D33. Only plain port numbers are read.
@@ -196,17 +199,15 @@ func Parse(data []byte) (Config, error) {
 		case "customizations":
 			c.EgressRequests, c.Hints, notes = customizations(v, notes)
 		case "features":
-			var f map[string]json.RawMessage
-			if err := json.Unmarshal(v, &f); err != nil {
+			reqs, err := featureRequests(v)
+			if err != nil {
 				return Config{}, fmt.Errorf("devcontainer.json: features: %w", err)
 			}
-			for id := range f {
-				c.Features = append(c.Features, id)
+			c.FeatureRequests = reqs
+			for _, r := range reqs {
+				c.Features = append(c.Features, r.ID)
 			}
 			sort.Strings(c.Features)
-			if len(c.Features) > 0 {
-				notes = append(notes, "features: requested, not applied yet (building them on Apple Container is unverified)")
-			}
 		case "forwardPorts":
 			c.ForwardPorts, notes = ports("forwardPorts", v, notes)
 		case "name", "$schema":
@@ -479,4 +480,74 @@ func dropTrailingCommas(in []byte) []byte {
 		out.WriteByte(ch)
 	}
 	return out.Bytes()
+}
+
+// featureRequests reads the features object in the order of the file, with each
+// feature's options as the strings an install script reads: a string value is the
+// "version" option, true or an empty object sets nothing, an object gives its options.
+func featureRequests(raw json.RawMessage) ([]feature.Request, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil, errors.New("not an object")
+	}
+	var out []feature.Request
+	seen := map[string]bool{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		id, _ := tok.(string)
+		var val json.RawMessage
+		if err := dec.Decode(&val); err != nil {
+			return nil, err
+		}
+		if seen[id] {
+			return nil, fmt.Errorf("%q appears twice", id)
+		}
+		seen[id] = true
+		opts, off, err := featureOptions(val)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", id, err)
+		}
+		if !off {
+			out = append(out, feature.Request{ID: id, Options: opts})
+		}
+	}
+	return out, nil
+}
+
+// featureOptions reads one feature's value. off is true for false: the feature is
+// switched off.
+func featureOptions(raw json.RawMessage) (opts map[string]string, off bool, err error) {
+	var v any
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&v); err != nil {
+		return nil, false, err
+	}
+	switch t := v.(type) {
+	case nil:
+		return nil, false, nil
+	case bool:
+		return nil, !t, nil
+	case string:
+		return map[string]string{"version": t}, false, nil
+	case map[string]any:
+		opts = map[string]string{}
+		for k, val := range t {
+			switch x := val.(type) {
+			case string:
+				opts[k] = x
+			case bool:
+				opts[k] = fmt.Sprint(x)
+			case json.Number:
+				opts[k] = x.String()
+			default:
+				return nil, false, fmt.Errorf("option %q is not a string, boolean or number", k)
+			}
+		}
+		return opts, false, nil
+	}
+	return nil, false, errors.New("not an options object, a version or true")
 }
