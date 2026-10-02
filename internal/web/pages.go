@@ -27,6 +27,8 @@ var flashes = map[string]string{
 	"purged":        "The transcript was deleted. The audit entries, usage and Decisions stay.",
 	"revoked":       "That device is signed out.",
 	"gone":          "That device was already signed out.",
+	"confirmed":     "Confirmed. It takes effect when whr serve is restarted on the host.",
+	"tokens":        "The forge tokens were revoked. A new one is made when it is next needed.",
 }
 
 func flash(r *http.Request) string { return flashes[r.URL.Query().Get("flash")] }

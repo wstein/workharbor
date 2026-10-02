@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -113,9 +114,11 @@ func Run(ctx context.Context, d Deps) error {
 	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
-	if err := applyWorkflows(ctx, d, logf); err != nil {
+	held, err := applyWorkflows(ctx, d, logf)
+	if err != nil {
 		return err
 	}
+	d.Config = withHeld(d.Config, held)
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
 		Workflow: func(repo string) string {
 			for _, r := range d.Config.Repositories {
@@ -160,6 +163,7 @@ func Run(ctx context.Context, d Deps) error {
 	webOpt := web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }}
 	if keys != nil { // a typed nil would look like a configured interface
 		apiOpt.Passkeys, webOpt.Passkeys = keys, keys
+		webOpt.Changes = changesOf{st: d.Store, svc: svc, revoke: scfg.RevokeTokens != nil}
 	}
 	srv, err := api.New(be, apiOpt)
 	if err != nil {
@@ -270,30 +274,84 @@ func addRevoker(scfg *service.Config, d Deps) {
 }
 
 // applyWorkflows records the preset of each configured repository. A change of
-// one is a policy change: it is refused unless the operator confirmed it, and when
-// confirmed it is appended to the audit log of changes. A task already started
-// keeps the preset it started under either way.
-func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) error {
+// one is a policy change: unless the operator confirmed it on the host
+// (--accept-workflow-change) it is not applied. With a passkey enrolled the
+// supervisor then starts and returns the repositories it holds on their recorded
+// workflow, each with a pending change the web UI can confirm with a step-up
+// (D45, issue #107); without one it refuses to start, as it always did. A
+// confirmed change is appended to the audit log of changes. A task already
+// started keeps the preset it started under either way.
+func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) (held map[string]store.WorkflowRecord, err error) {
+	canConfirm, err := webCanConfirm(ctx, d)
+	if err != nil {
+		return nil, err
+	}
 	for _, r := range d.Config.Repositories {
 		want := store.WorkflowRecord{Workflow: string(r.Preset()), Branch: workflowBranch(r)}
 		prev, ok, err := d.Store.RecordedWorkflow(ctx, r.Name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if ok && prev != want && !d.AcceptWorkflowChange {
-			return fmt.Errorf("the workflow of %s is %s on %q in the configuration and was %s on %q: that is a policy change; check it and start with --accept-workflow-change to confirm it (tasks already started keep what they started under)", r.Name, want.Workflow, want.Branch, prev.Workflow, prev.Branch)
+			if !canConfirm {
+				return nil, fmt.Errorf("the workflow of %s is %s on %q in the configuration and was %s on %q: that is a policy change; check it and start with --accept-workflow-change to confirm it, or enrol a passkey (whr passkey add) to confirm it in the web UI (tasks already started keep what they started under)", r.Name, want.Workflow, want.Branch, prev.Workflow, prev.Branch)
+			}
+			if _, err := d.Store.RaiseChange(ctx, string(NewID()), r.Name, prev, want, time.Now()); err != nil {
+				return nil, err
+			}
+			if held == nil {
+				held = map[string]store.WorkflowRecord{}
+			}
+			held[strings.ToLower(r.Name)] = prev
+			logf("the workflow of %s is %s on %q in the configuration and stays %s on %q until you confirm it (web UI, with a passkey, or --accept-workflow-change)", r.Name, want.Workflow, want.Branch, prev.Workflow, prev.Branch)
+			continue
 		}
 		by := "serve"
 		if d.AcceptWorkflowChange {
 			by = "host-cli"
 		}
 		if _, changed, err := d.Store.ApplyWorkflow(ctx, r.Name, want, by, time.Now()); err != nil {
-			return err
+			return nil, err
 		} else if changed {
 			logf("workflow of %s changed from %s on %q to %s on %q (confirmed on the host CLI)", r.Name, prev.Workflow, prev.Branch, want.Workflow, want.Branch)
 		}
 	}
-	return nil
+	// What the configuration no longer asks for is withdrawn.
+	keep := make([]string, 0, len(held))
+	for r := range held {
+		keep = append(keep, r)
+	}
+	if _, err := d.Store.WithdrawChangesExcept(ctx, keep, time.Now()); err != nil {
+		return nil, err
+	}
+	return held, nil
+}
+
+// withHeld returns the configuration with each held repository back on the
+// workflow it was recorded under: a change nobody confirmed does not apply. The
+// caller's configuration is left as it is.
+func withHeld(c *config.Config, held map[string]store.WorkflowRecord) *config.Config {
+	if len(held) == 0 {
+		return c
+	}
+	cp := *c
+	cp.Repositories = slices.Clone(c.Repositories)
+	for i, r := range cp.Repositories {
+		if rec, ok := held[strings.ToLower(r.Name)]; ok {
+			cp.Repositories[i].Workflow, cp.Repositories[i].IntegrationBranch = rec.Workflow, rec.Branch
+		}
+	}
+	return &cp
+}
+
+// webCanConfirm says whether the web UI could confirm a change: passkeys are on
+// (public_url is set) and one is enrolled.
+func webCanConfirm(ctx context.Context, d Deps) (bool, error) {
+	if origin, _ := d.Config.PublicOrigin(); origin == "" {
+		return false, nil
+	}
+	keys, err := d.Store.Passkeys(ctx)
+	return len(keys) > 0, err
 }
 
 // workflowBranch is the integration branch a repository runs under: the one its

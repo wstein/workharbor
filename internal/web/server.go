@@ -37,6 +37,10 @@ type Options struct {
 	// the step-up approvals (D45). Without it the UI signs in with the token and
 	// refuses to answer a review.
 	Passkeys Passkeys
+	// Changes, if set, adds the page of changes that need a passkey: a workflow
+	// change the host has not confirmed and the revocation of the forge tokens
+	// (D45, issue #107). Without Passkeys it only lists them.
+	Changes Changes
 	// OnError hears an internal error, which the browser only sees as a generic
 	// message. Optional.
 	OnError func(error)
@@ -93,6 +97,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /passkey/login/finish", s.passkeyLoginFinish)
 	mux.HandleFunc("POST /decisions/{decision}/stepup/begin", s.authedJSON(s.stepUpBegin))
 	mux.HandleFunc("POST /decisions/{decision}/stepup/finish", s.authedJSON(s.stepUpFinish))
+	mux.HandleFunc("GET /changes", s.authed(false, s.changes))
+	mux.HandleFunc("POST /changes/{change}/stepup/begin", s.authedJSON(s.changeBegin))
+	mux.HandleFunc("POST /changes/{change}/stepup/finish", s.authedJSON(s.changeFinish))
+	mux.HandleFunc("POST /secrets/revoke-tokens/stepup/begin", s.authedJSON(s.revokeBegin))
+	mux.HandleFunc("POST /secrets/revoke-tokens/stepup/finish", s.authedJSON(s.revokeFinish))
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.login)
 	mux.HandleFunc("POST /logout", s.authed(true, s.logout))

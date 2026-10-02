@@ -10,6 +10,8 @@ import (
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/passkey"
+	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/store"
 )
 
 // Passkeys is what the UI needs of the passkey ceremonies (design D45); the real one
@@ -218,12 +220,7 @@ func (s *Server) stepUpBegin(w http.ResponseWriter, r *http.Request, sess Sessio
 		jsonError(w, http.StatusBadRequest, "that decision needs no passkey")
 		return
 	}
-	opts, cer, err := s.opt.Passkeys.StepUpBegin(r.Context(), sess.CSRF, passkey.Binding{Decision: string(d.ID), SHA: bindsTo(d)})
-	if err != nil {
-		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
-		return
-	}
-	jsonReply(w, http.StatusOK, map[string]any{"options": opts, "ceremony": cer})
+	s.beginStepUp(w, r, sess, passkey.Binding{Decision: string(d.ID), SHA: bindsTo(d)})
 }
 
 func (s *Server) openDecision(r *http.Request) (*domain.Decision, error) {
@@ -251,7 +248,7 @@ func (s *Server) stepUpFinish(w http.ResponseWriter, r *http.Request, sess Sessi
 		return
 	}
 	q := r.URL.Query()
-	option, reason, cer := q.Get("option"), strings.TrimSpace(q.Get("reason")), r.Header.Get("X-Ceremony")
+	option, reason := q.Get("option"), strings.TrimSpace(q.Get("reason"))
 	d, err := s.openDecision(r)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, "that decision is not open")
@@ -261,33 +258,47 @@ func (s *Server) stepUpFinish(w http.ResponseWriter, r *http.Request, sess Sessi
 		jsonError(w, http.StatusBadRequest, "that is not an answer to this decision")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
-	got, err := s.opt.Passkeys.StepUpFinish(r.Context(), cer, sess.CSRF, r)
-	if err != nil {
-		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
-		return
-	}
-	if got.Decision != string(d.ID) || got.SHA != bindsTo(d) {
-		jsonError(w, http.StatusForbidden, "The approval was for another decision, commit or host.")
-		return
-	}
-	loc, err := s.onceKey(r.Context(), "stepup:"+cer, string(d.ID)+"|"+option+"|"+bindsTo(d), func() (string, error) {
+	s.finishStepUp(w, r, sess, passkey.Binding{Decision: string(d.ID), SHA: bindsTo(d)}, option+"|"+reason, func() (string, error) {
 		_, err := s.be.Answer(r.Context(), d.ID, domain.Response{By: "web+passkey", Option: option, Reason: reason, SHA: d.SHA, At: s.opt.Now()})
 		if err != nil {
 			return "", err
 		}
 		return "/inbox?flash=answered", nil
 	})
+}
+
+// finishStepUp verifies the assertion and only then runs the action, once. What the
+// challenge named must be exactly what the page is acting on now (want): an
+// assertion for another Decision, change or commit is refused. The ceremony is
+// single-use and its key makes a repeat of the request answer once.
+func (s *Server) finishStepUp(w http.ResponseWriter, r *http.Request, sess Session, want passkey.Binding, detail string, run func() (location string, err error)) {
+	cer := r.Header.Get("X-Ceremony")
+	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
+	got, err := s.opt.Passkeys.StepUpFinish(r.Context(), cer, sess.CSRF, r)
+	if err != nil {
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
+		return
+	}
+	if got != want {
+		jsonError(w, http.StatusForbidden, "The approval was for another decision, change, commit or host.")
+		return
+	}
+	loc, err := s.onceKey(r.Context(), "stepup:"+cer, want.Decision+"|"+want.SHA+"|"+detail, run)
 	if err != nil {
 		var coded interface{ ExitCode() int }
-		if errors.As(err, &coded) {
+		switch {
+		case errors.As(err, &coded):
 			jsonError(w, statusOf(coded.ExitCode()), err.Error())
-			return
+		case errors.Is(err, store.ErrNoChange), errors.Is(err, store.ErrStaleChange):
+			jsonError(w, http.StatusConflict, "That change is no longer waiting, or the repository changed since it was raised. Reload the page.")
+		case errors.Is(err, service.ErrNoRevoker):
+			jsonError(w, http.StatusConflict, "There is no forge token to revoke.")
+		default:
+			if s.opt.OnError != nil {
+				s.opt.OnError(err)
+			}
+			jsonError(w, http.StatusInternalServerError, "The answer could not be recorded.")
 		}
-		if s.opt.OnError != nil {
-			s.opt.OnError(err)
-		}
-		jsonError(w, http.StatusInternalServerError, "The answer could not be recorded.")
 		return
 	}
 	jsonReply(w, http.StatusOK, map[string]string{"location": loc})

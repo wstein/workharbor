@@ -25,6 +25,20 @@ type nav struct {
 	Active string
 }
 
+type changeRow struct {
+	ID, Repo, From, To string
+}
+
+type changesPage struct {
+	nav
+	Flash string
+	// StepUp says a passkey is enrolled, so a change can be confirmed here.
+	StepUp  bool
+	Changes []changeRow
+	// Revoke says the supervisor holds forge tokens it could revoke.
+	Revoke bool
+}
+
 type deviceRow struct {
 	ID, Label, Since, LastSeen string
 	Current                    bool

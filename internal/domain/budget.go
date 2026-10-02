@@ -93,3 +93,22 @@ func NewKillAllEvent(k KillAll, at time.Time) Event {
 	}
 	return newEvent(SupervisorStream, EventKillAll, k, at)
 }
+
+// EventTokensRevoked is the audit entry of revoking the forge tokens without
+// stopping anything else: a secret operation of the web UI behind a passkey
+// step-up (D45, issue #107). Like EventKillAll it is kept in the supervisor's own
+// stream.
+const EventTokensRevoked EventKind = "supervisor.tokens_revoked"
+
+// TokensRevoked is the payload of EventTokensRevoked: who did it, how many tokens
+// were revoked and what could not be done. It holds no token.
+type TokensRevoked struct {
+	Actor   string `json:"actor"`
+	Revoked int    `json:"revoked"`
+	Problem string `json:"problem,omitempty"`
+}
+
+// NewTokensRevokedEvent returns the audit entry of a token revocation.
+func NewTokensRevokedEvent(r TokensRevoked, at time.Time) Event {
+	return newEvent(SupervisorStream, EventTokensRevoked, r, at)
+}

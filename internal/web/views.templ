@@ -41,6 +41,7 @@ templ layout(n nav, title string) {
 								<span class="count">{ strconv.Itoa(n.Inbox) }</span>
 							}
 						</a>
+						<a href="/changes" class={ tab(n.Active, "changes") }>Changes</a>
 						<a href="/devices" class={ tab(n.Active, "devices") }>Devices</a>
 					</nav>
 					<form method="post" action="/logout" hx-boost="false">
@@ -337,6 +338,54 @@ templ purgeView(p purgePage) {
 			<button class="danger">Delete the transcript</button>
 			<a class="button" href={ templ.SafeURL("/tasks/" + p.ID) }>Keep it</a>
 		</form>
+	}
+}
+
+templ changesView(p changesPage) {
+	@layout(p.nav, "Changes") {
+		<h1>Changes to confirm</h1>
+		@flashNote(p.Flash)
+		<p class="muted">A change of the rules, or of a secret, is never done by a signed-in session alone: it needs your passkey, and the passkey names the change. The host's command line stays the other way.</p>
+		<section aria-labelledby="workflows">
+			<h2 id="workflows">Workflow of a repository</h2>
+			if len(p.Changes) == 0 {
+				<p class="muted">Nothing waits. A repository's preset or integration branch is changed in the configuration; the change shows here after <code>whr serve</code> starts with it.</p>
+			}
+			for _, c := range p.Changes {
+				<article class="decision">
+					<h3>{ c.Repo }</h3>
+					<p class="subject">{ c.From } becomes { c.To }</p>
+					<p class="muted">Until you confirm, the repository stays as it is, and a confirmed change takes effect when <code>whr serve</code> is restarted.</p>
+					if p.StepUp {
+						<div class="actions">
+							<button type="button" data-stepup="confirm" data-url={ "/changes/" + c.ID + "/stepup" } class="primary">Confirm with passkey</button>
+						</div>
+						<p class="flash bad" role="alert" data-passkey-status hidden></p>
+						<noscript><p class="muted">Confirming with a passkey needs JavaScript.</p></noscript>
+					} else {
+						<p class="flash">This needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or start <code>whr serve</code> with <code>--accept-workflow-change</code>.</p>
+					}
+				</article>
+			}
+		</section>
+		if p.Revoke {
+			<section aria-labelledby="secrets">
+				<h2 id="secrets">Secrets</h2>
+				<article class="decision">
+					<h3>Revoke the forge tokens</h3>
+					<p class="subject">Every installation token the supervisor holds is revoked now. Nothing is stopped; a new token is made when one is needed. No secret is shown here.</p>
+					if p.StepUp {
+						<div class="actions">
+							<button type="button" data-stepup="revoke" data-url="/secrets/revoke-tokens/stepup" class="danger">Revoke with passkey</button>
+						</div>
+						<p class="flash bad" role="alert" data-passkey-status hidden></p>
+						<noscript><p class="muted">Revoking with a passkey needs JavaScript.</p></noscript>
+					} else {
+						<p class="flash">This needs your passkey, and none is enrolled. Use <code>whr kill-all</code> on the host.</p>
+					}
+				</article>
+			</section>
+		}
 	}
 }
 

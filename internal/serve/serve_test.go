@@ -309,13 +309,13 @@ func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
 	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
 	ctx := context.Background()
 
-	if err := applyWorkflows(ctx, cfg(""), logf); err != nil { // the first start records the default
+	if _, err := applyWorkflows(ctx, cfg(""), logf); err != nil { // the first start records the default
 		t.Fatal(err)
 	}
-	if err := applyWorkflows(ctx, cfg("integration"), logf); err != nil {
+	if _, err := applyWorkflows(ctx, cfg("integration"), logf); err != nil {
 		t.Errorf("the same preset: %v", err)
 	}
-	err = applyWorkflows(ctx, cfg("prototype", "dev"), logf)
+	_, err = applyWorkflows(ctx, cfg("prototype", "dev"), logf)
 	if err == nil || !strings.Contains(err.Error(), "--accept-workflow-change") || !strings.Contains(err.Error(), "policy change") {
 		t.Fatalf("an unconfirmed change = %v", err)
 	}
@@ -324,7 +324,7 @@ func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
 	}
 	d := cfg("prototype", "dev")
 	d.AcceptWorkflowChange = true
-	if err := applyWorkflows(ctx, d, logf); err != nil {
+	if _, err := applyWorkflows(ctx, d, logf); err != nil {
 		t.Fatal(err)
 	}
 	ch, _ := st.WorkflowChanges(ctx, "wstein/workharbor")
@@ -349,11 +349,11 @@ func TestAChangeOfIntegrationBranchNeedsTheHostsConfirmationToo(t *testing.T) {
 	}
 	logf := func(string, ...any) {}
 	ctx := context.Background()
-	if err := applyWorkflows(ctx, cfg("wstein/workharbor", "develop"), logf); err != nil {
+	if _, err := applyWorkflows(ctx, cfg("wstein/workharbor", "develop"), logf); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"wstein/workharbor", "Wstein/WorkHarbor"} {
-		err := applyWorkflows(ctx, cfg(name, "next"), logf)
+		_, err := applyWorkflows(ctx, cfg(name, "next"), logf)
 		if err == nil || !strings.Contains(err.Error(), "--accept-workflow-change") {
 			t.Fatalf("%s: an unconfirmed branch change = %v", name, err)
 		}
@@ -363,11 +363,102 @@ func TestAChangeOfIntegrationBranchNeedsTheHostsConfirmationToo(t *testing.T) {
 	}
 	d := cfg("WSTEIN/workharbor", "next")
 	d.AcceptWorkflowChange = true
-	if err := applyWorkflows(ctx, d, logf); err != nil {
+	if _, err := applyWorkflows(ctx, d, logf); err != nil {
 		t.Fatal(err)
 	}
 	ch, _ := st.WorkflowChanges(ctx, "wstein/workharbor")
 	if len(ch) != 1 || ch[0].FromBranch != "develop" || ch[0].ToBranch != "next" {
 		t.Errorf("audit %+v", ch)
+	}
+}
+
+// With a passkey enrolled, a workflow change nobody confirmed does not stop the
+// supervisor from starting: the repository is held on what it was recorded under
+// and the change waits for the web UI's step-up (D45, issue #107). Without a
+// passkey it still refuses, and the host's flag still confirms.
+func TestAnUnconfirmedWorkflowChangeIsHeldWhenAPasskeyCanConfirmIt(t *testing.T) {
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "workharbor.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	cfg := func(workflow, branch string) Deps {
+		c := &config.Config{PublicURL: "https://whr.example.test", Repositories: []config.Repository{{Name: "wstein/workharbor", Workflow: workflow, IntegrationBranch: branch}}}
+		return Deps{Config: c, Store: st}
+	}
+	logf := func(string, ...any) {}
+	if _, err := applyWorkflows(ctx, cfg("integration", "develop"), logf); err != nil {
+		t.Fatal(err)
+	}
+
+	// no passkey: refused, and nothing is raised
+	if _, err := applyWorkflows(ctx, cfg("prototype", "scratch"), logf); err == nil {
+		t.Fatal("a change was accepted with no passkey to confirm it")
+	}
+	if open, _ := st.OpenChanges(ctx); len(open) != 0 {
+		t.Fatalf("a refused change was raised: %+v", open)
+	}
+
+	// a passkey is enrolled: held, raised, not recorded
+	if err := st.AddPasskey(ctx, store.Passkey{ID: "k1", Name: "phone", Credential: []byte("x"), CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	d := cfg("prototype", "scratch")
+	held, err := applyWorkflows(ctx, d, logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := store.WorkflowRecord{Workflow: "integration", Branch: "develop"}
+	if held["wstein/workharbor"] != want {
+		t.Fatalf("held = %+v, want the recorded workflow %+v", held, want)
+	}
+	if rec, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); rec != want {
+		t.Errorf("a held change was recorded: %+v", rec)
+	}
+	open, _ := st.OpenChanges(ctx)
+	if len(open) != 1 || open[0].To.Workflow != "prototype" {
+		t.Fatalf("open = %+v", open)
+	}
+	// what the supervisor then runs under is the held workflow, and the caller's
+	// configuration is untouched
+	eff := withHeld(d.Config, held)
+	if r := eff.Repositories[0]; r.Workflow != "integration" || r.IntegrationBranch != "develop" {
+		t.Errorf("effective repository = %+v", r)
+	}
+	if r := d.Config.Repositories[0]; r.Workflow != "prototype" {
+		t.Errorf("the configuration was changed: %+v", r)
+	}
+	// a restart raises the same change, not a second one
+	if _, err := applyWorkflows(ctx, cfg("prototype", "scratch"), logf); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := st.OpenChanges(ctx); len(again) != 1 || again[0].ID != open[0].ID {
+		t.Errorf("a restart raised another change: %+v", again)
+	}
+
+	// the configuration goes back: the change is withdrawn
+	held, err = applyWorkflows(ctx, cfg("integration", "develop"), logf)
+	if err != nil || len(held) != 0 {
+		t.Fatalf("held = %v, %v", held, err)
+	}
+	if again, _ := st.OpenChanges(ctx); len(again) != 0 {
+		t.Errorf("a change the configuration no longer asks for is still open: %+v", again)
+	}
+
+	// the host's flag confirms and leaves nothing open
+	if _, err := applyWorkflows(ctx, cfg("prototype", "scratch"), logf); err != nil {
+		t.Fatal(err)
+	}
+	flag := cfg("prototype", "scratch")
+	flag.AcceptWorkflowChange = true
+	if held, err := applyWorkflows(ctx, flag, logf); err != nil || len(held) != 0 {
+		t.Fatalf("with the flag: held %v, %v", held, err)
+	}
+	if again, _ := st.OpenChanges(ctx); len(again) != 0 {
+		t.Errorf("the host's confirmation left a change open: %+v", again)
+	}
+	if rec, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); rec.Workflow != "prototype" {
+		t.Errorf("recorded = %+v", rec)
 	}
 }

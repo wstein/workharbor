@@ -86,3 +86,30 @@ func TestKillAllWithNothingRunningStillWritesTheAuditEntry(t *testing.T) {
 		t.Errorf("an empty report has empty lists: %s", b)
 	}
 }
+
+func TestRevokeForgeTokensRevokesOnlyTokensAndLeavesAnAuditEntry(t *testing.T) {
+	r := newRig(t)
+	r.live()
+	if _, err := r.svc.RevokeForgeTokens(bg, "web+passkey"); !errors.Is(err, ErrNoRevoker) {
+		t.Fatalf("without a revoker: %v, want ErrNoRevoker", err)
+	}
+	r.svc.cfg.RevokeTokens = func(context.Context) (int, error) { return 3, nil }
+	n, err := r.svc.RevokeForgeTokens(bg, "web+passkey")
+	if err != nil || n != 3 {
+		t.Fatalf("revoked %d, %v", n, err)
+	}
+	if r.runState() == domain.RunStopped {
+		t.Error("revoking the tokens stopped a run")
+	}
+	if a, _ := r.store.LoadTask(bg, "t1"); a.Task().State == domain.TaskCancelled {
+		t.Error("revoking the tokens cancelled a task")
+	}
+	evs, err := r.store.EventsSince(bg, domain.SupervisorStream, 0, 10)
+	if err != nil || len(evs) != 1 || evs[0].Kind != domain.EventTokensRevoked || evs[0].Tier != domain.TierAudit {
+		t.Fatalf("audit = %+v, %v", evs, err)
+	}
+	var k domain.TokensRevoked
+	if err := json.Unmarshal(evs[0].Payload, &k); err != nil || k.Actor != "web+passkey" || k.Revoked != 3 {
+		t.Errorf("payload = %+v, %v", k, err)
+	}
+}

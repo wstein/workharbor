@@ -63,3 +63,27 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 	s.publish(saved)
 	return rep, nil
 }
+
+// ErrNoRevoker means the supervisor holds no forge token it could revoke.
+var ErrNoRevoker = errors.New("service: there is no forge token to revoke")
+
+// RevokeForgeTokens revokes the forge tokens the supervisor holds and nothing
+// else: the secret operation the web UI offers behind a passkey step-up (D45).
+// The attempt is an audit entry in the supervisor's stream whatever happened, with
+// who did it and how many tokens went, never a token.
+func (s *Service) RevokeForgeTokens(ctx context.Context, actor string) (int, error) {
+	if s.cfg.RevokeTokens == nil {
+		return 0, ErrNoRevoker
+	}
+	n, rerr := s.cfg.RevokeTokens(ctx)
+	rec := domain.TokensRevoked{Actor: actor, Revoked: n}
+	if rerr != nil {
+		rec.Problem = rerr.Error()
+	}
+	saved, aerr := s.store.Append(ctx, domain.NewTokensRevokedEvent(rec, s.clock.Now()))
+	if aerr != nil {
+		return n, errors.Join(rerr, fmt.Errorf("revoke tokens: write the audit entry: %w", aerr))
+	}
+	s.publish(saved)
+	return n, rerr
+}

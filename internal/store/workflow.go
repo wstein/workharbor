@@ -47,27 +47,33 @@ func (s *Store) ApplyWorkflow(ctx context.Context, repo string, rec WorkflowReco
 	if repo == "" || rec.Workflow == "" {
 		return WorkflowRecord{}, false, fmt.Errorf("store: a workflow record needs a repository and a preset")
 	}
-	key := repoKey(repo)
 	err = s.Update(ctx, func(tx *Tx) error {
-		qerr := tx.tx.QueryRowContext(ctx, `SELECT workflow, branch FROM repo_workflows WHERE repo = ?`, key).Scan(&previous.Workflow, &previous.Branch)
-		switch {
-		case errors.Is(qerr, sql.ErrNoRows):
-			_, e := tx.tx.ExecContext(ctx, `INSERT INTO repo_workflows (repo, workflow, branch, since) VALUES (?, ?, ?, ?)`, key, rec.Workflow, rec.Branch, toNano(at))
-			return e
-		case qerr != nil:
-			return qerr
-		case previous == rec:
-			return nil
-		}
-		changed = true
-		if _, e := tx.tx.ExecContext(ctx, `INSERT INTO workflow_changes (repo, from_workflow, to_workflow, from_branch, to_branch, confirmed_by, at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			key, previous.Workflow, rec.Workflow, previous.Branch, rec.Branch, confirmedBy, toNano(at)); e != nil {
-			return e
-		}
-		_, e := tx.tx.ExecContext(ctx, `UPDATE repo_workflows SET workflow = ?, branch = ?, since = ? WHERE repo = ?`, rec.Workflow, rec.Branch, toNano(at), key)
+		var e error
+		previous, changed, e = applyWorkflowTx(ctx, tx, repoKey(repo), rec, confirmedBy, at)
 		return e
 	})
 	return previous, changed, err
+}
+
+// applyWorkflowTx is ApplyWorkflow inside a transaction: the record and, when it
+// differs, the audit entry of the change.
+func applyWorkflowTx(ctx context.Context, tx *Tx, key string, rec WorkflowRecord, confirmedBy string, at time.Time) (previous WorkflowRecord, changed bool, err error) {
+	qerr := tx.tx.QueryRowContext(ctx, `SELECT workflow, branch FROM repo_workflows WHERE repo = ?`, key).Scan(&previous.Workflow, &previous.Branch)
+	switch {
+	case errors.Is(qerr, sql.ErrNoRows):
+		_, e := tx.tx.ExecContext(ctx, `INSERT INTO repo_workflows (repo, workflow, branch, since) VALUES (?, ?, ?, ?)`, key, rec.Workflow, rec.Branch, toNano(at))
+		return WorkflowRecord{}, false, e
+	case qerr != nil:
+		return WorkflowRecord{}, false, qerr
+	case previous == rec:
+		return previous, false, nil
+	}
+	if _, e := tx.tx.ExecContext(ctx, `INSERT INTO workflow_changes (repo, from_workflow, to_workflow, from_branch, to_branch, confirmed_by, at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		key, previous.Workflow, rec.Workflow, previous.Branch, rec.Branch, confirmedBy, toNano(at)); e != nil {
+		return previous, false, e
+	}
+	_, e := tx.tx.ExecContext(ctx, `UPDATE repo_workflows SET workflow = ?, branch = ?, since = ? WHERE repo = ?`, rec.Workflow, rec.Branch, toNano(at), key)
+	return previous, e == nil, e
 }
 
 // WorkflowChanges returns the recorded changes of a repository, oldest first.

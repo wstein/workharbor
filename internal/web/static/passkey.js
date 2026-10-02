@@ -118,12 +118,18 @@
   }
 
   function stepUp(button) {
-    var id = encodeURIComponent(button.dataset.decision);
-    var reasonBox = document.getElementById(button.dataset.reason);
-    var q = "?option=" + encodeURIComponent(button.dataset.stepup) + "&reason=" + encodeURIComponent(reasonBox ? reasonBox.value : "");
-    return post("/decisions/" + id + "/stepup/begin", {}).then(function (r) {
+    // A Decision is answered with an option and a reason; a change or a secret
+    // operation has only its own address.
+    var base = button.dataset.url;
+    var q = "";
+    if (!base) {
+      var reasonBox = document.getElementById(button.dataset.reason);
+      base = "/decisions/" + encodeURIComponent(button.dataset.decision) + "/stepup";
+      q = "?option=" + encodeURIComponent(button.dataset.stepup) + "&reason=" + encodeURIComponent(reasonBox ? reasonBox.value : "");
+    }
+    return post(base + "/begin", {}).then(function (r) {
       return get(r.options).then(function (c) {
-        return post("/decisions/" + id + "/stepup/finish" + q, asserted(c), { "X-Ceremony": r.ceremony });
+        return post(base + "/finish" + q, asserted(c), { "X-Ceremony": r.ceremony });
       });
     }).then(function (r) {
       window.location.assign(r.location);

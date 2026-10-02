@@ -35,7 +35,7 @@ type pkRig struct {
 func newPKRig(t *testing.T) *pkRig { return newPKRigWith(t, nil) }
 
 // newPKRigWith is newPKRig with the passkey service wrapped, to make it fail.
-func newPKRigWith(t *testing.T, wrap func(*passkey.Service) Passkeys) *pkRig {
+func newPKRigWith(t *testing.T, wrap func(*passkey.Service) Passkeys, more ...func(*Options)) *pkRig {
 	t.Helper()
 	st, err := store.Open(bg, filepath.Join(t.TempDir(), "workharbor.db"))
 	if err != nil {
@@ -59,7 +59,11 @@ func newPKRigWith(t *testing.T, wrap func(*passkey.Service) Passkeys) *pkRig {
 	if wrap != nil {
 		keys = wrap(svc)
 	}
-	ui, err := New(r.be, Options{Auth: r.auth, Store: st, Passkeys: keys, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }})
+	opt := Options{Auth: r.auth, Store: st, Passkeys: keys, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }}
+	for _, m := range more {
+		m(&opt)
+	}
+	ui, err := New(r.be, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +243,13 @@ func csrfOf(t *testing.T, b *browser) string {
 // stepUp begins a step-up for a decision as the page's script would.
 func (p *pkRig) stepUpBegin(b *browser, csrf, decision string) (*reply, ceremonyReply) {
 	p.t.Helper()
-	resp, raw := b.postJSON("/decisions/"+decision+"/stepup/begin", []byte(`{}`), map[string]string{"X-CSRF-Token": csrf})
+	return p.beginAt(b, csrf, "/decisions/"+decision+"/stepup")
+}
+
+// beginAt begins a step-up at any of the step-up addresses.
+func (p *pkRig) beginAt(b *browser, csrf, base string) (*reply, ceremonyReply) {
+	p.t.Helper()
+	resp, raw := b.postJSON(base+"/begin", []byte(`{}`), map[string]string{"X-CSRF-Token": csrf})
 	var cr ceremonyReply
 	_ = json.Unmarshal(raw, &cr)
 	return resp, cr
