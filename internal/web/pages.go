@@ -28,7 +28,7 @@ var flashes = map[string]string{
 	"revoked":        "That device is signed out.",
 	"gone":           "That device was already signed out.",
 	"confirmed":      "Confirmed. It takes effect when whr serve is restarted on the host.",
-	"tokens_partial": "Some forge tokens were revoked and some could not be: the audit entry says which. Run whr kill-all on the host to try the rest.",
+	"tokens_partial": "Some forge tokens were revoked and some could not be. Run whr kill-all on the host to try the rest.",
 	"tokens":         "The forge tokens were revoked. A new one is made when it is next needed.",
 }
 
@@ -53,6 +53,7 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	r = s.stamp(r) // before the checks below: a sweep after them must stop this sign-in
 	// A sign-in form is a POST like the others: another site must not be able
 	// to sign the browser in to its own session.
 	if o := r.Header.Get("Origin"); o != "" {
@@ -76,6 +77,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		seeOther(w, r, "/")
 	case errors.Is(err, ErrTooManyTries):
 		s.render(w, r, http.StatusTooManyRequests, loginView(err.Error(), false))
+	case errors.Is(err, ErrSignInChanged):
+		s.render(w, r, http.StatusConflict, loginView(err.Error(), s.passkeyMode(r.Context())))
 	default:
 		s.render(w, r, http.StatusUnauthorized, loginView(ErrBadCredentials.Error(), false))
 	}

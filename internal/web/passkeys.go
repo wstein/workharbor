@@ -165,13 +165,17 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusForbidden, "not available")
 		return
 	}
+	r = s.stamp(r) // before the assertion is checked: a revocation after it must stop this sign-in
 	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
 	keyID, err := s.opt.Passkeys.LoginFinish(r.Context(), r.Header.Get("X-Ceremony"), r)
 	if err != nil {
 		jsonError(w, passkeyStatus(err, http.StatusUnauthorized), passkeyMessage(err))
 		return
 	}
-	starter.StartFor(w, r, keyID)
+	if !starter.StartFor(w, r, keyID) {
+		jsonError(w, http.StatusConflict, ErrSignInChanged.Error())
+		return
+	}
 	jsonReply(w, http.StatusOK, map[string]string{"next": "/"})
 }
 

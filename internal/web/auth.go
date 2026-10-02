@@ -4,6 +4,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -42,7 +43,24 @@ type Auth interface {
 type Starter interface {
 	// StartFor begins the session of the passkey the sign-in was made with, so a
 	// revoked passkey takes its sessions with it.
-	StartFor(w http.ResponseWriter, r *http.Request, passkeyID string)
+	// It returns false, with no session, when sessions were ended after the
+	// request was stamped (Server.stamp).
+	StartFor(w http.ResponseWriter, r *http.Request, passkeyID string) bool
+}
+
+// Generations is an Auth that counts the times its sessions were ended, so a
+// sign-in can note the count before it checks whether it may start a session and
+// be refused if a sweep ran in between.
+type Generations interface {
+	Generation() uint64
+}
+
+// stamp notes the generation on the request, before whatever the sign-in checks.
+func (s *Server) stamp(r *http.Request) *http.Request {
+	if g, ok := s.opt.Auth.(Generations); ok {
+		return r.WithContext(context.WithValue(r.Context(), generationKey{}, g.Generation()))
+	}
+	return r
 }
 
 // Device is a signed-in browser as the device list shows it.
@@ -103,6 +121,10 @@ type TokenAuth struct {
 	watchers map[[sha256.Size]byte]map[uint64]func()
 	nextW    uint64
 	failures []time.Time
+	// gen counts the calls of EndSessions. A sign-in notes it before it checks
+	// whether it may start, and a session is started only if it is still the same:
+	// one that checked before a sweep cannot start after it.
+	gen uint64
 }
 
 type tokenSession struct {
@@ -187,18 +209,36 @@ func (a *TokenAuth) SignIn(w http.ResponseWriter, r *http.Request) error {
 		a.mu.Unlock()
 		return ErrBadCredentials
 	}
-	a.Start(w, r)
+	if !a.Start(w, r) {
+		return ErrSignInChanged
+	}
 	return nil
+}
+
+// generationKey carries the generation a sign-in noted (see Server.stamp).
+type generationKey struct{}
+
+// ErrSignInChanged means the sessions were ended while a sign-in ran, so it did
+// not start one: it asks to try again.
+var ErrSignInChanged = errors.New("sign-in changed while it ran: try again")
+
+// Generation returns how many times sessions were ended so far.
+func (a *TokenAuth) Generation() uint64 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.gen
 }
 
 // Start begins a session for a request that has proved who it is by other means
 // (a passkey): a random ID in a cookie that is HttpOnly, SameSite=Strict, without a
 // Domain attribute (so only this host gets it) and Secure when the request came
 // over HTTPS.
-func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) { a.StartFor(w, r, "") }
+func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) bool { return a.StartFor(w, r, "") }
 
-// StartFor implements Starter: Start for a session that belongs to a passkey.
-func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID string) {
+// StartFor implements Starter: Start for a session that belongs to a passkey. It
+// returns false, with no session, when sessions were ended after the request noted
+// the generation: whatever it checked before may no longer hold.
+func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID string) bool {
 	id := randomHex(32)
 	now := a.now()
 	label, phone := deviceOf(r.UserAgent())
@@ -207,6 +247,10 @@ func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID s
 		idle = phoneIdle
 	}
 	a.mu.Lock()
+	if g, ok := r.Context().Value(generationKey{}).(uint64); ok && g != a.gen {
+		a.mu.Unlock()
+		return false
+	}
 	a.sessions[sha256.Sum256([]byte(id))] = tokenSession{
 		csrf: randomHex(32), expires: now.Add(sessionTTL), since: now, lastSeen: now, idle: idle, label: label, id: randomHex(6), passkey: passkeyID,
 	}
@@ -216,6 +260,7 @@ func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID s
 		Name: cookieName, Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		Secure: isHTTPS(r), MaxAge: int(sessionTTL / time.Second),
 	})
+	return true
 }
 
 // SignOut implements Auth.
@@ -281,6 +326,7 @@ func (a *TokenAuth) Revoke(id string) bool {
 // token-started sessions end) and when a passkey is revoked (its sessions end).
 func (a *TokenAuth) EndSessions(match func(passkeyID string) bool) {
 	a.mu.Lock()
+	a.gen++
 	var ends []func()
 	for key, s := range a.sessions {
 		if match(s.passkey) {

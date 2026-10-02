@@ -436,7 +436,10 @@ func TestEnrollingTheFirstPasskeyEndsTheTokenSessions(t *testing.T) {
 // Each session is tied to the passkey that signed it in, and revoking the passkey
 // (whr passkey rm) ends those sessions and their live streams, and no others.
 func TestRevokingAPasskeyEndsItsSessions(t *testing.T) {
-	p := newPKRig(t)
+	// The heartbeat is longer than ended() waits, so only EndSessions itself can
+	// close the stream in time: the heartbeat's own session check would hide a
+	// sweep that skipped the watchers.
+	p := newPKRigWith(t, nil, func(o *Options) { o.Heartbeat = time.Minute })
 	p.be.events = make(chan domain.Event)
 	phone, laptop := p.auth, passkeytest.New(t, passkey.OwnerID())
 	p.enrolAs(p.browser(), phone)
@@ -482,5 +485,34 @@ func TestAnEnrolledErrorFailsClosed(t *testing.T) {
 	}
 	if resp, _ := b.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("a session without a sign-in: %d", resp.StatusCode)
+	}
+}
+
+// A sign-in that checked before a sweep ended the sessions must not start one
+// after it: EndSessions bumps a generation that a stamped request is compared to.
+func TestASignInThatCheckedBeforeASweepStartsNoSession(t *testing.T) {
+	auth, err := NewTokenAuth([]byte(token), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamped := func() *http.Request {
+		r := httptest.NewRequestWithContext(bg, "POST", "/login", nil)
+		return r.WithContext(context.WithValue(r.Context(), generationKey{}, auth.Generation()))
+	}
+	// no sweep in between: it starts
+	w := httptest.NewRecorder()
+	if !auth.StartFor(w, stamped(), "") || len(w.Result().Cookies()) != 1 {
+		t.Fatal("a sign-in with no sweep in between did not start")
+	}
+	// the sweep ran after the stamp: it does not, and sets no cookie
+	r := stamped()
+	auth.EndSessions(func(string) bool { return true })
+	w = httptest.NewRecorder()
+	if auth.StartFor(w, r, "k1") || len(w.Result().Cookies()) != 0 {
+		t.Error("a sign-in that checked before the sweep started a session after it")
+	}
+	// a request that was never stamped is not refused
+	if !auth.StartFor(httptest.NewRecorder(), httptest.NewRequestWithContext(bg, "POST", "/login", nil), "") {
+		t.Error("an unstamped request was refused")
 	}
 }
