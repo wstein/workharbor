@@ -257,6 +257,9 @@ type UsageSummary struct {
 	ByModel []UsageRow            `json:"by_model"`
 	Windows []store.WindowReading `json:"windows"`
 	Balance *store.BalanceReading `json:"balance,omitempty"`
+	// Code is the size of the commits approved in the period: approvals, files and the
+	// lines added and removed, from the review.approved audit entries.
+	Code store.CodeChanges `json:"code"`
 	// Subscription says some turns ran on a subscription: the windows lead, and the
 	// cost is API-equivalent, not billed.
 	Subscription bool `json:"subscription"`
@@ -307,6 +310,9 @@ func (s *Service) UsageSummary(ctx context.Context, period string, now time.Time
 	}
 	for _, r := range sum.Total {
 		sum.Subscription = sum.Subscription || r.Notional
+	}
+	if sum.Code, err = s.store.CodeChanges(ctx, since, now.Add(time.Nanosecond)); err != nil {
+		return UsageSummary{}, err
 	}
 	return sum, nil
 }

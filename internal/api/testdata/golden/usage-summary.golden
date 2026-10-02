@@ -90,6 +90,12 @@ HTTP OK (200)
         "at": "2026-10-01T09:00:00Z"
       }
     ],
+    "code": {
+      "approvals": 0,
+      "files": 0,
+      "added": 0,
+      "removed": 0
+    },
     "subscription": true
   }
 }

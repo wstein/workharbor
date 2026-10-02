@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -189,5 +190,61 @@ func TestLatestBalanceIsAReadingFromTheAudit(t *testing.T) {
 	}
 	if other, _ := s.LatestBalance(bg, "codex"); other != nil {
 		t.Errorf("another agent has no balance: %+v", other)
+	}
+}
+
+// The code changes of a period are the sum of its review.approved entries, and the
+// size a candidate was pinned with survives a save and a load.
+func TestCodeChangesSumTheApprovalsOfAPeriod(t *testing.T) {
+	s := openTemp(t)
+	at := time.Unix(1_700_000_000, 0)
+	approve := func(task domain.ID, when time.Time, files, added, removed int64) {
+		ev := domain.Event{
+			TaskID: task, Kind: domain.EventReviewApproved, Tier: domain.TierAudit, At: when,
+			Payload: []byte(fmt.Sprintf(`{"decision":"d","sha":"s","by":"x","files":%d,"added":%d,"removed":%d}`, files, added, removed)),
+		}
+		if _, err := s.Append(bg, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approve("t1", at, 3, 40, 7)
+	approve("t2", at.Add(2*time.Hour), 1, 10, 0)
+	approve("t3", at.Add(48*time.Hour), 5, 100, 50)
+	all, err := s.CodeChanges(bg, time.Time{}, time.Time{})
+	if err != nil || all != (CodeChanges{Approvals: 3, Files: 9, Added: 150, Removed: 57}) {
+		t.Fatalf("all = %+v, %v", all, err)
+	}
+	day, _ := s.CodeChanges(bg, at.Add(-time.Hour), at.Add(24*time.Hour))
+	if day != (CodeChanges{Approvals: 2, Files: 4, Added: 50, Removed: 7}) {
+		t.Errorf("the first day = %+v", day)
+	}
+	none, _ := s.CodeChanges(bg, at.Add(72*time.Hour), time.Time{})
+	if none != (CodeChanges{}) {
+		t.Errorf("an empty period = %+v", none)
+	}
+
+	a := domain.NewTaskAggregate(domain.Task{ID: "t9", State: domain.TaskRunning})
+	a.AddEnvironment(domain.Environment{ID: "e1", Backend: "apple", State: domain.EnvRunning})
+	if err := a.StartRun(domain.Run{ID: "r1", EnvID: "e1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.MarkRunning("r1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.StopRun("r1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.PinPreparedStat("r1", "agent/topic", "aaa111", "src", domain.DiffStat{Files: 2, Added: 5, Removed: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	back, err := s.LoadTask(bg, "t9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := back.CurrentCandidate(); !ok || c.Files != 2 || c.Added != 5 || c.Removed != 1 {
+		t.Errorf("the candidate came back as %+v", c)
 	}
 }

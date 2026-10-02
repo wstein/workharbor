@@ -120,6 +120,10 @@ func TestPrepareRebasesFoldsAndSigns(t *testing.T) {
 	if len(got.Commits) != 2 {
 		t.Fatalf("commits = %v, want the fixup folded into two", got.Commits)
 	}
+	// the diff stat against the target: a.txt and b.txt, one line each, nothing removed
+	if got.Files != 2 || got.Added != 2 || got.Removed != 0 {
+		t.Errorf("diff stat = %d files +%d -%d, want 2 files +2 -0", got.Files, got.Added, got.Removed)
+	}
 	if p.rev("refs/heads/agent/topic") != got.SHA || got.SHA == oldTip {
 		t.Errorf("the topic branch is at %s, want the new tip %s", p.rev("refs/heads/agent/topic"), got.SHA)
 	}
@@ -338,5 +342,15 @@ func TestPrepareFollowUpExtendsThePushedCommit(t *testing.T) {
 	bad.Onto = first.SHA
 	if _, err := p.repo.Prepare(ctx, bad); err == nil {
 		t.Fatal("Onto without Upstream was accepted")
+	}
+}
+
+func TestNumstatReadsFilesLinesAndBinaries(t *testing.T) {
+	out := []byte("3\t1\ta.go\x00-\t-\timg.png\x0010\t0\tdir/new file.txt\x00")
+	if f, a, r := numstat(out); f != 3 || a != 13 || r != 1 {
+		t.Errorf("numstat = %d files +%d -%d, want 3 files +13 -1 (a binary adds no lines)", f, a, r)
+	}
+	if f, a, r := numstat(nil); f != 0 || a != 0 || r != 0 {
+		t.Errorf("numstat of nothing = %d %d %d", f, a, r)
 	}
 }

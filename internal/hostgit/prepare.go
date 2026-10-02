@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -54,6 +55,32 @@ type Prepared struct {
 	// Source is the agent's own tip the revision was prepared from: the
 	// Upstream of the next follow-up round.
 	Source string
+	// Files, Added and Removed are the diff stat of the revision against what it was
+	// rebased onto: the files it changes and its lines added and removed. A binary
+	// file counts as a file and adds no lines. It is what the human is shown and what
+	// the approval records (design §4.5, issue #111).
+	Files, Added, Removed int64
+}
+
+// numstat reads `git diff --numstat -z --no-renames` output.
+func numstat(out []byte) (files, added, removed int64) {
+	for _, rec := range bytes.Split(out, []byte{0}) {
+		if len(rec) == 0 {
+			continue
+		}
+		f := strings.SplitN(string(rec), "\t", 3)
+		if len(f) != 3 {
+			continue
+		}
+		files++
+		if a, err := strconv.ParseInt(f[0], 10, 64); err == nil && a > 0 {
+			added += a
+		}
+		if r, err := strconv.ParseInt(f[1], 10, 64); err == nil && r > 0 {
+			removed += r
+		}
+	}
+	return files, added, removed
 }
 
 // Prepare rebases the topic onto the target in a temporary worktree with
@@ -139,6 +166,9 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 		return Prepared{}, err
 	}
 	out := Prepared{SHA: tip, Commits: strings.Fields(string(list)), Source: oldTip}
+	if stat, err := r.g.run(ctx, dir, false, nil, "diff", "--numstat", "-z", "--no-renames", base, tip); err == nil {
+		out.Files, out.Added, out.Removed = numstat(stat)
+	}
 
 	var problems []string
 	for _, c := range out.Commits {

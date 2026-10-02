@@ -108,6 +108,26 @@ type RevisionPinned struct {
 	Branch string `json:"branch"`
 	SHA    string `json:"sha"`
 	Source string `json:"source,omitempty"`
+	// Files, Added and Removed are the revision's diff stat, when measured.
+	Files   int64 `json:"files,omitempty"`
+	Added   int64 `json:"added,omitempty"`
+	Removed int64 `json:"removed,omitempty"`
+}
+
+// EventReviewApproved is the audit entry of a human's approval of "Ready to push?":
+// the commit approved, who approved it and the size of the change, so that the
+// dashboard can sum the code changes of approved commits (issue #111). It is written
+// with the answer, in the same transaction.
+const EventReviewApproved EventKind = "review.approved"
+
+// ReviewApproved is the payload of EventReviewApproved.
+type ReviewApproved struct {
+	Decision ID     `json:"decision"`
+	SHA      string `json:"sha"`
+	By       string `json:"by"`
+	Files    int64  `json:"files,omitempty"`
+	Added    int64  `json:"added,omitempty"`
+	Removed  int64  `json:"removed,omitempty"`
 }
 
 // RevisionPushed is the payload of EventRevisionPushed.
