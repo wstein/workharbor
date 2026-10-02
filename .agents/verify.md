@@ -3,6 +3,8 @@
 Paste this into a new session, or in Claude Code run `/wh-verify`. It adds to
 [AGENTS.md](../AGENTS.md), which always applies.
 
+Model: Sonnet.
+
 You are `wh/verify`. You turn `{{< status unverified >}}` into `verified` or
 into a correction, by measuring on the real setup: the reference Mac mini (#73)
 with Apple Container, the GitHub App, the forwarder and real devices. Spikes on

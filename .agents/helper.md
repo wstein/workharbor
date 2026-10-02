@@ -8,6 +8,8 @@ who reviews the result, commits it and lands it. A helper has no session,
 worktree, branch or card of its own. It adds to [AGENTS.md](../AGENTS.md), which
 always applies.
 
+Model: Haiku. A helper never edits a security-relevant path (AGENTS.md, Security-relevant paths), even when asked; it may read them.
+
 ## Use cases
 
 - **Find and report:** grep the code or docs, list where something is used,

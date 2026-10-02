@@ -116,6 +116,19 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Naming.** A lane is named by its outcome, what it delivers (`wh/design`, `wh/platform`, `wh/runtime`, `wh/review`, `wh/verify`, `wh/docs`, `wh/spikes`), as `whr` names agents by responsibility (D42); its prompt in `.agents/` names the role (lead, coding worker, reviewer, verifier, technical writer). A helper is not a lane: it is a subagent a lane uses for one task, with no card, branch or board entry. A coding session starts from [`.agents/code.md`](.agents/code.md) (in Claude Code: `/wh-code <area> [#issue]`).
 
+**Models.** Each lane runs on a fixed model; the review is at least as strong as the author.
+
+| Lane | Model | Note |
+| --- | --- | --- |
+| `wh/design` | Opus | decisions and rule sections |
+| `wh/review` | Opus | reviews every change before the push; must be at least as strong as the author |
+| `wh/platform`, `wh/runtime` | Sonnet | security-relevant changes are reviewed by an Opus session (below) |
+| `wh/docs`, `wh/desk`, `wh/verify` | Sonnet | |
+| `wh/spikes` | Antigravity (Gemini) | measurements only; results are reviewed by `wh/review` |
+| helpers | Haiku | never touch a security-relevant path |
+
+**Security-relevant paths.** A change to any of these is reviewed by an Opus session (`wh/review`, or `wh/design` when the reviewer is not on Opus) before it is `Ready to push`, and a Sonnet-on-Sonnet review never suffices for it; a helper never edits them: `internal/policy`, `internal/forge`, `internal/passkey`, `internal/sshca`, `internal/redact`, `internal/egress`, `internal/hostgit`, `internal/devcontainer`, `internal/toolstore`, `internal/runtime` (spec validation, mounts, the Apple adapter), `internal/agent` (approvals and the control channel), `internal/config` (secret files), `internal/api` and `internal/serve` (auth, listeners, the socket), `internal/web` (sessions, CSRF, CSP, previews, step-up), `internal/preview`, `internal/setup` (host commands), `internal/console` (git wrapper), `cmd/whr-proxy`, `cmd/whr-shim`, `.github/workflows`, `.claude/settings.json`, `.gitleaks.toml`, `scripts/install-release.sh`, `.githooks`, and the rule sections of the design and the threat model. Docs and mechanical changes elsewhere may be reviewed Sonnet-on-Sonnet.
+
 **Pulling work.** The board's `Priority` field (`P1` first, then `P2`, `P3`) and `Session` (the lane) rank each lane's queue; `wh/design` keeps them current. A lane that finishes an issue takes the next one itself: its highest-priority `Todo` card with its own `Session`, the lowest issue number first, and claims it as below. Only an empty queue, or a card that needs a rule decided first, goes to `wh/design`.
 
 **Who decides what.** The author decides anything inside its own area that is not a rule: names, structure, tests, the details of an issue's criteria, and records it in the issue. `wh/review` settles low and medium findings directly with the author. Only rule-section questions (§3 decisions, §4.1, §4.2, §6, §7, the threat model), conflicts between lanes, high findings and a change of priority go to `wh/design`; Werner talks to the project through `wh/desk`, which routes rule and priority questions to `wh/design`; he may also talk to `wh/design` directly.
