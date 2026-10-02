@@ -1,0 +1,28 @@
+---
+description: Rebase your branch onto main and land it with make land, retrying safely
+argument-hint: "[branch, default: the current one]"
+---
+
+Land a finished branch on local `main` as AGENTS.md step 3 describes. Branch:
+$ARGUMENTS (empty: the current branch). Never push.
+
+1. Check the worktree: you are in your own worktree, not the shared checkout;
+    `git status --short` is empty (commit or ask first; never stash someone
+    else's work). The branch has commits that `main` lacks.
+2. Squash your own fixups: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash
+    main`. If the rebase conflicts, stop and report; do not resolve someone
+    else's code by guessing.
+3. Run `make land` and read its last lines:
+    - `land: main is now <sha>`: done; go to 4.
+    - `main moved during the checks` or `is not on top of main`:
+      `git rebase main`, then run `make land` again.
+    - `Rejected status code: 50x` from github.com in the link check: not your
+      content; wait 60 seconds and run it again, at most 4 times, then report.
+    - Anything else (tests, lint, commitlint, secrets): stop, fix it in a new
+      commit or an amend of your own unpushed commit, and start again at 2.
+      Never use `--no-verify`.
+4. Only after a successful land: `git switch --detach main`, then
+    `git branch -d <branch>` (`-D` only after `git merge-base --is-ancestor
+    <branch> main` confirms it is in).
+5. Set the card of each issue to `In review`, and report the landed commits
+    (`git log --oneline <old main>..main`) to `wh/design`.
