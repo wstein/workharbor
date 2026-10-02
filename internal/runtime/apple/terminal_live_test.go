@@ -131,7 +131,7 @@ func TestTerminalCloseEndsTheGuestCommand(t *testing.T) {
 	// The sleep is gone from the guest within a few seconds.
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: []string{"sh", "-c", "pgrep -x sleep >/dev/null && echo alive || echo gone"}})
+		st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: []string{"sh", "-c", "pgrep -f '[s]leep 600' >/dev/null && echo alive || echo gone"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,6 +141,59 @@ func TestTerminalCloseEndsTheGuestCommand(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the guest command outlived its terminal")
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// A login shell with job control leaves nothing behind either: a background job
+// of an interactive zsh is gone within seconds of the terminal's close. It runs
+// only on an image that has zsh (WHR_TEST_IMAGE=<the console image>).
+func TestTerminalCloseEndsABackgroundJobOfAnInteractiveShell(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	id, err := h.Adapter.Provision(ctx, mustPrepare(t, h, h.NewSpec()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = h.Adapter.Stop(context.Background(), id)
+		_ = h.Adapter.Delete(context.Background(), id)
+	})
+	if err := h.Adapter.Start(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	probe := func(cmd string) string {
+		st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: []string{"sh", "-c", cmd}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _, _, _ := runtime.Collect(st)
+		return strings.TrimSpace(string(out))
+	}
+	if probe("command -v zsh || echo none") == "none" {
+		t.Skip("the image has no zsh: run with WHR_TEST_IMAGE set to the console image")
+	}
+	tm, err := h.Adapter.(runtime.TerminalAdapter).Terminal(ctx, id, runtime.TerminalRequest{Cmd: []string{"zsh", "-f", "-i"}, Env: []string{"TERM=xterm", "HOME=/tmp"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out collector
+	go out.copy(tm)
+	time.Sleep(2 * time.Second) // zsh starts and prints its first prompt
+	if _, err := tm.Write([]byte("sleep 777 &\necho started-$((6*7))\n")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, &out, "started-42")
+	if probe("pgrep -f '[s]leep 777' >/dev/null && echo alive || echo gone") != "alive" {
+		t.Fatal("the background job did not start")
+	}
+	_ = tm.Close()
+	deadline := time.Now().Add(20 * time.Second)
+	for probe("pgrep -f '[s]leep 777' >/dev/null && echo alive || echo gone") != "gone" {
+		if time.Now().After(deadline) {
+			t.Fatal("a background job of the interactive shell outlived its terminal")
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
