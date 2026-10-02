@@ -15,15 +15,18 @@ func newKey() string { return randomHex(16) }
 // flashes are the only messages a redirect may carry back to a page: a fixed set,
 // never text from the query string.
 var flashes = map[string]string{
-	"started":   "The task was started.",
-	"held":      "That issue is from an author you do not trust, so nothing started: its text is in the inbox for you to read first.",
-	"answered":  "Your answer was recorded.",
-	"cancelled": "The task was cancelled.",
-	"injected":  "Sent: the agent has it now.",
-	"next_turn": "Sent: the agent gets it at its next step.",
-	"resumed":   "Sent: it starts a resumed turn.",
-	"revoked":   "That device is signed out.",
-	"gone":      "That device was already signed out.",
+	"started":       "The task was started.",
+	"held":          "That issue is from an author you do not trust, so nothing started: its text is in the inbox for you to read first.",
+	"answered":      "Your answer was recorded.",
+	"cancelled":     "The task was cancelled.",
+	"injected":      "Sent: the agent has it now.",
+	"next_turn":     "Sent: the agent gets it at its next step.",
+	"resumed":       "Sent: it starts a resumed turn.",
+	"paused":        "The run is paused: the agent is stopped and the environment keeps running. Resume starts it again from its session.",
+	"started_again": "The run is starting again from its session.",
+	"purged":        "The transcript was deleted. The audit entries, usage and Decisions stay.",
+	"revoked":       "That device is signed out.",
+	"gone":          "That device was already signed out.",
 }
 
 func flash(r *http.Request) string { return flashes[r.URL.Query().Get("flash")] }
@@ -242,7 +245,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request, sess Session) {
 		return
 	}
 	p := taskPageOf(v)
-	p.nav, p.SayKey, p.Flash = s.navOf(r, sess, "harbor"), newKey(), flash(r)
+	p.nav, p.SayKey, p.ActKey, p.Flash = s.navOf(r, sess, "harbor"), newKey(), newKey(), flash(r)
 	p.Decisions = decisionRows(v.Open, newKey)
 	p.StepUp = s.stepUpAvailable(r.Context())
 	if len(evs) > maxShown {
@@ -299,6 +302,69 @@ func (s *Server) cancelPage(w http.ResponseWriter, r *http.Request, sess Session
 		return
 	}
 	s.render(w, r, http.StatusOK, cancelView(cancelPage{nav: s.navOf(r, sess, "harbor"), ID: string(id), Repo: v.Task.Repo, Issue: v.Task.Issue, Key: newKey()}))
+}
+
+// pause is a hard interrupt of the task's run (D11). Pausing a paused run is
+// refused by the service, so a repeated form is harmless.
+func (s *Server) pause(w http.ResponseWriter, r *http.Request, sess Session) {
+	id := domain.ID(r.PathValue("task"))
+	loc, err := s.once(r, func() (string, error) {
+		if err := s.be.Pause(r.Context(), id); err != nil {
+			return "", err
+		}
+		return "/tasks/" + url.PathEscape(string(id)) + "?flash=paused", nil
+	})
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	seeOther(w, r, loc)
+}
+
+func (s *Server) resume(w http.ResponseWriter, r *http.Request, sess Session) {
+	id := domain.ID(r.PathValue("task"))
+	loc, err := s.once(r, func() (string, error) {
+		if _, err := s.be.Resume(r.Context(), id); err != nil {
+			return "", err
+		}
+		return "/tasks/" + url.PathEscape(string(id)) + "?flash=started_again", nil
+	})
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	seeOther(w, r, loc)
+}
+
+// purgePage says what a purge deletes before it does anything.
+func (s *Server) purgePage(w http.ResponseWriter, r *http.Request, sess Session) {
+	id := domain.ID(r.PathValue("task"))
+	v, err := s.be.Show(r.Context(), id)
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	size, err := s.be.TranscriptSize(r.Context(), id)
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, purgeView(purgePage{nav: s.navOf(r, sess, "harbor"), ID: string(id), Repo: v.Task.Repo, Issue: v.Task.Issue, Events: size.Events, Bytes: size.Bytes, Key: newKey()}))
+}
+
+func (s *Server) purge(w http.ResponseWriter, r *http.Request, sess Session) {
+	id := domain.ID(r.PathValue("task"))
+	loc, err := s.once(r, func() (string, error) {
+		if _, err := s.be.PurgeTranscript(r.Context(), id, "web"); err != nil {
+			return "", err
+		}
+		return "/tasks/" + url.PathEscape(string(id)) + "?flash=purged", nil
+	})
+	if err != nil {
+		s.fail(w, r, sess, err)
+		return
+	}
+	seeOther(w, r, loc)
 }
 
 func (s *Server) cancel(w http.ResponseWriter, r *http.Request, sess Session) {

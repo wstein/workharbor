@@ -307,9 +307,36 @@ templ taskView(p taskPage) {
 				<button>Make an editor copy</button>
 			</form>
 		}
+		if p.CanPause || p.CanResume {
+			<form method="post" action={ templ.SafeURL("/tasks/" + p.ID + runVerb(p)) } class="actions">
+				<input type="hidden" name="csrf" value={ p.CSRF }/>
+				<input type="hidden" name="key" value={ p.ActKey }/>
+				if p.CanPause {
+					<button>Pause the run</button>
+					<span class="muted">Stops the agent now (it cannot pause politely); the environment keeps running and its open questions are asked again after a resume.</span>
+				} else {
+					<button class="primary">Resume the run</button>
+				}
+			</form>
+		}
+		<p><a class="button" href={ templ.SafeURL("/tasks/" + p.ID + "/purge") }>Delete the transcript…</a></p>
 		if p.Cancelable {
 			<p><a class="button danger" href={ templ.SafeURL("/tasks/" + p.ID + "/cancel") }>Cancel this task…</a></p>
 		}
+	}
+}
+
+templ purgeView(p purgePage) {
+	@layout(p.nav, "Delete the transcript") {
+		<h1>Delete the transcript of { p.Repo }{ p.Issue }?</h1>
+		<p>This deletes { strconv.Itoa(p.Events) } transcript event(s), { strconv.FormatInt(p.Bytes, 10) } byte(s): what the agent said, its tool inputs and results and its diffs. It cannot be undone.</p>
+		<p>The audit entries, the usage records and the Decisions stay, and so does the agent's own session. The purge is recorded as an audit entry. It is refused while the run is running: pause it first.</p>
+		<form method="post" action={ templ.SafeURL("/tasks/" + p.ID + "/purge") } class="actions">
+			<input type="hidden" name="csrf" value={ p.CSRF }/>
+			<input type="hidden" name="key" value={ p.Key }/>
+			<button class="danger">Delete the transcript</button>
+			<a class="button" href={ templ.SafeURL("/tasks/" + p.ID) }>Keep it</a>
+		</form>
 	}
 }
 

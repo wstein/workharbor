@@ -39,6 +39,9 @@ type fake struct {
 	runs      []service.RunRequest
 	says      []string
 	cancels   []domain.ID
+	pauses    []domain.ID
+	resumes   []domain.ID
+	purges    []string
 	answers   []domain.Response
 	answerIDs []domain.ID
 	since     []int64
@@ -94,6 +97,31 @@ func (f *fake) Cancel(_ context.Context, id domain.ID) error {
 	defer f.mu.Unlock()
 	f.cancels = append(f.cancels, id)
 	return nil
+}
+
+func (f *fake) Pause(_ context.Context, id domain.ID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pauses = append(f.pauses, id)
+	return nil
+}
+
+func (f *fake) Resume(_ context.Context, id domain.ID) (domain.ID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resumes = append(f.resumes, id)
+	return "r1", nil
+}
+
+func (f *fake) TranscriptSize(context.Context, domain.ID) (service.TranscriptSize, error) {
+	return service.TranscriptSize{Events: 12, Bytes: 3400}, nil
+}
+
+func (f *fake) PurgeTranscript(_ context.Context, id domain.ID, actor string) (store.PurgeResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.purges = append(f.purges, string(id)+" by "+actor)
+	return store.PurgeResult{Events: 12, Bytes: 3400, Digest: "abc123"}, nil
 }
 
 func (f *fake) Answer(_ context.Context, id domain.ID, r domain.Response) (domain.ID, error) {

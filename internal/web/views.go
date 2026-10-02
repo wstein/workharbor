@@ -94,7 +94,17 @@ type taskPage struct {
 	SayKey                                       string
 	Flash                                        string
 	Cancelable                                   bool
+	CanPause, CanResume                          bool // a run is running, or is paused
+	ActKey                                       string
 	StepUp                                       bool
+}
+
+type purgePage struct {
+	nav
+	ID, Repo, Issue string
+	Events          int
+	Bytes           int64
+	Key             string
 }
 
 type cancelPage struct {
@@ -142,6 +152,14 @@ func kindLabel(d domain.Decision) string {
 	return string(d.Kind)
 }
 
+// runVerb is the path of the form that pauses a running run or resumes a paused one.
+func runVerb(p taskPage) string {
+	if p.CanPause {
+		return "/pause"
+	}
+	return "/resume"
+}
+
 func taskPageOf(v service.TaskView) taskPage {
 	p := taskPage{
 		ID: string(v.Task.ID), Repo: v.Task.Repo, Issue: v.Task.Issue, State: string(v.Task.State), Agent: v.Agent,
@@ -152,6 +170,8 @@ func taskPageOf(v service.TaskView) taskPage {
 		if r.State == domain.RunRunning || r.State == domain.RunStarting {
 			p.Live = true
 		}
+		p.CanPause = p.CanPause || r.State == domain.RunRunning
+		p.CanResume = p.CanResume || r.State == domain.RunPaused
 	}
 	if c := v.Candidate; c != nil {
 		p.Branch, p.PRURL = c.Branch, c.PRURL
