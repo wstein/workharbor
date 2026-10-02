@@ -22,7 +22,7 @@ appears in a lockup": 96 px in the banner (64 units at scale 1.5) and 288 px in
 the social preview (scale 4.5). The social preview also carries a third grey line,
 "Self-hosted · isolated workspaces" (never naming the `whr` CLI), by Werner's
 decision (#147). The docs navbar uses the same tile lockup in small, without the
-tagline: the tile about 40 px tall in the 56 px bar, the wordmark beside it at twice the size it would have in the social preview's proportion (#147).
+tagline: the tile about 40 px tall in the 56 px bar, the wordmark beside it at about 2.3 times the size it would have in the social preview's proportion (#147, #149). The logo is 226.5 × 40 px; on a narrow screen Hextra shrinks the whole logo, tile and wordmark together (202 px wide at 390 px, 172 px at 360 px), and it never touches the search button.
 Every icon follows the rules below; it stays one family (the same anchor, tile,
 wordmark, colours and type).
 
@@ -43,7 +43,7 @@ wordmark, colours and type).
 | --- | --- | --- | --- |
 | README banner | 1000 × 150 | 45 px (anchor 108 px as Werner approved; the block leaves about 15 px, 0.33 × C, above and below) | yes |
 | Social preview | 1280 × 640, lockup centred | 80 px (anchor 192 px) | yes |
-| Docs navbar | the tile lockup of the social preview in small: tile about 40 px in the 56 px bar, in both `logo-light.svg` and `logo-dark.svg` (#147) | wordmark beside the tile | no |
+| Docs navbar | the tile lockup of the social preview in small: tile 40 px in the 56 px bar, logo 226.5 × 40 px, in both `logo-light.svg` and `logo-dark.svg` (#147, #149) | wordmark beside the tile, about 2.3 × the preview's proportion | no |
 
 ## Colours
 
