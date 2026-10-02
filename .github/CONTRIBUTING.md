@@ -22,6 +22,12 @@ make check   # format, vet, lint, editorconfig and tests
 make docs    # build the documentation site into _site
 ```
 
+## Where things live
+
+- Tool configuration is under [`.config/`](../.config): `cliff.toml` (changelog), `gitmessage` (commit template), `golangci.yml` (lint), `goreleaser.yaml` (release), `lychee.toml` (link check) and `typos.toml` (spelling).
+- The community files are under [`.github/`](.): this file, `SECURITY.md`, `CODE_OF_CONDUCT.md`, the issue and pull request templates, `dependabot.yml`, `renovate.json`, `release-signers` and the workflows.
+- Nothing of these is at the repository root any more, so link to them through these paths (for example `.github/SECURITY.md`).
+
 ## Making a change
 
 1. Branch from `main`. Keep the change small and focused.
