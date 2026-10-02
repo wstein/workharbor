@@ -45,7 +45,7 @@ func newHarness(t *testing.T) runtimetest.Harness {
 		}
 	}
 	owner := fmt.Sprintf("wh-conf-%d", time.Now().UnixNano()%1_000_000)
-	a, err := New(owner, WithShim("/tools/whr-shim"))
+	a, err := New(owner, WithShim("/tools/whr-shim"), WithTemp("wh/runtime", "conformance"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func newHarness(t *testing.T) runtimetest.Harness {
 		Prepare: func(spec runtime.Spec) (runtime.PreparedSpec, error) {
 			return runtime.Prepare(runtime.PrepareOptions{
 				FS: runtime.OSFS{}, Home: home, CacheRoots: []string{filepath.Join(home, "cache")},
-				Owns: func(v string) bool { return strings.HasPrefix(v, "wh-conformance-") },
+				Owns: func(v string) bool { return strings.HasPrefix(v, "whtmp-conformance-") },
 			}, spec)
 		},
 		ProxyBinary:  filepath.Join(bin, "whr-proxy"),
@@ -238,7 +238,7 @@ func TestANewVolumeIsWritableByTheEnvironmentsUser(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	spec := h.NewSpec()
-	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-home", Target: "/home/agent"})
+	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-home", Target: "/home/agent"})
 	prep, err := h.Prepare(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestANewVolumeIsWritableByTheEnvironmentsUser(t *testing.T) {
 	t.Cleanup(func() {
 		_ = h.Adapter.Stop(context.Background(), id)
 		_ = h.Adapter.Delete(context.Background(), id)
-		_ = h.Adapter.RemoveVolume(context.Background(), "wh-conformance-home")
+		_ = h.Adapter.RemoveVolume(context.Background(), "whtmp-conformance-home")
 	})
 	if err := h.Adapter.Start(ctx, id); err != nil {
 		t.Fatal(err)

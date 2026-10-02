@@ -52,6 +52,11 @@ type Adapter struct {
 	// the process group in the guest; without it a cancel only ends the client,
 	// which leaves the guest process running (spike #2).
 	shim string
+	// tempLane and tempPurpose, when set, mark everything the adapter creates as
+	// temporary (AGENTS.md, Temporary containers): the labels make `make
+	// temp-clean` find it and the names start with whtmp-. Live tests set them;
+	// the supervisor never does.
+	tempLane, tempPurpose string
 }
 
 // Option configures New.
@@ -59,6 +64,12 @@ type Option func(*Adapter)
 
 // WithShim sets the guest path of whr-shim, such as /tools/whr-shim.
 func WithShim(guestPath string) Option { return func(a *Adapter) { a.shim = guestPath } }
+
+// WithTemp marks the resources the adapter creates as temporary, for the lane
+// and purpose (a live test's name), and names environments whtmp-<id>.
+func WithTemp(lane, purpose string) Option {
+	return func(a *Adapter) { a.tempLane, a.tempPurpose = lane, purpose }
+}
 
 // New returns an adapter acting for owner. It finds the container CLI.
 func New(owner string, opts ...Option) (*Adapter, error) {
@@ -228,12 +239,16 @@ func (a *Adapter) info(c listing) runtime.Info {
 
 // ---- Provision ----
 
-func randomID() (string, error) {
+func (a *Adapter) randomID() (string, error) {
 	b := make([]byte, 5)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "whr-" + hex.EncodeToString(b), nil
+	prefix := "whr-"
+	if a.tempLane != "" {
+		prefix = "whtmp-"
+	}
+	return prefix + hex.EncodeToString(b), nil
 }
 
 // labelArgs returns the --label flags. The adapter's own labels are set last,
@@ -244,6 +259,9 @@ func (a *Adapter) labelArgs(role, env string, extra map[string]string) []string 
 		labels[k] = v
 	}
 	labels[runtime.OwnerLabel], labels[roleLabel] = a.owner, role
+	if a.tempLane != "" {
+		labels["workharbor.temp"], labels["workharbor.lane"], labels["workharbor.purpose"] = "true", a.tempLane, a.tempPurpose
+	}
 	if env != "" {
 		labels[envLabel] = env
 	}
@@ -274,7 +292,7 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 			return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("network %q is already in use: a network is never shared between environments", spec.Network.Name)}}
 		}
 	}
-	id, err := randomID()
+	id, err := a.randomID()
 	if err != nil {
 		return "", err
 	}

@@ -139,7 +139,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		Spec: func(w domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
 			if r.home {
-				spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-" + string(w.ID), Target: "/home/agent"})
+				spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-" + string(w.ID), Target: "/home/agent"})
 			}
 			if r.egress {
 				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"api.anthropic.com"}}

@@ -39,8 +39,8 @@ func TestBuildLive(t *testing.T) {
 	if err := os.WriteFile(dockerfile, []byte("FROM "+base+"\nARG WHO=nobody\nCOPY hello.txt /hello.txt\nRUN echo \"$WHO\" > /who\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tag := "whr-build-live:" + strings.ToLower(filepath.Base(dir))
-	a, err := New("wh-build-live")
+	tag := "whtmp/build-live:" + strings.ToLower(filepath.Base(dir))
+	a, err := New("wh-build-live", WithTemp("wh/runtime", "build-live"))
 	if err != nil {
 		t.Fatal(err)
 	}

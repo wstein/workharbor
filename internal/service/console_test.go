@@ -18,7 +18,7 @@ func (r *wsRig) consoles() *Consoles {
 	return NewConsoles(r.svc, ConsoleConfig{
 		Spec: func([]domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
-			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-console-home", Target: "/home/whr"})
+			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-console-home", Target: "/home/whr"})
 			if r.egress {
 				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"github.com"}}
 			}
@@ -126,7 +126,7 @@ func TestClosingTheConsoleKeepsTheHomeVolumeAndTheReconcilerLeavesItAlone(t *tes
 		t.Fatal(err)
 	}
 	inv, err := r.rt.Adapter.Inventory(bg)
-	if err != nil || len(inv.Volumes) != 1 || inv.Volumes[0] != "wh-conformance-console-home" || len(inv.Networks) != 0 {
+	if err != nil || len(inv.Volumes) != 1 || inv.Volumes[0] != "whtmp-conformance-console-home" || len(inv.Networks) != 0 {
 		t.Errorf("inventory after close = %+v, %v: the volume stays, the network goes", inv, err)
 	}
 	// Closing again, and with none open, is not an error; the next open mounts the same home.

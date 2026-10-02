@@ -276,7 +276,7 @@ func checkForbiddenMounts(ctx context.Context, h Harness) error {
 	spec := h.NewSpec()
 	spec.Mounts = append(spec.Mounts,
 		runtime.Mount{Kind: runtime.MountBind, Source: h.AllowedMount, Target: "/work"},
-		runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-cache", Target: "/cache"})
+		runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-cache", Target: "/cache"})
 	if _, err := h.provision(ctx, spec); err != nil {
 		return fmt.Errorf("an allowed bind mount and a volume were rejected: %w", err)
 	}
@@ -620,7 +620,7 @@ func fakeHarness(t *testing.T, defects Defects) Harness {
 		Prepare: func(spec runtime.Spec) (runtime.PreparedSpec, error) {
 			return runtime.Prepare(runtime.PrepareOptions{
 				FS: runtime.OSFS{}, Home: home, CacheRoots: []string{filepath.Join(home, "cache")},
-				Owns: func(volume string) bool { return strings.HasPrefix(volume, "wh-conformance-") },
+				Owns: func(volume string) bool { return strings.HasPrefix(volume, "whtmp-conformance-") },
 			}, spec)
 		},
 		ProxyBinary: proxy, CacheObjects: objects,
@@ -628,7 +628,7 @@ func fakeHarness(t *testing.T, defects Defects) Harness {
 			nets++ // a network is never shared between environments
 			return runtime.Spec{
 				Image: "debian:stable-slim", Owner: owner, CPUs: 2, MemoryMB: 1024, DiskMB: 10240,
-				Network: runtime.Network{Name: fmt.Sprintf("wh-net-%d", nets), Internal: true},
+				Network: runtime.Network{Name: fmt.Sprintf("whtmp-net-%d", nets), Internal: true},
 				User:    "1000:1000", ReadOnlyRoot: true, CapDrop: []string{"ALL"}, Init: true, Tmpfs: []string{"/tmp"},
 			}
 		},
@@ -686,8 +686,8 @@ func contains(list []string, want string) bool {
 
 func checkSurroundings(ctx context.Context, h Harness) error {
 	a := h.Adapter
-	spec := withEgress(h, "wh-conformance-home-a")
-	spec.Network.Name = "wh-conformance-net-a"
+	spec := withEgress(h, "whtmp-conformance-home-a")
+	spec.Network.Name = "whtmp-conformance-net-a"
 	id, err := h.provision(ctx, spec)
 	if err != nil {
 		return err
@@ -696,14 +696,14 @@ func checkSurroundings(ctx context.Context, h Harness) error {
 	if err != nil {
 		return fmt.Errorf("Resources: %w", err)
 	}
-	if res.Network != spec.Network.Name || res.Sidecar == "" || !contains(res.Volumes, "wh-conformance-home-a") {
+	if res.Network != spec.Network.Name || res.Sidecar == "" || !contains(res.Volumes, "whtmp-conformance-home-a") {
 		return fmt.Errorf("provisioning must create the network, the sidecar and the volume: %+v", res)
 	}
 	inv, err := a.Inventory(ctx)
 	if err != nil {
 		return fmt.Errorf("Inventory: %w", err)
 	}
-	if !contains(inv.Networks, res.Network) || !contains(inv.Sidecars, res.Sidecar) || !contains(inv.Volumes, "wh-conformance-home-a") {
+	if !contains(inv.Networks, res.Network) || !contains(inv.Sidecars, res.Sidecar) || !contains(inv.Volumes, "whtmp-conformance-home-a") {
 		return fmt.Errorf("the inventory lacks what was created: %+v", inv)
 	}
 	// The proxy's address is known only while the environment runs.
@@ -735,16 +735,16 @@ func checkSurroundings(ctx context.Context, h Harness) error {
 		return fmt.Errorf("a delete left the network or the sidecar behind: %+v", inv)
 	}
 	// The agent home survives a delete and a rebuild (design §4.4).
-	if !contains(inv.Volumes, "wh-conformance-home-a") {
+	if !contains(inv.Volumes, "whtmp-conformance-home-a") {
 		return fmt.Errorf("a delete removed the agent-home volume: %+v", inv)
 	}
-	if err := a.RemoveVolume(ctx, "wh-conformance-home-a"); err != nil {
+	if err := a.RemoveVolume(ctx, "whtmp-conformance-home-a"); err != nil {
 		return fmt.Errorf("RemoveVolume: %w", err)
 	}
-	if inv, _ = a.Inventory(ctx); contains(inv.Volumes, "wh-conformance-home-a") {
+	if inv, _ = a.Inventory(ctx); contains(inv.Volumes, "whtmp-conformance-home-a") {
 		return errors.New("RemoveVolume left the volume")
 	}
-	if err := a.RemoveVolume(ctx, "wh-conformance-home-a"); err != nil {
+	if err := a.RemoveVolume(ctx, "whtmp-conformance-home-a"); err != nil {
 		return fmt.Errorf("removing a volume that is gone must succeed: %w", err)
 	}
 	return nil
@@ -869,7 +869,7 @@ func checkUpdateEgress(ctx context.Context, h Harness) error {
 		return nil
 	}
 	spec := withEgress(h, "")
-	spec.Network.Name = "wh-conformance-net-egress"
+	spec.Network.Name = "whtmp-conformance-net-egress"
 	id, err := h.provision(ctx, spec)
 	if err != nil {
 		return err
@@ -923,7 +923,7 @@ func checkUpdateEgress(ctx context.Context, h Harness) error {
 		return fmt.Errorf("UpdateEgress with an unprepared spec = %s, want ErrNotPrepared", show(err))
 	}
 	other := narrower
-	other.Network.Name = "wh-conformance-net-other"
+	other.Network.Name = "whtmp-conformance-net-other"
 	if prep, err = h.Prepare(other); err != nil {
 		return err
 	}
@@ -952,14 +952,14 @@ func checkVolumeExclusive(ctx context.Context, h Harness) error {
 	mk := func(net string) (string, error) {
 		spec := h.NewSpec()
 		spec.Network.Name = net
-		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "wh-conformance-shared-home", Target: "/home/agent"})
+		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-shared-home", Target: "/home/agent"})
 		return h.provision(ctx, spec)
 	}
-	first, err := mk("wh-conformance-net-x")
+	first, err := mk("whtmp-conformance-net-x")
 	if err != nil {
 		return err
 	}
-	second, err := mk("wh-conformance-net-y")
+	second, err := mk("whtmp-conformance-net-y")
 	if err != nil {
 		return err
 	}
@@ -972,7 +972,7 @@ func checkVolumeExclusive(ctx context.Context, h Harness) error {
 	if info, err := a.Inspect(ctx, second); err != nil || info.State != domain.EnvStopped {
 		return fmt.Errorf("a refused start left the environment %s (%s)", info.State, show(err))
 	}
-	if err := a.RemoveVolume(ctx, "wh-conformance-shared-home"); !errors.Is(err, runtime.ErrVolumeBusy) {
+	if err := a.RemoveVolume(ctx, "whtmp-conformance-shared-home"); !errors.Is(err, runtime.ErrVolumeBusy) {
 		return fmt.Errorf("removing a volume a running environment holds = %s, want ErrVolumeBusy", show(err))
 	}
 	// A rebuild stops the old environment before the new one starts.

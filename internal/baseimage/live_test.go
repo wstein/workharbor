@@ -28,7 +28,7 @@ func TestBaseImageLive(t *testing.T) {
 	if os.Getenv("WHR_TEST_BASE") == "ubuntu" {
 		d = baseimage.Ubuntu
 	}
-	a, err := apple.New("wh-base-live")
+	a, err := apple.New("wh-base-live", apple.WithTemp("wh/runtime", "base-live"))
 	if err != nil {
 		t.Fatal(err)
 	}
