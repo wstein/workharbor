@@ -57,6 +57,8 @@ func newRig(t *testing.T, mod ...func(*Config)) *rig {
 		case r.seenIn <- q.Clone(context.Background()):
 		default:
 		}
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		w.Header().Set("Clear-Site-Data", `"cookies"`)
 		http.SetCookie(w, &http.Cookie{Name: "app", Value: "1"})               //nolint:gosec // an app's cookie
 		http.SetCookie(w, &http.Cookie{Name: "whr_session", Value: "forged"})  //nolint:gosec // an app's cookie
 		http.SetCookie(w, &http.Cookie{Name: "__Host-whr_x", Value: "forged"}) //nolint:gosec // an app's cookie, as the test needs it
@@ -508,5 +510,35 @@ func TestTheCookieIsHostPrefixedOverHttpsAndOthersAreIgnored(t *testing.T) {
 	forged := &http.Cookie{Name: cs[0].Name, Value: "forged"} //nolint:gosec // a request cookie
 	if got := try(forged); got != http.StatusUnauthorized {
 		t.Errorf("a cookie the server did not issue: %d", got)
+	}
+}
+
+// A port is reused, so a preview may not register a service worker, the grant
+// exchange clears the origin's storage and cache (never its cookies), and the app
+// may neither pin the origin to https nor wipe what the UI keeps.
+func TestAReusedOriginStartsCleanAndCannotKeepAServiceWorker(t *testing.T) {
+	r := newRig(t)
+	p := r.open()
+	link, _ := r.m.Grant(p.ID)
+	resp, _ := get(t, link)
+	if got := resp.Header.Get("Clear-Site-Data"); got != `"storage", "cache"` {
+		t.Errorf("Clear-Site-Data on the exchange = %q, want storage and cache only (never cookies)", got)
+	}
+	cookie := resp.Cookies()[0]
+	b := base(link)
+	req, _ := http.NewRequestWithContext(bg, "GET", b+"/sw.js", nil)
+	req.Header.Set("Service-Worker", "script")
+	req.AddCookie(cookie)
+	sw, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = sw.Body.Close()
+	if sw.StatusCode != http.StatusForbidden {
+		t.Errorf("a service worker script: %d, want 403", sw.StatusCode)
+	}
+	ans, _ := get(t, b+"/", cookie)
+	if ans.Header.Get("Strict-Transport-Security") != "" || ans.Header.Get("Clear-Site-Data") != "" {
+		t.Errorf("the app's HSTS or Clear-Site-Data reached the browser: %v", ans.Header)
 	}
 }

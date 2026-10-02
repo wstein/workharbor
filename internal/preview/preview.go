@@ -398,6 +398,10 @@ func (m *Manager) handler(p *live) http.Handler {
 			for _, v := range kept {
 				resp.Header.Add("Set-Cookie", v)
 			}
+			// the app may not make the browser pin this origin to https or wipe
+			// what the UI keeps for the host name
+			resp.Header.Del("Strict-Transport-Security")
+			resp.Header.Del("Clear-Site-Data")
 			if resp.Header.Get("Referrer-Policy") == "" {
 				resp.Header.Set("Referrer-Policy", "no-referrer")
 			}
@@ -413,6 +417,13 @@ func (m *Manager) handler(p *live) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !m.hostOK(r) {
 			http.Error(w, "wrong host", http.StatusMisdirectedRequest)
+			return
+		}
+		// A port is reused by another agent's preview later, and a service worker the
+		// first one registered would control the second on the same origin: no
+		// preview may register one.
+		if r.Header.Get("Service-Worker") != "" {
+			http.Error(w, "a preview may not register a service worker", http.StatusForbidden)
 			return
 		}
 		if _, ok := m.alive(p.ID); !ok {
@@ -476,5 +487,9 @@ func (m *Manager) exchange(w http.ResponseWriter, r *http.Request, p *live, cook
 	}
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
+	// The origin is reused by the next preview on this port: start it with no
+	// storage or cache from the last one. Never "cookies": they are not kept apart
+	// by port, and these would be the UI's.
+	w.Header().Set("Clear-Site-Data", `"storage", "cache"`)
 	http.Redirect(w, r, next.String(), http.StatusSeeOther)
 }
