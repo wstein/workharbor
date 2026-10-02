@@ -68,3 +68,28 @@ func (a *TaskAggregate) ExceedBudget(b BudgetBreach) error {
 	a.record(EventBudgetExceeded, b)
 	return a.moveTask(TaskFailed)
 }
+
+// EventKillAll is the audit entry of `whr kill-all` (design §7.7). It belongs to
+// no task, so it is kept in the supervisor's own stream.
+const EventKillAll EventKind = "supervisor.kill_all"
+
+// SupervisorStream is the key of the supervisor's own audit entries in the
+// event log, next to the task IDs and the workspace streams.
+const SupervisorStream ID = "supervisor"
+
+// KillAll is the payload of EventKillAll: who pulled the switch, which tasks
+// were cancelled, how many tokens were revoked and what could not be done.
+type KillAll struct {
+	Actor         string   `json:"actor"`
+	Cancelled     []ID     `json:"cancelled"`
+	TokensRevoked int      `json:"tokens_revoked"`
+	Problems      []string `json:"problems,omitempty"`
+}
+
+// NewKillAllEvent returns the audit entry of a kill-all.
+func NewKillAllEvent(k KillAll, at time.Time) Event {
+	if k.Cancelled == nil {
+		k.Cancelled = []ID{}
+	}
+	return newEvent(SupervisorStream, EventKillAll, k, at)
+}

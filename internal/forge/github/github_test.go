@@ -662,3 +662,57 @@ func TestCheckAppReportsABadKeyAsAnAuthError(t *testing.T) {
 		t.Fatalf("err = %v, want ErrAuth", err)
 	}
 }
+
+// RevokeTokens is the token half of kill-all: each held token revokes itself
+// with DELETE /installation/token, and the next call mints a new one.
+func TestRevokeTokensRevokesWhatIsHeldAndForgetsIt(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	c := f.client(t, nil)
+	first, err := c.InstallationToken(bg, "wstein/workharbor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.handlers["DELETE /installation/token"] = func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		delete(f.validTok, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		f.mu.Unlock()
+		w.WriteHeader(204)
+	}
+	n, err := c.RevokeTokens(bg)
+	if err != nil || n != 1 || f.count("DELETE /installation/token") != 1 {
+		t.Fatalf("revoked %d, err %v, deletes %d", n, err, f.count("DELETE /installation/token"))
+	}
+	f.mu.Lock()
+	stillValid := f.validTok[first]
+	f.mu.Unlock()
+	if stillValid {
+		t.Error("the revoked token still works")
+	}
+	second, err := c.InstallationToken(bg, "wstein/workharbor")
+	if err != nil || second == first || f.mints != 2 {
+		t.Errorf("after the revoke: token reused=%v mints=%d err=%v", second == first, f.mints, err)
+	}
+	// Nothing held, nothing to revoke.
+	c2 := f.client(t, nil)
+	if n, err := c2.RevokeTokens(bg); n != 0 || err != nil {
+		t.Errorf("an idle client: %d, %v", n, err)
+	}
+}
+
+func TestARevokeThatFailsIsReportedAndTheTokenIsStillForgotten(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	c := f.client(t, nil)
+	if _, err := c.InstallationToken(bg, "wstein/workharbor"); err != nil {
+		t.Fatal(err)
+	}
+	f.handlers["DELETE /installation/token"] = func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) }
+	n, err := c.RevokeTokens(bg)
+	if n != 0 || err == nil || !strings.Contains(err.Error(), "wstein/workharbor") {
+		t.Errorf("revoked %d, err %v", n, err)
+	}
+	if _, err := c.InstallationToken(bg, "wstein/workharbor"); err != nil || f.mints != 2 {
+		t.Errorf("a failed revoke must not keep the token: mints=%d err=%v", f.mints, err)
+	}
+}

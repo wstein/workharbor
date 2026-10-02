@@ -665,3 +665,26 @@ func sortedPermKeys(m map[string]string) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// RevokeTokens revokes every installation token this client holds, with
+// DELETE /installation/token (each token authenticates its own revocation), and
+// forgets them, so the next call mints a fresh one. It is the token half of
+// `whr kill-all` (design §7.7). It returns how many were revoked; a token that
+// could not be revoked is reported in the error and is dropped from the cache
+// all the same, and it expires within the hour GitHub gives it.
+func (c *Client) RevokeTokens(ctx context.Context) (int, error) {
+	c.mu.Lock()
+	held := c.tokens
+	c.tokens = map[string]token{}
+	c.mu.Unlock()
+	n := 0
+	var errs []error
+	for repo, t := range held {
+		if err := c.do(ctx, t.value, http.MethodDelete, "/installation/token", nil, nil); err != nil {
+			errs = append(errs, fmt.Errorf("revoke the token for %s: %w", repo, err))
+			continue
+		}
+		n++
+	}
+	return n, errors.Join(errs...)
+}
