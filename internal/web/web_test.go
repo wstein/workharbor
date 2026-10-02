@@ -154,7 +154,7 @@ func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (ser
 	f.mu.Lock()
 	f.rebuilds = append(f.rebuilds, workspace+" by "+actor)
 	f.mu.Unlock()
-	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr-base/fedora:aaa", NewImage: "whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
+	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr.invalid/whr-base/fedora:aaa", NewImage: "whr.invalid/whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
 }
 
 func (f *fake) OpenCopy(_ context.Context, ws, role string) (service.EditorCopy, error) {

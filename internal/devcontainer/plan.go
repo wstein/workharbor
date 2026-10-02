@@ -36,7 +36,7 @@ func (e Environment) Tag(owner string) string {
 			fmt.Fprintf(h, "%s\x00%s\x00%v\x00", f.Ref, f.Digest, f.Vars)
 		}
 	}
-	return "whr-env/" + owner + ":" + hex.EncodeToString(h.Sum(nil))[:16]
+	return runtime.BuiltImageHost + "whr-env/" + owner + ":" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // BaseTag is the tag of the image a Dockerfile builds before the features are applied

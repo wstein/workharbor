@@ -116,6 +116,16 @@ var (
 // be pointed at a network the adapter never created.
 const ReservedLabelPrefix = "workharbor."
 
+// BuiltImageHost is the reserved registry host every image the supervisor
+// builds is named under (design §7, rule 4a). It is an RFC 6761 ".invalid"
+// name, which no registry answers, so such an image cannot be fetched from
+// anywhere: it exists locally or it is built. A bare name would normalise to
+// docker.io, where an attacker could publish it.
+const BuiltImageHost = "whr.invalid/"
+
+// IsBuiltImage reports whether ref is named under BuiltImageHost.
+func IsBuiltImage(ref string) bool { return strings.HasPrefix(ref, BuiltImageHost) }
+
 // ValidImage reports whether ref is an image reference the adapter passes on.
 func ValidImage(ref string) bool { return imageRe.MatchString(ref) }
 

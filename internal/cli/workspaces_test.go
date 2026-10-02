@@ -176,12 +176,12 @@ func TestOpenPrintsThePathAndWarnsAboutAutoRunFiles(t *testing.T) {
 
 func TestWsRebuildShowsTheEnvironmentsAndImagesBeforeAndAfter(t *testing.T) {
 	s := newStub(t)
-	s.reply("POST /v1/workspaces/docs-ws/rebuild", 200, ok(`{"old_env":"whr-1","new_env":"whr-2","old_image":"whr-base/fedora:aaa","new_image":"whr-base/fedora:bbb","old_digest":"sha256:aa","new_digest":"sha256:bb"}`))
+	s.reply("POST /v1/workspaces/docs-ws/rebuild", 200, ok(`{"old_env":"whr-1","new_env":"whr-2","old_image":"whr.invalid/whr-base/fedora:aaa","new_image":"whr.invalid/whr-base/fedora:bbb","old_digest":"sha256:aa","new_digest":"sha256:bb"}`))
 	code, out, errOut := s.runCLI("", "ws", "rebuild", "docs-ws")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	for _, want := range []string{"before", "whr-1", "whr-base/fedora:aaa", "sha256:aa", "after", "whr-2", "whr-base/fedora:bbb", "sha256:bb"} {
+	for _, want := range []string{"before", "whr-1", "whr.invalid/whr-base/fedora:aaa", "sha256:aa", "after", "whr-2", "whr.invalid/whr-base/fedora:bbb", "sha256:bb"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, out)
 		}

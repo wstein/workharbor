@@ -58,7 +58,7 @@ func Tag(d Distro) (string, error) {
 		return "", err
 	}
 	sum := sha256.Sum256(cf)
-	return "whr-base/" + string(d) + ":" + hex.EncodeToString(sum[:])[:12], nil
+	return runtime.BuiltImageHost + "whr-base/" + string(d) + ":" + hex.EncodeToString(sum[:])[:12], nil
 }
 
 // Builder builds an image and says whether one exists.

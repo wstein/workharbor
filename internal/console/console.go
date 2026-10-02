@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/wstein/workharbor/internal/baseimage"
+	"github.com/wstein/workharbor/internal/runtime"
 )
 
 //go:embed whr-git whr-sshd sshd_config Containerfile.fedora Containerfile.ubuntu Containerfile.alpine
@@ -82,7 +83,7 @@ func Tag(d baseimage.Distro) (string, error) {
 	h.Write(SSHD())
 	h.Write([]byte{0})
 	h.Write(SSHDConfig())
-	return "whr-console/" + string(d) + ":" + hex.EncodeToString(h.Sum(nil))[:12], nil
+	return runtime.BuiltImageHost + "whr-console/" + string(d) + ":" + hex.EncodeToString(h.Sum(nil))[:12], nil
 }
 
 // Ensure makes sure the console image of d exists and returns its tag, building

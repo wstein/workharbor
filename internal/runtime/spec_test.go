@@ -162,7 +162,7 @@ func TestSpecEnvRefusesWhatTheSupervisorSets(t *testing.T) {
 }
 
 func TestBuildSpecValidate(t *testing.T) {
-	ok := BuildSpec{Tag: "whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/ctx/Dockerfile", Args: map[string]string{"GO_VERSION": "1.27"}}
+	ok := BuildSpec{Tag: "whr.invalid/whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/ctx/Dockerfile", Args: map[string]string{"GO_VERSION": "1.27"}}
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +176,19 @@ func TestBuildSpecValidate(t *testing.T) {
 		mutate(&b)
 		if err := b.Validate(); !errors.Is(err, ErrInvalidBuild) {
 			t.Errorf("%s: err = %v, want ErrInvalidBuild", name, err)
+		}
+	}
+}
+
+func TestBuiltImagesLiveUnderTheReservedHost(t *testing.T) {
+	for _, ref := range []string{BuiltImageHost + "whr-env/o1:abc", BuiltImageHost + "whr-base/fedora:0123456789ab", BuiltImageHost + "whr-console/fedora:0123456789ab"} {
+		if !ValidImage(ref) || !IsBuiltImage(ref) {
+			t.Errorf("%s: valid %v, built %v", ref, ValidImage(ref), IsBuiltImage(ref))
+		}
+	}
+	for _, ref := range []string{"whr-env/o1:abc", "fedora", "docker.io/whr.invalid/x"} {
+		if IsBuiltImage(ref) {
+			t.Errorf("%s reads as built by whr", ref)
 		}
 	}
 }

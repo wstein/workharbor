@@ -282,7 +282,7 @@ func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (ser
 	case "busy":
 		return service.RebuildResult{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish or stop it before a rebuild")
 	}
-	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr-base/fedora:aaa", NewImage: "whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
+	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr.invalid/whr-base/fedora:aaa", NewImage: "whr.invalid/whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
 }
 
 func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.EditorCopy, error) {

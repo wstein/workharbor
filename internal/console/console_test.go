@@ -68,15 +68,15 @@ func TestTagChangesWithTheWrapperAndThePin(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, _ := Tag(baseimage.Ubuntu)
-	if al, err := Tag(Alpine); err != nil || !strings.HasPrefix(al, "whr-console/alpine:") || al == a || al == u || !runtime.ValidImage(al) {
+	if al, err := Tag(Alpine); err != nil || !strings.HasPrefix(al, "whr.invalid/whr-console/alpine:") || al == a || al == u || !runtime.ValidImage(al) {
 		t.Errorf("alpine tag %q, %v", al, err)
 	}
 	b, _ := Tag(baseimage.Fedora)
-	if a != b || a == u || !strings.HasPrefix(a, "whr-console/fedora:") || !runtime.ValidImage(a) {
+	if a != b || a == u || !strings.HasPrefix(a, "whr.invalid/whr-console/fedora:") || !runtime.ValidImage(a) {
 		t.Errorf("tags %s %s %s", a, b, u)
 	}
 	base, _ := baseimage.Tag(baseimage.Fedora)
-	if strings.Contains(a, strings.TrimPrefix(base, "whr-base/fedora:")) {
+	if strings.Contains(a, strings.TrimPrefix(base, "whr.invalid/whr-base/fedora:")) {
 		t.Error("the console tag must not be the base image's")
 	}
 }

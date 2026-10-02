@@ -5,8 +5,8 @@ HTTP OK (200)
   "data": {
     "old_env": "env-1",
     "new_env": "env-2",
-    "old_image": "whr-base/fedora:aaa",
-    "new_image": "whr-base/fedora:bbb",
+    "old_image": "whr.invalid/whr-base/fedora:aaa",
+    "new_image": "whr.invalid/whr-base/fedora:bbb",
     "old_digest": "sha256:aa",
     "new_digest": "sha256:bb"
   }

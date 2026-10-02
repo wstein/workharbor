@@ -38,7 +38,7 @@ func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
 	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
 		t.Fatal(err)
 	}
-	opts := SpecOptions{Owner: Owner, Env: config.Environment{Image: "whr-base/fedora:abc123abc123"}.Resolved(), ToolStore: store, Proxy: proxy}
+	opts := SpecOptions{Owner: Owner, Env: config.Environment{Image: "whr.invalid/whr-base/fedora:abc123abc123"}.Resolved(), ToolStore: store, Proxy: proxy}
 	spec := opts.For(domain.Workspace{ID: "w1"})
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: ws, Target: "/ws"}) // what the service adds
 	if err := spec.Validate(); err != nil {
@@ -320,7 +320,7 @@ func TestTheConsoleSpecIsHardenedReadOnlyByDefaultAndHasNoSecrets(t *testing.T) 
 	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
 		t.Fatal(err)
 	}
-	opts := ConsoleOptions{Owner: Owner, Image: "whr-console/fedora:abc123abc123", Console: config.Console{}.Resolved(), Roots: []string{rootA, rootB}, Proxy: proxy}
+	opts := ConsoleOptions{Owner: Owner, Image: "whr.invalid/whr-console/fedora:abc123abc123", Console: config.Console{}.Resolved(), Roots: []string{rootA, rootB}, Proxy: proxy}
 	prepare := func(s runtime.Spec) error {
 		_, err := runtime.Prepare(runtime.PrepareOptions{
 			FS: runtime.OSFS{}, Home: home, Roots: []string{rootA, rootB, libexec},

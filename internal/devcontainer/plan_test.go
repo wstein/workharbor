@@ -23,11 +23,11 @@ func baseSpec() runtime.Spec {
 func TestSpecKeepsTheSupervisorsHardening(t *testing.T) {
 	env := Environment{Config: Config{Env: map[string]string{"GOFLAGS": "-mod=mod"}}}
 	base := baseSpec()
-	spec, err := env.Spec(base, "whr-env/o1:abc")
+	spec, err := env.Spec(base, "whr.invalid/whr-env/o1:abc")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Image != "whr-env/o1:abc" || spec.Env["GOFLAGS"] != "-mod=mod" {
+	if spec.Image != "whr.invalid/whr-env/o1:abc" || spec.Env["GOFLAGS"] != "-mod=mod" {
 		t.Errorf("image or env missing: %+v", spec)
 	}
 	// Everything but the image and the variables is the supervisor's.
@@ -87,7 +87,7 @@ func TestHostRequestsAreAskedNeverAssumed(t *testing.T) {
 func TestTagChangesWithWhatTheBuildReads(t *testing.T) {
 	a := Environment{Commit: strings.Repeat("a", 40), Dockerfile: "Dockerfile", Context: ".", BuildArgs: map[string]string{"A": "1"}}
 	tag := a.Tag("o1")
-	if !runtime.ValidImage(tag) || !strings.HasPrefix(tag, "whr-env/o1:") {
+	if !runtime.ValidImage(tag) || !strings.HasPrefix(tag, "whr.invalid/whr-env/o1:") {
 		t.Fatalf("tag = %q", tag)
 	}
 	for name, mutate := range map[string]func(*Environment){

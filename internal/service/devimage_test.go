@@ -27,10 +27,13 @@ func TestAWorkspaceRunsTheOwnImageOfItsRepository(t *testing.T) {
 	r := newWsRig(t)
 	var builds int
 	r.ws.cfg.Environment = repoEnv(devcontainer.OriginDevcontainer, devcontainer.Config{Env: map[string]string{"GOFLAGS": "-mod=mod"}},
-		func(context.Context) (string, error) { builds++; return "whr-env/wh-conformance:0123456789abcdef", nil })
+		func(context.Context) (string, error) {
+			builds++
+			return "whr.invalid/whr-env/wh-conformance:0123456789abcdef", nil
+		})
 	w, _ := r.create("docs-ws")
 	info, err := r.rt.Adapter.Inspect(bg, string(w.EnvID))
-	if err != nil || info.Image != "whr-env/wh-conformance:0123456789abcdef" || builds != 1 {
+	if err != nil || info.Image != "whr.invalid/whr-env/wh-conformance:0123456789abcdef" || builds != 1 {
 		t.Fatalf("image %q, builds %d, %v", info.Image, builds, err)
 	}
 	// The mounts, the network and the limits are the supervisor's: the workspace
@@ -60,7 +63,7 @@ func TestAWorkspaceRunsTheOwnImageOfItsRepository(t *testing.T) {
 		return "", nil
 	})
 	w3, _ := r3.create("docs-ws")
-	if info, _ := r3.rt.Adapter.Inspect(bg, string(w3.EnvID)); info.Image == "" || strings.HasPrefix(info.Image, "whr-env/") {
+	if info, _ := r3.rt.Adapter.Inspect(bg, string(w3.EnvID)); info.Image == "" || strings.HasPrefix(info.Image, "whr.invalid/whr-env/") {
 		t.Errorf("image = %q", info.Image)
 	}
 }

@@ -45,7 +45,7 @@ func TestTagIsStableAndPerBase(t *testing.T) {
 	}
 	b, _ := Tag(Fedora)
 	u, _ := Tag(Ubuntu)
-	if a != b || a == u || !strings.HasPrefix(a, "whr-base/fedora:") || !runtime.ValidImage(a) || !runtime.ValidImage(u) {
+	if a != b || a == u || !strings.HasPrefix(a, "whr.invalid/whr-base/fedora:") || !runtime.ValidImage(a) || !runtime.ValidImage(u) {
 		t.Errorf("tags: %s %s %s", a, b, u)
 	}
 	if _, err := Tag("alpine"); !errors.Is(err, ErrUnknownDistro) {
@@ -108,7 +108,7 @@ func TestEnsureBuildsOnceAndAgainOnlyWhenThePinChanges(t *testing.T) {
 func TestEnsureReportsAFailedBuildWithItsOutput(t *testing.T) {
 	fb := &fakeBuilder{have: map[string]bool{}, fail: errors.New("exit status 1")}
 	_, _, err := Ensure(context.Background(), fb, Ubuntu, t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "step 2 failed: dnf") || !strings.Contains(err.Error(), "whr-base/ubuntu:") {
+	if err == nil || !strings.Contains(err.Error(), "step 2 failed: dnf") || !strings.Contains(err.Error(), "whr.invalid/whr-base/ubuntu:") {
 		t.Errorf("err = %v", err)
 	}
 	if _, _, err := Ensure(context.Background(), fb, "alpine", t.TempDir()); !errors.Is(err, ErrUnknownDistro) {
