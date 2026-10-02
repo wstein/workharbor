@@ -155,6 +155,10 @@ func (f *fake) KillAll(context.Context, string) (service.KillReport, error) {
 	return service.KillReport{}, errors.New("not used")
 }
 
+func (f *fake) Usage(context.Context, service.UsageQuery) (service.UsageReport, error) {
+	return service.UsageReport{}, errors.New("not used")
+}
+
 func (f *fake) Log(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
 	return f.logs, nil
 }

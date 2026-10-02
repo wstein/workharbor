@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -594,5 +595,92 @@ func TestKillAllSaysWhatFailedAndExitsNonZero(t *testing.T) {
 	code, out, errOut := s.runCLI("", "kill-all", "--yes")
 	if code != exitcode.Error || out != "t-aaa111\n" || !strings.Contains(errOut, "problem: revoke the token for a/b: 500") {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+}
+
+const usageData = `{"group":"task","rows":[
+{"key":"t-aaa111","auth":"subscription","turns":3,"tokens":{"input":18,"output":194,"cache_read":43502,"cache_write":233},"turns_without_tokens":0,"reported_micro_usd":5804,"turns_without_cost":0,"notional":true},
+{"key":"t-aaa111","auth":"api-key","turns":2,"tokens":{"input":0,"output":0,"cache_read":0,"cache_write":0},"turns_without_tokens":2,"reported_micro_usd":0,"turns_without_cost":2,"notional":false}],
+"windows":[{"account":"claude","name":"five_hour","utilization":0.42,"resets_at":"2026-10-01T15:00:00Z","at":"2026-10-01T12:00:00Z"}],
+"balance":{"agent":"claude","remaining_micro_usd":12340000,"at":"2026-10-01T12:00:00Z"}}`
+
+func TestUsagePrintsRowsAndLeadsWithTheWindowOnASubscription(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	s.reply("GET /v1/usage", 200, ok(usageData))
+	code, out, errOut := s.runCLI("", "usage")
+	if code != 0 || errOut != "" {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+	if i, j := strings.Index(out, "five_hour"), strings.Index(out, "t-aaa111"); i < 0 || j < 0 || i > j {
+		t.Errorf("a subscription leads with its window:\n%s", out)
+	}
+	for _, want := range []string{"42%", "$0.0058 reported, notional", "not reported", "2 turn(s) without tokens", "43.8k", "balance: $12.3400 left"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out)
+		}
+	}
+	// --json is the envelope as the API sent it.
+	code, out, _ = s.runCLI("", "usage", "--json")
+	if code != 0 || !strings.Contains(out, `"schema_version":1`) || !strings.Contains(out, `"remaining_micro_usd":12340000`) {
+		t.Errorf("--json: exit %d, %q", code, out)
+	}
+}
+
+func TestUsageSendsTheFiltersAndRefusesBadOnes(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	s.reply("GET /v1/usage", 200, ok(`{"group":"day","rows":[],"windows":[]}`))
+	if code, _, errOut := s.runCLI("", "usage", "--task", "t-aaa", "--repo", "wstein/workharbor", "--since", "2026-10-01", "--until", "2026-10-02T00:00:00Z", "--by", "day"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	reqs := s.requests("GET /v1/usage")
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %+v", reqs)
+	}
+	q, _ := url.ParseQuery(reqs[0].query)
+	if q.Get("task") != "t-aaa111" || q.Get("repo") != "wstein/workharbor" || q.Get("since") != "2026-10-01T00:00:00Z" || q.Get("until") != "2026-10-02T00:00:00Z" || q.Get("by") != "day" {
+		t.Errorf("query = %v", q)
+	}
+	// "7d" and "36h" are how long ago: a time in the past, in RFC 3339.
+	if code, _, _ := s.runCLI("", "usage", "--since", "7d"); code != 0 {
+		t.Fatal("--since 7d")
+	}
+	reqs = s.requests("GET /v1/usage")
+	since, err := time.Parse(time.RFC3339, func() string { q, _ := url.ParseQuery(reqs[len(reqs)-1].query); return q.Get("since") }())
+	if err != nil || time.Since(since) < 6*24*time.Hour || time.Since(since) > 8*24*time.Hour {
+		t.Errorf("--since 7d = %v, %v", since, err)
+	}
+	for _, args := range [][]string{{"usage", "--since", "yesterday"}, {"usage", "--by", "week"}, {"usage", "--task", "nope"}, {"usage", "extra"}} {
+		if code, _, _ := s.runCLI("", args...); code == 0 {
+			t.Errorf("%v was accepted", args)
+		}
+	}
+}
+
+func TestParseWhenDollarsAndCounts(t *testing.T) {
+	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	for in, want := range map[string]string{
+		"2026-10-01": "2026-10-01T00:00:00Z", "2026-10-01T05:06:07+02:00": "2026-10-01T03:06:07Z", "7d": "2026-10-01T12:00:00Z", "36h": "2026-10-07T00:00:00Z", "0d": "2026-10-08T12:00:00Z",
+	} {
+		got, err := parseWhen(in, now)
+		if err != nil || got.Format(time.RFC3339) != want {
+			t.Errorf("parseWhen(%q) = %v, %v; want %s", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "yesterday", "-1d", "1x", "2026-13-01"} {
+		if _, err := parseWhen(bad, now); err == nil {
+			t.Errorf("parseWhen(%q) was accepted", bad)
+		}
+	}
+	for micro, want := range map[int64]string{0: "$0.0000", 5804: "$0.0058", 999_999: "$1.0000", 12_000_000: "$12.0000"} {
+		if got := dollars(micro); got != want {
+			t.Errorf("dollars(%d) = %s", micro, got)
+		}
+	}
+	for n, want := range map[int64]string{999: "999", 1500: "1.5k", 2_500_000: "2.5M"} {
+		if got := count(n); got != want {
+			t.Errorf("count(%d) = %s", n, got)
+		}
 	}
 }

@@ -42,12 +42,13 @@ type fake struct {
 	created  []service.CreateRequest
 	events   chan domain.Event
 
-	onRun    func(service.RunRequest) (service.RunResult, error)
-	onShow   func(domain.ID) (service.TaskView, error)
-	onSay    func(domain.ID, string) (agent.Delivery, error)
-	onCancel func(domain.ID) error
-	onKill   func(actor string) (service.KillReport, error)
-	onAnswer func(domain.ID, domain.Response) (domain.ID, error)
+	onRun        func(service.RunRequest) (service.RunResult, error)
+	onShow       func(domain.ID) (service.TaskView, error)
+	onSay        func(domain.ID, string) (agent.Delivery, error)
+	onCancel     func(domain.ID) error
+	onKill       func(actor string) (service.KillReport, error)
+	usageQueries []service.UsageQuery
+	onAnswer     func(domain.ID, domain.Response) (domain.ID, error)
 }
 
 func (f *fake) List(_ context.Context, active bool) ([]store.TaskSummary, error) {
@@ -132,6 +133,21 @@ func (f *fake) PurgeTranscript(_ context.Context, id domain.ID, _ string) (store
 		return store.PurgeResult{}, domain.NewConflict(domain.RuleTransition, "run r1 is running and still writing its transcript: pause or stop it first")
 	}
 	return store.PurgeResult{Events: 12, Bytes: 3400, Digest: "abc123"}, nil
+}
+
+func (f *fake) Usage(_ context.Context, q service.UsageQuery) (service.UsageReport, error) {
+	f.mu.Lock()
+	f.usageQueries = append(f.usageQueries, q)
+	f.mu.Unlock()
+	d := t0.Add(time.Hour)
+	return service.UsageReport{
+		Group: store.GroupTask,
+		Rows: []service.UsageRow{{UsageRow: store.UsageRow{
+			Key: "t2", Auth: "subscription", Turns: 3, Tokens: domain.UsageTokens{Input: 18, Output: 194, CacheRead: 43502, CacheWrite: 233},
+			ReportedMicroUSD: 5804, First: t0, Last: d,
+		}, Notional: true}},
+		Windows: []store.WindowReading{{Account: "claude", Name: "five_hour", Utilization: 0.42, ResetsAt: d.Add(3 * time.Hour), At: d}},
+	}, nil
 }
 
 func (f *fake) KillAll(_ context.Context, actor string) (service.KillReport, error) {
@@ -500,6 +516,11 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"purge-unconfirmed":              {"POST", "/v1/tasks/t1/purge", `{"confirm":false}`},
 		"purge-empty":                    {"POST", "/v1/tasks/t1/purge", ``},
 		"purge-running":                  {"POST", "/v1/tasks/t2/purge", `{"confirm":true}`},
+		"usage":                          {"GET", "/v1/usage", ""},
+		"usage-filtered":                 {"GET", "/v1/usage?task=t2&repo=wstein/workharbor&since=2026-10-01T00:00:00Z&until=2026-10-02T00:00:00Z&by=day", ""},
+		"usage-bad-since":                {"GET", "/v1/usage?since=yesterday", ""},
+		"usage-bad-until":                {"GET", "/v1/usage?until=2026-10-01", ""},
+		"usage-bad-by":                   {"GET", "/v1/usage?by=week", ""},
 		"kill-all":                       {"POST", "/v1/kill-all", `{"confirm":true}`},
 		"kill-all-unconfirmed":           {"POST", "/v1/kill-all", `{"confirm":false}`},
 		"kill-all-empty":                 {"POST", "/v1/kill-all", ``},
@@ -786,7 +807,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 25 {
+	if got := Routes(); len(got) != 26 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

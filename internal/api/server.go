@@ -43,6 +43,7 @@ type Backend interface {
 	TranscriptSize(ctx context.Context, task domain.ID) (service.TranscriptSize, error)
 	PurgeTranscript(ctx context.Context, task domain.ID, actor string) (store.PurgeResult, error)
 	KillAll(ctx context.Context, actor string) (service.KillReport, error)
+	Usage(ctx context.Context, q service.UsageQuery) (service.UsageReport, error)
 	Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error)
 	Inbox(ctx context.Context) ([]domain.Decision, error)
 	WorkspaceList(ctx context.Context) ([]service.WorkspaceView, error)
@@ -160,6 +161,7 @@ var routes = []route{
 	{http.MethodGet, "/v1/tasks/{task}/transcript", (*Server).transcriptSize},
 	{http.MethodPost, "/v1/tasks/{task}/purge", (*Server).purge},
 	{http.MethodPost, "/v1/kill-all", (*Server).killAll},
+	{http.MethodGet, "/v1/usage", (*Server).usage},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},
 	{http.MethodGet, "/v1/inbox", (*Server).inbox},
@@ -506,6 +508,45 @@ func (s *Server) purge(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, map[string]any{"events": res.Events, "bytes": res.Bytes, "digest": res.Digest}, nil
 	})
+}
+
+// usage is the report behind `whr usage` (design §5.7): the totals of what the
+// agents reported, grouped, with the account's usage windows and balance.
+func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := service.UsageQuery{Repo: q.Get("repo"), Group: store.UsageGroup(q.Get("by"))}
+	if t := q.Get("task"); t != "" {
+		if len(t) > 200 || strings.ContainsFunc(t, func(c rune) bool { return c < 0x20 || c == 0x7f }) {
+			writeError(w, usageError{"the task is not valid"})
+			return
+		}
+		query.TaskID = domain.ID(t)
+	}
+	for _, f := range []struct {
+		name string
+		to   *time.Time
+	}{{"since", &query.Since}, {"until", &query.Until}} {
+		if v := q.Get(f.name); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				writeError(w, usageError{f.name + " must be a time like 2026-10-01T00:00:00Z"})
+				return
+			}
+			*f.to = t
+		}
+	}
+	switch query.Group {
+	case "", store.GroupAll, store.GroupRun, store.GroupTask, store.GroupRepo, store.GroupDay, store.GroupMonth:
+	default:
+		writeError(w, usageError{"by must be all, run, task, repo, day or month"})
+		return
+	}
+	rep, err := s.be.Usage(r.Context(), query)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeOK(w, http.StatusOK, rep)
 }
 
 type killAllBody struct {

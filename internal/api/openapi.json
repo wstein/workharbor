@@ -1739,6 +1739,113 @@
           }
         }
       }
+    },
+    "/v1/usage": {
+      "get": {
+        "operationId": "usage",
+        "summary": "Totals of what the agents reported",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the usage report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UsageReport"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "repo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "run",
+                "task",
+                "repo",
+                "day",
+                "month"
+              ],
+              "default": "task"
+            }
+          }
+        ],
+        "description": "The tokens, the cost and the number of turns the agents reported, grouped, from the audit entries (design \u00a75.7). A row is one group and one auth mode, so the notional cost of a subscription is never added to the spend of an API key; a turn without tokens or without a cost is counted, not read as zero. `windows` are the account's own usage windows and `balance` the latest balance the agent reported, if it reported one."
+      }
     }
   },
   "components": {
@@ -2332,6 +2439,157 @@
           },
           "backup_eligible": {
             "type": "boolean"
+          }
+        }
+      },
+      "UsageReport": {
+        "type": "object",
+        "required": [
+          "group",
+          "rows",
+          "windows"
+        ],
+        "properties": {
+          "group": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "auth",
+                "turns",
+                "tokens",
+                "turns_without_tokens",
+                "reported_micro_usd",
+                "turns_without_cost",
+                "first",
+                "last",
+                "notional"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "auth": {
+                  "type": "string"
+                },
+                "turns": {
+                  "type": "integer"
+                },
+                "tokens": {
+                  "type": "object",
+                  "required": [
+                    "input",
+                    "output",
+                    "cache_read",
+                    "cache_write"
+                  ],
+                  "properties": {
+                    "input": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "output": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_read": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_write": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "turns_without_tokens": {
+                  "type": "integer"
+                },
+                "reported_micro_usd": {
+                  "type": "integer"
+                },
+                "turns_without_cost": {
+                  "type": "integer"
+                },
+                "first": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "last": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "notional": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "account",
+                "name",
+                "utilization",
+                "at"
+              ],
+              "properties": {
+                "account": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "utilization": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "resets_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "balance": {
+            "type": "object",
+            "required": [
+              "agent",
+              "remaining_micro_usd",
+              "at"
+            ],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "remaining_micro_usd": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           }
         }
       }

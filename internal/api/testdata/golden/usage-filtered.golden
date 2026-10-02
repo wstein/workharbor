@@ -1,0 +1,37 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "group": "task",
+    "rows": [
+      {
+        "key": "t2",
+        "auth": "subscription",
+        "turns": 3,
+        "tokens": {
+          "input": 18,
+          "output": 194,
+          "cache_read": 43502,
+          "cache_write": 233
+        },
+        "turns_without_tokens": 0,
+        "reported_micro_usd": 5804,
+        "turns_without_cost": 0,
+        "first": "2026-10-01T09:00:00Z",
+        "last": "2026-10-01T10:00:00Z",
+        "notional": true
+      }
+    ],
+    "windows": [
+      {
+        "account": "claude",
+        "name": "five_hour",
+        "utilization": 0.42,
+        "resets_at": "2026-10-01T13:00:00Z",
+        "at": "2026-10-01T10:00:00Z"
+      }
+    ]
+  }
+}
+
