@@ -1,0 +1,14 @@
+# The workharbor console on Ubuntu LTS (design D43): the stock image pinned by digest,
+# the tools for the human's shell work, and the git wrapper that runs git safely in a
+# workspace whose .git an agent wrote. No Docker CLI and no container engine, no
+# credentials. The digest is the one of the base image (internal/baseimage); changing
+# either file changes the image's tag, so the next start builds it again.
+FROM docker.io/library/ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git zsh fish jq curl ripgrep tmux vim-tiny make less util-linux procps ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && (id ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true) \
+    && useradd -u 1000 -m -s /bin/zsh whr
+COPY whr-git /usr/local/bin/git
+RUN chmod 0755 /usr/local/bin/git

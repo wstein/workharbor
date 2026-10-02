@@ -76,30 +76,48 @@ func Ensure(ctx context.Context, b Builder, d Distro, workDir string) (tag strin
 	if tag, err = Tag(d); err != nil {
 		return "", false, err
 	}
-	have, err := b.HasImage(ctx, tag)
-	if err != nil {
-		return "", false, fmt.Errorf("baseimage: look for %s: %w", tag, err)
-	}
-	if have {
-		return tag, false, nil
-	}
 	cf, err := Containerfile(d)
 	if err != nil {
 		return "", false, err
 	}
-	dir := filepath.Join(workDir, string(d))
-	contextDir := filepath.Join(dir, "context") // empty: the Containerfile copies nothing
+	built, err = EnsureImage(ctx, b, tag, cf, nil, filepath.Join(workDir, string(d)))
+	return tag, built, err
+}
+
+// EnsureImage builds the image tag from a Containerfile and the files of its
+// build context (name to content, no directories), unless the runtime already
+// has an image with that tag. It is what Ensure and the console image share.
+// dir is a directory the supervisor owns; the Containerfile and the context
+// are written below it. The caller chooses a tag that changes whenever any of
+// the inputs does.
+func EnsureImage(ctx context.Context, b Builder, tag string, containerfile []byte, contextFiles map[string][]byte, dir string) (built bool, err error) {
+	have, err := b.HasImage(ctx, tag)
+	if err != nil {
+		return false, fmt.Errorf("baseimage: look for %s: %w", tag, err)
+	}
+	if have {
+		return false, nil
+	}
+	contextDir := filepath.Join(dir, "context")
 	if err := os.MkdirAll(contextDir, 0o700); err != nil {
-		return "", false, err
+		return false, err
+	}
+	for name, content := range contextFiles {
+		if name != filepath.Base(name) || name == "" || name == "." || name == ".." {
+			return false, fmt.Errorf("baseimage: %q is not a plain file name for a build context", name)
+		}
+		if err := os.WriteFile(filepath.Join(contextDir, name), content, 0o600); err != nil {
+			return false, err
+		}
 	}
 	file := filepath.Join(dir, "Containerfile")
-	if err := os.WriteFile(file, cf, 0o600); err != nil {
-		return "", false, err
+	if err := os.WriteFile(file, containerfile, 0o600); err != nil {
+		return false, err
 	}
 	if out, err := b.Build(ctx, runtime.BuildSpec{Tag: tag, ContextDir: contextDir, Dockerfile: file}); err != nil {
-		return "", false, fmt.Errorf("baseimage: build %s: %w\n%s", tag, err, tail(out, 2000))
+		return false, fmt.Errorf("baseimage: build %s: %w\n%s", tag, err, tail(out, 2000))
 	}
-	return tag, true, nil
+	return true, nil
 }
 
 // tail returns the last n bytes of the builder's output, the part that says why

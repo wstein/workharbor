@@ -1,0 +1,146 @@
+#!/bin/sh
+# The git of the workharbor console (design D43, §7.6).
+#
+# A workspace's .git is written by agents, so its configuration is hostile input
+# to whoever runs git there (spike #89): plain git ran a planted hook, fsmonitor,
+# clean filter, textconv driver and alias. This wrapper runs the real git with
+#
+#   - core.hooksPath=/dev/null and core.fsmonitor=false, and
+#   - every other setting that makes git run a command overridden BY NAME, unless
+#     the console's own system or global configuration sets it too: then the
+#     override is the value they give, so the human's own aliases and helpers keep
+#     working.
+#
+# The overrides go through GIT_CONFIG_COUNT, GIT_CONFIG_KEY_n and
+# GIT_CONFIG_VALUE_n, which win over every configuration file, so the repository
+# cannot undo them. The keys come from `git config --list --name-only`, which
+# runs nothing. Their origin is not read: a setting that came in through an
+# include has a path the repository chooses, so it is not parsed.
+#
+# A few settings (remote.<name>.uploadpack) are read first-value-wins, so an
+# override that comes last would lose to the repository's. Those overrides go
+# into a temporary file that git reads as its system configuration, which comes
+# before the repository's.
+#
+# POSIX sh only: Ubuntu's /bin/sh is dash.
+
+REAL=${WHR_REAL_GIT:-/usr/bin/git}
+
+n=${GIT_CONFIG_COUNT:-0}
+case $n in
+'' | *[!0-9]*) n=0 ;;
+esac
+
+first=
+cleanup() {
+  if [ -n "$first" ]; then
+    rm -f "$first"
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+# set_override KEY VALUE appends one override.
+set_override() {
+  export "GIT_CONFIG_KEY_$n=$1"
+  export "GIT_CONFIG_VALUE_$n=$2"
+  n=$((n + 1))
+}
+
+# first_wins KEY VALUE writes one override into the temporary system file.
+first_wins() {
+  if [ -z "$first" ]; then
+    first=$(mktemp "${TMPDIR:-/tmp}/whr-git.XXXXXX") || exit 1
+  fi
+  "$REAL" config --file "$first" "$1" "$2"
+}
+
+set_override core.hooksPath /dev/null
+set_override core.fsmonitor false
+# The ext:: transport runs a command named by a url, and a repository can hold urls.
+set_override protocol.ext.allow never
+
+editor=${GIT_EDITOR:-${VISUAL:-${EDITOR:-vi}}}
+# A static message: the alias name is the repository's and never goes into a command.
+disabled_alias='!f() { echo "whr console: an alias from the repository is disabled" >&2; return 1; }; f'
+
+trusted_keys=$(
+  "$REAL" config --system --name-only --list 2>/dev/null
+  "$REAL" config --global --name-only --list 2>/dev/null
+)
+
+# trusted_value KEY prints the value the console's own configuration gives.
+trusted_value() {
+  v=$("$REAL" config --global --get "$1" 2>/dev/null) || v=$("$REAL" config --system --get "$1" 2>/dev/null)
+  printf '%s' "$v"
+}
+
+keys=$("$REAL" config --list --name-only 2>/dev/null)
+seen='
+'
+while IFS= read -r key; do
+  lower=$(printf '%s' "$key" | tr 'A-Z' 'a-z')
+  neutral=
+  once=
+  case $lower in
+  core.hookspath | core.fsmonitor) continue ;; # set above, for good
+  core.pager) neutral=less ;;
+  core.editor | sequence.editor) neutral=$editor ;;
+  core.sshcommand) neutral=ssh ;;
+  core.askpass | core.gitproxy | core.alternaterefscommand | core.sshvariant) neutral= ;;
+  pager.*) neutral=false ;;
+  filter.*.clean | filter.*.smudge) neutral=cat ;;
+  filter.*.process) neutral= ;;
+  filter.*.required) neutral=false ;;
+  diff.external | diff.*.textconv | diff.*.command) neutral= ;;
+  merge.*.driver | merge.*.recursive | mergetool.*.cmd | mergetool.*.path | difftool.*.cmd | difftool.*.path) neutral= ;;
+  alias.*) neutral=$disabled_alias ;;
+  credential.helper | credential.*.helper) neutral= ;;
+  gpg.program | gpg.*.program) neutral= ;;
+  uploadpack.packobjectshook) neutral= ;;
+  remote.*.uploadpack)
+    neutral=git-upload-pack
+    once=yes
+    ;;
+  remote.*.receivepack)
+    neutral=git-receive-pack
+    once=yes
+    ;;
+  remote.*.vcs)
+    neutral=
+    once=yes
+    ;;
+  trailer.*.cmd | man.*.cmd | browser.*.cmd | web.browser | help.browser | instaweb.browser) neutral= ;;
+  *) continue ;;
+  esac
+  # Each key once, however many values it has.
+  case $seen in *"
+$lower
+"*) continue ;; esac
+  seen="$seen$lower
+"
+  value=$neutral
+  if printf '%s\n' "$trusted_keys" | grep -Fxq -- "$key"; then
+    value=$(trusted_value "$key")
+  fi
+  if [ -n "$once" ]; then
+    first_wins "$key" "$value"
+  else
+    set_override "$key" "$value"
+  fi
+done <<EOF
+$keys
+EOF
+
+export GIT_CONFIG_COUNT=$n
+if [ -n "$first" ]; then
+  # The console's own /etc/gitconfig is still read, through this file.
+  if [ -z "${GIT_CONFIG_NOSYSTEM:-}" ] && [ -r /etc/gitconfig ]; then
+    "$REAL" config --file "$first" --add include.path /etc/gitconfig
+  fi
+  unset GIT_CONFIG_NOSYSTEM
+  GIT_CONFIG_SYSTEM=$first
+  export GIT_CONFIG_SYSTEM
+  "$REAL" "$@"
+  exit $?
+fi
+exec "$REAL" "$@"
