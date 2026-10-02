@@ -51,7 +51,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | --- | --- |
 | Deployment | On-premises, one developer |
 | Hardware | Apple-silicon Mac mini: M6 with 32 GB memory and 512 GB storage recommended; on a budget 16 GB, with 512 GB or with 256 GB plus an external SSD; 24 GB / 512 GB in between (D32, §8) |
-| Runtime | Apple Container (per-container VM isolation); Firecracker microVMs on Linux in the medium term (#85); Proxmox VE and VMware vSphere, and a Windows host with Hyper-V VMs, in the long term (#86, #87); Docker/Podman and other microVMs later; not VirtualBox or WSL2 as runtimes (§13) |
+| Runtime | Apple Container (per-container VM isolation); Firecracker microVMs on Linux in the medium term (#140); Proxmox VE and VMware vSphere, and a Windows host with Hyper-V VMs, in the long term (#140); Docker/Podman and other microVMs later; not VirtualBox or WSL2 as runtimes (§13) |
 | Capacity | **4 concurrent instances realistic, 8 a stretch goal** (see §8) |
 | Overhead | Light operational and resource cost |
 | Access | VPN, temporary SSH, VS Code / JetBrains via SSH; code-server optional and later |

@@ -110,7 +110,7 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 - [ ] OAuth providers, Gitea/Forgejo/GitLab/GitHub adapters
 - [ ] Docker/Podman backends, remote Linux hosts (host worker becomes remote-capable)
 - [ ] Alpine as a first-class console base (#93): a small image and a fast package manager for the human's console (D43); no agent runs there, so musl only affects the human's own tools
-- [ ] Firecracker as a runtime target (#85): a microVM with its own guest kernel per environment, the isolation model of Apple Container, on a Linux host with KVM (remote, or a Linux VM on the Mac if nested virtualization allows it, {{< status unverified >}}). It boots a kernel and a root filesystem rather than an OCI image, so stock and devcontainer images need a conversion or Kata Containers or firecracker-containerd underneath; the spike decides, and the runtime conformance suite is the gate
+- [ ] Firecracker as a runtime target (#140): a microVM with its own guest kernel per environment, the isolation model of Apple Container, on a Linux host with KVM (remote, or a Linux VM on the Mac if nested virtualization allows it, {{< status unverified >}}). It boots a kernel and a root filesystem rather than an OCI image, so stock and devcontainer images need a conversion or Kata Containers or firecracker-containerd underneath; the spike decides, and the runtime conformance suite is the gate
 - [ ] Antigravity adapter in degraded mode (`agy` print mode, §5.2, §12) and additional runners
 - [ ] Out-of-process adapter plugin loader with conformance checks (§5.5, §7.8)
 - [ ] Drone CI with revision-aware feedback
@@ -122,9 +122,9 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 ### Long term
 
 - [ ] An enterprise offering: several developers on one supervisor under the vendors' commercial terms (Team or Enterprise plans, API keys or a cloud provider), with per-user identity and audit. D40's one-human rule is for consumer subscriptions; this needs its own decision (D41)
-- [ ] Proxmox VE and VMware vSphere/ESXi as runtime targets (#86): environments as full VMs on an existing virtualization cluster, each with its own kernel (a Proxmox LXC container shares the host kernel and does not meet §7's bar), driven through their APIs with credentials scoped to one pool or folder, an isolated network per environment with the egress sidecar, and the runtime conformance suite as the gate. A full VM boots far slower than Apple Container's 1.1 s (spike #2), which may call for pooled environments
+- [ ] Proxmox VE and VMware vSphere/ESXi as runtime targets (#140): environments as full VMs on an existing virtualization cluster, each with its own kernel (a Proxmox LXC container shares the host kernel and does not meet §7's bar), driven through their APIs with credentials scoped to one pool or folder, an isolated network per environment with the egress sidecar, and the runtime conformance suite as the gate. A full VM boots far slower than Apple Container's 1.1 s (spike #2), which may call for pooled environments
 - [ ] Alpine as a first-class base for agent environments (#93), once each agent CLI has a musl build that passes `agenttest` and the common toolchains work on musl (Python wheels, Node native modules); the tool store then pins musl builds next to the glibc ones (D19)
-- [ ] A Windows host with Hyper-V VMs (#87): the supervisor on Windows, each environment a Hyper-V VM with its own kernel. A host port, not only a runtime: the Windows counterparts of Homebrew (D28), the `pf` rules (D29), launchd and `0600` secret files are needed, and whether Firecracker (#85) can run inside WSL2 is {{< status unverified >}}
+- [ ] A Windows host with Hyper-V VMs (#140): the supervisor on Windows, each environment a Hyper-V VM with its own kernel. A host port, not only a runtime: the Windows counterparts of Homebrew (D28), the `pf` rules (D29), launchd and `0600` secret files are needed, and whether Firecracker (#140) can run inside WSL2 is {{< status unverified >}}
 - [ ] Other microVM/VM platforms, Kubernetes where useful
 - [ ] Multiple hosts and placement policies
 - [ ] Wider forge/CI coverage
@@ -133,6 +133,6 @@ Built CLI first (D12): the slice is the core loop through `whr`; the web UI and 
 
 - Native iOS and Android apps. The installable PWA (release 1) is the mobile client; the JSON API stays the contract for any client.
 - VirtualBox as a runtime. One VM per environment would meet §7, but it adds little next to Apple Container on the Mac and Firecracker, Proxmox or VMware on Linux; it is driven only through `VBoxManage`, boots full VMs slowly, and its shared folders are slow where spike #40 already found bind mounts costly. Whether it runs on Apple-silicon Macs is {{< status unverified >}}.
-- WSL2 as a runtime. Its distributions share one utility VM and one Linux kernel, so environments would be separated by namespaces only, which fails §7's bar of a kernel per environment. Windows is a host platform instead (#87).
+- WSL2 as a runtime. Its distributions share one utility VM and one Linux kernel, so environments would be separated by namespaces only, which fails §7's bar of a kernel per environment. Windows is a host platform instead (#140).
 
 Phases are proposals, not a schedule.
