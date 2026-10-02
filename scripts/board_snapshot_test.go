@@ -40,6 +40,10 @@ func newBoard(t *testing.T) board {
 echo "$*" >> "` + b.log + `"
 sleep 0.3
 if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exit 1; fi
+case "$1 $2" in
+"project item-edit" | "project item-add") exit 0 ;;
+"issue view") echo "A new title"; exit 0 ;;
+esac
 cat "` + data + `"
 `
 	if err := os.WriteFile(filepath.Join(b.bin, "gh"), []byte(gh), 0o755); err != nil { //nolint:gosec // a test fake
@@ -235,5 +239,199 @@ func TestBoardSnapshotRejectsBadEnv(t *testing.T) {
 	}
 	if b.calls(t) != 0 {
 		t.Fatal("a rejected setting must not call gh")
+	}
+}
+
+func (b board) lines(t *testing.T) []string {
+	t.Helper()
+	data, err := os.ReadFile(b.log) //nolint:gosec // a test path
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Split(strings.TrimSpace(string(data)), "\n")
+}
+
+func (b board) card(t *testing.T, n string) string {
+	t.Helper()
+	out, se, err := b.run(t, "card", n)
+	if err != nil {
+		t.Fatalf("card %s: %v %s", n, err, se)
+	}
+	return strings.TrimSpace(out)
+}
+
+func TestBoardSnapshotMovePatchesCache(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if _, se, err := b.run(t, "move", "20", "In review"); err != nil {
+		t.Fatalf("move: %v %s", err, se)
+	}
+	if _, se, err := b.run(t, "session", "20", "wh/review"); err != nil {
+		t.Fatalf("session: %v %s", err, se)
+	}
+	if _, se, err := b.run(t, "priority", "20", "P3"); err != nil {
+		t.Fatalf("priority: %v %s", err, se)
+	}
+	if got := b.card(t, "20"); !strings.HasPrefix(got, "#20\tIn review\twh/review\tP3\t") {
+		t.Fatalf("card = %q", got)
+	}
+	l := b.lines(t)
+	want := []string{
+		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Status --value In review",
+		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Session --value wh/review",
+		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Priority --value P3",
+	}
+	if len(l) != 4 || strings.Join(l[1:], "\n") != strings.Join(want, "\n") {
+		t.Fatalf("gh calls = %q", l)
+	}
+	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	var x, y struct {
+		FetchedAt int64 `json:"fetched_at"`
+	}
+	_ = json.Unmarshal(before, &x)
+	_ = json.Unmarshal(after, &y)
+	if x.FetchedAt != y.FetchedAt {
+		t.Fatal("a move changed fetched_at")
+	}
+}
+
+func TestBoardSnapshotFailedMoveKeepsCache(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	for _, args := range [][]string{{"move", "20", "Done"}, {"session", "20", "Werner"}, {"priority", "20", "P1"}, {"add", "99"}} {
+		_, se, err := b.runEnv(t, []string{"FAKE_GH_FAIL=1"}, args...)
+		if err == nil || se == "" {
+			t.Fatalf("%v: err %v, stderr %q; want a failure with a message", args, err, se)
+		}
+	}
+	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if string(after) != string(before) {
+		t.Fatal("a failed write changed the cache")
+	}
+}
+
+func TestBoardSnapshotConcurrentMoves(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for _, n := range []string{"10", "20", "30", "40"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, se, err := b.run(t, "move", n, "Blocked"); err != nil {
+				t.Errorf("move %s: %v %s", n, err, se)
+			}
+		}()
+	}
+	wg.Wait()
+	for _, n := range []string{"10", "20", "30", "40"} {
+		if got := b.card(t, n); !strings.Contains(got, "\tBlocked\t") {
+			t.Errorf("card %s = %q, want Blocked", n, got)
+		}
+	}
+}
+
+func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
+	b := newBoard(t)
+	_, se, err := b.run(t, "move", "20", "Done")
+	if err != nil || !strings.Contains(se, "cache") {
+		t.Fatalf("err %v, stderr %q", err, se)
+	}
+	if _, err := os.Stat(b.snap); err == nil {
+		t.Fatal("a move created a cache")
+	}
+	if len(b.lines(t)) != 1 {
+		t.Fatalf("gh calls = %q, want only the edit", b.lines(t))
+	}
+	// A stale cache is not patched either.
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	b.age(t, 400)
+	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if _, _, err := b.run(t, "move", "20", "Done"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if string(after) != string(before) {
+		t.Fatal("a stale cache was patched")
+	}
+}
+
+func TestBoardSnapshotAdd(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	if _, se, err := b.run(t, "add", "77"); err != nil {
+		t.Fatalf("add: %v %s", err, se)
+	}
+	l := b.lines(t)
+	if len(l) != 3 ||
+		l[1] != "project item-add 6 --owner wstein --url https://github.com/wstein/workharbor/issues/77" ||
+		l[2] != "issue view 77 --json title -q .title" {
+		t.Fatalf("gh calls = %q", l)
+	}
+	if got := b.card(t, "77"); !strings.HasPrefix(got, "#77\t") || !strings.HasSuffix(got, "A new title") {
+		t.Fatalf("card = %q", got)
+	}
+}
+
+func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	base := b.calls(t)
+	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	bad := [][]string{
+		{"move", "", "Done"},
+		{"move", "0", "Done"},
+		{"move", "1 2", "Done"},
+		{"move", "12\n3", "Done"},
+		{"move", "$(id)", "Done"},
+		{"move", "12;id", "Done"},
+		{"move", "-1", "Done"},
+		{"move", "12", "Merged"},
+		{"move", "12", "Done; id"},
+		{"move", "12", "$(id)"},
+		{"move", "12", "Done\nTodo"},
+		{"move", "12", "done"},
+		{"move", "12"},
+		{"move"},
+		{"session", "12", "wh/nobody"},
+		{"session", "12", "wh/platform extra"},
+		{"session", "12", "`id`"},
+		{"priority", "12", "P4"},
+		{"priority", "12", "P1 "},
+		{"priority", "12", "P1\nP2"},
+		{"priority", "x", "P1"},
+		{"add", "12 13"},
+		{"add", "$(id)"},
+		{"add", ""},
+		{"add"},
+	}
+	for _, args := range bad {
+		if _, _, err := b.run(t, args...); err == nil {
+			t.Errorf("%q accepted", args)
+		}
+	}
+	if b.calls(t) != base {
+		t.Fatalf("a rejected value reached gh: %q", b.lines(t))
+	}
+	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if string(after) != string(before) {
+		t.Fatal("a rejected value changed the cache")
 	}
 }

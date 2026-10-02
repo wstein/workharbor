@@ -4,6 +4,17 @@
 #   board-snapshot.sh [--refresh]            print the snapshot JSON
 #   board-snapshot.sh queue <lane> [--refresh]  the lane's Todo cards, P1 first, then by issue number
 #   board-snapshot.sh card <number> [--refresh] one card: number, status, session, priority, title
+#   board-snapshot.sh move <number> <status>   set a card's Status
+#   board-snapshot.sh session <number> <lane>  set a card's Session
+#   board-snapshot.sh priority <number> <P1|P2|P3>  set a card's Priority
+#   board-snapshot.sh add <number>             add an issue to the board
+#
+# The four writes run `gh project item-edit` / `item-add` by the issue's URL
+# and make no board query. Only when GitHub accepts the write is that one card
+# patched in the cache (under the lock, fetched_at unchanged: a write does not
+# make old data fresh). A failed write leaves the cache untouched and exits 1.
+# With no cache, or a stale one, the write still happens and the cache is left
+# alone. Values are checked against fixed lists before any gh call.
 #
 # The snapshot is {"fetched_at": <unix>, "items": [...]} in one file outside the
 # repository. While it is younger than WHR_BOARD_MAX_AGE seconds (default 300)
@@ -49,7 +60,30 @@ queue) [ -n "${args[1]:-}" ] || die "usage: board-snapshot.sh queue <lane>" ;;
 card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
   ;;
-*) die "unknown mode $mode (print, queue <lane>, card <number>)" ;;
+move | session | priority | add)
+  case ${args[1]:-} in '' | *[!0-9]* | 0*) die "usage: board-snapshot.sh $mode <number> ..." ;; esac
+  [ ${#args[1]} -le 9 ] || die "the issue number is too long"
+  case $mode in
+  move)
+    case ${args[2]:-} in
+    "Todo" | "In progress" | "Blocked" | "In review" | "Ready to push" | "Done") ;;
+    *) die "status must be one of: Todo, In progress, Blocked, In review, Ready to push, Done" ;;
+    esac
+    ;;
+  session)
+    case ${args[2]:-} in
+    "wh/design" | "wh/platform" | "wh/runtime" | "wh/review" | "wh/verify" | "wh/docs" | "wh/spikes" | "wh/desk" | "Werner") ;;
+    *) die "lane must be one of: wh/design, wh/platform, wh/runtime, wh/review, wh/verify, wh/docs, wh/spikes, wh/desk, Werner" ;;
+    esac
+    ;;
+  priority)
+    case ${args[2]:-} in P1 | P2 | P3) ;; *) die "priority must be one of: P1, P2, P3" ;; esac
+    ;;
+  add) [ -z "${args[2]:-}" ] || die "usage: board-snapshot.sh add <number>" ;;
+  esac
+  [ "$mode" = add ] || [ ${#args[@]} -eq 3 ] || die "usage: board-snapshot.sh $mode <number> <value>"
+  ;;
+*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add)" ;;
 esac
 
 dir=$(dirname "$file")
@@ -108,6 +142,58 @@ lock_take() {
   done
   date +%s >"$lock/ts"
 }
+
+# patch rewrites the cache with one jq filter ($@ are its jq arguments), only
+# when the cache is fresh, under the lock, re-reading the file under the lock.
+patch() {
+  local filter=$1 tmp
+  shift
+  if ! lock_take; then
+    echo "board-snapshot: the write is done, but the cache lock was busy: the cache is not patched (--refresh shows it)" >&2
+    return 0
+  fi
+  if fresh; then
+    tmp=$(mktemp "$dir/.board.XXXXXX")
+    if jq "$@" "$filter" "$file" >"$tmp"; then
+      chmod 600 "$tmp"
+      mv "$tmp" "$file"
+    else
+      rm -f "$tmp"
+      echo "board-snapshot: the write is done, but the cache could not be patched (--refresh shows it)" >&2
+    fi
+  else
+    echo "board-snapshot: the write is done; there is no fresh cache, so none was patched" >&2
+  fi
+  rm -rf "$lock"
+}
+
+case $mode in
+move | session | priority | add)
+  n=${args[1]}
+  url=https://github.com/wstein/workharbor/issues/$n
+  case $mode in
+  move) field=Status key=status ;;
+  session) field=Session key=session ;;
+  priority) field=Priority key=priority ;;
+  esac
+  if [ "$mode" = add ]; then
+    gh project item-add 6 --owner wstein --url "$url" >/dev/null || die "GitHub refused the add; the cache is unchanged"
+    if title=$(gh issue view "$n" --json title -q .title) && [ -n "$title" ]; then
+      patch '.items |= (if any(.[]; .number == $n) then . else . + [{number: $n, title: $title, status: null, session: null, priority: null, labels: [], type: "Issue", url: $url}] end)' \
+        --argjson n "$n" --arg title "$title" --arg url "$url"
+    else
+      echo "board-snapshot: the card is added, but its title could not be read: the cache is not patched" >&2
+    fi
+  else
+    value=${args[2]}
+    gh project item-edit 6 --owner wstein --url "$url" --field "$field" --value "$value" >/dev/null ||
+      die "GitHub refused the write; the cache is unchanged"
+    patch '.items |= map(if .number == $n then .[$k] = $v else . end)' \
+      --argjson n "$n" --arg k "$key" --arg v "$value"
+  fi
+  exit 0
+  ;;
+esac
 
 if [ "$refresh" = 1 ] || ! fresh; then
   started=$(date +%s)
