@@ -265,3 +265,52 @@ func TestTheUntrustedMarkOfATaskIsStored(t *testing.T) {
 		t.Error("an old task is untrusted")
 	}
 }
+
+func TestSwapWorkspaceEnvIsACompareAndSetThatWritesItsEventWithIt(t *testing.T) {
+	s := openTemp(t)
+	addWorkspace(t, s, "w1", "docs-ws", "/Volumes/ssd/ws/docs")
+	if err := s.SetWorkspaceEnv(bg, "w1", "e1"); err != nil {
+		t.Fatal(err)
+	}
+	ev := domain.NewWorkspaceRebuiltEvent(domain.WorkspaceRebuilt{ID: "w1", Name: "docs-ws", Actor: "werner", OldEnv: "e1", NewEnv: "e2"}, wsNow)
+	if err := s.SwapWorkspaceEnv(bg, "w1", "e1", "e2", ev); err != nil {
+		t.Fatal(err)
+	}
+	if w, _ := s.Workspace(bg, "w1"); w.EnvID != "e2" {
+		t.Errorf("env = %q, want e2", w.EnvID)
+	}
+	evs, err := s.EventsSince(bg, domain.WorkspaceStream("w1"), 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rebuilt int
+	for _, e := range evs {
+		if e.Kind == domain.EventWorkspaceRebuilt {
+			rebuilt++
+		}
+	}
+	if rebuilt != 1 {
+		t.Errorf("%d rebuild events, want one", rebuilt)
+	}
+	// A swap from an environment the workspace no longer runs in changes nothing
+	// and writes no event: two rebuilds cannot both win.
+	stale := domain.NewWorkspaceRebuiltEvent(domain.WorkspaceRebuilt{ID: "w1", Name: "docs-ws", OldEnv: "e1", NewEnv: "e3"}, wsNow)
+	err = s.SwapWorkspaceEnv(bg, "w1", "e1", "e3", stale)
+	var c *domain.ConflictError
+	if !errors.As(err, &c) {
+		t.Errorf("a stale swap: %v, want a conflict", err)
+	}
+	if w, _ := s.Workspace(bg, "w1"); w.EnvID != "e2" {
+		t.Errorf("a stale swap changed the environment to %q", w.EnvID)
+	}
+	evs, _ = s.EventsSince(bg, domain.WorkspaceStream("w1"), 0, 10)
+	rebuilt = 0
+	for _, e := range evs {
+		if e.Kind == domain.EventWorkspaceRebuilt {
+			rebuilt++
+		}
+	}
+	if rebuilt != 1 {
+		t.Errorf("a refused swap wrote an event: %d rebuild events", rebuilt)
+	}
+}

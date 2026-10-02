@@ -42,6 +42,7 @@ const (
 	EventPurged             EventKind = "store.purged"
 	EventWorkspaceAdded     EventKind = "workspace.added"
 	EventWorkspaceRemoved   EventKind = "workspace.removed"
+	EventWorkspaceRebuilt   EventKind = "workspace.rebuilt"
 	EventAgentAdded         EventKind = "agent.added"
 	EventAgentRemoved       EventKind = "agent.removed"
 	// EventInstruction is a message the human sent to a run, with how it was

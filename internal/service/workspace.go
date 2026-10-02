@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wstein/workharbor/internal/config"
@@ -85,6 +86,13 @@ type WorkspaceConfig struct {
 type Workspaces struct {
 	svc *Service
 	cfg WorkspaceConfig
+
+	// mu guards rebuilding: the workspaces whose environment is being replaced
+	// (Rebuild). A run is not started in one, and a rebuild is not started in a
+	// workspace that has a live run, under the same lock, so the two cannot pass
+	// each other's check.
+	mu         sync.Mutex
+	rebuilding map[domain.ID]bool
 }
 
 // NewWorkspaces returns the workspace operations of a service.
@@ -183,7 +191,21 @@ func (w *Workspaces) Create(ctx context.Context, req CreateRequest) (domain.Work
 // provision makes the workspace's environment, with the folder mounted
 // read-write, and starts it.
 func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string, error) {
+	prep, err := w.prepareSpec(ctx, ws, "")
+	if err != nil {
+		return "", err
+	}
+	return w.bringUp(ctx, prep, false)
+}
+
+// prepareSpec builds and checks the spec of the workspace's environment: the
+// image the repository's default branch resolves to now (built if it needs
+// building, which can take minutes), the folder mounted read-write, and the egress
+// hosts the repository has been allowed. netSuffix is added to the network's name,
+// for a second environment that exists beside the first for a moment (a rebuild).
+func (w *Workspaces) prepareSpec(ctx context.Context, ws domain.Workspace, netSuffix string) (runtime.PreparedSpec, error) {
 	spec := w.cfg.Spec(ws)
+	spec.Network.Name += netSuffix
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: ws.Path, Target: WorkspaceMount})
 	// A repository with its own environment (a devcontainer.json or a Dockerfile)
 	// runs its own image, built from the default branch, with its containerEnv;
@@ -195,12 +217,12 @@ func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string
 		if re.Image != nil {
 			var err error
 			if image, err = re.Image(ctx); err != nil {
-				return "", fmt.Errorf("build the environment of %s: %w", ws.Repo, err)
+				return runtime.PreparedSpec{}, fmt.Errorf("build the environment of %s: %w", ws.Repo, err)
 			}
 		}
 		var err error
 		if spec, err = re.Spec(spec, image); err != nil {
-			return "", fmt.Errorf("the environment of %s: %w", ws.Repo, err)
+			return runtime.PreparedSpec{}, fmt.Errorf("the environment of %s: %w", ws.Repo, err)
 		}
 	}
 	if spec.Egress != nil {
@@ -208,16 +230,20 @@ func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string
 		// other workspace of it is asked again.
 		allowed, err := w.svc.EgressAllow(ctx, ws.Repo)
 		if err != nil {
-			return "", err
+			return runtime.PreparedSpec{}, err
 		}
 		egress := *spec.Egress
 		egress.Allow = unionHosts(egress.Allow, allowed)
 		spec.Egress = &egress
 	}
-	prep, err := w.cfg.Prepare(spec)
-	if err != nil {
-		return "", err
-	}
+	return w.cfg.Prepare(spec)
+}
+
+// bringUp provisions, starts and checks the environment of a prepared spec. A
+// failure takes back what it made; the volumes it made go too, unless
+// keepVolumes says they were already there (a rebuild reuses the home and build
+// volumes, which hold the agents' work).
+func (w *Workspaces) bringUp(ctx context.Context, prep runtime.PreparedSpec, keepVolumes bool) (string, error) {
 	env, err := w.svc.rt.Provision(ctx, prep)
 	if err != nil {
 		return "", err
@@ -233,14 +259,16 @@ func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string
 		_ = w.svc.rt.Delete(bg, env)
 		return "", err
 	}
-	if err := w.checkGit(ctx, env, spec.Image); err != nil {
+	if err := w.checkGit(ctx, env, prep.Spec().Image); err != nil {
 		// Like Create's own undo: a volume outlives its environment (§4.4).
 		bg := context.WithoutCancel(ctx)
 		res, _ := w.svc.rt.Resources(bg, env)
 		_ = w.svc.rt.Stop(bg, env)
 		_ = w.svc.rt.Delete(bg, env)
-		for _, v := range res.Volumes {
-			_ = w.svc.rt.RemoveVolume(bg, v)
+		if !keepVolumes {
+			for _, v := range res.Volumes {
+				_ = w.svc.rt.RemoveVolume(bg, v)
+			}
 		}
 		return "", err
 	}
@@ -439,18 +467,17 @@ func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace)
 	return w.svc.waitReady(ctx, ws.EnvID)
 }
 
-// launch starts a run on a task aggregate that has none live: the run is added,
-// saved with the one-run check in one transaction, and the agent is started in
-// its worktree and attached. If the agent cannot be started the run fails into
-// a retry-or-cancel Decision, so the environment is free again.
-func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws domain.Workspace, a domain.Agent, run domain.ID, prompt string) error {
-	r := domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}
-	if err := agg.StartRun(r); err != nil {
-		return err
+// saveStartingRun saves the task with its new run, if the environment is free and
+// is not being rebuilt: the check and the save are one change under the lock a
+// rebuild takes, so a rebuild never starts while a run is being saved, and a run is
+// never saved while one is under way.
+func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, agg *domain.TaskAggregate) ([]domain.Event, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.rebuilding[ws.ID] {
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: start the task when it is done", ws.Name)
 	}
-	task := agg.Task().ID
 	var saved []domain.Event
-	sl := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
 	err := w.svc.store.Update(ctx, func(tx *store.Tx) error {
 		live, err := tx.LiveRuns(ctx, ws.EnvID)
 		if err != nil {
@@ -462,6 +489,21 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 		saved, err = tx.SaveTask(ctx, agg)
 		return err
 	})
+	return saved, err
+}
+
+// launch starts a run on a task aggregate that has none live: the run is added,
+// saved with the one-run check in one transaction, and the agent is started in
+// its worktree and attached. If the agent cannot be started the run fails into
+// a retry-or-cancel Decision, so the environment is free again.
+func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws domain.Workspace, a domain.Agent, run domain.ID, prompt string) error {
+	r := domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}
+	if err := agg.StartRun(r); err != nil {
+		return err
+	}
+	task := agg.Task().ID
+	sl := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
+	saved, err := w.saveStartingRun(ctx, ws, agg)
 	if err != nil {
 		w.svc.end(run, sl)
 		return err

@@ -68,6 +68,27 @@ type WorkspaceAdded struct {
 	Integration string `json:"integration,omitempty"`
 }
 
+// WorkspaceRebuilt is the payload of EventWorkspaceRebuilt: a workspace's
+// environment was replaced by one made from the image its repository resolves to
+// now (issue #128). The images are given by reference and by the digest the runtime
+// recorded, so the audit says which image ran before and which runs now.
+type WorkspaceRebuilt struct {
+	ID        ID     `json:"id"`
+	Name      string `json:"name"`
+	Actor     string `json:"actor"`
+	OldEnv    ID     `json:"old_env"`
+	NewEnv    ID     `json:"new_env"`
+	OldImage  string `json:"old_image"`
+	NewImage  string `json:"new_image"`
+	OldDigest string `json:"old_digest,omitempty"`
+	NewDigest string `json:"new_digest,omitempty"`
+}
+
+// NewWorkspaceRebuiltEvent is the audit event of a rebuild.
+func NewWorkspaceRebuiltEvent(r WorkspaceRebuilt, now time.Time) Event {
+	return newEvent(WorkspaceStream(r.ID), EventWorkspaceRebuilt, r, now)
+}
+
 // AgentAdded is the payload of EventAgentAdded and EventAgentRemoved.
 type AgentAdded struct {
 	ID          ID     `json:"id"`

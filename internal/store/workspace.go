@@ -97,6 +97,24 @@ func (s *Store) SetWorkspaceEnv(ctx context.Context, id, env domain.ID) error {
 	return nil
 }
 
+// SwapWorkspaceEnv replaces the environment a workspace runs in and appends the
+// event, in one change: it is the moment a rebuild takes effect. It is a
+// compare-and-set on the old environment, so a workspace that changed meanwhile is
+// a conflict and nothing is written.
+func (s *Store) SwapWorkspaceEnv(ctx context.Context, id, oldEnv, newEnv domain.ID, ev domain.Event) error {
+	return s.Update(ctx, func(tx *Tx) error {
+		res, err := tx.tx.ExecContext(ctx, `UPDATE workspaces SET env_id = ? WHERE id = ? AND env_id = ?`, string(newEnv), string(id), string(oldEnv))
+		if err != nil {
+			return fmt.Errorf("store: swap workspace environment: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return domain.NewConflict(RuleExists, "workspace %s does not run in environment %s any more", id, oldEnv)
+		}
+		_, err = tx.Append(ctx, ev)
+		return err
+	})
+}
+
 // RemoveWorkspace deletes a workspace record and appends the event. A workspace
 // that still has agents is a conflict: the human removes them first.
 func (s *Store) RemoveWorkspace(ctx context.Context, w domain.Workspace, ev domain.Event) error {
