@@ -5,7 +5,17 @@ weight: 1
 toc: true
 ---
 
-A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design/_index.md). A setup wizard (`whr setup host` as the administrator, then `whr setup` as `whr`, design D46, issue #104) is coming that checks each step, shows the commands and runs them after you confirm; until it exists, follow the steps by hand, and they stay the reference afterwards.
+A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design/_index.md).
+
+## The quick way: `whr setup` (provisional)
+
+Two commands do most of this page, and the steps below stay the reference for what they do. Both check a step first, show the exact commands of its fix, run them only after you answer `y`, and check again; a step whose check passes does nothing. They need a terminal, and `--dry-run` runs the read-only checks for real and prints every fix without running any. `--only <step>` and `--from <step>` pick steps (the shell completes their names), and the steps marked optional run only when named.
+
+1. **As your administrator account, not `root` and not `whr`:** `whr setup host`. It covers steps 2 to 5 and 8: the standard user `whr`, power settings, the firewall, SSH with keys only, FileVault (guided, because enabling it prints a recovery key whr must not see), Homebrew and the Brewfile with `brew pin container`, and the `/opt/whr` prefix. Every privileged command runs as its own `sudo` command, shown first; it asks for your password once (`sudo -v`) and never keeps it alive. A file that must be root's is written to a private temporary file and installed with `sudo install`. Screen Sharing and Tailscale are guided and optional.
+2. **Install whr** from a draft release (step 13, `make install-release`): the wizard refuses a `whr` that is not in an admin-owned prefix (`/opt/whr`, or Homebrew's) or that sits in a git working tree.
+3. **As `whr`, in its desktop session (Terminal on the Mac, or over Screen Sharing), not over SSH:** `whr setup`. It covers steps 6, 12 and 13: the container kernel and system, the standard-user check, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo), the base configuration, `whr github app create`, the configuration's GitHub App keys (shown as a diff and written after a `y`, keeping every key it does not know), the tool store and `whr service install`.
+
+Secrets are only ever generated or typed without echo, written `0600` with an exclusive create, never overwritten and never printed. What the wizard cannot do (enabling FileVault, the App's confirm click and installation, the ruleset check, signing in to Tailscale) it says, opens the right System Settings pane or link where it can, and checks afterwards. All of the wizard's commands and the output formats it reads are {{< status unverified >}} until it has set up the reference Mac mini (issue #73).
 
 ## 1. Hardware and macOS
 
