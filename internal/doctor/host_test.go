@@ -123,6 +123,7 @@ func TestOffAMacTheStepsAreNotVerified(t *testing.T) {
 }
 
 func TestEveryFixIsArgvAndRootOwnedFilesGoThroughInstall(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // the private setup directory lies in the home
 	d := hostDeps(scripted{})
 	d.Whr = "/opt/whr/bin/whr"
 	for _, c := range Checks(d) {
@@ -360,5 +361,53 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	}
 	if len(Shared(all)) == 0 || len(Shared(all))+len(Steps(all, PhaseHost))+len(Steps(all, PhaseUser)) != len(all) {
 		t.Error("every check is shared or a step of one phase")
+	}
+}
+
+// The file root installs is never written where another account could have
+// prepared the directory or a link: a directory that is loose or a link is
+// refused, and a link in place of the file is replaced, not followed.
+func TestWriteTempRefusesADirectoryOthersControl(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := setupDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // a test making the directory too open
+		t.Fatal(err)
+	}
+	if err := writeTemp(sshdTemp(), "x"); err == nil {
+		t.Error("a 0755 directory was accepted")
+	}
+	if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // a directory, 0700 is private
+		t.Fatal(err)
+	}
+	victim := filepath.Join(home, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, sshdTemp()); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTemp(sshdTemp(), "new"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "keep" { //nolint:gosec // a file the test made
+		t.Errorf("the link was followed: victim now %q", b)
+	}
+	if fi, err := os.Lstat(sshdTemp()); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 {
+		t.Errorf("the temp file is not a fresh 0600 file: %v %v", fi, err)
+	}
+
+	other := filepath.Join(home, "elsewhere")
+	if err := os.Mkdir(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTemp(sshdTemp(), "x"); err == nil {
+		t.Error("a linked directory was accepted")
 	}
 }

@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/launchd"
@@ -289,7 +291,19 @@ func hostSteps(d Deps) []Check {
 				if !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
 					return Fail, d.prefix() + " is not a directory only its owner can write"
 				}
-				return OK, d.prefix() + " exists and only its owner writes it"
+				for _, p := range []string{d.prefix(), filepath.Join(d.prefix(), "bin"), filepath.Join(d.prefix(), "bin", "whr")} {
+					own, err := ownedByWhr(p)
+					if err != nil {
+						continue // not installed yet
+					}
+					if own {
+						return Fail, p + " belongs to " + WhrUser + ", who could then replace the supervisor: it must belong to the administrator"
+					}
+					if fi, err := os.Lstat(p); err == nil && fi.Mode().Perm()&0o022 != 0 {
+						return Fail, p + " can be written by others than its owner"
+					}
+				}
+				return OK, d.prefix() + " exists and only the administrator writes it"
 			},
 			Fix: &Fix{
 				Cmds:  []Cmd{{Sudo: true, Argv: []string{"install", "-d", "-o", d.User, "-g", "admin", "-m", "755", d.prefix()}}},
@@ -328,19 +342,84 @@ func orNone(s string) string {
 	return s
 }
 
-// sshdTemp is where the sshd settings wait before sudo install copies them: a
-// 0600 file in a 0700 directory of the administrator.
-func sshdTemp() string { return filepath.Join(os.TempDir(), "whr-setup", "100-whr.conf") }
+// setupDir is where files wait before a command reads them: a 0700 directory
+// of the administrator in their own home, never the shared temporary directory,
+// where another account could create it first and swap a file that root then
+// installs.
+func setupDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(home) {
+		home = "/nonexistent" // writeTemp then fails; nothing is written elsewhere
+	}
+	return filepath.Join(home, "Library", "Caches", "whr-setup")
+}
 
-func brewfilePath() string { return filepath.Join(os.TempDir(), "whr-setup", "Brewfile") }
+// sshdTemp is where the sshd settings wait before sudo install copies them.
+func sshdTemp() string { return filepath.Join(setupDir(), "100-whr.conf") }
 
-// writeTemp writes a file the next command reads, in a directory only this user
-// can enter. It replaces an earlier copy: it holds no secret.
+func brewfilePath() string { return filepath.Join(setupDir(), "Brewfile") }
+
+// writeTemp writes a file the next command reads. The directory must be a real
+// directory of this user with mode 0700, so no other account can enter it, and
+// the file is created anew, never through a symbolic link. It holds no secret,
+// so an earlier copy is replaced.
 func writeTemp(path, content string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(content), 0o600)
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	if err := privateDir(dir); err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600) //nolint:gosec // the path is the private setup directory checked above
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// privateDir refuses a directory that is a link, belongs to another user or
+// can be entered by anyone else.
+func privateDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	switch {
+	case !fi.IsDir():
+		return fmt.Errorf("%s is not a directory", dir)
+	case !ok || int(st.Uid) != os.Getuid():
+		return fmt.Errorf("%s does not belong to you", dir)
+	case fi.Mode().Perm() != 0o700:
+		return fmt.Errorf("%s has mode %o, want 700", dir, fi.Mode().Perm())
+	}
+	return nil
+}
+
+// ownedByWhr reports whether a path belongs to the workharbor user, who must
+// never own what runs the supervisor (D24).
+func ownedByWhr(path string) (bool, error) {
+	u, err := user.Lookup(WhrUser)
+	if err != nil {
+		return false, nil // no such user yet: nothing it could own
+	}
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && strconv.FormatUint(uint64(st.Uid), 10) == u.Uid, nil
 }
 
 // WriteSecret writes a secret file: mode 0600, exclusive create, so it never
