@@ -22,6 +22,7 @@ import (
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
+	"github.com/wstein/workharbor/internal/passkey"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
@@ -124,9 +125,21 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	srv, err := api.New(be, api.Options{
-		Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) },
-	})
+	// Passkeys (D45) are bound to whr's HTTPS name, so they need public_url.
+	var keys *passkey.Service
+	if origin, host := d.Config.PublicOrigin(); origin != "" {
+		if keys, err = passkey.New(passkey.Config{RPID: host, Origin: origin, DisplayName: "workharbor", Now: d.Clock.Now}, d.Store); err != nil {
+			return err
+		}
+	} else {
+		logf("passkeys are off: set public_url to whr's https name to enrol one (D45)")
+	}
+	apiOpt := api.Options{Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
+	webOpt := web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }}
+	if keys != nil { // a typed nil would look like a configured interface
+		apiOpt.Passkeys, webOpt.Passkeys = keys, keys
+	}
+	srv, err := api.New(be, apiOpt)
 	if err != nil {
 		return err
 	}
@@ -168,7 +181,7 @@ func Run(ctx context.Context, d Deps) error {
 		}
 	}()
 
-	ui, err := web.New(be, web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }})
+	ui, err := web.New(be, webOpt)
 	if err != nil {
 		return err
 	}

@@ -744,7 +744,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 18 {
+	if got := Routes(); len(got) != 21 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

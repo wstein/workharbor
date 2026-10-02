@@ -1222,6 +1222,208 @@
           }
         }
       }
+    },
+    "/v1/passkeys": {
+      "get": {
+        "operationId": "listPasskeys",
+        "summary": "The enrolled passkeys",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the passkeys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Passkey"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passkeys/enrolments": {
+      "post": {
+        "operationId": "newEnrolment",
+        "summary": "Make a one-time link that enrols a passkey",
+        "description": "For the host's CLI only: the web UI cannot enrol a passkey. The link works once, for 5 minutes, and carries a secret token, so it is not stored for replay and the call takes no idempotency key.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "the link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "url",
+                        "expires_at"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "expires_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passkeys/{passkey}": {
+      "delete": {
+        "operationId": "revokePasskey",
+        "summary": "Revoke a passkey",
+        "description": "By its ID or a unique prefix. Revoking the last passkey turns the web sign-in back to the API token.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "passkey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1783,6 +1985,38 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "Passkey": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "backed_up",
+          "backup_eligible"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_used": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "backed_up": {
+            "type": "boolean"
+          },
+          "backup_eligible": {
+            "type": "boolean"
           }
         }
       }

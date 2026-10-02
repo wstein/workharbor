@@ -83,6 +83,8 @@ type Options struct {
 	// OnError hears an internal error, which the client only sees as a generic
 	// message. Optional.
 	OnError func(error)
+	// Passkeys serves the host's passkey commands (D45). Nil leaves them off.
+	Passkeys Passkeys
 }
 
 // Server is the API. Its Handler is the whole thing.
@@ -160,6 +162,9 @@ var routes = []route{
 	{http.MethodPost, "/v1/workspaces/{workspace}/agents", (*Server).addAgent},
 	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
 	{http.MethodPost, "/v1/workspaces/{workspace}/open", (*Server).openCopy},
+	{http.MethodGet, "/v1/passkeys", (*Server).listPasskeys},
+	{http.MethodPost, "/v1/passkeys/enrolments", (*Server).newEnrolment},
+	{http.MethodDelete, "/v1/passkeys/{passkey}", (*Server).revokePasskey},
 }
 
 // Routes returns the "METHOD path" of every route, for the contract test.

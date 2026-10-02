@@ -108,10 +108,29 @@ type GitHub struct {
 	APIURL string `json:"api_url,omitempty"`
 }
 
+// PublicOrigin returns whr's HTTPS origin (https://host[:port]) and its host name,
+// or empty strings when no public URL is configured. It uses public_url and then
+// board.public_url.
+func (c *Config) PublicOrigin() (origin, host string) {
+	raw := c.PublicURL
+	if raw == "" && c.Board != nil {
+		raw = c.Board.PublicURL
+	}
+	u, err := url.Parse(raw)
+	if raw == "" || err != nil || u.Scheme != "https" || u.Hostname() == "" {
+		return "", ""
+	}
+	return "https://" + u.Host, u.Hostname()
+}
+
 // Config is the whole file.
 type Config struct {
 	// Listen is the address `whr serve` binds: a loopback address (D29).
-	Listen       string       `json:"listen"`
+	Listen string `json:"listen"`
+	// PublicURL is whr's HTTPS name behind the forwarder (D29), for example
+	// https://whr.tailnet.example. Passkeys (D45) are bound to its host name, so
+	// they are off without it; board.public_url is used when this is empty.
+	PublicURL    string       `json:"public_url,omitempty"`
 	Repositories []Repository `json:"repositories"`
 	Roots        Roots        `json:"roots"`
 	GitHub       GitHub       `json:"github"`
@@ -397,6 +416,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.PublicURL != "" {
+		if u, err := url.Parse(c.PublicURL); err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || strings.Trim(u.Path, "/") != "" || u.RawQuery != "" || u.Fragment != "" {
+			add("public_url: %q must be an https address without a path", c.PublicURL)
+		}
+	}
 	if b := c.Board; b != nil {
 		if !boardOwnerRE.MatchString(b.Owner) {
 			add("board.owner: %q is not a GitHub login", b.Owner)
