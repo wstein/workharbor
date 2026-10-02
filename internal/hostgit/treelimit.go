@@ -26,6 +26,17 @@ const (
 	// MaxTopicCommits bounds the commits a prepare replays: each one is checked out
 	// by the rebase, so each one's tree is checked.
 	MaxTopicCommits = 2_000
+	// MaxTopicEntries and MaxTopicBytes bound what a whole topic adds: the entries
+	// (trees count) and blob bytes that its commits introduce over their parents,
+	// summed over all commits. See CheckCommits for why this bounds an autosquash.
+	MaxTopicEntries = 400_000
+	MaxTopicBytes   = 4 << 30
+)
+
+// The topic limits as the checks read them; tests lower them.
+var (
+	topicEntryLimit int64 = MaxTopicEntries
+	topicByteLimit  int64 = MaxTopicBytes
 )
 
 // Hard deadlines, so a hostile object graph cannot hold the supervisor: the whole
@@ -54,15 +65,31 @@ func (r *Repo) CheckTree(ctx context.Context, ref string) error {
 // a bomb in one commit that a later commit deletes would leave the tip small. A tree
 // already checked (by object id) is not checked again, and the number of commits and
 // the total time are bounded. tip and exclude are commit IDs.
+//
+// Each tree alone can be small while the rebase still builds a bigger one:
+// --autosquash moves every "fixup!" commit up to its target, so the target's tree
+// becomes the union of what many commits added, even though later commits deleted it
+// again. So the topic's additions are capped as a whole: the entries and blob bytes
+// each (non-merge) commit introduces over its parent, summed, each distinct new
+// object once. A rebase only applies those changes (a conflict aborts it), so no tree
+// it builds can hold more than the target's own tree (bounded by MaxTreeEntries) plus
+// that sum. Counting what a commit adds, not its whole tree, keeps a topic of many
+// small commits in a large repository well under the cap, while a fixup chain
+// that adds 100 files and drops them again, 1,000 times, is refused.
 func (r *Repo) CheckCommits(ctx context.Context, tip, exclude string) error {
+	return r.checkCommits(ctx, tip, exclude, topicEntryLimit, topicByteLimit)
+}
+
+func (r *Repo) checkCommits(ctx context.Context, tip, exclude string, maxEntries, maxBytes int64) error {
 	ctx, cancel := context.WithTimeout(ctx, CheckTimeout)
 	defer cancel()
-	args := []string{"log", "--format=%T", "--end-of-options", tip}
+	revs := []string{"--end-of-options", tip}
 	if exclude != "" {
-		args = append(args, "^"+exclude)
+		revs = append(revs, "^"+exclude)
 	}
-	// "--end-of-options" must precede revisions only; the exclusion is a revision too.
-	out, err := r.g.run(ctx, r.path, false, nil, args...)
+	// --max-count bounds the listing before it is read; one more than the cap shows
+	// that the cap was passed.
+	out, err := r.g.run(ctx, r.path, false, nil, append([]string{"log", "--format=%T", "--max-count=" + strconv.Itoa(MaxTopicCommits+1)}, revs...)...)
 	if err != nil {
 		return err
 	}
@@ -79,6 +106,92 @@ func (r *Repo) CheckCommits(ctx context.Context, tip, exclude string) error {
 		if err := r.checkTree(ctx, tree, MaxTreeEntries, MaxTreeBytes); err != nil {
 			return err
 		}
+	}
+	return r.checkAdditions(ctx, revs, maxEntries, maxBytes)
+}
+
+// checkAdditions streams the raw diff of every non-merge commit against its parent
+// and sums the entries it adds or changes (deletions add nothing), then the sizes of
+// the distinct new blobs.
+func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, maxBytes int64) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	args := append([]string{"log", "--no-merges", "--root", "--format=", "--raw", "-r", "-t", "--no-renames", "--no-abbrev"}, revs...)
+	cmd := r.g.command(ctx, r.path, false, nil, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// Deletions add nothing, but listing them still costs: the excluded side is the
+	// target's own tree (trusted) and the included side is checked above, so their
+	// count is bounded by MaxTreeEntries per commit; this stops a pathological one.
+	var entries, lines int64
+	blobs := map[string]bool{}
+	over := false
+	br := bufio.NewReaderSize(pipe, 1<<16)
+	for {
+		line, rerr := br.ReadString('\n')
+		// ":<old mode> <new mode> <old id> <new id> <status>\t<path>"
+		if meta, _, ok := strings.Cut(line, "\t"); ok && strings.HasPrefix(meta, ":") {
+			f := strings.Fields(meta[1:])
+			if lines++; lines > maxEntries+MaxTreeEntries {
+				over = true
+				break
+			}
+			if len(f) == 5 && f[4] != "D" {
+				entries++
+				if f[1] != "040000" && f[1] != "160000" {
+					blobs[f[3]] = true
+				}
+				if entries > maxEntries {
+					over = true
+					break
+				}
+			}
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	if over {
+		cancel()
+		_ = cmd.Wait()
+		return fmt.Errorf("%w: the topic adds more than %d entries", ErrTreeTooLarge, maxEntries)
+	}
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("%w: checking the topic ran out of time", ErrTreeTooLarge)
+		}
+		return fmt.Errorf("git log: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	if len(blobs) == 0 {
+		return nil
+	}
+	var in strings.Builder
+	for id := range blobs {
+		in.WriteString(id + "\n")
+	}
+	sc := r.g.command(ctx, r.path, false, nil, "cat-file", "--batch-check=%(objectsize)")
+	sc.Stdin = strings.NewReader(in.String())
+	var serr bytes.Buffer
+	sc.Stderr = &serr
+	sizes, err := sc.Output()
+	if err != nil {
+		return fmt.Errorf("git cat-file: %w: %s", err, strings.TrimSpace(serr.String()))
+	}
+	var total int64
+	for _, f := range strings.Fields(string(sizes)) {
+		if n, perr := strconv.ParseInt(f, 10, 64); perr == nil {
+			total += n
+		}
+	}
+	if total > maxBytes {
+		return fmt.Errorf("%w: the topic adds more than %d bytes", ErrTreeTooLarge, maxBytes)
 	}
 	return nil
 }

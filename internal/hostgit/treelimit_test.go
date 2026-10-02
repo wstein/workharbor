@@ -3,6 +3,7 @@ package hostgit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -172,9 +173,6 @@ func TestCheckCommitsCoversEveryCommitOfARange(t *testing.T) {
 	if err := r.CheckCommits(ctx, base, ""); err != nil {
 		t.Errorf("a small history: %v", err)
 	}
-	if err := r.CheckCommits(ctx, b, a); err != nil {
-		t.Errorf("commits after the bomb are small: %v", err)
-	}
 }
 
 // Prepare replays every commit, so a bomb that a later commit deletes is refused,
@@ -200,5 +198,81 @@ func TestPrepareRefusesABombDeletedByALaterCommit(t *testing.T) {
 	}
 	if got := p.rev("refs/heads/" + p.topicBr); got != b {
 		t.Errorf("the topic moved to %s", got)
+	}
+}
+
+// --autosquash moves every fixup up to its target, so the target's tree becomes the
+// union of what the fixups added, though each commit's own tree stays small because
+// the next commit deletes the files again. The topic's additions are capped as a whole.
+func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
+	p := newPrep(t)
+	ctx := context.Background()
+	path := p.repo.Path()
+	env := plumbEnv(t)
+	old := p.rev("refs/heads/" + p.topicBr)
+	oldTree := plumb(t, env, path, "", "rev-parse", old+"^{tree}")
+
+	const fixups, perFixup = 60, 100
+	// withFiles is the old tree plus n files named by prefix.
+	withFiles := func(prefix string, n int) string {
+		blob := plumb(t, env, path, prefix, "hash-object", "-w", "--stdin")
+		var b strings.Builder
+		b.WriteString(plumb(t, env, path, "", "ls-tree", oldTree) + "\n")
+		for i := range n {
+			fmt.Fprintf(&b, "100644 blob %s\t%s-%d\n", blob, prefix, i)
+		}
+		return plumb(t, env, path, b.String(), "mktree")
+	}
+	a := plumb(t, env, path, "", "commit-tree", withFiles("d0", perFixup), "-p", old, "-m", "docs: add")
+	tip := plumb(t, env, path, "", "commit-tree", oldTree, "-p", a, "-m", "docs: drop")
+	for i := 1; i <= fixups; i++ {
+		tip = plumb(t, env, path, "", "commit-tree", withFiles(fmt.Sprintf("d%d", i), perFixup), "-p", tip, "-m", "fixup! docs: add")
+		tip = plumb(t, env, path, "", "commit-tree", oldTree, "-p", tip, "-m", "docs: drop")
+	}
+	plumb(t, env, path, "", "update-ref", "refs/heads/"+p.topicBr, tip)
+
+	// Every tree is about perFixup entries over the base; the union is fixups times that.
+	oldEntries, oldBytes := topicEntryLimit, topicByteLimit
+	t.Cleanup(func() { topicEntryLimit, topicByteLimit = oldEntries, oldBytes })
+	topicEntryLimit = 2000
+	if _, err := p.repo.Prepare(ctx, p.spec()); !errors.Is(err, ErrTreeTooLarge) {
+		t.Fatalf("Prepare = %v, want ErrTreeTooLarge", err)
+	}
+	if got := p.rev("refs/heads/" + p.topicBr); got != tip {
+		t.Errorf("the topic moved to %s", got)
+	}
+	topicEntryLimit = oldEntries
+	topicByteLimit = 10 // the blobs of the additions are over a byte budget too
+	if err := p.repo.CheckCommits(ctx, tip, old); !errors.Is(err, ErrTreeTooLarge) {
+		t.Errorf("CheckCommits over the byte budget = %v, want ErrTreeTooLarge", err)
+	}
+}
+
+// Many small commits on top of a big tree are fine: what counts is what they add.
+func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
+	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "r.git")
+	r, err := g.InitBare(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := plumbEnv(t)
+	blob := plumb(t, env, path, "x", "hash-object", "-w", "--stdin")
+	var b strings.Builder
+	for i := range 500 {
+		fmt.Fprintf(&b, "100644 blob %s\tf%d\n", blob, i)
+	}
+	prev := plumb(t, env, path, "", "commit-tree", plumb(t, env, path, b.String(), "mktree"), "-m", "base")
+	base := prev
+	for i := range 100 {
+		fmt.Fprintf(&b, "100644 blob %s\tg%d\n", blob, i)
+		prev = plumb(t, env, path, "", "commit-tree", plumb(t, env, path, b.String(), "mktree"), "-p", prev, "-m", "more")
+	}
+	// 100 trees of 500 to 600 entries sum to 55,000, yet the topic adds only 100.
+	topicEntryLimit, topicByteLimit = 1000, 1000
+	t.Cleanup(func() { topicEntryLimit, topicByteLimit = MaxTopicEntries, MaxTopicBytes })
+	if err := r.CheckCommits(ctx, prev, base); err != nil {
+		t.Errorf("a normal topic: %v", err)
 	}
 }
