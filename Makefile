@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
+.PHONY: release-prep release-snapshot build install check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -84,6 +84,20 @@ commitlint:
 # Regenerate CHANGELOG.md from Conventional Commits (git-cliff via npx).
 changelog:
 	npx --yes git-cliff@2 --output CHANGELOG.md
+
+# Prepare a release (design D24): regenerate CHANGELOG.md for VERSION and commit
+# it as chore(release). It does not tag; the human tags, signed, after CI passes.
+release-prep: check-clean
+	@echo "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$' || { echo "usage: make release-prep VERSION=vX.Y.Z" >&2; exit 1; }
+	npx --yes git-cliff@2.14.2 --tag "$(VERSION)" --output CHANGELOG.md
+	git add CHANGELOG.md
+	git commit -m "chore(release): prepare $(VERSION)"
+
+# Build the release artifacts locally into dist/ without publishing anything.
+# The SBOM needs a tag, so it is skipped here; the snapshot workflow tags the
+# runner's copy and builds it too.
+release-snapshot:
+	go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean --skip=publish,sbom
 
 # Run what CI runs beyond make check, before a branch is merged or rebased into
 # main: the docs build, spelling (typos), links (lychee, online, as CI does),

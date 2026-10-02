@@ -1,0 +1,88 @@
+# GoReleaser configuration for the release workflow (design D24, §13). Run it
+# through the workflow or `make release-snapshot`; nothing here publishes.
+version: 2
+
+project_name: whr
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: whr
+    main: ./cmd/whr
+    binary: whr
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [arm64, amd64]
+    ignore:
+      - {goos: darwin, goarch: amd64} # darwin/arm64 first; Intel Macs are not a target
+    flags: [-trimpath]
+    ldflags: &ldflags
+      - -X github.com/wstein/workharbor/internal/version.Version={{.Tag}}
+      - -X github.com/wstein/workharbor/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/wstein/workharbor/internal/version.Date={{.CommitDate}}
+      - -X github.com/wstein/workharbor/internal/version.Dirty=false
+  # The launcher and the egress proxy run in the Linux guests, which are arm64
+  # on Apple silicon (what `make install` builds too).
+  - id: whr-shim
+    main: ./cmd/whr-shim
+    binary: whr-shim
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [arm64]
+    flags: [-trimpath]
+    ldflags: *ldflags
+  - id: whr-proxy
+    main: ./cmd/whr-proxy
+    binary: whr-proxy
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [arm64]
+    flags: [-trimpath]
+    ldflags: *ldflags
+
+archives:
+  - id: whr
+    ids: [whr]
+    formats: [tar.gz]
+    name_template: "whr_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+  - id: guest
+    ids: [whr-shim, whr-proxy]
+    formats: [tar.gz]
+    name_template: "whr-guest_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# One SBOM of the module's dependencies (CycloneDX), from a pinned tool. It
+# runs in dist/, hence the module path "..", and reads the main module's
+# version from a git tag, so a snapshot without one
+# skips it (--skip=sbom).
+sboms:
+  - id: sbom
+    artifacts: any
+    cmd: go
+    args:
+      - run
+      - github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0
+      - app
+      - -json
+      - -main
+      - cmd/whr
+      - -output
+      - "${document}"
+      - ..
+    documents:
+      - "whr_{{ .Version }}_sbom.cdx.json"
+
+# Release notes come from git-cliff (the workflow passes --release-notes), not
+# from GoReleaser's own changelog. The release is a draft: a human publishes it.
+changelog:
+  disable: true
+release:
+  draft: true
+  prerelease: auto

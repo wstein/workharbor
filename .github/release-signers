@@ -1,0 +1,3 @@
+# Keys that may sign a release tag (D24). The release workflow refuses a tag
+# that is not signed by one of them. Format: ssh-keygen allowed_signers.
+workharbor-release namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHqchO5e+cbCwhv5ZqyLiScLAP6XamvC5nq4BCZpxz79

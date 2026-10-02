@@ -1,0 +1,109 @@
+name: release
+
+# A push of a v* tag builds a DRAFT release (design D24, §13). Nothing is
+# published: the human checks the draft and publishes it. workflow_dispatch runs
+# a snapshot build that creates no release, to test the pipeline.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    # The tag is the trust anchor: annotated, signed by a key in
+    # .github/release-signers, on main, with CI green on that commit.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TAG: ${{ github.ref_name }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the tag object itself
+        # checkout can leave refs/tags/<tag> pointing at the commit, which hides
+        # whether the tag was annotated.
+        run: git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+      - name: The tag is a version, annotated and signed by a known key
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$TAG is not a version tag"; exit 1; }
+          [ "$(git cat-file -t "refs/tags/$TAG")" = tag ] || { echo "::error::$TAG is not an annotated tag"; exit 1; }
+          git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=.github/release-signers tag -v "$TAG" \
+            || { echo "::error::$TAG is not signed by a key in .github/release-signers"; exit 1; }
+      - name: The tagged commit is on main
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_ENV"
+      - name: CI passed on the tagged commit
+        run: |
+          set -euo pipefail
+          ok="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$sha&status=success" -q '.total_count')"
+          [ "$ok" -ge 1 ] || { echo "::error::no successful ci run for $sha"; exit 1; }
+
+  snapshot:
+    # Builds everything and creates no release: the test run before the first tag.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Tag the runner's copy only, for the SBOM's version (never pushed)
+        run: git -c tag.gpgsign=false tag v0.0.0-snapshot
+      - name: Build a snapshot
+        run: go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean --skip=publish
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot
+          path: dist/*.tar.gz
+          retention-days: 3
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Only this job writes: the draft release and the attestations.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release job must not restore a cache an earlier run could have poisoned
+      - name: Release notes from git-cliff
+        run: npx --yes git-cliff@2.14.2 --current --strip header --output "$RUNNER_TEMP/notes.md"
+      - name: Build and create the draft release
+        run: go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --clean --release-notes "$RUNNER_TEMP/notes.md"
+      - name: Attest build provenance of every artifact
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
