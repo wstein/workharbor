@@ -159,7 +159,7 @@ func randomHex(n int) string {
 
 // Session implements Auth.
 func (a *TokenAuth) Session(r *http.Request) (Session, bool) {
-	c, err := r.Cookie(cookieName)
+	c, err := r.Cookie(cookieFor(r))
 	if err != nil || c.Value == "" {
 		return Session{}, false
 	}
@@ -257,7 +257,7 @@ func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID s
 	a.mu.Unlock()
 	//nolint:gosec // Secure is set when the request came over HTTPS: the forwarder terminates TLS (D29) and the loopback listener is plain HTTP
 	http.SetCookie(w, &http.Cookie{
-		Name: cookieName, Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
+		Name: cookieFor(r), Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		Secure: isHTTPS(r), MaxAge: int(sessionTTL / time.Second),
 	})
 	return true
@@ -265,14 +265,26 @@ func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID s
 
 // SignOut implements Auth.
 func (a *TokenAuth) SignOut(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(cookieName); err == nil {
+	if c, err := r.Cookie(cookieFor(r)); err == nil {
 		a.mu.Lock()
 		ends := a.dropLocked(sha256.Sum256([]byte(c.Value)))
 		a.mu.Unlock()
 		runAll(ends)
 	}
 	//nolint:gosec // clearing the cookie, with the same attributes it was set with
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isHTTPS(r), MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: cookieFor(r), Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isHTTPS(r), MaxAge: -1})
+}
+
+// cookieFor is the session cookie's name for a request: over HTTPS it carries the
+// __Host- prefix, so a browser takes it only when it is Secure, has no Domain and
+// Path=/, and a cookie another port of the same host name sets under the plain name
+// (a preview, D33) is not read as the session. Over plain loopback HTTP, where
+// __Host- cannot work, it keeps the plain name.
+func cookieFor(r *http.Request) string {
+	if isHTTPS(r) {
+		return "__Host-" + cookieName
+	}
+	return cookieName
 }
 
 // isHTTPS reports whether the browser reached the UI over HTTPS: directly, or
@@ -285,7 +297,7 @@ func isHTTPS(r *http.Request) bool {
 // the one of r marked.
 func (a *TokenAuth) Devices(r *http.Request) []Device {
 	var mine [sha256.Size]byte
-	if c, err := r.Cookie(cookieName); err == nil {
+	if c, err := r.Cookie(cookieFor(r)); err == nil {
 		mine = sha256.Sum256([]byte(c.Value))
 	}
 	now := a.now()
@@ -357,7 +369,7 @@ func runAll(fs []func()) {
 
 // Peek implements Streams.
 func (a *TokenAuth) Peek(r *http.Request) bool {
-	c, err := r.Cookie(cookieName)
+	c, err := r.Cookie(cookieFor(r))
 	if err != nil || c.Value == "" {
 		return false
 	}
@@ -371,7 +383,7 @@ func (a *TokenAuth) Peek(r *http.Request) bool {
 
 // Watch implements Streams.
 func (a *TokenAuth) Watch(r *http.Request, end func()) func() {
-	c, err := r.Cookie(cookieName)
+	c, err := r.Cookie(cookieFor(r))
 	if err != nil || c.Value == "" {
 		end()
 		return func() {}

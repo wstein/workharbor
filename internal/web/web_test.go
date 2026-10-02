@@ -377,8 +377,21 @@ func TestSigningInNeedsTheTokenAndSetsAStrictCookie(t *testing.T) {
 	b2 := r.browser()
 	b2.hd.Set("X-Forwarded-Proto", "https")
 	resp, _ = b2.do("POST", "/login", url.Values{"token": {token}})
-	if c := resp.Cookies()[0]; !c.Secure {
-		t.Errorf("cookie %+v behind the forwarder: want Secure", c)
+	c = resp.Cookies()[0]
+	if !c.Secure || c.Name != "__Host-"+cookieName || c.Path != "/" || c.Domain != "" {
+		t.Errorf("cookie %+v behind the forwarder: want Secure, __Host- prefixed, Path=/ and no Domain", c)
+	}
+	// over https only the prefixed name is the session: the same value under the plain
+	// name, as another port of this host name could toss it (a preview, D33), is not
+	b4 := r.browser()
+	b4.hd.Set("X-Forwarded-Proto", "https")
+	b4.hd.Set("Cookie", c.Name+"="+c.Value)
+	if resp, _ := b4.do("GET", "/inbox", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("the issued cookie: %d", resp.StatusCode)
+	}
+	b4.hd.Set("Cookie", cookieName+"="+c.Value)
+	if resp, _ := b4.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("a cookie under the plain name over https opened the session: %d", resp.StatusCode)
 	}
 	// a cross-site sign-in form is refused
 	b3 := r.browser()
