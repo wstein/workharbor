@@ -2,10 +2,13 @@
 // feature's devcontainer-feature.json, refuses what the safe subset does not allow,
 // orders the features, and writes the image layers that install them. A feature is code
 // from a registry that runs as root in the builder, which is the accepted risk of §7.2
-// for a repository's own Dockerfile; what this package guarantees is what that code
-// cannot ask for: no privilege, mount, capability, security option, init, entrypoint or
-// lifecycle command, and no environment variable that points the agent past the egress
-// proxy, preloads a library, moves its home or carries a supervisor or vendor name.
+// for a repository's own Dockerfile. The boundary is that only an allowed source runs
+// and that the build runs in the builder VM; what this package adds is what a feature
+// may not declare: no privilege, mount, capability, security option, init, entrypoint or
+// lifecycle command, and no containerEnv variable that points the agent past the egress
+// proxy, preloads a library, moves its home or carries a supervisor or vendor name. That
+// last refusal is not a boundary (install.sh runs as root and can write any file of the
+// image): it keeps a feature from setting the supervisor's variables by accident.
 package feature
 
 import (
@@ -80,7 +83,9 @@ func emptyValue(raw json.RawMessage) bool {
 
 // refusedEnv says a feature's containerEnv may not set a name: the proxy variables,
 // the loader's, HOME and the supervisor's and vendors' prefixes (D38). PATH may change,
-// since a feature puts its tool on it that way.
+// since a feature puts its tool on it that way. This is not a security boundary: the
+// install script runs as root. It stops a feature from overriding the supervisor's own
+// variables and the proxy by accident.
 func refusedEnv(name string) bool {
 	if strings.EqualFold(name, "PATH") {
 		return false
