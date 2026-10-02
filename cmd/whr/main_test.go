@@ -67,6 +67,27 @@ func TestVersionRefusesUnknownOptions(t *testing.T) {
 	}
 }
 
+// versionPattern matches what git describe gives: vX.Y.Z, vX.Y.Z-<pre>, and
+// either followed by -<n>-g<sha> after the tag.
+var versionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?(-\d+-g[0-9a-f]{7,})?$`)
+
+func TestVersionPattern(t *testing.T) {
+	for v, ok := range map[string]bool{
+		"v0.1.0":                       true,
+		"v0.1.0-alpha.2":               true,
+		"v0.1.0-3-g392443d":            true,
+		"v0.1.0-alpha.2-1-g392443d":    true,
+		"v0.1.0-alpha.2-1-gXYZ":        false,
+		"0.1.0":                        false,
+		"v0.1":                         false,
+		"v0.1.0-alpha.2-1-g392443d-x!": false,
+	} {
+		if versionPattern.MatchString(v) != ok {
+			t.Errorf("%q: match = %v, want %v", v, !ok, ok)
+		}
+	}
+}
+
 // make build stamps the binary: the version is not empty, the commit is the
 // checkout's, and the build is trimpath.
 func TestMakeBuildStampsTheBinary(t *testing.T) {
@@ -108,8 +129,8 @@ func TestMakeBuildStampsTheBinary(t *testing.T) {
 	if got.Commit != strings.TrimSpace(string(want)) {
 		t.Errorf("commit = %q, want %q", got.Commit, strings.TrimSpace(string(want)))
 	}
-	if !regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+-g[0-9a-f]{7})?(-[0-9A-Za-z.]+)?$`).MatchString(got.Version) {
-		t.Errorf("version = %q, want a tag version or v0.0.0-<n>-g<sha>", got.Version)
+	if !versionPattern.MatchString(got.Version) {
+		t.Errorf("version = %q, want a tag version or a git describe form", got.Version)
 	}
 	if got.Date == "" {
 		t.Error("the build date was not stamped")
