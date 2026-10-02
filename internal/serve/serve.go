@@ -26,6 +26,7 @@ import (
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
 	"github.com/wstein/workharbor/internal/web"
 )
@@ -54,6 +55,9 @@ type Deps struct {
 	// ConsoleSpec returns the console's spec for the workspaces mounted
 	// read-write, and ConsoleImage builds the console image on first use (D43).
 	// Both are optional: without them there is no console.
+	// ConsoleSSH is the authority that signs the console's SSH certificates (issue
+	// #32). Nil: the console has no SSH access.
+	ConsoleSSH   *sshca.CA
 	ConsoleSpec  func(rw []domain.Workspace) runtime.Spec
 	ConsoleImage func(ctx context.Context) error
 	ConsoleDir   func(w domain.Workspace) string
@@ -157,8 +161,9 @@ func Run(ctx context.Context, d Deps) error {
 	})
 	var consoles *service.Consoles
 	if d.ConsoleSpec != nil {
-		consoles = service.NewConsoles(svc, service.ConsoleConfig{Spec: d.ConsoleSpec, Prepare: d.Prepare, EnsureImage: d.ConsoleImage, Dir: d.ConsoleDir})
+		consoles = service.NewConsoles(svc, service.ConsoleConfig{Spec: d.ConsoleSpec, Prepare: d.Prepare, EnsureImage: d.ConsoleImage, Dir: d.ConsoleDir, SSH: d.ConsoleSSH})
 		defer consoles.CloseShells() // a shell does not outlive the supervisor
+		defer consoles.CloseSSH()    // nor does an SSH connection
 	}
 	be := api.NewBackend(svc, ws, consoles)
 	auth, err := web.NewTokenAuth(token, nil)

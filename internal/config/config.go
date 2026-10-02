@@ -205,6 +205,10 @@ type Console struct {
 	CPUs        int      `json:"cpus,omitempty"`      // default 2
 	MemoryMB    int      `json:"memory_mb,omitempty"` // default 2048
 	DiskMB      int      `json:"disk_mb,omitempty"`   // default 10240
+	// SSHCAKeyFile is the private key of the authority that signs the console's
+	// SSH certificates (issue #32): a secret file like the others (0600, outside
+	// every root), made by `whr setup`. Without it there is no SSH access.
+	SSHCAKeyFile string `json:"ssh_ca_key_file,omitempty"`
 }
 
 // DefaultConsoleEgress are the hosts a console may reach by default: the package
@@ -536,6 +540,9 @@ func (c *Config) Validate() error {
 	secrets := map[string]string{"github.key_file": c.GitHub.KeyFile, "api_token_file": c.APITokenFile}
 	if c.AgentAPIKeyEnvFile != "" {
 		secrets["agent_api_key_env_file"] = c.AgentAPIKeyEnvFile
+	}
+	if c.Console.SSHCAKeyFile != "" {
+		secrets["console.ssh_ca_key_file"] = c.Console.SSHCAKeyFile
 	}
 	for _, key := range sortedKeys(secrets) {
 		if msg := checkSecretFile(secrets[key]); msg != "" {

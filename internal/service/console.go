@@ -11,6 +11,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/sshca"
 )
 
 // Labels of the console environment (design D43). They are the only record of
@@ -36,6 +37,11 @@ type ConsoleConfig struct {
 	// Dir returns the directory a workspace has in the console. Optional: without
 	// it a shell starts in /workspaces.
 	Dir func(w domain.Workspace) string
+	// SSH is the certificate authority of the console's SSH access (issue #32).
+	// Optional: without it the SSH operations answer ErrNoSSH.
+	SSH *sshca.CA
+	// SSHCmd replaces the in-guest sshd launcher. For tests; empty in production.
+	SSHCmd []string
 }
 
 // Consoles opens and closes the console environment of design D43: an
@@ -47,6 +53,9 @@ type Consoles struct {
 	mu     sync.Mutex
 	shells int                           // the shells open now
 	open   map[*countedTerminal]struct{} // the same, to close them at shutdown
+
+	sshConns int                   // the SSH connections open now
+	openSSH  map[*sshConn]struct{} // the same, to close them at shutdown
 }
 
 // NewConsoles returns the console operations of a service.

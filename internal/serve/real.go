@@ -24,6 +24,7 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/apple"
 	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -186,6 +187,13 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 			return nil, fmt.Errorf("github.key_file: the key is shorter than %d characters", redact.MinSecretLength)
 		}
 	}
+	if c.Console.SSHCAKeyFile != "" {
+		ca, err := sshca.Load(c.Console.SSHCAKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("console.ssh_ca_key_file: %w", err)
+		}
+		ca.Register(rd)
+	}
 	for i, e := range agentEnv {
 		_, v, _ := strings.Cut(e, "=")
 		if v == "" {
@@ -303,7 +311,16 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}
 		return err
 	}
+	var consoleSSH *sshca.CA
+	if c.Console.SSHCAKeyFile != "" {
+		if consoleSSH, err = sshca.Load(c.Console.SSHCAKeyFile); err != nil {
+			_ = git.Close()
+			_ = st.Close()
+			return Deps{}, nil, fmt.Errorf("console.ssh_ca_key_file: %w", err)
+		}
+	}
 	return Deps{
+		ConsoleSSH: consoleSSH,
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
