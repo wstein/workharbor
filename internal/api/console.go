@@ -25,6 +25,8 @@ type ConsoleBackend interface {
 	ConsoleStatus(ctx context.Context) (*service.ConsoleInfo, error)
 	ConsoleClose(ctx context.Context) error
 	ConsoleShell(ctx context.Context, req service.ShellRequest) (runtime.Terminal, error)
+	ConsoleSSHCertificate(ctx context.Context, req service.SSHRequest) (service.SSHCertificate, error)
+	ConsoleSSH(ctx context.Context, actor string) (service.SSHConn, error)
 }
 
 var errNoConsole = domain.NewConflict(domain.RuleEnvRunning, "this supervisor has no console")
@@ -46,6 +48,14 @@ func (noConsole) ConsoleStatus(context.Context) (*service.ConsoleInfo, error) { 
 func (noConsole) ConsoleClose(context.Context) error                          { return errNoConsole }
 
 func (noConsole) ConsoleShell(context.Context, service.ShellRequest) (runtime.Terminal, error) {
+	return nil, errNoConsole
+}
+
+func (noConsole) ConsoleSSHCertificate(context.Context, service.SSHRequest) (service.SSHCertificate, error) {
+	return service.SSHCertificate{}, errNoConsole
+}
+
+func (noConsole) ConsoleSSH(context.Context, string) (service.SSHConn, error) {
 	return nil, errNoConsole
 }
 
@@ -213,4 +223,77 @@ func pumpShell(conn net.Conn, in *bufio.Reader, tm runtime.Terminal) {
 		_ = send(termproto.ExitFrame(code))
 	case <-clientGone: // the client left: hang the terminal up
 	}
+}
+
+type consoleSSHBody struct {
+	PublicKey  string `json:"public_key"`
+	Forwarding bool   `json:"forwarding"`
+}
+
+// consoleSSHCertificate signs the client's public key for one SSH session. The
+// private key never reaches the supervisor.
+func (s *Server) consoleSSHCertificate(w http.ResponseWriter, r *http.Request) {
+	var body consoleSSHBody
+	raw, err := readBody(w, r, &body)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(body.PublicKey) == 0 || len(body.PublicKey) > 4096 {
+		writeError(w, usageError{"public_key must be one public key line"})
+		return
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		cert, err := s.consoleOf().ConsoleSSHCertificate(r.Context(), service.SSHRequest{PublicKey: body.PublicKey, Forwarding: body.Forwarding, Actor: "api"})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, cert, nil
+	})
+}
+
+// consoleSSH turns the connection into the SSH protocol, to and from an sshd that
+// runs for it in the console, after the client asked for the upgrade. As for the
+// shell, everything that can fail does so before the upgrade. The bytes are not
+// framed: the client is an ssh with a ProxyCommand. What the sshd accepts is a
+// certificate this supervisor signed, so the stream is no way in on its own.
+func (s *Server) consoleSSH(w http.ResponseWriter, r *http.Request) {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), termproto.SSHUpgrade) || !headerHasToken(r.Header, "Connection", "upgrade") {
+		writeError(w, usageError{"an SSH connection is a stream: ask for it with Connection: Upgrade and Upgrade: " + termproto.SSHUpgrade})
+		return
+	}
+	sc, err := s.consoleOf().ConsoleSSH(r.Context(), "api")
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	conn, buf, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		_ = sc.Close()
+		s.internal(err)
+		writeError(w, errors.New("the connection cannot be upgraded"))
+		return
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Time{})
+	pumpSSH(conn, buf.Reader, sc)
+}
+
+// pumpSSH answers the upgrade and copies the bytes both ways until one side ends.
+// Closing sc ends sshd.
+func pumpSSH(conn net.Conn, in *bufio.Reader, sc service.SSHConn) {
+	defer func() { _ = sc.Close() }()
+	if _, err := io.WriteString(conn, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: "+termproto.SSHUpgrade+"\r\n\r\n"); err != nil {
+		return
+	}
+	done := make(chan struct{}, 2)
+	go func() { // the client to sshd
+		_, _ = io.Copy(sc, in)
+		done <- struct{}{}
+	}()
+	go func() { // sshd to the client
+		_, _ = io.Copy(conn, sc)
+		done <- struct{}{}
+	}()
+	<-done
 }

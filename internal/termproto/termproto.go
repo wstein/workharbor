@@ -18,6 +18,10 @@ import (
 // Upgrade is the value of the Upgrade header that asks for a terminal stream.
 const Upgrade = "whr-terminal/1"
 
+// SSHUpgrade is the value of the Upgrade header that asks for an SSH connection
+// to the console: after the 101, the bytes are the SSH protocol, not framed.
+const SSHUpgrade = "whr-ssh/1"
+
 // Frame types.
 const (
 	TypeData   byte = 'D' // bytes of the terminal's input or output

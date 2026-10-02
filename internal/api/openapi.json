@@ -2030,6 +2030,100 @@
         }
       }
     },
+    "/v1/console/ssh/certificate": {
+      "post": {
+        "operationId": "consoleSSHCertificate",
+        "summary": "Sign a client's public key for one SSH session to the console",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleSSHRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the certificate and the console's host key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ConsoleSSHCertificate"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "description": "Signs the client's public key into a certificate for the principal `whr`, valid for minutes, and returns it with the console's host key, which the client pins. The private key stays with the client. The console must be open. Every certificate is audited."
+      }
+    },
+    "/v1/console/ssh": {
+      "get": {
+        "operationId": "consoleSSH",
+        "summary": "Carry one SSH connection to the console's sshd as a byte stream",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols: the connection is now the SSH protocol, to and from an sshd that runs for it in the console"
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "Ask for the upgrade with `Connection: Upgrade` and `Upgrade: whr-ssh/1`. After the 101 the bytes are the SSH protocol, unframed, in both directions: the client is an `ssh` whose ProxyCommand is `whr ssh --proxy`. The console listens on no port; the sshd runs once per connection, as the console user, and accepts only a certificate this supervisor signed."
+      }
+    },
     "/v1/usage": {
       "get": {
         "operationId": "usage",
@@ -3195,6 +3289,49 @@
           }
         },
         "additionalProperties": false
+      },
+      "ConsoleSSHRequest": {
+        "type": "object",
+        "required": [
+          "public_key"
+        ],
+        "properties": {
+          "public_key": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "one public key line (ed25519, ECDSA, or RSA of at least 3072 bits)"
+          },
+          "forwarding": {
+            "type": "boolean",
+            "description": "allow port forwarding to the console's own loopback"
+          }
+        }
+      },
+      "ConsoleSSHCertificate": {
+        "type": "object",
+        "required": [
+          "certificate",
+          "host_key",
+          "principal",
+          "expires_at"
+        ],
+        "properties": {
+          "certificate": {
+            "type": "string",
+            "description": "one authorized_keys line, the contents of a *-cert.pub file"
+          },
+          "host_key": {
+            "type": "string",
+            "description": "the console's host public key, one line, to pin"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "ConsoleInfo": {
         "type": "object",

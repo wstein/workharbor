@@ -53,6 +53,9 @@ type fake struct {
 	shells        []service.ShellRequest
 	onConsoleOpen func(rw []string) (service.ConsoleInfo, error)
 	onShell       func(service.ShellRequest) (runtime.Terminal, error)
+	sshCerts      []service.SSHRequest
+	onSSH         func() (service.SSHConn, error)
+	sshAsked      int
 	onAnswer      func(domain.ID, domain.Response) (domain.ID, error)
 }
 
@@ -162,6 +165,23 @@ func (f *fake) ConsoleShell(_ context.Context, req service.ShellRequest) (runtim
 	f.mu.Unlock()
 	if f.onShell != nil {
 		return f.onShell(req)
+	}
+	return nil, domain.NewConflict(domain.RuleEnvRunning, "the console is not open: open it first")
+}
+
+func (f *fake) ConsoleSSHCertificate(_ context.Context, req service.SSHRequest) (service.SSHCertificate, error) {
+	f.mu.Lock()
+	f.sshCerts = append(f.sshCerts, req)
+	f.mu.Unlock()
+	return service.SSHCertificate{Certificate: "ssh-ed25519-cert-v01@openssh.com AAAA", HostKey: "ssh-ed25519 AAAAhost", Principal: "whr", ExpiresAt: t0.Add(10 * time.Minute)}, nil
+}
+
+func (f *fake) ConsoleSSH(context.Context, string) (service.SSHConn, error) {
+	f.mu.Lock()
+	f.sshAsked++
+	f.mu.Unlock()
+	if f.onSSH != nil {
+		return f.onSSH()
 	}
 	return nil, domain.NewConflict(domain.RuleEnvRunning, "the console is not open: open it first")
 }
@@ -844,7 +864,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 34 {
+	if got := Routes(); len(got) != 36 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

@@ -93,6 +93,20 @@ func (b backend) ConsoleShell(ctx context.Context, req service.ShellRequest) (ru
 	return b.consoles.Shell(ctx, req)
 }
 
+func (b backend) ConsoleSSHCertificate(ctx context.Context, req service.SSHRequest) (service.SSHCertificate, error) {
+	if b.consoles == nil {
+		return service.SSHCertificate{}, errNoConsole
+	}
+	return b.consoles.SSHCertificate(ctx, req)
+}
+
+func (b backend) ConsoleSSH(ctx context.Context, actor string) (service.SSHConn, error) {
+	if b.consoles == nil {
+		return nil, errNoConsole
+	}
+	return b.consoles.SSH(ctx, actor)
+}
+
 // CreateWorkspace, RemoveWorkspace and the agent methods give the API's names to
 // the workspace operations.
 func (b backend) CreateWorkspace(ctx context.Context, req service.CreateRequest) (domain.Workspace, domain.Agent, error) {
@@ -202,6 +216,8 @@ var routes = []route{
 	{http.MethodPost, "/v1/console", (*Server).consoleOpen},
 	{http.MethodDelete, "/v1/console", (*Server).consoleClose},
 	{http.MethodGet, "/v1/console/shell", (*Server).consoleShell},
+	{http.MethodPost, "/v1/console/ssh/certificate", (*Server).consoleSSHCertificate},
+	{http.MethodGet, "/v1/console/ssh", (*Server).consoleSSH},
 	{http.MethodGet, "/v1/usage", (*Server).usage},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},

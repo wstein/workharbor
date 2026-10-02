@@ -80,6 +80,12 @@ func (e *echoTerminal) isClosed() bool {
 // auth is false, and returns the connection, a reader on it and the response.
 func (r *rig) upgrade(query string, auth bool, extra ...string) (net.Conn, *bufio.Reader, int, http.Header) {
 	r.t.Helper()
+	return r.upgradeTo("/v1/console/shell", query, auth, extra...)
+}
+
+// upgradeTo is upgrade for any path.
+func (r *rig) upgradeTo(path, query string, auth bool, extra ...string) (net.Conn, *bufio.Reader, int, http.Header) {
+	r.t.Helper()
 	var d net.Dialer
 	conn, err := d.DialContext(context.Background(), "tcp", r.ts.Listener.Addr().String())
 	if err != nil {
@@ -87,7 +93,7 @@ func (r *rig) upgrade(query string, auth bool, extra ...string) (net.Conn, *bufi
 	}
 	r.t.Cleanup(func() { _ = conn.Close() })
 	var b strings.Builder
-	b.WriteString("GET /v1/console/shell" + query + " HTTP/1.1\r\nHost: whr\r\n")
+	b.WriteString("GET " + path + query + " HTTP/1.1\r\nHost: whr\r\n")
 	if auth {
 		b.WriteString("Authorization: Bearer " + token + "\r\n")
 	}
