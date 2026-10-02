@@ -117,8 +117,8 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	if len(r.svc.egressWaits) != 0 {
 		t.Error("the wait was not cleared")
 	}
-	if len(r.bgErrs) != 0 {
-		t.Errorf("errors: %v", r.bgErrs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 
 	// Another workspace of the repository is not asked again and starts with the allowed host.
@@ -212,15 +212,15 @@ func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
 		return RepoEnvironment{}, errors.New("fetch wstein/workharbor: no route to host")
 	}
 	w, a := r.create("docs-ws")
-	if len(r.bgErrs) != 1 {
-		t.Fatalf("a workspace of an unreadable repository gets the default environment and reports it: %v", r.bgErrs)
+	if len(r.reported()) != 1 {
+		t.Fatalf("a workspace of an unreadable repository gets the default environment and reports it: %v", r.reported())
 	}
-	r.bgErrs = nil
+	r.forget()
 	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
-	if r.agent.Started() != 1 || len(r.bgErrs) != 1 {
-		t.Errorf("agent starts %d, reported %v", r.agent.Started(), r.bgErrs)
+	if r.agent.Started() != 1 || len(r.reported()) != 1 {
+		t.Errorf("agent starts %d, reported %v", r.agent.Started(), r.reported())
 	}
 	if !reflect.DeepEqual(r.allowOf(w.EnvID), []string{"api.anthropic.com"}) {
 		t.Errorf("an unreadable repository changed the allowlist: %v", r.allowOf(w.EnvID))
@@ -284,7 +284,7 @@ func TestNoEnvironmentIsReadWhenTheDefaultBranchIsUnknown(t *testing.T) {
 	if called {
 		t.Error("the environment was read although the default branch is unknown")
 	}
-	if len(r.bgErrs) == 0 {
+	if len(r.reported()) == 0 {
 		t.Error("the refusal was not reported")
 	}
 }

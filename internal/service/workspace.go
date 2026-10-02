@@ -594,6 +594,17 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		w.svc.end(run, sl)
 		return err
 	}
+	if h := w.svc.testBeforeAttach; h != nil {
+		h(run) // a test seam: the interleaving of a Cancel with the end of the start
+	}
+	// A Cancel that came after the check above and after the run was marked
+	// running stops the session here, or, if it comes later still, through the
+	// slot's stopRequested, which attach honours.
+	if ctx.Err() != nil {
+		_ = sess.Stop(context.WithoutCancel(ctx))
+		w.svc.end(run, sl)
+		return ctx.Err()
+	}
 	w.svc.attach(task, run, sl, sess)
 	return nil
 }

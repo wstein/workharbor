@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -99,7 +100,7 @@ func TestAPostCreateThatDoesNotFinishFailsTheRun(t *testing.T) {
 	}
 	var said bool
 	eventually(t, func() bool {
-		for _, e := range r.bgErrs {
+		for _, e := range r.reported() {
 			if strings.Contains(e.Error(), "did not finish within 100ms") {
 				said = true
 			}
@@ -107,7 +108,7 @@ func TestAPostCreateThatDoesNotFinishFailsTheRun(t *testing.T) {
 		return said || err != nil
 	})
 	if !said && (err == nil || !strings.Contains(err.Error(), "did not finish within 100ms")) {
-		t.Errorf("the reason is not clear: reported %v, returned %v", r.bgErrs, err)
+		t.Errorf("the reason is not clear: reported %v, returned %v", r.reported(), err)
 	}
 }
 
@@ -196,5 +197,53 @@ func TestShutdownCancelsARunningStart(t *testing.T) {
 	}
 	if r.svc.startDetached(bg, "r2", func(context.Context) error { return nil }) != nil {
 		t.Error("a start began after Shutdown")
+	}
+}
+
+// A Cancel that commits after the agent started and the run was marked running,
+// and before the session is attached, must not leave the agent running for a
+// cancelled task: the start's context is cancelled, so the session is stopped.
+func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
+	r := newWsRig(t)
+	_, a := r.create("docs-ws")
+	var task domain.ID
+	r.svc.testBeforeAttach = func(domain.ID) {
+		list, _ := r.svc.List(bg, false)
+		task = list[0].ID
+		if err := r.svc.Cancel(bg, task); err != nil {
+			t.Errorf("cancel: %v", err)
+		}
+	}
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	list, _ := r.svc.List(bg, false)
+	agg, _ := r.store.LoadTask(bg, list[0].ID)
+	run := agg.Runs()[0].ID
+	eventually(t, func() bool { return !r.svc.attached(run) })
+	if r.svc.attached(run) {
+		t.Fatal("the agent of a cancelled task is still attached")
+	}
+	if agg.Task().State != domain.TaskCancelled || agg.Runs()[0].State != domain.RunStopped {
+		t.Errorf("task %s, run %s", agg.Task().State, agg.Runs()[0].State)
+	}
+}
+
+// The same interleaving when only the slot's stop request, not the start's
+// context, is set: the session is stopped as soon as it is attached.
+func TestAStopRequestedBeforeAttachStopsTheSession(t *testing.T) {
+	r := newWsRig(t)
+	_, a := r.create("docs-ws")
+	r.svc.testBeforeAttach = func(run domain.ID) { r.svc.stopSession(run) }
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := r.svc.List(bg, false)
+	agg, _ := r.store.LoadTask(bg, list[0].ID)
+	run := agg.Runs()[0].ID
+	// The fake agent was told to block; the stop request ends it, and with it the slot.
+	eventually(t, func() bool { return !r.svc.attached(run) })
+	if r.svc.attached(run) {
+		t.Fatal("a session that was asked to stop while it was starting is still attached")
 	}
 }

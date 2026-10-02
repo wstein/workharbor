@@ -41,9 +41,25 @@ type wsRig struct {
 	failAg bool
 	issues *forgetest.Fake
 	clock  *fakeClock
-	bgErrs []error // what the service reported through OnError
+	bgMu   sync.Mutex
+	bgErrs []error // what the service reported through OnError, from goroutines of its own
 	egress bool    // give the environments an egress sidecar
 	home   bool    // give the environments an agent home volume
+}
+
+// reported returns what the service reported through OnError so far. The
+// service reports from goroutines of its own, so it is read under a lock.
+func (r *wsRig) reported() []error {
+	r.bgMu.Lock()
+	defer r.bgMu.Unlock()
+	return append([]error(nil), r.bgErrs...)
+}
+
+// forget drops what was reported so far.
+func (r *wsRig) forget() {
+	r.bgMu.Lock()
+	r.bgErrs = nil
+	r.bgMu.Unlock()
 }
 
 func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
@@ -97,7 +113,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 	}
 	r.svc = New(r.store, r.rt.Adapter, r.agent, clock, Config{
 		Owner: r.rt.Owner, ReadyCmd: []string{"echo", "ready"},
-		OnError: func(err error) { r.bgErrs = append(r.bgErrs, err) },
+		OnError: func(err error) { r.bgMu.Lock(); r.bgErrs = append(r.bgErrs, err); r.bgMu.Unlock() },
 		NewID:   func() domain.ID { return r.id("d") },
 		Spec: func(domain.Task, domain.Run) agent.StartSpec {
 			s := spec()

@@ -108,6 +108,9 @@ type Service struct {
 	// starts are the agent starts in progress, by run: at most one each, detached
 	// from the request that began it and cancelled by Cancel and Shutdown.
 	starts map[domain.ID]*startJob
+	// testBeforeAttach, when set by a test, runs in startAgent between the run
+	// being marked running and the session being attached.
+	testBeforeAttach func(run domain.ID)
 	// egressWaits are the runs that stay starting until their egress requests are
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
