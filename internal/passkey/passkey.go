@@ -107,6 +107,7 @@ type Service struct {
 	enrolling map[[sha256.Size]byte]enrolment
 	ceremony  map[string]ceremony
 	begins    []time.Time // sign-ins begun within loginWindow
+	seq       uint64      // the last ceremony's insertion number
 }
 
 type enrolment struct {
@@ -121,6 +122,7 @@ type ceremony struct {
 	holder  string  // step-up: the web session it belongs to
 	bind    Binding // step-up: what it names
 	expires time.Time
+	seq     uint64 // insertion order, so the oldest is not found by comparing times
 }
 
 // New returns the service. The origin must be https (or a loopback http, for a test
@@ -293,12 +295,12 @@ func (s *Service) keep(c ceremony) (string, error) {
 	defer s.mu.Unlock()
 	s.sweepLocked()
 	login, other := 0, 0
-	oldest, oldestAt := "", time.Time{}
+	oldest, oldestSeq := "", uint64(0)
 	for k, e := range s.ceremony {
 		if e.kind == "login" {
 			login++
-			if oldest == "" || e.expires.Before(oldestAt) {
-				oldest, oldestAt = k, e.expires
+			if oldest == "" || e.seq < oldestSeq {
+				oldest, oldestSeq = k, e.seq
 			}
 		} else {
 			other++
@@ -311,6 +313,8 @@ func (s *Service) keep(c ceremony) (string, error) {
 	} else if other >= maxOtherCeremonies {
 		return "", ErrBusy
 	}
+	s.seq++
+	c.seq = s.seq
 	s.ceremony[id] = c
 	return id, nil
 }
