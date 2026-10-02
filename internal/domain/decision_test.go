@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -222,5 +224,79 @@ func TestResolutionUsesTheTable(t *testing.T) {
 	_ = d.supersede()
 	if d.Status != DecisionOpen {
 		t.Errorf("Supersede changed the status to %s without the table", d.Status)
+	}
+}
+
+func TestAnEgressRequestIsABlockingApprovalWithAValidHost(t *testing.T) {
+	a, _, _ := newRunningAggregate(t)
+	d, err := a.RaiseEgressRequest("r1", "d1", "proxy.golang.org", "a lockfile", time.Unix(10, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Kind != DecisionApproval || !d.Blocking || d.Cause != CauseEgressRequest || d.Host != "proxy.golang.org" || d.Deadline.IsZero() {
+		t.Errorf("decision = %+v", d)
+	}
+	if !reflect.DeepEqual(d.Options, []string{AnswerAllow, AnswerDeny}) {
+		t.Errorf("options = %v", d.Options)
+	}
+	if a.Task().State != TaskAwaitingGuidance {
+		t.Errorf("task = %s, want awaiting_guidance as for any blocking approval", a.Task().State)
+	}
+	var seen bool
+	for _, e := range a.TakeEvents() {
+		if e.Kind == EventDecisionRaised {
+			var p DecisionRaised
+			if err := json.Unmarshal(e.Payload, &p); err != nil || p.Host != "proxy.golang.org" || p.Cause != CauseEgressRequest {
+				t.Errorf("payload = %+v, %v", p, err)
+			}
+			seen = true
+		}
+	}
+	if !seen {
+		t.Error("no decision.raised entry")
+	}
+	// The host is its own field: a bad name, an IP, a wildcard and a path are refused,
+	// and so is a host on any other Decision.
+	for _, bad := range []string{"", "10.0.0.1", "*.evil.com", "evil.com/x", "evil.com:443", "Evil.COM", "localhost", "a b.com"} {
+		b, _, _ := newRunningAggregate(t)
+		if _, err := b.RaiseEgressRequest("r1", "d1", bad, "x", time.Unix(10, 0)); !errors.Is(err, ErrDecisionHost) {
+			t.Errorf("host %q: err = %v, want ErrDecisionHost", bad, err)
+		}
+	}
+	c, _, _ := newRunningAggregate(t)
+	if _, err := c.RaiseDecision(NewDecision{ID: "d2", RunID: "r1", Kind: DecisionApproval, Blocking: true, Host: "proxy.golang.org", Now: time.Unix(10, 0)}); !errors.Is(err, ErrDecisionHost) {
+		t.Errorf("a host on an ordinary approval: err = %v", err)
+	}
+	if _, err := c.RaiseDecision(NewDecision{ID: "d3", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Cause: CauseEgressRequest, Host: "proxy.golang.org", Now: time.Unix(10, 0)}); !errors.Is(err, ErrDecisionHost) {
+		t.Errorf("an egress request that is a question: err = %v", err)
+	}
+}
+
+// An answer is the human's: allow or deny. A request that expires or is
+// superseded is a denial for this run only, and the host is asked again at the next start.
+func TestAnEgressRequestIsAnsweredAllowOrDeny(t *testing.T) {
+	a, _, _ := newRunningAggregate(t)
+	if _, err := a.RaiseEgressRequest("r1", "d1", "sum.golang.org", "a lockfile", time.Unix(10, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Answer("d1", Response{Option: AnswerAllow, By: "werner", At: time.Unix(20, 0)}); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := a.Decision("d1")
+	if d.Status != DecisionAnswered || d.Answer != AnswerAllow || d.Host != "sum.golang.org" {
+		t.Errorf("decision = %+v", d)
+	}
+	b, _, _ := newRunningAggregate(t)
+	if _, err := b.RaiseEgressRequest("r1", "d1", "sum.golang.org", "a lockfile", time.Unix(10, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Answer("d1", Response{Option: "maybe", By: "werner", At: time.Unix(20, 0)}); err == nil {
+		t.Error("an answer other than allow or deny must be refused")
+	}
+	if expired := b.ExpireDecisions(time.Unix(10, 0).Add(DefaultApprovalTimeout + time.Second)); len(expired) != 1 {
+		t.Errorf("expired = %v: an egress request has an approval's deadline", expired)
+	}
+	if d, _ := b.Decision("d1"); d.Answer == AnswerAllow {
+		t.Error("an expired request must not read as an allow")
 	}
 }

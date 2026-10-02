@@ -556,3 +556,18 @@ func (a *TaskAggregate) SupersededOf(runID ID) []Decision {
 	}
 	return out
 }
+
+// RaiseEgressRequest asks the human whether a repository may reach a host
+// (design §4.2, D38): a blocking approval raised for a run that is starting or
+// running, with the cause egress_request and the host in its own field. The
+// subject and the input only describe the request; source says where the host
+// came from (the repository's file or a lockfile) and is the supervisor's own
+// text. An allow or deny is the supervisor's to keep per repository; an
+// expired or superseded request is a denial for this run only.
+func (a *TaskAggregate) RaiseEgressRequest(runID, id ID, host, source string, now time.Time) (Decision, error) {
+	return a.RaiseDecision(NewDecision{
+		ID: id, RunID: runID, Kind: DecisionApproval, Blocking: true,
+		Subject: "Allow network access to " + host + "?", Input: "requested by " + source,
+		Cause: CauseEgressRequest, Host: host, Now: now,
+	})
+}

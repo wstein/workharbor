@@ -13,11 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -292,12 +292,8 @@ func ports(key string, v json.RawMessage, notes []string) ([]int, []string) {
 	return out, notes
 }
 
-// hostRe is a DNS name: lower-case labels, at least two of them. A wildcard,
-// a port, a path and an address are not hosts a repository may request.
-var hostRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
-
 // ValidHost reports whether name can be requested as an egress host.
-func ValidHost(name string) bool { return len(name) <= 253 && hostRe.MatchString(name) }
+func ValidHost(name string) bool { return domain.ValidHost(name) }
 
 func customizations(v json.RawMessage, notes []string) ([]string, Hints, []string) {
 	var c map[string]json.RawMessage

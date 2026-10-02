@@ -140,6 +140,8 @@ func (d *Decision) reraise(id ID, now time.Time) (*Decision, error) {
 		Input:    d.Input,
 		SHA:      d.SHA,
 		Options:  d.Options,
+		Cause:    d.Cause,
+		Host:     d.Host,
 		Now:      now,
 		Timeout:  d.Timeout,
 	})

@@ -140,6 +140,7 @@ type DecisionRaised struct {
 	SHA      string        `json:"sha,omitempty"`
 	Deadline time.Time     `json:"deadline,omitzero"`
 	Cause    DecisionCause `json:"cause,omitempty"`
+	Host     string        `json:"host,omitempty"`
 	ResumeAt time.Time     `json:"resume_at,omitzero"`
 }
 

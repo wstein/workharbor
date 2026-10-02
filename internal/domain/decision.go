@@ -68,6 +68,10 @@ const (
 	// CauseRebaseConflict is raised for a stopped run whose branch does not
 	// rebase onto the integration branch before the export (design §4.2).
 	CauseRebaseConflict DecisionCause = "rebase_conflict"
+	// CauseEgressRequest is a host a repository's devcontainer.json requests or a
+	// lockfile suggests, asked at the first start of a run (design §4.2, D38).
+	// The host is in the Decision's Host field.
+	CauseEgressRequest DecisionCause = "egress_request"
 	// CauseUntrustedInput holds a run before it starts, on an issue by an
 	// author who is not trusted.
 	CauseUntrustedInput DecisionCause = "untrusted_input"
@@ -110,6 +114,10 @@ type Decision struct {
 	Cause DecisionCause
 	// ResumeAt is the time the agent reports its quota resets, when known.
 	ResumeAt time.Time
+	// Host is the egress host of a CauseEgressRequest Decision: a name the
+	// reader validated (ValidHost), kept apart from the subject and the input,
+	// which only describe it. Empty for every other Decision.
+	Host string
 
 	Status     DecisionStatus
 	CreatedAt  time.Time
@@ -141,6 +149,7 @@ type NewDecision struct {
 	SHA            string
 	Options        []string
 	Cause          DecisionCause
+	Host           string // the egress host of a CauseEgressRequest Decision
 	ResumeAt       time.Time
 	Now            time.Time
 	Timeout        time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
@@ -152,6 +161,7 @@ var (
 	ErrDecisionKind = invalid("unknown decision kind")
 	ErrDecisionRun  = invalid("a review decision has no run, and any other decision needs one")
 	ErrDecisionSHA  = invalid("a review decision needs the commit SHA it is about")
+	ErrDecisionHost = invalid("an egress request is a blocking approval with a valid host name, and no other decision names a host")
 
 	ErrDecisionTimeout = invalid("a decision timeout cannot be negative")
 	ErrDecisionTime    = invalid("a time is needed and it is zero")
@@ -189,6 +199,11 @@ func raise(spec NewDecision) (*Decision, error) {
 		return nil, fmt.Errorf("%w: %q", ErrDecisionKind, spec.Kind)
 	}
 
+	if egress := spec.Cause == CauseEgressRequest; egress != (spec.Host != "") ||
+		(egress && (spec.Kind != DecisionApproval || !spec.Blocking || !ValidHost(spec.Host))) {
+		return nil, ErrDecisionHost
+	}
+
 	d := &Decision{
 		ID:        spec.ID,
 		TaskID:    spec.TaskID,
@@ -199,6 +214,7 @@ func raise(spec NewDecision) (*Decision, error) {
 		SHA:       spec.SHA,
 		Options:   append([]string(nil), spec.Options...),
 		Cause:     spec.Cause,
+		Host:      spec.Host,
 		ResumeAt:  spec.ResumeAt,
 		Status:    DecisionOpen,
 		CreatedAt: spec.Now,
@@ -219,7 +235,7 @@ func raise(spec NewDecision) (*Decision, error) {
 	}
 	d.record(EventDecisionRaised, DecisionRaised{
 		ID: d.ID, RunID: d.RunID, Kind: d.Kind, Blocking: d.Blocking, Subject: d.Subject,
-		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, ResumeAt: d.ResumeAt,
+		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, Host: d.Host, ResumeAt: d.ResumeAt,
 	}, spec.Now)
 	return d, nil
 }
