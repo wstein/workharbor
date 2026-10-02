@@ -31,7 +31,7 @@ branch per change (AGENTS.md, Working on an issue).
   findings that need a rule come to you, and you decide them before the fix.
 - **Keep the board honest.** Statuses and ticked criteria match what landed;
   closed issues are `Done`; follow-ups get their own issue. Board-wide status
-  comes from the shared snapshot (#132); until it exists, lanes ask `wh/desk`,
+  comes from `scripts/board-snapshot.sh` (#132), cached for 5 minutes,
   and you run a board-wide query only to rank or check drift (AGENTS.md, GitHub
   rate limit).
 - **Hand over.** Tell the human, usually through `wh/desk`, what is ready to
