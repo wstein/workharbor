@@ -40,6 +40,10 @@ func workflowCheck(ctx context.Context, cfg *config.Config, src RuleSource) (Sta
 			continue
 		}
 		branch := r.Target(def)
+		if !preset.ToDefaultBranch() && branch == def {
+			note(Fail, r.Name+" ("+string(preset)+"): the integration branch "+branch+" is the default branch, which the supervisor never moves; name another")
+			continue
+		}
 		st, msg := evaluate(ctx, src, r.Name, preset, branch)
 		note(st, r.Name+" ("+string(preset)+", "+branch+"): "+msg)
 	}

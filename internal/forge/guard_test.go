@@ -246,6 +246,35 @@ func TestBoardWritesFollowTheTableAndNotTheRunsContext(t *testing.T) {
 	}
 }
 
+// The default branch is never moved, in any preset, and a forge that cannot say
+// which it is fails closed.
+func TestFastForwardRefusesTheDefaultBranch(t *testing.T) {
+	g, f := newGuard(policy.Prototype.Table())
+	ap := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	for _, def := range []string{"main", "trunk"} {
+		f.DefaultBranch = def
+		if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", def, ap); !errors.Is(err, forge.ErrTarget) {
+			t.Errorf("fast-forward of the default branch %q: %v", def, err)
+		}
+	}
+	if len(f.FastForwards) != 0 {
+		t.Fatalf("the default branch was moved: %v", f.FastForwards)
+	}
+	f.DefaultBranch = "trunk"
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", "main", ap); err != nil {
+		t.Errorf("main is not the default branch of this repository: %v", err)
+	}
+	if err := forge.NewGuard(noDefaultBranch{f}, f, policy.Prototype.Table(), approvals{"d1": "aaa111"}).FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ap); !errors.Is(err, forge.ErrTarget) {
+		t.Errorf("a forge that cannot name the default branch: %v", err)
+	}
+}
+
+// noDefaultBranch hides what a forge can say about its default branch.
+type noDefaultBranch struct{ *forgetest.Fake }
+
+func (noDefaultBranch) DefaultBranchName() {}
+
 // The prototype workflow moves the integration branch to the approved commit:
 // the human's approval carried out by the supervisor, never forced, never an
 // agent's merge (D47).

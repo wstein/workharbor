@@ -295,7 +295,6 @@ func TestRepositoriesRunUnderAWorkflow(t *testing.T) {
 		workflow, branch, defaultBranch, want string
 		preset                                policy.Preset
 	}{
-		{"prototype", "", "main", "main", policy.Prototype},
 		{"prototype", "dev", "main", "dev", policy.Prototype},
 		{"integration", "", "main", "develop", policy.Integration},
 		{"integration", "next", "main", "next", policy.Integration},
@@ -316,6 +315,7 @@ func TestRepositoriesRunUnderAWorkflow(t *testing.T) {
 		"an agent branch":       {Name: "a/b", IntegrationBranch: "agent/x"},
 		"a bad branch":          {Name: "a/b", IntegrationBranch: "a..b"},
 		"published with branch": {Name: "a/b", Workflow: "published", IntegrationBranch: "develop"},
+		"a prototype without an integration branch": {Name: "a/b", Workflow: "prototype"},
 	} {
 		r.cfg.Repositories = []Repository{repo}
 		if _, err := r.parse(t); !strings.Contains(problems(err), "repositories[0]") {

@@ -182,6 +182,19 @@ func (g *Guard) FastForward(ctx context.Context, repo, from, to string, ap Appro
 	if err := target(to); err != nil {
 		return err
 	}
+	// The supervisor never moves the default branch, in any preset (D47): promotion
+	// to it is the human's. Fail closed when the forge cannot say which it is.
+	db, ok := g.inner.(DefaultBrancher)
+	if !ok {
+		return fmt.Errorf("%w: the forge adapter cannot name the default branch, so %q is not known to be a safe target", ErrTarget, to)
+	}
+	def, err := db.DefaultBranchName(ctx, repo)
+	if err != nil {
+		return fmt.Errorf("%w: the default branch of %s could not be read: %w", ErrTarget, repo, err)
+	}
+	if to == def {
+		return fmt.Errorf("%w: %q is the default branch, which the supervisor never moves", ErrTarget, to)
+	}
 	if err := g.approve(ctx, policy.FastForwardBranch, ap); err != nil {
 		return err
 	}

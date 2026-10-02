@@ -38,8 +38,10 @@ type Repository struct {
 	// repository chooses or reads it.
 	Workflow string `json:"workflow,omitempty"`
 	// IntegrationBranch is where approved commits go in the prototype and
-	// integration workflows. Default: develop for integration, and for prototype
-	// the repository's default branch (empty here). Published has none.
+	// integration workflows. Default: develop for integration. A prototype must
+	// name one, and it must not be the repository's default branch, which the
+	// supervisor never moves (D47): the configuration cannot know the default
+	// branch, so whr doctor and the Guard check that. Published has none.
 	IntegrationBranch string `json:"integration_branch,omitempty"`
 }
 
@@ -54,8 +56,9 @@ func (r Repository) Preset() policy.Preset {
 }
 
 // Target is the branch approved commits go to, given the repository's default
-// branch: the default branch itself for a published repository and for a
-// prototype without an integration branch, else the integration branch.
+// branch: the default branch for a published repository's pull request, else the
+// integration branch (develop for integration when none is set). A prototype with
+// none has no target, and the configuration check refuses it.
 func (r Repository) Target(defaultBranch string) string {
 	p := r.Preset()
 	switch {
@@ -64,7 +67,7 @@ func (r Repository) Target(defaultBranch string) string {
 	case r.IntegrationBranch != "":
 		return r.IntegrationBranch
 	case p == policy.Prototype:
-		return defaultBranch
+		return ""
 	}
 	return "develop"
 }
@@ -376,6 +379,9 @@ func (c *Config) Validate() error {
 		}
 		if b := r.IntegrationBranch; b != "" && (!hostgit.ValidBranch(b) || strings.HasPrefix(b, "agent/")) {
 			add("%s.integration_branch: %q is not a branch name an agent cannot write", key, b)
+		}
+		if r.Workflow == string(policy.Prototype) && r.IntegrationBranch == "" {
+			add("%s.integration_branch: a prototype repository needs an integration branch that is not the default branch: the supervisor never moves the default branch", key)
 		}
 		if r.Workflow == string(policy.Published) && r.IntegrationBranch != "" {
 			add("%s.integration_branch: a published repository has no integration branch: its pull requests go to the default branch", key)

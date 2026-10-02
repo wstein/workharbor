@@ -59,7 +59,7 @@ func TestTheForgeWorkflowChecksTheRulesetOfTheBranchesThePresetWritesTo(t *testi
 		{"published goes to the default branch", repo("published", ""), &rules{def: "trunk", byBranch: map[string][]github.BranchRule{"trunk": published}, bypass: map[int64]int{1: 0}}, OK, "", "trunk"},
 		{"integration, protected", repo("integration", ""), &rules{def: "main", byBranch: map[string][]github.BranchRule{"develop": {rule("pull_request", 2, ``), rule("non_fast_forward", 2, ``)}}}, OK, "", "develop"},
 		{"integration, no PR rule", repo("integration", "next"), &rules{def: "main", byBranch: map[string][]github.BranchRule{"next": {rule("non_fast_forward", 2, ``)}}}, Fail, "a pull request is not required", "next"},
-		{"prototype, force push blocked", repo("prototype", ""), &rules{def: "main", byBranch: map[string][]github.BranchRule{"main": {rule("non_fast_forward", 3, ``)}}}, NotVerified, "only the App and you may write", "main"},
+		{"prototype, force push blocked", repo("prototype", "dev"), &rules{def: "main", byBranch: map[string][]github.BranchRule{"dev": {rule("non_fast_forward", 3, ``)}}}, NotVerified, "only the App and you may write", "dev"},
 		{"prototype, force push allowed", repo("prototype", "dev"), &rules{def: "main", byBranch: map[string][]github.BranchRule{"dev": {}}}, Fail, "force push is not blocked", "dev"},
 		{"the rules cannot be read", repo("published", ""), &rules{def: "main", unreadable: true}, NotVerified, "not verified", "main"},
 	}
@@ -70,6 +70,14 @@ func TestTheForgeWorkflowChecksTheRulesetOfTheBranchesThePresetWritesTo(t *testi
 		}
 		if len(c.src.askedFor) != 1 || c.src.askedFor[0] != "wstein/workharbor:"+c.asked {
 			t.Errorf("%s: asked for %v, want the branch %s", c.name, c.src.askedFor, c.asked)
+		}
+	}
+	// the supervisor never moves the default branch: naming it as the integration
+	// branch fails, without even reading its rules
+	for _, preset := range []string{"prototype", "integration"} {
+		src := &rules{def: "main"}
+		if st, detail := workflowCheck(context.Background(), repo(preset, "main"), src); st != Fail || !strings.Contains(detail, "is the default branch") || len(src.askedFor) != 0 {
+			t.Errorf("%s on the default branch: %s %q, asked %v", preset, st, detail, src.askedFor)
 		}
 	}
 	// one failing repository makes the whole check fail; an unread one never passes

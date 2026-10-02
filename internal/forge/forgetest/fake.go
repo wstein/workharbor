@@ -19,7 +19,9 @@ type Fake struct {
 	Branches map[string]string      // "repo:branch" to commit
 	PRs      []forge.PullRequest
 	Comments []string
-	Calls    []string
+	// DefaultBranch is what DefaultBranchName answers; empty means "main".
+	DefaultBranch string
+	Calls         []string
 	// Cards are the board updates it was asked for, in order, and CardErr is
 	// what UpdateCard returns (a board write that fails).
 	Cards   []Card
@@ -131,6 +133,16 @@ func (f *Fake) CardsSeen() []Card {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]Card(nil), f.Cards...)
+}
+
+// DefaultBranchName implements forge.DefaultBrancher: "main" unless DefaultBranch is set.
+func (f *Fake) DefaultBranchName(context.Context, string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.DefaultBranch != "" {
+		return f.DefaultBranch, nil
+	}
+	return "main", nil
 }
 
 // FastForward implements forge.FastForwarder.

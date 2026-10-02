@@ -106,6 +106,12 @@ type FastForwarder interface {
 	FastForward(ctx context.Context, repo, branch, sha string) error
 }
 
+// DefaultBrancher is the optional capability to name a repository's default
+// branch. The Guard needs it to refuse a fast-forward of that branch (D47).
+type DefaultBrancher interface {
+	DefaultBranchName(ctx context.Context, repo string) (string, error)
+}
+
 // BasedPRs is the optional capability to open a pull request into a branch other
 // than the default one (the integration workflow, D47).
 type BasedPRs interface {
