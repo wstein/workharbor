@@ -190,6 +190,20 @@ func TestTheSidecarHasLimits(t *testing.T) {
 	}
 }
 
+func TestTheSidecarGetsTheHostPrefixes(t *testing.T) {
+	a := &Adapter{owner: "o1"}
+	spec := baseSpec()
+	spec.Egress = &runtime.Egress{Image: "fedora", Proxy: "/opt/whr-proxy", Allow: []string{"api.anthropic.com"}}
+	if args := a.sidecarArgs("whr-1", spec); slices.Contains(args, "-deny-prefixes") {
+		t.Errorf("a flag without prefixes: %v", args)
+	}
+	spec.Egress.DenyPrefixes = []string{"2001:db8:1::/64", "2001:db8:2::/56"}
+	args := a.sidecarArgs("whr-1", spec)
+	if i := slices.Index(args, "-deny-prefixes"); i < 0 || args[i+1] != "2001:db8:1::/64,2001:db8:2::/56" {
+		t.Errorf("the sidecar does not carry the prefixes: %v", args)
+	}
+}
+
 func TestCreateArgsPassTheEnvironmentSorted(t *testing.T) {
 	a := &Adapter{owner: "o1"}
 	spec := baseSpec()

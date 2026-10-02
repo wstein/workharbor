@@ -78,6 +78,10 @@ type Egress struct {
 	Image string   // the stock image the proxy runs in
 	Proxy string   // the host path of the proxy binary, mounted read-only into the sidecar
 	Allow []string // host names the agent may reach through the proxy
+	// DenyPrefixes are IPv6 prefixes the proxy refuses like the private ranges:
+	// the global prefixes of the host's own interfaces (design §7.2). Each must
+	// be an IPv6 prefix no wider than /16.
+	DenyPrefixes []string
 }
 
 // ErrInvalidSpec is matched by every error Validate returns.

@@ -422,7 +422,11 @@ func (a *Adapter) sidecarArgs(id string, spec runtime.Spec) []string {
 	allow := append([]string(nil), e.Allow...)
 	sort.Strings(allow)
 	args = append(args, a.labelArgs(roleSidecar, id, map[string]string{egressLabel: strings.Join(allow, ",")})...)
-	return append(args, e.Image, guestProxy, "-listen", "0.0.0.0:"+proxyPort, "-allow", strings.Join(e.Allow, ","))
+	args = append(args, e.Image, guestProxy, "-listen", "0.0.0.0:"+proxyPort, "-allow", strings.Join(e.Allow, ","))
+	if len(e.DenyPrefixes) > 0 {
+		args = append(args, "-deny-prefixes", strings.Join(e.DenyPrefixes, ","))
+	}
+	return args
 }
 
 func sidecarName(id string) string { return id + "-proxy" }

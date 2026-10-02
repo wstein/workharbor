@@ -48,12 +48,22 @@ const GuestBuild = "/var/whr/build"
 // ToolsMount is where the tool store is mounted, read-only, in every environment.
 const ToolsMount = "/tools"
 
+func callPrefixes(f func() []string) []string {
+	if f == nil {
+		return nil
+	}
+	return f()
+}
+
 // SpecOptions is what an environment's spec is made from.
 type SpecOptions struct {
 	Owner     string
 	Env       config.Environment // resolved
 	ToolStore string             // the host directory of the tool store
 	Proxy     string             // the host path of whr-proxy for linux/arm64
+	// HostPrefixes lists the host's own global IPv6 prefixes for the sidecar to
+	// refuse (design §7.2); nil means none.
+	HostPrefixes func() []string
 }
 
 // For returns the spec of a workspace's environment: hardened, on an internal
@@ -75,7 +85,7 @@ func (o SpecOptions) For(w domain.Workspace) runtime.Spec {
 			{Kind: runtime.MountVolume, Source: o.Owner + "-home-" + string(w.ID), Target: GuestHome},
 			{Kind: runtime.MountVolume, Source: o.Owner + "-build-" + string(w.ID), Target: GuestBuild},
 		},
-		Egress: &runtime.Egress{Image: e.Image, Proxy: o.Proxy, Allow: e.EgressAllow},
+		Egress: &runtime.Egress{Image: e.Image, Proxy: o.Proxy, Allow: e.EgressAllow, DenyPrefixes: callPrefixes(o.HostPrefixes)},
 	}
 }
 
@@ -327,7 +337,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}
 		spec.Image = tag
 	}
-	opts := SpecOptions{Owner: Owner, Env: spec, ToolStore: c.Roots.ToolStore, Proxy: proxy}
+	opts := SpecOptions{Owner: Owner, Env: spec, ToolStore: c.Roots.ToolStore, Proxy: proxy, HostPrefixes: HostIPv6Prefixes}
 	roots := append(append([]string(nil), c.Roots.Workspaces...), c.Roots.ToolStore, filepath.Dir(proxy))
 	prepare := func(s runtime.Spec) (runtime.PreparedSpec, error) {
 		return runtime.Prepare(runtime.PrepareOptions{
@@ -345,7 +355,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		_ = st.Close()
 		return Deps{}, nil, err
 	}
-	consoleOpts := ConsoleOptions{Owner: Owner, Image: consoleTag, Console: c.Console.Resolved(), Roots: c.Roots.Workspaces, Proxy: proxy}
+	consoleOpts := ConsoleOptions{Owner: Owner, Image: consoleTag, Console: c.Console.Resolved(), Roots: c.Roots.Workspaces, Proxy: proxy, HostPrefixes: HostIPv6Prefixes}
 	ensureConsole := func(ctx context.Context) error {
 		_, built, err := console.Ensure(ctx, rt, consoleDistro, filepath.Join(dir, "build"))
 		if built {
@@ -457,6 +467,8 @@ type ConsoleOptions struct {
 	Console config.Console // resolved
 	Roots   []string       // the workspace roots, absolute and resolved
 	Proxy   string         // the host path of whr-proxy for linux/arm64
+	// HostPrefixes is as in SpecOptions.
+	HostPrefixes func() []string
 }
 
 // rootName is the directory name a workspace root gets under WorkspacesMount.
@@ -546,7 +558,7 @@ func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
 		Init:         true,
 		Tmpfs:        []string{"/tmp", "/run"},
 		Mounts:       mounts,
-		Egress:       &runtime.Egress{Image: o.Image, Proxy: o.Proxy, Allow: c.EgressAllow},
+		Egress:       &runtime.Egress{Image: o.Image, Proxy: o.Proxy, Allow: c.EgressAllow, DenyPrefixes: callPrefixes(o.HostPrefixes)},
 	}
 }
 

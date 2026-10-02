@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"io/fs"
+	"net/netip"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -44,6 +45,7 @@ func (p PreparedSpec) Spec() Spec {
 	if p.spec.Egress != nil {
 		e := *p.spec.Egress
 		e.Allow = append([]string(nil), e.Allow...)
+		e.DenyPrefixes = append([]string(nil), e.DenyPrefixes...)
 		s.Egress = &e
 	}
 	return s
@@ -142,12 +144,35 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 				add("allowlist entry %q is not a host name or a *.name wildcard", h)
 			}
 		}
+		for _, d := range e.DenyPrefixes {
+			if msg := checkDenyPrefix(d); msg != "" {
+				add("%s", msg)
+			}
+		}
 	}
 	if len(problems) > 0 {
 		sort.Strings(problems)
 		return PreparedSpec{}, &SpecError{Problems: problems}
 	}
 	return PreparedSpec{spec: out, ok: true}, nil
+}
+
+// minDenyBits is the widest prefix the proxy is told to refuse: a /0 would
+// refuse every IPv6 address.
+const minDenyBits = 16
+
+// checkDenyPrefix returns what is wrong with a denied prefix, or "".
+func checkDenyPrefix(d string) string {
+	p, err := netip.ParsePrefix(d)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("denied prefix %q is not a prefix", d)
+	case !p.Addr().Is6() || p.Addr().Is4In6():
+		return fmt.Sprintf("denied prefix %q is not an IPv6 prefix", d)
+	case p.Bits() < minDenyBits:
+		return fmt.Sprintf("denied prefix %q is wider than /%d, which would refuse most of the internet", d, minDenyBits)
+	}
+	return ""
 }
 
 // insideAny reports whether a resolved path lies inside one of the roots.

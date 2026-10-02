@@ -148,6 +148,25 @@ func TestPrepareMountsCacheObjectsReadOnlyAtTheirHostPath(t *testing.T) {
 	}
 }
 
+func TestPrepareChecksTheDeniedPrefixes(t *testing.T) {
+	r := newPrepRig(t)
+	proxy := filepath.Join(r.home, "bin", "proxy")
+	try := func(prefixes ...string) error {
+		spec := goodSpec()
+		spec.Egress = &Egress{Image: "debian", Proxy: proxy, Allow: []string{"example.com"}, DenyPrefixes: prefixes}
+		_, err := Prepare(r.opts, spec)
+		return err
+	}
+	if err := try("2001:db8:1::/64", "2001:db8::/16"); err != nil {
+		t.Errorf("good prefixes: %v", err)
+	}
+	for _, bad := range []string{"::/0", "2000::/15", "10.0.0.0/8", "192.168.0.0/16", "::ffff:10.0.0.0/104", "2001:db8::1", "nonsense", ""} {
+		if err := try("2001:db8:1::/64", bad); !errors.Is(err, ErrInvalidSpec) {
+			t.Errorf("%q: err = %v, want ErrInvalidSpec", bad, err)
+		}
+	}
+}
+
 func TestPrepareChecksTheEgressSidecar(t *testing.T) {
 	r := newPrepRig(t)
 	proxy := filepath.Join(r.home, "bin", "proxy")
