@@ -151,7 +151,9 @@ release-snapshot:
 	go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --config .config/goreleaser.yaml --snapshot --clean --skip=publish,sbom
 
 # Run what CI runs beyond make check, before a branch is merged or rebased into
-# main: the docs build, spelling (typos), links (lychee, online, as CI does),
+# main: the docs build, spelling (typos), links (lychee, online, as CI does;
+# links into this repository's main are checked against the local files, so
+# a file moved on local main does not fail before the push),
 # secrets (gitleaks over the history being merged, as CI scans it) and the
 # workflows (actionlint). typos and lychee come from Homebrew
 # (brew install typos-cli lychee); the rest run through pinned `go run`.
@@ -160,7 +162,9 @@ check-ci: docs check-hooks check-generated
 	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
 	typos --config .config/typos.toml .
-	lychee --config .config/lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
+	lychee --config .config/lychee.toml --no-progress \
+		--remap 'https://github\.com/wstein/workharbor/(?:blob|tree)/main/(.*) file://$(CURDIR)/$$1' \
+		'*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
