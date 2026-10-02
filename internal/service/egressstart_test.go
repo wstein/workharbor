@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,14 +16,15 @@ import (
 // host and whose lockfiles suggest another, and environments with a proxy sidecar.
 func (r *wsRig) withEgressRequests() {
 	r.egress = true
-	r.ws.cfg.Environment = func(_ context.Context, repo, branch string) (devcontainer.Environment, error) {
+	r.ws.cfg.Environment = func(_ context.Context, repo, branch string) (RepoEnvironment, error) {
 		if repo != "wstein/workharbor" || branch != "main" {
 			r.t.Errorf("the environment was read for %s@%s", repo, branch)
 		}
-		return devcontainer.Environment{
+		return RepoEnvironment{Environment: devcontainer.Environment{
+			Origin: devcontainer.OriginDefault, Commit: strings.Repeat("a", 40),
 			Config:         devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}},
 			SuggestedHosts: []string{"sum.golang.org"},
-		}, nil
+		}}, nil
 	}
 }
 
@@ -195,10 +197,14 @@ func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
 func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
 	r := newWsRig(t)
 	r.egress = true
-	r.ws.cfg.Environment = func(context.Context, string, string) (devcontainer.Environment, error) {
-		return devcontainer.Environment{}, errors.New("fetch wstein/workharbor: no route to host")
+	r.ws.cfg.Environment = func(context.Context, string, string) (RepoEnvironment, error) {
+		return RepoEnvironment{}, errors.New("fetch wstein/workharbor: no route to host")
 	}
 	w, a := r.create("docs-ws")
+	if len(r.bgErrs) != 1 {
+		t.Fatalf("a workspace of an unreadable repository gets the default environment and reports it: %v", r.bgErrs)
+	}
+	r.bgErrs = nil
 	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}

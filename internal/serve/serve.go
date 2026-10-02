@@ -18,7 +18,6 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/config"
-	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
@@ -60,7 +59,7 @@ type Deps struct {
 	// Environment reads a repository's environment from the supervisor's own
 	// copy of its default branch (D38), for the egress requests a run's start
 	// asks about. Optional.
-	Environment func(ctx context.Context, repo, branch string) (devcontainer.Environment, error)
+	Environment func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error)
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
 	Clock     service.Clock

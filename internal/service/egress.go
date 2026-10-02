@@ -181,3 +181,14 @@ func (s *Service) continueAllEgress(ctx context.Context) []error {
 	}
 	return errs
 }
+
+// RepoEnvironment is a repository's environment as read from its default branch,
+// with the means to make its image. The supervisor reads it in its own copy,
+// never in a workspace (D38).
+type RepoEnvironment struct {
+	devcontainer.Environment
+	// Image returns the image to run: it builds one from the commit when the
+	// environment has a Dockerfile, once per commit, or returns the image the
+	// file names. Nil when the environment is the supervisor's default.
+	Image func(ctx context.Context) (string, error)
+}

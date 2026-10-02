@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -53,7 +56,7 @@ type WorkspaceConfig struct {
 	// the supervisor's own copy, never from a checkout (D38): the hosts its
 	// devcontainer.json requests and its lockfiles suggest are asked about at a
 	// run's start. Optional: without it nothing is asked.
-	Environment func(ctx context.Context, repo, branch string) (devcontainer.Environment, error)
+	Environment func(ctx context.Context, repo, branch string) (RepoEnvironment, error)
 	// Workflow returns the preset a repository runs under (D47); a task keeps the
 	// one it started under. Nil means the default preset.
 	Workflow func(repo string) string
@@ -168,6 +171,24 @@ func (w *Workspaces) Create(ctx context.Context, req CreateRequest) (domain.Work
 func (w *Workspaces) provision(ctx context.Context, ws domain.Workspace) (string, error) {
 	spec := w.cfg.Spec(ws)
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: ws.Path, Target: WorkspaceMount})
+	// A repository with its own environment (a devcontainer.json or a Dockerfile)
+	// runs its own image, built from the default branch, with its containerEnv;
+	// everything else of the spec stays the supervisor's (D38). A repository that
+	// cannot be read gets the supervisor's default (reported), but one whose image
+	// cannot be built is refused: it asked for an environment it cannot have.
+	if re, ok := w.repoEnvironment(ctx, ws); ok && re.Origin != devcontainer.OriginDefault {
+		image := re.Environment.Image
+		if re.Image != nil {
+			var err error
+			if image, err = re.Image(ctx); err != nil {
+				return "", fmt.Errorf("build the environment of %s: %w", ws.Repo, err)
+			}
+		}
+		var err error
+		if spec, err = re.Spec(spec, image); err != nil {
+			return "", fmt.Errorf("the environment of %s: %w", ws.Repo, err)
+		}
+	}
 	if spec.Egress != nil {
 		// A repository's allowed hosts are in the sidecar from the start, so no
 		// other workspace of it is asked again.
@@ -368,8 +389,9 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 	}
 	w.svc.publish(saved)
 
-	start := func(ctx context.Context) error { return w.startAgent(ctx, task, run, ws, a, prompt, sl) }
-	waiting, err := w.gateEgress(ctx, task, run, ws, start, sl)
+	env, _ := w.repoEnvironment(ctx, ws)
+	start := func(ctx context.Context) error { return w.startAgent(ctx, task, run, ws, a, prompt, sl, env) }
+	waiting, err := w.gateEgress(ctx, task, run, ws, env, start, sl)
 	if err != nil {
 		w.svc.end(run, sl)
 		var rep Report
@@ -381,6 +403,22 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 	return start(ctx)
 }
 
+// repoEnvironment reads the repository's environment from its default branch,
+// in the supervisor's own copy (D38). A repository that cannot be read yields the
+// zero environment and the failure is reported: nothing it would have requested
+// is allowed, and nothing it would have run is run.
+func (w *Workspaces) repoEnvironment(ctx context.Context, ws domain.Workspace) (RepoEnvironment, bool) {
+	if w.cfg.Environment == nil {
+		return RepoEnvironment{}, false
+	}
+	env, err := w.cfg.Environment(ctx, ws.Repo, ws.Integration)
+	if err != nil {
+		w.svc.report(fmt.Errorf("the environment of %s: %w", ws.Repo, err))
+		return RepoEnvironment{}, false
+	}
+	return env, true
+}
+
 // gateEgress asks the human about the hosts the repository requests or suggests
 // and has not answered yet (design §4.2): one blocking approval per host, raised
 // for the run, which stays starting. It returns true when it did, and the agent
@@ -388,16 +426,11 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 // cannot be read right now does not stop the run: it starts with the hosts
 // already allowed, and the failure is reported, since no host is ever allowed
 // by what could not be read.
-func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws domain.Workspace, start func(context.Context) error, sl *slot) (bool, error) {
-	if w.cfg.Environment == nil {
-		return false, nil
+func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws domain.Workspace, env RepoEnvironment, start func(context.Context) error, sl *slot) (bool, error) {
+	if env.Commit == "" {
+		return false, nil // nothing was read
 	}
-	env, err := w.cfg.Environment(ctx, ws.Repo, ws.Integration)
-	if err != nil {
-		w.svc.report(fmt.Errorf("egress requests of %s: %w", ws.Repo, err))
-		return false, nil
-	}
-	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env)
+	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env.Environment)
 	if err != nil {
 		return false, err
 	}
@@ -471,7 +504,7 @@ func unionHosts(a, b []string) []string {
 // startAgent starts the agent of a run that is starting, after the allowlist was
 // brought up to date. It is the second half of launch: the run is saved, and the
 // egress requests, if any, are answered.
-func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws domain.Workspace, a domain.Agent, prompt string, sl *slot) error {
+func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws domain.Workspace, a domain.Agent, prompt string, sl *slot, env RepoEnvironment) error {
 	agg, err := w.svc.store.LoadTask(ctx, task)
 	if err != nil {
 		w.svc.end(run, sl)
@@ -494,6 +527,11 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		spec.Prompt = prompt
 	}
 	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
+	if err := w.postCreate(ctx, ws, a, spec.Env, env); err != nil {
+		w.svc.end(run, sl)
+		var rep Report
+		return errors.Join(err, w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep))
+	}
 	// The session outlives the request that starts it (the API request returns
 	// at once; the agent runs for hours). Shutdown stops it.
 	sess, err := w.svc.ag.Start(context.WithoutCancel(ctx), spec)
@@ -696,4 +734,51 @@ func (w *Workspaces) workflowOf(repo string) string {
 		return p
 	}
 	return string(policy.DefaultPreset)
+}
+
+// postCreate runs the repository's postCreateCommand inside the environment, as
+// the agent's user, in the agent's worktree and with the agent's environment
+// (the egress proxy among it), once per environment and command set: a marker in
+// the agent home records it, so a later run does not run it again, and a
+// changed command runs again. It runs after the allowlist is up to date and
+// before the agent starts, so what it fetches goes through the hosts the human
+// allowed. A command that fails ends the run as failed, with the tail of its
+// output (the repository's own text, untrusted).
+func (w *Workspaces) postCreate(ctx context.Context, ws domain.Workspace, a domain.Agent, env []string, re RepoEnvironment) error {
+	cmds := re.PostCreate()
+	if len(cmds) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(cmds)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(raw)
+	marker := `"$HOME/.whr-post-create-` + hex.EncodeToString(sum[:8]) + `"`
+	if _, code, err := w.svc.exec(ctx, string(ws.EnvID), runtime.ExecRequest{Cmd: []string{"sh", "-c", "test -f " + marker}, Env: env}); err != nil {
+		return fmt.Errorf("check the post-create marker: %w", err)
+	} else if code == 0 {
+		return nil
+	}
+	for _, c := range cmds {
+		c.Env, c.Dir = env, a.Worktree
+		out, code, err := w.svc.exec(ctx, string(ws.EnvID), c)
+		if err != nil {
+			return fmt.Errorf("post-create command %q: %w", strings.Join(c.Cmd, " "), err)
+		}
+		if code != 0 {
+			if len(out) > 400 {
+				out = out[len(out)-400:]
+			}
+			return fmt.Errorf("post-create command %q exited %d: %s", strings.Join(c.Cmd, " "), code, strings.TrimSpace(out))
+		}
+	}
+	out, code, err := w.svc.exec(ctx, string(ws.EnvID), runtime.ExecRequest{Cmd: []string{"sh", "-c", "touch " + marker}, Env: env})
+	if err != nil {
+		return fmt.Errorf("record that post-create ran: %w", err)
+	}
+	if code != 0 {
+		return fmt.Errorf("record that post-create ran: exited %d: %s", code, strings.TrimSpace(out))
+	}
+	return nil
 }

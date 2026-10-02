@@ -54,6 +54,7 @@ type Fake struct {
 	volumes  map[string]bool   // named volumes that exist
 	networks map[string]string // network name to the environment it belongs to
 	sidecars map[string]bool
+	execs    []ExecCall
 	next     int
 	ip       int
 }
@@ -410,4 +411,17 @@ func (f *Fake) UpdateEgress(_ context.Context, id string, prep runtime.PreparedS
 	e.allow = sortedCopy(spec.Egress.Allow)
 	e.proxies++ // a new sidecar is a new address
 	return nil
+}
+
+// ExecCall is one exec the fake was asked to run, with the whole request.
+type ExecCall struct {
+	Env string // the environment's ID
+	Req runtime.ExecRequest
+}
+
+// Execs returns every exec the fake was asked to run, in order.
+func (f *Fake) Execs() []ExecCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ExecCall(nil), f.execs...)
 }

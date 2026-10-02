@@ -31,6 +31,7 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 		f.mu.Unlock()
 		return nil, runtime.ErrNotRunning
 	}
+	f.execs = append(f.execs, ExecCall{Env: id, Req: req})
 	sleeping := len(req.Cmd) > 0 && req.Cmd[0] == "sleep"
 	if sleeping {
 		e.procs++ // the process exists before Exec returns

@@ -311,7 +311,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole,
-		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}),
+		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
 		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 	}, func() {
@@ -451,25 +451,64 @@ func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
 	}
 }
 
-// Environment reads a repository's environment for the egress requests of a
-// run's start (design §4.2, D38): it refreshes the supervisor's own mirror of the
-// repository's integration branch and resolves the devcontainer.json, the
-// toolchain files and the lockfiles of that commit there, never in a workspace.
-// A mirror that cannot be fetched is an error, which the caller reports; no host
-// is allowed by what could not be read.
-func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.Options) func(ctx context.Context, repo, branch string) (devcontainer.Environment, error) {
-	return func(ctx context.Context, repo, branch string) (devcontainer.Environment, error) {
+// Environment reads a repository's environment from its default branch (design
+// §4.2, D38): it refreshes the supervisor's own mirror of the integration branch
+// and resolves the devcontainer.json, the toolchain files and the lockfiles of
+// that commit there, never in a workspace. Its Image builds the repository's own
+// image, once per commit and tag, from a context exported from that commit into a
+// directory of the supervisor's own (design §5.1). A mirror that cannot be
+// fetched is an error, which the caller reports; no host is allowed and nothing
+// is run for what could not be read.
+func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.Options, rt baseimage.Builder, owner, workDir string) func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error) {
+	return func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error) {
 		_, cache, err := topics(ctx, repo)
 		if err != nil {
-			return devcontainer.Environment{}, err
+			return service.RepoEnvironment{}, err
 		}
 		if err := cache.Refresh(ctx, branch); err != nil {
-			return devcontainer.Environment{}, fmt.Errorf("fetch %s: %w", repo, err)
+			return service.RepoEnvironment{}, fmt.Errorf("fetch %s: %w", repo, err)
 		}
 		mirror, err := git.OpenBare(ctx, cache.Path())
 		if err != nil {
-			return devcontainer.Environment{}, err
+			return service.RepoEnvironment{}, err
 		}
-		return devcontainer.Resolve(ctx, mirror, "refs/heads/"+branch, opt)
+		env, err := devcontainer.Resolve(ctx, mirror, "refs/heads/"+branch, opt)
+		if err != nil {
+			return service.RepoEnvironment{}, err
+		}
+		re := service.RepoEnvironment{Environment: env}
+		if env.Origin != devcontainer.OriginDefault {
+			re.Image = func(ctx context.Context) (string, error) {
+				if !env.Built() {
+					return env.Image, nil
+				}
+				tag := env.Tag(owner)
+				if have, err := rt.HasImage(ctx, tag); err != nil {
+					return "", err
+				} else if have {
+					return tag, nil
+				}
+				if err := os.MkdirAll(workDir, 0o700); err != nil {
+					return "", err
+				}
+				dir, err := os.MkdirTemp(workDir, "devcontainer-")
+				if err != nil {
+					return "", err
+				}
+				defer func() { _ = os.RemoveAll(dir) }()
+				b, _, err := env.Stage(ctx, mirror, owner, dir)
+				if err != nil {
+					return "", err
+				}
+				if out, err := rt.Build(ctx, b); err != nil {
+					if len(out) > 2000 {
+						out = out[len(out)-2000:]
+					}
+					return "", fmt.Errorf("%w\n%s", err, out)
+				}
+				return tag, nil
+			}
+		}
+		return re, nil
 	}
 }
