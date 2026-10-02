@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/hostgit"
@@ -39,6 +40,27 @@ type Roots struct {
 	// repository of the human's.
 	Workspaces []string `json:"workspaces"`
 	ToolStore  string   `json:"tool_store"` // the shared read-only tool store (§5.6)
+}
+
+// Board names a GitHub project board (Projects v2) the supervisor writes (D30).
+// Agents never write to it.
+type Board struct {
+	// Owner is the login of the user or organization that owns the project, and
+	// Number the project's number in its URL.
+	Owner  string `json:"owner"`
+	Number int    `json:"number"`
+	// Organization says the project belongs to an organization. A user-owned
+	// project may not accept an App's token at all (unverified, issue #70).
+	Organization bool `json:"organization,omitempty"`
+	// StatusField, SessionField and LinkField name the project's fields; the
+	// defaults are "Status", "Session" and "Task". A field the project does not
+	// have is not written.
+	StatusField  string `json:"status_field,omitempty"`
+	SessionField string `json:"session_field,omitempty"`
+	LinkField    string `json:"link_field,omitempty"`
+	// PublicURL is whr's HTTPS name behind the forwarder (D29): the card links
+	// to the task there. Without it the card has no link.
+	PublicURL string `json:"public_url,omitempty"`
 }
 
 // GitHub is the App the forge adapter acts as (D31).
@@ -74,6 +96,9 @@ type Config struct {
 	// ToolProfile names the profile of the tool store the environments use
 	// (`profiles/<name>`). Optional when the store has exactly one.
 	ToolProfile string `json:"tool_profile,omitempty"`
+	// Board is the project board the supervisor keeps current with the state of
+	// its tasks (D30). Optional; it adds the board's permission to the App.
+	Board *Board `json:"board,omitempty"`
 	// AgentPermissionMode is how the agent's permission prompts are handled:
 	// "dontAsk" (the default) never asks and runs only AgentAllowedTools, and
 	// "manual" routes every prompt to the human as an approval Decision over
@@ -254,6 +279,24 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if b := c.Board; b != nil {
+		if !boardOwnerRE.MatchString(b.Owner) {
+			add("board.owner: %q is not a GitHub login", b.Owner)
+		}
+		if b.Number <= 0 {
+			add("board.number: the project number must be positive")
+		}
+		for name, f := range map[string]string{"status_field": b.StatusField, "session_field": b.SessionField, "link_field": b.LinkField} {
+			if len(f) > 100 || strings.ContainsFunc(f, unicode.IsControl) {
+				add("board.%s: a field name is at most 100 characters, without control characters", name)
+			}
+		}
+		if b.PublicURL != "" {
+			if u, err := url.Parse(b.PublicURL); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || strings.Trim(u.Path, "/") != "" || u.RawQuery != "" {
+				add("board.public_url: %q must be an https address without a path", b.PublicURL)
+			}
+		}
+	}
 	switch c.AgentPermissionMode {
 	case "", "dontAsk":
 	case "manual":
@@ -578,3 +621,5 @@ func checkAPIURL(raw string) string {
 	}
 	return fmt.Sprintf("%q must be https, or http to a loopback address", raw)
 }
+
+var boardOwnerRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}$`)

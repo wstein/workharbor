@@ -15,8 +15,11 @@ import (
 	"github.com/wstein/workharbor/internal/agent/agenttest"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
+	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -169,5 +172,27 @@ func TestNewIDIsRandomAndPrefixed(t *testing.T) {
 	a, b := NewID(), NewID()
 	if a == b || !strings.HasPrefix(string(a), "x-") || len(a) != 18 {
 		t.Errorf("ids %q %q", a, b)
+	}
+}
+
+// With a board in the configuration the service writes it through the guard, and
+// the card links the task on whr's HTTPS name.
+func TestTheBoardIsWiredThroughTheGuard(t *testing.T) {
+	var scfg service.Config
+	addBoard(&scfg, Deps{Config: &config.Config{}, Forge: forgetest.NewFake()})
+	if scfg.Board != nil || scfg.BoardLink != nil {
+		t.Error("a board without configuration")
+	}
+	cfg := &config.Config{Board: &config.Board{Owner: "acme", Number: 3, PublicURL: "https://whr.example.test"}}
+	f := forgetest.NewFake()
+	addBoard(&scfg, Deps{Config: cfg, Forge: f})
+	if _, ok := scfg.Board.(*forge.Guard); !ok {
+		t.Fatalf("the board is %T, want the guard", scfg.Board)
+	}
+	if got := scfg.BoardLink("t1"); got != "https://whr.example.test/tasks/t1" {
+		t.Errorf("link %q", got)
+	}
+	if err := scfg.Board.UpdateCard(context.Background(), "wstein/workharbor", 7, forge.CardUpdate{Status: forge.StatusDone}); err != nil || len(f.CardsSeen()) != 1 {
+		t.Errorf("update: %v, cards %v", err, f.CardsSeen())
 	}
 }

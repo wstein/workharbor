@@ -67,8 +67,12 @@ func (b *bus) publish(events ...domain.Event) {
 	}
 }
 
-// publish hands saved events to subscribers. The caller has committed them.
-func (s *Service) publish(events []domain.Event) { s.bus.publish(events...) }
+// publish hands saved events to subscribers and keeps the board in step. The
+// caller has committed them.
+func (s *Service) publish(events []domain.Event) {
+	s.bus.publish(events...)
+	s.mirror(events)
+}
 
 // PublishEphemeral sends an event to subscribers of a task from memory, with no
 // sequence number, and never stores it: token deltas and heartbeats (§5.4). Its

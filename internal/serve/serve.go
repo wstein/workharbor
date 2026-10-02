@@ -18,6 +18,8 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/notify"
+	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
@@ -77,12 +79,14 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, service.Config{
+	scfg := service.Config{
 		Owner:   d.Owner,
 		Spec:    d.AgentSpec,
 		NewID:   NewID,
 		OnError: func(err error) { logf("background error: %v", err) },
-	})
+	}
+	addBoard(&scfg, d)
+	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
@@ -139,4 +143,18 @@ func Run(ctx context.Context, d Deps) error {
 		return nil
 	}
 	return err
+}
+
+// addBoard gives the service the project board of D30: the supervisor's own
+// writes, through the autonomy table, with a link to the task on each card. The
+// guard's pusher and verifier are for the push flow, not for this.
+func addBoard(scfg *service.Config, d Deps) {
+	b := d.Config.Board
+	if b == nil || d.Forge == nil {
+		return
+	}
+	scfg.Board = forge.NewGuard(d.Forge, nil, policy.Default(), nil)
+	if b.PublicURL != "" {
+		scfg.BoardLink = func(task domain.ID) string { return notify.Link(b.PublicURL, notify.Message{TaskID: task}) }
+	}
 }

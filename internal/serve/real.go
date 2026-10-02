@@ -274,7 +274,11 @@ func newGitHub(c *config.Config, rd *redact.Redactor) (*github.Client, error) {
 	for i, r := range c.Repositories {
 		repos[i] = r.Name
 	}
-	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd, BaseURL: c.GitHub.APIURL})
+	gc := github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd, BaseURL: c.GitHub.APIURL}
+	if b := c.Board; b != nil {
+		gc.Board = &github.BoardConfig{Owner: b.Owner, Organization: b.Organization, Number: b.Number, StatusField: b.StatusField, SessionField: b.SessionField, LinkField: b.LinkField}
+	}
+	return github.New(gc)
 }
 
 // EditorCopyDir is the directory of the state directory that `whr open` makes

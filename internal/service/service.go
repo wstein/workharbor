@@ -15,6 +15,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/store"
@@ -69,6 +70,12 @@ type Config struct {
 	// or failed (design §9.4). It is best effort: a failure is reported through
 	// OnError and never fails the change. Optional.
 	Notifier notify.Notifier
+	// Board, if set, is kept current with the state of every task that started
+	// from an issue (design D30): the supervisor's own action, through the
+	// forge's autonomy policy. A failed write never affects a task. Optional.
+	Board forge.Board
+	// BoardLink returns the link to a task in the web UI for its card. Optional.
+	BoardLink func(task domain.ID) string
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)
@@ -88,6 +95,7 @@ type Service struct {
 	closing   bool                              // set by Shutdown: no session joins the wait group any more
 	async     *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
 	bus       bus                               // live events for subscribers (design §5.3)
+	board     boardQueue                        // card updates waiting for the worker (D30)
 	approvals map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
 }
 
@@ -144,8 +152,18 @@ func (s *Service) Shutdown() {
 		_ = sess.Stop(context.Background())
 	}
 	s.wg.Wait()
+	s.waitBoard(10 * time.Second) // the last card updates, bounded: the board is never worth a hang
 	if s.async != nil {
 		s.async.Close() // deliver what is queued, then stop
+	}
+}
+
+func (s *Service) waitBoard(limit time.Duration) {
+	done := make(chan struct{})
+	go func() { s.board.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(limit):
 	}
 }
 

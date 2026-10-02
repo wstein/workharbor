@@ -240,3 +240,28 @@ func TestAgentPermissionMode(t *testing.T) {
 		t.Errorf("an allowlist in manual mode: %s", problems(err))
 	}
 }
+
+func TestBoardIsOptionalAndChecked(t *testing.T) {
+	r := newRig(t)
+	if _, err := r.parse(t); err != nil {
+		t.Fatalf("no board: %s", problems(err))
+	}
+	r.cfg.Board = &Board{Owner: "acme", Number: 3, Organization: true, StatusField: "Stage", PublicURL: "https://whr.example.test"}
+	if c, err := r.parse(t); err != nil || c.Board == nil || c.Board.Number != 3 {
+		t.Fatalf("a good board: %s", problems(err))
+	}
+	for name, mut := range map[string]func(*Board){
+		"owner a path":     func(b *Board) { b.Owner = "../x" },
+		"no number":        func(b *Board) { b.Number = 0 },
+		"control in field": func(b *Board) { b.LinkField = "a\nb" },
+		"http link":        func(b *Board) { b.PublicURL = "http://whr.example.test" },
+		"link with path":   func(b *Board) { b.PublicURL = "https://whr.example.test/x" },
+		"link credentials": func(b *Board) { b.PublicURL = "https://u:p@whr.example.test" },
+	} {
+		r.cfg.Board = &Board{Owner: "acme", Number: 3}
+		mut(r.cfg.Board)
+		if _, err := r.parse(t); !strings.Contains(problems(err), "board.") {
+			t.Errorf("%s: %s", name, problems(err))
+		}
+	}
+}

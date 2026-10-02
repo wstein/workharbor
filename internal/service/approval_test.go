@@ -33,10 +33,10 @@ type approved struct {
 	err error
 }
 
-func (r *rig) ask(ctx context.Context, tool, input string) <-chan approved {
+func (r *rig) ask(ctx context.Context, input string) <-chan approved {
 	out := make(chan approved, 1)
 	go func() {
-		a, err := r.svc.approverFor("t1", "r1").Approve(ctx, agent.ApprovalRequest{ID: "req-1", Tool: tool, Input: input})
+		a, err := r.svc.approverFor("t1", "r1").Approve(ctx, agent.ApprovalRequest{ID: "req-1", Tool: "Bash", Input: input})
 		out <- approved{a, err}
 	}()
 	return out
@@ -56,7 +56,7 @@ func TestAPermissionPromptBecomesAnApprovalDecisionAndTheAnswerGoesBack(t *testi
 		t.Run(tc.option, func(t *testing.T) {
 			r := newRig(t)
 			r.live()
-			res := r.ask(bg, "Bash", strings.Repeat("x", 3*domain.MaxDecisionInput))
+			res := r.ask(bg, strings.Repeat("x", 3*domain.MaxDecisionInput))
 			d := r.openApproval()
 			if d.Subject != "Bash" || !d.Blocking || len([]rune(d.Input)) > domain.MaxDecisionInput || d.RunID != "r1" || d.Deadline.IsZero() {
 				t.Fatalf("decision %+v", d)
@@ -109,7 +109,7 @@ func TestAnUnansweredApprovalExpiresAndDenies(t *testing.T) {
 	r.live()
 	ctx, cancel := context.WithTimeout(bg, 50*time.Millisecond)
 	defer cancel()
-	res := r.ask(ctx, "Bash", "make deploy")
+	res := r.ask(ctx, "make deploy")
 	d := r.openApproval()
 	got := <-res
 	if got.err == nil || got.a.Allow {
@@ -134,7 +134,7 @@ func TestPausingARunSupersedesItsApproval(t *testing.T) {
 	r := newRig(t)
 	r.live()
 	ctx, cancel := context.WithCancel(bg)
-	res := r.ask(ctx, "Bash", "ls")
+	res := r.ask(ctx, "ls")
 	d := r.openApproval()
 
 	must(t, r.svc.update(bg, "t1", func(a *domain.TaskAggregate) error {
