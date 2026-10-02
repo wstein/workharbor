@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,13 @@ import (
 
 // DefaultBaseURL is GitHub's API.
 const DefaultBaseURL = "https://api.github.com"
+
+// AppPermissions are exactly the permissions the App needs and no more (D15,
+// D31): the manifest asks for them, an installation token is minted with them,
+// and `whr doctor` compares the installation against them. It returns a copy.
+func AppPermissions() map[string]string {
+	return map[string]string{"contents": "write", "issues": "write", "pull_requests": "write", "metadata": "read"}
+}
 
 // Errors the client returns, each matched with errors.Is. An API failure is
 // also an *APIError with the status and GitHub's message.
@@ -333,7 +341,7 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 	}
 	err = c.do(ctx, jwt, http.MethodPost, "/app/installations/"+strconv.FormatInt(id, 10)+"/access_tokens", map[string]any{
 		"repositories": []string{name},
-		"permissions":  map[string]string{"issues": "write", "pull_requests": "write", "contents": "write", "metadata": "read"},
+		"permissions":  AppPermissions(),
 	}, &tok)
 	if err != nil {
 		return "", fmt.Errorf("mint an installation token for %s: %w", repo, err)
@@ -547,3 +555,104 @@ func (c *Client) VerifyWebhook(h http.Header, body []byte) error {
 }
 
 var _ forge.Adapter = (*Client)(nil)
+
+// RepoReport is what GitHub says about the App's installation on one repository.
+type RepoReport struct {
+	Repo      string
+	Installed bool
+	// Problems say how the installation differs from what workharbor expects:
+	// permissions it lacks or has beyond AppPermissions.
+	Problems []string
+}
+
+// AppReport is the result of CheckApp.
+type AppReport struct {
+	Slug     string
+	Problems []string // the App itself: another App ID, or permissions other than AppPermissions
+	Repos    []RepoReport
+}
+
+// OK reports whether the App and every installation are as expected.
+func (r AppReport) OK() bool {
+	if len(r.Problems) > 0 {
+		return false
+	}
+	for _, rr := range r.Repos {
+		if !rr.Installed || len(rr.Problems) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// CheckApp asks GitHub (GET /app and GET /repos/{repo}/installation, both as the
+// App) whether the App is installed on every configured repository with exactly
+// AppPermissions. A repository without an installation is a finding, not an
+// error; an error is a request that did not get an answer about the App.
+func (c *Client) CheckApp(ctx context.Context) (AppReport, error) {
+	jwt, err := c.appJWT()
+	if err != nil {
+		return AppReport{}, err
+	}
+	var app struct {
+		ID          int64             `json:"id"`
+		Slug        string            `json:"slug"`
+		Permissions map[string]string `json:"permissions"`
+	}
+	if err := c.do(ctx, jwt, http.MethodGet, "/app", nil, &app); err != nil {
+		return AppReport{}, err
+	}
+	rep := AppReport{Slug: app.Slug}
+	if app.ID != c.cfg.AppID {
+		rep.Problems = append(rep.Problems, fmt.Sprintf("GitHub answered for App %d, not %d", app.ID, c.cfg.AppID))
+	}
+	rep.Problems = append(rep.Problems, permissionDiff("the App", app.Permissions)...)
+	for _, repo := range c.cfg.Repos {
+		rr := RepoReport{Repo: repo}
+		var inst struct {
+			Permissions map[string]string `json:"permissions"`
+		}
+		err := c.do(ctx, jwt, http.MethodGet, "/repos/"+repo+"/installation", nil, &inst)
+		switch {
+		case errors.Is(err, ErrNotFound):
+			// not installed on this repository
+		case err != nil:
+			return AppReport{}, err
+		default:
+			rr.Installed = true
+			rr.Problems = permissionDiff("the installation", inst.Permissions)
+		}
+		rep.Repos = append(rep.Repos, rr)
+	}
+	return rep, nil
+}
+
+// permissionDiff lists what who has beyond or below AppPermissions.
+func permissionDiff(who string, got map[string]string) []string {
+	want := AppPermissions()
+	var out []string
+	for _, k := range sortedPermKeys(want) {
+		if got[k] != want[k] {
+			have := got[k]
+			if have == "" {
+				have = "nothing"
+			}
+			out = append(out, fmt.Sprintf("%s has %s on %s, want %s", who, have, k, want[k]))
+		}
+	}
+	for _, k := range sortedPermKeys(got) {
+		if _, ok := want[k]; !ok {
+			out = append(out, fmt.Sprintf("%s has %s on %s, which is not wanted", who, got[k], k))
+		}
+	}
+	return out
+}
+
+func sortedPermKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

@@ -123,7 +123,7 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(400, map[string]string{"message": "bad headers"})
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/app/") || strings.HasSuffix(r.URL.Path, "/installation") {
+	if r.URL.Path == "/app" || strings.HasPrefix(r.URL.Path, "/app/") || strings.HasSuffix(r.URL.Path, "/installation") {
 		if !f.jwtOK(bearer) {
 			reply(401, map[string]string{"message": "A JSON web token could not be decoded"})
 			return
@@ -582,5 +582,83 @@ func TestTheAppJWTIsShortLivedAndBackdated(t *testing.T) {
 	_ = json.Unmarshal(cb, &claims)
 	if claims.Iat != now().Add(-time.Minute).Unix() || claims.Exp-claims.Iat != 600 {
 		t.Errorf("claims %+v: want iat a minute ago and a ten minute span", claims)
+	}
+}
+
+func jsonReply(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func TestCheckAppFindsAMissingInstallationAndWrongPermissions(t *testing.T) {
+	now := func() time.Time { return time.Unix(1_800_000_000, 0) }
+	f := newFake(t, now)
+	f.handlers["GET /app"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"id": 4242, "slug": "workharbor-x", "permissions": AppPermissions()})
+	}
+	f.handlers["GET /repos/wstein/workharbor/installation"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"id": 7, "permissions": AppPermissions()})
+	}
+	f.handlers["GET /repos/wstein/other/installation"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 404, map[string]string{"message": "Not Found"})
+	}
+	f.handlers["GET /repos/wstein/wide/installation"] = func(w http.ResponseWriter, _ *http.Request) {
+		p := AppPermissions()
+		p["contents"] = "read"
+		p["administration"] = "write"
+		delete(p, "issues")
+		jsonReply(w, 200, map[string]any{"id": 8, "permissions": p})
+	}
+	c := f.client(t, func(cfg *Config) { cfg.Repos = []string{"wstein/workharbor", "wstein/other", "wstein/wide"} })
+	rep, err := c.CheckApp(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.OK() || rep.Slug != "workharbor-x" || len(rep.Problems) != 0 {
+		t.Fatalf("%+v", rep)
+	}
+	byRepo := map[string]RepoReport{}
+	for _, r := range rep.Repos {
+		byRepo[r.Repo] = r
+	}
+	if r := byRepo["wstein/workharbor"]; !r.Installed || len(r.Problems) != 0 {
+		t.Errorf("exact installation: %+v", r)
+	}
+	if r := byRepo["wstein/other"]; r.Installed {
+		t.Errorf("a 404 is not an installation: %+v", r)
+	}
+	r := byRepo["wstein/wide"]
+	joined := strings.Join(r.Problems, "|")
+	for _, want := range []string{"read on contents, want write", "nothing on issues, want write", "write on administration, which is not wanted"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("problems %q lack %q", joined, want)
+		}
+	}
+}
+
+func TestCheckAppSaysSoWhenAllIsRight(t *testing.T) {
+	now := func() time.Time { return time.Unix(1_800_000_000, 0) }
+	f := newFake(t, now)
+	f.handlers["GET /app"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"id": 4242, "slug": "s", "permissions": AppPermissions()})
+	}
+	f.handlers["GET /repos/wstein/workharbor/installation"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"id": 7, "permissions": AppPermissions()})
+	}
+	rep, err := f.client(t, nil).CheckApp(bg)
+	if err != nil || !rep.OK() {
+		t.Fatalf("%+v, %v", rep, err)
+	}
+}
+
+func TestCheckAppReportsABadKeyAsAnAuthError(t *testing.T) {
+	now := func() time.Time { return time.Unix(1_800_000_000, 0) }
+	f := newFake(t, now)
+	f.handlers["GET /app"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 401, map[string]string{"message": "A JSON web token could not be decoded"})
+	}
+	if _, err := f.client(t, nil).CheckApp(bg); !errors.Is(err, ErrAuth) {
+		t.Fatalf("err = %v, want ErrAuth", err)
 	}
 }
