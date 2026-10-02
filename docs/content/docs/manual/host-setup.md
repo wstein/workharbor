@@ -234,7 +234,7 @@ Until `v0.1.0` the host runs a **dogfood draft release**: a signed prerelease ta
     make install-release VERSION=v0.1.0-alpha.1    # PREFIX=/opt/whr is the default
     ```
 
-    It downloads the macOS archive, the guest archive and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of the repository's release workflow, and installs `whr` in `/opt/whr/bin` and the guest binaries `whr-shim` and `whr-proxy` in `/opt/whr/libexec/whr`; it installs nothing if a check fails. Whether `gh release download` finds a draft by its tag is {{< status unverified >}} until the first draft (issue #103). Upgrade the same way with the next tag. Then, as `whr`, add `export PATH=/opt/whr/bin:$PATH` to `~/.zprofile`: `whr version` shows the tag, and `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
+    It downloads the macOS archive, the guest archive and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of the repository's release workflow, and installs `whr` in `/opt/whr/bin` and the guest binaries `whr-shim` and `whr-proxy` in `/opt/whr/libexec/whr`; it installs nothing if a check fails. `gh release download` finds a draft by its tag ({{< status verified >}} with the first draft, `v0.1.0-alpha.1`, on an Apple-silicon Mac; issue #103). Upgrade the same way with the next tag. Then, as `whr`, add `export PATH=/opt/whr/bin:$PATH` to `~/.zprofile`: `whr version` shows the tag, and `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
 
 The remaining steps run as the `whr` user: steps 2 and 3 from any `whr` shell, step 4 from a Terminal of its desktop session (step 2).
 
