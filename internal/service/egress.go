@@ -79,3 +79,105 @@ func (s *Service) keepEgressAnswer(ctx context.Context, d domain.Decision, optio
 	}
 	return s.store.SetEgressHost(ctx, agg.Task().Repo, d.Host, allowed, d.ID, s.clock.Now())
 }
+
+// egressWait is a run that stays starting until the human has answered every
+// egress request raised for it (design §4.2). finish starts the agent; sl is the
+// run's slot, held so the reconciler does not take the run for lost while it waits.
+type egressWait struct {
+	task   domain.ID
+	finish func(ctx context.Context) error
+	sl     *slot
+}
+
+// holdForEgress records that a run waits for its egress requests. The wait is in
+// memory: after a restart the reconciler interrupts the run, which supersedes the
+// requests, and the host is asked again at the next start.
+func (s *Service) holdForEgress(run domain.ID, w *egressWait) {
+	s.mu.Lock()
+	if s.egressWaits == nil {
+		s.egressWaits = map[domain.ID]*egressWait{}
+	}
+	s.egressWaits[run] = w
+	s.mu.Unlock()
+}
+
+// takeEgressWait removes and returns the wait of a run, if it has one.
+func (s *Service) takeEgressWait(run domain.ID) *egressWait {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := s.egressWaits[run]
+	delete(s.egressWaits, run)
+	return w
+}
+
+// dropEgressWait forgets a run's wait and frees its slot: the run ended without
+// starting its agent (the task was cancelled).
+func (s *Service) dropEgressWait(run domain.ID) {
+	if w := s.takeEgressWait(run); w != nil {
+		s.end(run, w.sl)
+	}
+}
+
+// egressOpen reports whether a run still has an egress request waiting for an
+// answer.
+func (s *Service) egressOpen(ctx context.Context, task, run domain.ID) (bool, error) {
+	agg, err := s.store.LoadTask(ctx, task)
+	if err != nil {
+		return false, err
+	}
+	if r, ok := agg.Run(run); !ok || r.State != domain.RunStarting {
+		return false, nil
+	}
+	for _, d := range agg.Decisions() {
+		if d.RunID == run && d.Cause == domain.CauseEgressRequest && d.Status == domain.DecisionOpen {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// continueEgress starts the agent of a run that waited for egress requests, once
+// none is open: every request was answered, or expired, which is a denial for
+// this run only. A run that is no longer starting (cancelled) is dropped.
+func (s *Service) continueEgress(ctx context.Context, task, run domain.ID) error {
+	s.mu.Lock()
+	_, waiting := s.egressWaits[run]
+	s.mu.Unlock()
+	if !waiting {
+		return nil
+	}
+	agg, err := s.store.LoadTask(ctx, task)
+	if err != nil {
+		return err
+	}
+	if r, ok := agg.Run(run); !ok || r.State != domain.RunStarting {
+		s.dropEgressWait(run)
+		return nil
+	}
+	if open, err := s.egressOpen(ctx, task, run); err != nil || open {
+		return err
+	}
+	w := s.takeEgressWait(run)
+	if w == nil {
+		return nil // another caller got there first
+	}
+	return w.finish(ctx)
+}
+
+// continueAllEgress is continueEgress for every run that waits: the reconciler
+// calls it, because a request that expired opens the way without an answer.
+func (s *Service) continueAllEgress(ctx context.Context) []error {
+	s.mu.Lock()
+	waits := make(map[domain.ID]domain.ID, len(s.egressWaits)) // run -> task
+	for run, w := range s.egressWaits {
+		waits[run] = w.task
+	}
+	s.mu.Unlock()
+	var errs []error
+	for run, task := range waits {
+		if err := s.continueEgress(ctx, task, run); err != nil {
+			errs = append(errs, fmt.Errorf("run %s: %w", run, err))
+		}
+	}
+	return errs
+}

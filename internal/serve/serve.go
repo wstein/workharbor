@@ -18,6 +18,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/api"
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
@@ -56,6 +57,10 @@ type Deps struct {
 	// Both are optional: without them there is no console.
 	ConsoleSpec  func(rw []domain.Workspace) runtime.Spec
 	ConsoleImage func(ctx context.Context) error
+	// Environment reads a repository's environment from the supervisor's own
+	// copy of its default branch (D38), for the egress requests a run's start
+	// asks about. Optional.
+	Environment func(ctx context.Context, repo, branch string) (devcontainer.Environment, error)
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
 	Clock     service.Clock
@@ -118,7 +123,7 @@ func Run(ctx context.Context, d Deps) error {
 			return ""
 		},
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
-		Topics: d.Topics, EditorDir: d.EditorDir,
+		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment,
 	})
 	be := api.NewBackend(svc, ws)
 	auth, err := web.NewTokenAuth(token, nil)

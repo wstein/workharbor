@@ -1,0 +1,211 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/wstein/workharbor/internal/devcontainer"
+	"github.com/wstein/workharbor/internal/domain"
+)
+
+// withEgressRequests gives the rig a repository whose environment requests one
+// host and whose lockfiles suggest another, and environments with a proxy sidecar.
+func (r *wsRig) withEgressRequests() {
+	r.egress = true
+	r.ws.cfg.Environment = func(_ context.Context, repo, branch string) (devcontainer.Environment, error) {
+		if repo != "wstein/workharbor" || branch != "main" {
+			r.t.Errorf("the environment was read for %s@%s", repo, branch)
+		}
+		return devcontainer.Environment{
+			Config:         devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}},
+			SuggestedHosts: []string{"sum.golang.org"},
+		}, nil
+	}
+}
+
+func (r *wsRig) allowOf(env domain.ID) []string {
+	r.t.Helper()
+	info, err := r.rt.Adapter.Inspect(bg, string(env))
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return info.EgressAllow
+}
+
+func (r *wsRig) openEgress(task domain.ID) []domain.Decision {
+	r.t.Helper()
+	a, err := r.store.LoadTask(bg, task)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	var out []domain.Decision
+	for _, d := range a.Decisions() {
+		if d.Cause == domain.CauseEgressRequest && d.Status == domain.DecisionOpen {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// The run stays starting and the agent does not start until every request is
+// answered; an allowed host is then in the sidecar before the agent starts, a
+// denied one is not, and the agent starts without it (design §4.2).
+func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T) {
+	r := newWsRig(t)
+	r.withEgressRequests()
+	w, a := r.create("docs-ws")
+	base := r.allowOf(w.EnvID)
+	if !reflect.DeepEqual(base, []string{"api.anthropic.com"}) {
+		t.Fatalf("the environment starts with the supervisor's hosts only: %v", base)
+	}
+
+	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agg, _ := r.store.LoadTask(bg, task)
+	if rn, _ := agg.Run(run); rn.State != domain.RunStarting || agg.Task().State != domain.TaskAwaitingGuidance {
+		t.Fatalf("run %s, task %s: the run stays starting and the task waits", rn.State, agg.Task().State)
+	}
+	if len(r.agent.Specs) != 0 {
+		t.Fatal("the agent started before the requests were answered")
+	}
+	open := r.openEgress(task)
+	if len(open) != 2 || open[0].Host != "proxy.golang.org" || open[1].Host != "sum.golang.org" {
+		t.Fatalf("open requests = %+v", open)
+	}
+	if !reflect.DeepEqual(r.allowOf(w.EnvID), base) {
+		t.Error("the allowlist changed before any answer")
+	}
+
+	// Reconcile does not take the waiting run for lost.
+	if rep, err := r.svc.Reconcile(bg); err != nil || len(rep.Interrupted) != 0 {
+		t.Fatalf("reconcile: %+v, %v", rep, err)
+	}
+
+	// The first answer is not enough.
+	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 0 {
+		t.Fatal("the agent started with a request still open")
+	}
+	// The last one starts it, with the allowed host in the sidecar and the denied one out.
+	if err := r.svc.AnswerDecision(bg, open[1].ID, domain.Response{Option: domain.AnswerDeny, By: "werner", At: t0}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 1 {
+		t.Fatalf("agent starts = %d, want 1", len(r.agent.Specs))
+	}
+	if got := r.allowOf(w.EnvID); !reflect.DeepEqual(got, []string{"api.anthropic.com", "proxy.golang.org"}) {
+		t.Errorf("allowlist = %v, want the base and the allowed host, not the denied one", got)
+	}
+	agg, _ = r.store.LoadTask(bg, task)
+	if rn, _ := agg.Run(run); rn.State != domain.RunRunning || agg.Task().State != domain.TaskRunning {
+		t.Errorf("run %s, task %s after the answers", rn.State, agg.Task().State)
+	}
+	if len(r.svc.egressWaits) != 0 {
+		t.Error("the wait was not cleared")
+	}
+	if len(r.bgErrs) != 0 {
+		t.Errorf("errors: %v", r.bgErrs)
+	}
+
+	// Another workspace of the repository is not asked again and starts with the allowed host.
+	w2, a2 := r.create("docs-two")
+	if got := r.allowOf(w2.EnvID); !reflect.DeepEqual(got, []string{"api.anthropic.com", "proxy.golang.org"}) {
+		t.Errorf("a new workspace of the repository starts with %v", got)
+	}
+	task2, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a2.ID, Issue: "#8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open := r.openEgress(task2); len(open) != 0 {
+		t.Errorf("answered hosts were asked again: %+v", open)
+	}
+	if len(r.agent.Specs) != 2 {
+		t.Errorf("the second run did not start at once: %d agent starts", len(r.agent.Specs))
+	}
+}
+
+// An expired request is a denial for this run only: the run starts without the
+// host, and the host is asked again at the next start.
+func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
+	r := newWsRig(t)
+	r.withEgressRequests()
+	_, a := r.create("docs-ws")
+	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 0 || len(r.openEgress(task)) != 2 {
+		t.Fatal("the run did not wait")
+	}
+	r.clock.now = t0.Add(domain.DefaultApprovalTimeout + time.Minute)
+	if _, err := r.svc.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 1 {
+		t.Fatalf("agent starts = %d: an expiry opens the way", len(r.agent.Specs))
+	}
+	agg, _ := r.store.LoadTask(bg, task)
+	if rn, _ := agg.Run(run); rn.State != domain.RunRunning {
+		t.Errorf("run = %s", rn.State)
+	}
+	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
+		t.Errorf("an expiry allowed %v", allow)
+	}
+	env := devcontainer.Environment{Config: devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}}}
+	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env); len(again) != 1 {
+		t.Errorf("the host is asked again at the next start: %+v", again)
+	}
+}
+
+func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
+	r := newWsRig(t)
+	r.withEgressRequests()
+	_, a := r.create("docs-ws")
+	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := r.openEgress(task)
+	if err := r.svc.Cancel(bg, task); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.svc.egressWaits) != 0 || r.svc.attached(run) {
+		t.Error("the cancelled run still holds its wait or its slot")
+	}
+	// An answer to a request of a cancelled task is refused and starts nothing.
+	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
+		t.Error("an answer to a superseded request was accepted")
+	}
+	if len(r.agent.Specs) != 0 {
+		t.Error("an agent started for a cancelled run")
+	}
+	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
+		t.Errorf("a refused answer allowed %v", allow)
+	}
+}
+
+// A repository that cannot be read does not stop the run, and allows nothing.
+func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
+	r := newWsRig(t)
+	r.egress = true
+	r.ws.cfg.Environment = func(context.Context, string, string) (devcontainer.Environment, error) {
+		return devcontainer.Environment{}, errors.New("fetch wstein/workharbor: no route to host")
+	}
+	w, a := r.create("docs-ws")
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 1 || len(r.bgErrs) != 1 {
+		t.Errorf("agent starts %d, reported %v", len(r.agent.Specs), r.bgErrs)
+	}
+	if !reflect.DeepEqual(r.allowOf(w.EnvID), []string{"api.anthropic.com"}) {
+		t.Errorf("an unreadable repository changed the allowlist: %v", r.allowOf(w.EnvID))
+	}
+}

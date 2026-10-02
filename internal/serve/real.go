@@ -15,6 +15,7 @@ import (
 	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/console"
+	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
@@ -310,7 +311,8 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole,
-		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
+		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}),
+		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 	}, func() {
 		_ = git.Close()
@@ -446,5 +448,28 @@ func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
 		Tmpfs:        []string{"/tmp", "/run"},
 		Mounts:       mounts,
 		Egress:       &runtime.Egress{Image: o.Image, Proxy: o.Proxy, Allow: c.EgressAllow},
+	}
+}
+
+// Environment reads a repository's environment for the egress requests of a
+// run's start (design §4.2, D38): it refreshes the supervisor's own mirror of the
+// repository's integration branch and resolves the devcontainer.json, the
+// toolchain files and the lockfiles of that commit there, never in a workspace.
+// A mirror that cannot be fetched is an error, which the caller reports; no host
+// is allowed by what could not be read.
+func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.Options) func(ctx context.Context, repo, branch string) (devcontainer.Environment, error) {
+	return func(ctx context.Context, repo, branch string) (devcontainer.Environment, error) {
+		_, cache, err := topics(ctx, repo)
+		if err != nil {
+			return devcontainer.Environment{}, err
+		}
+		if err := cache.Refresh(ctx, branch); err != nil {
+			return devcontainer.Environment{}, fmt.Errorf("fetch %s: %w", repo, err)
+		}
+		mirror, err := git.OpenBare(ctx, cache.Path())
+		if err != nil {
+			return devcontainer.Environment{}, err
+		}
+		return devcontainer.Resolve(ctx, mirror, "refs/heads/"+branch, opt)
 	}
 }

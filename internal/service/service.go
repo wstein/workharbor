@@ -95,14 +95,17 @@ type Service struct {
 	clock Clock
 	cfg   Config
 
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	sessions  map[domain.ID]*slot               // by run: the sessions the service owns, and launches in progress
-	closing   bool                              // set by Shutdown: no session joins the wait group any more
-	async     *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
-	bus       bus                               // live events for subscribers (design §5.3)
-	board     boardQueue                        // card updates waiting for the worker (D30)
-	approvals map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
+	wg       sync.WaitGroup
+	mu       sync.Mutex
+	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
+	// egressWaits are the runs that stay starting until their egress requests are
+	// answered (design §4.2), by run.
+	egressWaits map[domain.ID]*egressWait
+	closing     bool                              // set by Shutdown: no session joins the wait group any more
+	async       *notify.Async                     // the queue that delivers cfg.Notifier's messages, when set
+	bus         bus                               // live events for subscribers (design §5.3)
+	board       boardQueue                        // card updates waiting for the worker (D30)
+	approvals   map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent
@@ -378,6 +381,10 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		if err := s.keepEgressAnswer(ctx, *row, r.Option); err != nil {
 			return fmt.Errorf("keep the answer for %s: %w", row.Host, err)
 		}
+		// The agent starts once the last request of its run is answered.
+		if err := s.continueEgress(ctx, row.TaskID, row.RunID); err != nil {
+			return fmt.Errorf("start the run after the egress answers: %w", err)
+		}
 	}
 	switch {
 	case r.Option == domain.AnswerCancel:
@@ -407,6 +414,7 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 	})
 	if err == nil {
 		s.stopSession(live)
+		s.dropEgressWait(live) // a run still waiting for its egress answers never starts
 	}
 	return err
 }

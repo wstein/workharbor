@@ -40,8 +40,10 @@ type wsRig struct {
 	ids    int
 	failAg bool
 	issues *forgetest.Fake
-	egress bool // give the environments an egress sidecar
-	home   bool // give the environments an agent home volume
+	clock  *fakeClock
+	bgErrs []error // what the service reported through OnError
+	egress bool    // give the environments an egress sidecar
+	home   bool    // give the environments an agent home volume
 }
 
 func newWsRig(t *testing.T) *wsRig { return newWsRigBlocking(t, true) }
@@ -83,6 +85,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 	}
 
 	clock := &fakeClock{now: t0}
+	r.clock = clock
 	r.store, err = store.Open(bg, filepath.Join(dir, "workharbor.db"), store.WithClock(func() time.Time { return clock.now }))
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +97,8 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 	}
 	r.svc = New(r.store, r.rt.Adapter, r.agent, clock, Config{
 		Owner: r.rt.Owner, ReadyCmd: []string{"echo", "ready"},
-		NewID: func() domain.ID { return r.id("d") },
+		OnError: func(err error) { r.bgErrs = append(r.bgErrs, err) },
+		NewID:   func() domain.ID { return r.id("d") },
 		Spec: func(domain.Task, domain.Run) agent.StartSpec {
 			s := spec()
 			s.Env = []string{"HOME=/home/agent"}

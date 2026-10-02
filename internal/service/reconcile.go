@@ -50,6 +50,9 @@ func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 			rep.Errors = append(rep.Errors, fmt.Errorf("task %s: %w", id, err))
 		}
 	}
+	// A run that waited for egress requests starts once none is open, also when
+	// the last one expired instead of being answered.
+	rep.Errors = append(rep.Errors, s.continueAllEgress(ctx)...)
 	return rep, nil
 }
 
