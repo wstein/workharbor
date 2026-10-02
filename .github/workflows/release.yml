@@ -50,10 +50,11 @@ jobs:
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_ENV"
       - name: CI passed on the tagged commit
-        run: |
-          set -euo pipefail
-          ok="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$sha&status=success" -q '.total_count')"
-          [ "$ok" -ge 1 ] || { echo "::error::no successful ci run for $sha"; exit 1; }
+        # The tag may be pushed together with main, so ci may still be queued or
+        # running: wait up to 15 minutes, fail on any non-success conclusion.
+        env:
+          SHA: ${{ env.sha }}
+        run: scripts/wait-for-ci.sh
 
   snapshot:
     # Builds everything and creates no release: the test run before the first tag.
