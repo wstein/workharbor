@@ -189,7 +189,8 @@ func (s *Service) Shutdown() {
 		_ = sess.Stop(context.Background())
 	}
 	s.wg.Wait()
-	s.waitBoard(10 * time.Second) // the last card updates, bounded: the board is never worth a hang
+	s.waitBoard(10 * time.Second)  // the last card updates, bounded: the board is never worth a hang
+	s.closeBoard(10 * time.Second) // and the worker goes with the service
 	if s.async != nil {
 		s.async.Close() // deliver what is queued, then stop
 	}

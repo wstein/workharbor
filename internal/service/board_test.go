@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,4 +165,44 @@ type boardFunc func(ctx context.Context, repo string, issue int, u forge.CardUpd
 
 func (f boardFunc) UpdateCard(ctx context.Context, repo string, issue int, u forge.CardUpdate) error {
 	return f(ctx, repo, issue, u)
+}
+
+// The board's worker goes with its service: after Shutdown no boardWorker goroutine
+// is left (they piled up across tests and starved `make race`), a late update is
+// dropped instead of sent on a closed queue, and Shutdown twice is harmless.
+func TestShutdownStopsTheBoardWorker(t *testing.T) {
+	r := newRig(t)
+	fake := forgetest.NewFake()
+	r.svc.cfg.Board = fake
+	r.svc.mirror([]domain.Event{stateEvent("running")})
+	r.svc.WaitBoard()
+	if len(fake.CardsSeen()) != 1 {
+		t.Fatalf("cards %+v", fake.CardsSeen())
+	}
+	if !boardWorkerRunning() {
+		t.Fatal("the test did not start a worker, so it proves nothing")
+	}
+	r.svc.Shutdown()
+	if boardWorkerRunning() {
+		t.Error("a boardWorker goroutine outlived Shutdown")
+	}
+	r.svc.mirror([]domain.Event{stateEvent("completed")}) // a late update: dropped, no panic
+	r.svc.Shutdown()                                      // twice is harmless
+	if len(fake.CardsSeen()) != 1 {
+		t.Errorf("a card was written after Shutdown: %+v", fake.CardsSeen())
+	}
+}
+
+// boardWorkerRunning says whether some service's board worker goroutine exists in
+// this process; it waits a moment for one that is still returning.
+func boardWorkerRunning() bool {
+	for range 40 {
+		buf := make([]byte, 1<<20)
+		buf = buf[:runtime.Stack(buf, true)]
+		if !strings.Contains(string(buf), "(*Service).boardWorker") {
+			return false
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return true
 }

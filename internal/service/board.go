@@ -44,6 +44,10 @@ type boardQueue struct {
 	once sync.Once
 	jobs chan boardJob
 	wg   sync.WaitGroup
+
+	mu     sync.Mutex
+	closed bool          // Shutdown closed the queue: later updates are dropped
+	done   chan struct{} // closed when the worker has returned; nil if it never started
 }
 
 const boardQueueSize = 64
@@ -78,9 +82,15 @@ func (s *Service) mirror(events []domain.Event) {
 }
 
 func (s *Service) enqueueCard(j boardJob) {
+	s.board.mu.Lock()
+	defer s.board.mu.Unlock()
+	if s.board.closed { // the service is shut down: nothing is left to write a card
+		return
+	}
 	s.board.once.Do(func() {
 		s.board.jobs = make(chan boardJob, boardQueueSize)
-		go s.boardWorker()
+		s.board.done = make(chan struct{})
+		go s.boardWorker(s.board.jobs, s.board.done)
 	})
 	s.board.wg.Add(1)
 	select {
@@ -91,10 +101,36 @@ func (s *Service) enqueueCard(j boardJob) {
 	}
 }
 
+// closeBoard stops the worker with its service: no more updates are taken, the
+// queue is closed so the worker returns once it has written what is queued, and
+// the wait for it is bounded, since a board that does not answer is never worth a
+// hang. It is safe to call twice.
+func (s *Service) closeBoard(limit time.Duration) {
+	s.board.mu.Lock()
+	if s.board.closed {
+		s.board.mu.Unlock()
+		return
+	}
+	s.board.closed = true
+	jobs, done := s.board.jobs, s.board.done
+	if jobs != nil {
+		close(jobs)
+	}
+	s.board.mu.Unlock()
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(limit):
+	}
+}
+
 var errBoardQueueFull = &domain.InvalidError{Msg: "the board's queue is full: a card update was dropped"}
 
-func (s *Service) boardWorker() {
-	for j := range s.board.jobs {
+func (s *Service) boardWorker(jobs <-chan boardJob, done chan<- struct{}) {
+	defer close(done)
+	for j := range jobs {
 		s.report(s.writeCard(j))
 		s.board.wg.Done()
 	}
