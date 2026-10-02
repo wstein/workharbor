@@ -59,7 +59,7 @@ func lintRange(revRange string) int {
 			fmt.Fprintln(os.Stderr, "commitlint:", err)
 			return 2
 		}
-		problems := commitlint.Lint(msg, commitlint.Options{Author: strings.TrimSpace(author)})
+		problems := commitlint.Lint(msg, commitlint.Options{Author: strings.TrimSpace(author), Final: true})
 		if report(sha[:min(len(sha), 10)], problems) != 0 {
 			status = 1
 		}

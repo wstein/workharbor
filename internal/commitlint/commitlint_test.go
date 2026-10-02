@@ -67,3 +67,20 @@ func TestLint(t *testing.T) {
 		})
 	}
 }
+
+func TestAFixupMustBeSquashedBeforeItLands(t *testing.T) {
+	for _, subject := range []string{"fixup! feat: a", "squash! feat: a", "amend! feat: a"} {
+		if got := Lint(subject, Options{Author: "Werner Stein <w@x.de>"}); len(got) != 0 {
+			t.Errorf("%q is a normal commit while working: %v", subject, got)
+		}
+		got := Lint(subject, Options{Author: "Werner Stein <w@x.de>", Final: true})
+		if len(got) != 1 || !strings.Contains(got[0], "autosquash") {
+			t.Errorf("%q landing: %v", subject, got)
+		}
+	}
+	for _, subject := range []string{"Merge branch 'x'", "Revert \"feat: a\""} {
+		if got := Lint(subject, Options{Author: "Werner Stein <w@x.de>", Final: true}); len(got) != 0 {
+			t.Errorf("%q: %v", subject, got)
+		}
+	}
+}

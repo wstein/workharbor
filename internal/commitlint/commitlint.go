@@ -49,6 +49,11 @@ type Options struct {
 	// (Dependabot, Renovate) are exempt from the subject length and Signed-off-by
 	// rules, because they generate their own messages.
 	Author string
+	// Final says the commit is about to land, as when a range is checked: a
+	// fixup!, squash! or amend! commit must have been squashed away by then
+	// (git rebase -i --autosquash). The commit-msg hook leaves it false, since
+	// git commit --fixup is how such a commit is made.
+	Final bool
 }
 
 type trailer struct{ key, value string }
@@ -63,6 +68,9 @@ func Lint(msg string, opt Options) []string {
 	subject := lines[0]
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
+			if opt.Final && p != "Merge " && p != "Revert " {
+				return []string{fmt.Sprintf("%q commit is not squashed: run git rebase -i --autosquash before it lands", strings.TrimSpace(p))}
+			}
 			return nil
 		}
 	}
