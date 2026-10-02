@@ -472,7 +472,7 @@ func TestAPinDecidesEvenWhenTheRecordAgreesWithATamperedTool(t *testing.T) {
 
 // writeEntry makes a store entry by hand, as the store owner could: a tool and,
 // if record is set, a record file.
-func writeEntry(t *testing.T, s *Store, dirName, tool string, content []byte, record string) string {
+func writeEntry(t *testing.T, s *Store, dirName, tool string, content []byte, record string) {
 	t.Helper()
 	dir := filepath.Join(s.Root, "store", dirName)
 	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil { //nolint:gosec // a test
@@ -486,7 +486,6 @@ func writeEntry(t *testing.T, s *Store, dirName, tool string, content []byte, re
 			t.Fatal(err)
 		}
 	}
-	return dir
 }
 
 // A look-alike directory with another hash8, a tampered tool and a record that
