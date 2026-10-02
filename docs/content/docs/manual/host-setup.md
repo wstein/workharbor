@@ -136,6 +136,19 @@ Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor ge
 
 workharbor talks to GitHub as an App of your own, never with your personal token (D15, D31): its tokens last about an hour, cover one repository and only the permissions below, and the App cannot merge, tag or release. On github.com, as the repository's owner:
 
+**The quick way: `whr github app create`** (provisional name). It creates the App from a manifest, so there is no form to fill in and no `.pem` to download. You need the `listen` and `api_token_file` lines of the configuration (step 13) and the HTTPS name your forwarder gives workharbor (step 7). `whr serve` must not be running, because the supervisor needs the App this creates.
+
+```bash
+whr github app create --public-url https://<your-forwarded-name>
+```
+
+1. It prints a link and waits on the configuration's `listen` address. Open the link on any device that reaches that name (the Mac or the phone, over the VPN of step 7) and press **Continue to GitHub**. GitHub shows the App's name and asks you to confirm: **Create GitHub App**. For an organization's App, add `--org <name>`; you must own the organization.
+2. GitHub sends the browser back to workharbor with a one-time code. Only a link this command just made is accepted, once, and for ten minutes (`--ttl`); anything else is refused. `whr` exchanges the code for the App and writes the private key to `~/.config/whr/github-app-<id>.pem` (mode `0600`, never overwriting a file). The key, the client secret and the webhook secret are never printed or logged; the two secrets are dropped.
+3. The command prints the two lines to add to the configuration, `"github": {"app_id": <id>, "key_file": "<path>"}`: it does not edit the file. It also prints the link to install the App. Install it as in step 3 below, and check the ruleset as in step 4. The App is private, has no active webhook and only the permissions below.
+4. `whr doctor` then checks, from GitHub, that the App is installed on every configured repository with exactly those permissions.
+
+Whether GitHub accepts the manifest as `whr` sends it (its inactive webhook, a private App) is {{< status unverified >}} until the first run against github.com. **If it does not work, or you prefer to click, create the App by hand** with the steps below:
+
 1. **Create the App.** Your account's **Settings → Developer settings → GitHub Apps → New GitHub App**.
     - **Name:** for example `workharbor-<your-name>` (it must be unique on GitHub). **Homepage URL:** the repository's URL.
     - **Webhook:** untick **Active**. `whr` asks GitHub when it needs something; webhooks would need a public address, which workharbor does not have (D29).
@@ -158,7 +171,8 @@ mkdir -p ~/.config/whr && chmod 700 ~/.config/whr
 # The API token the local whr CLI uses: generated, never typed.
 umask 077 && openssl rand -base64 32 > ~/.config/whr/api.token
 
-# The GitHub App's private key from step 11.
+# The GitHub App's private key from step 11. `whr github app create` has already
+# written it to ~/.config/whr/github-app-<id>.pem; only a key you downloaded needs moving.
 mv ~/Downloads/<app-name>.*.private-key.pem ~/.config/whr/github-app.pem
 chmod 600 ~/.config/whr/github-app.pem
 ```
