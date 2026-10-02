@@ -37,7 +37,10 @@ func newService(st *state) *cobra.Command {
 	g := &cobra.Command{Use: "service", Short: "Run whr serve as a macOS LaunchAgent in this user's login session (provisional)"}
 	group(g)
 
-	spec := func() (launchd.Spec, error) {
+	// spec describes the job. Only install needs the binaries: uninstall and
+	// status work from the label and the home directory, so they still work when
+	// whr or container is gone.
+	spec := func(full bool) (launchd.Spec, error) {
 		path := st.configPath
 		if path == "" {
 			path = DefaultConfigPath(st.env.Getenv)
@@ -47,6 +50,9 @@ func newService(st *state) *cobra.Command {
 			return launchd.Spec{}, err
 		}
 		home := st.env.Getenv("HOME")
+		if !full {
+			return launchd.Spec{Label: launchd.Label, Config: cfgPath, Home: home}, nil
+		}
 		if whr == "" {
 			exe := st.env.Host.Executable
 			if exe == nil {
@@ -76,7 +82,7 @@ func newService(st *state) *cobra.Command {
 		Short: "Write the LaunchAgent plist and load it: container system start, then whr serve, kept alive",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := spec()
+			s, err := spec(true)
 			if err != nil {
 				return err
 			}
@@ -102,7 +108,7 @@ func newService(st *state) *cobra.Command {
 		Short: "Unload the job and remove its plist; the logs stay",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := spec()
+			s, err := spec(false)
 			if err != nil {
 				return err
 			}
@@ -119,7 +125,7 @@ func newService(st *state) *cobra.Command {
 		Short: "Say whether the job is installed and loaded, and what launchd knows of it",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := spec()
+			s, err := spec(false)
 			if err != nil {
 				return err
 			}

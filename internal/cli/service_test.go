@@ -176,3 +176,37 @@ func TestServiceInstallRefusesWhatWouldNotWork(t *testing.T) {
 		}
 	}
 }
+
+// Uninstall and status need neither whr nor container: they must still work
+// when either is gone.
+func TestUninstallAndStatusNeedNeitherWhrNorContainer(t *testing.T) {
+	r := newServiceRig(t)
+	if code, _, errOut := r.run(t, "service", "install"); code != exitcode.OK {
+		t.Fatalf("install: %d %s", code, errOut)
+	}
+	gone := Host{
+		Manager:    &launchd.Manager{R: r.launchctl, UID: 501, GOOS: "darwin"},
+		Executable: func() (string, error) { return "", errors.New("whr is gone") },
+		LookPath:   func(string) (string, error) { return "", errors.New("container is gone") },
+	}
+	run := func(args ...string) (int, string) {
+		var out, errOut bytes.Buffer
+		env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Host: gone, Getenv: func(k string) string {
+			if k == "HOME" {
+				return r.home
+			}
+			return ""
+		}}
+		code := Execute(context.Background(), env, append(args, "--config", r.cfg))
+		return code, out.String() + errOut.String()
+	}
+	if code, out := run("service", "status"); code != exitcode.OK || !strings.Contains(out, "loaded\ttrue") {
+		t.Errorf("status: %d %q", code, out)
+	}
+	if code, out := run("service", "uninstall"); code != exitcode.OK {
+		t.Errorf("uninstall: %d %q", code, out)
+	}
+	if code, _ := run("service", "install"); code == exitcode.OK {
+		t.Error("install worked without the binaries")
+	}
+}

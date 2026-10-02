@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden file")
@@ -129,11 +130,12 @@ func TestTheBinaryMustBeInstalledNotBuiltInAWorkingTree(t *testing.T) {
 
 // fakeLaunchctl records every call and answers like launchctl does.
 type fakeLaunchctl struct {
-	manager  string
-	loaded   bool
-	calls    []string
-	failBoot bool
-	print    string
+	manager   string
+	loaded    bool
+	calls     []string
+	failBoot  bool
+	failFirst int // bootstraps that fail before one succeeds
+	print     string
 }
 
 func (f *fakeLaunchctl) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -153,6 +155,10 @@ func (f *fakeLaunchctl) Run(_ context.Context, name string, args ...string) ([]b
 		f.loaded = false
 		return nil, nil
 	case "bootstrap":
+		if f.failFirst > 0 {
+			f.failFirst--
+			return []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
+		}
 		if f.failBoot {
 			return []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
 		}
@@ -285,5 +291,75 @@ func TestThePlistIsAValidPropertyList(t *testing.T) {
 	}
 	if out, err := exec.CommandContext(bg, plutil, "-lint", path).CombinedOutput(); err != nil { //nolint:gosec // plutil from the PATH on a test machine
 		t.Errorf("plutil -lint: %v\n%s", err, out)
+	}
+}
+
+func TestRootIsRefusedBeforeAnythingIsWritten(t *testing.T) {
+	home := t.TempDir()
+	f := &fakeLaunchctl{manager: "Aqua"} // a sudo shell can still say Aqua
+	err := Manager{R: f, UID: 0, GOOS: "darwin"}.Install(bg, spec(home))
+	if !errors.Is(err, ErrRoot) {
+		t.Fatalf("root = %v, want ErrRoot", err)
+	}
+	if _, serr := os.Stat(spec(home).PlistPath()); serr == nil {
+		t.Error("a plist was written for root")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("launchctl was run for root: %v", f.calls)
+	}
+}
+
+func TestAnExistingLogDirectoryIsTightened(t *testing.T) {
+	home := t.TempDir()
+	s := spec(home)
+	if err := os.MkdirAll(s.LogDir(), 0o755); err != nil { //nolint:gosec // the loose directory the install must tighten
+		t.Fatal(err)
+	}
+	if err := manager(&fakeLaunchctl{manager: "Aqua"}).Install(bg, s); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(s.LogDir()); fi.Mode().Perm() != 0o700 {
+		t.Errorf("log dir %v, want 0700", fi.Mode().Perm())
+	}
+}
+
+// Right after a bootout launchd may still be tearing the old job down: a
+// reinstall tries again, a first install does not.
+func TestAReinstallRetriesTheLoadAfterTheUnload(t *testing.T) {
+	home := t.TempDir()
+	s := spec(home)
+	f := &fakeLaunchctl{manager: "Aqua"}
+	m := Manager{R: f, UID: 501, GOOS: "darwin", RetryAfter: time.Millisecond}
+	if err := m.Install(bg, s); err != nil {
+		t.Fatal(err)
+	}
+	f.failFirst, f.calls = 2, nil
+	if err := m.Install(bg, s); err != nil {
+		t.Fatalf("a reinstall that needs a retry: %v", err)
+	}
+	boots := 0
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "launchctl bootstrap") {
+			boots++
+		}
+	}
+	if boots != 3 {
+		t.Errorf("%d bootstraps, want 3", boots)
+	}
+
+	// a first install fails at once
+	f2 := &fakeLaunchctl{manager: "Aqua", failBoot: true}
+	m2 := Manager{R: f2, UID: 501, GOOS: "darwin", RetryAfter: time.Millisecond}
+	if err := m2.Install(bg, spec(t.TempDir())); err == nil {
+		t.Fatal("a failing first install succeeded")
+	}
+	boots = 0
+	for _, c := range f2.calls {
+		if strings.HasPrefix(c, "launchctl bootstrap") {
+			boots++
+		}
+	}
+	if boots != 1 {
+		t.Errorf("a first install tried %d times, want once", boots)
 	}
 }

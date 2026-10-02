@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 )
 
@@ -168,14 +169,25 @@ type Manager struct {
 	UID int
 	// GOOS is runtime.GOOS; a test sets it.
 	GOOS string
+	// RetryAfter is the pause between the attempts to load a job again after
+	// unloading it. Default 300 ms.
+	RetryAfter time.Duration
 }
 
 func (m Manager) domain() string { return "gui/" + strconv.Itoa(m.UID) }
+
+func (m Manager) retryAfter() time.Duration {
+	if m.RetryAfter > 0 {
+		return m.RetryAfter
+	}
+	return 300 * time.Millisecond
+}
 
 // Errors of the manager.
 var (
 	ErrNotMac     = errors.New("launchd is macOS only")
 	ErrNoGUILogIn = errors.New("this shell is not in a graphical login session")
+	ErrRoot       = errors.New("run this as the user whose session it is, not as root: the job belongs to that user's login")
 )
 
 // checkSession refuses a shell outside the user's Aqua session: SSH, sudo and
@@ -183,6 +195,9 @@ var (
 func (m Manager) checkSession(ctx context.Context) error {
 	if m.GOOS != "darwin" {
 		return ErrNotMac
+	}
+	if m.UID == 0 { // a sudo shell can still report Aqua, and gui/0 does not exist
+		return ErrRoot
 	}
 	out, err := m.R.Run(ctx, "launchctl", "managername")
 	if name := strings.TrimSpace(string(out)); err != nil || name != "Aqua" {
@@ -209,10 +224,14 @@ func (m Manager) Install(ctx context.Context, s Spec) error {
 	if err := os.MkdirAll(s.LogDir(), 0o700); err != nil {
 		return err
 	}
+	if err := os.Chmod(s.LogDir(), 0o700); err != nil { //nolint:gosec // a directory needs the execute bit; MkdirAll leaves an existing one as it is
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(s.PlistPath()), 0o755); err != nil { //nolint:gosec // ~/Library/LaunchAgents is world-readable by convention
 		return err
 	}
-	if m.loaded(ctx, s.Label) {
+	wasLoaded := m.loaded(ctx, s.Label)
+	if wasLoaded {
 		if out, err := m.R.Run(ctx, "launchctl", "bootout", m.domain()+"/"+s.Label); err != nil {
 			return fmt.Errorf("unload the running job: %w: %s", err, strings.TrimSpace(string(out)))
 		}
@@ -232,10 +251,31 @@ func (m Manager) Install(ctx context.Context, s Spec) error {
 	if err := os.Rename(tmp.Name(), s.PlistPath()); err != nil {
 		return err
 	}
-	if out, err := m.R.Run(ctx, "launchctl", "bootstrap", m.domain(), s.PlistPath()); err != nil {
-		return fmt.Errorf("load the job: %w: %s", err, strings.TrimSpace(string(out)))
+	return m.bootstrap(ctx, s, wasLoaded)
+}
+
+// bootstrap loads the job. Right after a bootout launchd may still be tearing the
+// old one down and refuse the new one, so a reinstall tries a few times.
+func (m Manager) bootstrap(ctx context.Context, s Spec, retry bool) error {
+	attempts := 1
+	if retry {
+		attempts = 5
 	}
-	return nil
+	var out []byte
+	var err error
+	for i := range attempts {
+		if out, err = m.R.Run(ctx, "launchctl", "bootstrap", m.domain(), s.PlistPath()); err == nil {
+			return nil
+		}
+		if i < attempts-1 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(m.retryAfter()):
+			}
+		}
+	}
+	return fmt.Errorf("load the job: %w: %s", err, strings.TrimSpace(string(out)))
 }
 
 // Uninstall unloads the job and removes its plist. A job that is not loaded, or a
