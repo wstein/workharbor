@@ -45,7 +45,7 @@ func serveCommand(stderr io.Writer) *cobra.Command {
 			}
 			defer closeAll()
 			deps.AcceptWorkflowChange, _ = cmd.Flags().GetBool("accept-workflow-change")
-			deps.Ready = func(a net.Addr) { logf("listening on %s", a) }
+			deps.Ready = func(web, api net.Addr) { logf("web UI on %s, API on %s", web, api) }
 			return serve.Run(cmd.Context(), deps)
 		},
 	}

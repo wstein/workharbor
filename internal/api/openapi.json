@@ -3,11 +3,12 @@
   "info": {
     "title": "workharbor API",
     "version": "1",
-    "description": "The JSON API of `whr serve` (design \u00a79.7). Loopback only; every route needs the bearer token. Responses are wrapped in the envelope of \u00a79.2. Free text from agents, repositories and the forge (input, subject, message) is untrusted data."
+    "description": "The JSON API of `whr serve` (design \u00a79.7). Served only on a unix socket, `api.sock` in the state directory (D29, §7.5), never on a network address; every route needs the bearer token. Responses are wrapped in the envelope of \u00a79.2. Free text from agents, repositories and the forge (input, subject, message) is untrusted data."
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:8787"
+      "url": "http://localhost",
+      "description": "The unix socket api.sock in the supervisor's state directory; the host name is ignored."
     }
   ],
   "security": [

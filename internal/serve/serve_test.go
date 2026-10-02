@@ -39,14 +39,21 @@ func newDeps(t *testing.T) (Deps, *store.Store) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	h := runtimetest.NewFakeHarness(t)
+	// a unix socket path is short: the test's own temporary directory may not fit
+	sockDir, err := os.MkdirTemp("", "whr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
 	return Deps{
-		Config:  &config.Config{Listen: "127.0.0.1:0", APITokenFile: tokenFile},
-		Store:   st,
-		Runtime: h.Adapter,
-		Agent:   agenttest.NewFake(agenttest.FullCaps()),
-		Owner:   h.Owner,
-		Spec:    func(domain.Workspace) runtime.Spec { return h.NewSpec() },
-		Prepare: h.Prepare,
+		SocketPath: filepath.Join(sockDir, "api.sock"),
+		Config:     &config.Config{Listen: "127.0.0.1:0", APITokenFile: tokenFile},
+		Store:      st,
+		Runtime:    h.Adapter,
+		Agent:      agenttest.NewFake(agenttest.FullCaps()),
+		Owner:      h.Owner,
+		Spec:       func(domain.Workspace) runtime.Spec { return h.NewSpec() },
+		Prepare:    h.Prepare,
 		AgentSpec: func(domain.Task, domain.Run) agent.StartSpec {
 			return agent.StartSpec{Auth: agent.AuthSubscription}
 		},
@@ -56,11 +63,24 @@ func newDeps(t *testing.T) (Deps, *store.Store) {
 
 func get(t *testing.T, url, tok string) (int, string) {
 	t.Helper()
+	return getVia(t, http.DefaultClient, url, tok)
+}
+
+// socketClient dials the API's unix socket whatever the URL says.
+func socketClient(path string) *http.Client {
+	return &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "unix", path)
+	}}}
+}
+
+func getVia(t *testing.T, hc *http.Client, url, tok string) (int, string) {
+	t.Helper()
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,34 +89,59 @@ func get(t *testing.T, url, tok string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
-func TestRunServesTheAPIOnLoopbackAndStopsCleanly(t *testing.T) {
+// The JSON API is served only on a private unix socket; the forwarded loopback
+// address serves the web UI alone, so a leaked API token cannot be used from the
+// phone network (D29, §7.5).
+func TestRunServesTheAPIOnASocketAndTheWebUIOnLoopback(t *testing.T) {
 	d, _ := newDeps(t)
-	addr := make(chan net.Addr, 1)
-	d.Ready = func(a net.Addr) { addr <- a }
+	type addrs struct{ web, api net.Addr }
+	up := make(chan addrs, 1)
+	d.Ready = func(web, api net.Addr) { up <- addrs{web, api} }
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, d) }()
-	var a net.Addr
+	var a addrs
 	select {
-	case a = <-addr:
+	case a = <-up:
 	case err := <-done:
 		t.Fatalf("Run ended early: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("the server did not come up")
 	}
-	if tcp, ok := a.(*net.TCPAddr); !ok || !tcp.IP.IsLoopback() {
-		t.Fatalf("listening on %v, want a loopback address", a)
+	if tcp, ok := a.web.(*net.TCPAddr); !ok || !tcp.IP.IsLoopback() {
+		t.Fatalf("the web UI listens on %v, want a loopback address", a.web)
 	}
-	base := "http://" + a.String()
-	if code, body := get(t, base+"/v1/health", token); code != 200 || !strings.Contains(body, `"ok":true`) {
+	if a.api.Network() != "unix" || a.api.String() != d.SocketPath {
+		t.Fatalf("the API listens on %v %v, want the socket %s", a.api.Network(), a.api, d.SocketPath)
+	}
+	if fi, err := os.Stat(d.SocketPath); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("the socket: %v %v", fi, err)
+	}
+
+	sock := socketClient(d.SocketPath)
+	if code, body := getVia(t, sock, "http://whr/v1/health", token); code != 200 || !strings.Contains(body, `"ok":true`) {
 		t.Errorf("health = %d %s", code, body)
 	}
-	if code, _ := get(t, base+"/v1/health", ""); code != 401 {
+	if code, _ := getVia(t, sock, "http://whr/v1/health", ""); code != 401 {
 		t.Errorf("health without the token = %d", code)
 	}
-	if code, body := get(t, base+"/v1/tasks", token); code != 200 || !strings.Contains(body, `"data":[]`) {
+	if code, body := getVia(t, sock, "http://whr/v1/tasks", token); code != 200 || !strings.Contains(body, `"data":[]`) {
 		t.Errorf("tasks = %d %s", code, body)
 	}
+
+	// the web listener has no /v1: not with the token, not without it
+	web := "http://" + a.web.String()
+	for _, path := range []string{"/v1/health", "/v1/tasks", "/v1/passkeys", "/v1/passkeys/enrolments", "/v1/decisions/d1/answer", "/v1/openapi.json"} {
+		for _, tok := range []string{token, ""} {
+			if code, body := get(t, web+path, tok); code != http.StatusNotFound || strings.Contains(body, `"schema_version"`) && !strings.Contains(body, "not found") {
+				t.Errorf("GET %s on the web listener (token %v) = %d %s", path, tok != "", code, body)
+			}
+		}
+	}
+	if code, _ := get(t, web+"/login", ""); code != 200 {
+		t.Errorf("the web UI's login page on the web listener = %d", code)
+	}
+
 	cancel()
 	select {
 	case err := <-done:
@@ -105,6 +150,22 @@ func TestRunServesTheAPIOnLoopbackAndStopsCleanly(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("Run did not stop")
+	}
+	if _, err := os.Stat(d.SocketPath); err == nil {
+		t.Error("the socket file is left behind after a clean stop")
+	}
+}
+
+// A state directory other users can enter is refused at start, before anything
+// is served.
+func TestRunRefusesASocketDirectoryOthersCanEnter(t *testing.T) {
+	d, _ := newDeps(t)
+	dir := filepath.Dir(d.SocketPath)
+	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // a deliberately open directory
+		t.Fatal(err)
+	}
+	if err := Run(context.Background(), d); err == nil || !strings.Contains(err.Error(), "accessible to others") {
+		t.Errorf("Run = %v, want a refusal of the open directory", err)
 	}
 }
 
@@ -151,7 +212,7 @@ func TestRunReconcilesBeforeItAcceptsRequests(t *testing.T) {
 	}
 
 	ready := make(chan net.Addr, 1)
-	d.Ready = func(a net.Addr) { ready <- a }
+	d.Ready = func(web, _ net.Addr) { ready <- web }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = Run(ctx, d) }()

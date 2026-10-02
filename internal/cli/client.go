@@ -58,14 +58,18 @@ type Client struct {
 	hc    *http.Client
 }
 
-// ClientConfig is the part of the configuration file a client needs.
+// ClientConfig is the part of the configuration file a client needs. Listen is the
+// web UI's address (only `whr github app create` uses it): the API is on a unix
+// socket in the state directory (D29, §7.5).
 type ClientConfig struct {
 	Listen       string `json:"listen"`
 	APITokenFile string `json:"api_token_file"`
+	StateDir     string `json:"state_dir"`
 }
 
-// ReadClientConfig reads listen and api_token_file from the configuration file.
-// Other keys are not checked here: `whr serve` validates the whole file.
+// ReadClientConfig reads listen, api_token_file and state_dir from the
+// configuration file. Other keys are not checked here: `whr serve` validates the
+// whole file.
 func ReadClientConfig(path string) (ClientConfig, error) {
 	f, err := os.Open(path) //nolint:gosec // the user names their own configuration file
 	if err != nil {
@@ -76,36 +80,37 @@ func ReadClientConfig(path string) (ClientConfig, error) {
 	if err := json.NewDecoder(io.LimitReader(f, 1<<20)).Decode(&c); err != nil {
 		return ClientConfig{}, fmt.Errorf("configuration %s: %w", path, err)
 	}
-	if c.Listen == "" || c.APITokenFile == "" {
-		return ClientConfig{}, fmt.Errorf("configuration %s: listen and api_token_file are needed", path)
+	if c.APITokenFile == "" {
+		return ClientConfig{}, fmt.Errorf("configuration %s: api_token_file is needed", path)
 	}
 	return c, nil
 }
 
-// NewClient builds a client from the configuration file: the loopback listen
-// address and the token read with config.ReadSecret (a 0600 file, never a
-// command line or the environment).
+// NewClient builds a client from the configuration file: the API's unix socket in
+// the state directory and the token read with config.ReadSecret (a 0600 file, never
+// a command line or the environment). The API is served only on that socket (D29,
+// §7.5), so the token never crosses a network, not even loopback.
 func NewClient(configPath string) (*Client, error) {
 	cc, err := ReadClientConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
-	// The token goes over plain HTTP, so only to a loopback address: the API
-	// listens on loopback only (D29), and remote access goes through a
-	// forwarder with TLS, never through this client sending the token in clear.
-	host, _, err := net.SplitHostPort(cc.Listen)
-	if err != nil {
-		return nil, fmt.Errorf("configuration %s: listen %q is not host:port", configPath, cc.Listen)
-	}
-	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-		return nil, fmt.Errorf("configuration %s: listen %q is not a loopback address; whr sends its token only to the local supervisor (D29)", configPath, cc.Listen)
-	}
+	home, _ := os.UserHomeDir()
+	sock := config.APISocketPath(cc.StateDir, home)
 	tok, err := config.ReadSecret(cc.APITokenFile)
 	if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "http", Host: cc.Listen}
-	return &Client{base: u.String(), token: strings.TrimSpace(string(tok)), hc: &http.Client{Timeout: 30 * time.Second}}, nil
+	return newSocketClient(sock, strings.TrimSpace(string(tok))), nil
+}
+
+// newSocketClient is a client that dials a unix socket whatever the URL says.
+func newSocketClient(sock, token string) *Client {
+	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "unix", sock)
+	}}
+	return &Client{base: "http://whr", token: token, hc: &http.Client{Timeout: 30 * time.Second, Transport: tr}}
 }
 
 // NewClientFor is for tests and wiring that already know the address and token.
@@ -197,7 +202,7 @@ func (c *Client) Stream(ctx context.Context, path, lastEventID string) (*http.Re
 	if lastEventID != "" {
 		req.Header.Set("Last-Event-ID", lastEventID)
 	}
-	hc := &http.Client{} // no timeout: the stream is open until the user stops it
+	hc := &http.Client{Transport: c.hc.Transport} // no timeout: the stream is open until the user stops it
 	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, connError{redactURLError(err)}

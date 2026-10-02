@@ -74,6 +74,9 @@ It listens on the configuration's "listen" address while it waits, so stop
 					return usageError{"no listen address: pass --listen or put it in the configuration (" + err.Error() + ")"}
 				}
 				listen = cc.Listen
+				if listen == "" {
+					return usageError{"no listen address: pass --listen or put it in the configuration"}
+				}
 			}
 			if keyDir == "" {
 				abs, err := filepath.Abs(filepath.Dir(path))

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"time"
 
@@ -72,8 +71,12 @@ type Deps struct {
 	// operator confirms on the host CLI (`whr serve --accept-workflow-change`)
 	// until the passkey of D45 exists.
 	AcceptWorkflowChange bool
-	// Ready, if set, is called with the address the API is listening on.
-	Ready func(addr net.Addr)
+	// SocketPath is the unix socket the JSON API is served on, and only there
+	// (D29, §7.5): the forwarded `listen` address serves the web UI alone.
+	SocketPath string
+	// Ready, if set, is called with the address the web UI listens on and the API's
+	// socket, once both are bound.
+	Ready func(web, api net.Addr)
 }
 
 // NewID returns a random ID with a short prefix.
@@ -156,19 +159,29 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	// Bind before the first reconcile: a wrong address is the quickest failure.
+	// Bind before the first reconcile: a wrong address is the quickest failure. The
+	// API gets a private unix socket, the web UI the forwarded loopback address.
+	if d.SocketPath == "" {
+		return errors.New("serve: no socket path for the API")
+	}
+	apiLn, err := api.ListenSocket(d.SocketPath)
+	if err != nil {
+		return err
+	}
 	ln, err := api.Listen(d.Config.Listen)
 	if err != nil {
+		_ = apiLn.Close()
 		return err
 	}
 	rep, err := svc.Reconcile(ctx)
 	if err != nil {
 		_ = ln.Close()
+		_ = apiLn.Close()
 		return fmt.Errorf("reconcile at start: %w", err)
 	}
 	logf("reconciled: %d interrupted, %d resumed, %d failed", len(rep.Interrupted), len(rep.Resumed), len(rep.Failed))
 	if d.Ready != nil {
-		d.Ready(ln.Addr())
+		d.Ready(ln.Addr(), apiLn.Addr())
 	}
 
 	every := d.ReconcileEvery
@@ -198,10 +211,17 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	root := http.NewServeMux()
-	root.Handle("/v1/", srv.Handler()) // the JSON API: bearer token on every request
-	root.Handle("/", ui.Handler())     // the web UI: a session, set from the same token
-	err = srv.ServeHandler(ctx, ln, root)
+	// The web listener has no /v1 route: a request for it is the web UI's own 404.
+	// The API answers only on the socket (D29, §7.5), so a leaked API token cannot
+	// be used from the forwarded network.
+	serveCtx, cancelServe := context.WithCancel(ctx)
+	defer cancelServe()
+	errc := make(chan error, 2)
+	go func() { errc <- srv.ServeHandler(serveCtx, apiLn, srv.Handler()) }()
+	go func() { errc <- srv.ServeHandler(serveCtx, ln, ui.Handler()) }()
+	err = <-errc
+	cancelServe()
+	<-errc
 	stop()
 	<-loopDone
 	if errors.Is(err, context.Canceled) {

@@ -199,12 +199,7 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 }
 
 // StateDir returns the directory of the database.
-func StateDir(c *config.Config, home string) string {
-	if c.StateDir != "" {
-		return c.StateDir
-	}
-	return filepath.Join(home, ".local", "state", "whr")
-}
+func StateDir(c *config.Config, home string) string { return config.StateDirOf(c.StateDir, home) }
 
 // Build makes the real dependencies of `whr serve` from the configuration:
 // the database, hostgit, the Apple Container runtime, the Claude Code adapter
@@ -309,7 +304,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		return err
 	}
 	return Deps{
-		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
+		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
 		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),

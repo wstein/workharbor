@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -457,17 +459,39 @@ func TestShellCompletionOffersTaskDecisionAndAgentIDs(t *testing.T) {
 	}
 }
 
-func TestTheConfigurationFileGivesTheServerAndTheToken(t *testing.T) {
+// serveOnSocket serves the stub's handler on a unix socket in a short private
+// directory, as `whr serve` serves the API, and returns the directory (the
+// configuration's state_dir).
+func serveOnSocket(t *testing.T, s *stub) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "whr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "unix", filepath.Join(dir, "api.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewUnstartedServer(s.ts.Config.Handler)
+	srv.Listener = ln
+	srv.Start()
+	t.Cleanup(srv.Close)
+	return dir
+}
+
+func TestTheConfigurationFileGivesTheSocketAndTheToken(t *testing.T) {
 	s := newStub(t)
 	withTasks(s)
+	state := serveOnSocket(t, s)
 	dir := t.TempDir()
 	tokenFile := filepath.Join(dir, "api.token")
 	if err := os.WriteFile(tokenFile, []byte(tok+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	host := strings.TrimPrefix(s.ts.URL, "http://")
 	cfg := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(cfg, []byte(fmt.Sprintf(`{"listen":%q,"api_token_file":%q,"roots":{"x":1}}`, host, tokenFile)), 0o600); err != nil {
+	if err := os.WriteFile(cfg, []byte(fmt.Sprintf(`{"listen":"127.0.0.1:8787","state_dir":%q,"api_token_file":%q,"roots":{"x":1}}`, state, tokenFile)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -496,31 +520,39 @@ func TestTheConfigurationFileGivesTheServerAndTheToken(t *testing.T) {
 	}
 }
 
-// The client sends its token over plain HTTP, so only to a loopback address
-// (D29); a configuration that names another host is refused before the token
-// file is even read.
-func TestTheClientSendsTheTokenOnlyToLoopback(t *testing.T) {
+// The client sends its token only to the API's unix socket (D29, §7.5): whatever
+// the configuration's listen address is, nothing is ever sent to it, so the token
+// never crosses a network, not even loopback.
+func TestTheClientSendsTheTokenOnlyToTheSocket(t *testing.T) {
+	var hits int
+	web := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits++ }))
+	t.Cleanup(web.Close)
 	dir := t.TempDir()
 	tokenFile := filepath.Join(dir, "api.token")
 	if err := os.WriteFile(tokenFile, []byte(tok+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for listen, ok := range map[string]bool{
-		"127.0.0.1:8787": true, "[::1]:8787": true,
-		"192.168.1.20:8787": false, "example.com:8787": false, "0.0.0.0:8787": false, "localhost:8787": false, "8787": false,
-	} {
-		cfg := filepath.Join(dir, "c.json")
-		raw, _ := json.Marshal(map[string]string{"listen": listen, "api_token_file": tokenFile})
-		if err := os.WriteFile(cfg, raw, 0o600); err != nil {
-			t.Fatal(err)
-		}
-		_, err := NewClient(cfg)
-		if (err == nil) != ok {
-			t.Errorf("listen %q: err = %v, want ok=%v", listen, err, ok)
-		}
-		if err != nil && strings.Contains(err.Error(), tok) {
-			t.Errorf("listen %q: the error shows the token: %v", listen, err)
-		}
+	empty, err := os.MkdirTemp("", "whr") // no socket in it
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(empty) })
+	cfg := filepath.Join(dir, "c.json")
+	raw, _ := json.Marshal(map[string]string{"listen": strings.TrimPrefix(web.URL, "http://"), "state_dir": empty, "api_token_file": tokenFile})
+	if err := os.WriteFile(cfg, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := NewClient(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = c.Do(context.Background(), "GET", "/v1/tasks", nil, "")
+	var ce connError
+	if !errors.As(err, &ce) || strings.Contains(err.Error(), tok) {
+		t.Fatalf("a missing socket must be a connection error that hides the token: %v", err)
+	}
+	if hits != 0 {
+		t.Errorf("the listen address got %d request(s): the token went over TCP", hits)
 	}
 }
 

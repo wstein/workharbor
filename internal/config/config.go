@@ -127,6 +127,23 @@ func (c *Config) PublicOrigin() (origin, host string) {
 	return "https://" + u.Host, u.Hostname()
 }
 
+// APISocketName is the JSON API's unix socket in the state directory (D29, §7.5).
+const APISocketName = "api.sock"
+
+// StateDirOf returns the state directory: stateDir when set, else
+// ~/.local/state/whr.
+func StateDirOf(stateDir, home string) string {
+	if stateDir != "" {
+		return stateDir
+	}
+	return filepath.Join(home, ".local", "state", "whr")
+}
+
+// APISocketPath is where the JSON API listens and where the CLI connects.
+func APISocketPath(stateDir, home string) string {
+	return filepath.Join(StateDirOf(stateDir, home), APISocketName)
+}
+
 // Config is the whole file.
 type Config struct {
 	// Listen is the address `whr serve` binds: a loopback address (D29).
