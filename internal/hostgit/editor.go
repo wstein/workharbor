@@ -48,6 +48,10 @@ func (r *Repo) EditorCopy(ctx context.Context, dest, branch string) ([]string, e
 		return nil, fmt.Errorf("%w: %q", ErrInsideWorkspace, dest)
 	}
 
+	// The copy is a checkout on the host: check how large the tree expands to first.
+	if err := r.CheckTree(ctx, "refs/heads/"+branch); err != nil {
+		return nil, err
+	}
 	if _, err := os.Lstat(dest); errors.Is(err, os.ErrNotExist) {
 		if _, err := r.g.run(ctx, parent, true, nil, "clone", "--quiet", "--no-hardlinks", "--no-tags", "--template=",
 			"--branch", branch, "--", r.path, dest); err != nil {

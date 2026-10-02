@@ -109,6 +109,11 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 	if err != nil {
 		return Prepared{}, err
 	}
+	// The topic is checked out in a worktree on the host: its expanded size is
+	// checked first (a small bundle can name billions of paths).
+	if err := r.CheckTree(ctx, topicRef); err != nil {
+		return Prepared{}, err
+	}
 	base := targetRef // what the topic is rebased onto, and what its commits are counted from
 	rebaseArgs := []string{targetRef}
 	if spec.Onto != "" || spec.Upstream != "" {
