@@ -19,8 +19,13 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Container base images, pinned by digest. Whether Dependabot reads files named
-  # Containerfile.<base> is unverified; the devcontainer's Dockerfile it reads.
+  # Container base images, pinned by digest. Dependabot reads files named
+  # Containerfile.<base> (it opened #114 and #115 for Containerfile.fedora). The
+  # base image and the console image share one Fedora digest (D44), and
+  # TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools fails when only one
+  # moves, so every directory is in one group: a bump arrives as one pull request
+  # that changes them together. Whether the group spans directories is unverified
+  # until the next bump (issue #120).
   - package-ecosystem: docker
     directories: [/.devcontainer, /internal/baseimage, /internal/console]
     schedule:
@@ -32,6 +37,9 @@ updates:
       prefix: build
       include: scope
     labels: [dependencies]
+    groups:
+      containers:
+        patterns: ["*"]
 
   - package-ecosystem: gomod
     directory: /
