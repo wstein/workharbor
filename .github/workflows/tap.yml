@@ -1,0 +1,76 @@
+name: tap
+
+# A published release updates the Homebrew tap (design D24, §13): the tap never
+# points at a draft, and a prerelease does not update it. workflow_dispatch
+# re-renders the formula for an already published release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A published release tag, vX.Y.Z
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: tap
+  cancel-in-progress: false
+
+jobs:
+  formula:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    # The tap's deploy key lives in this environment only; it can write to
+    # wstein/homebrew-tap and nothing else.
+    environment: homebrew-tap
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The release is published, final, with checked assets
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG is not a final version tag"; exit 1; }
+          state="$(gh release view "$TAG" --repo "$REPO" --json isDraft,isPrerelease -q '"\(.isDraft) \(.isPrerelease)"')"
+          [ "$state" = "false false" ] || { echo "::error::$TAG is a draft or a prerelease"; exit 1; }
+          v="${TAG#v}"
+          mkdir -p "$RUNNER_TEMP/rel"
+          gh release download "$TAG" --repo "$REPO" --dir "$RUNNER_TEMP/rel" \
+            --pattern "whr_${v}_darwin_arm64.tar.gz" --pattern "whr-guest_${v}_linux_arm64.tar.gz" --pattern checksums.txt
+          cd "$RUNNER_TEMP/rel"
+          for f in "whr_${v}_darwin_arm64.tar.gz" "whr-guest_${v}_linux_arm64.tar.gz"; do
+            awk -v f="$f" '$2 == f' checksums.txt | sha256sum -c -
+            gh attestation verify "$f" --repo "$REPO" --signer-workflow "$REPO/.github/workflows/release.yml"
+          done
+      - name: Render the formula
+        run: scripts/homebrew-formula.sh "$TAG" "$RUNNER_TEMP/rel/checksums.txt" > "$RUNNER_TEMP/whr.rb"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: wstein/homebrew-tap
+          path: tap
+          ssh-key: ${{ secrets.TAP_DEPLOY_KEY }}
+          persist-credentials: true # zizmor: ignore[artipacked] the next step pushes with this key; nothing uploads the workspace
+      - name: Commit and push the formula
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/whr.rb" Formula/whr.rb
+          git add Formula/whr.rb
+          if git diff --cached --quiet; then
+            echo "Formula/whr.rb is already at $TAG"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "whr ${TAG#v}" -m "From $REPO release $TAG."
+          git push origin HEAD

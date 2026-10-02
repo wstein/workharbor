@@ -52,12 +52,13 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 ## Releases
 
-Only the maintainer releases (design D24). The pipeline is built but dormant until `v0.1.0`.
+Only the maintainer releases (design D24). Until `v0.1.0`, dogfood builds are prerelease tags `v0.1.0-alpha.N` whose draft is never published: skip step 1, tag a green commit of `main` (step 2), and install the draft on the host with `make install-release VERSION=v0.1.0-alpha.N` (the manual's host setup).
 
 1. **Prepare.** On a branch: `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release): prepare vX.Y.Z`. Merge it and wait for CI on `main`.
 2. **Tag.** The maintainer signs and annotates it: `git tag -s vX.Y.Z` on that commit, then pushes the tag. The workflow stops unless the tag is annotated, signed by a key in `.github/release-signers` (SSH signatures), on `main` and green in CI. Agents never tag.
 3. **Check the draft.** The `release` workflow builds `whr` (darwin/arm64, linux/arm64, linux/amd64) and the guest helpers, checksums, an SBOM and provenance attestations, with notes from git-cliff, into a **draft** release. Download the assets, `gh attestation verify` one, and read the notes.
 4. **Publish.** Publish the draft by hand. Nothing in the workflow publishes.
+5. **Tap.** Publishing a final release (not a prerelease) runs the `tap` workflow: it checks the assets' checksums and attestations, renders `Formula/whr.rb` with `scripts/homebrew-formula.sh` and pushes it to [`wstein/homebrew-tap`](https://github.com/wstein/homebrew-tap). Once: create that repository, add a deploy key with write access to it, and store the private key as the secret `TAP_DEPLOY_KEY` in an environment `homebrew-tap` of this repository (limit the environment to the `main` branch and the `v*` tags). Run the workflow by hand with a tag to render the formula again.
 
 To test the pipeline before a tag, run the `release` workflow by hand (a snapshot build that creates no release), or `make release-snapshot` locally.
 
