@@ -35,6 +35,12 @@ Enforcement is outside the agent: forge branch protection, required human review
 | Egress requests (§4.2) | asked once per repository | asked once per repository | asked again when their source changes; lockfile suggestions ignored |
 | Ruleset `whr doctor` expects | force push blocked on the integration branch | the integration branch protected, PR required | the default branch requires review, checks and signed commits; no bypass actor |
 
+Three rules close the gaps between the presets and the rest of the design:
+
+- **The supervisor never moves the default branch**, in any preset. `prototype` needs an explicitly configured `integration_branch` that is not the default branch; without one the configuration is refused. Promotion to the default branch is always the human's.
+- **The environment comes from the default branch only** (D38): the devcontainer file, the Dockerfile, `postCreateCommand` and the egress requests are read at the default branch's commit, never at the integration branch's, so an approved agent commit on the integration branch cannot configure the agent's next environment.
+- **A task never runs looser than the repository.** A task keeps the branch it started with, and publishes under the stricter of its own preset and the repository's current one; changing `integration_branch` is a policy change like changing the preset (refused at start until accepted, and audited).
+
 The fast-forward of `prototype` is never forced: a branch that moved is refused and the topic is rebased (§4.2). It is the human's approval carried out by the supervisor, so the floor holds. Changing a preset is a policy change: it is audited, it needs a passkey assertion once D45 exists, and a looser preset never applies to a run already started.
 
 **Agent permission modes.** The agent CLIs have their own coarse modes. In the spike with Claude Code (a fixed allowlist of `Read` and a few harmless shell prefixes) they behaved as follows for a file write:

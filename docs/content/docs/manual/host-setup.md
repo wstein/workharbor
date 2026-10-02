@@ -182,7 +182,7 @@ Whether GitHub accepts the manifest as `whr` sends it (its inactive webhook, a p
 
     | Workflow | Where approved commits go | The ruleset to set up |
     | --- | --- | --- |
-    | `prototype` | the supervisor fast-forwards the integration branch (`integration_branch`, default the repository's default branch) to the approved commit; no pull request | force pushes blocked on that branch, and only the App and you may write to it ({{< status unverified >}}: whether a ruleset can name the App as the only other writer) |
+    | `prototype` | the supervisor fast-forwards the integration branch (`integration_branch`, required, and never the default branch) to the approved commit; no pull request | force pushes blocked on that branch, and only the App and you may write to it ({{< status unverified >}}: whether a ruleset can name the App as the only other writer) |
     | `integration` (default) | a pull request into `integration_branch` (default `develop`) that you merge and promote to `main` | that branch protected, a pull request required |
     | `published` | a pull request into the default branch; the agent asks for every tool (`manual`) | the default branch requires a pull request with a review and status checks and signed commits, and has **no bypass actor** |
 
