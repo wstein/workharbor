@@ -68,10 +68,16 @@ func Lint(msg string, opt Options) []string {
 	subject := lines[0]
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
-			if opt.Final && p != "Merge " && p != "Revert " {
-				return []string{fmt.Sprintf("%q commit is not squashed: run git rebase -i --autosquash before it lands", strings.TrimSpace(p))}
+			// These skip the message rules, never the one about origin: a bot's
+			// "Merge ..." must not carry a Signed-off-by either.
+			var problems []string
+			if signoffByBot(lines, opt) {
+				problems = append(problems, fmt.Sprintf("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author))
 			}
-			return nil
+			if opt.Final && p != "Merge " && p != "Revert " {
+				problems = append(problems, fmt.Sprintf("%q commit is not squashed: run git rebase -i --autosquash before it lands", strings.TrimSpace(p)))
+			}
+			return problems
 		}
 	}
 
@@ -142,6 +148,20 @@ func Lint(msg string, opt Options) []string {
 		add("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author)
 	}
 	return problems
+}
+
+// signoffByBot reports a Signed-off-by trailer on a commit whose author is a bot or
+// an agent (the dependency bots are exempt).
+func signoffByBot(lines []string, opt Options) bool {
+	if !botRe.MatchString(opt.Author) || depBotRe.MatchString(opt.Author) {
+		return false
+	}
+	for _, t := range parseTrailers(lines) {
+		if t.key == "Signed-off-by" {
+			return true
+		}
+	}
+	return false
 }
 
 // clean drops git's comment lines and the scissors section, then trims

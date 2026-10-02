@@ -33,6 +33,8 @@ func TestLint(t *testing.T) {
 		{"two tasks", "docs: a\n\nWhr-Task: t1\nWhr-Task: t2", human, "at most one"},
 		{"bad task id", "docs: a\n\nWhr-Task: bad id", human, "not a valid id"},
 		{"human signoff", "docs: a\n\nSigned-off-by: Werner <w@x.de>", human, ""},
+		{"merge with a bot signoff", "Merge branch 'x'\n\nSigned-off-by: Bot <b@x.de>", "Claude <noreply@anthropic.com>", "Signed-off-by"},
+		{"merge by a human with a signoff", "Merge branch 'x'\n\nSigned-off-by: W <w@x.de>", human, ""},
 		{"bot signoff", "docs: a\n\nSigned-off-by: Bot <b@x.de>", "Claude <noreply@anthropic.com>", "Signed-off-by"},
 		{"bot name signoff", "docs: a\n\nSigned-off-by: X <x@x.de>", "ci-bot <ci@x.de>", "Signed-off-by"},
 		{"dependabot long subject", "build(deps): " + strings.Repeat("x", 80) + " in /docs", "dependabot[bot] <support@github.com>", ""},
