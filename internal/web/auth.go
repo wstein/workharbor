@@ -187,8 +187,8 @@ func (a *TokenAuth) Session(r *http.Request) (Session, bool) {
 
 // SignIn implements Auth. The token is compared in constant time through its
 // hash, a wrong one is slowed down by a limit on failures, and the cookie is
-// HttpOnly, SameSite=Strict, and Secure when the request came over HTTPS (TLS,
-// or the forwarder saying so).
+// HttpOnly, SameSite=Strict, and Secure when the request came over HTTPS: TLS, or
+// the public_url host (SetPublicHost); X-Forwarded-Proto is never believed.
 func (a *TokenAuth) SignIn(w http.ResponseWriter, r *http.Request) error {
 	if err := r.ParseForm(); err != nil {
 		return ErrBadCredentials

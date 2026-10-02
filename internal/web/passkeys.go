@@ -45,8 +45,9 @@ func (s *Server) passkeyMode(ctx context.Context) bool {
 func (s *Server) stepUpAvailable(ctx context.Context) bool { return s.passkeyMode(ctx) }
 
 // sensitive reports whether answering a Decision needs a fresh passkey assertion
-// (D45): "Ready to push?", an egress host and a feature source; policy and preset changes and secret
-// operations as those Decisions come. A web session alone never answers them.
+// (D45): "Ready to push?", an egress host and a feature source. Policy and preset
+// changes are not Decisions: they are confirmed on /changes, each with its own
+// passkey assertion. A web session alone never answers or confirms them.
 func sensitive(d *domain.Decision) bool {
 	return d.Kind == domain.DecisionReview || d.Cause == domain.CauseEgressRequest || d.Cause == domain.CauseFeatureSource
 }

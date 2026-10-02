@@ -411,7 +411,8 @@ func (s *Service) List(ctx context.Context) ([]Info, error) {
 }
 
 // Revoke removes a passkey by its ID or by a unique prefix of it. Revoking the
-// last one leaves the web UI without a sign-in until the host enrols another.
+// last one turns passkey mode off: the token signs in to the web UI again, until
+// the host enrols another.
 func (s *Service) Revoke(ctx context.Context, idOrPrefix string) error {
 	rows, err := s.st.Passkeys(ctx)
 	if err != nil {
