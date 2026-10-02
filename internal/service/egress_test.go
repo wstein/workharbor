@@ -299,3 +299,21 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 		t.Errorf("errors: %v", r.errs)
 	}
 }
+
+// A feature Decision raised before the digest was recorded has none: its answer
+// must not fail after the Decision is closed (the run would be left stuck), keeps
+// nothing for the digest rule and is reported once.
+func TestFeatureAnswerWithoutADigestIsNotAnError(t *testing.T) {
+	r := newRig(t)
+	d := domain.Decision{ID: "dx", TaskID: "t1", Cause: domain.CauseFeatureSource, Feature: "ghcr.io/someone/else/thing:1"}
+	before := len(r.errs)
+	if err := r.svc.keepFeatureAnswer(bg, d, domain.AnswerAllow); err != nil {
+		t.Fatalf("keepFeatureAnswer = %v, want nil", err)
+	}
+	if len(r.errs) != before+1 {
+		t.Errorf("reported %d errors, want one", len(r.errs)-before)
+	}
+	if ok, _ := r.svc.ApprovedFeatureSources(bg, "wstein/workharbor"); len(ok) != 0 {
+		t.Errorf("approved = %v, want nothing", ok)
+	}
+}

@@ -162,6 +162,12 @@ func (s *Service) keepFeatureAnswer(ctx context.Context, d domain.Decision, opti
 	if option != domain.AnswerAllow && option != domain.AnswerDeny {
 		return nil
 	}
+	if !domain.ValidDigest(d.FeatureDigest) {
+		// Raised before the digest was recorded: nothing is kept for the digest rule,
+		// so the digest is asked again at the next start.
+		s.report(fmt.Errorf("feature source %s: the Decision has no digest, so its answer is not kept", d.Feature))
+		return nil
+	}
 	agg, err := s.store.LoadTask(ctx, d.TaskID)
 	if err != nil {
 		return err

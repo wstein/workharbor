@@ -456,11 +456,17 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		return err
 	}
 	if row.Cause == domain.CauseFeatureSource && row.Feature != "" {
-		if err := s.keepFeatureAnswer(ctx, *row, r.Option); err != nil {
-			return fmt.Errorf("keep the answer for %s: %w", row.Feature, err)
+		// The run continues even if keeping the answer failed: the Decision is closed.
+		keepErr := s.keepFeatureAnswer(ctx, *row, r.Option)
+		if keepErr != nil {
+			keepErr = fmt.Errorf("keep the answer for %s: %w", row.Feature, keepErr)
 		}
-		if err := s.continueEgress(ctx, row.TaskID, row.RunID); err != nil {
-			return fmt.Errorf("start the run after the feature answers: %w", err)
+		contErr := s.continueEgress(ctx, row.TaskID, row.RunID)
+		if contErr != nil {
+			contErr = fmt.Errorf("start the run after the feature answers: %w", contErr)
+		}
+		if err := errors.Join(keepErr, contErr); err != nil {
+			return err
 		}
 	}
 	if row.Cause == domain.CauseEgressRequest && row.Host != "" {
