@@ -612,3 +612,93 @@ func TestAProfileOfAPinnedToolMustPointAtThePinsOwnEntry(t *testing.T) {
 		t.Errorf("the profile link to a look-alike was not caught: %s", joinProblems(s.Verify()))
 	}
 }
+
+// bin that is itself a link moves where the kernel resolves every link in it.
+func TestAProfileWhoseBinIsALinkIsSevere(t *testing.T) {
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	e := addTool(t, s)
+	good := filepath.Base(e.Dir)
+	// profiles/P/bin -> ../.p/q/r; .p/q/r/tool -> ../../../store/<good>/bin/tool
+	// really resolves to profiles/store/<good>/bin/tool, not to the store.
+	evil := filepath.Join(s.Root, "profiles", "store", good, "bin")
+	if err := os.MkdirAll(evil, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(evil, "tool"), []byte("EVIL"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hidden := filepath.Join(s.Root, "profiles", ".p", "q", "r")
+	if err := os.MkdirAll(hidden, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../../store/"+good+"/bin/tool", filepath.Join(hidden, "tool")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(s.Root, "profiles", "P"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../.p/q/r", filepath.Join(s.Root, "profiles", "P", "bin")); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, p := range s.Verify() {
+		if p.Severe && strings.HasPrefix(p.Entry, "profiles/P") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a profile whose bin is a link was not severe: %s", joinProblems(s.Verify()))
+	}
+}
+
+func TestAProfileDirectoryThatIsALinkIsSevere(t *testing.T) {
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	e := addTool(t, s)
+	if err := s.Profile("real", e); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real", filepath.Join(s.Root, "profiles", "linked")); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, p := range s.Verify() {
+		if p.Severe && strings.HasPrefix(p.Entry, "profiles/linked") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a profile directory that is a link was not severe: %s", joinProblems(s.Verify()))
+	}
+}
+
+func TestAPinnedToolMayNotLinkToAnUnpinnedVersion(t *testing.T) {
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	content := []byte("x")
+	sum := sha256.Sum256(content)
+	look := hex.EncodeToString(sum[:])[:8] + "-" + pin.Name + "-9.9.9-" + pin.Platform
+	writeEntry(t, s, look, pin.Name, content, hex.EncodeToString(sum[:]))
+	bin := filepath.Join(s.Root, "profiles", "p", "bin")
+	if err := os.MkdirAll(bin, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../../store/"+look+"/bin/"+pin.Name, filepath.Join(bin, pin.Name)); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, p := range s.Verify() {
+		if p.Severe && strings.HasPrefix(p.Entry, "profiles/p/") && strings.Contains(p.Msg, "no pin covers") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a link from a pinned tool to an unpinned version was not caught: %s", joinProblems(s.Verify()))
+	}
+}

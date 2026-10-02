@@ -549,6 +549,10 @@ func (s *Store) verifyProfiles(pins []Pin) []Problem {
 	if err != nil {
 		return []Problem{{Msg: "cannot read the profiles: " + err.Error(), Severe: true}}
 	}
+	evalRoot, err := filepath.EvalSymlinks(s.Root)
+	if err != nil {
+		return []Problem{{Msg: "cannot resolve the store root: " + err.Error(), Severe: true}}
+	}
 	var problems []Problem
 	for _, pd := range list {
 		if strings.HasPrefix(pd.Name(), ".") {
@@ -559,6 +563,10 @@ func (s *Store) verifyProfiles(pins []Pin) []Problem {
 			continue
 		}
 		binDir := filepath.Join(profiles, pd.Name(), "bin")
+		if info, err := os.Lstat(binDir); err != nil || !info.IsDir() {
+			problems = append(problems, Problem{Entry: "profiles/" + pd.Name(), Msg: "bin is not a real directory (a link or a file is refused)", Severe: true})
+			continue
+		}
 		links, err := os.ReadDir(binDir)
 		if err != nil {
 			problems = append(problems, Problem{Entry: "profiles/" + pd.Name(), Msg: "cannot read bin: " + err.Error(), Severe: true})
@@ -593,11 +601,28 @@ func (s *Store) verifyProfiles(pins []Pin) []Problem {
 				bad("the entry %s has no tool %s", seg[4], l.Name())
 				continue
 			}
+			want := filepath.Join(evalRoot, "store", seg[4], "bin", l.Name())
+			if got, err := filepath.EvalSymlinks(filepath.Join(binDir, l.Name())); err != nil || got != want {
+				bad("the link resolves to %q, not into the entry's own bin (%s)", got, want)
+				continue
+			}
+			var pinned, covered bool
 			for _, p := range pins {
-				if len(p.SHA256) == 64 && p.Name == l.Name() && strings.HasSuffix(seg[4], "-"+p.Name+"-"+p.Version+"-"+p.Platform) &&
-					seg[4] != p.SHA256[:8]+"-"+p.Name+"-"+p.Version+"-"+p.Platform {
+				if len(p.SHA256) != 64 || p.Name != l.Name() {
+					continue
+				}
+				pinned = true
+				if !strings.HasSuffix(seg[4], "-"+p.Name+"-"+p.Version+"-"+p.Platform) {
+					continue
+				}
+				covered = true
+				if seg[4] != p.SHA256[:8]+"-"+p.Name+"-"+p.Version+"-"+p.Platform {
 					bad("the link points to %s, not the pin's own entry %s-%s-%s-%s", seg[4], p.SHA256[:8], p.Name, p.Version, p.Platform)
 				}
+			}
+			if pinned && !covered {
+				bad("%s is a pinned tool and no pin covers the entry %s", l.Name(), seg[4])
+				continue
 			}
 			if sum, err := hashRegular(filepath.Join(entry, "bin", l.Name())); err != nil || len(seg[4]) < 8 || !strings.HasPrefix(sum, seg[4][:8]) {
 				bad("the entry %s does not hold the content its name says", seg[4])
