@@ -52,10 +52,11 @@ install: check-clean check-main
 
 # Install a release, a dogfood draft included (D24, D34), as the administrator
 # into a prefix whr cannot write: make install-release VERSION=v0.1.0-alpha.1
+# (an older tag than the installed one needs ALLOW_DOWNGRADE=1)
 # [PREFIX=/opt/whr]. It checks the checksums and the provenance attestation.
 install-release:
 	@test -n "$(VERSION)" || { echo "usage: make install-release VERSION=<tag> [PREFIX=/opt/whr]" >&2; exit 2; }
-	scripts/install-release.sh "$(VERSION)" "$(if $(filter command line,$(origin PREFIX)),$(PREFIX),/opt/whr)"
+	scripts/install-release.sh "$(VERSION)" "$(if $(filter command line,$(origin PREFIX)),$(PREFIX),/opt/whr)" $(if $(ALLOW_DOWNGRADE),--allow-downgrade)
 
 # Temporary Apple Container resources of spikes, live tests and debugging
 # (AGENTS.md): list them, or remove one lane's (LANE=wh/spikes); ALL=1 removes
