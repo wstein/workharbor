@@ -230,6 +230,9 @@ func (s *session) Instruct(_ context.Context, message string) (agent.Delivery, e
 }
 
 func (s *session) Stop(context.Context) error {
+	s.f.mu.Lock()
+	s.f.stops++
+	s.f.mu.Unlock()
 	s.stopOnce.Do(func() { close(s.stop) })
 	return nil
 }

@@ -202,7 +202,11 @@ func TestShutdownCancelsARunningStart(t *testing.T) {
 
 // A Cancel that commits after the agent started and the run was marked running,
 // and before the session is attached, must not leave the agent running for a
-// cancelled task: the start's context is cancelled, so the session is stopped.
+// cancelled task: the start's context is cancelled, so the session is stopped,
+// once. Two paths end it (the ctx check before attach, and attach honouring the
+// slot's stop request), so this test does not tell them apart: it guards the
+// outcome, and the check before attach only saves attaching a session that is
+// to be stopped at once.
 func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
 	r := newWsRig(t)
 	_, a := r.create("docs-ws")
@@ -227,6 +231,9 @@ func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
 	if agg.Task().State != domain.TaskCancelled || agg.Runs()[0].State != domain.RunStopped {
 		t.Errorf("task %s, run %s", agg.Task().State, agg.Runs()[0].State)
 	}
+	if n := r.agent.Stops(); n != 1 {
+		t.Errorf("the session was stopped %d times, want once", n)
+	}
 }
 
 // The same interleaving when only the slot's stop request, not the start's
@@ -245,5 +252,8 @@ func TestAStopRequestedBeforeAttachStopsTheSession(t *testing.T) {
 	eventually(t, func() bool { return !r.svc.attached(run) })
 	if r.svc.attached(run) {
 		t.Fatal("a session that was asked to stop while it was starting is still attached")
+	}
+	if n := r.agent.Stops(); n != 1 {
+		t.Errorf("the session was stopped %d times, want once", n)
 	}
 }

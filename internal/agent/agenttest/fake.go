@@ -89,6 +89,7 @@ type Fake struct {
 	Specs []agent.StartSpec
 
 	mu       sync.Mutex
+	stops    int // Stop calls on any session, repeated ones included
 	queue    []scenario
 	sessions int
 	known    map[string]bool
@@ -185,4 +186,12 @@ func (f *Fake) Started() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.Specs)
+}
+
+// Stops returns how many times Stop was called on the sessions of this fake,
+// repeated calls included, so a test can check that a session was stopped once.
+func (f *Fake) Stops() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.stops
 }
