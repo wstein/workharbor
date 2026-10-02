@@ -1,0 +1,366 @@
+package web
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-webauthn/webauthn/protocol"
+
+	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/passkey"
+	"github.com/wstein/workharbor/internal/passkey/passkeytest"
+	"github.com/wstein/workharbor/internal/store"
+)
+
+const pkOrigin = "https://whr.example.test"
+
+// pkRig is the UI with the real passkey ceremonies and a virtual authenticator.
+type pkRig struct {
+	*rig
+	svc  *passkey.Service
+	auth *passkeytest.Authn
+}
+
+func newPKRig(t *testing.T) *pkRig {
+	t.Helper()
+	st, err := store.Open(bg, filepath.Join(t.TempDir(), "workharbor.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	svc, err := passkey.New(passkey.Config{RPID: "whr.example.test", Origin: pkOrigin}, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &rig{t: t, be: &fake{}, now: t0}
+	r.auth, err = NewTokenAuth([]byte(token), func() time.Time { r.mu.Lock(); defer r.mu.Unlock(); return r.now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ui, err := New(r.be, Options{Auth: r.auth, Store: st, Passkeys: svc, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.srv = httptest.NewServer(ui.Handler())
+	t.Cleanup(r.srv.Close)
+	return &pkRig{rig: r, svc: svc, auth: passkeytest.New(t, passkey.OwnerID())}
+}
+
+// postJSON sends a JSON body with headers, as the page's script does.
+func (b *browser) postJSON(path string, body []byte, headers map[string]string) (*reply, []byte) {
+	b.r.t.Helper()
+	req, err := http.NewRequestWithContext(bg, "POST", b.r.srv.URL+path, bytes.NewReader(body))
+	if err != nil {
+		b.r.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := b.c.Do(req)
+	if err != nil {
+		b.r.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(resp.Body)
+	return &reply{StatusCode: resp.StatusCode, Header: resp.Header, cookies: resp.Cookies()}, raw
+}
+
+func bodyOf(r *http.Request) []byte {
+	b, _ := io.ReadAll(r.Body)
+	return b
+}
+
+type ceremonyReply struct {
+	Options  json.RawMessage `json:"options"`
+	Ceremony string          `json:"ceremony"`
+}
+
+// enrol runs an enrolment through the HTTP endpoints, with no session.
+func (p *pkRig) enrol(b *browser) {
+	p.t.Helper()
+	tok, _, err := p.svc.NewEnrolment("phone")
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	resp, raw := b.postJSON("/passkey/enrol/begin", []byte(`{"token":"`+tok+`"}`), nil)
+	if resp.StatusCode != 200 {
+		p.t.Fatalf("enrol begin: %d %s", resp.StatusCode, raw)
+	}
+	var cr ceremonyReply
+	if err := json.Unmarshal(raw, &cr); err != nil {
+		p.t.Fatal(err)
+	}
+	var creation protocol.CredentialCreation
+	if err := json.Unmarshal(cr.Options, &creation); err != nil {
+		p.t.Fatal(err)
+	}
+	resp, raw = b.postJSON("/passkey/enrol/finish", bodyOf(p.auth.Register(&creation, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
+	if resp.StatusCode != 200 {
+		p.t.Fatalf("enrol finish: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// signIn runs a passkey sign-in and returns the browser with a session.
+func (p *pkRig) signIn() *browser {
+	p.t.Helper()
+	jar, _ := cookiejar.New(nil)
+	b := &browser{r: p.rig, hd: http.Header{}, c: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	resp, raw := b.postJSON("/passkey/login/begin", []byte(`{}`), nil)
+	if resp.StatusCode != 200 {
+		p.t.Fatalf("login begin: %d %s", resp.StatusCode, raw)
+	}
+	var cr ceremonyReply
+	_ = json.Unmarshal(raw, &cr)
+	var assertion protocol.CredentialAssertion
+	if err := json.Unmarshal(cr.Options, &assertion); err != nil {
+		p.t.Fatal(err)
+	}
+	resp, raw = b.postJSON("/passkey/login/finish", bodyOf(p.auth.Assert(&assertion, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
+	if resp.StatusCode != 200 || len(resp.Cookies()) == 0 {
+		p.t.Fatalf("login finish: %d %s", resp.StatusCode, raw)
+	}
+	return b
+}
+
+func TestEnrolmentIsOnlyFromAHostLinkAndNeedsNoSession(t *testing.T) {
+	p := newPKRig(t)
+	b := p.browser()
+	// the page of a good link has the button; a bad one says so and has no token
+	tok, _, _ := p.svc.NewEnrolment("x")
+	if resp, body := b.do("GET", "/enrol?token="+tok, nil); resp.StatusCode != 200 || !strings.Contains(body, `data-passkey="enrol"`) || !strings.Contains(body, `data-token="`+tok+`"`) {
+		t.Errorf("a good link: %d\n%s", resp.StatusCode, body)
+	}
+	if resp, body := b.do("GET", "/enrol?token=forged", nil); resp.StatusCode != 200 || strings.Contains(body, "data-token") || !strings.Contains(body, "whr passkey add") {
+		t.Errorf("a bad link: %d\n%s", resp.StatusCode, body)
+	}
+	// a web session cannot start an enrolment: there is no route for it
+	b.signIn()
+	for _, path := range []string{"/passkey/enrol", "/passkeys", "/enrol/new"} {
+		if resp, _ := b.do("POST", path, nil); resp.StatusCode == 200 {
+			t.Errorf("POST %s answered 200", path)
+		}
+	}
+	// a forged token and a replayed one are refused, whatever the session
+	resp, _ := b.postJSON("/passkey/enrol/begin", []byte(`{"token":"forged"}`), nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a forged token: %d", resp.StatusCode)
+	}
+	p.enrol(b)
+	if resp, _ := b.postJSON("/passkey/enrol/begin", []byte(`{"token":"`+tok+`"}`), nil); resp.StatusCode == 200 {
+		// tok was never begun: it is still good once; use it, then replay it
+		resp, _ = b.postJSON("/passkey/enrol/begin", []byte(`{"token":"`+tok+`"}`), nil)
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("a replayed token: %d", resp.StatusCode)
+		}
+	}
+	// the request must come from this site
+	hdr := map[string]string{"Origin": "https://evil.example"}
+	if resp, _ := b.postJSON("/passkey/enrol/begin", []byte(`{"token":"x"}`), hdr); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a cross-site enrolment: %d", resp.StatusCode)
+	}
+}
+
+func TestOnceAPasskeyIsEnrolledTheTokenNoLongerSignsInAndThePasskeyDoes(t *testing.T) {
+	p := newPKRig(t)
+	b := p.browser()
+	// before: the token signs in, and the page says it stops when a passkey exists
+	if _, body := b.do("GET", "/login", nil); !strings.Contains(body, `name="token"`) || !strings.Contains(body, "whr passkey add") {
+		t.Error("before a passkey, the token form is the way in")
+	}
+	p.enrol(b)
+
+	_, page := b.do("GET", "/login", nil)
+	if strings.Contains(page, `name="token"`) || !strings.Contains(page, `data-passkey="login"`) {
+		t.Errorf("after a passkey the page offers the token or no passkey:\n%s", page)
+	}
+	resp, body := b.do("POST", "/login", map[string][]string{"token": {token}})
+	if resp.StatusCode != http.StatusForbidden || len(resp.Cookies()) != 0 || !strings.Contains(body, "no longer signs in") {
+		t.Errorf("the token after enrolment: %d, cookies %v", resp.StatusCode, resp.Cookies())
+	}
+
+	// the passkey signs in; a wrong assertion does not
+	s := p.signIn()
+	if resp, _ := s.do("GET", "/", nil); resp.StatusCode != 200 {
+		t.Errorf("signed in with a passkey: %d", resp.StatusCode)
+	}
+	_, raw := b.postJSON("/passkey/login/begin", []byte(`{}`), nil)
+	var cr ceremonyReply
+	_ = json.Unmarshal(raw, &cr)
+	var assertion protocol.CredentialAssertion
+	_ = json.Unmarshal(cr.Options, &assertion)
+	p.auth.UV = false // the authenticator did not verify the user
+	resp, _ = b.postJSON("/passkey/login/finish", bodyOf(p.auth.Assert(&assertion, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
+	if resp.StatusCode != http.StatusUnauthorized || len(resp.Cookies()) != 0 {
+		t.Errorf("a sign-in without user verification: %d, cookies %v", resp.StatusCode, resp.Cookies())
+	}
+	// a guess at a ceremony ID gets nothing
+	if resp, _ := b.postJSON("/passkey/login/finish", []byte(`{}`), map[string]string{"X-Ceremony": "guess"}); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("an unknown ceremony: %d", resp.StatusCode)
+	}
+}
+
+func reviewDecision() domain.Decision {
+	return domain.Decision{ID: "d-review", TaskID: "t1", Kind: domain.DecisionReview, Blocking: true, SHA: "aaa111", Subject: "Ready to push? 2 commits", Options: []string{"allow", "deny"}}
+}
+
+func csrfOf(t *testing.T, b *browser) string {
+	t.Helper()
+	csrf, _ := b.form("/inbox")
+	return csrf
+}
+
+// stepUp begins a step-up for a decision as the page's script would.
+func (p *pkRig) stepUpBegin(b *browser, csrf, decision string) (*reply, ceremonyReply) {
+	p.t.Helper()
+	resp, raw := b.postJSON("/decisions/"+decision+"/stepup/begin", []byte(`{}`), map[string]string{"X-CSRF-Token": csrf})
+	var cr ceremonyReply
+	_ = json.Unmarshal(raw, &cr)
+	return resp, cr
+}
+
+func (p *pkRig) answerWith(b *browser, csrf, decision, option string, cr ceremonyReply, auth *passkeytest.Authn) *reply {
+	p.t.Helper()
+	var assertion protocol.CredentialAssertion
+	if err := json.Unmarshal(cr.Options, &assertion); err != nil {
+		p.t.Fatal(err)
+	}
+	resp, _ := b.postJSON("/decisions/"+decision+"/stepup/finish?option="+option+"&reason=ok", bodyOf(auth.Assert(&assertion, pkOrigin)), map[string]string{"X-CSRF-Token": csrf, "X-Ceremony": cr.Ceremony})
+	return resp
+}
+
+// A review is answered with a fresh passkey assertion for exactly that Decision and
+// commit, and never by the session alone.
+func TestAReviewIsAnsweredOnlyWithAPasskeyForThatDecisionAndCommit(t *testing.T) {
+	p := newPKRig(t)
+	p.be.inbox = []domain.Decision{reviewDecision(), {ID: "d-other", TaskID: "t1", Kind: domain.DecisionReview, Blocking: true, SHA: "bbb222", Options: []string{"allow", "deny"}}, {ID: "d-tool", TaskID: "t1", Kind: domain.DecisionApproval, Options: []string{"allow", "deny"}}}
+	p.enrol(p.browser())
+	b := p.signIn()
+	csrf := csrfOf(t, b)
+
+	// the inbox offers the passkey buttons, no plain form for the review
+	_, inbox := b.do("GET", "/inbox", nil)
+	if !strings.Contains(inbox, `data-stepup="allow" data-decision="d-review"`) || strings.Contains(inbox, "/decisions/d-review/answer") {
+		t.Errorf("the review is not answered with a passkey:\n%s", inbox)
+	}
+	// the form POST still refuses it, whatever the session
+	if resp, _ := b.do("POST", "/decisions/d-review/answer", map[string][]string{"csrf": {csrf}, "key": {"k1"}, "option": {"allow"}}); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a session alone answered a review: %d", resp.StatusCode)
+	}
+	// the script's calls need the CSRF header and a decision that needs a passkey
+	if resp, _ := b.postJSON("/decisions/d-review/stepup/begin", []byte(`{}`), nil); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("no CSRF header: %d", resp.StatusCode)
+	}
+	if resp, _ := p.stepUpBegin(b, csrf, "d-tool"); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("a tool approval needs no passkey: %d", resp.StatusCode)
+	}
+	if resp, _ := p.stepUpBegin(b, csrf, "nope"); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("an unknown decision: %d", resp.StatusCode)
+	}
+	anon := p.browser()
+	if resp, _ := anon.postJSON("/decisions/d-review/stepup/begin", []byte(`{}`), nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no session: %d", resp.StatusCode)
+	}
+
+	// an assertion made for ANOTHER decision's challenge does not answer this one
+	_, crA := p.stepUpBegin(b, csrf, "d-review")
+	_, crB := p.stepUpBegin(b, csrf, "d-other")
+	mixed := ceremonyReply{Options: crB.Options, Ceremony: crA.Ceremony}
+	if resp := p.answerWith(b, csrf, "d-review", "allow", mixed, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("an assertion for another decision: %d", resp.StatusCode)
+	}
+	// a ceremony of one decision cannot answer another
+	_, crC := p.stepUpBegin(b, csrf, "d-review")
+	if resp := p.answerWith(b, csrf, "d-other", "allow", crC, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("the ceremony of d-review answered d-other: %d", resp.StatusCode)
+	}
+	// another web session cannot finish this session's ceremony
+	_, crD := p.stepUpBegin(b, csrf, "d-review")
+	other := p.signIn()
+	otherCSRF := csrfOf(t, other)
+	if resp := p.answerWith(other, otherCSRF, "d-review", "allow", crD, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("another session finished it: %d", resp.StatusCode)
+	}
+	if _, _, a := p.be.calls(); a != 0 {
+		t.Fatalf("a refused step-up reached the service (%d answers)", a)
+	}
+
+	// the commit changed between the begin and the finish: the old approval is void
+	_, crE := p.stepUpBegin(b, csrf, "d-review")
+	moved := reviewDecision()
+	moved.SHA = "ccc333"
+	p.be.inbox[0] = moved
+	if resp := p.answerWith(b, csrf, "d-review", "allow", crE, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("an approval for an earlier commit: %d", resp.StatusCode)
+	}
+	p.be.inbox[0] = reviewDecision()
+
+	// the right assertion answers, once, with the SHA
+	_, crF := p.stepUpBegin(b, csrf, "d-review")
+	if resp := p.answerWith(b, csrf, "d-review", "allow", crF, p.auth); resp.StatusCode != 200 {
+		t.Fatalf("the right assertion: %d", resp.StatusCode)
+	}
+	if len(p.be.answers) != 1 || p.be.answerIDs[0] != "d-review" || p.be.answers[0].Option != "allow" || p.be.answers[0].SHA != "aaa111" || p.be.answers[0].By != "web+passkey" || p.be.answers[0].Reason != "ok" {
+		t.Errorf("the service got %v %+v", p.be.answerIDs, p.be.answers)
+	}
+	// a replay of the same ceremony is refused and answers nothing more
+	if resp := p.answerWith(b, csrf, "d-review", "allow", crF, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a replay: %d", resp.StatusCode)
+	}
+	if _, _, a := p.be.calls(); a != 1 {
+		t.Errorf("%d answers", a)
+	}
+	// an option the decision does not offer
+	_, crG := p.stepUpBegin(b, csrf, "d-review")
+	if resp := p.answerWith(b, csrf, "d-review", "merge", crG, p.auth); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("an unknown option: %d", resp.StatusCode)
+	}
+}
+
+// A passkey that does not verify the user, or whose counter went backwards, answers nothing.
+func TestAStepUpNeedsUserVerificationAndAHonestCounter(t *testing.T) {
+	p := newPKRig(t)
+	p.be.inbox = []domain.Decision{reviewDecision()}
+	p.enrol(p.browser())
+	b := p.signIn()
+	csrf := csrfOf(t, b)
+
+	_, cr := p.stepUpBegin(b, csrf, "d-review")
+	p.auth.UV = false
+	if resp := p.answerWith(b, csrf, "d-review", "allow", cr, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("no user verification: %d", resp.StatusCode)
+	}
+	p.auth.UV = true
+	p.auth.Counter = 0 // a clone that was used less
+	_, cr = p.stepUpBegin(b, csrf, "d-review")
+	if resp := p.answerWith(b, csrf, "d-review", "allow", cr, p.auth); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a counter that went backwards: %d", resp.StatusCode)
+	}
+	if _, _, a := p.be.calls(); a != 0 {
+		t.Errorf("%d answers", a)
+	}
+}
+
+// Without an enrolled passkey the review keeps pointing at the host.
+func TestWithoutAPasskeyAReviewHasNoWebAnswer(t *testing.T) {
+	p := newPKRig(t)
+	p.be.inbox = []domain.Decision{reviewDecision()}
+	b := p.browser()
+	b.signIn()
+	_, inbox := b.do("GET", "/inbox", nil)
+	if strings.Contains(inbox, "data-stepup") || !strings.Contains(inbox, "whr passkey add") {
+		t.Errorf("no passkey is enrolled, so the page must say how to enrol one:\n%s", inbox)
+	}
+	csrf, _ := b.form("/inbox")
+	if resp, _ := b.postJSON("/decisions/d-review/stepup/begin", []byte(`{}`), map[string]string{"X-CSRF-Token": csrf}); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a step-up with nothing enrolled: %d", resp.StatusCode)
+	}
+}

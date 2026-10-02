@@ -44,9 +44,11 @@ type harborPage struct {
 type decisionRow struct {
 	ID, TaskID, Kind, Subject, Input, Deadline string
 	Options                                    []string
-	// Review is a "Ready to push?" Decision: it needs the passkey step-up of D45,
-	// so the page offers no answer.
+	// Review is a Decision that needs the passkey step-up of D45 (a "Ready to push?"
+	// or an egress host), so the page offers no plain answer. For says what the
+	// approval is for: "this commit" or "this host".
 	Review bool
+	For    string
 	// Plan is an approval of a plan, which reads better as text than as a tool.
 	Key string
 }
@@ -55,6 +57,8 @@ type inboxPage struct {
 	nav
 	Decisions []decisionRow
 	Flash     string
+	// StepUp says a passkey is enrolled, so a review can be answered here.
+	StepUp bool
 }
 
 type eventRow struct {
@@ -77,6 +81,7 @@ type taskPage struct {
 	SayKey                                       string
 	Flash                                        string
 	Cancelable                                   bool
+	StepUp                                       bool
 }
 
 type cancelPage struct {
@@ -102,7 +107,7 @@ func decisionRows(in []domain.Decision, key func() string) []decisionRow {
 	for _, d := range in {
 		row := decisionRow{
 			ID: string(d.ID), TaskID: string(d.TaskID), Kind: kindLabel(d), Subject: d.Subject, Input: d.Input,
-			Options: d.Options, Review: d.Kind == domain.DecisionReview, Key: key(),
+			Options: d.Options, Review: sensitive(&d), For: stepUpFor(d), Key: key(),
 		}
 		if !d.Deadline.IsZero() {
 			row.Deadline = d.Deadline.UTC().Format("15:04 UTC")

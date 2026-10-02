@@ -33,6 +33,12 @@ type Auth interface {
 	SignOut(w http.ResponseWriter, r *http.Request)
 }
 
+// Starter is an Auth that can begin a session for a request that was verified by
+// other means, as the passkey sign-in does.
+type Starter interface {
+	Start(w http.ResponseWriter, r *http.Request)
+}
+
 // Errors of signing in.
 var (
 	ErrBadCredentials = errors.New("that is not the token")
@@ -129,16 +135,24 @@ func (a *TokenAuth) SignIn(w http.ResponseWriter, r *http.Request) error {
 		a.mu.Unlock()
 		return ErrBadCredentials
 	}
+	a.Start(w, r)
+	return nil
+}
+
+// Start begins a session for a request that has proved who it is by other means
+// (a passkey): a random ID in a cookie that is HttpOnly, SameSite=Strict, without a
+// Domain attribute (so only this host gets it) and Secure when the request came
+// over HTTPS.
+func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) {
 	id := randomHex(32)
 	a.mu.Lock()
-	a.sessions[sha256.Sum256([]byte(id))] = tokenSession{csrf: randomHex(32), expires: now.Add(sessionTTL)}
+	a.sessions[sha256.Sum256([]byte(id))] = tokenSession{csrf: randomHex(32), expires: a.now().Add(sessionTTL)}
 	a.mu.Unlock()
 	//nolint:gosec // Secure is set when the request came over HTTPS: the forwarder terminates TLS (D29) and the loopback listener is plain HTTP
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		Secure: isHTTPS(r), MaxAge: int(sessionTTL / time.Second),
 	})
-	return nil
 }
 
 // SignOut implements Auth.

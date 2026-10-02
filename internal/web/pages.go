@@ -41,7 +41,7 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 		seeOther(w, r, "/")
 		return
 	}
-	s.render(w, r, http.StatusOK, loginView(""))
+	s.render(w, r, http.StatusOK, loginView("", s.passkeyMode(r.Context())))
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -49,12 +49,16 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	// to sign the browser in to its own session.
 	if o := r.Header.Get("Origin"); o != "" {
 		if u, err := url.Parse(o); err != nil || !sameHost(u.Host, r.Host) {
-			s.render(w, r, http.StatusForbidden, loginView(errForbidden.msg))
+			s.render(w, r, http.StatusForbidden, loginView(errForbidden.msg, s.passkeyMode(r.Context())))
 			return
 		}
 	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
-		s.render(w, r, http.StatusForbidden, loginView(errForbidden.msg))
+		s.render(w, r, http.StatusForbidden, loginView(errForbidden.msg, s.passkeyMode(r.Context())))
+		return
+	}
+	if s.passkeyMode(r.Context()) { // no password fallback once a passkey is enrolled
+		s.render(w, r, http.StatusForbidden, loginView("Sign in with a passkey. The token no longer signs in to the web UI.", true))
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
@@ -63,9 +67,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		seeOther(w, r, "/")
 	case errors.Is(err, ErrTooManyTries):
-		s.render(w, r, http.StatusTooManyRequests, loginView(err.Error()))
+		s.render(w, r, http.StatusTooManyRequests, loginView(err.Error(), false))
 	default:
-		s.render(w, r, http.StatusUnauthorized, loginView(ErrBadCredentials.Error()))
+		s.render(w, r, http.StatusUnauthorized, loginView(ErrBadCredentials.Error(), false))
 	}
 }
 
@@ -127,6 +131,7 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request, sess Session) {
 		return
 	}
 	p := inboxPage{nav: s.navOf(r, sess, "inbox"), Decisions: decisionRows(in, newKey), Flash: flash(r)}
+	p.StepUp = s.stepUpAvailable(r.Context())
 	s.render(w, r, http.StatusOK, inboxView(p))
 }
 
@@ -152,8 +157,8 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request, sess Session) {
 	case d == nil:
 		s.fail(w, r, sess, &domain.NotFoundError{Kind: "open decision", ID: string(id)})
 		return
-	case d.Kind == domain.DecisionReview:
-		s.fail(w, r, sess, &httpError{status: http.StatusForbidden, msg: "answering \"Ready to push?\" needs a passkey, which this page does not have yet: answer it with `whr approve` or `whr reject` on the host"})
+	case sensitive(d):
+		s.fail(w, r, sess, &httpError{status: http.StatusForbidden, msg: "this answer needs a fresh passkey assertion: use the passkey buttons in the inbox (they need JavaScript), or answer it with `whr approve` or `whr reject` on the host"})
 		return
 	case !contains(d.Options, option):
 		s.fail(w, r, sess, &domain.InvalidError{Msg: "that is not one of the answers to this decision"})
@@ -200,6 +205,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request, sess Session) {
 	p := taskPageOf(v)
 	p.nav, p.SayKey, p.Flash = s.navOf(r, sess, "harbor"), newKey(), flash(r)
 	p.Decisions = decisionRows(v.Open, newKey)
+	p.StepUp = s.stepUpAvailable(r.Context())
 	if len(evs) > maxShown {
 		p.Earlier = len(evs) - maxShown
 		evs = evs[len(evs)-maxShown:]

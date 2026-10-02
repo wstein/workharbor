@@ -33,6 +33,10 @@ type Options struct {
 	Heartbeat time.Duration
 	// Now is the clock of an answer. Default time.Now.
 	Now func() time.Time
+	// Passkeys, if set, turns on the passkey enrolment page, the passkey sign-in and
+	// the step-up approvals (D45). Without it the UI signs in with the token and
+	// refuses to answer a review.
+	Passkeys Passkeys
 	// OnError hears an internal error, which the browser only sees as a generic
 	// message. Optional.
 	OnError func(error)
@@ -77,6 +81,13 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		files.ServeHTTP(w, r)
 	})
+	mux.HandleFunc("GET /enrol", s.enrolPage)
+	mux.HandleFunc("POST /passkey/enrol/begin", s.enrolBegin)
+	mux.HandleFunc("POST /passkey/enrol/finish", s.enrolFinish)
+	mux.HandleFunc("POST /passkey/login/begin", s.passkeyLoginBegin)
+	mux.HandleFunc("POST /passkey/login/finish", s.passkeyLoginFinish)
+	mux.HandleFunc("POST /decisions/{decision}/stepup/begin", s.authedJSON(s.stepUpBegin))
+	mux.HandleFunc("POST /decisions/{decision}/stepup/finish", s.authedJSON(s.stepUpFinish))
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.login)
 	mux.HandleFunc("POST /logout", s.authed(true, s.logout))
@@ -126,6 +137,24 @@ func (s *Server) authed(write bool, h func(http.ResponseWriter, *http.Request, S
 				s.fail(w, r, sess, err)
 				return
 			}
+		}
+		h(w, r, sess)
+	}
+}
+
+// authedJSON wraps a handler of the page's script: it needs the session and the
+// CSRF token in a header (a JSON body has no form field), and answers 401 and 403
+// as JSON instead of redirecting.
+func (s *Server) authedJSON(h func(http.ResponseWriter, *http.Request, Session)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sess, ok := s.opt.Auth.Session(r)
+		if !ok {
+			jsonError(w, http.StatusUnauthorized, "sign in first")
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(sess.CSRF)) != 1 {
+			jsonError(w, http.StatusForbidden, "this request did not come from the page: reload it and try again")
+			return
 		}
 		h(w, r, sess)
 	}

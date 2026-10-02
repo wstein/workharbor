@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -54,11 +55,16 @@ func (s *Server) once(r *http.Request, run func() (location string, err error)) 
 	if key == "" || len(key) > 100 {
 		return "", errBadForm
 	}
+	return s.onceKey(r.Context(), key, r.Method+" "+r.URL.Path+" "+r.PostForm.Encode(), run)
+}
+
+// onceKey is once for a key and a description of the request that the caller made.
+func (s *Server) onceKey(ctx context.Context, key, request string, run func() (location string, err error)) (string, error) {
 	key = "web:" + key
 	unlock := s.keys.lock(key)
 	defer unlock()
-	hash := store.RequestHash(r.Method, r.URL.Path, r.PostForm.Encode())
-	stored, replayed, err := s.opt.Store.Do(r.Context(), key, hash, func(*store.Tx) ([]byte, error) { return nil, errNotYet })
+	hash := store.RequestHash(request)
+	stored, replayed, err := s.opt.Store.Do(ctx, key, hash, func(*store.Tx) ([]byte, error) { return nil, errNotYet })
 	switch {
 	case err == nil && replayed:
 		return string(stored), nil
@@ -69,7 +75,7 @@ func (s *Server) once(r *http.Request, run func() (location string, err error)) 
 	if err != nil {
 		return "", err
 	}
-	if _, _, err := s.opt.Store.Do(r.Context(), key, hash, func(*store.Tx) ([]byte, error) { return []byte(loc), nil }); err != nil {
+	if _, _, err := s.opt.Store.Do(ctx, key, hash, func(*store.Tx) ([]byte, error) { return []byte(loc), nil }); err != nil {
 		return "", err
 	}
 	return loc, nil

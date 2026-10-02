@@ -17,6 +17,10 @@ templ layout(n nav, title string) {
 			<script src="/static/htmx.min.js" defer></script>
 			<script src="/static/app.js" defer></script>
 			<script src="/static/sse.js" defer></script>
+			<script src="/static/passkey.js" defer></script>
+			if n.CSRF != "" {
+				<meta name="csrf-token" content={ n.CSRF }/>
+			}
 		</head>
 		<body hx-boost="true">
 			<header class="bar">
@@ -57,18 +61,39 @@ templ flashNote(msg string) {
 	}
 }
 
-templ loginView(msg string) {
+templ loginView(msg string, passkeys bool) {
 	@layout(nav{}, "Sign in") {
 		<h1>Sign in</h1>
 		if msg != "" {
 			<p class="flash bad" role="alert">{ msg }</p>
 		}
-		<form method="post" action="/login" hx-boost="false" class="stack">
-			<label for="token">API token</label>
-			<input id="token" name="token" type="password" autocomplete="current-password" required/>
-			<button class="primary">Sign in</button>
-		</form>
-		<p class="muted">The token is the one in your `whr` configuration (<code>api_token_file</code>).</p>
+		if passkeys {
+			<p>Sign in with the passkey on this device. It asks for your face, fingerprint or PIN.</p>
+			<p><button class="primary" type="button" data-passkey="login">Sign in with a passkey</button></p>
+			<p class="flash bad" role="alert" data-passkey-status hidden></p>
+			<noscript><p class="muted">Signing in with a passkey needs JavaScript.</p></noscript>
+		} else {
+			<form method="post" action="/login" hx-boost="false" class="stack">
+				<label for="token">API token</label>
+				<input id="token" name="token" type="password" autocomplete="current-password" required/>
+				<button class="primary">Sign in</button>
+			</form>
+			<p class="muted">The token is the one in your `whr` configuration (<code>api_token_file</code>). Once you enrol a passkey from the host (<code>whr passkey add</code>), the token no longer signs in here.</p>
+		}
+	}
+}
+
+templ enrolView(token string) {
+	@layout(nav{}, "Enrol a passkey") {
+		<h1>Enrol a passkey</h1>
+		if token == "" {
+			<p class="flash bad" role="alert">This enrolment link is not valid, has expired or was already used. Run <code>whr passkey add</code> on the host to get a new one.</p>
+		} else {
+			<p>This registers the passkey of this device for signing in and for approving a push. It asks for your face, fingerprint or PIN. Only its public key is kept here.</p>
+			<p><button class="primary" type="button" data-passkey="enrol" data-token={ token }>Create the passkey</button></p>
+			<p class="flash" role="status" data-passkey-status hidden></p>
+			<noscript><p class="muted">Enrolling a passkey needs JavaScript.</p></noscript>
+		}
 	}
 }
 
@@ -139,7 +164,7 @@ templ harborView(p harborPage) {
 	}
 }
 
-templ decisionCard(d decisionRow, csrf string) {
+templ decisionCard(d decisionRow, csrf string, stepUp bool) {
 	<article class="decision">
 		<h3>{ d.Kind }</h3>
 		<p class="subject">{ d.Subject }</p>
@@ -150,8 +175,19 @@ templ decisionCard(d decisionRow, csrf string) {
 			<p class="muted">Answer by { d.Deadline } or it is denied.</p>
 		}
 		<p class="muted"><a href={ templ.SafeURL("/tasks/" + d.TaskID) }>Open the task</a></p>
-		if d.Review {
-			<p class="flash">This answer publishes code, so it needs your passkey, which this page cannot ask yet. Answer it with <code>whr approve</code> or <code>whr reject</code> on the host.</p>
+		if d.Review && stepUp {
+			<p class="flash">This answer needs your passkey: it is for exactly { d.For }.</p>
+			<label for={ "reason-" + d.ID }>Reason (optional, the agent sees it)</label>
+			<input id={ "reason-" + d.ID } name="reason" type="text" maxlength="500"/>
+			<div class="actions">
+				for _, o := range d.Options {
+					<button type="button" data-stepup={ o } data-decision={ d.ID } data-reason={ "reason-" + d.ID } class={ optionClass(o) }>{ o } with passkey</button>
+				}
+			</div>
+			<p class="flash bad" role="alert" data-passkey-status hidden></p>
+			<noscript><p class="muted">Answering with a passkey needs JavaScript.</p></noscript>
+		} else if d.Review {
+			<p class="flash">This answer needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or answer it with <code>whr approve</code> or <code>whr reject</code> on the host.</p>
 		} else {
 			<form method="post" action={ templ.SafeURL("/decisions/" + d.ID + "/answer") } class="stack">
 				<input type="hidden" name="csrf" value={ csrf }/>
@@ -186,7 +222,7 @@ templ inboxView(p inboxPage) {
 			<p class="muted">Nothing needs an answer.</p>
 		}
 		for _, d := range p.Decisions {
-			@decisionCard(d, p.CSRF)
+			@decisionCard(d, p.CSRF, p.StepUp)
 		}
 	}
 }
@@ -231,7 +267,7 @@ templ taskView(p taskPage) {
 			<section aria-labelledby="open">
 				<h2 id="open">Waiting for you</h2>
 				for _, d := range p.Decisions {
-					@decisionCard(d, p.CSRF)
+					@decisionCard(d, p.CSRF, p.StepUp)
 				}
 			</section>
 		}
