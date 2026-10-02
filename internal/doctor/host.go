@@ -18,6 +18,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/sshca"
 )
 
 // The setup steps beyond what `whr doctor` always checked (design D46, the manual's
@@ -554,6 +555,7 @@ func userSteps(d Deps) []Check {
 	dir := d.configDir()
 	tokenPath := filepath.Join(dir, "api.token")
 	envPath := filepath.Join(dir, "agent.env")
+	caPath := filepath.Join(dir, "ssh-ca")
 	return ordered([]Check{
 		{
 			Name: "container-kernel", Phase: PhaseUser, Step: 4, Title: "the Linux kernel containers boot (manual step 6)",
@@ -672,6 +674,22 @@ func userSteps(d Deps) []Check {
 		},
 
 		{
+			Name: "ssh-ca", Phase: PhaseUser, Step: 3, Title: "the console's SSH certificate authority (optional; for whr ssh, issue #32)", Optional: true,
+			Run: func(context.Context) (Status, string) {
+				if _, err := os.Stat(caPath); err != nil {
+					return OK, "no SSH authority: `whr ssh` is off"
+				}
+				if _, err := sshca.Load(caPath); err != nil {
+					return Fail, oneLine(err.Error())
+				}
+				return OK, caPath + " is a private authority key; set console.ssh_ca_key_file to it in the configuration to turn `whr ssh` on"
+			},
+			Fix: &Fix{Desc: "generate an Ed25519 authority key into " + caPath + " (0600, never overwritten, never shown); add \"console\": {\"ssh_ca_key_file\": \"" + caPath + "\"} to the configuration to use it", Do: func(context.Context, Prompter) error {
+				return sshca.Generate(caPath)
+			}},
+		},
+
+		{
 			Name: "github-app", Phase: PhaseUser, Step: 2, Title: "your own GitHub App (manual step 11)",
 			Run: func(context.Context) (Status, string) {
 				if id, path, err := appKey(dir); err == nil {
@@ -783,7 +801,7 @@ func userSteps(d Deps) []Check {
 // no cycle (the base configuration comes before the App, which comes before the
 // configuration that names it).
 var userOrder = []string{
-	"config-dir", "api-token", "agent-key", "container-kernel", "container-start", "standard-user-check",
+	"config-dir", "api-token", "agent-key", "ssh-ca", "container-kernel", "container-start", "standard-user-check",
 	"config-base", "github-app", "config-github", "tool-store", "service-install",
 }
 

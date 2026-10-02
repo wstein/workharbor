@@ -117,7 +117,7 @@ func TestOffAMacTheStepsAreNotVerified(t *testing.T) {
 	d := hostDeps(scripted{})
 	d.GOOS = "linux"
 	for _, c := range Checks(d) {
-		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "config-base" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "tool-store" || c.Name == "prefix" {
+		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "ssh-ca" || c.Name == "config-base" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "tool-store" || c.Name == "prefix" {
 			continue
 		}
 		if got, _ := status(c); got != NotVerified && got != OK {
@@ -222,6 +222,24 @@ func TestSecretsAreGeneratedOrTypedAndWrittenPrivatelyWithoutOverwriting(t *test
 	}
 	if got, _ := status(steps(t, d)["api-token"]); got != OK {
 		t.Error("the token check fails after its fix")
+	}
+
+	// the SSH authority is optional: absent is fine, made it is a private key, never overwritten
+	if got, detail := status(steps(t, d)["ssh-ca"]); got != OK || !strings.Contains(detail, "off") {
+		t.Errorf("no authority = %s %q", got, detail)
+	}
+	if err := st["ssh-ca"].Fix.Do(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	ca := filepath.Join(dir, "ssh-ca")
+	if fi, err := os.Stat(ca); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("authority key %v %v", fi, err)
+	}
+	if got, detail := status(steps(t, d)["ssh-ca"]); got != OK || !strings.Contains(detail, "console.ssh_ca_key_file") {
+		t.Errorf("authority = %s %q", got, detail)
+	}
+	if err := st["ssh-ca"].Fix.Do(ctx, nil); err == nil {
+		t.Error("a second authority key overwrote the first")
 	}
 
 	// the API key is typed, never echoed, never shown
@@ -356,7 +374,7 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	for _, c := range Steps(all, PhaseUser) {
 		user = append(user, c.Name)
 	}
-	want := "config-dir api-token agent-key container-kernel container-start standard-user-check config-base github-app config-github tool-store service-install"
+	want := "config-dir api-token agent-key ssh-ca container-kernel container-start standard-user-check config-base github-app config-github tool-store service-install"
 	if strings.Join(user, " ") != want {
 		t.Errorf("user steps %v\nwant %s", user, want)
 	}
