@@ -12,3 +12,7 @@ extend-exclude = [
   "**/testdata/**/*.golden.json", # outputs generated from them
   "**/testdata/*.golden.json",
 ]
+
+[default.extend-words]
+cose = "cose" # the COSE key format of WebAuthn
+COSE = "COSE"
