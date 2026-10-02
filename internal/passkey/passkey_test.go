@@ -326,31 +326,8 @@ func TestTheOriginMustBeHTTPSAndTheRPIDItsHost(t *testing.T) {
 	}
 }
 
-// The challenges held in memory are bounded, so requests that begin a ceremony
-// cannot grow the map without limit.
-func TestTheNumberOfOpenCeremoniesIsBounded(t *testing.T) {
-	r := newRig(t)
-	r.enrol(passkeytest.New(t, ownerID), "phone")
-	for i := range maxCeremonies {
-		if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
-			t.Fatalf("step-up %d: %v", i, err)
-		}
-	}
-	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); !errors.Is(err, ErrBusy) {
-		t.Fatalf("a ceremony past the cap: %v", err)
-	}
-	if n := len(r.svc.ceremony); n != maxCeremonies {
-		t.Errorf("%d ceremonies held, want %d", n, maxCeremonies)
-	}
-	// expired ones make room again
-	r.advance(ChallengeTTL + time.Second)
-	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
-		t.Errorf("after the challenges expired: %v", err)
-	}
-}
-
-// Sign-in is rate limited as a whole: too many beginnings, or ...
-// assertions, stop it for the rest of the minute.
+// Beginning a sign-in has a global CPU guard of 600 a minute; refused assertions
+// are not counted.
 func TestSignInIsRateLimited(t *testing.T) {
 	r := newRig(t)
 	a := passkeytest.New(t, ownerID)
@@ -397,11 +374,68 @@ func TestSignInIsRateLimited(t *testing.T) {
 	}
 }
 
-// Unauthenticated clients may hold at most maxLoginBegin ceremonies a minute, each
-// for ChallengeTTL, so a step-up or an enrolment always finds room under the cap.
-func TestTheCapLeavesRoomForAStepUpUnderTheBeginLimit(t *testing.T) {
-	const held = maxLoginBegin * int(ChallengeTTL/loginWindow) // begins that may still be open
-	if room := maxCeremonies - held; room < 4 {
-		t.Errorf("only %d ceremonies are left for a step-up or an enrolment while sign-ins hold %d of %d", room, held, maxCeremonies)
+// A flood of sign-in begins evicts the oldest sign-in ceremonies and never refuses
+// a new one, and cannot fill what step-up and enrolment use.
+func TestAFloodOfSignInBeginsDoesNotKeepTheHumanOut(t *testing.T) {
+	r := newRig(t)
+	a := passkeytest.New(t, ownerID)
+	r.enrol(a, "phone")
+
+	opts, cer, err := r.svc.LoginBegin(bg) // the human's, the oldest
+	if err != nil {
+		t.Fatal(err)
+	}
+	// step-up works while the flood runs
+	for i := range maxLoginCeremonies + 40 {
+		if _, _, err := r.svc.LoginBegin(bg); err != nil {
+			t.Fatalf("flood begin %d refused: %v", i, err)
+		}
+	}
+	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
+		t.Fatalf("a step-up during the flood: %v", err)
+	}
+	n := 0
+	for _, c := range r.svc.ceremony {
+		if c.kind == "login" {
+			n++
+		}
+	}
+	if n != maxLoginCeremonies {
+		t.Errorf("%d sign-in ceremonies held, want the pool's %d", n, maxLoginCeremonies)
+	}
+	// the oldest was evicted: that sign-in fails as an unknown challenge
+	if _, err := r.svc.LoginFinish(bg, cer, a.Assert(opts.(*protocol.CredentialAssertion), origin)); !errors.Is(err, ErrBadCeremony) {
+		t.Errorf("the evicted ceremony: %v", err)
+	}
+	// and a fresh sign-in completes right after the flood
+	opts, cer, err = r.svc.LoginBegin(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.svc.LoginFinish(bg, cer, a.Assert(opts.(*protocol.CredentialAssertion), origin)); err != nil {
+		t.Errorf("a sign-in after the flood: %v", err)
+	}
+}
+
+// Step-up and enrolment ceremonies have a pool of their own that refuses when full.
+func TestStepUpCeremoniesHaveTheirOwnPool(t *testing.T) {
+	r := newRig(t)
+	r.enrol(passkeytest.New(t, ownerID), "phone")
+	for range maxLoginCeremonies * 2 {
+		if _, _, err := r.svc.LoginBegin(bg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := range maxOtherCeremonies {
+		if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
+			t.Fatalf("step-up %d: %v", i, err)
+		}
+	}
+	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); !errors.Is(err, ErrBusy) {
+		t.Errorf("a step-up past its pool: %v", err)
+	}
+	r.advance(ChallengeTTL + time.Second)
+	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
+		t.Errorf("after the challenges expired: %v", err)
 	}
 }

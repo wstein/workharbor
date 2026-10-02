@@ -399,7 +399,7 @@ func TestTooManySignInsAnswer429(t *testing.T) {
 	b := p.browser()
 	p.enrol(b)
 	var last int
-	for range 40 {
+	for range 700 {
 		resp, _ := b.postJSON("/passkey/login/begin", []byte(`{}`), nil)
 		last = resp.StatusCode
 		if last != 200 {

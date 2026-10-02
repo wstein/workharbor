@@ -38,16 +38,19 @@ const (
 	ChallengeTTL  = 2 * time.Minute
 	maxPending    = 16
 	maxNameLength = 60
-	// maxCeremonies bounds the challenges held in memory, so unauthenticated
-	// requests to begin a sign-in cannot grow the map without limit.
-	maxCeremonies = 64
-	// Beginning a sign-in is rate limited as a whole, not per client: there is one
-	// owner and the clients arrive through a forwarder that hides their address, so
-	// at most 30 may begin in a minute. A refused assertion is not counted: an
-	// assertion cannot be guessed, and a lockout would only give anyone who reaches
-	// the forwarder a lever against the human (D45, issue #101).
+	// Challenges held in memory are bounded in two pools. A sign-in begins without
+	// a session, so anyone who reaches the forwarder can start one: its pool holds
+	// maxLoginCeremonies and a full pool evicts its oldest ceremony and never
+	// refuses a new begin, so a flood cannot keep the human out, and it would have
+	// to outrun 256 begins to push one aside. A step-up needs a web session and an
+	// enrolment needs the host's link, so those have a pool of their own, which
+	// refuses when it is full and which no sign-in can fill.
+	maxLoginCeremonies = 256
+	maxOtherCeremonies = 64
+	// Beginning a sign-in is limited as a whole, only as a guard against wasted
+	// CPU: 600 a minute. It is not a lockout lever (D45, issue #101).
 	loginWindow   = time.Minute
-	maxLoginBegin = 30
+	maxLoginBegin = 600
 )
 
 // Errors a caller can tell apart.
@@ -281,14 +284,31 @@ func excluded(cs []webauthn.Credential) []protocol.CredentialDescriptor {
 	return out
 }
 
-// keep stores a ceremony under a new ID, or refuses when too many are open.
+// keep stores a ceremony under a new ID. A sign-in ceremony evicts the oldest
+// sign-in ceremony when its pool is full; any other refuses when its pool is full.
 func (s *Service) keep(c ceremony) (string, error) {
 	id := random(24)
 	c.expires = s.now().Add(ChallengeTTL)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sweepLocked()
-	if len(s.ceremony) >= maxCeremonies {
+	login, other := 0, 0
+	oldest, oldestAt := "", time.Time{}
+	for k, e := range s.ceremony {
+		if e.kind == "login" {
+			login++
+			if oldest == "" || e.expires.Before(oldestAt) {
+				oldest, oldestAt = k, e.expires
+			}
+		} else {
+			other++
+		}
+	}
+	if c.kind == "login" {
+		if login >= maxLoginCeremonies {
+			delete(s.ceremony, oldest)
+		}
+	} else if other >= maxOtherCeremonies {
 		return "", ErrBusy
 	}
 	s.ceremony[id] = c
