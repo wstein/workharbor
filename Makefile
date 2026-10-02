@@ -72,10 +72,12 @@ test:
 	go test ./...
 
 # The race detector, on the packages that run goroutines of their own: the
-# service (starts, sessions, the reconciler), the API (streams), the store and
-# the runtime adapters. About a minute.
+# service (starts, sessions, the reconciler), the API (streams), the store, the
+# runtime adapters, the agent adapters and approval broker, the egress proxy,
+# `whr serve` and the in-guest shim. About a minute.
 race:
-	go test -race ./internal/service ./internal/api ./internal/store ./internal/runtime/...
+	go test -race ./internal/service ./internal/api ./internal/store ./internal/runtime/... \
+		./internal/agent/... ./internal/egress ./internal/serve ./cmd/whr-shim
 
 vet:
 	go vet ./...
