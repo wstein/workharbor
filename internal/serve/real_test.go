@@ -64,6 +64,25 @@ func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
 	if other.Network.Name == spec.Network.Name || other.Mounts[1].Source == spec.Mounts[1].Source {
 		t.Error("two workspaces share a network or a home volume")
 	}
+	// The build volume: one per environment, owned like the home, mounted
+	// read-write outside the checkout (D39).
+	var build []runtime.Mount
+	for _, m := range spec.Mounts {
+		if m.Target == GuestBuild {
+			build = append(build, m)
+		}
+	}
+	if len(build) != 1 || build[0].Kind != runtime.MountVolume || build[0].ReadOnly || build[0].Source != Owner+"-build-w1" {
+		t.Errorf("the build volume = %+v", build)
+	}
+	if strings.HasPrefix(GuestBuild, "/ws") {
+		t.Error("the build volume is inside the checkout")
+	}
+	for _, m := range other.Mounts {
+		if m.Target == GuestBuild && m.Source == build[0].Source {
+			t.Error("two workspaces share a build volume")
+		}
+	}
 }
 
 func TestTheAgentRunsInTheDegradedModeWithTheSupervisorsAllowlist(t *testing.T) {

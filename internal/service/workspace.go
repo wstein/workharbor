@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -53,6 +54,10 @@ type WorkspaceConfig struct {
 	// Optional.
 	Topics    TopicsFunc
 	EditorDir string
+	// BuildDir is where the environment's build volume is mounted in the guest.
+	// When set, each agent's tools put their output there (buildEnv), per agent,
+	// off the bind-mounted checkout (D39). Empty: nothing is relocated.
+	BuildDir string
 	// Environment reads the repository's environment from its default branch, in
 	// the supervisor's own copy, never from a checkout (D38): the hosts its
 	// devcontainer.json requests and its lockfiles suggest are asked about at a
@@ -258,6 +263,23 @@ func (w *Workspaces) checkGit(ctx context.Context, env, image string) error {
 		image, code, strings.TrimSpace(out))}
 }
 
+// buildEnv points the output directories of the tools that read them from the
+// environment to the agent's own directory on the build volume (D39): cargo's
+// target and uv's project environment. The paths lie outside the checkout, so no
+// mount point is made in it, and they are per agent, so two agents of a workspace
+// do not share a virtual environment of different branches. Tools that cannot be
+// moved this way (npm's node_modules) are not touched here.
+func (w *Workspaces) buildEnv(a domain.Agent) []string {
+	if w.cfg.BuildDir == "" {
+		return nil
+	}
+	dir := path.Join(w.cfg.BuildDir, a.Role)
+	return []string{
+		"CARGO_TARGET_DIR=" + path.Join(dir, "cargo-target"),
+		"UV_PROJECT_ENVIRONMENT=" + path.Join(dir, "venv"),
+	}
+}
+
 // addWorktree makes the agent's worktree and branch inside the environment. The
 // host never runs git in a workspace's clone after it was seeded (§4.5).
 func (w *Workspaces) addWorktree(ctx context.Context, ws domain.Workspace, a domain.Agent) error {
@@ -271,6 +293,17 @@ func (w *Workspaces) addWorktree(ctx context.Context, ws domain.Workspace, a dom
 	}
 	if code != 0 {
 		return fmt.Errorf("add worktree for agent %s: git exited %d: %s", a.Role, code, strings.TrimSpace(out))
+	}
+	if w.cfg.BuildDir != "" {
+		// The agent's directory on the build volume, so a tool that does not make
+		// parent directories finds it. The volume is the agent's user's own.
+		dir := path.Join(w.cfg.BuildDir, a.Role)
+		if out, code, err := w.svc.exec(ctx, string(ws.EnvID), runtime.ExecRequest{Cmd: []string{"mkdir", "-p", dir}}); err != nil || code != 0 {
+			if err == nil {
+				err = fmt.Errorf("mkdir exited %d: %s", code, strings.TrimSpace(out))
+			}
+			return fmt.Errorf("make the build directory of agent %s: %w", a.Role, err)
+		}
 	}
 	return nil
 }
@@ -574,6 +607,7 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		spec.Prompt = prompt
 	}
 	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
+	spec.Env = append(spec.Env, w.buildEnv(a)...)
 	if err := w.postCreateWithin(ctx, ws, a, spec.Env, env); err != nil {
 		return w.abortStart(ctx, task, run, sl, err)
 	}

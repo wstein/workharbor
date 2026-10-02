@@ -156,7 +156,7 @@ func Run(ctx context.Context, d Deps) error {
 			}
 			return ""
 		},
-		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
+		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues, BuildDir: GuestBuild,
 		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment,
 	})
 	var consoles *service.Consoles

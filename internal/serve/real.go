@@ -35,6 +35,12 @@ const Owner = "whr"
 // the human signs in (D40).
 const GuestHome = "/home/agent"
 
+// GuestBuild is where the build volume of an environment is mounted: the output
+// directories of tools that read their location from the environment (cargo's
+// target, uv's environment) live there, one directory per agent, instead of in the
+// bind-mounted checkout where file metadata costs 20 to 100 times as much (D39).
+const GuestBuild = "/var/whr/build"
+
 // ToolsMount is where the tool store is mounted, read-only, in every environment.
 const ToolsMount = "/tools"
 
@@ -63,6 +69,7 @@ func (o SpecOptions) For(w domain.Workspace) runtime.Spec {
 		Mounts: []runtime.Mount{
 			{Kind: runtime.MountBind, Source: o.ToolStore, Target: ToolsMount, ReadOnly: true},
 			{Kind: runtime.MountVolume, Source: o.Owner + "-home-" + string(w.ID), Target: GuestHome},
+			{Kind: runtime.MountVolume, Source: o.Owner + "-build-" + string(w.ID), Target: GuestBuild},
 		},
 		Egress: &runtime.Egress{Image: e.Image, Proxy: o.Proxy, Allow: e.EgressAllow},
 	}

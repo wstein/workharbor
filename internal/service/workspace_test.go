@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -650,6 +651,51 @@ func TestTheEffectivePresetIsTheStricterOfTheTaskAndTheRepository(t *testing.T) 
 	} {
 		if got := effectivePreset(c.task, c.repo); got != c.want {
 			t.Errorf("task %q repo %q = %s, want %s", c.task, c.repo, got, c.want)
+		}
+	}
+}
+
+// Where a tool reads its output location from the environment, the environment
+// puts it on the build volume, in the agent's own directory, outside the
+// bind-mounted checkout (D39).
+func TestAnAgentsToolsWriteTheirOutputToTheBuildVolumeNotTheCheckout(t *testing.T) {
+	r := newWsRig(t)
+	r.ws.cfg.BuildDir = "/var/whr/build"
+	w, a := r.create("run")
+	if want := "mkdir -p /var/whr/build/docs"; !strings.Contains(r.logs(w.EnvID), want) {
+		t.Errorf("the agent's build directory was not made (%q); the log:\n%s", want, r.logs(w.EnvID))
+	}
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.agent.Specs) != 1 {
+		t.Fatalf("%d agents started", len(r.agent.Specs))
+	}
+	env := r.agent.Specs[0].Env
+	for _, want := range []string{"CARGO_TARGET_DIR=/var/whr/build/docs/cargo-target", "UV_PROJECT_ENVIRONMENT=/var/whr/build/docs/venv", "HOME=/home/agent"} {
+		if !slices.Contains(env, want) {
+			t.Errorf("the agent's environment lacks %s: %v", want, env)
+		}
+	}
+	for _, e := range env {
+		if _, v, _ := strings.Cut(e, "="); strings.HasPrefix(v, WorkspaceMount) {
+			t.Errorf("%s points into the checkout, which is the bind mount", e)
+		}
+	}
+}
+
+func TestWithoutABuildVolumeNothingIsRelocated(t *testing.T) {
+	r := newWsRig(t)
+	w, a := r.create("run")
+	if strings.Contains(r.logs(w.EnvID), "mkdir") {
+		t.Errorf("a build directory was made without a build volume:\n%s", r.logs(w.EnvID))
+	}
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range r.agent.Specs[0].Env {
+		if strings.HasPrefix(e, "CARGO_TARGET_DIR=") || strings.HasPrefix(e, "UV_PROJECT_ENVIRONMENT=") {
+			t.Errorf("%s was set without a build volume: the path would not exist", e)
 		}
 	}
 }

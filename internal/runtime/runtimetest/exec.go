@@ -17,6 +17,7 @@ import (
 //	sleep           blocks until the context is cancelled
 //	cat             copies stdin to stdout until stdin ends
 //	alive           exit 0 while a sleep runs in the environment, 1 when none does
+//	mkdir ...       exit 0 (the command is only logged; the fake has no files)
 //	git ...         exit GitExit (the command is only logged; the fake has no repositories)
 //
 // Anything else exits 127.
@@ -89,6 +90,8 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 		case "git":
 			// logged above; a service test reads the log to see what was asked
 			st.code = f.GitExit
+		case "mkdir":
+			// logged above; the fake has no file system
 		case "alive":
 			if !alive {
 				st.code = 1
