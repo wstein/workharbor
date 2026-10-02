@@ -220,9 +220,9 @@ func TestCreateArgsPassTheEnvironmentSorted(t *testing.T) {
 }
 
 func TestBuildArgs(t *testing.T) {
-	b := runtime.BuildSpec{Tag: "whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/df/Dockerfile", Args: map[string]string{"B": "2", "A": "1"}}
+	b := runtime.BuildSpec{Tag: "whr.invalid/whr-env/o1:abc", ContextDir: "/var/ctx", Dockerfile: "/var/df/Dockerfile", Args: map[string]string{"B": "2", "A": "1"}}
 	got := strings.Join(buildArgs(b), " ")
-	want := "build --progress plain --tag whr-env/o1:abc --file /var/df/Dockerfile --build-arg A=1 --build-arg B=2 -- /var/ctx"
+	want := "build --progress plain --tag whr.invalid/whr-env/o1:abc --file /var/df/Dockerfile --build-arg A=1 --build-arg B=2 -- /var/ctx"
 	if got != want {
 		t.Errorf("buildArgs =\n%s\nwant\n%s", got, want)
 	}
@@ -283,12 +283,12 @@ func TestHasImageTellsAMissingImageFromAFailure(t *testing.T) {
 		fail bool
 	}{
 		"present":           {nil, true, false},
-		"missing":           {&ExitError{Args: []string{"image", "inspect"}, Err: errors.New("exit status 1"), Stderr: "Error: image not found: whr-base/x:1"}, false, false},
+		"missing":           {&ExitError{Args: []string{"image", "inspect"}, Err: errors.New("exit status 1"), Stderr: "Error: image not found: whr.invalid/whr-base/x:1"}, false, false},
 		"the CLI is broken": {&ExitError{Args: []string{"image", "inspect"}, Err: errors.New("exit status 1"), Stderr: "Error: the system service is not running"}, false, true},
 	}
 	for name, c := range cases {
 		a := &Adapter{owner: "o1", run: func(context.Context, io.Reader, ...string) ([]byte, []byte, error) { return nil, nil, c.err }}
-		got, err := a.HasImage(context.Background(), "whr-base/fedora:abc")
+		got, err := a.HasImage(context.Background(), "whr.invalid/whr-base/fedora:abc")
 		if got != c.want || (err != nil) != c.fail {
 			t.Errorf("%s: got %v, err %v", name, got, err)
 		}
@@ -354,5 +354,63 @@ func TestDeleteRemovesAHelperThatWasLeftBehind(t *testing.T) {
 	}
 	if !slices.Contains(deleted, "whr-ab-own-vol") || slices.Contains(deleted, "whr-zz-own-vol") {
 		t.Errorf("deleted %v: want this environment's helper and not another's", deleted)
+	}
+}
+
+func TestProvisionNeverPullsAMissingBuiltImage(t *testing.T) {
+	var calls [][]string
+	run := func(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+		calls = append(calls, args)
+		if len(args) > 1 && args[0] == "image" && args[1] == "inspect" {
+			return nil, nil, &ExitError{Args: args, Err: errors.New("exit status 1"), Stderr: "Error: image not found"}
+		}
+		if slices.Contains(args, "list") {
+			return []byte("[]"), nil, nil
+		}
+		return nil, nil, nil
+	}
+	a := &Adapter{owner: "o1", run: run}
+	home := testHome(t)
+	spec := baseSpec()
+	spec.Image = runtime.BuiltImageHost + "whr-env/o1:abc"
+	_, err := a.Provision(context.Background(), preparedIn(t, home, spec))
+	if !errors.Is(err, runtime.ErrInvalidSpec) || !strings.Contains(err.Error(), "built by whr and is not here") {
+		t.Fatalf("err = %v", err)
+	}
+	for _, c := range calls {
+		if c[0] == "create" || c[0] == "network" || c[0] == "volume" || c[0] == "image" && c[1] == "pull" {
+			t.Errorf("a missing built image ran %v", c)
+		}
+	}
+}
+
+func TestProvisionCreatesFromALocalBuiltImage(t *testing.T) {
+	r := &recorder{}
+	a := &Adapter{owner: "o1", run: r.run}
+	spec := baseSpec()
+	spec.Image = runtime.BuiltImageHost + "whr-env/o1:abc"
+	if _, err := a.Provision(context.Background(), preparedIn(t, testHome(t), spec)); err != nil {
+		t.Fatal(err)
+	}
+	var inspected, created bool
+	for _, c := range r.calls {
+		inspected = inspected || c[0] == "image" && c[1] == "inspect"
+		created = created || c[0] == "create"
+	}
+	if !inspected || !created {
+		t.Errorf("inspected %v, created %v", inspected, created)
+	}
+}
+
+func TestProvisionLeavesOtherImagesToTheCLI(t *testing.T) {
+	r := &recorder{}
+	a := &Adapter{owner: "o1", run: r.run}
+	if _, err := a.Provision(context.Background(), preparedIn(t, testHome(t), baseSpec())); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range r.calls {
+		if c[0] == "image" {
+			t.Errorf("a plain image was inspected: %v", c)
+		}
 	}
 }

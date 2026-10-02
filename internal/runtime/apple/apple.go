@@ -287,6 +287,9 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 	if spec.Owner != a.owner {
 		return "", &runtime.SpecError{Problems: []string{fmt.Sprintf("owner %q is not this adapter's owner %q", spec.Owner, a.owner)}}
 	}
+	if err := a.requireLocalBuilt(ctx, spec.Image); err != nil {
+		return "", err
+	}
 	nets, err := a.listNamed(ctx, "network")
 	if err != nil {
 		return "", err
@@ -364,6 +367,28 @@ func (a *Adapter) Provision(ctx context.Context, prep runtime.PreparedSpec) (str
 		}
 	}
 	return id, nil
+}
+
+// requireLocalBuilt makes an image named under runtime.BuiltImageHost local
+// only (design §7, rule 4a). `container create` has no option to never pull
+// (container 1.5.0: only `build` has --pull), so on a local miss it asks the
+// registry, and for a bare name that is docker.io: the adapter asks the local
+// store first and fails with a clear error instead of letting the CLI go to the
+// network. Before anything is created, so a miss leaves nothing behind. Other
+// images (a repository's own `image`, the egress sidecar's) keep the CLI's
+// behaviour.
+func (a *Adapter) requireLocalBuilt(ctx context.Context, image string) error {
+	if !runtime.IsBuiltImage(image) {
+		return nil
+	}
+	ok, err := a.HasImage(ctx, image)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return &runtime.SpecError{Problems: []string{fmt.Sprintf("the image %s is built by whr and is not here: build it (it is never pulled)", image)}}
+	}
+	return nil
 }
 
 // createArgs builds `container create` for the environment: hardened, on its
