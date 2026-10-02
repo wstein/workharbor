@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -80,6 +80,27 @@ test:
 race:
 	go test -race ./internal/service ./internal/api ./internal/store ./internal/runtime/... \
 		./internal/agent/... ./internal/egress ./internal/serve ./cmd/whr-shim
+
+# Native Go fuzz targets for every parser of untrusted input (issue #110): each runs
+# for FUZZTIME (go's -fuzztime). A crash writes its input under the package's
+# testdata/fuzz, which is then a regression test: commit it with the fix. The
+# scheduled workflow runs this; it is not part of make check.
+FUZZTIME ?= 30s
+FUZZ_TARGETS = \
+	./internal/redact:FuzzRedact \
+	./internal/commitlint:FuzzLint \
+	./internal/devcontainer:FuzzParse \
+	./internal/devcontainer:FuzzExport \
+	./internal/agent/claude:FuzzParseStream \
+	./internal/agent/claude:FuzzControlRequests \
+	./internal/service:FuzzParseIssueURL \
+	./internal/service:FuzzIssuePrompt \
+	./internal/forge/github:FuzzGitHubAnswers \
+	./internal/forge/github:FuzzVerifyWebhook
+fuzz:
+	@set -e; for t in $(FUZZ_TARGETS); do pkg=$${t%%:*}; name=$${t##*:}; \
+		echo "fuzz $$name ($$pkg) for $(FUZZTIME)"; \
+		go test $$pkg -run '^$$' -fuzz "^$$name\$$" -fuzztime $(FUZZTIME); done
 
 vet:
 	go vet ./...
