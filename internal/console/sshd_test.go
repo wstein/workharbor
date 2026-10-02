@@ -36,6 +36,7 @@ func directives(t *testing.T) map[string]string {
 }
 
 func TestTheConsolesSSHDTrustsTheAuthorityAndNothingElse(t *testing.T) {
+	t.Parallel()
 	d := directives(t)
 	want := map[string]string{
 		"authenticationmethods":        "publickey",
@@ -79,6 +80,7 @@ func TestTheConsolesSSHDTrustsTheAuthorityAndNothingElse(t *testing.T) {
 }
 
 func TestTheLauncherIsPOSIXShAndRefusesAnythingButAnAuthorityKey(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "whr-sshd")
 	if err := os.WriteFile(script, SSHD(), 0o700); err != nil { //nolint:gosec // a script the test runs
@@ -110,6 +112,7 @@ func TestTheLauncherIsPOSIXShAndRefusesAnythingButAnAuthorityKey(t *testing.T) {
 }
 
 func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
+	t.Parallel()
 	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu, Alpine} {
 		cf, err := Containerfile(d)
 		if err != nil {
@@ -130,6 +133,7 @@ func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
 // Files sshd reads are replaced by a rename, never rewritten in place, and the host
 // key's public half is derived from its private half, never linked in beside it.
 func TestTheLauncherWritesAtomicallyAndDerivesThePublicHostKey(t *testing.T) {
+	t.Parallel()
 	script := string(SSHD())
 	for _, bad := range []string{">/tmp/whr-ssh-ca.pub", ">/tmp/whr-ssh-principals", ">/tmp/whr-proxy-vars", `ln "$tmp.pub"`, ": >"} {
 		if strings.Contains(script, bad) {

@@ -224,8 +224,10 @@ func kinds() []kind {
 // alone. Each kind is planted twice: plain git must run it (or the test proves
 // nothing), and the wrapper must not.
 func TestTheWrapperStopsEverythingARepositoryCanPlant(t *testing.T) {
+	t.Parallel()
 	for _, k := range kinds() {
 		t.Run(k.name, func(t *testing.T) {
+			t.Parallel()
 			plain := newGitBox(t)
 			k.plant(plain)
 			k.trigger(plain, plain.git)
@@ -245,6 +247,7 @@ func TestTheWrapperStopsEverythingARepositoryCanPlant(t *testing.T) {
 
 // The wrapper is git: ordinary work in a repository goes through it.
 func TestTheWrapperRunsOrdinaryGit(t *testing.T) {
+	t.Parallel()
 	b := newGitBox(t)
 	b.write("b.txt", "hello\n")
 	for _, args := range [][]string{{"add", "b.txt"}, {"commit", "-q", "-m", "two"}, {"log", "--oneline"}, {"status", "--short"}, {"diff", "HEAD~1"}} {
@@ -263,6 +266,7 @@ func TestTheWrapperRunsOrdinaryGit(t *testing.T) {
 // The human's own configuration keeps working, and a repository cannot take a
 // setting of it over by naming the same key.
 func TestTheHumansOwnSettingsStillWork(t *testing.T) {
+	t.Parallel()
 	b := newGitBox(t)
 	if err := os.WriteFile(filepath.Join(b.home, ".gitconfig"), []byte("[alias]\n\thi = !echo hello from home\n\tdt = diff --stat\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -289,6 +293,7 @@ func TestTheHumansOwnSettingsStillWork(t *testing.T) {
 // A setting that comes in through an include is the repository's too, whatever
 // the file is called.
 func TestAnIncludedFileIsNotTrusted(t *testing.T) {
+	t.Parallel()
 	b := newGitBox(t)
 	inc := filepath.Join(b.repo, "evil.inc")
 	if err := os.WriteFile(inc, []byte("[alias]\n\tst = !"+b.touch("included")+"\n[core]\n\tpager = included-pager\n"), 0o600); err != nil {
@@ -315,6 +320,7 @@ func TestAnIncludedFileIsNotTrusted(t *testing.T) {
 // What the repository cannot do through the environment either: its settings do
 // not reach git through GIT_CONFIG_COUNT as the caller set it, which is kept.
 func TestTheCallersOwnOverridesAreKept(t *testing.T) {
+	t.Parallel()
 	b := newGitBox(t)
 	cmd := exec.Command(b.wrapper, "config", "--get", "user.name") //nolint:gosec,noctx // the test's wrapper
 	cmd.Dir = b.repo
@@ -332,6 +338,7 @@ func TestTheCallersOwnOverridesAreKept(t *testing.T) {
 }
 
 func TestTheWrapperIsPlainShell(t *testing.T) {
+	t.Parallel()
 	script := string(GitWrapper())
 	if !strings.HasPrefix(script, "#!/bin/sh\n") {
 		t.Error("the wrapper must start with #!/bin/sh")
@@ -356,6 +363,7 @@ func TestTheWrapperIsPlainShell(t *testing.T) {
 // check is on the value: the wrapper gives the key a neutral one, the plain
 // repository the planted one.
 func TestTheWrapperNeutralisesWhatNeedsATerminal(t *testing.T) {
+	t.Parallel()
 	for _, k := range []struct {
 		name    string
 		plant   func(b *gitBox)
@@ -371,6 +379,7 @@ func TestTheWrapperNeutralisesWhatNeedsATerminal(t *testing.T) {
 		}, map[string]string{"core.editor": "true", "sequence.editor": "true"}},
 	} {
 		t.Run(k.name, func(t *testing.T) {
+			t.Parallel()
 			box := newGitBox(t)
 			k.plant(box)
 			for key, want := range k.neutral {

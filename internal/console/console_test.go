@@ -14,6 +14,7 @@ import (
 var fromRe = regexp.MustCompile(`(?m)^FROM (docker\.io/library/(fedora|ubuntu|alpine)@sha256:[0-9a-f]{64})$`)
 
 func TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools(t *testing.T) {
+	t.Parallel()
 	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu, Alpine} {
 		cf, err := Containerfile(d)
 		if err != nil {
@@ -63,6 +64,7 @@ func TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools(t *testing.T) {
 }
 
 func TestTagChangesWithTheWrapperAndThePin(t *testing.T) {
+	t.Parallel()
 	a, err := Tag(baseimage.Fedora)
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +110,7 @@ func (f *fakeBuilder) Build(_ context.Context, b runtime.BuildSpec) ([]byte, err
 }
 
 func TestEnsureStagesTheWrapperInTheContextAndBuildsOnce(t *testing.T) {
+	t.Parallel()
 	fb := &fakeBuilder{have: map[string]bool{}}
 	dir := t.TempDir()
 	tag, built, err := Ensure(context.Background(), fb, baseimage.Ubuntu, dir)
@@ -136,6 +139,7 @@ func TestEnsureStagesTheWrapperInTheContextAndBuildsOnce(t *testing.T) {
 // An sshd built without PAM refuses a locked account, certificate or not, so the
 // Alpine image gives the console user a password field that is not "!" (#93).
 func TestTheAlpineConsoleUserIsNotLockedForSSHD(t *testing.T) {
+	t.Parallel()
 	cf, err := Containerfile(Alpine)
 	if err != nil {
 		t.Fatal(err)
