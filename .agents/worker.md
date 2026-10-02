@@ -55,6 +55,6 @@ design owner is the `wh/design` session; the human is Werner.
 ## When an issue is done
 
 Tick the acceptance criteria it met in the issue body, leave unmet ones
-unticked with a comment saying why, and set the card to `Ready to push`. Then
-message the design owner: the commits, what is unverified, any deviation from
+unticked with a comment saying why, and set the card to `In review`, so `wh/review`
+reviews it before the push. Then message the design owner: the commits, what is unverified, any deviation from
 the specification, and any rule you need decided. Then wait for the next issue.
