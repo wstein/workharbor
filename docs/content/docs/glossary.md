@@ -40,6 +40,15 @@ ReviewCandidate
 "Ready to push?"
 : The review Decision for a ReviewCandidate. Approval is tied to its commit SHA; only then does the supervisor push and open the pull request. Agents never push (D18).
 
+Workflow preset
+: How a repository's approved commits leave, set in the supervisor's configuration and never by the repository: `prototype` (the supervisor fast-forwards the integration branch to the approved commit, no pull request), `integration` (the default: a pull request into the integration branch, which you merge and promote) or `published` (a pull request into the default branch, the agent in `manual` mode, egress asked for again when its source changes). The floor is the same in every preset: a per-commit approval before anything leaves, and no merge, tag, release or deploy by an agent. Changing it is a policy change (D47, [§6](design/security.md#6-policy-and-autonomy)).
+
+Integration branch
+: The branch of a repository that agents rebase onto and that a preset publishes to, `main` or `develop`, set in the configuration. It is part of the workflow policy: changing it needs the same confirmation as changing the preset. `prototype` needs one that is not the default branch (D47, [§6](design/security.md#6-policy-and-autonomy)).
+
+Step-up
+: A fresh passkey assertion that names exactly what you approve, required for a "Ready to push?" review (with its commit), an egress host, a workflow change and revoking the forge tokens. It is held server-side for 2 minutes and works once (D45, [§7.5](design/security.md#7-security), [§9.3](design/interfaces.md#93-web-ui)).
+
 Autonomy table
 : The policy that maps each action to `auto`, `ask` or `forbid`, with a floor that keeps merge, tag, release and deploy forbidden for agents ([§6](design/security.md#6-policy-and-autonomy), D36).
 
@@ -57,7 +66,16 @@ Auth modes
 Usage window
 : A subscription's rolling allowance (for example five hours and seven days). Every run on one account draws on the same window, so the UI shows it as one figure; a run that exhausts it pauses with a Decision ([§5.7](design/architecture.md#57-usage-and-cost)).
 
+API-equivalent cost
+: What a subscription run's tokens would cost at API prices. It is not billed and is labelled as such, so it is never added to the spend of an API key; on a subscription the usage window is the number that matters ([§5.7](design/architecture.md#57-usage-and-cost), [§9.3](design/interfaces.md#93-web-ui), D40).
+
 ## Host and environment
+
+Bundle export
+: How an agent's commits leave its environment: a `git bundle` made inside the running environment and imported by a fetch into the supervisor's own repository, so the host never runs git in an agent-writable checkout (D42, [§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+
+Editor copy
+: A clone of the supervisor's own copy of an agent's branch, outside the workspace, for your editor (`whr open`). Your editor is never pointed at an agent's checkout, because opening it would run config the agent planted. It is refreshed by fast-forward only, and the UI warns about files an editor acts on ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push), threat model T15).
 
 Tool store
 : A content-addressed, read-only directory on the host that holds the agent CLIs and the supervisor's helpers, verified against pinned checksums and mounted into every environment. A profile picks a set of versions ([§5.6](design/architecture.md#56-tool-store), D19).
@@ -70,6 +88,12 @@ Egress sidecar
 
 Repository cache
 : The per-task clone layout of D17: a bare repository per forge repository on the host, with each topic a shared clone of it. Replaced by workspaces (D42) and removed (issue #95); only the forge mirror remains ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+
+Host-only socket
+: The unix socket `api.sock` in the `whr` user's state directory (directory `0700`, socket `0600`) that serves the JSON API to the host CLI alone. The forwarder carries only the web UI, which listens on loopback, so a leaked API token cannot be used from the phone network (D29, [§7.5](design/security.md#7-security)).
+
+Preview
+: A web app an agent runs in its environment, shown to you through the supervisor on a port and an origin of its own, with its own CSP and a one-time link. It closes with its environment and its session (`whr preview`, D33, [§9.3](design/interfaces.md#93-web-ui)).
 
 Console
 : An environment without an agent for the human's shell work: zsh or fish and the usual tools, the workspaces mounted read-only by default, no credentials. `whr console` and SSH land there, so only the admin logs in to the host (D43).
