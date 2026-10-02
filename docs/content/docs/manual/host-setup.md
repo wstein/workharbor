@@ -25,8 +25,10 @@ A checklist for the host, in order. Each step says why. Steps marked {{< status 
 
 ## 2. Users
 
-- Use your own administrator account for setup only.
+- Use your own administrator account for setup only: Homebrew, `sudo`, system settings. Each step below says which account runs it.
 - Create a **standard user `whr`** for workharbor and Apple Container. Agents never run next to your own home directory, keychain or SSH keys.
+- **`whr` needs a desktop login session**, not only SSH. Apple Container registers its services in the logged-in user's GUI launchd domain (`gui/<uid>`), and its state lives in that user's `~/Library/Application Support/com.apple.container`: a shell from SSH, `sudo -u whr` or `su whr` cannot start or reach them. So log in as `whr` on the Mac (or over Screen Sharing), start what step 6 and step 13 start from a Terminal in that session, and leave the session logged in; use fast user switching to reach your own account. Commands that do not touch containers (files, `make install`, the configuration) also work from `sudo -iu whr`.
+- Whether Apple Container runs for a **standard (non-administrator) user** is {{< status unverified >}}: the services are per user, but nobody has tried it on a fresh standard account yet. Check it once in step 6; if it fails, tell us in issue #38 before you make `whr` an administrator.
 
 ```bash
 # as the administrator; you are asked for a password
@@ -53,7 +55,7 @@ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1
 
 ## 5. Software (Homebrew)
 
-Install [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading anything you did not ask for: `HOMEBREW_NO_AUTO_UPDATE` stops the automatic index refresh, `HOMEBREW_NO_INSTALL_UPGRADE` stops `brew install` from upgrading what is installed, and `brew pin` (step 6) holds a version through `brew upgrade`.
+**As the administrator.** Homebrew's prefix `/opt/homebrew` belongs to the account that installed it, so `whr` cannot install, upgrade or pin anything; it only runs what is installed. Install the Xcode Command Line Tools (`xcode-select --install`, for `make` and the compilers), [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading anything you did not ask for: `HOMEBREW_NO_AUTO_UPDATE` stops the automatic index refresh, `HOMEBREW_NO_INSTALL_UPGRADE` stops `brew install` from upgrading what is installed, and `brew pin` (step 6) holds a version through `brew upgrade`.
 
 ```bash
 echo 'export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1' >> ~/.zprofile
@@ -63,27 +65,33 @@ echo 'export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1' >> ~/.zpro
 # Brewfile: the whole host software for workharbor (D28)
 brew "container"      # Apple Container; workharbor was measured with 1.5.0
 brew "git"
+brew "go"             # builds whr with make install (step 13) until there are releases
 cask "tailscale"      # only for the Tailscale option in step 7
 # tap "wstein/tap"; brew "whr"   # from the first release (issue #62)
 ```
 
 ```bash
 brew bundle --file=Brewfile
+brew pin container    # hold the version you tested through brew upgrade
 ```
+
+`whr` finds these through its `PATH`: as `whr`, add `eval "$(/opt/homebrew/bin/brew shellenv)"` to `~/.zprofile`.
 
 Do **not** install Claude Code, Codex CLI or other agent CLIs on the host for workharbor. workharbor fetches them into its own verified tool store and mounts them into each environment read-only (D19).
 
 ## 6. Apple Container
 
-As `whr`, install the Linux kernel the containers boot once, then start the container system and check it:
+**As `whr`, in a Terminal of its desktop session** (step 2), install the Linux kernel the containers boot once, then start the container system and check it:
 
 ```bash
 container system kernel set --recommended
 container system start --disable-kernel-install
 container system status
+launchctl print gui/$(id -u) | grep com.apple.container   # the services run in this session
+container list --all                                     # answers without an error
 ```
 
-`--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed first; without a kernel no container starts. After a restart the system does not start by itself; the workharbor launchd job will start it and then resume agents (issue #38). Pin the version you tested: `brew pin container`.
+`--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed first; without a kernel no container starts. The last two lines are the standard-user check of step 2: if `container system start` or `container list` fails with a permission or bootstrap error, note the message in issue #38. After a restart the system does not start by itself; the workharbor launchd job will start it in `whr`'s session and then resume agents (issue #38).
 
 ## 7. Reach it from your phone
 
@@ -93,8 +101,8 @@ workharbor listens on **loopback only**, and every request needs its API token (
 
 The quickest option. The Mac gets its own VPN interface and a stable name, and Tailscale can issue HTTPS certificates for that name, which the phone app (PWA) needs.
 
-1. Install the Tailscale app on the Mac (step 5) and on the phone, and sign in on both.
-2. Forward the Mac's Tailscale name to workharbor on loopback with HTTPS: `tailscale serve --bg <port>` (check the exact syntax with `tailscale serve --help`). workharbor itself stays on loopback.
+1. Install the Tailscale app on the Mac (step 5, as the administrator) and on the phone. Sign in on the Mac **in `whr`'s session**, the one that stays logged in; whether the app keeps the Mac on the VPN while no one or another user is logged in is {{< status unverified >}}.
+2. As `whr`, forward the Mac's Tailscale name to workharbor on loopback with HTTPS: `tailscale serve --bg <port>` (check the exact syntax with `tailscale serve --help`). workharbor itself stays on loopback.
 3. Optional: limit the phone to that port with a Tailscale access rule.
 4. Whether a guest container can reach the Mac's Tailscale address is {{< status unverified >}} (issue #69); the API token guards it either way.
 
@@ -121,7 +129,8 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 - **Every guest container can reach the Mac's services that listen on all interfaces**, even from an isolated network (issue #69). Turn off what you do not need in *System Settings → General → Sharing* (File Sharing, Screen Sharing, AirPlay Receiver, Media Sharing).
 - Remote Login (SSH) only for your administrator account (*Allow access for*), with **keys only**: set `PasswordAuthentication no` and `KbdInteractiveAuthentication no` in a file under `/etc/ssh/sshd_config.d/`. Otherwise an agent could guess passwords. Keep it until workharbor's short-lived SSH certificates exist (issue #32).
 - A `pf` rule that blocks the container subnets (`192.168.64.0/24` for the default network, and the `--internal` networks') from the Mac's own addresses closes this for every service; it is {{< status unverified >}} and comes with issue #69.
-- Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3).
+- Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3). It is how you reach `whr`'s desktop session from afar (step 2); if you keep it on, allow it only for your administrator and `whr`, and it stays reachable from guests until the `pf` rule above exists.
+- From SSH as the administrator, `sudo -iu whr` gives a `whr` shell for files and builds, but not for `container` or `whr serve` (step 2).
 
 ## 9. Backups
 
@@ -179,7 +188,7 @@ chmod 600 ~/.config/whr/github-app.pem
 
 **The agent's login:**
 
-- **A subscription (Claude Pro or Max) is the default** and has no file: you sign in inside the environment with Claude Code's own login, and `whr` never sees it (design D40, [agent vendor terms](vendor-terms.md)). How that works from the console is being measured (issue #82); the first sign-in needs the Mac or an SSH session.
+- **A subscription (Claude Pro or Max) is the default** and has no file: you sign in inside the environment with Claude Code's own login, and `whr` never sees it (design D40, [agent vendor terms](vendor-terms.md)). How that works from the console is being measured (issue #82); the first sign-in needs a Terminal in `whr`'s desktop session (step 2).
 - **An API key is optional.** Type it so that it is neither echoed nor kept in the shell history nor visible in the process list (`read -s` does not echo, and `printf` is a shell builtin):
 
   ```bash
@@ -190,7 +199,7 @@ chmod 600 ~/.config/whr/github-app.pem
 
 ## 13. Build and configure whr (dogfood)
 
-As the `whr` user, in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
+As the `whr` user (steps 1 to 3 from any `whr` shell, step 4 from a Terminal of its desktop session, step 2), in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
 
 1. **Install.** `make install` builds `whr`, the launcher `whr-shim` and the egress proxy `whr-proxy` (both for the guest, linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`; the guest binaries go to `libexec/whr`). It refuses a dirty tree and a commit that is not on `origin/main` (run `git fetch origin` first), so the supervisor always runs approved, committed code (D34). It builds with `GOWORK=off` and an empty `GOFLAGS`, so a parent `go.work` or your environment cannot change the build. `whr version` shows the version and whether the tree was clean. `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
 2. **Fill the tool store.** `whr tools build -store <tool store> -shim ~/.local/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.
@@ -211,4 +220,4 @@ As the `whr` user, in a checkout of the repository on a clean commit ([design D3
     ```
 
     Add `"agent_api_key_env_file": "/Users/whr/.config/whr/agent.env"` only for an API key. `agent_allowed_tools` is required while the agent runs without host approvals (issue #75): only the tools listed there run, and the list above is an example to adapt.
-4. **Start it and create a workspace.** `whr serve` checks the whole configuration at start and lists every problem. In another terminal: `whr ws add <name> --path <empty folder below a workspace root> --repo <owner>/<repository> --role <role>` creates the workspace, seeds its agent clone and starts its environment; `whr agent add <workspace> <role>` adds an agent. Then `whr run <issue-url> --agent <workspace>/<role>`. Running `whr serve` as a launchd job that survives a restart comes with issue #38.
+4. **Start it and create a workspace.** In `whr`'s desktop session, because the supervisor talks to Apple Container's per-session services (step 2): `whr serve` checks the whole configuration at start and lists every problem. In another terminal: `whr ws add <name> --path <empty folder below a workspace root> --repo <owner>/<repository> --role <role>` creates the workspace, seeds its agent clone and starts its environment; `whr agent add <workspace> <role>` adds an agent. Then `whr run <issue-url> --agent <workspace>/<role>`. Running `whr serve` as a launchd job that survives a restart comes with issue #38.
