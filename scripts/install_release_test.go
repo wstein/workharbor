@@ -97,7 +97,14 @@ func newRelease(t *testing.T, version, installed string) release {
 		if err := os.MkdirAll(filepath.Join(r.prefix, "bin"), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(r.prefix, "bin", "whr"), []byte("#!/bin/sh\necho "+installed+" abc\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		marker := filepath.Join(r.bin, "installed-whr-ran")
+		if err := os.WriteFile(filepath.Join(r.prefix, "bin", "whr"), []byte("#!/bin/sh\ntouch '"+marker+"'\necho "+installed+" abc\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(r.prefix, "libexec", "whr"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(r.prefix, "libexec", "whr", "VERSION"), []byte(installed+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -151,5 +158,47 @@ func TestAnOlderReleaseIsRefusedUnlessAllowed(t *testing.T) {
 	unreadable := newRelease(t, "0.2.0", "garbage")
 	if out, err := unreadable.run(t, "v0.2.0", unreadable.prefix); err == nil || !strings.Contains(out, "cannot read the installed version") {
 		t.Errorf("an unreadable installed version: %v\n%s", err, out)
+	}
+}
+
+// The installed whr is never run before the release is verified: its version comes
+// from the file the installer wrote.
+func TestTheInstalledBinaryIsNotRunBeforeVerification(t *testing.T) {
+	r := newRelease(t, "0.1.0", "v0.2.0")
+	if out, err := r.run(t, "v0.1.0", r.prefix); err == nil {
+		t.Fatalf("a downgrade was not refused:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(r.bin, "installed-whr-ran")); err == nil {
+		t.Error("the installed whr was executed before verification")
+	}
+	// An install without the version file cannot be read, so it needs the flag.
+	if err := os.Remove(filepath.Join(r.prefix, "libexec", "whr", "VERSION")); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := r.run(t, "v0.2.0", r.prefix); err == nil || !strings.Contains(out, "cannot read the installed version") {
+		t.Errorf("a missing version file: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(r.bin, "installed-whr-ran")); err == nil {
+		t.Error("the installed whr was executed to find its version")
+	}
+}
+
+// WHR_RELEASE_REPO must be owner/name and is refused without --trust-release-repo.
+func TestTheReleaseRepoOverrideNeedsConfirmation(t *testing.T) {
+	r := newRelease(t, "0.2.0", "")
+	run := func(repo string, args ...string) (string, error) {
+		return bash(t, []string{"PATH=" + r.bin + ":" + os.Getenv("PATH"), "WHR_RELEASE_DIR=" + r.dir, "WHR_RELEASE_REPO=" + repo},
+			"./install-release.sh "+strings.Join(args, " "))
+	}
+	if out, err := run("someone/fork", "v0.2.0", r.prefix); err == nil || !strings.Contains(out, "--trust-release-repo") {
+		t.Errorf("an unconfirmed override was accepted: %v\n%s", err, out)
+	}
+	for _, bad := range []string{"a/b/c", "nogash", "a/b?x=1", "a/../b", "../..", "a b/c"} {
+		if out, err := run("'"+bad+"'", "v0.2.0", r.prefix, "--trust-release-repo"); err == nil || !strings.Contains(out, "owner/name") {
+			t.Errorf("%q was accepted: %v\n%s", bad, err, out)
+		}
+	}
+	if out, err := run("someone/fork", "v0.2.0", r.prefix, "--trust-release-repo"); err != nil || !strings.Contains(out, "trusting attestations of someone/fork") {
+		t.Errorf("a confirmed override: %v\n%s", err, out)
 	}
 }

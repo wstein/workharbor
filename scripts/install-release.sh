@@ -15,7 +15,11 @@
 # is given: the attested archives of an old, vulnerable release are still validly
 # attested. WHR_RELEASE_DIR names a folder that already holds the three files, to
 # skip the download; the checks still run. WHR_RELEASE_REPO changes the repository
-# whose attestations are trusted; the script says which one it trusts.
+# whose attestations are trusted (a fork, say): it must be owner/name and is refused
+# unless --trust-release-repo confirms it; the script says which one it trusts.
+# The installed version is read from $prefix/libexec/whr/VERSION, which this script
+# writes after a verified install: the installed whr is never run before the checks
+# (an install from before that file existed needs --allow-downgrade once).
 set -euo pipefail
 
 die() {
@@ -47,13 +51,20 @@ semver_lt() {
 main() {
 repo="${WHR_RELEASE_REPO:-wstein/workharbor}"
 allow_downgrade=0
+trust_repo=0
 args=()
 for a in "$@"; do
   case "$a" in
     --allow-downgrade) allow_downgrade=1 ;;
+    --trust-release-repo) trust_repo=1 ;;
     *) args+=("$a") ;;
   esac
 done
+[[ "$repo" =~ ^[0-9A-Za-z_.-]+/[0-9A-Za-z_.-]+$ ]] || die "WHR_RELEASE_REPO must be owner/name (got '$repo')"
+[[ "${repo%%/*}" != . && "${repo%%/*}" != .. && "${repo##*/}" != . && "${repo##*/}" != .. ]] || die "WHR_RELEASE_REPO must be owner/name (got '$repo')"
+if [ -n "${WHR_RELEASE_REPO:-}" ] && [ "$repo" != wstein/workharbor ] && [ "$trust_repo" -ne 1 ]; then
+  die "WHR_RELEASE_REPO=$repo is not the default repository: pass --trust-release-repo to trust its attestations"
+fi
 tag="${args[0]:-}"
 prefix="${args[1]:-/opt/whr}"
 
@@ -64,8 +75,12 @@ command -v gh >/dev/null || die "needs gh (brew install gh), signed in as a writ
 echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
 
 # Never go back to an older release silently.
-if [ -x "$prefix/bin/whr" ]; then
-  installed="$("$prefix/bin/whr" version 2>/dev/null | awk '{print $1; exit}')" || installed=""
+# The version comes from the file the installer wrote, never from running the binary.
+if [ -e "$prefix/bin/whr" ]; then
+  installed=""
+  if [ -f "$prefix/libexec/whr/VERSION" ] && [ ! -L "$prefix/libexec/whr/VERSION" ]; then
+    installed="$(head -c 64 "$prefix/libexec/whr/VERSION" | awk '{print $1; exit}')" || installed=""
+  fi
   if [[ "$installed" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
     if semver_lt "$tag" "$installed" && [ "$allow_downgrade" -ne 1 ]; then
       die "$tag is older than the installed $installed: pass --allow-downgrade to go back"
@@ -120,6 +135,8 @@ install -d -m 0755 "$prefix/bin" "$prefix/libexec/whr"
 install -m 0755 "$work/mac/whr" "$prefix/bin/whr"
 install -m 0755 "$work/guest/whr-shim" "$prefix/libexec/whr/whr-shim-linux-arm64"
 install -m 0755 "$work/guest/whr-proxy" "$prefix/libexec/whr/whr-proxy-linux-arm64"
+printf '%s\n' "$tag" >"$work/VERSION"
+install -m 0644 "$work/VERSION" "$prefix/libexec/whr/VERSION"
 
 echo "installed whr $("$prefix/bin/whr" version), whr-shim and whr-proxy (linux-arm64) under $prefix" >&2
 echo "next, as whr: $prefix/bin/whr tools build -store <tool store> -shim $prefix/libexec/whr/whr-shim-linux-arm64" >&2
