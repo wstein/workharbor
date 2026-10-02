@@ -46,6 +46,7 @@ type fake struct {
 	answerIDs []domain.ID
 	since     []int64
 	opens     []string
+	rebuilds  []string
 	events    chan domain.Event
 
 	summary      func(period string) service.UsageSummary
@@ -149,6 +150,13 @@ func (f *fake) AddAgent(context.Context, string, string, string, string) (domain
 	return domain.Agent{}, errors.New("not used")
 }
 func (f *fake) RemoveAgent(context.Context, string, string) error { return errors.New("not used") }
+func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (service.RebuildResult, error) {
+	f.mu.Lock()
+	f.rebuilds = append(f.rebuilds, workspace+" by "+actor)
+	f.mu.Unlock()
+	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr-base/fedora:aaa", NewImage: "whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
+}
+
 func (f *fake) OpenCopy(_ context.Context, ws, role string) (service.EditorCopy, error) {
 	f.mu.Lock()
 	f.opens = append(f.opens, ws+"/"+role)

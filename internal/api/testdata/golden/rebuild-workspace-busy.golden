@@ -1,0 +1,11 @@
+HTTP Conflict (409)
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "conflict",
+    "exit_code": 5,
+    "message": "workspace busy has run r1 (running) of agent a1: finish or stop it before a rebuild"
+  }
+}
+

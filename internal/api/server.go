@@ -50,6 +50,7 @@ type Backend interface {
 	WorkspaceList(ctx context.Context) ([]service.WorkspaceView, error)
 	CreateWorkspace(ctx context.Context, req service.CreateRequest) (domain.Workspace, domain.Agent, error)
 	RemoveWorkspace(ctx context.Context, workspace string) error
+	RebuildWorkspace(ctx context.Context, workspace, actor string) (service.RebuildResult, error)
 	AddAgent(ctx context.Context, workspace, role, instructions, profile string) (domain.Agent, error)
 	RemoveAgent(ctx context.Context, workspace, role string) error
 	OpenCopy(ctx context.Context, workspace, role string) (service.EditorCopy, error)
@@ -115,6 +116,10 @@ func (b backend) CreateWorkspace(ctx context.Context, req service.CreateRequest)
 
 func (b backend) RemoveWorkspace(ctx context.Context, workspace string) error {
 	return b.Remove(ctx, workspace)
+}
+
+func (b backend) RebuildWorkspace(ctx context.Context, workspace, actor string) (service.RebuildResult, error) {
+	return b.Rebuild(ctx, workspace, actor)
 }
 
 // NewBackend joins the service, the workspace operations and the console (nil
@@ -230,6 +235,7 @@ var routes = []route{
 	{http.MethodPost, "/v1/workspaces/{workspace}/agents", (*Server).addAgent},
 	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
 	{http.MethodPost, "/v1/workspaces/{workspace}/open", (*Server).openCopy},
+	{http.MethodPost, "/v1/workspaces/{workspace}/rebuild", (*Server).rebuildWorkspace},
 	{http.MethodGet, "/v1/previews", (*Server).listPreviews},
 	{http.MethodPost, "/v1/tasks/{task}/previews", (*Server).openPreview},
 	{http.MethodPost, "/v1/previews/{preview}/link", (*Server).previewLink},
@@ -815,6 +821,24 @@ func (s *Server) removeAgent(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+// rebuildWorkspace replaces the workspace's environment with one made from the
+// image its repository resolves to now (issue #128). It takes minutes when the
+// image has to be built, and is refused while a run of the workspace is live.
+func (s *Server) rebuildWorkspace(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.idempotent(w, r, nil, func() (int, any, error) {
+		res, err := s.be.RebuildWorkspace(r.Context(), string(name), "api")
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, rebuildView(res), nil
 	})
 }
 

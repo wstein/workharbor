@@ -933,6 +933,72 @@
         }
       }
     },
+    "/v1/workspaces/{workspace}/rebuild": {
+      "post": {
+        "operationId": "rebuildWorkspace",
+        "summary": "Recreate a workspace's environment from the image its repository resolves to now",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the environments and images before and after",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RebuildReport"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "description": "Replaces the environment with one made from the image the repository's default branch resolves to now, keeping the home and build volumes and the workspace folder. Refused (409) while a run of the workspace is live, naming it. The old environment is removed only after the new one is up; if the new one cannot be brought up the old one is started again. Audited with both image digests. It takes minutes when the image has to be built."
+      }
+    },
     "/v1/workspaces/{workspace}/open": {
       "post": {
         "operationId": "openCopy",
@@ -3436,6 +3502,35 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "RebuildReport": {
+        "type": "object",
+        "required": [
+          "old_env",
+          "new_env",
+          "old_image",
+          "new_image"
+        ],
+        "properties": {
+          "old_env": {
+            "type": "string"
+          },
+          "new_env": {
+            "type": "string"
+          },
+          "old_image": {
+            "type": "string"
+          },
+          "new_image": {
+            "type": "string"
+          },
+          "old_digest": {
+            "type": "string"
+          },
+          "new_digest": {
+            "type": "string"
           }
         }
       },

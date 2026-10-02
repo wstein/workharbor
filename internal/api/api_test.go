@@ -51,6 +51,7 @@ type fake struct {
 	usageQueries  []service.UsageQuery
 	consoleOpen   bool
 	shells        []service.ShellRequest
+	rebuilds      []string
 	onConsoleOpen func(rw []string) (service.ConsoleInfo, error)
 	onShell       func(service.ShellRequest) (runtime.Terminal, error)
 	sshCerts      []service.SSHRequest
@@ -269,6 +270,19 @@ func (f *fake) RemoveAgent(_ context.Context, _, role string) error {
 		return domain.NewConflict("in-use", "agent busy has 1 unfinished task(s)")
 	}
 	return nil
+}
+
+func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (service.RebuildResult, error) {
+	f.mu.Lock()
+	f.rebuilds = append(f.rebuilds, workspace+" by "+actor)
+	f.mu.Unlock()
+	switch workspace {
+	case "nope":
+		return service.RebuildResult{}, &domain.NotFoundError{Kind: "workspace", ID: "nope"}
+	case "busy":
+		return service.RebuildResult{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish or stop it before a rebuild")
+	}
+	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr-base/fedora:aaa", NewImage: "whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
 }
 
 func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.EditorCopy, error) {
@@ -605,6 +619,9 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"open-copy-ambiguous":            {"POST", "/v1/workspaces/docs-ws/open", ""},
 		"open-copy-unknown-workspace":    {"POST", "/v1/workspaces/nope/open", `{"role":"x"}`},
 		"open-copy-unknown-field":        {"POST", "/v1/workspaces/docs-ws/open", `{"role":"x","dir":"/etc"}`},
+		"rebuild-workspace":              {"POST", "/v1/workspaces/docs-ws/rebuild", ""},
+		"rebuild-workspace-busy":         {"POST", "/v1/workspaces/busy/rebuild", ""},
+		"rebuild-workspace-unknown":      {"POST", "/v1/workspaces/nope/rebuild", ""},
 		"remove-agent":                   {"DELETE", "/v1/workspaces/docs-ws/agents/runtime", ""},
 		"remove-agent-busy":              {"DELETE", "/v1/workspaces/docs-ws/agents/busy", ""},
 	} {
@@ -864,7 +881,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 37 {
+	if got := Routes(); len(got) != 38 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

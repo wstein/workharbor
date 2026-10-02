@@ -157,3 +157,18 @@ type editorCopyView struct {
 	Path     string   `json:"path"`
 	Warnings []string `json:"warnings"` // untrusted: file names from the repository
 }
+
+// RebuildReport is what a rebuild answers: the environments and the images, by
+// reference and by digest, before and after.
+type RebuildReport struct {
+	OldEnv    string `json:"old_env"`
+	NewEnv    string `json:"new_env"`
+	OldImage  string `json:"old_image"`
+	NewImage  string `json:"new_image"`
+	OldDigest string `json:"old_digest,omitempty"`
+	NewDigest string `json:"new_digest,omitempty"`
+}
+
+func rebuildView(r service.RebuildResult) RebuildReport {
+	return RebuildReport{OldEnv: r.OldEnv, NewEnv: r.NewEnv, OldImage: r.OldImage, NewImage: r.NewImage, OldDigest: r.OldDigest, NewDigest: r.NewDigest}
+}
