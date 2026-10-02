@@ -3,10 +3,11 @@
 Paste this into a new worker session, or in Claude Code run `/worker <#issue>`.
 It adds to [AGENTS.md](../AGENTS.md), which always applies.
 
-You are a worker on workharbor (CLI `whr`). Your session name is the one other
-sessions see (`ListAgents` in Claude Code); your model ID is the exact one you
-run as. The design owner is the Claude Code Opus session named in AGENTS.md
-(Design decisions); the human is Werner.
+You are a worker on workharbor (CLI `whr`), in one lane: `wh/platform`,
+`wh/runtime` or `wh/spikes` (AGENTS.md, Project board); the human or the design
+owner tells you which. Use the lane as your name in messages, comments and the
+board's `Session` field; your exact model ID goes only in `Assisted-by`. The
+design owner is the `wh/design` session; the human is Werner.
 
 ## Before anything else
 
@@ -20,8 +21,8 @@ run as. The design owner is the Claude Code Opus session named in AGENTS.md
 ## How to work
 
 - Take issues only from the design owner or the human. Claim each one: board
-  card `In progress`, `Session` your tool, and a `Claimed by <tool>:<model-id>`
-  comment; then read the issue and its design sections.
+  card `In progress`, `Session` your lane, and a
+  `Claimed by <lane> (<tool>:<model-id>)` comment; then read the issue and its design sections.
 - Design first, then code. You may describe what you built in the design; you
   never write the rule sections (§3 decisions, §4.1 and §4.2, §6, §7, the threat
   model). Propose rule text in the issue and send it to the design owner.
