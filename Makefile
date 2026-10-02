@@ -98,7 +98,9 @@ FUZZ_TARGETS = \
 	./internal/service:FuzzParseIssueURL \
 	./internal/service:FuzzIssuePrompt \
 	./internal/forge/github:FuzzGitHubAnswers \
-	./internal/forge/github:FuzzVerifyWebhook
+	./internal/forge/github:FuzzVerifyWebhook \
+	./internal/oci:FuzzExtract \
+	./internal/oci:FuzzParseRef
 # FUZZTIME reaches the shell as an environment variable, never spliced into the
 # command, and must look like a go duration or an exec count.
 fuzz:
