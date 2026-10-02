@@ -13,6 +13,10 @@ import (
 type Repo struct {
 	g    *Git
 	path string
+
+	// the topic limits CheckCommits applies; zero means MaxTopicEntries and
+	// MaxTopicBytes. Only a test sets them, on its own Repo.
+	entryLimit, byteLimit int64
 }
 
 // InitBare creates a bare repository at path, which must not exist yet and

@@ -103,6 +103,7 @@ func (p *prep) rev(ref string) string {
 }
 
 func TestPrepareRebasesFoldsAndSigns(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	// The target moved on while the agent worked.
@@ -153,6 +154,7 @@ func TestPrepareRebasesFoldsAndSigns(t *testing.T) {
 }
 
 func TestPrepareSignsEvenWhenNothingMoved(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	got, err := p.repo.Prepare(ctx, p.spec())
@@ -167,6 +169,7 @@ func TestPrepareSignsEvenWhenNothingMoved(t *testing.T) {
 }
 
 func TestPrepareRefusesBadCommitMessagesAndKeepsTheBranch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	p.commitFile("c.txt", "oops this is not conventional")
@@ -186,6 +189,7 @@ func TestPrepareRefusesBadCommitMessagesAndKeepsTheBranch(t *testing.T) {
 }
 
 func TestPrepareReportsAConflictAndKeepsTheBranch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	// The agent and the target both change file.txt.
@@ -213,6 +217,7 @@ func TestPrepareReportsAConflictAndKeepsTheBranch(t *testing.T) {
 }
 
 func TestPrepareNeedsTheBotKeyAndIdentity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	for name, mod := range map[string]func(*PrepareSpec){
@@ -239,6 +244,7 @@ func TestPrepareNeedsTheBotKeyAndIdentity(t *testing.T) {
 }
 
 func TestPushSendsTheApprovedCommitOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	prepared, err := p.repo.Prepare(ctx, p.spec())
@@ -294,6 +300,7 @@ func TestPushSendsTheApprovedCommitOnly(t *testing.T) {
 // onto the pushed commit, so the second push is a fast-forward and the pushed
 // commits are not rewritten.
 func TestPrepareFollowUpExtendsThePushedCommit(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := newPrep(t)
 	first, err := p.repo.Prepare(ctx, p.spec())
@@ -346,6 +353,7 @@ func TestPrepareFollowUpExtendsThePushedCommit(t *testing.T) {
 }
 
 func TestNumstatReadsFilesLinesAndBinaries(t *testing.T) {
+	t.Parallel()
 	out := []byte("3\t1\ta.go\x00-\t-\timg.png\x0010\t0\tdir/new file.txt\x00")
 	if f, a, r := numstat(out); f != 3 || a != 13 || r != 1 {
 		t.Errorf("numstat = %d files +%d -%d, want 3 files +13 -1 (a binary adds no lines)", f, a, r)

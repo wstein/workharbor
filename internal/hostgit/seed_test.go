@@ -12,11 +12,13 @@ import (
 const testOrigin = "https://github.com/wstein/workharbor.git"
 
 func TestSeedAgentCloneIsIndependentOfItsSource(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	f := newForge(t, "", 3)
+	marker := filepath.Join(t.TempDir(), "pwned") // per test: nothing shared between runs
 	// The source carries planted config: nothing of it may reach the clone.
-	mustGit(t, f.env, f.dir, "config", "core.fsmonitor", "touch /tmp/whr-seed-pwned")
-	if err := os.WriteFile(filepath.Join(f.dir, ".git", "hooks", "post-checkout"), []byte("#!/bin/sh\ntouch /tmp/whr-seed-pwned\n"), 0o700); err != nil { //nolint:gosec // a planted hook in a test
+	mustGit(t, f.env, f.dir, "config", "core.fsmonitor", "touch "+marker)
+	if err := os.WriteFile(filepath.Join(f.dir, ".git", "hooks", "post-checkout"), []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o700); err != nil { //nolint:gosec // a planted hook in a test
 		t.Fatal(err)
 	}
 	dest := filepath.Join(t.TempDir(), "repo")
@@ -44,8 +46,7 @@ func TestSeedAgentCloneIsIndependentOfItsSource(t *testing.T) {
 	strings.Contains(string(cfg), "fsmonitor") || strings.Contains(string(cfg), f.dir) {
 		t.Errorf("the source's config or path is in the clone's config:\n%s", cfg)
 	}
-	if _, err := os.Stat("/tmp/whr-seed-pwned"); err == nil {
-		_ = os.Remove("/tmp/whr-seed-pwned")
+	if _, err := os.Stat(marker); err == nil {
 		t.Error("something planted in the source ran during the clone")
 	}
 	// Hard links would tie the clone's objects to the source's.
@@ -57,6 +58,7 @@ func TestSeedAgentCloneIsIndependentOfItsSource(t *testing.T) {
 }
 
 func TestSeedAgentCloneRefusesBadInput(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	f := newForge(t, "", 1)
 	base := t.TempDir()

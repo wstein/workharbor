@@ -38,12 +38,6 @@ const (
 	MaxTopicBytes   = 4 << 30
 )
 
-// The topic limits as the checks read them; tests lower them.
-var (
-	topicEntryLimit int64 = MaxTopicEntries
-	topicByteLimit  int64 = MaxTopicBytes
-)
-
 // Hard deadlines, so a hostile object graph cannot hold the supervisor: the whole
 // check of a topic, the whole prepare, and the whole editor copy.
 const (
@@ -82,7 +76,14 @@ func (r *Repo) CheckTree(ctx context.Context, ref string) error {
 // small commits in a large repository well under the cap, while a fixup chain
 // that adds 100 files and drops them again, 1,000 times, is refused.
 func (r *Repo) CheckCommits(ctx context.Context, tip, exclude string) error {
-	return r.checkCommits(ctx, tip, exclude, topicEntryLimit, topicByteLimit)
+	entries, maxBytes := int64(MaxTopicEntries), int64(MaxTopicBytes)
+	if r.entryLimit > 0 {
+		entries = r.entryLimit
+	}
+	if r.byteLimit > 0 {
+		maxBytes = r.byteLimit
+	}
+	return r.checkCommits(ctx, tip, exclude, entries, maxBytes)
 }
 
 func (r *Repo) checkCommits(ctx context.Context, tip, exclude string, maxEntries, maxBytes int64) error {

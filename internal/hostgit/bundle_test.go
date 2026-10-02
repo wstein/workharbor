@@ -93,6 +93,7 @@ func (r *bundleRig) hasRef(branch string) bool {
 }
 
 func TestImportBundleTakesTheBranchAndNothingOfTheWorkspace(t *testing.T) {
+	t.Parallel()
 	r := newBundleRig(t)
 	r.commit(3, 0)
 	want := mustGit(t, r.env, r.guest, "rev-parse", "agent/docs")
@@ -129,6 +130,7 @@ func TestImportBundleTakesTheBranchAndNothingOfTheWorkspace(t *testing.T) {
 }
 
 func TestImportBundleRefusesWhatIsNotWhole(t *testing.T) {
+	t.Parallel()
 	r := newBundleRig(t)
 	r.commit(2, 600_000)
 	data := r.raw()

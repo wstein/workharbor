@@ -24,6 +24,7 @@ func editorRig(t *testing.T) (*prep, *Repo) {
 }
 
 func TestEditorCopyIsACleanCloneOfTheFetchedTopic(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p, r := editorRig(t)
 	// The agent plants what it can in its own checkout.
@@ -77,6 +78,7 @@ func TestEditorCopyIsACleanCloneOfTheFetchedTopic(t *testing.T) {
 // The control: plain git in the agent's own checkout does fire the plant, which
 // is why the editor must never be pointed there.
 func TestControlThePlantFiresInTheAgentCheckout(t *testing.T) {
+	t.Parallel()
 	p, _ := editorRig(t)
 	canary := filepath.Join(p.base, "fired")
 	mustGit(t, p.env, p.topic, "config", "alias.evil", "!touch "+canary)
@@ -87,6 +89,7 @@ func TestControlThePlantFiresInTheAgentCheckout(t *testing.T) {
 }
 
 func TestEditorCopyListsFilesAnEditorActsOn(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p, r := editorRig(t)
 	if err := os.MkdirAll(filepath.Join(p.topic, ".vscode"), 0o750); err != nil {
@@ -112,6 +115,7 @@ func TestEditorCopyListsFilesAnEditorActsOn(t *testing.T) {
 }
 
 func TestEditorCopyRefreshesByFastForwardOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p, r := editorRig(t)
 	dest := filepath.Join(t.TempDir(), "editor")
@@ -146,6 +150,7 @@ func TestEditorCopyRefreshesByFastForwardOnly(t *testing.T) {
 }
 
 func TestEditorCopyIsNeverInsideTheWorkspaceRoot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p, r := editorRig(t)
 	for name, dest := range map[string]string{
@@ -173,6 +178,7 @@ func TestEditorCopyIsNeverInsideTheWorkspaceRoot(t *testing.T) {
 }
 
 func TestEditorCopyRefusesADirectoryThatIsNotItsCopy(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p, r := editorRig(t)
 	other := filepath.Join(t.TempDir(), "other")

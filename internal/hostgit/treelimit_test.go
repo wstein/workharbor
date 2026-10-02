@@ -51,6 +51,7 @@ func bombRepo(t *testing.T, g *Git, depth int) *Repo {
 // A few kilobytes of objects that name a billion files are refused before anything is
 // written, quickly, by the prepare and the editor copy alike.
 func TestANestedTreeBombIsRefusedBeforeCheckout(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	r := bombRepo(t, g, 30) // 2^30 files from 31 tree objects
 	start := time.Now()
@@ -72,6 +73,7 @@ func TestANestedTreeBombIsRefusedBeforeCheckout(t *testing.T) {
 
 // An ordinary tree passes, and each limit stops a tree that exceeds it.
 func TestTheTreeLimitsApplyToEntriesAndBytes(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	r := bombRepo(t, g, 4) // 16 files of one byte in 30 trees: 46 entries
 	ctx := context.Background()
@@ -111,6 +113,7 @@ func plumbEnv(t *testing.T) []string {
 // 41 objects, no file at all, 2^40 trees: `ls-tree -r` alone prints nothing while git
 // walks them, so the trees themselves count and the refusal comes quickly.
 func TestAFilelessNestedTreeBombIsRefusedQuickly(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "bomb.git")
@@ -138,6 +141,7 @@ func TestAFilelessNestedTreeBombIsRefusedQuickly(t *testing.T) {
 
 // A deadline stops a check that has not finished.
 func TestTheTreeCheckHonoursItsDeadline(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	r := bombRepo(t, g, 4)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -149,6 +153,7 @@ func TestTheTreeCheckHonoursItsDeadline(t *testing.T) {
 
 // The check is by commit ID and covers the commits in a range, each tree once.
 func TestCheckCommitsCoversEveryCommitOfARange(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")
@@ -178,6 +183,7 @@ func TestCheckCommitsCoversEveryCommitOfARange(t *testing.T) {
 // Prepare replays every commit, so a bomb that a later commit deletes is refused,
 // and the branch stays as it was.
 func TestPrepareRefusesABombDeletedByALaterCommit(t *testing.T) {
+	t.Parallel()
 	p := newPrep(t)
 	ctx := context.Background()
 	path := p.repo.Path()
@@ -205,6 +211,7 @@ func TestPrepareRefusesABombDeletedByALaterCommit(t *testing.T) {
 // union of what the fixups added, though each commit's own tree stays small because
 // the next commit deletes the files again. The topic's additions are capped as a whole.
 func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
+	t.Parallel()
 	p := newPrep(t)
 	ctx := context.Background()
 	path := p.repo.Path()
@@ -232,17 +239,14 @@ func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
 	plumb(t, env, path, "", "update-ref", "refs/heads/"+p.topicBr, tip)
 
 	// Every tree is about perFixup entries over the base; the union is fixups times that.
-	oldEntries, oldBytes := topicEntryLimit, topicByteLimit
-	t.Cleanup(func() { topicEntryLimit, topicByteLimit = oldEntries, oldBytes })
-	topicEntryLimit = 2000
+	p.repo.entryLimit = 2000
 	if _, err := p.repo.Prepare(ctx, p.spec()); !errors.Is(err, ErrTreeTooLarge) {
 		t.Fatalf("Prepare = %v, want ErrTreeTooLarge", err)
 	}
 	if got := p.rev("refs/heads/" + p.topicBr); got != tip {
 		t.Errorf("the topic moved to %s", got)
 	}
-	topicEntryLimit = oldEntries
-	topicByteLimit = 10 // the blobs of the additions are over a byte budget too
+	p.repo.entryLimit, p.repo.byteLimit = 0, 10 // the blobs of the additions are over a byte budget too
 	if err := p.repo.CheckCommits(ctx, tip, old); !errors.Is(err, ErrTreeTooLarge) {
 		t.Errorf("CheckCommits over the byte budget = %v, want ErrTreeTooLarge", err)
 	}
@@ -250,6 +254,7 @@ func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
 
 // Many small commits on top of a big tree are fine: what counts is what they add.
 func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")
@@ -270,8 +275,7 @@ func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
 		prev = plumb(t, env, path, "", "commit-tree", plumb(t, env, path, b.String(), "mktree"), "-p", prev, "-m", "more")
 	}
 	// 100 trees of 500 to 600 entries sum to 55,000, yet the topic adds only 100.
-	topicEntryLimit, topicByteLimit = 1000, 1000
-	t.Cleanup(func() { topicEntryLimit, topicByteLimit = MaxTopicEntries, MaxTopicBytes })
+	r.entryLimit, r.byteLimit = 1000, 1000
 	if err := r.CheckCommits(ctx, prev, base); err != nil {
 		t.Errorf("a normal topic: %v", err)
 	}
@@ -280,6 +284,7 @@ func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
 // A fixup chain that re-adds one big blob at new paths counts every copy: the
 // autosquash writes each of them, though a bundle stores the blob once.
 func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")
@@ -296,13 +301,11 @@ func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
 		fmt.Fprintf(&b, "100644 blob %s\tp%d\n", blob, i)
 		tip = plumb(t, env, path, "", "commit-tree", plumb(t, env, path, b.String(), "mktree"), "-p", tip, "-m", "fixup! x")
 	}
-	oldEntries, oldBytes := topicEntryLimit, topicByteLimit
-	t.Cleanup(func() { topicEntryLimit, topicByteLimit = oldEntries, oldBytes })
-	topicEntryLimit, topicByteLimit = 1000, 500 // 20 copies of 100 bytes are 2000
+	r.entryLimit, r.byteLimit = 1000, 500 // 20 copies of 100 bytes are 2000
 	if err := r.CheckCommits(ctx, tip, base); !errors.Is(err, ErrTreeTooLarge) {
 		t.Errorf("one blob re-added at many paths = %v, want ErrTreeTooLarge", err)
 	}
-	topicByteLimit = 5000
+	r.byteLimit = 5000
 	if err := r.CheckCommits(ctx, tip, base); err != nil {
 		t.Errorf("within the budget: %v", err)
 	}
@@ -311,6 +314,7 @@ func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
 // The sizes are matched to their blobs by object name, so a line for another
 // object does not shift the sizes after it onto the wrong blob.
 func TestBlobBytesMatchesSizesByObjectName(t *testing.T) {
+	t.Parallel()
 	a, b, z := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("f", 40)
 	blobs := map[string]int64{a: 2, b: 1}
 	out := z + " 7\n" + a + " 100\n" + b + " 10\n"
@@ -325,6 +329,7 @@ func TestBlobBytesMatchesSizesByObjectName(t *testing.T) {
 // blobBytes fails closed: anything but "<id> <size>" for every blob asked for is an
 // error, never 0 bytes.
 func TestBlobBytesFailsClosed(t *testing.T) {
+	t.Parallel()
 	a, b := strings.Repeat("a", 40), strings.Repeat("b", 40)
 	blobs := map[string]int64{a: 1, b: 1}
 	for name, out := range map[string]string{
@@ -345,6 +350,7 @@ func TestBlobBytesFailsClosed(t *testing.T) {
 
 // A tree that names a blob the object store lacks is refused, not counted as 0 bytes.
 func TestCheckCommitsRefusesAMissingBlob(t *testing.T) {
+	t.Parallel()
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")

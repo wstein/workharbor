@@ -13,6 +13,7 @@ import (
 
 // Three parallel shallow fetches had failed 40 times in 60 on shallow.lock.
 func TestParallelRefreshesAllSucceed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -49,6 +50,7 @@ func TestParallelRefreshesAllSucceed(t *testing.T) {
 }
 
 func TestStaleGitLocksAreRecovered(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -88,6 +90,7 @@ func TestStaleGitLocksAreRecovered(t *testing.T) {
 
 // The lock is waited for with the caller's context.
 func TestTheCacheLockHonoursTheContext(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	base := t.TempDir()
 	f := newForge(t, base, 2)
@@ -108,6 +111,7 @@ func TestTheCacheLockHonoursTheContext(t *testing.T) {
 }
 
 func TestRepositoryNamesMapToSafeDirectories(t *testing.T) {
+	t.Parallel()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +150,7 @@ func TestRepositoryNamesMapToSafeDirectories(t *testing.T) {
 }
 
 func TestCachePathsMustBeAbsoluteAndInsideTheCacheRoot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

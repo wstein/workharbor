@@ -19,6 +19,7 @@ func newSupervised(t *testing.T, g *Git) *Repo {
 // Cleanup and push work only on the supervisor-owned copy: a Repo is bare and
 // supervisor-made, and the agent's own checkout cannot become one.
 func TestOnlyASupervisorOwnedBareRepositoryCanBeOpened(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	p := newPlant(t)
 	ctx := context.Background()
@@ -44,6 +45,7 @@ func TestOnlyASupervisorOwnedBareRepositoryCanBeOpened(t *testing.T) {
 }
 
 func TestSupervisedRepositoryHasNoTransportButFile(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	r := newSupervised(t, g)
 	for _, remote := range []string{"https://example.invalid/x.git", "ssh://example.invalid/x.git", "git://example.invalid/x.git", "ext::sh -c id"} {
@@ -55,6 +57,7 @@ func TestSupervisedRepositoryHasNoTransportButFile(t *testing.T) {
 }
 
 func TestInitBareNeedsAnExistingParent(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	if _, err := g.InitBare(context.Background(), filepath.Join(t.TempDir(), "no", "such", "parent.git")); !errors.Is(err, ErrBadPath) {
 		t.Errorf("InitBare below a missing parent = %v, want ErrBadPath", err)

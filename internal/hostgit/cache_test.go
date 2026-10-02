@@ -73,6 +73,7 @@ func openCache(t *testing.T, g *Git, base string, f *forgeRepo, depth int) *Cach
 // A shallow cache cannot fast-forward, so a plain fetch is rejected; the
 // forced refspec keeps refreshing it, even after the forge rewrote history.
 func TestRefreshOfAShallowCacheFollowsTheForge(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -101,6 +102,7 @@ func TestRefreshOfAShallowCacheFollowsTheForge(t *testing.T) {
 }
 
 func TestSourcesAndNamesAreValidated(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -153,6 +155,7 @@ func topicWithCommit(t *testing.T, c *Cache, base, name string) string {
 // With a depth, the target can move further than the depth past the topic's
 // fork point: then there is no merge base until the histories are deepened.
 func TestEnsureMergeBaseDeepensUntilThereIsOne(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -192,6 +195,7 @@ func TestEnsureMergeBaseDeepensUntilThereIsOne(t *testing.T) {
 }
 
 func TestEnsureMergeBaseGivesUpAtTheLimit(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -217,6 +221,7 @@ func TestEnsureMergeBaseGivesUpAtTheLimit(t *testing.T) {
 }
 
 func TestEnsureMergeBaseOnFullHistoryNeedsNoDeepening(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()

@@ -117,6 +117,7 @@ func newPlant(t *testing.T) plant {
 // The control: plain git fires every plant, so a test that finds the canary
 // directory empty after hostgit has proven something.
 func TestPlainGitFiresThePlants(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		args  []string
@@ -206,6 +207,7 @@ func hardened(t *testing.T, g *Git, dir string, args ...string) (string, error) 
 }
 
 func TestTheFloorStopsTheKnownKeys(t *testing.T) {
+	t.Parallel()
 	g := newGit(t)
 	t.Run("hook", func(t *testing.T) {
 		p := newPlant(t)
@@ -262,6 +264,7 @@ func TestTheFloorStopsTheKnownKeys(t *testing.T) {
 // `git config --system` ignores GIT_CONFIG_NOSYSTEM. This only reads the
 // environment hostgit builds; it starts no process.
 func TestTheEnvironmentPointsEveryConfigFileNowhere(t *testing.T) {
+	t.Parallel()
 	g, err := New()
 	if err != nil {
 		t.Skip(err)
