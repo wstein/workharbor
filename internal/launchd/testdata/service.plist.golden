@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.wstein.workharbor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>"$1" system start --disable-kernel-install || exit 1
+exec "$2" serve --config "$3"</string>
+    <string>whr-launch</string>
+    <string>/opt/homebrew/bin/container</string>
+    <string>/opt/whr/bin/whr</string>
+    <string>/Users/whr/.config/whr/config.json</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>/Users/whr</string>
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>ExitTimeOut</key>
+  <integer>60</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/whr/Library/Logs/whr/whr.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/whr/Library/Logs/whr/whr.err.log</string>
+</dict>
+</plist>
