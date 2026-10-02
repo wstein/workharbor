@@ -28,7 +28,7 @@ func newDoctor(st *state) *cobra.Command {
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
 			}
-			checks := doctor.Checks(doctor.Deps{
+			checks := doctor.Shared(doctor.Checks(doctor.Deps{
 				ConfigPath: path,
 				Home:       st.env.Getenv("HOME"),
 				FS:         runtime.OSFS{},
@@ -41,7 +41,7 @@ func newDoctor(st *state) *cobra.Command {
 					_, _, err = c.Do(ctx, "GET", "/v1/tasks?active=true", nil, "")
 					return err
 				},
-			})
+			}))
 			names := map[string]bool{}
 			for _, c := range checks {
 				names[c.Name] = true

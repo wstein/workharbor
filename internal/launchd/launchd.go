@@ -190,9 +190,9 @@ var (
 	ErrRoot       = errors.New("run this as the user whose session it is, not as root: the job belongs to that user's login")
 )
 
-// checkSession refuses a shell outside the user's Aqua session: SSH, sudo and
+// CheckSession refuses a shell outside the user's Aqua session: SSH, sudo and
 // a daemon are in other domains, where Apple Container's services are not.
-func (m Manager) checkSession(ctx context.Context) error {
+func (m Manager) CheckSession(ctx context.Context) error {
 	if m.GOOS != "darwin" {
 		return ErrNotMac
 	}
@@ -214,7 +214,7 @@ func (m Manager) loaded(ctx context.Context, label string) bool {
 // Install writes the plist (0644, owned by the user) and loads it. It replaces
 // a job that is already loaded, so running it again is safe.
 func (m Manager) Install(ctx context.Context, s Spec) error {
-	if err := m.checkSession(ctx); err != nil {
+	if err := m.CheckSession(ctx); err != nil {
 		return err
 	}
 	data, err := Plist(s)
@@ -281,7 +281,7 @@ func (m Manager) bootstrap(ctx context.Context, s Spec, retry bool) error {
 // Uninstall unloads the job and removes its plist. A job that is not loaded, or a
 // plist that is not there, is not an error. The logs stay.
 func (m Manager) Uninstall(ctx context.Context, s Spec) error {
-	if err := m.checkSession(ctx); err != nil {
+	if err := m.CheckSession(ctx); err != nil {
 		return err
 	}
 	if m.loaded(ctx, s.Label) {
@@ -306,7 +306,7 @@ type Status struct {
 
 // Status asks launchd about the job.
 func (m Manager) Status(ctx context.Context, s Spec) (Status, error) {
-	if err := m.checkSession(ctx); err != nil {
+	if err := m.CheckSession(ctx); err != nil {
 		return Status{}, err
 	}
 	var st Status

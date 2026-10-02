@@ -33,11 +33,35 @@ type Result struct {
 	Detail string `json:"detail"`
 }
 
-// Check is one named check. Its Run may assume nothing about the others.
+// Check is one named check. Its Run may assume nothing about the others. A
+// check with a Fix is a setup step too (design D46): `whr doctor` runs the
+// checks, `whr setup` runs the same values and offers the fixes, so the two
+// cannot disagree.
 type Check struct {
+	Name  string
+	Step  int
+	Run   func(ctx context.Context) (Status, string)
+	Phase Phase
+	// Optional steps are left alone by `whr setup` unless it is told to run them.
+	Optional bool
+	// Title says in a few words what the step is for.
+	Title string
+	Fix   *Fix
+}
+
+// basic is a check as the list below writes it; base fills in the rest.
+type basic struct {
 	Name string
 	Step int
 	Run  func(ctx context.Context) (Status, string)
+}
+
+func base(in []basic) []Check {
+	out := make([]Check, len(in))
+	for i, b := range in {
+		out[i] = Check{Name: b.Name, Step: b.Step, Run: b.Run}
+	}
+	return out
 }
 
 // Deps is what the checks touch outside themselves, so tests need no host.
@@ -51,6 +75,15 @@ type Deps struct {
 	GitHub func(*config.Config) (*github.Client, error)
 	// Probe asks the running supervisor for something that needs the token.
 	Probe func(ctx context.Context) error
+	// The host: what the setup steps look at and change (design D46). Runner is
+	// nil where nothing may be run, and the host checks then say not verified.
+	Runner  Runner
+	GOOS    string
+	User    string // the account running this
+	UID     int
+	Whr     string // the running whr binary
+	Prefix  string // the admin-owned prefix whr is installed under, "/opt/whr" by default
+	Brewing string // the Brewfile's text; empty means the one in this package
 }
 
 // VendorTerms is where the manual explains a subscription login (D40).
@@ -83,7 +116,7 @@ func Checks(d Deps) []Check {
 	notVerified := func(why string) func(context.Context) (Status, string) {
 		return func(context.Context) (Status, string) { return NotVerified, why }
 	}
-	return []Check{
+	return withFixes(d, base([]basic{
 		{"config", 1, func(context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
@@ -202,7 +235,30 @@ func Checks(d Deps) []Check {
 		{"reboot", 4, notVerified("an agent session surviving a reboot is unverified (design §12)")},
 		{"capacity", 4, notVerified("room for 4 concurrent environments (§8) is not measured")},
 		{"notifications", 5, notVerified("no notification channel is configured yet")},
+	}))
+}
+
+// Shared returns the checks `whr doctor` runs by itself: the ones that are no
+// setup step of one account. The steps of the two phases are for `whr setup`.
+func Shared(checks []Check) []Check {
+	var out []Check
+	for _, c := range checks {
+		if c.Phase == "" {
+			out = append(out, c)
+		}
 	}
+	return out
+}
+
+// Steps returns the checks of one phase, in the order the wizard runs them.
+func Steps(checks []Check, phase Phase) []Check {
+	var out []Check
+	for _, c := range checks {
+		if c.Phase == phase {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Run runs the checks except the skipped ones, in order.

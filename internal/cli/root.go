@@ -22,6 +22,8 @@ type Env struct {
 	NewClient func(configPath string) (*Client, error)
 	// Host is the machine `whr service` works on; zero means this one.
 	Host Host
+	// Setup is the machine `whr setup` works on; zero means this one.
+	Setup SetupEnv
 	// Extra are commands the binary adds, such as version, tools and serve.
 	Extra []*cobra.Command
 }
@@ -123,7 +125,7 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 		root.AddCommand(c)
 	}
 	for _, c := range []*cobra.Command{
-		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newOpen(st), newKillAll(st),
+		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newOpen(st), newKillAll(st), newSetup(st),
 	} {
 		add(c)
 	}

@@ -134,7 +134,7 @@ func run(d Deps, skip ...string) []Result {
 	for _, s := range skip {
 		sk[s] = true
 	}
-	return Run(context.Background(), Checks(d), sk)
+	return Run(context.Background(), Shared(Checks(d)), sk)
 }
 
 func TestAHealthyHostPassesAndStillSaysWhatIsNotVerified(t *testing.T) {

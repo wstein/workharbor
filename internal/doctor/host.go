@@ -1,0 +1,826 @@
+package doctor
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/launchd"
+)
+
+// The setup steps beyond what `whr doctor` always checked (design D46, the manual's
+// host setup). Every command and every output format below is that of macOS 26's
+// own tools as documented, and none has been run against a fresh machine:
+// all of it is unverified until the wizard has set up the reference Mac mini
+// (issue #73). The checks only read; the fixes are shown before they run.
+
+// DefaultPrefix is where an admin-owned install of whr lives (D24).
+const DefaultPrefix = "/opt/whr"
+
+// WhrUser is the standard user workharbor runs as.
+const WhrUser = "whr"
+
+// DefaultBrewfile is the manual's Brewfile (step 5): the whole host software.
+const DefaultBrewfile = `brew "container"
+brew "git"
+brew "gh"
+cask "tailscale"
+`
+
+const (
+	sshdFile    = "/etc/ssh/sshd_config.d/100-whr.conf"
+	sshdContent = "PasswordAuthentication no\nKbdInteractiveAuthentication no\n"
+)
+
+// withFixes adds the titles and fixes of the checks doctor always had, and the
+// host and user steps, in the order the wizard runs them.
+func withFixes(d Deps, shared []Check) []Check {
+	out := append([]Check(nil), hostSteps(d)...)
+	out = append(out, userSteps(d)...)
+	return append(out, shared...)
+}
+
+func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
+	if d.Runner == nil || d.GOOS != "darwin" {
+		return "", errNotHere
+	}
+	b, err := d.Runner.Output(ctx, argv...)
+	return string(b), err
+}
+
+var errNotHere = errors.New("this runs only on a Mac")
+
+func notHere(err error) (Status, string, bool) {
+	if errors.Is(err, errNotHere) {
+		return NotVerified, "not checked: " + err.Error(), true
+	}
+	return "", "", false
+}
+
+func (d Deps) prefix() string {
+	if d.Prefix != "" {
+		return d.Prefix
+	}
+	return DefaultPrefix
+}
+
+func (d Deps) configDir() string { return filepath.Dir(d.ConfigPath) }
+
+// kv reads "name value" lines, as `pmset -g` prints them.
+func kv(out string) map[string]string {
+	m := map[string]string{}
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.Fields(l)
+		if len(f) >= 2 {
+			m[f[0]] = f[1]
+		}
+	}
+	return m
+}
+
+func hostSteps(d Deps) []Check {
+	brewfile := d.Brewing
+	if brewfile == "" {
+		brewfile = DefaultBrewfile
+	}
+	return []Check{
+		{
+			Name: "whr-user", Phase: PhaseHost, Step: 2, Title: "the standard user whr (manual step 2)",
+			Run: func(ctx context.Context) (Status, string) {
+				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+WhrUser, "UniqueID"); err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return Fail, "there is no user " + WhrUser
+				}
+				out, err := d.output(ctx, "dseditgroup", "-o", "checkmember", "-m", WhrUser, "admin")
+				if err == nil && strings.HasPrefix(strings.TrimSpace(out), "yes") {
+					return Fail, WhrUser + " is an administrator: workharbor's account must be a standard user"
+				}
+				return OK, WhrUser + " exists and is a standard user"
+			},
+			Fix: &Fix{
+				Cmds:  []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", WhrUser, "-fullName", "workharbor", "-password", "-"}}},
+				Guide: "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + WhrUser + " on the Mac (or over Screen Sharing) and run `whr setup` there.",
+			},
+		},
+
+		{
+			Name: "power", Phase: PhaseHost, Step: 4, Title: "never sleep, restart after a power cut (manual step 4)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "pmset", "-g")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "pmset did not answer: " + oneLine(err.Error())
+				}
+				m := kv(out)
+				var bad []string
+				for _, want := range [][2]string{{"sleep", "0"}, {"disksleep", "0"}, {"autorestart", "1"}, {"womp", "1"}} {
+					if m[want[0]] != want[1] {
+						bad = append(bad, want[0]+" is "+orNone(m[want[0]])+", want "+want[1])
+					}
+				}
+				if len(bad) > 0 {
+					return Fail, strings.Join(bad, "; ")
+				}
+				return OK, "the Mac does not sleep and restarts after a power cut"
+			},
+			Fix: &Fix{Cmds: []Cmd{{Sudo: true, Argv: []string{"pmset", "-a", "sleep", "0", "disksleep", "0", "autorestart", "1", "womp", "1"}}}},
+		},
+
+		{
+			Name: "firewall", Phase: PhaseHost, Step: 8, Title: "the firewall on, in stealth mode (manual step 8)",
+			Run: func(ctx context.Context) (Status, string) {
+				const fw = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+				state, err := d.output(ctx, fw, "--getglobalstate")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "socketfilterfw did not answer: " + oneLine(err.Error())
+				}
+				stealth, _ := d.output(ctx, fw, "--getstealthmode")
+				var bad []string
+				if !strings.Contains(strings.ToLower(state), "enabled") {
+					bad = append(bad, "the firewall is off")
+				}
+				if !strings.Contains(strings.ToLower(stealth), "enabled") && !strings.Contains(strings.ToLower(stealth), "on") {
+					bad = append(bad, "stealth mode is off")
+				}
+				if len(bad) > 0 {
+					return Fail, strings.Join(bad, "; ")
+				}
+				return OK, "the firewall is on, in stealth mode"
+			},
+			Fix: &Fix{Cmds: []Cmd{
+				{Sudo: true, Argv: []string{"/usr/libexec/ApplicationFirewall/socketfilterfw", "--setglobalstate", "on"}},
+				{Sudo: true, Argv: []string{"/usr/libexec/ApplicationFirewall/socketfilterfw", "--setstealthmode", "on"}},
+			}},
+		},
+
+		{
+			Name: "ssh-keys-only", Phase: PhaseHost, Step: 8, Title: "SSH with keys only (manual step 8)",
+			Run: func(context.Context) (Status, string) {
+				if d.GOOS != "darwin" {
+					return NotVerified, "not checked: " + errNotHere.Error()
+				}
+				b, err := os.ReadFile(sshdFile)
+				if err != nil {
+					return Fail, sshdFile + " is not there: password logins are not refused"
+				}
+				if !strings.Contains(string(b), "PasswordAuthentication no") || !strings.Contains(string(b), "KbdInteractiveAuthentication no") {
+					return Fail, sshdFile + " does not turn both password methods off"
+				}
+				return OK, "password logins are refused (" + sshdFile + ")"
+			},
+			Fix: &Fix{
+				Desc:  "write the two settings to a private temporary file, then install it as root's",
+				Do:    func(context.Context, Prompter) error { return writeTemp(sshdTemp(), sshdContent) },
+				Cmds:  []Cmd{{Sudo: true, Argv: []string{"install", "-m", "0644", "-o", "root", "-g", "wheel", sshdTemp(), sshdFile}}},
+				Guide: "Remote Login itself is switched on in System Settings → General → Sharing → Remote Login, for your administrator account only; it cannot be checked here without a privileged command, so it is not verified.",
+				Open:  "x-apple.systempreferences:com.apple.Sharing-Settings.extension",
+			},
+		},
+
+		{
+			Name: "filevault", Phase: PhaseHost, Step: 3, Title: "FileVault on (manual step 3)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "fdesetup", "status")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "fdesetup did not answer: " + oneLine(err.Error())
+				}
+				if strings.Contains(out, "FileVault is On") {
+					return OK, "FileVault is on"
+				}
+				return Fail, "FileVault is off"
+			},
+			Fix: &Fix{
+				Guide: "Enabling FileVault is interactive and prints a recovery key that must be yours alone, so whr does not run it. Run `sudo fdesetup enable` yourself in this terminal (or use System Settings → Privacy & Security → FileVault) and keep the key safe.",
+				Open:  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+			},
+		},
+
+		{
+			Name: "homebrew", Phase: PhaseHost, Step: 5, Title: "Homebrew (manual step 5)",
+			Run: func(ctx context.Context) (Status, string) {
+				if _, err := d.output(ctx, "/opt/homebrew/bin/brew", "--version"); err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return Fail, "Homebrew is not installed at /opt/homebrew"
+				}
+				return OK, "Homebrew is installed"
+			},
+			Fix: &Fix{
+				Guide: "Install the Xcode Command Line Tools (`xcode-select --install`) and Homebrew from https://brew.sh as your administrator. Its installer is a script from the internet, so whr does not run it for you.",
+				Open:  "https://brew.sh",
+			},
+		},
+
+		{
+			Name: "brew-packages", Phase: PhaseHost, Step: 5, Title: "the host packages of the Brewfile (manual step 5)",
+			Run: func(ctx context.Context) (Status, string) {
+				var missing []string
+				for _, f := range []string{"container", "git", "gh"} {
+					out, err := d.output(ctx, "/opt/homebrew/bin/brew", "list", "--formula", "--versions", f)
+					if err != nil || strings.TrimSpace(out) == "" {
+						if st, msg, ok := notHere(err); ok {
+							return st, msg
+						}
+						missing = append(missing, f)
+					}
+				}
+				if len(missing) > 0 {
+					return Fail, "not installed: " + strings.Join(missing, ", ")
+				}
+				return OK, "container, git and gh are installed"
+			},
+			Fix: &Fix{
+				Desc: "write the Brewfile to a temporary file, then brew bundle it",
+				Do: func(context.Context, Prompter) error {
+					return writeTemp(brewfilePath(), brewfile)
+				},
+				Cmds: []Cmd{{Argv: []string{"/opt/homebrew/bin/brew", "bundle", "--file=" + brewfilePath()}}},
+			},
+		},
+
+		{
+			Name: "brew-pin", Phase: PhaseHost, Step: 6, Title: "container pinned, so brew upgrade leaves it (manual step 5)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "/opt/homebrew/bin/brew", "list", "--pinned")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "brew did not answer: " + oneLine(err.Error())
+				}
+				for _, l := range strings.Fields(out) {
+					if l == "container" {
+						return OK, "container is pinned"
+					}
+				}
+				return Fail, "container is not pinned"
+			},
+			Fix: &Fix{Cmds: []Cmd{{Argv: []string{"/opt/homebrew/bin/brew", "pin", "container"}}}},
+		},
+
+		{
+			Name: "prefix", Phase: PhaseHost, Step: 13, Title: "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)",
+			Run: func(context.Context) (Status, string) {
+				fi, err := os.Stat(d.prefix())
+				if err != nil {
+					return Fail, d.prefix() + " does not exist"
+				}
+				if !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
+					return Fail, d.prefix() + " is not a directory only its owner can write"
+				}
+				return OK, d.prefix() + " exists and only its owner writes it"
+			},
+			Fix: &Fix{
+				Cmds:  []Cmd{{Sudo: true, Argv: []string{"install", "-d", "-o", d.User, "-g", "admin", "-m", "755", d.prefix()}}},
+				Guide: "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13).",
+			},
+		},
+
+		{
+			Name: "screen-sharing", Phase: PhaseHost, Step: 8, Title: "Screen Sharing for whr's desktop session (manual steps 2 and 8)", Optional: true,
+			Run: func(context.Context) (Status, string) {
+				return NotVerified, "macOS keeps this under privacy controls (TCC) that a command cannot read or set"
+			},
+			Fix: &Fix{
+				Guide: "System Settings → General → Sharing → Screen Sharing: allow it only for your administrator and whr, if you want to reach whr's desktop session from afar.",
+				Open:  "x-apple.systempreferences:com.apple.Sharing-Settings.extension",
+			},
+		},
+
+		{
+			Name: "tailscale", Phase: PhaseHost, Step: 7, Title: "Tailscale signed in (manual step 7)", Optional: true,
+			Run: func(context.Context) (Status, string) {
+				return NotVerified, "signing in is the human's; whr does not check a third party's state"
+			},
+			Fix: &Fix{
+				Guide: "Open the Tailscale app, sign in, and forward whr's name to its loopback port with HTTPS (`tailscale serve`, manual step 7); or use another option of that step.",
+				Open:  "https://login.tailscale.com",
+			},
+		},
+	}
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "unset"
+	}
+	return s
+}
+
+// sshdTemp is where the sshd settings wait before sudo install copies them: a
+// 0600 file in a 0700 directory of the administrator.
+func sshdTemp() string { return filepath.Join(os.TempDir(), "whr-setup", "100-whr.conf") }
+
+func brewfilePath() string { return filepath.Join(os.TempDir(), "whr-setup", "Brewfile") }
+
+// writeTemp writes a file the next command reads, in a directory only this user
+// can enter. It replaces an earlier copy: it holds no secret.
+func writeTemp(path, content string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o600)
+}
+
+// WriteSecret writes a secret file: mode 0600, exclusive create, so it never
+// overwrites one, and the directory it lies in must be private. It never prints
+// the value.
+func WriteSecret(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // the secret's own path, in the user's configuration directory
+	if err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return fmt.Errorf("%s already exists: not overwritten", path)
+		}
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	return f.Close()
+}
+
+var appKeyRE = regexp.MustCompile(`^github-app-([0-9]+)\.pem$`)
+
+// appKey finds the private key `whr github app create` wrote and the App ID in
+// its name. More than one is ambiguous.
+func appKey(dir string) (id int64, path string, err error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, "", err
+	}
+	for _, e := range ents {
+		if m := appKeyRE.FindStringSubmatch(e.Name()); m != nil {
+			if path != "" {
+				return 0, "", errors.New("more than one github-app-<id>.pem is in " + dir + ": keep the one in use")
+			}
+			id, _ = strconv.ParseInt(m[1], 10, 64)
+			path = filepath.Join(dir, e.Name())
+		}
+	}
+	if path == "" {
+		return 0, "", fs.ErrNotExist
+	}
+	return id, path, nil
+}
+
+func userSteps(d Deps) []Check {
+	dir := d.configDir()
+	tokenPath := filepath.Join(dir, "api.token")
+	envPath := filepath.Join(dir, "agent.env")
+	return ordered([]Check{
+		{
+			Name: "container-kernel", Phase: PhaseUser, Step: 4, Title: "the Linux kernel containers boot (manual step 6)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "container", "system", "status")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "whether the kernel is installed is not visible until the container system runs"
+				}
+				if strings.Contains(out, "running") {
+					return OK, "the container system runs, so a kernel is installed"
+				}
+				return NotVerified, "whether the kernel is installed is not visible until the container system runs"
+			},
+			Fix: &Fix{
+				Cmds:  []Cmd{{Argv: []string{"container", "system", "kernel", "set", "--recommended"}}},
+				Guide: "This must run in whr's own desktop session: the services live in that user's GUI launchd domain.",
+			},
+		},
+		{
+			Name: "container-start", Phase: PhaseUser, Step: 4, Title: "the container system running (manual step 6)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "container", "system", "status")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return Fail, "the container system is not running"
+				}
+				if strings.Contains(out, "running") {
+					return OK, "the container system is running"
+				}
+				return Fail, "the container system is not running"
+			},
+			Fix: &Fix{Cmds: []Cmd{{Argv: []string{"container", "system", "start", "--disable-kernel-install"}}}},
+		},
+		{
+			Name: "standard-user-check", Phase: PhaseUser, Step: 4, Title: "containers answer for this standard user (manual steps 2 and 6)",
+			Run: func(ctx context.Context) (Status, string) {
+				if _, err := d.output(ctx, "container", "list", "--all"); err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return Fail, "container list failed: " + oneLine(err.Error()) + " (tell issue #38 before making this user an administrator)"
+				}
+				out, _ := d.output(ctx, "launchctl", "print", "gui/"+strconv.Itoa(d.UID))
+				if !strings.Contains(out, "com.apple.container") {
+					return Fail, "the container services are not in this user's GUI launchd domain (gui/" + strconv.Itoa(d.UID) + ")"
+				}
+				return OK, "the container services answer in gui/" + strconv.Itoa(d.UID)
+			},
+			Fix: &Fix{Guide: "Run `container system start --disable-kernel-install` in whr's desktop session, not over SSH or sudo. If it fails with a permission or bootstrap error for this standard user, note the message in issue #38."},
+		},
+
+		{
+			Name: "config-dir", Phase: PhaseUser, Step: 4, Title: "the private configuration directory (manual step 12)",
+			Run: func(context.Context) (Status, string) {
+				fi, err := os.Stat(dir)
+				if err != nil {
+					return Fail, dir + " does not exist"
+				}
+				if fi.Mode().Perm()&0o077 != 0 {
+					return Fail, dir + " can be entered by others"
+				}
+				return OK, dir + " is private"
+			},
+			Fix: &Fix{Desc: "make " + dir + " with mode 0700", Do: func(context.Context, Prompter) error {
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					return err
+				}
+				return os.Chmod(dir, 0o700) //nolint:gosec // a directory needs the execute bit
+			}},
+		},
+
+		{
+			Name: "api-token", Phase: PhaseUser, Step: 1, Title: "the API token (manual step 12)",
+			Run: func(context.Context) (Status, string) {
+				if _, err := config.ReadSecret(tokenPath); err != nil {
+					return Fail, oneLine(err.Error())
+				}
+				return OK, tokenPath + " is a private file"
+			},
+			Fix: &Fix{Desc: "generate a random token into " + tokenPath + " (0600, never overwritten, never shown)", Do: func(context.Context, Prompter) error {
+				b := make([]byte, 32)
+				if _, err := rand.Read(b); err != nil {
+					return err
+				}
+				return WriteSecret(tokenPath, []byte(base64.StdEncoding.EncodeToString(b)+"\n"))
+			}},
+		},
+
+		{
+			Name: "agent-key", Phase: PhaseUser, Step: 3, Title: "an agent API key (optional; a subscription needs none, D40)", Optional: true,
+			Run: func(context.Context) (Status, string) {
+				if _, err := os.Stat(envPath); err != nil {
+					return OK, "no API key: the agent signs in inside the environment (subscription)"
+				}
+				if _, err := config.ReadSecret(envPath); err != nil {
+					return Fail, oneLine(err.Error())
+				}
+				return OK, envPath + " is a private file"
+			},
+			Fix: &Fix{Desc: "ask for the key without echo and write it to " + envPath + " (0600, never overwritten, never shown)", Do: func(_ context.Context, p Prompter) error {
+				key, err := p.Secret("Agent API key (ANTHROPIC_API_KEY, not echoed)")
+				if err != nil {
+					return err
+				}
+				key = strings.TrimSpace(key)
+				if len(key) < 20 || strings.ContainsAny(key, " \t\r\n=") {
+					return errors.New("that does not look like an API key; nothing was written")
+				}
+				return WriteSecret(envPath, []byte("ANTHROPIC_API_KEY="+key+"\n"))
+			}},
+		},
+
+		{
+			Name: "github-app", Phase: PhaseUser, Step: 2, Title: "your own GitHub App (manual step 11)",
+			Run: func(context.Context) (Status, string) {
+				if id, path, err := appKey(dir); err == nil {
+					return OK, fmt.Sprintf("App %d: its key is %s; installing it on your repositories and the ruleset check stay yours (whr doctor checks the installation)", id, path)
+				}
+				return Fail, "no GitHub App key in " + dir
+			},
+			Fix: &Fix{
+				Cmds: []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", "<https name>"}}},
+				Build: func(_ context.Context, p Prompter) ([]Cmd, error) {
+					u, err := p.Line("whr's HTTPS name behind the forwarder (manual step 7), for example https://whr.example.ts.net")
+					if err != nil {
+						return nil, err
+					}
+					u = strings.TrimSpace(u)
+					if !strings.HasPrefix(u, "https://") || strings.ContainsAny(u, " \t\r\n") {
+						return nil, errors.New("that is not an https address; nothing was run")
+					}
+					return []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", u}}}, nil
+				},
+				Guide: "whr github app create prints a link: open it, press Continue to GitHub and confirm. Then install the App on your selected repositories and check that main's ruleset does not list it as a bypass actor (D15). The command asks for --public-url: the HTTPS name your forwarder gives whr (manual step 7).",
+				Open:  "https://github.com/settings/apps",
+			},
+		},
+
+		{
+			Name: "config-base", Phase: PhaseUser, Step: 1, Title: "the base configuration: listen, token, roots, repositories (manual step 13)",
+			Run: func(context.Context) (Status, string) {
+				m, err := readConfigMap(d.ConfigPath)
+				if err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						return Fail, d.ConfigPath + " does not exist"
+					}
+					return Fail, oneLine(err.Error())
+				}
+				for _, k := range []string{"listen", "api_token_file", "roots", "repositories"} {
+					if _, ok := m[k]; !ok {
+						return Fail, d.ConfigPath + " lacks " + k
+					}
+				}
+				return OK, d.ConfigPath + " has the base settings"
+			},
+			Fix: &Fix{Desc: "ask for the repository and the folders, then write " + d.ConfigPath + " (0600, never overwritten)", Do: func(_ context.Context, p Prompter) error {
+				return writeConfigBase(d, p, tokenPath, envPath)
+			}},
+		},
+		{
+			Name: "config-github", Phase: PhaseUser, Step: 2, Title: "the GitHub App in the configuration (manual step 13)",
+			Run: func(context.Context) (Status, string) {
+				if _, err := config.Load(d.ConfigPath); err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						return Fail, d.ConfigPath + " does not exist"
+					}
+					return Fail, problems(err)
+				}
+				return OK, d.ConfigPath + " is valid"
+			},
+			Fix: &Fix{Desc: "add github.app_id and github.key_file to " + d.ConfigPath + " as a diff, after a y, written atomically, keeping every other key", Do: func(_ context.Context, p Prompter) error {
+				return addGitHub(d, p)
+			}},
+		},
+		{
+			Name: "tool-store", Phase: PhaseUser, Step: 4, Title: "the tool store with Claude Code (manual step 13)",
+			Run: func(context.Context) (Status, string) {
+				c, err := config.Load(d.ConfigPath)
+				if err != nil {
+					return Fail, "needs a valid configuration (the config-file step)"
+				}
+				ents, err := os.ReadDir(filepath.Join(c.Roots.ToolStore, "profiles"))
+				if err != nil || len(ents) == 0 {
+					return Fail, "the tool store " + c.Roots.ToolStore + " has no profile"
+				}
+				return OK, "the tool store has a profile"
+			},
+			Fix: &Fix{
+				Cmds: []Cmd{{Argv: []string{d.Whr, "tools", "build", "-store", "<tool_store>", "-shim", filepath.Join(d.prefix(), "libexec", "whr", "whr-shim-linux-arm64")}}},
+				Build: func(context.Context, Prompter) ([]Cmd, error) {
+					c, err := config.Load(d.ConfigPath)
+					if err != nil {
+						return nil, errors.New("needs a valid configuration first (config-base, github-app, config-github)")
+					}
+					return []Cmd{{Argv: []string{d.Whr, "tools", "build", "-store", c.Roots.ToolStore, "-shim", filepath.Join(d.prefix(), "libexec", "whr", "whr-shim-linux-arm64")}}}, nil
+				},
+			},
+		},
+
+		{
+			Name: "service-install", Phase: PhaseUser, Step: 4, Title: "whr serve as a LaunchAgent (manual step 13)",
+			Run: func(ctx context.Context) (Status, string) {
+				if d.Runner == nil || d.GOOS != "darwin" {
+					return NotVerified, "not checked: " + errNotHere.Error()
+				}
+				m := launchd.Manager{R: runnerAdapter{d.Runner}, UID: d.UID, GOOS: d.GOOS}
+				st, err := m.Status(ctx, launchd.Spec{Label: launchd.Label, Home: d.Home})
+				if err != nil {
+					return NotVerified, oneLine(err.Error())
+				}
+				if !st.Loaded {
+					return Fail, "the job is not loaded"
+				}
+				return OK, "the job is loaded (" + st.State + ")"
+			},
+			Fix: &Fix{Cmds: []Cmd{{Argv: []string{d.Whr, "service", "install", "--config", d.ConfigPath}}}},
+		},
+	}, userOrder)
+}
+
+// userOrder is the order of `whr setup`: nothing needs a later step, so there is
+// no cycle (the base configuration comes before the App, which comes before the
+// configuration that names it).
+var userOrder = []string{
+	"config-dir", "api-token", "agent-key", "container-kernel", "container-start", "standard-user-check",
+	"config-base", "github-app", "config-github", "tool-store", "service-install",
+}
+
+// ordered returns the checks in the given order. A name with no check is a bug
+// in this package, caught by its tests.
+func ordered(checks []Check, order []string) []Check {
+	by := map[string]Check{}
+	for _, c := range checks {
+		by[c.Name] = c
+	}
+	out := make([]Check, 0, len(order))
+	for _, n := range order {
+		if c, ok := by[n]; ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// runnerAdapter lets the launchd manager ask launchctl through the same Runner.
+type runnerAdapter struct{ r Runner }
+
+func (a runnerAdapter) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return a.r.Output(ctx, append([]string{name}, args...)...)
+}
+
+func readConfigMap(path string) (map[string]any, error) {
+	raw, err := os.ReadFile(path) //nolint:gosec // the operator's own configuration file
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("%s is not JSON: %w", path, err)
+	}
+	return m, nil
+}
+
+// writeConfigBase asks for what `whr github app create` and the rest need before
+// the App exists, and writes a new file. It never overwrites one. It is not the
+// whole configuration: github comes later (config-github), so it is not validated
+// as one.
+func writeConfigBase(d Deps, p Prompter, tokenPath, envPath string) error {
+	repo, err := p.Line("Repository to work on (owner/name)")
+	if err != nil {
+		return err
+	}
+	ws, err := p.Line("Folder for workspaces [" + filepath.Join(d.Home, "workspaces") + "]")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(ws) == "" {
+		ws = filepath.Join(d.Home, "workspaces")
+	}
+	store := filepath.Join(d.Home, "tools")
+	m := map[string]any{
+		"listen":              "127.0.0.1:8787",
+		"repositories":        []map[string]any{{"name": strings.TrimSpace(repo)}},
+		"roots":               map[string]any{"workspaces": []string{strings.TrimSpace(ws)}, "tool_store": store},
+		"api_token_file":      tokenPath,
+		"agent_allowed_tools": []string{"Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"},
+	}
+	if _, err := os.Stat(envPath); err == nil {
+		m["agent_api_key_env_file"] = envPath
+	}
+	if !ownerNameRE.MatchString(strings.TrimSpace(repo)) {
+		return errors.New("that is not owner/name; nothing was written")
+	}
+	for _, dd := range []string{strings.TrimSpace(ws), store} {
+		if err := os.MkdirAll(dd, 0o700); err != nil {
+			return err
+		}
+	}
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return WriteSecret(d.ConfigPath, append(raw, '\n'))
+}
+
+var ownerNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
+
+// addGitHub adds the App to the configuration: the file is read as generic JSON,
+// so a key this version does not know is kept, the change is shown as a diff,
+// and the file is replaced atomically only after a y.
+func addGitHub(d Deps, p Prompter) error {
+	id, key, err := appKey(d.configDir())
+	if err != nil {
+		return errors.New("run the github-app step first: no github-app-<id>.pem in " + d.configDir())
+	}
+	m, err := readConfigMap(d.ConfigPath)
+	if err != nil {
+		return err
+	}
+	old, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	gh, _ := m["github"].(map[string]any)
+	if gh == nil {
+		gh = map[string]any{}
+	}
+	gh["app_id"], gh["key_file"] = id, key
+	m["github"] = gh
+	updated, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := validateKeepingUnknown(m); err != nil {
+		return errors.New("the configuration would still not start, so it was not changed: " + problems(err))
+	}
+	p.Show(lineDiff(string(old), string(updated)))
+	ok, err := p.Confirm("Write this change to " + d.ConfigPath)
+	if err != nil || !ok {
+		if err == nil {
+			err = errors.New("not written")
+		}
+		return err
+	}
+	return replaceFile(d.ConfigPath, append(updated, '\n'))
+}
+
+// lineDiff shows the lines that were added and removed, one per line.
+func lineDiff(before, after string) string {
+	seen := func(s string) map[string]int {
+		m := map[string]int{}
+		for _, l := range strings.Split(s, "\n") {
+			m[l]++
+		}
+		return m
+	}
+	b, a := seen(before), seen(after)
+	var out []string
+	for _, l := range strings.Split(before, "\n") {
+		if a[l] == 0 {
+			out = append(out, "- "+l)
+		} else {
+			a[l]--
+		}
+	}
+	for _, l := range strings.Split(after, "\n") {
+		if b[l] == 0 {
+			out = append(out, "+ "+l)
+		} else {
+			b[l]--
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// replaceFile replaces a file atomically with mode 0600: the new content is
+// written beside it and renamed over it.
+func replaceFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".whr-config-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err := os.Chmod(tmp.Name(), 0o600); err != nil { //nolint:gosec // the configuration is private
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+var unknownFieldRE = regexp.MustCompile(`unknown field "([^"]+)"`)
+
+// validateKeepingUnknown checks a configuration the way `whr serve` would, but a
+// top-level key this version does not know (a newer whr wrote it) does not stop
+// the wizard: the key is kept in the file, and only the rest is validated.
+func validateKeepingUnknown(m map[string]any) error {
+	probe := map[string]any{}
+	for k, v := range m {
+		probe[k] = v
+	}
+	for range 20 {
+		raw, err := json.Marshal(probe)
+		if err != nil {
+			return err
+		}
+		_, err = config.Parse(raw)
+		if err == nil {
+			return nil
+		}
+		match := unknownFieldRE.FindStringSubmatch(err.Error())
+		if match == nil {
+			return err
+		}
+		if _, top := probe[match[1]]; !top {
+			return err
+		}
+		delete(probe, match[1])
+	}
+	return errors.New("too many unknown keys")
+}
