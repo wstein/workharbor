@@ -436,14 +436,27 @@ func (s *Service) startWait() time.Duration {
 }
 
 // repoEnvironment reads the repository's environment from its default branch,
-// in the supervisor's own copy (D38). A repository that cannot be read yields the
-// zero environment and the failure is reported: nothing it would have requested
-// is allowed, and nothing it would have run is run.
+// in the supervisor's own copy (D38): the devcontainer file, the Dockerfile,
+// postCreateCommand and the egress requests, never from the integration branch,
+// where an approved agent commit could configure the agent's next environment
+// (design §6). A repository that cannot be read, or whose default branch the forge
+// cannot name, yields the zero environment and the failure is reported: nothing it
+// would have requested is allowed, and nothing it would have run is run.
 func (w *Workspaces) repoEnvironment(ctx context.Context, ws domain.Workspace) (RepoEnvironment, bool) {
 	if w.cfg.Environment == nil {
 		return RepoEnvironment{}, false
 	}
-	env, err := w.cfg.Environment(ctx, ws.Repo, ws.Integration)
+	db, ok := w.cfg.Issues.(forge.DefaultBrancher)
+	if !ok {
+		w.svc.report(fmt.Errorf("the environment of %s: the forge adapter cannot name the default branch, so it is not read", ws.Repo))
+		return RepoEnvironment{}, false
+	}
+	def, err := db.DefaultBranchName(ctx, ws.Repo)
+	if err != nil {
+		w.svc.report(fmt.Errorf("the environment of %s: the default branch could not be read: %w", ws.Repo, err))
+		return RepoEnvironment{}, false
+	}
+	env, err := w.cfg.Environment(ctx, ws.Repo, def)
 	if err != nil {
 		w.svc.report(fmt.Errorf("the environment of %s: %w", ws.Repo, err))
 		return RepoEnvironment{}, false

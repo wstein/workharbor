@@ -239,3 +239,52 @@ func eventually(t *testing.T, ok func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// The environment (devcontainer, Dockerfile, postCreateCommand, egress requests) is
+// read at the repository's default branch, never at the workspace's integration
+// branch, so an approved agent commit there cannot configure the next environment
+// (design §6).
+func TestTheEnvironmentIsReadAtTheDefaultBranchNotTheIntegrationBranch(t *testing.T) {
+	r := newWsRig(t)
+	r.egress = true
+	r.issues.DefaultBranch = "trunk"
+	var read []string
+	r.ws.cfg.Environment = func(_ context.Context, _, branch string) (RepoEnvironment, error) {
+		read = append(read, branch)
+		return RepoEnvironment{}, errors.New("nothing to see")
+	}
+	_, a := r.create("docs-ws")
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(read) == 0 {
+		t.Fatal("the environment was never read")
+	}
+	for _, b := range read {
+		if b != "trunk" {
+			t.Errorf("the environment was read at %q: the workspace's integration branch is main, the default is trunk", b)
+		}
+	}
+}
+
+// A forge that cannot name the default branch gets no environment read at all.
+func TestNoEnvironmentIsReadWhenTheDefaultBranchIsUnknown(t *testing.T) {
+	r := newWsRig(t)
+	r.egress = true
+	r.ws.cfg.Issues = struct{ IssueSource }{r.issues}
+	called := false
+	r.ws.cfg.Environment = func(context.Context, string, string) (RepoEnvironment, error) {
+		called = true
+		return RepoEnvironment{}, nil
+	}
+	_, a := r.create("docs-ws")
+	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Error("the environment was read although the default branch is unknown")
+	}
+	if len(r.bgErrs) == 0 {
+		t.Error("the refusal was not reported")
+	}
+}
