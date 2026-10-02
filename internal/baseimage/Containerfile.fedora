@@ -2,7 +2,7 @@
 # by digest, plus git and CA certificates, and nothing else. The agent CLIs stay
 # in the tool store. Changing the digest changes the image's tag, so the next
 # start builds it again.
-FROM docker.io/library/fedora@sha256:498c452f32a739b61f0ef215bce9924ebc4866cbe44710f58157d77723b7a6d2
+FROM docker.io/library/fedora@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80
 RUN dnf -y --setopt=install_weak_deps=False install git-core ca-certificates \
     && dnf clean all \
     && rm -rf /var/cache/dnf /var/log/dnf*
