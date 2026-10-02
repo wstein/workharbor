@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -278,6 +279,43 @@ func (w *Workspaces) buildEnv(a domain.Agent) []string {
 		"CARGO_TARGET_DIR=" + path.Join(dir, "cargo-target"),
 		"UV_PROJECT_ENVIRONMENT=" + path.Join(dir, "venv"),
 	}
+}
+
+// noteRepoSize counts the files the agent's checkout tracks and records it in
+// the task's events, with a warning above RepoSizeWarnFiles (D39). It runs in the
+// environment, because the host never runs git in a workspace, and it never
+// fails a start: a count that cannot be made is reported and the run goes on.
+func (w *Workspaces) noteRepoSize(ctx context.Context, task, run domain.ID, ws domain.Workspace, a domain.Agent) {
+	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	out, code, err := w.svc.exec(cctx, string(ws.EnvID), runtime.ExecRequest{
+		Cmd: []string{"sh", "-c", `git -C "$0" ls-files -z | tr -cd '\000' | wc -c`, a.Worktree},
+		Env: gitEnv(),
+	})
+	if err == nil && code != 0 {
+		err = fmt.Errorf("exited %d: %s", code, strings.TrimSpace(out))
+	}
+	var files int
+	if err == nil {
+		if files, err = strconv.Atoi(strings.TrimSpace(out)); err != nil {
+			err = fmt.Errorf("the count %q is not a number", strings.TrimSpace(out))
+		}
+	}
+	if err != nil {
+		w.svc.report(fmt.Errorf("count the tracked files of %s: %w", a.Worktree, err))
+		return
+	}
+	ev, err := domain.NewRepoSizeEvent(task, run, files, w.svc.clock.Now())
+	if err != nil {
+		w.svc.report(err)
+		return
+	}
+	saved, err := w.svc.store.Append(ctx, ev)
+	if err != nil {
+		w.svc.report(fmt.Errorf("record the size of %s: %w", a.Worktree, err))
+		return
+	}
+	w.svc.publish(saved)
 }
 
 // addWorktree makes the agent's worktree and branch inside the environment. The
@@ -608,6 +646,7 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 	}
 	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
 	spec.Env = append(spec.Env, w.buildEnv(a)...)
+	w.noteRepoSize(ctx, task, run, ws, a)
 	if err := w.postCreateWithin(ctx, ws, a, spec.Env, env); err != nil {
 		return w.abortStart(ctx, task, run, sl, err)
 	}

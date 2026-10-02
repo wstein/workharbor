@@ -39,6 +39,9 @@ type Fake struct {
 	// GitExit is the exit code of a `git` command in an environment, for a
 	// test of a git step that fails. Zero (the default) succeeds.
 	GitExit int
+	// TrackedFiles is what the fake answers to the supervisor's count of the files a
+	// checkout tracks (a `sh -c` that runs `git ls-files`). Guarded by the fake's lock.
+	TrackedFiles int
 	// OnExec, when set, is asked first about every command: a test that needs
 	// real output (a git bundle made by the host standing in for the guest) says
 	// what the command wrote and how it ended. handled false falls back to the

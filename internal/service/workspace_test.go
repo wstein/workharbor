@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -696,6 +697,101 @@ func TestWithoutABuildVolumeNothingIsRelocated(t *testing.T) {
 	for _, e := range r.agent.Specs[0].Env {
 		if strings.HasPrefix(e, "CARGO_TARGET_DIR=") || strings.HasPrefix(e, "UV_PROJECT_ENVIRONMENT=") {
 			t.Errorf("%s was set without a build volume: the path would not exist", e)
+		}
+	}
+}
+
+func repoSizeEvents(t *testing.T, r *wsRig, task domain.ID) []domain.RepoSize {
+	t.Helper()
+	evs, err := r.store.EventsSince(bg, task, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []domain.RepoSize
+	for _, e := range evs {
+		if e.Kind != domain.EventRepoSize {
+			continue
+		}
+		if e.Tier != domain.TierAudit {
+			t.Errorf("the size entry is in tier %s, want audit", e.Tier)
+		}
+		var rs domain.RepoSize
+		if err := json.Unmarshal(e.Payload, &rs); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, rs)
+	}
+	return out
+}
+
+// A run's start counts the files its checkout tracks and records it in the task's
+// events; above 50 000 it warns (D39).
+func TestARunRecordsHowManyFilesItsCheckoutTracksAndWarnsWhenItIsVeryLarge(t *testing.T) {
+	for _, tc := range []struct {
+		files int
+		warn  bool
+	}{{120, false}, {domain.RepoSizeWarnFiles, false}, {domain.RepoSizeWarnFiles + 1, true}, {153_000, true}} {
+		r := newWsRig(t)
+		r.fake.TrackedFiles = tc.files
+		_, a := r.create("run")
+		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := repoSizeEvents(t, r, task)
+		if len(got) != 1 || got[0].TrackedFiles != tc.files || got[0].Warn != tc.warn || got[0].RunID != run {
+			t.Fatalf("%d files: events %+v", tc.files, got)
+		}
+		if tc.warn && !strings.Contains(got[0].Message, "slow") {
+			t.Errorf("the warning says nothing about what to expect: %q", got[0].Message)
+		}
+		if !tc.warn && got[0].Message != "" {
+			t.Errorf("a warning on %d files: %q", tc.files, got[0].Message)
+		}
+	}
+}
+
+// A count that cannot be made never fails the start: it is reported.
+func TestACountThatFailsIsReportedAndTheRunStartsAnyway(t *testing.T) {
+	for name, answer := range map[string]struct {
+		out  string
+		code int
+	}{"exit": {"", 3}, "not a number": {"lots\n", 0}} {
+		r := newWsRig(t)
+		r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+			if len(cmd) > 2 && cmd[0] == "sh" && strings.Contains(cmd[2], "ls-files") {
+				return []byte(answer.out), "boom", answer.code, true
+			}
+			return nil, "", 0, false
+		}
+		_, a := r.create("run")
+		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !r.svc.attached(run) {
+			t.Errorf("%s: the run did not start", name)
+		}
+		if got := repoSizeEvents(t, r, task); len(got) != 0 {
+			t.Errorf("%s: an event for a count that failed: %+v", name, got)
+		}
+		var found bool
+		for _, e := range r.reported() {
+			found = found || strings.Contains(e.Error(), "count the tracked files")
+		}
+		if !found {
+			t.Errorf("%s: nothing was reported: %v", name, r.reported())
+		}
+	}
+}
+
+func TestARepoSizeNeedsATaskARunAndACount(t *testing.T) {
+	for _, bad := range []struct {
+		task, run domain.ID
+		files     int
+	}{{"", "r", 1}, {"t", "", 1}, {"t", "r", -1}} {
+		if _, err := domain.NewRepoSizeEvent(bad.task, bad.run, bad.files, t0); err == nil {
+			t.Errorf("%+v was accepted", bad)
 		}
 	}
 }
