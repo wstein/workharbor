@@ -72,7 +72,7 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	if rn, _ := agg.Run(run); rn.State != domain.RunStarting || agg.Task().State != domain.TaskAwaitingGuidance {
 		t.Fatalf("run %s, task %s: the run stays starting and the task waits", rn.State, agg.Task().State)
 	}
-	if len(r.agent.Specs) != 0 {
+	if r.agent.Started() != 0 {
 		t.Fatal("the agent started before the requests were answered")
 	}
 	open := r.openEgress(task)
@@ -92,20 +92,25 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.agent.Specs) != 0 {
+	if r.agent.Started() != 0 {
 		t.Fatal("the agent started with a request still open")
 	}
 	// The last one starts it, with the allowed host in the sidecar and the denied one out.
 	if err := r.svc.AnswerDecision(bg, open[1].ID, domain.Response{Option: domain.AnswerDeny, By: "werner", At: t0}); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.agent.Specs) != 1 {
-		t.Fatalf("agent starts = %d, want 1", len(r.agent.Specs))
+	eventually(t, func() bool { return r.agent.Started() == 1 })
+	if r.agent.Started() != 1 {
+		t.Fatalf("agent starts = %d, want 1", r.agent.Started())
 	}
 	if got := r.allowOf(w.EnvID); !reflect.DeepEqual(got, []string{"api.anthropic.com", "proxy.golang.org"}) {
 		t.Errorf("allowlist = %v, want the base and the allowed host, not the denied one", got)
 	}
-	agg, _ = r.store.LoadTask(bg, task)
+	eventually(t, func() bool {
+		agg, _ = r.store.LoadTask(bg, task)
+		rn, _ := agg.Run(run)
+		return rn.State == domain.RunRunning
+	})
 	if rn, _ := agg.Run(run); rn.State != domain.RunRunning || agg.Task().State != domain.TaskRunning {
 		t.Errorf("run %s, task %s after the answers", rn.State, agg.Task().State)
 	}
@@ -128,8 +133,8 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	if open := r.openEgress(task2); len(open) != 0 {
 		t.Errorf("answered hosts were asked again: %+v", open)
 	}
-	if len(r.agent.Specs) != 2 {
-		t.Errorf("the second run did not start at once: %d agent starts", len(r.agent.Specs))
+	if r.agent.Started() != 2 {
+		t.Errorf("the second run did not start at once: %d agent starts", r.agent.Started())
 	}
 }
 
@@ -143,16 +148,22 @@ func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.agent.Specs) != 0 || len(r.openEgress(task)) != 2 {
+	if r.agent.Started() != 0 || len(r.openEgress(task)) != 2 {
 		t.Fatal("the run did not wait")
 	}
 	r.clock.now = t0.Add(domain.DefaultApprovalTimeout + time.Minute)
 	if _, err := r.svc.Reconcile(bg); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.agent.Specs) != 1 {
-		t.Fatalf("agent starts = %d: an expiry opens the way", len(r.agent.Specs))
+	eventually(t, func() bool { return r.agent.Started() == 1 })
+	if r.agent.Started() != 1 {
+		t.Fatalf("agent starts = %d: an expiry opens the way", r.agent.Started())
 	}
+	eventually(t, func() bool {
+		agg, _ := r.store.LoadTask(bg, task)
+		rn, _ := agg.Run(run)
+		return rn.State == domain.RunRunning
+	})
 	agg, _ := r.store.LoadTask(bg, task)
 	if rn, _ := agg.Run(run); rn.State != domain.RunRunning {
 		t.Errorf("run = %s", rn.State)
@@ -185,7 +196,7 @@ func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
 	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
 		t.Error("an answer to a superseded request was accepted")
 	}
-	if len(r.agent.Specs) != 0 {
+	if r.agent.Started() != 0 {
 		t.Error("an agent started for a cancelled run")
 	}
 	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
@@ -208,10 +219,23 @@ func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
 	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.agent.Specs) != 1 || len(r.bgErrs) != 1 {
-		t.Errorf("agent starts %d, reported %v", len(r.agent.Specs), r.bgErrs)
+	if r.agent.Started() != 1 || len(r.bgErrs) != 1 {
+		t.Errorf("agent starts %d, reported %v", r.agent.Started(), r.bgErrs)
 	}
 	if !reflect.DeepEqual(r.allowOf(w.EnvID), []string{"api.anthropic.com"}) {
 		t.Errorf("an unreadable repository changed the allowlist: %v", r.allowOf(w.EnvID))
+	}
+}
+
+// eventually waits up to five seconds for what happens on a goroutine of the
+// service's own, such as the start of an agent.
+func eventually(t *testing.T, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !ok() {
+		if time.Now().After(deadline) {
+			return // the caller's own check reports what is wrong
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

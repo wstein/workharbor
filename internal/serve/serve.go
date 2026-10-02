@@ -99,11 +99,12 @@ func Run(ctx context.Context, d Deps) error {
 		return err
 	}
 	scfg := service.Config{
-		Owner:   d.Owner,
-		Budgets: Budgets(d.Config.Budgets),
-		Spec:    d.AgentSpec,
-		NewID:   NewID,
-		OnError: func(err error) { logf("background error: %v", err) },
+		Owner:             d.Owner,
+		PostCreateTimeout: d.Config.Environment.PostCreate(),
+		Budgets:           Budgets(d.Config.Budgets),
+		Spec:              d.AgentSpec,
+		NewID:             NewID,
+		OnError:           func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
 	addRevoker(&scfg, d)

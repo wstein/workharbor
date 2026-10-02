@@ -178,3 +178,11 @@ func (f *Fake) Resume(ctx context.Context, spec agent.StartSpec, sessionID strin
 	}
 	return f.launch(ctx, spec, sessionID, false), nil
 }
+
+// Started returns how many sessions were started or resumed so far. Unlike
+// reading Specs, it is safe while a session is being started in another goroutine.
+func (f *Fake) Started() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.Specs)
+}

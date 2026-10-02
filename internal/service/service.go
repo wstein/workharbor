@@ -79,6 +79,13 @@ type Config struct {
 	// RevokeTokens revokes the forge tokens the supervisor holds and returns how
 	// many it revoked: the token half of KillAll. Optional.
 	RevokeTokens func(ctx context.Context) (int, error)
+	// PostCreateTimeout bounds a repository's postCreateCommand, which runs before
+	// the agent starts. Default 10 minutes. A command still running then fails
+	// the run with that reason.
+	PostCreateTimeout time.Duration
+	// StartWait is how long StartTask waits for the agent to start before it
+	// returns with the run still starting. Default 30 seconds.
+	StartWait time.Duration
 	// Budgets are the per-run and per-task limits on tokens and cost (§7.4).
 	// The zero value sets none. Optional.
 	Budgets Budgets
@@ -98,6 +105,9 @@ type Service struct {
 	wg       sync.WaitGroup
 	mu       sync.Mutex
 	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
+	// starts are the agent starts in progress, by run: at most one each, detached
+	// from the request that began it and cancelled by Cancel and Shutdown.
+	starts map[domain.ID]*startJob
 	// egressWaits are the runs that stay starting until their egress requests are
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
@@ -153,6 +163,9 @@ func (s *Service) Wait() { s.wg.Wait() }
 func (s *Service) Shutdown() {
 	s.mu.Lock()
 	s.closing = true // from now on attach stops a session instead of adding it
+	for _, j := range s.starts {
+		j.cancel() // a start in progress ends: its run stays starting for the next start's reconcile
+	}
 	live := make([]agent.Session, 0, len(s.sessions))
 	for _, sl := range s.sessions {
 		if sl.sess != nil {
@@ -417,6 +430,7 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 	})
 	if err == nil {
 		s.stopSession(live)
+		s.cancelStart(live)    // a postCreate or an agent start that is already running stops
 		s.dropEgressWait(live) // a run still waiting for its egress answers never starts
 	}
 	return err

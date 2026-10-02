@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -200,7 +201,80 @@ func (s *Service) continueEgress(ctx context.Context, task, run domain.ID) error
 	if w == nil {
 		return nil // another caller got there first
 	}
-	return w.finish(ctx)
+	job := s.startDetached(ctx, run, w.finish)
+	if job == nil {
+		s.end(run, w.sl) // the supervisor is shutting down: the reconciler resumes the run later
+		return nil
+	}
+	s.reportWhenDone(run, job) // nobody waits for this start, so its failure is reported here
+	return nil
+}
+
+// startJob is an agent start in progress.
+type startJob struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	err    error // how the start ended; valid after done is closed
+}
+
+// startDetached runs fn, the start of a run's agent, in a goroutine of its own,
+// not on the context of the request that caused it: a caller that drops the
+// connection must not fail a run whose answer was stored, and a slow postCreate
+// must not hold the reconciler. At most one start runs per run: a second call
+// returns true without starting another. It is tracked, so Shutdown cancels and
+// waits for it, and Cancel stops it. It returns the job, which the caller may
+// wait on, or nil when the supervisor is shutting down and nothing was started.
+// A second call for a run whose start is running returns that start's job.
+func (s *Service) startDetached(parent context.Context, run domain.ID, fn func(ctx context.Context) error) *startJob {
+	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return nil
+	}
+	if job, running := s.starts[run]; running {
+		s.mu.Unlock()
+		return job
+	}
+	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
+	job := &startJob{cancel: cancel, done: make(chan struct{})}
+	if s.starts == nil {
+		s.starts = map[domain.ID]*startJob{}
+	}
+	s.starts[run] = job
+	s.wg.Add(1) // under s.mu, like attach: before Shutdown sets closing or not at all
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		defer close(job.done)
+		err := fn(ctx)
+		job.err = err
+		s.mu.Lock()
+		delete(s.starts, run)
+		s.mu.Unlock()
+		cancel()
+	}()
+	return job
+}
+
+// reportWhenDone reports how a start ended, if it failed and was not cancelled,
+// for a caller that does not wait for it.
+func (s *Service) reportWhenDone(run domain.ID, job *startJob) {
+	go func() {
+		<-job.done
+		if job.err != nil && !errors.Is(job.err, context.Canceled) {
+			s.report(fmt.Errorf("start run %s: %w", run, job.err))
+		}
+	}()
+}
+
+// cancelStart stops the start of a run, if one is in progress.
+func (s *Service) cancelStart(run domain.ID) {
+	s.mu.Lock()
+	j := s.starts[run]
+	s.mu.Unlock()
+	if j != nil {
+		j.cancel()
+	}
 }
 
 // continueAllEgress is continueEgress for every run that waits: the reconciler
@@ -230,4 +304,15 @@ type RepoEnvironment struct {
 	// environment has a Dockerfile, once per commit, or returns the image the
 	// file names. Nil when the environment is the supervisor's default.
 	Image func(ctx context.Context) (string, error)
+}
+
+// startDoneChan returns the channel that closes when the start of a run has
+// ended, or nil when none is in progress.
+func (s *Service) startDoneChan(run domain.ID) <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if j := s.starts[run]; j != nil {
+		return j.done
+	}
+	return nil
 }

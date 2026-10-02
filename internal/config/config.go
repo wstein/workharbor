@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unicode"
 
 	"github.com/wstein/workharbor/internal/baseimage"
@@ -239,6 +240,21 @@ type Environment struct {
 	CPUs        int      `json:"cpus,omitempty"`      // default 2
 	MemoryMB    int      `json:"memory_mb,omitempty"` // default 4096
 	DiskMB      int      `json:"disk_mb,omitempty"`   // default 10240
+	// PostCreateTimeout bounds the repository's postCreateCommand, a Go duration
+	// such as "10m" (the default). A command still running then fails the run.
+	PostCreateTimeout string `json:"post_create_timeout,omitempty"`
+}
+
+// DefaultPostCreateTimeout is how long a postCreateCommand may run.
+const DefaultPostCreateTimeout = 10 * time.Minute
+
+// PostCreate returns the post-create timeout, the default when none is set.
+// Validate has checked that a set value is a duration.
+func (e Environment) PostCreate() time.Duration {
+	if d, err := time.ParseDuration(e.PostCreateTimeout); err == nil && d > 0 {
+		return d
+	}
+	return DefaultPostCreateTimeout
 }
 
 // Defaults of Environment.
@@ -409,6 +425,11 @@ func (c *Config) Validate() error {
 	}
 	if e := c.Environment; e.CPUs < 0 || e.MemoryMB < 0 || e.DiskMB < 0 {
 		add("environment: cpus, memory_mb and disk_mb must not be negative")
+	}
+	if v := c.Environment.PostCreateTimeout; v != "" {
+		if d, err := time.ParseDuration(v); err != nil || d < time.Second || d > 6*time.Hour {
+			add("environment.post_create_timeout: %q is not a duration from 1s to 6h, such as \"10m\"", v)
+		}
 	}
 	for _, h := range c.Environment.EgressAllow {
 		if !validEgressHost(h) {

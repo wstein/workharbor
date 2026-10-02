@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/devcontainer"
@@ -400,7 +401,35 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 	if waiting {
 		return nil // the run stays starting; the answers start the agent
 	}
-	return start(ctx)
+	// The start runs on its own context and is tracked (startDetached): the
+	// request may end, and Cancel may stop it. The request waits for it a while,
+	// so a start that is quick returns with the agent running, and a slow one
+	// (a long postCreate) returns with the run starting.
+	job := w.svc.startDetached(ctx, run, start)
+	if job == nil {
+		w.svc.end(run, sl)
+		return errors.New("the supervisor is shutting down")
+	}
+	select {
+	case <-job.done:
+		if job.err != nil && !errors.Is(job.err, context.Canceled) {
+			return job.err // the run has failed into a Decision, as before
+		}
+	case <-ctx.Done():
+		w.svc.reportWhenDone(run, job)
+	case <-time.After(w.svc.startWait()):
+		w.svc.reportWhenDone(run, job)
+	}
+	return nil
+}
+
+// startWait is how long StartTask waits for the agent to start before it returns
+// with the run still starting.
+func (s *Service) startWait() time.Duration {
+	if s.cfg.StartWait > 0 {
+		return s.cfg.StartWait
+	}
+	return 30 * time.Second
 }
 
 // repoEnvironment reads the repository's environment from its default branch,
@@ -520,9 +549,7 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		return nil
 	}
 	if err := w.applyEgress(ctx, ws); err != nil {
-		w.svc.end(run, sl)
-		var rep Report
-		return errors.Join(fmt.Errorf("apply the egress allowlist: %w", err), w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep))
+		return w.abortStart(ctx, task, run, sl, fmt.Errorf("apply the egress allowlist: %w", err))
 	}
 	spec := w.svc.cfg.Spec(agg.Task(), r)
 	w.svc.fillApprover(&spec, task, run)
@@ -531,24 +558,23 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		spec.Prompt = prompt
 	}
 	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
-	if err := w.postCreate(ctx, ws, a, spec.Env, env); err != nil {
-		w.svc.end(run, sl)
-		var rep Report
-		return errors.Join(err, w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep))
+	if err := w.postCreateWithin(ctx, ws, a, spec.Env, env); err != nil {
+		return w.abortStart(ctx, task, run, sl, err)
 	}
-	// The session outlives the request that starts it (the API request returns
-	// at once; the agent runs for hours). Shutdown stops it.
+	// The session outlives this start (the agent runs for hours): it gets a
+	// context that is never cancelled by Cancel of the start; Shutdown and a stop
+	// end it. A cancel that came while the agent was starting stops it at once.
 	sess, err := w.svc.ag.Start(context.WithoutCancel(ctx), spec)
 	if err != nil {
+		return w.abortStart(ctx, task, run, sl, err)
+	}
+	if ctx.Err() != nil {
+		_ = sess.Stop(context.WithoutCancel(ctx))
 		w.svc.end(run, sl)
-		var rep Report
-		if ferr := w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep); ferr != nil {
-			return errors.Join(err, ferr)
-		}
-		return err
+		return ctx.Err()
 	}
 	if err := w.svc.update(ctx, task, func(t *domain.TaskAggregate) error { return t.MarkRunning(run) }); err != nil {
-		_ = sess.Stop(ctx)
+		_ = sess.Stop(context.WithoutCancel(ctx))
 		w.svc.end(run, sl)
 		return err
 	}
@@ -738,6 +764,38 @@ func (w *Workspaces) workflowOf(repo string) string {
 		return p
 	}
 	return string(policy.DefaultPreset)
+}
+
+// abortStart ends a run whose start failed: its slot is freed and, unless the
+// start was cancelled (the task was cancelled and the run stopped), the run
+// fails into a retry-or-cancel Decision. The error is returned for the report.
+func (w *Workspaces) abortStart(ctx context.Context, task, run domain.ID, sl *slot, cause error) error {
+	w.svc.end(run, sl)
+	if ctx.Err() != nil {
+		return ctx.Err() // cancelled: nothing to fail
+	}
+	var rep Report
+	if err := w.svc.failRun(context.WithoutCancel(ctx), task, run, &rep); err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
+}
+
+// postCreateWithin runs postCreate for at most the configured time (default ten
+// minutes). A command still running then fails the run with that reason, and a
+// cancel of the start stops it.
+func (w *Workspaces) postCreateWithin(ctx context.Context, ws domain.Workspace, a domain.Agent, env []string, re RepoEnvironment) error {
+	limit := w.svc.cfg.PostCreateTimeout
+	if limit <= 0 {
+		limit = 10 * time.Minute
+	}
+	pctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	err := w.postCreate(pctx, ws, a, env, re)
+	if err != nil && ctx.Err() == nil && errors.Is(pctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("the post-create command did not finish within %s", limit)
+	}
+	return err
 }
 
 // postCreate runs the repository's postCreateCommand inside the environment, as
