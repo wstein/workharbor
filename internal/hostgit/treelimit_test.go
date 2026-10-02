@@ -307,3 +307,16 @@ func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
 		t.Errorf("within the budget: %v", err)
 	}
 }
+
+// The sizes are matched to their blobs by object name, so a line for a missing
+// object does not shift the sizes after it onto the wrong blob.
+func TestBlobBytesMatchesSizesByObjectName(t *testing.T) {
+	blobs := map[string]int64{"aaa": 2, "bbb": 1}
+	out := "zzz missing\naaa 100\nbbb 10\n"
+	if got := blobBytes(out, blobs, 1<<20); got != 210 {
+		t.Errorf("blobBytes = %d, want 210", got)
+	}
+	if got := blobBytes(out, blobs, 205); got <= 205 {
+		t.Errorf("blobBytes = %d, want more than the limit 205", got)
+	}
+}

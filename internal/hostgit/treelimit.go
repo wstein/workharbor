@@ -175,12 +175,10 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 	// Count per occurrence, like checkTree's per-path rule: a bundle stores a blob
 	// once, but the autosquash writes a copy at every path that re-adds it.
 	var in strings.Builder
-	ids := make([]string, 0, len(blobs))
 	for id := range blobs {
-		ids = append(ids, id)
 		in.WriteString(id + "\n")
 	}
-	sc := r.g.command(ctx, r.path, false, nil, "cat-file", "--batch-check=%(objectsize)")
+	sc := r.g.command(ctx, r.path, false, nil, "cat-file", "--batch-check=%(objectname) %(objectsize)")
 	sc.Stdin = strings.NewReader(in.String())
 	var serr bytes.Buffer
 	sc.Stderr = &serr
@@ -188,20 +186,35 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 	if err != nil {
 		return fmt.Errorf("git cat-file: %w: %s", err, strings.TrimSpace(serr.String()))
 	}
-	var total int64
-	for i, f := range strings.Fields(string(sizes)) {
-		if n, perr := strconv.ParseInt(f, 10, 64); perr == nil && i < len(ids) {
-			if n > 0 && blobs[ids[i]] > (maxBytes-total)/n {
-				total = maxBytes + 1
-				break
-			}
-			total += n * blobs[ids[i]]
-		}
-	}
+	total := blobBytes(string(sizes), blobs, maxBytes)
 	if total > maxBytes {
 		return fmt.Errorf("%w: the topic adds more than %d bytes", ErrTreeTooLarge, maxBytes)
 	}
 	return nil
+}
+
+// blobBytes sums the sizes that `cat-file --batch-check=%(objectname) %(objectsize)`
+// printed, each weighted by its occurrences in blobs. Sizes are matched by object name,
+// not by position: a missing object prints "<name> missing" and must not shift the rest.
+// It returns more than maxBytes as soon as the total passes it.
+func blobBytes(out string, blobs map[string]int64, maxBytes int64) int64 {
+	var total int64
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			continue
+		}
+		n, perr := strconv.ParseInt(f[1], 10, 64)
+		count, ok := blobs[f[0]]
+		if perr != nil || !ok {
+			continue
+		}
+		if n > 0 && count > (maxBytes-total)/n {
+			return maxBytes + 1
+		}
+		total += n * count
+	}
+	return total
 }
 
 func (r *Repo) checkTree(ctx context.Context, ref string, maxEntries, maxBytes int64) error {
