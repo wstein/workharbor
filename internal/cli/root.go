@@ -100,19 +100,28 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.PersistentFlags().StringVar(&st.configPath, "config", "", "the configuration file (default $WHR_CONFIG or ~/.config/whr/config.json)")
 	root.PersistentFlags().BoolVar(&st.asJSON, "json", false, "print the API's envelope (or one JSON event per line for logs -f) instead of text")
 
-	add := func(c *cobra.Command) {
-		inner := c.RunE
-		if inner != nil {
+	// A command that ran owns its errors: only cobra's own refusal of the command
+	// line, which happens before any RunE, is a usage error. The mark goes on
+	// every command of the tree, not only the top ones.
+	var mark func(c *cobra.Command)
+	mark = func(c *cobra.Command) {
+		if inner := c.RunE; inner != nil {
 			c.RunE = func(cmd *cobra.Command, args []string) error {
 				*ran = true
 				return inner(cmd, args)
 			}
 		}
 		c.SilenceErrors, c.SilenceUsage = true, true
+		for _, sub := range c.Commands() {
+			mark(sub)
+		}
+	}
+	add := func(c *cobra.Command) {
+		mark(c)
 		root.AddCommand(c)
 	}
 	for _, c := range []*cobra.Command{
-		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st),
+		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st),
 	} {
 		add(c)
 	}

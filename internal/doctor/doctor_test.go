@@ -2,20 +2,30 @@ package doctor
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
 type rig struct {
 	dir, cfgPath string
 	cfg          config.Config
+	gh           *httptest.Server
+	appPerms     map[string]string
+	instStatus   int
+	instPerms    map[string]string
+	appStatus    int
 }
 
 func newRig(t *testing.T) *rig {
@@ -45,8 +55,31 @@ func newRig(t *testing.T) *rig {
 		AgentAPIKeyEnvFile: secret("agent.env", "ANTHROPIC_API_KEY=x\n"),
 		APITokenFile:       secret("api.token", "x\n"),
 	}
+	r.appPerms, r.instPerms, r.instStatus, r.appStatus = github.AppPermissions(), github.AppPermissions(), 200, 200
+	r.gh = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case req.URL.Path == "/app":
+			w.WriteHeader(r.appStatus)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "slug": "workharbor-x", "permissions": r.appPerms, "message": "Bad credentials"})
+		case strings.HasSuffix(req.URL.Path, "/installation"):
+			w.WriteHeader(r.instStatus)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 5, "permissions": r.instPerms, "message": "Not Found"})
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	t.Cleanup(r.gh.Close)
 	return r
 }
+
+var testKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
 
 func (r *rig) write(t *testing.T) {
 	t.Helper()
@@ -64,6 +97,9 @@ func (r *rig) deps() Deps {
 		ConfigPath: r.cfgPath, Home: filepath.Join(r.dir, "home"), FS: runtime.OSFS{},
 		LookPath: func(string) (string, error) { return "/usr/local/bin/container", nil },
 		Probe:    func(context.Context) error { return nil },
+		GitHub: func(c *config.Config) (*github.Client, error) {
+			return github.New(github.Config{AppID: c.GitHub.AppID, Key: testKey, Repos: []string{"wstein/workharbor"}, BaseURL: r.gh.URL})
+		},
 	}
 }
 
@@ -91,7 +127,7 @@ func TestAHealthyHostPassesAndStillSaysWhatIsNotVerified(t *testing.T) {
 		t.Fatalf("failed: %+v", rs)
 	}
 	got := statuses(rs)
-	for _, name := range []string{"config", "server", "forge-key", "agent-login", "runtime", "mounts"} {
+	for _, name := range []string{"config", "server", "forge-key", "forge-app", "agent-login", "runtime", "mounts"} {
 		if got[name] != OK {
 			t.Errorf("%s = %s, want ok", name, got[name])
 		}
@@ -170,5 +206,45 @@ func TestSkippedChecksAreReportedAndNotRun(t *testing.T) {
 	rs := run(d, "server")
 	if statuses(rs)["server"] != Skipped || Failed(rs) {
 		t.Fatalf("%+v", rs)
+	}
+}
+
+func forgeAppDetail(rs []Result) string {
+	for _, r := range rs {
+		if r.Check == "forge-app" {
+			return r.Detail
+		}
+	}
+	return ""
+}
+
+func TestForgeAppChecksTheInstallationAndItsPermissions(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+
+	r.instStatus = 404 // the App exists but is not installed on the repository
+	rs := run(r.deps())
+	if st := statuses(rs)["forge-app"]; st != Fail || !strings.Contains(forgeAppDetail(rs), "not installed on wstein/workharbor") || !strings.Contains(forgeAppDetail(rs), "https://github.com/apps/workharbor-x/installations/new") {
+		t.Errorf("not installed: %s %q", st, forgeAppDetail(rs))
+	}
+
+	r.instStatus = 200
+	r.instPerms = github.AppPermissions()
+	r.instPerms["administration"] = "write"
+	rs = run(r.deps())
+	if st := statuses(rs)["forge-app"]; st != Fail || !strings.Contains(forgeAppDetail(rs), "administration, which is not wanted") {
+		t.Errorf("too wide: %s %q", st, forgeAppDetail(rs))
+	}
+
+	r.instPerms = github.AppPermissions()
+	r.appStatus = 401 // a revoked or foreign key
+	if st := statuses(run(r.deps()))["forge-app"]; st != Fail {
+		t.Errorf("a refused key: %s", st)
+	}
+
+	r.appStatus = 200
+	r.gh.Close() // GitHub unreachable: not verified, never passed or failed
+	if st := statuses(run(r.deps()))["forge-app"]; st != NotVerified {
+		t.Errorf("unreachable: %s, want not_verified", st)
 	}
 }

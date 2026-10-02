@@ -77,7 +77,7 @@ func newDoctor(st *state) *cobra.Command {
 	}
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-		return []string{"config", "server", "forge-key", "forge-limits", "agent-login", "runtime", "mounts", "egress", "reboot", "capacity", "notifications"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"config", "server", "forge-key", "forge-app", "forge-limits", "agent-login", "runtime", "mounts", "egress", "reboot", "capacity", "notifications"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
 }

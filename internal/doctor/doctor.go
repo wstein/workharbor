@@ -5,11 +5,13 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -44,6 +46,9 @@ type Deps struct {
 	Home       string
 	FS         runtime.FS
 	LookPath   func(string) (string, error)
+	// GitHub builds the App's client from the configuration; nil uses
+	// NewGitHub. Tests point it at a fake.
+	GitHub func(*config.Config) (*github.Client, error)
 	// Probe asks the running supervisor for something that needs the token.
 	Probe func(ctx context.Context) error
 }
@@ -105,6 +110,40 @@ func Checks(d Deps) []Check {
 			}
 			return OK, fmt.Sprintf("App %d: the key file is private and a PEM key; not tried against GitHub", c.GitHub.AppID)
 		})},
+		{"forge-app", 2, func(ctx context.Context) (Status, string) {
+			c, err := load()
+			if err != nil {
+				return Fail, "needs a valid configuration (see the config check)"
+			}
+			mk := d.GitHub
+			if mk == nil {
+				mk = NewGitHub
+			}
+			gh, err := mk(c)
+			if err != nil {
+				return Fail, "github: " + oneLine(err.Error())
+			}
+			rep, err := gh.CheckApp(ctx)
+			switch {
+			case errors.Is(err, github.ErrAuth):
+				return Fail, "GitHub refused the App's key: wrong github.app_id, or the key was revoked or is another App's"
+			case err != nil:
+				return NotVerified, "GitHub could not be asked: " + oneLine(err.Error())
+			case rep.OK():
+				return OK, fmt.Sprintf("App %s is installed on all %d repositories with exactly the expected permissions", rep.Slug, len(rep.Repos))
+			}
+			var bad []string
+			bad = append(bad, rep.Problems...)
+			for _, r := range rep.Repos {
+				if !r.Installed {
+					bad = append(bad, fmt.Sprintf("not installed on %s (install it at https://github.com/apps/%s/installations/new)", r.Repo, rep.Slug))
+				}
+				for _, p := range r.Problems {
+					bad = append(bad, r.Repo+": "+p)
+				}
+			}
+			return Fail, strings.Join(bad, "; ")
+		}},
 		{"forge-limits", 2, notVerified("that the bot cannot bypass branch protection, and that merge, tag, release and deploy stay forbidden, is enforced by the forge adapter but not checked against your repositories")},
 		{"agent-login", 3, needCfg(func(c *config.Config) (Status, string) {
 			if c.AgentAPIKeyEnvFile != "" {
@@ -158,6 +197,24 @@ func Failed(rs []Result) bool {
 		}
 	}
 	return false
+}
+
+// NewGitHub builds the App's client from the configuration: the key file read
+// as a secret, the configured repositories, the configured API address.
+func NewGitHub(c *config.Config) (*github.Client, error) {
+	pemBytes, err := config.ReadSecret(c.GitHub.KeyFile)
+	if err != nil {
+		return nil, err
+	}
+	key, err := github.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return nil, err
+	}
+	repos := make([]string, len(c.Repositories))
+	for i, r := range c.Repositories {
+		repos[i] = r.Name
+	}
+	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, BaseURL: c.GitHub.APIURL})
 }
 
 // DefaultLookPath is exec.LookPath.
