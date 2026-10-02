@@ -68,6 +68,9 @@ var branchRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
 // validBranch accepts a plain branch name: no leading dash or slash, no
 // "..", no empty or dotted path elements, no ".lock" suffix.
+// ValidBranch reports whether name is a branch name hostgit accepts.
+func ValidBranch(name string) bool { return validBranch(name) }
+
 func validBranch(name string) bool {
 	if !branchRe.MatchString(name) || strings.Contains(name, "..") || strings.HasSuffix(name, "/") ||
 		strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, ".") || strings.Contains(name, "//") {

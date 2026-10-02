@@ -25,12 +25,47 @@ import (
 
 	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/policy"
 )
 
 // Repository is one repository workharbor works on.
 type Repository struct {
 	Name       string `json:"name"`        // "owner/name"
 	CloneDepth int    `json:"clone_depth"` // 0 keeps the full history (design §4.5)
+	// Workflow is the repository's preset: prototype, integration (the default) or
+	// published (design D47). It is set here and nowhere else: nothing in the
+	// repository chooses or reads it.
+	Workflow string `json:"workflow,omitempty"`
+	// IntegrationBranch is where approved commits go in the prototype and
+	// integration workflows. Default: develop for integration, and for prototype
+	// the repository's default branch (empty here). Published has none.
+	IntegrationBranch string `json:"integration_branch,omitempty"`
+}
+
+// Preset returns the repository's workflow. The configuration check has already
+// refused an unknown one.
+func (r Repository) Preset() policy.Preset {
+	p, err := policy.ParsePreset(r.Workflow)
+	if err != nil {
+		return policy.DefaultPreset
+	}
+	return p
+}
+
+// Target is the branch approved commits go to, given the repository's default
+// branch: the default branch itself for a published repository and for a
+// prototype without an integration branch, else the integration branch.
+func (r Repository) Target(defaultBranch string) string {
+	p := r.Preset()
+	switch {
+	case p.ToDefaultBranch():
+		return defaultBranch
+	case r.IntegrationBranch != "":
+		return r.IntegrationBranch
+	case p == policy.Prototype:
+		return defaultBranch
+	}
+	return "develop"
 }
 
 // Roots are the directories workharbor owns on the host.
@@ -255,6 +290,15 @@ func (c *Config) Validate() error {
 		}
 		if r.CloneDepth < 0 {
 			add("%s.clone_depth: %d is negative", key, r.CloneDepth)
+		}
+		if _, err := policy.ParsePreset(r.Workflow); err != nil {
+			add("%s.workflow: %v", key, err)
+		}
+		if b := r.IntegrationBranch; b != "" && (!hostgit.ValidBranch(b) || strings.HasPrefix(b, "agent/")) {
+			add("%s.integration_branch: %q is not a branch name an agent cannot write", key, b)
+		}
+		if r.Workflow == string(policy.Published) && r.IntegrationBranch != "" {
+			add("%s.integration_branch: a published repository has no integration branch: its pull requests go to the default branch", key)
 		}
 	}
 

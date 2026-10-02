@@ -21,10 +21,14 @@ const (
 	// UpdateBoard is the supervisor writing a task's state on the project board
 	// (D30). It is not an agent action: agents never write to the board.
 	UpdateBoard Action = "update_board"
-	Merge       Action = "merge"
-	Tag         Action = "tag"
-	Release     Action = "release"
-	Deploy      Action = "deploy"
+	// FastForwardBranch is the supervisor moving an integration branch to an
+	// approved commit, as the prototype workflow does instead of a PR (D47). It is
+	// the human's approval carried out by the supervisor, never an agent's merge.
+	FastForwardBranch Action = "fast_forward_branch"
+	Merge             Action = "merge"
+	Tag               Action = "tag"
+	Release           Action = "release"
+	Deploy            Action = "deploy"
 )
 
 // Mode says how an action is handled.
@@ -58,11 +62,12 @@ func (m Mode) rank() int {
 // its own: the supervisor pushes after approval, so push is at most ask
 // (design §4.5, §6).
 var ceilings = map[Action]Mode{
-	PushAgentBranch: Ask,
-	Merge:           Forbid,
-	Tag:             Forbid,
-	Release:         Forbid,
-	Deploy:          Forbid,
+	PushAgentBranch:   Ask,
+	FastForwardBranch: Ask,
+	Merge:             Forbid,
+	Tag:               Forbid,
+	Release:           Forbid,
+	Deploy:            Forbid,
 }
 
 // Table maps actions to modes.
@@ -121,6 +126,6 @@ func (t Table) Validate() error {
 
 // known lists every action a table may mention.
 var known = map[Action]bool{
-	Commit: true, PushAgentBranch: true, OpenPR: true, CommentIssue: true, UpdateBoard: true,
+	Commit: true, PushAgentBranch: true, OpenPR: true, CommentIssue: true, UpdateBoard: true, FastForwardBranch: true,
 	Merge: true, Tag: true, Release: true, Deploy: true,
 }

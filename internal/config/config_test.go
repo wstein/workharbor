@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/policy"
 )
 
 type rig struct {
@@ -281,5 +283,47 @@ func TestBudgets(t *testing.T) {
 		if _, err := r.parse(t); !strings.Contains(problems(err), name) {
 			t.Errorf("%s: %s", name, problems(err))
 		}
+	}
+}
+
+func TestRepositoriesRunUnderAWorkflow(t *testing.T) {
+	r := newRig(t)
+	if c, err := r.parse(t); err != nil || c.Repositories[0].Preset() != policy.Integration || c.Repositories[0].Target("main") != "develop" {
+		t.Fatalf("the default: %v", err)
+	}
+	for _, tc := range []struct {
+		workflow, branch, defaultBranch, want string
+		preset                                policy.Preset
+	}{
+		{"prototype", "", "main", "main", policy.Prototype},
+		{"prototype", "dev", "main", "dev", policy.Prototype},
+		{"integration", "", "main", "develop", policy.Integration},
+		{"integration", "next", "main", "next", policy.Integration},
+		{"published", "", "trunk", "trunk", policy.Published},
+	} {
+		r.cfg.Repositories = []Repository{{Name: "wstein/workharbor", Workflow: tc.workflow, IntegrationBranch: tc.branch}}
+		c, err := r.parse(t)
+		if err != nil {
+			t.Fatalf("%+v: %s", tc, problems(err))
+		}
+		if got := c.Repositories[0]; got.Preset() != tc.preset || got.Target(tc.defaultBranch) != tc.want {
+			t.Errorf("%+v: preset %s target %q", tc, got.Preset(), got.Target(tc.defaultBranch))
+		}
+	}
+	for name, repo := range map[string]Repository{
+		"unknown":               {Name: "a/b", Workflow: "yolo"},
+		"wrong case":            {Name: "a/b", Workflow: "Published"},
+		"an agent branch":       {Name: "a/b", IntegrationBranch: "agent/x"},
+		"a bad branch":          {Name: "a/b", IntegrationBranch: "a..b"},
+		"published with branch": {Name: "a/b", Workflow: "published", IntegrationBranch: "develop"},
+	} {
+		r.cfg.Repositories = []Repository{repo}
+		if _, err := r.parse(t); !strings.Contains(problems(err), "repositories[0]") {
+			t.Errorf("%s: %s", name, problems(err))
+		}
+	}
+	// the repository cannot choose: nothing reads a file of it, and the key is strict
+	if _, err := Parse([]byte(`{"repositories":[{"name":"a/b","preset":"prototype"}]}`)); err == nil {
+		t.Error("an unknown key was accepted")
 	}
 }
