@@ -224,3 +224,13 @@ func (s *Store) Purge(ctx context.Context, spec PurgeSpec) (PurgeResult, error) 
 	}
 	return res, nil
 }
+
+// TranscriptSize returns how many transcript events a task has and their bytes:
+// what a purge of all of them would delete.
+func (s *Store) TranscriptSize(ctx context.Context, task domain.ID) (events int, bytes int64, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(LENGTH(payload)), 0) FROM events WHERE task_id = ? AND tier = 'transcript'`, string(task)).Scan(&events, &bytes)
+	if err != nil {
+		return 0, 0, fmt.Errorf("store: transcript size: %w", err)
+	}
+	return events, bytes, nil
+}
