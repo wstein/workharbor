@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 // gitBox is a repository with a console-like home, where a test plants the
@@ -52,20 +54,16 @@ func newGitBox(t *testing.T) *gitBox {
 	return b
 }
 
-// env is the whole environment of a command: a short list, never os.Environ()
-// with a changed HOME (AGENTS.md: Homebrew's git turns the keychain helper on,
-// and a temporary HOME makes macOS offer to reset the human's keychain). No
-// system or global configuration but the test's own, no credential helper, no
-// prompt, no SSH agent.
+// env is the whole environment of a command: the shared isolated one of
+// internal/gittest (a minimal list, never os.Environ() with a changed HOME; see
+// AGENTS.md), plus what these tests need: the test's own global configuration,
+// an identity, no credential helper, and the wrapper's settings.
 func (b *gitBox) env(extra ...string) []string {
-	return append([]string{
-		"PATH=" + os.Getenv("PATH"), "TMPDIR=" + os.TempDir(), "HOME=" + b.home, "TERM=xterm",
-		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_GLOBAL=" + filepath.Join(b.home, ".gitconfig"),
+	return gittest.Env(b.home, append(append([]string{
+		"TMPDIR=" + os.TempDir(), "TERM=xterm", "GIT_CONFIG_GLOBAL=" + filepath.Join(b.home, ".gitconfig"),
 		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=",
-		"GIT_TERMINAL_PROMPT=0", "SSH_AUTH_SOCK=", "GIT_ASKPASS=", "SSH_ASKPASS=",
-		"GIT_AUTHOR_NAME=h", "GIT_AUTHOR_EMAIL=h@example.com", "GIT_COMMITTER_NAME=h", "GIT_COMMITTER_EMAIL=h@example.com",
 		"WHR_REAL_GIT=" + b.git, "VISUAL=true", "EDITOR=true",
-	}, extra...)
+	}, gittest.Identity...), extra...)...)
 }
 
 func (b *gitBox) run(bin string, args ...string) (string, error) {
