@@ -48,7 +48,9 @@ jobs:
         # up to 5 minutes until the tagged commit is reachable from it.
         run: |
           set -euo pipefail
-          sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          # The tag must still point at github.sha, the commit this run checked
+          # out and the release job builds; a re-pushed tag fails here.
+          sha="$(scripts/verify-tag-commit.sh)"
           SHA="$sha" scripts/wait-for-main.sh
           echo "sha=$sha" >> "$GITHUB_ENV"
       - name: CI passed on the tagged commit
