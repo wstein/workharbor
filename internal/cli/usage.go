@@ -27,8 +27,11 @@ type usageReport struct {
 		} `json:"tokens"`
 		TurnsWithoutTokens int64 `json:"turns_without_tokens"`
 		ReportedMicroUSD   int64 `json:"reported_micro_usd"`
+		EstimatedMicroUSD  int64 `json:"estimated_micro_usd"`
 		TurnsWithoutCost   int64 `json:"turns_without_cost"`
 		Notional           bool  `json:"notional"`
+		// CacheShare is the share of input tokens served from the cache, when known.
+		CacheShare *float64 `json:"cache_share"`
 	} `json:"rows"`
 	Windows []struct {
 		Name        string    `json:"name"`
@@ -113,9 +116,9 @@ func newUsage(s *state) *cobra.Command {
 				q.Set(name, t.Format(time.RFC3339))
 			}
 			switch by {
-			case "", "all", "run", "task", "repo", "day", "month":
+			case "", "all", "run", "task", "repo", "agent", "model", "day", "month":
 			default:
-				return usageError{"--by is all, run, task, repo, day or month"}
+				return usageError{"--by is all, run, task, repo, agent, model, day or month"}
 			}
 			if by != "" {
 				q.Set("by", by)
@@ -143,7 +146,7 @@ func newUsage(s *state) *cobra.Command {
 	cmd.Flags().StringVar(&repo, "repo", "", "only this repository (owner/name)")
 	cmd.Flags().StringVar(&since, "since", "", "from this time: 2026-10-01, 2026-10-01T00:00:00Z, or how long ago (36h, 7d)")
 	cmd.Flags().StringVar(&until, "until", "", "before this time (same forms as --since)")
-	cmd.Flags().StringVar(&by, "by", "", "group by all, run, task (default), repo, day or month (UTC)")
+	cmd.Flags().StringVar(&by, "by", "", "group by all, run, task (default), repo, agent (<workspace>/<role>), model, day or month (the supervisor's time zone)")
 	return cmd
 }
 
@@ -181,11 +184,23 @@ func printUsage(w io.Writer, rep usageReport) error {
 	rows := make([][]string, len(rep.Rows))
 	for i, r := range rep.Rows {
 		cost := dollars(r.ReportedMicroUSD) + " reported"
-		if r.ReportedMicroUSD == 0 && r.TurnsWithoutCost == r.Turns {
+		if r.ReportedMicroUSD == 0 && r.TurnsWithoutCost == r.Turns && r.EstimatedMicroUSD == 0 {
 			cost = "not reported"
 		}
+		if r.EstimatedMicroUSD > 0 { // never folded into the reported figure
+			if r.ReportedMicroUSD == 0 {
+				cost = ""
+			} else {
+				cost += ", "
+			}
+			cost += dollars(r.EstimatedMicroUSD) + " estimated"
+		}
 		if r.Notional {
-			cost += ", notional"
+			cost += ", notional (API-equivalent, not billed)"
+		}
+		cache := "-"
+		if r.CacheShare != nil {
+			cache = fmt.Sprintf("%.0f%%", *r.CacheShare*100)
 		}
 		var unknown []string
 		if r.TurnsWithoutTokens > 0 {
@@ -198,13 +213,13 @@ func printUsage(w io.Writer, rep usageReport) error {
 		if r.TurnsWithoutTokens == r.Turns {
 			in, out = "-", "-" // nothing was reported, which is not zero
 		}
-		rows[i] = []string{r.Key, r.Auth, strconv.FormatInt(r.Turns, 10), in, out, cost, strings.Join(unknown, "; ")}
+		rows[i] = []string{r.Key, r.Auth, strconv.FormatInt(r.Turns, 10), in, out, cache, cost, strings.Join(unknown, "; ")}
 	}
 	key := strings.ToUpper(rep.Group)
 	if key == "" {
 		key = "KEY"
 	}
-	if err := table(w, []string{key, "AUTH", "TURNS", "IN", "OUT", "COST", "UNKNOWN"}, rows); err != nil {
+	if err := table(w, []string{key, "AUTH", "TURNS", "IN", "OUT", "CACHE", "COST", "UNKNOWN"}, rows); err != nil {
 		return err
 	}
 	if !subscription && len(rep.Windows) > 0 {

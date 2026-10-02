@@ -219,6 +219,7 @@ var routes = []route{
 	{http.MethodPost, "/v1/console/ssh/certificate", (*Server).consoleSSHCertificate},
 	{http.MethodGet, "/v1/console/ssh", (*Server).consoleSSH},
 	{http.MethodGet, "/v1/usage", (*Server).usage},
+	{http.MethodGet, "/v1/usage/summary", (*Server).usageSummary},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},
 	{http.MethodGet, "/v1/inbox", (*Server).inbox},
@@ -597,12 +598,38 @@ func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	switch query.Group {
-	case "", store.GroupAll, store.GroupRun, store.GroupTask, store.GroupRepo, store.GroupDay, store.GroupMonth:
+	case "", store.GroupAll, store.GroupRun, store.GroupTask, store.GroupRepo, store.GroupDay, store.GroupMonth, store.GroupAgent, store.GroupModel:
 	default:
-		writeError(w, usageError{"by must be all, run, task, repo, day or month"})
+		writeError(w, usageError{"by must be all, run, task, repo, agent, model, day or month"})
 		return
 	}
 	rep, err := s.be.Usage(r.Context(), query)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeOK(w, http.StatusOK, rep)
+}
+
+// UsageSummarizer is what the dashboard's usage card needs of the backend (issue
+// #111): the same numbers as Usage, for a period, in total, by agent and by model.
+type UsageSummarizer interface {
+	UsageSummary(ctx context.Context, period string) (service.UsageSummary, error)
+}
+
+// usageSummary serves the card of a period: today, 7d, 30d or all (default 7d), in the
+// supervisor's time zone.
+func (s *Server) usageSummary(w http.ResponseWriter, r *http.Request) {
+	sum, ok := s.be.(UsageSummarizer)
+	if !ok {
+		writeError(w, domain.NewConflict("usage_summary_off", "this backend has no usage summary"))
+		return
+	}
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = service.Period7Days
+	}
+	rep, err := sum.UsageSummary(r.Context(), period)
 	if err != nil {
 		s.fail(w, err)
 		return

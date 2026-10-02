@@ -29,7 +29,7 @@ func (s *Service) recordUsage(ctx context.Context, task, run domain.ID, e agent.
 		s.report(fmt.Errorf("usage event: %w", err))
 		return
 	}
-	rec := domain.UsageRecorded{RunID: run, Repo: agg.Task().Repo, Agent: s.ag.Name(), Model: e.Usage.Model}
+	rec := domain.UsageRecorded{RunID: run, Repo: agg.Task().Repo, Agent: s.ag.Name(), Model: e.Usage.Model, APIMillis: e.Usage.APIMillis, WallMillis: e.Usage.WallMillis}
 	if r, ok := agg.Run(run); ok && s.cfg.Spec != nil {
 		rec.Auth = string(s.cfg.Spec(agg.Task(), r).Auth)
 	}
@@ -82,6 +82,41 @@ type UsageQuery struct {
 type UsageRow struct {
 	store.UsageRow
 	Notional bool `json:"notional"`
+	// CacheShare is the share of input tokens served from the cache, 0 to 1, or nil
+	// when the turns reported no input tokens.
+	CacheShare *float64 `json:"cache_share,omitempty"`
+	// CostLabel says what the cost figure is: reported, estimated, mixed (both) or
+	// none (no turn reported one). An estimate is never shown as reported.
+	CostLabel string `json:"cost_label"`
+}
+
+// cacheShare is cache_read over every input token (fresh, cache read and cache write).
+func cacheShare(t domain.UsageTokens) *float64 {
+	total := t.Input + t.CacheRead + t.CacheWrite
+	if total <= 0 {
+		return nil
+	}
+	v := float64(t.CacheRead) / float64(total)
+	return &v
+}
+
+func costLabel(r store.UsageRow) string {
+	switch {
+	case r.ReportedMicroUSD > 0 && r.EstimatedMicroUSD > 0:
+		return "mixed"
+	case r.EstimatedMicroUSD > 0:
+		return domain.CostEstimated
+	case r.ReportedMicroUSD > 0 || r.TurnsWithoutCost < r.Turns:
+		return string(domain.CostReported)
+	}
+	return "none"
+}
+
+func (s *Service) location() *time.Location {
+	if s.cfg.Location != nil {
+		return s.cfg.Location
+	}
+	return time.Local
 }
 
 // UsageReport is what `whr usage` and the UI show. Windows are the account's
@@ -104,7 +139,17 @@ func (s *Service) Usage(ctx context.Context, q UsageQuery) (UsageReport, error) 
 	if q.Group == "" {
 		q.Group = store.GroupTask
 	}
-	rows, err := s.store.UsageTotals(ctx, store.UsageFilter{TaskID: q.TaskID, Repo: q.Repo, Since: q.Since, Until: q.Until}, q.Group)
+	f := store.UsageFilter{TaskID: q.TaskID, Repo: q.Repo, Since: q.Since, Until: q.Until}
+	var rows []store.UsageRow
+	var err error
+	switch q.Group {
+	case store.GroupDay:
+		rows, err = s.store.UsageBuckets(ctx, f, s.location(), "day")
+	case store.GroupMonth:
+		rows, err = s.store.UsageBuckets(ctx, f, s.location(), "month")
+	default:
+		rows, err = s.store.UsageTotals(ctx, f, q.Group)
+	}
 	if err != nil {
 		return UsageReport{}, err
 	}
@@ -121,7 +166,7 @@ func (s *Service) Usage(ctx context.Context, q UsageQuery) (UsageReport, error) 
 		rep.Windows = []store.WindowReading{}
 	}
 	for _, r := range rows {
-		rep.Rows = append(rep.Rows, UsageRow{UsageRow: r, Notional: r.Auth == string(agent.AuthSubscription)})
+		rep.Rows = append(rep.Rows, UsageRow{UsageRow: r, Notional: r.Auth == string(agent.AuthSubscription), CacheShare: cacheShare(r.Tokens), CostLabel: costLabel(r)})
 	}
 	return rep, nil
 }
@@ -188,4 +233,80 @@ func Compact(n int64) string {
 		return fmt.Sprintf("%.1fk", float64(n)/1e3)
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+// Periods of the usage summary.
+const (
+	PeriodToday  = "today"
+	Period7Days  = "7d"
+	Period30Days = "30d"
+	PeriodAll    = "all"
+)
+
+// UsageSummary is the dashboard's usage card and `whr usage --period`: what every agent
+// used over a period, in total, by agent and by model. The same Rows as Usage, from
+// the same method, so the page and the command cannot disagree.
+type UsageSummary struct {
+	Period string    `json:"period"`
+	Since  time.Time `json:"since,omitzero"`
+	Until  time.Time `json:"until"`
+	// Total is one row per auth mode: a subscription's notional cost is never added to
+	// an API key's spend.
+	Total   []UsageRow            `json:"total"`
+	ByAgent []UsageRow            `json:"by_agent"`
+	ByModel []UsageRow            `json:"by_model"`
+	Windows []store.WindowReading `json:"windows"`
+	Balance *store.BalanceReading `json:"balance,omitempty"`
+	// Subscription says some turns ran on a subscription: the windows lead, and the
+	// cost is API-equivalent, not billed.
+	Subscription bool `json:"subscription"`
+}
+
+// PeriodStart returns the start of a period in the supervisor's time zone: midnight
+// today, six days before it (seven days with today), 29 days before it, or the zero
+// time for all. The boundary is the supervisor's midnight, not UTC's.
+func (s *Service) PeriodStart(period string, now time.Time) (time.Time, error) {
+	loc := s.location()
+	y, m, d := now.In(loc).Date()
+	midnight := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	switch period {
+	case PeriodToday:
+		return midnight, nil
+	case Period7Days:
+		return midnight.AddDate(0, 0, -6), nil
+	case Period30Days:
+		return midnight.AddDate(0, 0, -29), nil
+	case PeriodAll, "":
+		return time.Time{}, nil
+	}
+	return time.Time{}, &domain.InvalidError{Msg: "the period is today, 7d, 30d or all"}
+}
+
+// UsageSummary builds the card for a period ending now.
+func (s *Service) UsageSummary(ctx context.Context, period string, now time.Time) (UsageSummary, error) {
+	since, err := s.PeriodStart(period, now)
+	if err != nil {
+		return UsageSummary{}, err
+	}
+	if period == "" {
+		period = PeriodAll
+	}
+	sum := UsageSummary{Period: period, Since: since, Until: now}
+	for _, g := range []struct {
+		group store.UsageGroup
+		into  *[]UsageRow
+	}{{store.GroupAll, &sum.Total}, {store.GroupAgent, &sum.ByAgent}, {store.GroupModel, &sum.ByModel}} {
+		rep, err := s.Usage(ctx, UsageQuery{Since: since, Until: now.Add(time.Nanosecond), Group: g.group})
+		if err != nil {
+			return UsageSummary{}, err
+		}
+		*g.into = rep.Rows
+		if g.group == store.GroupAll {
+			sum.Windows, sum.Balance = rep.Windows, rep.Balance
+		}
+	}
+	for _, r := range sum.Total {
+		sum.Subscription = sum.Subscription || r.Notional
+	}
+	return sum, nil
 }

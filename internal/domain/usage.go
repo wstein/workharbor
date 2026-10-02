@@ -17,6 +17,11 @@ type CostSource string
 // CostReported is the agent's own figure.
 const CostReported CostSource = "reported"
 
+// CostEstimated labels a figure the supervisor or the agent worked out rather than
+// read from a bill. Nothing records one yet (#48); the summary already keeps it apart
+// so that an estimate is never shown as reported.
+const CostEstimated = "estimated"
+
 // UsageTokens are the tokens of one turn.
 type UsageTokens struct {
 	Input      int64 `json:"input"`
@@ -59,6 +64,10 @@ type UsageRecorded struct {
 	Cost    *UsageCost    `json:"cost,omitempty"`
 	Balance *UsageBalance `json:"balance,omitempty"`
 	Windows []UsageWindow `json:"windows,omitempty"`
+	// APIMillis and WallMillis are the turn's time on the model API and its wall
+	// time, as the agent reported them (milliseconds), or zero.
+	APIMillis  int64 `json:"api_ms,omitempty"`
+	WallMillis int64 `json:"wall_ms,omitempty"`
 }
 
 // Usage errors.

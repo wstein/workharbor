@@ -61,6 +61,10 @@ type Usage struct {
 	Cost    *Cost         `json:"cost,omitempty"`
 	Balance *Balance      `json:"balance,omitempty"`
 	Windows []UsageWindow `json:"windows,omitempty"`
+	// APIMillis and WallMillis are the time the agent says the turn spent waiting on
+	// the model API and its wall time, in milliseconds; zero when it reports none.
+	APIMillis  int64 `json:"api_ms,omitempty"`
+	WallMillis int64 `json:"wall_ms,omitempty"`
 }
 
 // ErrBadUsage reports a usage payload that cannot be recorded.
@@ -83,6 +87,9 @@ func (u Usage) Validate() error {
 		if u.Cost.Source != CostReported {
 			return fmt.Errorf("%w: cost source %q is not reported", ErrBadUsage, u.Cost.Source)
 		}
+	}
+	if u.APIMillis < 0 || u.WallMillis < 0 {
+		return fmt.Errorf("%w: a negative duration", ErrBadUsage)
 	}
 	if u.Balance != nil && u.Balance.RemainingMicroUSD < 0 {
 		return fmt.Errorf("%w: a negative balance", ErrBadUsage)

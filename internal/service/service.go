@@ -48,6 +48,9 @@ func (SystemClock) Sleep(ctx context.Context, d time.Duration) error {
 
 // Config is what the service needs besides its adapters.
 type Config struct {
+	// Location is the supervisor's time zone: the days of the usage summary and
+	// `whr usage --by day` are days there. Default time.Local.
+	Location *time.Location
 	// Owner is the supervisor's owner label: the reconciler lists only the
 	// environments that carry it (design §5.1).
 	Owner string

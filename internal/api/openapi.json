@@ -3,7 +3,7 @@
   "info": {
     "title": "workharbor API",
     "version": "1",
-    "description": "The JSON API of `whr serve` (design \u00a79.7). Served only on a unix socket, `api.sock` in the state directory (D29, §7.5), never on a network address; every route needs the bearer token. Responses are wrapped in the envelope of \u00a79.2. Free text from agents, repositories and the forge (input, subject, message) is untrusted data."
+    "description": "The JSON API of `whr serve` (design §9.7). Served only on a unix socket, `api.sock` in the state directory (D29, §7.5), never on a network address; every route needs the bearer token. Responses are wrapped in the envelope of §9.2. Free text from agents, repositories and the forge (input, subject, message) is untrusted data."
   },
   "servers": [
     {
@@ -225,7 +225,7 @@
             }
           },
           "202": {
-            "description": "The issue is by an untrusted author: the task is held, queued, with a blocking question (design \u00a76)",
+            "description": "The issue is by an untrusted author: the task is held, queued, with a blocking question (design §6)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1211,7 +1211,7 @@
             "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
-        "description": "The kill switch (design \u00a77.7). It needs `{\"confirm\": true}`, goes on after a failure, and lists what failed in `problems`. It cannot revoke the agent's own credentials. The attempt is an audit entry whatever happened.",
+        "description": "The kill switch (design §7.7). It needs `{\"confirm\": true}`, goes on after a failure, and lists what failed in `problems`. It cannot revoke the agent's own credentials. The attempt is an audit entry whatever happened.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2221,6 +2221,8 @@
                 "run",
                 "task",
                 "repo",
+                "agent",
+                "model",
                 "day",
                 "month"
               ],
@@ -2228,7 +2230,7 @@
             }
           }
         ],
-        "description": "The tokens, the cost and the number of turns the agents reported, grouped, from the audit entries (design \u00a75.7). A row is one group and one auth mode, so the notional cost of a subscription is never added to the spend of an API key; a turn without tokens or without a cost is counted, not read as zero. `windows` are the account's own usage windows and `balance` the latest balance the agent reported, if it reported one."
+        "description": "The tokens, the cost and the number of turns the agents reported, grouped, from the audit entries (design §5.7). A row is one group and one auth mode, so the notional cost of a subscription is never added to the spend of an API key; a turn without tokens or without a cost is counted, not read as zero. `windows` are the account's own usage windows and `balance` the latest balance the agent reported, if it reported one."
       }
     },
     "/v1/console": {
@@ -2493,6 +2495,75 @@
           }
         ],
         "description": "Needs `Connection: Upgrade` and `Upgrade: whr-terminal/1`. Everything that can fail does so as an ordinary error before the upgrade. The answer is `101 Switching Protocols`, and then the connection carries frames both ways: one type byte, a four-byte big-endian length and the payload (at most 64 KiB). The client sends data (`D`, the terminal's input) and its size (`R`, two big-endian uint16: columns, rows); the server sends data (`D`, the terminal's output) and, last, the exit code (`X`, a big-endian int32). A client that disconnects hangs the terminal up. The route is behind the API token, which listens on loopback only: a web session does not reach it."
+      }
+    },
+    "/v1/usage/summary": {
+      "get": {
+        "operationId": "usageSummary",
+        "summary": "The dashboard's usage card for a period",
+        "description": "What every agent used over today, 7 days, 30 days or all time, in the supervisor's time zone: in total, by agent and by model, each row with its cache share and a cost label (reported, estimated, mixed or none). Built from the audit entries, so a transcript purge does not change it.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "today",
+                "7d",
+                "30d",
+                "all"
+              ],
+              "default": "7d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UsageSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -3158,7 +3229,12 @@
                 "turns_without_cost",
                 "first",
                 "last",
-                "notional"
+                "notional",
+                "estimated_micro_usd",
+                "api_ms",
+                "wall_ms",
+                "runs",
+                "cost_label"
               ],
               "properties": {
                 "key": {
@@ -3216,6 +3292,36 @@
                 },
                 "notional": {
                   "type": "boolean"
+                },
+                "estimated_micro_usd": {
+                  "type": "integer",
+                  "description": "Cost of turns whose figure is an estimate; never added to reported_micro_usd."
+                },
+                "api_ms": {
+                  "type": "integer",
+                  "description": "Time on the model API the agent reported, in milliseconds."
+                },
+                "wall_ms": {
+                  "type": "integer",
+                  "description": "Wall time the agent reported, in milliseconds."
+                },
+                "runs": {
+                  "type": "integer"
+                },
+                "cache_share": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Share of input tokens served from the cache; absent when none were reported."
+                },
+                "cost_label": {
+                  "type": "string",
+                  "enum": [
+                    "reported",
+                    "estimated",
+                    "mixed",
+                    "none"
+                  ]
                 }
               }
             }
@@ -3352,6 +3458,223 @@
           },
           "reused": {
             "type": "boolean"
+          }
+        }
+      },
+      "UsageRow": {
+        "type": "object",
+        "required": [
+          "key",
+          "auth",
+          "turns",
+          "tokens",
+          "turns_without_tokens",
+          "reported_micro_usd",
+          "turns_without_cost",
+          "first",
+          "last",
+          "notional",
+          "estimated_micro_usd",
+          "api_ms",
+          "wall_ms",
+          "runs",
+          "cost_label"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "auth": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "integer"
+          },
+          "tokens": {
+            "type": "object",
+            "required": [
+              "input",
+              "output",
+              "cache_read",
+              "cache_write"
+            ],
+            "properties": {
+              "input": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "output": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cache_read": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cache_write": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "turns_without_tokens": {
+            "type": "integer"
+          },
+          "reported_micro_usd": {
+            "type": "integer"
+          },
+          "turns_without_cost": {
+            "type": "integer"
+          },
+          "first": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notional": {
+            "type": "boolean"
+          },
+          "estimated_micro_usd": {
+            "type": "integer",
+            "description": "Cost of turns whose figure is an estimate; never added to reported_micro_usd."
+          },
+          "api_ms": {
+            "type": "integer",
+            "description": "Time on the model API the agent reported, in milliseconds."
+          },
+          "wall_ms": {
+            "type": "integer",
+            "description": "Wall time the agent reported, in milliseconds."
+          },
+          "runs": {
+            "type": "integer"
+          },
+          "cache_share": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Share of input tokens served from the cache; absent when none were reported."
+          },
+          "cost_label": {
+            "type": "string",
+            "enum": [
+              "reported",
+              "estimated",
+              "mixed",
+              "none"
+            ]
+          }
+        }
+      },
+      "UsageSummary": {
+        "type": "object",
+        "required": [
+          "period",
+          "until",
+          "total",
+          "by_agent",
+          "by_model",
+          "windows",
+          "subscription"
+        ],
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "today",
+              "7d",
+              "30d",
+              "all"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            },
+            "description": "One row per auth mode: a subscription's notional cost is never added to an API key's spend."
+          },
+          "by_agent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            },
+            "description": "By <workspace>/<role>."
+          },
+          "by_model": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "account",
+                "name",
+                "utilization",
+                "at"
+              ],
+              "properties": {
+                "account": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "utilization": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "resets_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "balance": {
+            "type": "object",
+            "required": [
+              "agent",
+              "remaining_micro_usd",
+              "at"
+            ],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "remaining_micro_usd": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "subscription": {
+            "type": "boolean",
+            "description": "Some turns ran on a subscription: the usage windows lead and the cost is API-equivalent, not billed."
           }
         }
       }

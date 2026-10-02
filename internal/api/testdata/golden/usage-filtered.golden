@@ -17,10 +17,15 @@ HTTP OK (200)
         },
         "turns_without_tokens": 0,
         "reported_micro_usd": 5804,
+        "estimated_micro_usd": 0,
         "turns_without_cost": 0,
+        "api_ms": 0,
+        "wall_ms": 0,
+        "runs": 0,
         "first": "2026-10-01T09:00:00Z",
         "last": "2026-10-01T10:00:00Z",
-        "notional": true
+        "notional": true,
+        "cost_label": ""
       }
     ],
     "windows": [

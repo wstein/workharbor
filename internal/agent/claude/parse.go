@@ -34,7 +34,11 @@ type rawEvent struct {
 	Result    string          `json:"result"`
 	IsError   bool            `json:"is_error"`
 	TotalCost *float64        `json:"total_cost_usd"`
-	RateLimit json.RawMessage `json:"rate_limit_info"`
+	// DurationMS and DurationAPIMS are on the result event (spike #1): the turn's wall
+	// time and the part of it spent waiting on the model API.
+	DurationMS    int64           `json:"duration_ms"`
+	DurationAPIMS int64           `json:"duration_api_ms"`
+	RateLimit     json.RawMessage `json:"rate_limit_info"`
 	// Usage is on the result event (recorded in spike #7): the tokens of the run.
 	Usage *struct {
 		InputTokens      int64 `json:"input_tokens"`
@@ -346,6 +350,12 @@ func (p *parser) finish(ev rawEvent) []agent.Event {
 	}
 	if t := ev.Usage; t != nil && t.InputTokens >= 0 && t.OutputTokens >= 0 && t.CacheReadTokens >= 0 && t.CacheWriteTokens >= 0 {
 		u.Tokens = &agent.TokenCounts{Input: t.InputTokens, Output: t.OutputTokens, CacheRead: t.CacheReadTokens, CacheWrite: t.CacheWriteTokens}
+	}
+	if ev.DurationMS > 0 {
+		u.WallMillis = ev.DurationMS
+	}
+	if ev.DurationAPIMS > 0 {
+		u.APIMillis = ev.DurationAPIMS
 	}
 	e := p.event(agent.EventUsage)
 	e.Usage = &u

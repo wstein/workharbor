@@ -1,0 +1,96 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "period": "today",
+    "since": "2026-10-01T09:00:00Z",
+    "until": "2026-10-01T10:00:00Z",
+    "total": [
+      {
+        "key": "all",
+        "auth": "subscription",
+        "turns": 3,
+        "tokens": {
+          "input": 18,
+          "output": 194,
+          "cache_read": 162,
+          "cache_write": 0
+        },
+        "turns_without_tokens": 0,
+        "reported_micro_usd": 5804,
+        "estimated_micro_usd": 0,
+        "turns_without_cost": 0,
+        "api_ms": 2711,
+        "wall_ms": 2972,
+        "runs": 1,
+        "first": "2026-10-01T09:00:00Z",
+        "last": "2026-10-01T10:00:00Z",
+        "notional": true,
+        "cache_share": 0.9,
+        "cost_label": "reported"
+      }
+    ],
+    "by_agent": [
+      {
+        "key": "docs/review",
+        "auth": "subscription",
+        "turns": 3,
+        "tokens": {
+          "input": 18,
+          "output": 194,
+          "cache_read": 162,
+          "cache_write": 0
+        },
+        "turns_without_tokens": 0,
+        "reported_micro_usd": 5804,
+        "estimated_micro_usd": 0,
+        "turns_without_cost": 0,
+        "api_ms": 2711,
+        "wall_ms": 2972,
+        "runs": 1,
+        "first": "2026-10-01T09:00:00Z",
+        "last": "2026-10-01T10:00:00Z",
+        "notional": true,
+        "cache_share": 0.9,
+        "cost_label": "reported"
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-opus-4-1",
+        "auth": "subscription",
+        "turns": 3,
+        "tokens": {
+          "input": 18,
+          "output": 194,
+          "cache_read": 162,
+          "cache_write": 0
+        },
+        "turns_without_tokens": 0,
+        "reported_micro_usd": 5804,
+        "estimated_micro_usd": 0,
+        "turns_without_cost": 0,
+        "api_ms": 2711,
+        "wall_ms": 2972,
+        "runs": 1,
+        "first": "2026-10-01T09:00:00Z",
+        "last": "2026-10-01T10:00:00Z",
+        "notional": true,
+        "cache_share": 0.9,
+        "cost_label": "reported"
+      }
+    ],
+    "windows": [
+      {
+        "account": "claude",
+        "name": "five_hour",
+        "utilization": 0.42,
+        "resets_at": "2026-10-01T13:00:00Z",
+        "at": "2026-10-01T09:00:00Z"
+      }
+    ],
+    "subscription": true
+  }
+}
+

@@ -5,7 +5,7 @@ HTTP Bad Request (400)
   "error": {
     "code": "usage",
     "exit_code": 2,
-    "message": "by must be all, run, task, repo, day or month"
+    "message": "by must be all, run, task, repo, agent, model, day or month"
   }
 }
 

@@ -864,7 +864,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 36 {
+	if got := Routes(); len(got) != 37 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}
@@ -885,5 +885,55 @@ func TestCreateWorkspaceDefaultsTheIntegrationBranchAndPassesTheSource(t *testin
 	r.do("POST", "/v1/workspaces", `{"name":"w2","path":"/p2","repo":"a/b","role":"docs"}`, "Idempotency-Key", "ws-1")
 	if len(r.be.created) != 2 {
 		t.Errorf("%d creations, want 2 (the retry must not create again)", len(r.be.created))
+	}
+}
+
+// UsageSummary makes the fake a UsageSummarizer: one subscription total, one agent
+// and one model, so the shape of the card is pinned.
+func (f *fake) UsageSummary(_ context.Context, period string) (service.UsageSummary, error) {
+	f.mu.Lock()
+	f.usageQueries = append(f.usageQueries, service.UsageQuery{Repo: "period:" + period})
+	f.mu.Unlock()
+	if period == "fortnight" {
+		return service.UsageSummary{}, &domain.InvalidError{Msg: "the period is today, 7d, 30d or all"}
+	}
+	share := 0.9
+	row := service.UsageRow{
+		UsageRow: store.UsageRow{
+			Key: "k", Auth: "subscription", Turns: 3, Tokens: domain.UsageTokens{Input: 18, Output: 194, CacheRead: 162, CacheWrite: 0},
+			ReportedMicroUSD: 5804, APIMillis: 2711, WallMillis: 2972, Runs: 1, First: t0, Last: t0.Add(time.Hour),
+		},
+		Notional: true, CacheShare: &share, CostLabel: "reported",
+	}
+	total, byAgent, byModel := row, row, row
+	total.Key, byAgent.Key, byModel.Key = "all", "docs/review", "claude-opus-4-1"
+	return service.UsageSummary{
+		Period: period, Since: t0, Until: t0.Add(time.Hour), Subscription: true,
+		Total: []service.UsageRow{total}, ByAgent: []service.UsageRow{byAgent}, ByModel: []service.UsageRow{byModel},
+		Windows: []store.WindowReading{{Account: "claude", Name: "five_hour", Utilization: 0.42, ResetsAt: t0.Add(4 * time.Hour), At: t0}},
+	}, nil
+}
+
+func TestTheUsageSummaryIsServedForAPeriod(t *testing.T) {
+	r := newRig(t)
+	status, _, body := r.do("GET", "/v1/usage/summary?period=today", "")
+	if status != 200 || !strings.Contains(body, `"period":"today"`) || !strings.Contains(body, `"by_agent"`) || !strings.Contains(body, `"cost_label":"reported"`) {
+		t.Fatalf("summary = %d %s", status, body)
+	}
+	golden(t, "usage-summary", status, body)
+	if status, _, body = r.do("GET", "/v1/usage/summary", ""); status != 200 || !strings.Contains(body, `"period":"7d"`) {
+		t.Errorf("the default period: %d %s", status, body)
+	}
+	status, _, body = r.do("GET", "/v1/usage/summary?period=fortnight", "")
+	if status != 400 {
+		t.Errorf("a bad period: %d %s", status, body)
+	}
+	if status, _, _ = r.do("GET", "/v1/usage/summary", "", "Authorization", ""); status != 401 {
+		t.Errorf("no token: %d", status)
+	}
+	for _, by := range []string{"agent", "model", "day"} {
+		if status, _, body := r.do("GET", "/v1/usage?by="+by, ""); status != 200 {
+			t.Errorf("by %s: %d %s", by, status, body)
+		}
 	}
 }

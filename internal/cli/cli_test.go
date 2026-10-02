@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -714,5 +715,30 @@ func TestParseWhenDollarsAndCounts(t *testing.T) {
 		if got := count(n); got != want {
 			t.Errorf("count(%d) = %s", n, got)
 		}
+	}
+}
+
+func TestUsageByAgentAndModelShowsCacheAndKeepsEstimatesApart(t *testing.T) {
+	s := newStub(t)
+	s.reply("GET /v1/usage", 200, ok(`{"group":"agent","rows":[
+{"key":"docs/review","auth":"api-key","turns":2,"tokens":{"input":100,"output":50,"cache_read":300,"cache_write":0},"turns_without_tokens":0,"reported_micro_usd":5000,"estimated_micro_usd":700,"turns_without_cost":0,"notional":false,"cache_share":0.75},
+{"key":"docs/review","auth":"subscription","turns":1,"tokens":{"input":0,"output":0,"cache_read":0,"cache_write":0},"turns_without_tokens":1,"reported_micro_usd":0,"estimated_micro_usd":0,"turns_without_cost":1,"notional":true}],"windows":[]}`))
+	for _, by := range []string{"agent", "model", "day"} {
+		if code, _, errOut := s.runCLI("", "usage", "--by", by); code != 0 {
+			t.Errorf("--by %s: exit %d, %s", by, code, errOut)
+		}
+	}
+	_, out, _ := s.runCLI("", "usage", "--by", "agent")
+	for _, want := range []string{"AGENT", "CACHE", "75%", "$0.0050 reported, $0.0007 estimated", "API-equivalent, not billed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out)
+		}
+	}
+	var sent []string
+	for _, r := range s.requests("GET /v1/usage") {
+		sent = append(sent, r.query)
+	}
+	if !slices.Contains(sent, "by=agent") || !slices.Contains(sent, "by=model") || !slices.Contains(sent, "by=day") {
+		t.Errorf("queries sent = %v", sent)
 	}
 }
