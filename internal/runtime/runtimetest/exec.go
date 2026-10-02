@@ -18,7 +18,7 @@ import (
 //	cat             copies stdin to stdout until stdin ends
 //	alive           exit 0 while a sleep runs in the environment, 1 when none does
 //	sh -c ... ls-files ...   the number of tracked files, TrackedFiles, as the supervisor counts them
-//	mkdir ...       exit 0 (the command is only logged; the fake has no files)
+//	mkdir ..., rm ...   exit 0 (the command is only logged; the fake has no files)
 //	git ...         exit GitExit (the command is only logged; the fake has no repositories)
 //
 // Anything else exits 127.
@@ -102,7 +102,7 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 			} else {
 				st.code = 127
 			}
-		case "mkdir":
+		case "mkdir", "rm":
 			// logged above; the fake has no file system
 		case "alive":
 			if !alive {

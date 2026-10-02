@@ -795,3 +795,116 @@ func TestARepoSizeNeedsATaskARunAndACount(t *testing.T) {
 		}
 	}
 }
+
+// The supervisor's git commands in an agent's checkout run with hooks and fsmonitor
+// off: a .git an agent wrote must not run a command of its choice, as it must not
+// on the host. Plain git runs the planted fsmonitor on `git ls-files` (measured,
+// git 2.54), so the test is a real one.
+func TestTheGuestsGitEnvironmentStopsAPlantedFsmonitorAndHook(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+	home := t.TempDir()
+	repo := filepath.Join(t.TempDir(), "r")
+	marks := t.TempDir()
+	run := func(env []string, args ...string) {
+		t.Helper()
+		cmd := gittest.Git(bg, home, repo, nil, args...)
+		cmd.Env = append(cmd.Env, env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.MkdirAll(repo, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	run(gittest.Identity, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(repo, "a"), []byte("a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run(gittest.Identity, "add", "a")
+	run(gittest.Identity, "commit", "-q", "-m", "one")
+	run(nil, "config", "core.fsmonitor", "sh -c 'touch "+filepath.Join(marks, "fsmonitor")+"; true'")
+	hook := filepath.Join(repo, ".git", "hooks", "post-checkout")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch "+filepath.Join(marks, "hook")+"\n"), 0o700); err != nil { //nolint:gosec // the planted hook this test is about
+		t.Fatal(err)
+	}
+	ran := func() string {
+		ents, _ := os.ReadDir(marks)
+		var names []string
+		for _, e := range ents {
+			names = append(names, e.Name())
+			_ = os.Remove(filepath.Join(marks, e.Name()))
+		}
+		return strings.Join(names, " ")
+	}
+	exercise := func(env []string) string {
+		ran()
+		run(env, "ls-files", "-z")
+		run(env, "status", "--short")
+		run(env, "checkout", "-q", "main")
+		return ran()
+	}
+	if plain := exercise(nil); !strings.Contains(plain, "fsmonitor") || !strings.Contains(plain, "hook") {
+		t.Fatalf("plain git ran %q: the plant does not work, so this test proves nothing", plain)
+	}
+	if got := exercise(gitEnv()); got != "" {
+		t.Errorf("git with gitEnv() ran %q", got)
+	}
+}
+
+// A role that is added again later does not inherit the old one's output.
+func TestRemovingAnAgentClearsItsDirectoryOnTheBuildVolume(t *testing.T) {
+	r := newWsRig(t)
+	r.ws.cfg.BuildDir = "/var/whr/build"
+	w, _ := r.create("run")
+	second, err := r.ws.AddAgent(bg, w.Name, "review", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ws.RemoveAgent(bg, w.Name, second.Role); err != nil {
+		t.Fatal(err)
+	}
+	if want := "rm -rf -- /var/whr/build/review"; !strings.Contains(r.logs(w.EnvID), want) {
+		t.Errorf("the agent's build directory was not cleared (%q); the log:\n%s", want, r.logs(w.EnvID))
+	}
+	if strings.Contains(r.logs(w.EnvID), "rm -rf -- /var/whr/build/docs") {
+		t.Error("another agent's directory was cleared")
+	}
+	// A failure to clear is reported and does not undo the removal.
+	again, err := r.ws.AddAgent(bg, w.Name, "review", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+		if len(cmd) > 0 && cmd[0] == "rm" {
+			return nil, "", 1, true
+		}
+		return nil, "", 0, false
+	}
+	if err := r.ws.RemoveAgent(bg, w.Name, again.Role); err != nil {
+		t.Fatalf("a failed clear undid the removal: %v", err)
+	}
+	var reported bool
+	for _, e := range r.reported() {
+		reported = reported || strings.Contains(e.Error(), "clear the build directory")
+	}
+	if !reported {
+		t.Errorf("the failure was not reported: %v", r.reported())
+	}
+}
+
+func TestWithoutABuildVolumeRemovingAnAgentRunsNothing(t *testing.T) {
+	r := newWsRig(t)
+	w, _ := r.create("run")
+	second, err := r.ws.AddAgent(bg, w.Name, "review", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ws.RemoveAgent(bg, w.Name, second.Role); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(r.logs(w.EnvID), "rm ") {
+		t.Errorf("a removal ran without a build volume:\n%s", r.logs(w.EnvID))
+	}
+}
