@@ -1,0 +1,16 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": [
+    {
+      "id": "pv-1",
+      "task": "t1",
+      "port": 3000,
+      "listen_port": 9401,
+      "opened_at": "2026-10-01T09:00:00Z",
+      "expires_at": "2026-10-01T21:00:00Z"
+    }
+  ]
+}
+

@@ -90,6 +90,8 @@ type Options struct {
 	OnError func(error)
 	// Passkeys serves the host's passkey commands (D45). Nil leaves them off.
 	Passkeys Passkeys
+	// Previews serves the preview commands (D33). Nil leaves them off.
+	Previews Previews
 }
 
 // Server is the API. Its Handler is the whole thing.
@@ -172,6 +174,10 @@ var routes = []route{
 	{http.MethodPost, "/v1/workspaces/{workspace}/agents", (*Server).addAgent},
 	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
 	{http.MethodPost, "/v1/workspaces/{workspace}/open", (*Server).openCopy},
+	{http.MethodGet, "/v1/previews", (*Server).listPreviews},
+	{http.MethodPost, "/v1/tasks/{task}/previews", (*Server).openPreview},
+	{http.MethodPost, "/v1/previews/{preview}/link", (*Server).previewLink},
+	{http.MethodDelete, "/v1/previews/{preview}", (*Server).closePreview},
 	{http.MethodGet, "/v1/passkeys", (*Server).listPasskeys},
 	{http.MethodPost, "/v1/passkeys/enrolments", (*Server).newEnrolment},
 	{http.MethodDelete, "/v1/passkeys/{passkey}", (*Server).revokePasskey},

@@ -1,0 +1,17 @@
+HTTP Created (201)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "preview": {
+      "id": "pv-1",
+      "task": "t1",
+      "port": 3000,
+      "listen_port": 9401,
+      "opened_at": "2026-10-01T09:00:00Z",
+      "expires_at": "2026-10-01T21:00:00Z"
+    },
+    "url": "https://whr.example.test:9401/?whr_preview=grant"
+  }
+}
+

@@ -112,3 +112,26 @@ type TokensRevoked struct {
 func NewTokensRevokedEvent(r TokensRevoked, at time.Time) Event {
 	return newEvent(SupervisorStream, EventTokensRevoked, r, at)
 }
+
+// Events of the preview proxy (D33, issue #72). A preview shows agent-written code
+// in the human's browser, so opening and closing one are audit entries in the
+// supervisor's own stream. They hold no token.
+const (
+	EventPreviewOpened EventKind = "supervisor.preview_opened"
+	EventPreviewClosed EventKind = "supervisor.preview_closed"
+)
+
+// PreviewChange is the payload of both: who, which task and port, and for a close
+// why.
+type PreviewChange struct {
+	Preview string `json:"preview"`
+	Task    string `json:"task"`
+	Port    int    `json:"port"`
+	Actor   string `json:"actor,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// NewPreviewEvent returns the audit entry of a preview opening or closing.
+func NewPreviewEvent(kind EventKind, c PreviewChange, at time.Time) Event {
+	return newEvent(SupervisorStream, kind, c, at)
+}
