@@ -702,3 +702,29 @@ func TestAPinnedToolMayNotLinkToAnUnpinnedVersion(t *testing.T) {
 		t.Errorf("a link from a pinned tool to an unpinned version was not caught: %s", joinProblems(s.Verify()))
 	}
 }
+
+func TestVerifyRefusesALinkedStoreOrProfilesDirectory(t *testing.T) {
+	for _, name := range []string{"store", "profiles"} {
+		t.Run(name, func(t *testing.T) {
+			s := newStore(t)
+			t.Cleanup(func() { makeWritable(s.Root) })
+			e := addTool(t, s)
+			if err := s.Profile("good", e); err != nil {
+				t.Fatal(err)
+			}
+			other := t.TempDir()
+			moved := filepath.Join(other, name)
+			if err := os.Rename(filepath.Join(s.Root, name), moved); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { makeWritable(moved) })
+			if err := os.Symlink(moved, filepath.Join(s.Root, name)); err != nil {
+				t.Fatal(err)
+			}
+			got := s.Verify()
+			if !severe(got) || !strings.Contains(joinProblems(got), "not a real directory") {
+				t.Errorf("a linked %s directory was not severe: %s", name, joinProblems(got))
+			}
+		})
+	}
+}

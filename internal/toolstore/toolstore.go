@@ -437,6 +437,12 @@ func (p Problem) String() string {
 // are opened without following a link.
 func (s *Store) Verify() []Problem {
 	var problems []Problem
+	// The store and profiles directories must be real directories: a link is
+	// resolved by the host but, in the guest, through the image's rootfs. The
+	// root itself may be a link (an operator's choice).
+	if info, err := os.Lstat(filepath.Join(s.Root, "store")); err == nil && !info.IsDir() {
+		return []Problem{{Entry: "store", Msg: "the store directory " + filepath.Join(s.Root, "store") + " is not a real directory (a link is refused)", Severe: true}}
+	}
 	entries, err := os.ReadDir(filepath.Join(s.Root, "store"))
 	if err != nil {
 		return []Problem{{Msg: "cannot read the store: " + err.Error(), Severe: true}}
@@ -542,6 +548,9 @@ func isHex(s string) bool {
 // link's own name, and that a pinned tool's link goes to the pin's own entry.
 func (s *Store) verifyProfiles(pins []Pin) []Problem {
 	profiles := filepath.Join(s.Root, "profiles")
+	if info, err := os.Lstat(profiles); err == nil && !info.IsDir() {
+		return []Problem{{Entry: "profiles", Msg: "the profiles directory " + profiles + " is not a real directory (a link is refused)", Severe: true}}
+	}
 	list, err := os.ReadDir(profiles)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
