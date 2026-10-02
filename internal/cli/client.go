@@ -148,6 +148,23 @@ type envelope struct {
 // Do sends a request and returns the raw body of the envelope (for --json) and
 // its data. An error envelope is a *RemoteError with the server's exit code.
 func (c *Client) Do(ctx context.Context, method, path string, body any, idemKey string) (raw, data []byte, err error) {
+	return c.do(ctx, c.hc, method, path, body, idemKey)
+}
+
+// slowTimeout bounds a request that builds an image or an environment: it takes
+// minutes, where an ordinary request is done in seconds.
+const slowTimeout = 30 * time.Minute
+
+// DoSlow is Do for a request that can take minutes (an image is built, an
+// environment is made or replaced). The ordinary client's 30 seconds would end the
+// request while the supervisor works, and the work would be cancelled with it.
+func (c *Client) DoSlow(ctx context.Context, method, path string, body any, idemKey string) (raw, data []byte, err error) {
+	hc := *c.hc
+	hc.Timeout = slowTimeout
+	return c.do(ctx, &hc, method, path, body, idemKey)
+}
+
+func (c *Client) do(ctx context.Context, hc *http.Client, method, path string, body any, idemKey string) (raw, data []byte, err error) {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -167,7 +184,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, idemKey 
 	if idemKey != "" {
 		req.Header.Set("Idempotency-Key", idemKey)
 	}
-	resp, err := c.hc.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, nil, connError{redactURLError(err)}
 	}

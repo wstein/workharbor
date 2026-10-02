@@ -118,7 +118,7 @@ func runConsole(ctx context.Context, s *state, c *Client, workspace string, writ
 		rw = append(rw, workspace)
 	}
 	fmt.Fprintln(s.env.Stderr, "opening the console (the first time builds its image, which takes a while)...")
-	_, data, err := c.Do(ctx, "POST", "/v1/console", map[string][]string{"read_write": rw}, newKey())
+	_, data, err := c.DoSlow(ctx, "POST", "/v1/console", map[string][]string{"read_write": rw}, newKey())
 	if err != nil {
 		return err
 	}

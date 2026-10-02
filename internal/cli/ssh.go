@@ -176,7 +176,7 @@ func refreshSSH(ctx context.Context, s *state, c *Client, f sshFiles, forwarding
 	_ = raw
 	if string(data) == "null" {
 		fmt.Fprintln(s.env.Stderr, "opening the console (the first time builds its image, which takes a while)...")
-		if _, _, err := c.Do(ctx, "POST", "/v1/console", map[string][]string{"read_write": {}}, newKey()); err != nil {
+		if _, _, err := c.DoSlow(ctx, "POST", "/v1/console", map[string][]string{"read_write": {}}, newKey()); err != nil {
 			return err
 		}
 	}

@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/exitcode"
 )
@@ -168,5 +171,63 @@ func TestOpenPrintsThePathAndWarnsAboutAutoRunFiles(t *testing.T) {
 	}
 	if code, _, _ := s.runCLI("", "open", "/runtime"); code != exitcode.Usage {
 		t.Errorf("no workspace: exit %d, want usage", code)
+	}
+}
+
+func TestWsRebuildShowsTheEnvironmentsAndImagesBeforeAndAfter(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/workspaces/docs-ws/rebuild", 200, ok(`{"old_env":"whr-1","new_env":"whr-2","old_image":"whr-base/fedora:aaa","new_image":"whr-base/fedora:bbb","old_digest":"sha256:aa","new_digest":"sha256:bb"}`))
+	code, out, errOut := s.runCLI("", "ws", "rebuild", "docs-ws")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	for _, want := range []string{"before", "whr-1", "whr-base/fedora:aaa", "sha256:aa", "after", "whr-2", "whr-base/fedora:bbb", "sha256:bb"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(errOut, "minutes") {
+		t.Errorf("the user is not told it can take minutes: %q", errOut)
+	}
+	req := s.requests("POST /v1/workspaces/docs-ws/rebuild")
+	if len(req) != 1 || req[0].header.Get("Idempotency-Key") == "" {
+		t.Errorf("requests = %+v", req)
+	}
+	// The data on stdout is the API's envelope with --json.
+	if code, out, _ := s.runCLI("", "--json", "ws", "rebuild", "docs-ws"); code != 0 || !strings.Contains(out, `"new_env":"whr-2"`) {
+		t.Errorf("--json: %d %q", code, out)
+	}
+	if code, _, _ := s.runCLI("", "ws", "rebuild"); code != exitcode.Usage {
+		t.Errorf("no workspace: exit %d, want usage", code)
+	}
+}
+
+func TestWsRebuildOfAWorkspaceWithALiveRunKeepsTheServersExitCode(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/workspaces/busy/rebuild", 409, fail("conflict", exitcode.Conflict, "workspace busy has run r1 (running) of agent a1: finish or stop it before a rebuild"))
+	code, out, errOut := s.runCLI("", "ws", "rebuild", "busy")
+	if code != exitcode.Conflict || out != "" || !strings.Contains(errOut, "finish or stop it") {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+}
+
+// A request that builds an image takes minutes: the ordinary client's timeout would
+// end it while the supervisor works.
+func TestDoSlowOutlivesTheOrdinaryTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		_, _ = io.WriteString(w, ok(`{}`))
+	}))
+	defer srv.Close()
+	c := NewClientFor(srv.URL, "tok")
+	c.hc.Timeout = 100 * time.Millisecond
+	if _, _, err := c.Do(context.Background(), "GET", "/x", nil, ""); err == nil {
+		t.Error("the ordinary request outlived its timeout")
+	}
+	if _, _, err := c.DoSlow(context.Background(), "GET", "/x", nil, ""); err != nil {
+		t.Errorf("the slow request did not: %v", err)
+	}
+	if c.hc.Timeout != 100*time.Millisecond {
+		t.Error("DoSlow changed the shared client's timeout")
 	}
 }

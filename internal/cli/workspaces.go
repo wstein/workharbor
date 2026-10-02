@@ -44,7 +44,7 @@ func (s *state) workspaces(ctx context.Context) ([]workspaceRow, []byte, error) 
 func newWs(s *state) *cobra.Command {
 	ws := &cobra.Command{Use: "ws", Short: "Workspaces: folders with an agent clone and their environment (provisional)"}
 	group(ws)
-	ws.AddCommand(newWsAdd(s), newWsLs(s), newWsRm(s))
+	ws.AddCommand(newWsAdd(s), newWsLs(s), newWsRm(s), newWsRebuild(s))
 	return ws
 }
 
@@ -75,7 +75,7 @@ func newWsAdd(s *state) *cobra.Command {
 				body["instructions"] = instructions
 			}
 			fmt.Fprintf(s.env.Stderr, "whr: creating workspace %s: this seeds the clone and starts the environment\n", clean(args[0]))
-			raw, data, err := c.Do(cmd.Context(), "POST", "/v1/workspaces", body, key)
+			raw, data, err := c.DoSlow(cmd.Context(), "POST", "/v1/workspaces", body, key)
 			if err != nil {
 				return err
 			}
@@ -140,6 +140,49 @@ func newWsRm(s *state) *cobra.Command {
 				return err
 			}
 			return s.emit(raw, func(w io.Writer) error { _, err := fmt.Fprintln(w, clean(args[0])); return err })
+		},
+	}
+}
+
+func newWsRebuild(s *state) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rebuild <workspace>",
+		Short: "Recreate a workspace's environment from the image its repository resolves to now",
+		Long: "A new devcontainer commit, an allowed feature source or a bumped base image reaches a long-lived workspace " +
+			"only when its environment is next built; this builds it now. The home and build volumes, the workspace folder " +
+			"and so every worktree and branch stay; the container, its network and its egress sidecar are new. The old " +
+			"environment is removed only after the new one is up, and started again if the new one cannot be brought up. " +
+			"It is refused while any run of the workspace is live, naming it, and it takes minutes when the image has to " +
+			"be built. The rebuild is audited with the old and new image digests.",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: s.completeWorkspaces,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := s.api()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(s.env.Stderr, "rebuilding the environment (an image that has to be built takes minutes)...")
+			raw, data, err := c.DoSlow(cmd.Context(), "POST", "/v1/workspaces/"+url.PathEscape(args[0])+"/rebuild", nil, newKey())
+			if err != nil {
+				return err
+			}
+			var r struct {
+				OldEnv    string `json:"old_env"`
+				NewEnv    string `json:"new_env"`
+				OldImage  string `json:"old_image"`
+				NewImage  string `json:"new_image"`
+				OldDigest string `json:"old_digest"`
+				NewDigest string `json:"new_digest"`
+			}
+			if err := json.Unmarshal(data, &r); err != nil {
+				return fmt.Errorf("the answer is not what this whr expects: %w", err)
+			}
+			return s.emit(raw, func(w io.Writer) error {
+				return table(w, []string{"", "ENVIRONMENT", "IMAGE", "DIGEST"}, [][]string{
+					{"before", clean(r.OldEnv), clean(r.OldImage), clean(r.OldDigest)},
+					{"after", clean(r.NewEnv), clean(r.NewImage), clean(r.NewDigest)},
+				})
+			})
 		},
 	}
 }
