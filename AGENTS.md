@@ -110,6 +110,8 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Issues.** When work on an issue is done (its closing commit is merged into local `main`), update the issue: tick each acceptance-criteria checkbox the change met, and leave an unmet one unticked with a comment that says why. Do it then, not after the push: the session has usually ended by the time the human pushes. A `Closes:` trailer closes the issue but ticks nothing.
 
+**Starting a worker session.** A new worker session starts from [`.agents/worker.md`](.agents/worker.md) (in Claude Code: `/worker <#issue>`), which adds the worker's role to these rules.
+
 **Working on an issue, start to finish.** This workflow is for agent sessions; human contributors use the pull-request flow in CONTRIBUTING.md. Several sessions, possibly from different tools, share this repository, so each session works in its own worktree, which it reuses for every issue, and each issue gets its own branch. Every issue finishes the same way:
 
 1. **Claim, then start.** Skip an issue that is closed, or whose card on the project board is not `Todo`. Claim it: set its card to `In progress` and `Session` to your tool (see **Project board**), comment `Claimed by <tool>:<model-id>` with the scope you take, then `git fetch` and read the issue and the design sections it names. If your session has no worktree yet, create one once under a name that `git worktree list` does not show, such as `git worktree add ../workharbor-<name> -b <type>/<topic> main`. Otherwise reuse it: with a clean tree, `git -C <worktree> switch -c <type>/<topic> main`. Work only there, never in another session's worktree, and do not switch branches in the shared checkout.
