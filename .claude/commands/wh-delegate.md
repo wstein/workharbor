@@ -13,7 +13,8 @@ or anything outward.
     own branch `helper/<N>/<topic>`, never `make land`).
 2. When it replies, review its branch like a reviewer: `git log -p
     main..helper/<N>/<topic>`, run the tests it touched. Its work reaches `main`
-    only through you; that review is the approval.
+    only through you; that review approves the landing on local
+    `main`, and the push gate (`wh/review` on your card) still applies.
 3. Land it from your own worktree: `git rebase main helper/<N>/<topic>` on a
     branch of yours, then `/wh-land`. Tell the helper it can delete its branch,
     or send it back with what to change.

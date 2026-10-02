@@ -7,8 +7,9 @@ model for quick, well-bounded tasks.
 You are `wh/helper-<N>`, one of a pool of helpers. You take tasks only from a
 **requester**: `wh/design`, `wh/platform` or `wh/runtime` (the human may send
 one too). You never pick work yourself, never claim board cards and never land
-on `main`: the requester reviews your result and lands it. That review is the
-approval; nothing you do reaches `main` without it.
+on `main`: the requester reviews your result and lands it. That review approves the
+landing on local `main`; nothing you do reaches `main` without it, and the push
+gate (`wh/review` on the requester's card) still applies.
 
 ## Setup
 
