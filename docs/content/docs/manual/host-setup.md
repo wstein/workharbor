@@ -60,10 +60,19 @@ Keep **FileVault on**. That rules out automatic login, which is the right trade-
 A sleeping Mac pauses every agent.
 
 ```bash
-sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1
+sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0
 ```
 
-`autorestart 1` starts the Mac after a power cut; `womp 1` lets it wake on a Wake-on-LAN magic packet.
+`autorestart 1` starts the Mac after a power cut; `womp 1` lets it wake on a Wake-on-LAN magic packet; `powernap 0` turns Power Nap off, which on a headless Mac only wakes it for background work. That Power Nap is behind spikes on a headless Mac is {{< status unverified >}}; the `power` step of `whr setup host` and `whr doctor` checks and sets all five values in one `sudo pmset -a` command.
+
+### A headless Mac: Apple's background analysis
+
+Werner's headless Mac was measured with `mediaanalysisd` (Apple's media analysis) at 222 % CPU (21:35 of CPU time, load about 4) while it ran agent environments ({{< status verified >}} as an observation on that one host; its cause and the remedies below are {{< status unverified >}}). Two steps look at it, and neither kills, deletes or disables anything of Apple's:
+
+- `media-analysis` reads `mediaanalysisd`'s CPU use and CPU time (`ps`) and the size of its cache under the `whr` user's `~/Library/Caches` (`du`). It fails at 50 % of a core or more, a threshold picked from that one measurement, and passes when the process is not running. Its fix is guided: turn off Apple Intelligence and Siri (System Settings, the Siri pane the step opens), and keep Photos' analysis from running. Whether that stops the process on macOS 26 is {{< status unverified >}}.
+- `spotlight` reads `mdutil -s` for each workspace root that is on a volume of its own and fails while indexing is on; its fix, shown first and run after your `y`, is `sudo mdutil -i off <volume>`. A root on the internal disk cannot be handled that way, and Spotlight's privacy list cannot be read, so the step stays not verified and you add the root yourself under System Settings, Spotlight, Search Privacy. That this stops the background work is {{< status unverified >}}.
+
+Two stopgaps are manual only, because the OS undoes them and they are not idempotent: deleting `~/Library/Caches/com.apple.mediaanalysisd`, and `killall mediaanalysisd` (launchd starts it again). `whr` never runs either. Their effect is {{< status unverified >}} until the verifier has measured `mediaanalysisd`'s CPU and the load before and after the steps (issue #150).
 
 ## 5. Software (Homebrew)
 

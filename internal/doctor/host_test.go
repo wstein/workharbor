@@ -68,7 +68,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	good := scripted{
 		"dscl . -read /Users/whr UniqueID":        "UniqueID: 502",
 		"dseditgroup -o checkmember -m whr admin": "no whr is NOT a member of admin",
-		"pmset -g": " sleep                0\n disksleep            0\n autorestart          1\n womp                 1\n",
+		"pmset -g": " sleep                0\n disksleep            0\n autorestart          1\n womp                 1\n powernap             0\n",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is enabled. (State = 1)",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Stealth mode enabled",
 		"fdesetup status":                                            "FileVault is On.",
@@ -89,7 +89,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	bad := scripted{
 		"dscl . -read /Users/whr UniqueID":        "UniqueID: 502",
 		"dseditgroup -o checkmember -m whr admin": "yes whr is a member of admin",
-		"pmset -g":        " sleep 10\n disksleep 10\n autorestart 0\n",
+		"pmset -g":        " sleep 10\n disksleep 10\n autorestart 0\n powernap 1\n",
 		"fdesetup status": "FileVault is Off.",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is disabled. (State = 0)",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Stealth mode disabled",
@@ -175,6 +175,9 @@ func TestEveryFixIsArgvAndRootOwnedFilesGoThroughInstall(t *testing.T) {
 	b, _ := os.ReadFile(sshdTemp())
 	if string(b) != sshdContent {
 		t.Errorf("content %q", b)
+	}
+	if got := strings.Join(steps(t, d)["power"].Fix.Cmds[0].Argv, " "); got != "pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0" {
+		t.Errorf("power fix = %q", got)
 	}
 	// the privileged commands of the host part are all separate argvs with Sudo set
 	for _, name := range []string{"whr-user", "power", "firewall", "prefix"} {
@@ -498,6 +501,64 @@ func root(t *testing.T) string {
 // onDisk scripts `df -P` saying a directory is on a mount point.
 func onDisk(dir, mount string) (string, string) {
 	return "df -P " + dir, "Filesystem 512-blocks Used Available Capacity Mounted on\n/dev/disk5s1 100 1 99 1% " + mount + "\n"
+}
+
+func TestMediaAnalysisFailsOnlyOnMeasuredCPU(t *testing.T) {
+	d := hostDeps(nil)
+	cache := "du -sk /Users/whr/Library/Caches/com.apple.mediaanalysisd"
+	check := func(r scripted) (Status, string) {
+		d.Runner = r
+		return status(steps(t, d)["media-analysis"])
+	}
+	const ps = "ps -axo pcpu=,time=,comm="
+	if st, detail := check(scripted{ps: " 12.0 1:02.03 /usr/sbin/cfprefsd\n", cache: "2048\tx"}); st != OK || !strings.Contains(detail, "not running") || !strings.Contains(detail, "2 MiB") {
+		t.Errorf("no process: %s %q", st, detail)
+	}
+	if st, detail := check(scripted{ps: " 3.0 0:10.00 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd\n"}); st != OK || !strings.Contains(detail, "3%") {
+		t.Errorf("idle: %s %q", st, detail)
+	}
+	if st, detail := check(scripted{ps: " 222.0 21:35:00 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd\n", cache: "9437184\tx"}); st != Fail || !strings.Contains(detail, "222%") || !strings.Contains(detail, "21:35:00") || !strings.Contains(detail, "9216 MiB") {
+		t.Errorf("busy: %s %q", st, detail)
+	}
+	if st, _ := check(scripted{}); st != NotVerified {
+		t.Errorf("ps that does not answer: %s", st)
+	}
+	if st, _ := check(scripted{ps: " x 1:00 mediaanalysisd\n"}); st != NotVerified {
+		t.Errorf("unreadable ps: %s", st)
+	}
+	fix := steps(t, d)["media-analysis"].Fix
+	if len(fix.Cmds) != 0 || fix.Build != nil || fix.Do != nil || fix.Open == "" || strings.Contains(fix.Guide, "killall ") {
+		t.Errorf("the fix must be guided only: %+v", fix)
+	}
+}
+
+func TestSpotlightIsOffOnWorkspaceVolumes(t *testing.T) {
+	a := root(t)
+	ka, va := onDisk(a, "/Volumes/ssd")
+	d := writeRoots(t, a)
+	check := func(r scripted) (Status, string) {
+		d.Runner = r
+		return status(steps(t, d)["spotlight"])
+	}
+	if st, _ := check(scripted{ka: va, "mdutil -s /Volumes/ssd": "/Volumes/ssd:\n\tIndexing disabled.\n"}); st != OK {
+		t.Errorf("indexing off: %s", st)
+	}
+	on := scripted{ka: va, "mdutil -s /Volumes/ssd": "/Volumes/ssd:\n\tIndexing enabled.\n"}
+	if st, detail := check(on); st != Fail || !strings.Contains(detail, "/Volumes/ssd") {
+		t.Errorf("indexing on: %s %q", st, detail)
+	}
+	if st, _ := check(scripted{ka: va}); st != NotVerified {
+		t.Errorf("mdutil that does not answer: %s", st)
+	}
+	ki, vi := onDisk(a, "/System/Volumes/Data")
+	if st, detail := check(scripted{ki: vi}); st != NotVerified || !strings.Contains(detail, "internal disk") {
+		t.Errorf("internal root: %s %q", st, detail)
+	}
+	d.Runner = on
+	cmds, err := steps(t, d)["spotlight"].Fix.Build(context.Background(), nil)
+	if err != nil || len(cmds) != 1 || !cmds[0].Sudo || strings.Join(cmds[0].Argv, " ") != "mdutil -i off /Volumes/ssd" {
+		t.Errorf("fix commands = %+v, %v", cmds, err)
+	}
 }
 
 func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {

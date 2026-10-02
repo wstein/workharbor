@@ -176,7 +176,7 @@ func TestADryRunPrintsEveryFixAndChangesNothing(t *testing.T) {
 		t.Fatalf("a dry run ran %v opened %v asked %d", r.host.ran, r.host.opened, r.host.asked)
 	}
 	for _, want := range []string{
-		"$ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1",
+		"$ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0",
 		"$ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
 		"$ sudo sysadminctl -addUser whr -fullName workharbor -password -",
 		"$ sudo install -m 0644 -o root -g wheel",

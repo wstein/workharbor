@@ -28,6 +28,11 @@ import (
 // all of it is unverified until the wizard has set up the reference Mac mini
 // (issue #73). The checks only read; the fixes are shown before they run.
 
+// MediaAnalysisMaxCPU is the percentage of one core at which the media-analysis
+// check fails. Werner's headless Mac measured mediaanalysisd at 222 % while it
+// ran agent environments; half a core is well above idle and well below that.
+const MediaAnalysisMaxCPU = 50.0
+
 // DefaultPrefix is where an admin-owned install of whr lives (D24).
 const DefaultPrefix = "/opt/whr"
 
@@ -202,7 +207,7 @@ func hostSteps(d Deps) []Check {
 		},
 
 		{
-			Name: "power", Phase: PhaseHost, Step: 4, Title: "never sleep, restart after a power cut (manual step 4)",
+			Name: "power", Phase: PhaseHost, Step: 4, Title: "never sleep, restart after a power cut, no Power Nap (manual step 4)",
 			Run: func(ctx context.Context) (Status, string) {
 				out, err := d.output(ctx, "pmset", "-g")
 				if err != nil {
@@ -213,7 +218,7 @@ func hostSteps(d Deps) []Check {
 				}
 				m := kv(out)
 				var bad []string
-				for _, want := range [][2]string{{"sleep", "0"}, {"disksleep", "0"}, {"autorestart", "1"}, {"womp", "1"}} {
+				for _, want := range [][2]string{{"sleep", "0"}, {"disksleep", "0"}, {"autorestart", "1"}, {"womp", "1"}, {"powernap", "0"}} {
 					if m[want[0]] != want[1] {
 						bad = append(bad, want[0]+" is "+orNone(m[want[0]])+", want "+want[1])
 					}
@@ -221,9 +226,99 @@ func hostSteps(d Deps) []Check {
 				if len(bad) > 0 {
 					return Fail, strings.Join(bad, "; ")
 				}
-				return OK, "the Mac does not sleep and restarts after a power cut"
+				return OK, "the Mac does not sleep, restarts after a power cut and has Power Nap off"
 			},
-			Fix: &Fix{Cmds: []Cmd{{Sudo: true, Argv: []string{"pmset", "-a", "sleep", "0", "disksleep", "0", "autorestart", "1", "womp", "1"}}}},
+			Fix: &Fix{Cmds: []Cmd{{Sudo: true, Argv: []string{"pmset", "-a", "sleep", "0", "disksleep", "0", "autorestart", "1", "womp", "1", "powernap", "0"}}}},
+		},
+
+		{
+			Name: "media-analysis", Phase: PhaseHost, Step: 4, Title: "Apple's media analysis is not eating the CPU (manual step 4, headless Mac)",
+			Run: func(ctx context.Context) (Status, string) {
+				out, err := d.output(ctx, "ps", "-axo", "pcpu=,time=,comm=")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "ps did not answer: " + oneLine(err.Error())
+				}
+				cache := "its cache is not known"
+				if kb, err := d.output(ctx, "du", "-sk", filepath.Join(d.Home, "Library", "Caches", "com.apple.mediaanalysisd")); err == nil {
+					if f := strings.Fields(kb); len(f) > 0 {
+						if n, err := strconv.ParseInt(f[0], 10, 64); err == nil {
+							cache = "its cache is " + strconv.FormatInt(n/1024, 10) + " MiB"
+						}
+					}
+				}
+				for _, l := range strings.Split(out, "\n") {
+					f := strings.Fields(l)
+					if len(f) < 3 || filepath.Base(strings.Join(f[2:], " ")) != "mediaanalysisd" {
+						continue
+					}
+					cpu, err := strconv.ParseFloat(f[0], 64)
+					if err != nil {
+						return NotVerified, "ps's answer for mediaanalysisd could not be read"
+					}
+					detail := fmt.Sprintf("mediaanalysisd uses %.0f%% CPU, has used %s of CPU time, %s", cpu, f[1], cache)
+					if cpu >= MediaAnalysisMaxCPU {
+						return Fail, detail + fmt.Sprintf(" (limit %.0f%%)", MediaAnalysisMaxCPU)
+					}
+					return OK, detail
+				}
+				return OK, "mediaanalysisd is not running; " + cache
+			},
+			Fix: &Fix{
+				Guide: "whr never stops or deletes anything of Apple's. Turn off Apple Intelligence and Siri in System Settings, and keep Photos' analysis from running on this Mac; then keep the workspace roots out of Spotlight (step spotlight). Clearing mediaanalysisd's cache or killing it only helps for a while, the OS undoes it, so they are described in the manual and are not fixes.",
+				Open:  "x-apple.systempreferences:com.apple.Siri-Settings.extension",
+			},
+		},
+
+		{
+			Name: "spotlight", Phase: PhaseHost, Step: 4, Title: "Spotlight does not index the workspaces (manual step 4, headless Mac)",
+			Run: func(ctx context.Context) (Status, string) {
+				if d.GOOS != "darwin" || d.Runner == nil {
+					return NotVerified, "not checked: " + errNotHere.Error()
+				}
+				vols, st, msg := d.workspaceVolumes(ctx)
+				if st != "" {
+					return st, msg
+				}
+				if len(vols) == 0 {
+					return NotVerified, "the workspace roots are on the internal disk: Spotlight's privacy list cannot be read, so add them there yourself"
+				}
+				var on []string
+				for _, v := range vols {
+					out, err := d.output(ctx, "mdutil", "-s", v)
+					if err != nil {
+						return NotVerified, "mdutil did not answer for " + v + ": " + oneLine(err.Error())
+					}
+					if strings.Contains(strings.ToLower(out), "indexing enabled") {
+						on = append(on, v)
+					}
+				}
+				if len(on) > 0 {
+					return Fail, "Spotlight indexes " + strings.Join(on, ", ")
+				}
+				return OK, "Spotlight indexing is off on every workspace volume (mdutil's output format is unverified on macOS 26)"
+			},
+			Fix: &Fix{
+				Cmds: []Cmd{{Sudo: true, Argv: []string{"mdutil", "-i", "off", "<volume>"}}},
+				Build: func(ctx context.Context, _ Prompter) ([]Cmd, error) {
+					vols, _, msg := d.workspaceVolumes(ctx)
+					if msg != "" && len(vols) == 0 {
+						return nil, errors.New(msg)
+					}
+					var cmds []Cmd
+					for _, v := range vols {
+						out, err := d.output(ctx, "mdutil", "-s", v)
+						if err == nil && strings.Contains(strings.ToLower(out), "indexing enabled") {
+							cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"mdutil", "-i", "off", v}})
+						}
+					}
+					return cmds, nil
+				},
+				Guide: "On a workspace volume of its own, `sudo mdutil -i off <volume>` turns indexing off. A root on the internal disk cannot be turned off that way: add it in System Settings → Spotlight → Search Privacy.",
+				Open:  "x-apple.systempreferences:com.apple.Siri-Settings.extension",
+			},
 		},
 
 		{
