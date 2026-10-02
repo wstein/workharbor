@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -104,7 +105,10 @@ type listing struct {
 		ID     string            `json:"id"`
 		Labels map[string]string `json:"labels"`
 		Image  struct {
-			Reference string `json:"reference"`
+			Reference  string `json:"reference"`
+			Descriptor struct {
+				Digest string `json:"digest"`
+			} `json:"descriptor"`
 		} `json:"image"`
 		Mounts []mountInfo `json:"mounts"`
 	} `json:"configuration"`
@@ -211,7 +215,7 @@ func (a *Adapter) find(ctx context.Context, id string) (listing, error) {
 func (a *Adapter) info(c listing) runtime.Info {
 	info := runtime.Info{
 		ID: c.Configuration.ID, Owner: c.Configuration.Labels[runtime.OwnerLabel], Labels: map[string]string{},
-		Image: c.Configuration.Image.Reference, State: domain.EnvStopped,
+		Image: c.Configuration.Image.Reference, ImageDigest: c.Configuration.Image.Descriptor.Digest, State: domain.EnvStopped,
 	}
 	for k, v := range c.Configuration.Labels {
 		info.Labels[k] = v
@@ -570,6 +574,15 @@ func (a *Adapter) Delete(ctx context.Context, id string) error {
 	if _, _, err := a.run(ctx, nil, "delete", id); err != nil {
 		return err
 	}
+	// A helper of ownVolume that was left behind refers to the network: remove it.
+	if all, err := a.containers(ctx); err == nil {
+		for _, h := range all {
+			l := h.Configuration.Labels
+			if l[roleLabel] == roleVolume && l[envLabel] == id && l[runtime.OwnerLabel] == a.owner {
+				a.removeHelper(ctx, h.Configuration.ID)
+			}
+		}
+	}
 	if net := c.Configuration.Labels[netLabel]; net != "" {
 		if _, _, err := a.run(ctx, nil, "network", "delete", net); err != nil {
 			return err
@@ -777,11 +790,29 @@ func (a *Adapter) ownVolume(ctx context.Context, env string, spec runtime.Spec, 
 		return err
 	}
 	_, _, err = a.run(ctx, nil, args...)
-	_, _, _ = a.run(context.WithoutCancel(ctx), nil, "delete", ownHelperName(env, volume))
+	a.removeHelper(context.WithoutCancel(ctx), ownHelperName(env, volume))
 	if err != nil {
 		return fmt.Errorf("give volume %s to user %s: %w", volume, spec.User, err)
 	}
 	return nil
+}
+
+// removeHelper deletes the short container ownVolume ran, and tries again when
+// the runtime says it is not ready: a helper left behind keeps the environment's
+// network from being deleted later (found when a rebuild removed an environment
+// whose network a helper still referred to). A container that is already gone is
+// done.
+func (a *Adapter) removeHelper(ctx context.Context, name string) {
+	for range 10 {
+		if _, errOut, err := a.run(ctx, nil, "delete", "--force", name); err == nil || strings.Contains(strings.ToLower(string(errOut)), "not found") {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
 }
 
 func ownHelperName(env, volume string) string {

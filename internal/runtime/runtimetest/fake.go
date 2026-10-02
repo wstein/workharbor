@@ -6,6 +6,8 @@ package runtimetest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -292,7 +294,7 @@ func (f *Fake) info(e *fakeEnv) runtime.Info {
 	for k, v := range e.labels {
 		labels[k] = v
 	}
-	info := runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
+	info := runtime.Info{ID: e.id, Owner: e.owner, Labels: labels, Image: e.image, ImageDigest: fakeDigest(e.image), Mounts: append([]runtime.Mount(nil), e.mounts...), State: e.state, Addr: e.addr}
 	if e.sidecar != "" {
 		info.EgressAllow = append([]string(nil), e.allow...)
 	}
@@ -430,4 +432,11 @@ func (f *Fake) Execs() []ExecCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]ExecCall(nil), f.execs...)
+}
+
+// fakeDigest stands in for the digest a real runtime records for an image: a
+// SHA-256 of the reference, so two references have two digests and one has one.
+func fakeDigest(image string) string {
+	sum := sha256.Sum256([]byte(image))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

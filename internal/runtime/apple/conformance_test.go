@@ -264,3 +264,67 @@ func TestANewVolumeIsWritableByTheEnvironmentsUser(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q: the user cannot write its home volume", code, out, errOut)
 	}
 }
+
+// A rebuild (issue #128) provisions a second environment on the volumes of the
+// first, which is stopped, and then removes the first: the volume's contents
+// survive, the first environment's network goes with it, and the second keeps
+// working. This is what Workspaces.Rebuild asks of the runtime.
+func TestAnEnvironmentCanBeReplacedOnTheSameVolume(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	const vol = "whtmp-conformance-rebuild-home"
+	mk := func() string {
+		spec := h.NewSpec()
+		spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: vol, Target: "/home/agent"})
+		id, err := h.Adapter.Provision(ctx, mustPrepare(t, h, spec))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.Adapter.Start(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	run := func(id string, cmd ...string) string {
+		st, err := h.Adapter.Exec(ctx, id, runtime.ExecRequest{Cmd: cmd})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, errOut, code, _ := runtime.Collect(st)
+		if code != 0 {
+			t.Fatalf("%v: exit %d: %s", cmd, code, errOut)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	first := mk()
+	t.Cleanup(func() {
+		for _, id := range []string{first} {
+			_ = h.Adapter.Stop(context.Background(), id)
+			_ = h.Adapter.Delete(context.Background(), id)
+		}
+		_ = h.Adapter.RemoveVolume(context.Background(), vol)
+	})
+	run(first, "sh", "-c", "echo agent-work > /home/agent/work.txt")
+	if err := h.Adapter.Stop(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	second := mk() // the first is stopped and still exists
+	t.Cleanup(func() {
+		_ = h.Adapter.Stop(context.Background(), second)
+		_ = h.Adapter.Delete(context.Background(), second)
+	})
+	if got := run(second, "cat", "/home/agent/work.txt"); got != "agent-work" {
+		t.Fatalf("the volume's contents in the second environment: %q", got)
+	}
+	if err := h.Adapter.Delete(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := h.Adapter.Inventory(ctx)
+	if err != nil || len(inv.Networks) != 1 || len(inv.Volumes) != 1 || inv.Volumes[0] != vol {
+		t.Errorf("after the first is removed: %+v, %v (want the second's network and the one volume)", inv, err)
+	}
+	if got := run(second, "cat", "/home/agent/work.txt"); got != "agent-work" {
+		t.Errorf("the second environment lost the volume's contents: %q", got)
+	}
+}

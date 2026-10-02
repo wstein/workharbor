@@ -53,8 +53,12 @@ type Info struct {
 	Owner  string // the OwnerLabel value
 	Labels map[string]string
 	Image  string
-	Mounts []Mount // what the runtime mounted: the resolved paths of the prepared spec
-	State  domain.EnvState
+	// ImageDigest is the digest of the image the environment was created from, as
+	// the runtime recorded it ("sha256:…"), or empty when it does not say. An
+	// image reference can move (a tag); the digest says which image ran.
+	ImageDigest string
+	Mounts      []Mount // what the runtime mounted: the resolved paths of the prepared spec
+	State       domain.EnvState
 	// Addr is the address the environment has now. It is empty unless the
 	// environment is running, and it changes across a restart and a recreate,
 	// so it is read again every time and never stored.

@@ -283,3 +283,62 @@ func TestHasImageTellsAMissingImageFromAFailure(t *testing.T) {
 		t.Errorf("a tag that looks like an option: err = %v", err)
 	}
 }
+
+func TestRemoveHelperTriesAgainUntilTheRuntimeLetsGo(t *testing.T) {
+	var deletes int
+	a := &Adapter{owner: "o1", run: func(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+		if args[0] == "delete" {
+			deletes++
+			if deletes < 3 {
+				return nil, []byte("container is stopping"), errors.New("exit status 1")
+			}
+		}
+		return nil, nil, nil
+	}}
+	a.removeHelper(context.Background(), "whr-1-own-v")
+	if deletes != 3 {
+		t.Errorf("%d delete calls, want 3 (two refused, one done)", deletes)
+	}
+	// A helper that is already gone is done at once.
+	deletes = 0
+	b := &Adapter{owner: "o1", run: func(_ context.Context, _ io.Reader, _ ...string) ([]byte, []byte, error) {
+		deletes++
+		return nil, []byte("Error: container not found"), errors.New("exit status 1")
+	}}
+	b.removeHelper(context.Background(), "whr-1-own-v")
+	if deletes != 1 {
+		t.Errorf("%d delete calls for a helper that is gone, want 1", deletes)
+	}
+}
+
+// A helper of ownVolume that was left behind refers to the environment's network,
+// which then cannot be deleted: Delete removes it first.
+func TestDeleteRemovesAHelperThatWasLeftBehind(t *testing.T) {
+	list := `[
+	{"configuration":{"id":"whr-ab","labels":{"workharbor.owner":"o1","workharbor.role":"environment","workharbor.network":"net-ab"}},"status":{"state":"stopped"}},
+	{"configuration":{"id":"whr-ab-own-vol","labels":{"workharbor.owner":"o1","workharbor.role":"volume","workharbor.env":"whr-ab"}},"status":{"state":"stopped"}},
+	{"configuration":{"id":"whr-zz-own-vol","labels":{"workharbor.owner":"o1","workharbor.role":"volume","workharbor.env":"whr-zz"}},"status":{"state":"stopped"}}]`
+	var calls [][]string
+	a := &Adapter{owner: "o1", run: func(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+		calls = append(calls, args)
+		if slices.Contains(args, "list") {
+			return []byte(list), nil, nil
+		}
+		return nil, nil, nil
+	}}
+	if err := a.Delete(context.Background(), "whr-ab"); err != nil {
+		t.Fatal(err)
+	}
+	var deleted []string
+	for _, c := range calls {
+		if c[0] == "delete" {
+			deleted = append(deleted, c[len(c)-1])
+		}
+		if c[0] == "network" && c[1] == "delete" && !slices.Contains(deleted, "whr-ab-own-vol") {
+			t.Errorf("the network was deleted before the helper that refers to it: %v", deleted)
+		}
+	}
+	if !slices.Contains(deleted, "whr-ab-own-vol") || slices.Contains(deleted, "whr-zz-own-vol") {
+		t.Errorf("deleted %v: want this environment's helper and not another's", deleted)
+	}
+}
