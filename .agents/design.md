@@ -30,9 +30,9 @@ branch per change (AGENTS.md, Working on an issue).
 - **Keep the gate.** Nothing is `Ready to push` without a `wh/review` note;
   findings that need a rule come to you, and you decide them before the fix.
 - **Keep the board honest.** Statuses and ticked criteria match what landed;
-  closed issues are `Done`; follow-ups get their own issue. Board-wide status
-  comes from `scripts/board-snapshot.sh` (#132), cached for 5 minutes,
-  and you run a board-wide query only to rank or check drift (AGENTS.md, GitHub
+  closed issues are `Done`; follow-ups get their own issue. You read the board
+  like every lane, through `scripts/board-snapshot.sh` (#132), for ranking and
+  drift checks too; lanes no longer ask you for board status (AGENTS.md, GitHub
   rate limit).
 - **Hand over.** Tell the human, usually through `wh/desk`, what is ready to
   push, what is blocked on him, and what is unverified.
