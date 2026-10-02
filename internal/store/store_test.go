@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 20 || name != "0020_feature_sources.sql" || applied != fixed.UnixNano() {
+	if n != 21 || name != "0021_feature_digest.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -86,8 +87,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 20 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 20", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 21 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 21", n, err)
 	}
 }
 
@@ -184,5 +185,38 @@ func TestWorkflowsAreRecordedAndChangesAreAudited(t *testing.T) {
 	}
 	if err != nil || got.Task().Workflow != "published" {
 		t.Errorf("task workflow %q, %v", got.Task().Workflow, err)
+	}
+}
+
+// An allow of a feature source belongs to the digest the human saw, so one for another
+// digest does not count; the latest answer replaces the earlier one.
+func TestFeatureSourceAnswersAreKeptPerDigest(t *testing.T) {
+	s, err := Open(bg, filepath.Join(t.TempDir(), "workharbor.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	const ref = "ghcr.io/someone/else/thing:1"
+	d1, d2 := "sha256:"+strings.Repeat("1", 64), "sha256:"+strings.Repeat("2", 64)
+	at := time.Unix(100, 0)
+	if err := s.SetFeatureSource(bg, "wstein/r", ref, "bad", true, "d1", at); err == nil {
+		t.Error("an answer with a malformed digest was kept")
+	}
+	if err := s.SetFeatureSource(bg, "wstein/r", ref, d1, true, "d1", at); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.FeatureSources(bg, "wstein/r")
+	if err != nil || !got.Allows(ref, d1) || got.Allows(ref, d2) || got.Allows(ref, "") || got.Allows("other", d1) {
+		t.Fatalf("answers = %+v, %v", got, err)
+	}
+	if err := s.SetFeatureSource(bg, "wstein/r", ref, d2, false, "d2", at); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.FeatureSources(bg, "wstein/r")
+	if got.Allows(ref, d1) || got.Allows(ref, d2) || got[ref].Digest != d2 {
+		t.Errorf("after a deny = %+v", got)
+	}
+	if _, err := s.db.ExecContext(bg, `UPDATE feature_sources SET digest = 'nonsense'`); err == nil {
+		t.Error("the table accepted a malformed digest")
 	}
 }

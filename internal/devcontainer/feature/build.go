@@ -18,6 +18,18 @@ import (
 // devcontainers organisation's own registry path (D38).
 const AllowedPrefix = "ghcr.io/devcontainers/features/"
 
+// NotAllowedError is the error for a feature from a source that is not allowed (yet):
+// it carries the manifest digest the reference resolves to now, which is what the human
+// is asked about and what an allow is bound to. It matches ErrSourceNotAllowed.
+type NotAllowedError struct {
+	Ref    string
+	Digest string
+}
+
+func (e *NotAllowedError) Error() string { return fmt.Sprintf("%v: %s", ErrSourceNotAllowed, e.Ref) }
+
+func (e *NotAllowedError) Unwrap() error { return ErrSourceNotAllowed }
+
 // ErrSourceNotAllowed means the feature is not from AllowedPrefix: it needs a Decision,
 // kept per repository like an egress host, and is not fetched until the human allows
 // it.
@@ -43,13 +55,15 @@ type Resolver struct {
 	// AllowedPrefix. A feature outside them is ErrSourceNotAllowed unless Approved says
 	// its reference was allowed for this repository.
 	Allowed []string
-	// Approved reports whether the human allowed this reference's source for the
-	// repository (a Decision, kept like an egress answer). Optional.
-	Approved func(ref string) bool
+	// Approved reports whether the human allowed this reference for the repository at
+	// this manifest digest (a Decision, kept like an egress answer). A tag that was
+	// moved resolves to another digest and is not approved. Optional.
+	Approved func(ref, digest string) bool
 	Limits   oci.ExtractLimits
 }
 
-func (r *Resolver) allowed(ref oci.Ref, written string) bool {
+// prefixAllowed says the reference is under an always allowed prefix.
+func (r *Resolver) prefixAllowed(ref oci.Ref) bool {
 	full := ref.Registry + "/" + ref.Repo
 	list := r.Allowed
 	if len(list) == 0 {
@@ -60,10 +74,11 @@ func (r *Resolver) allowed(ref oci.Ref, written string) bool {
 			return true
 		}
 	}
-	return r.Approved != nil && r.Approved(written)
+	return false
 }
 
-// Resolve fetches one feature: the manifest by its tag or digest, the one feature layer
+// Resolve fetches one feature: the manifest by its tag or digest (a source that is not
+// allowed stops there, with a *NotAllowedError that holds the digest), the one feature layer
 // by its digest with the size cap, a safe extraction to read its
 // devcontainer-feature.json, the refusal rules and the options. Nothing is written
 // outside a temporary directory that is removed before it returns.
@@ -72,12 +87,14 @@ func (r *Resolver) Resolve(ctx context.Context, req Request) (Resolved, error) {
 	if err != nil {
 		return Resolved{}, err
 	}
-	if !r.allowed(ref, req.ID) {
-		return Resolved{}, fmt.Errorf("%w: %s", ErrSourceNotAllowed, req.ID)
-	}
+	// the manifest first, even for a source that is not allowed: its digest is what a
+	// Decision is about. Nothing else is fetched until the source is allowed.
 	m, err := r.Client.Resolve(ctx, ref)
 	if err != nil {
 		return Resolved{}, err
+	}
+	if !r.prefixAllowed(ref) && (r.Approved == nil || !r.Approved(req.ID, m.Digest)) {
+		return Resolved{}, &NotAllowedError{Ref: req.ID, Digest: m.Digest}
 	}
 	var layer *oci.Descriptor
 	for i := range m.Layers {

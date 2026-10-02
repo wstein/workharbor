@@ -516,3 +516,13 @@ func TestASignInThatCheckedBeforeASweepStartsNoSession(t *testing.T) {
 		t.Error("an unstamped request was refused")
 	}
 }
+
+// The step-up of a feature source names the reference and the digest the human saw, so
+// an approval for one digest cannot answer the question about another.
+func TestFeatureSourceStepUpBindsToTheDigest(t *testing.T) {
+	a := &domain.Decision{Cause: domain.CauseFeatureSource, Feature: "ghcr.io/x/y:1", FeatureDigest: "sha256:" + strings.Repeat("a", 64)}
+	b := &domain.Decision{Cause: domain.CauseFeatureSource, Feature: "ghcr.io/x/y:1", FeatureDigest: "sha256:" + strings.Repeat("b", 64)}
+	if want := "feature:ghcr.io/x/y:1@" + a.FeatureDigest; bindsTo(a) != want || bindsTo(a) == bindsTo(b) {
+		t.Errorf("bindsTo = %q, %q", bindsTo(a), bindsTo(b))
+	}
+}

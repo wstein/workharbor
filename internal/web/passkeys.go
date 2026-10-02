@@ -53,14 +53,14 @@ func sensitive(d *domain.Decision) bool {
 }
 
 // bindsTo is what the challenge of a sensitive Decision names besides its ID: the
-// commit of a review, the host of an egress request, so an approval for one cannot
+// commit of a review, the host of an egress request, the reference and digest of a feature source, so an approval for one cannot
 // be used for another.
 func bindsTo(d *domain.Decision) string {
 	if d.Cause == domain.CauseEgressRequest {
 		return "host:" + d.Host
 	}
 	if d.Cause == domain.CauseFeatureSource {
-		return "feature:" + d.Feature
+		return "feature:" + d.Feature + "@" + d.FeatureDigest
 	}
 	return d.SHA
 }

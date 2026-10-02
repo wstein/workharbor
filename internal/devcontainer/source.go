@@ -71,10 +71,11 @@ type Environment struct {
 	// (D38, issue #108); the digests key the image tag, so a moved tag changes nothing
 	// until the next resolution.
 	Features []feature.Resolved
-	// ForeignFeatures are the references, as written, of features from a source outside
-	// the allowed one that the human has not allowed for this repository: left out of
-	// Features, and asked about (D38, issue #127).
-	ForeignFeatures []string
+	// ForeignFeatures are the features, by reference as written and the manifest digest
+	// each resolves to now, from a source outside the allowed one that the human has not
+	// allowed for this repository at that digest: left out of Features, and asked about
+	// (D38, issue #127).
+	ForeignFeatures []ForeignFeature
 
 	// SuggestedHosts are the package registries the repository's lockfiles
 	// imply. They are suggestions: the human confirms them once per repository
@@ -82,6 +83,13 @@ type Environment struct {
 	SuggestedHosts []string
 
 	Notes []string
+}
+
+// ForeignFeature is a feature from a source that is not allowed: the reference as
+// the repository wrote it and the manifest digest it resolves to now.
+type ForeignFeature struct {
+	Ref    string
+	Digest string
 }
 
 // Built reports whether the environment has to be built: from a Dockerfile, or
@@ -202,8 +210,13 @@ func resolveFeatures(ctx context.Context, env *Environment, opt Options) error {
 		switch {
 		case errors.Is(err, feature.ErrSourceNotAllowed):
 			note("feature %s is not applied: a source outside %s needs the human's allow for this repository", req.ID, feature.AllowedPrefix)
-			if !slices.Contains(env.ForeignFeatures, req.ID) {
-				env.ForeignFeatures = append(env.ForeignFeatures, req.ID)
+			var na *feature.NotAllowedError
+			if !errors.As(err, &na) {
+				return fmt.Errorf("devcontainer feature %s: %w", req.ID, err)
+			}
+			f := ForeignFeature{Ref: req.ID, Digest: na.Digest}
+			if !slices.Contains(env.ForeignFeatures, f) {
+				env.ForeignFeatures = append(env.ForeignFeatures, f)
 			}
 		case errors.Is(err, feature.ErrRefused):
 			note("feature %s is not applied: %v", req.ID, err)

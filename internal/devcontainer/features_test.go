@@ -171,7 +171,7 @@ func TestAnUnsafeOrForeignFeatureIsLeftOutWithANote(t *testing.T) {
 		}
 	}
 	// the foreign one is recorded to be asked about, as written
-	if len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0] != "ghcr.io/someone/else/thing:1" {
+	if len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0].Ref != "ghcr.io/someone/else/thing:1" || !strings.HasPrefix(env.ForeignFeatures[0].Digest, "sha256:") {
 		t.Errorf("foreign features = %v", env.ForeignFeatures)
 	}
 	// without a resolver they stay requested too, and the tag is the plain one
@@ -234,10 +234,13 @@ func TestFeatureOptionsInTheFileAreReadAsStrings(t *testing.T) {
 func TestAnApprovedForeignFeatureIsApplied(t *testing.T) {
 	reg := newFeatureRegistry(t, map[string]map[string]string{
 		"someone/else/thing": {"devcontainer-feature.json": plainFeature, "install.sh": "x"},
+		"other/one":          {"devcontainer-feature.json": plainFeature, "install.sh": "y"},
 	})
 	o := reg.opts()
 	r := *o.Features
-	r.Approved = func(ref string) bool { return ref == "ghcr.io/someone/else/thing:1" }
+	r.Approved = func(ref, digest string) bool {
+		return ref == "ghcr.io/someone/else/thing:1" && strings.HasPrefix(digest, "sha256:")
+	}
 	o.Features = &r
 	env, err := resolveWith(t, o, map[string]string{
 		".devcontainer.json": `{"image":"docker.io/library/ubuntu:24.04","features":{"ghcr.io/someone/else/thing:1":{},"ghcr.io/other/one:2":{}}}`,
@@ -245,7 +248,7 @@ func TestAnApprovedForeignFeatureIsApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(env.Features) != 1 || len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0] != "ghcr.io/other/one:2" {
+	if len(env.Features) != 1 || len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0].Ref != "ghcr.io/other/one:2" {
 		t.Errorf("features %d, foreign %v", len(env.Features), env.ForeignFeatures)
 	}
 }

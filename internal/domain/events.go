@@ -163,7 +163,9 @@ type DecisionRaised struct {
 	Cause    DecisionCause `json:"cause,omitempty"`
 	Host     string        `json:"host,omitempty"`
 	Feature  string        `json:"feature,omitempty"`
-	ResumeAt time.Time     `json:"resume_at,omitzero"`
+	// FeatureDigest is the manifest digest the feature reference resolved to.
+	FeatureDigest string    `json:"feature_digest,omitempty"`
+	ResumeAt      time.Time `json:"resume_at,omitzero"`
 }
 
 // Reraised is the payload of EventDecisionReraised.

@@ -2,6 +2,7 @@ package service
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -233,7 +234,9 @@ func TestOtherPresetsAskOncePerRepository(t *testing.T) {
 func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 	r := newRig(t)
 	const repo = "wstein/workharbor"
-	env := devcontainer.Environment{ForeignFeatures: []string{"ghcr.io/someone/else/thing:1", "ghcr.io/other/one:2"}}
+	const d1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	const d2 = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	env := devcontainer.Environment{ForeignFeatures: []devcontainer.ForeignFeature{{Ref: "ghcr.io/someone/else/thing:1", Digest: d1}, {Ref: "ghcr.io/other/one:2", Digest: d2}}}
 	pending, err := r.svc.PendingFeatureSources(bg, repo, env)
 	if err != nil || len(pending) != 2 {
 		t.Fatalf("pending = %v, %v", pending, err)
@@ -247,7 +250,7 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 	}
 	var ids []domain.ID
 	for _, d := range a.Decisions() {
-		if d.Cause != domain.CauseFeatureSource || !d.Blocking || d.Status != domain.DecisionOpen || d.Feature == "" {
+		if d.Cause != domain.CauseFeatureSource || !d.Blocking || d.Status != domain.DecisionOpen || d.Feature == "" || !domain.ValidDigest(d.FeatureDigest) {
 			t.Errorf("decision = %+v", d)
 		}
 		ids = append(ids, d.ID)
@@ -266,7 +269,7 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 		}
 	}
 	ok, err := r.svc.ApprovedFeatureSources(bg, repo)
-	if err != nil || len(ok) != 1 || !ok["ghcr.io/someone/else/thing:1"] {
+	if err != nil || len(ok) != 1 || ok["ghcr.io/someone/else/thing:1"] != d1 {
 		t.Errorf("approved = %v, %v", ok, err)
 	}
 	if st := r.load().Task().State; st != domain.TaskRunning {
@@ -278,8 +281,19 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 	if other, _ := r.svc.PendingFeatureSources(bg, "wstein/other", env); len(other) != 2 {
 		t.Errorf("another repository must be asked for both: %v", other)
 	}
-	if err := r.svc.RequestFeatureSources(bg, "t1", "r1", []string{"bad ref"}); err == nil {
+	if err := r.svc.RequestFeatureSources(bg, "t1", "r1", []devcontainer.ForeignFeature{{Ref: "bad ref", Digest: d1}}); err == nil {
 		t.Error("a malformed reference was asked about")
+	}
+	if err := r.svc.RequestFeatureSources(bg, "t1", "r1", []devcontainer.ForeignFeature{{Ref: "ghcr.io/x/y:1"}}); err == nil {
+		t.Error("a feature with no digest was asked about")
+	}
+	// the allowed tag is moved: it resolves to another digest, so it is asked again; the
+	// deny stays per reference, whatever the reference resolves to
+	d3 := "sha256:" + strings.Repeat("3", 64)
+	moved := devcontainer.Environment{ForeignFeatures: []devcontainer.ForeignFeature{{Ref: "ghcr.io/someone/else/thing:1", Digest: d3}, {Ref: "ghcr.io/other/one:2", Digest: d3}}}
+	again, _ := r.svc.PendingFeatureSources(bg, repo, moved)
+	if len(again) != 1 || again[0].Ref != "ghcr.io/someone/else/thing:1" || again[0].Digest != d3 {
+		t.Errorf("a moved tag must be asked again, and a deny must stay: %v", again)
 	}
 	if len(r.errs) != 0 {
 		t.Errorf("errors: %v", r.errs)

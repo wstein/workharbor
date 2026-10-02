@@ -93,6 +93,21 @@ func (c DecisionCause) AsksBeforeStart() bool {
 	return c == CauseEgressRequest || c == CauseFeatureSource
 }
 
+// ValidDigest reports whether s is a manifest digest, sha256:<64 lower-case hex>.
+func ValidDigest(s string) bool {
+	const p = "sha256:"
+	if len(s) != len(p)+64 || s[:len(p)] != p {
+		return false
+	}
+	for i := len(p); i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // ValidFeatureRef reports whether s can be asked about as a feature reference: a
 // registry path with a tag or digest, printable ASCII without spaces or quotes, short.
 // The reader (oci.ParseRef) checks it again before anything is fetched.
@@ -157,6 +172,11 @@ type Decision struct {
 	// wrote it: validated (ValidFeatureRef) and kept apart from the subject and the
 	// input. Empty for every other Decision.
 	Feature string
+	// FeatureDigest is the manifest digest the reference resolved to when the question
+	// was raised, sha256:<64 hex>: what the human saw, and what an allow is bound to
+	// (D38). Kept apart from the subject and the input, like Feature. Empty for every
+	// other Decision.
+	FeatureDigest string
 
 	Status     DecisionStatus
 	CreatedAt  time.Time
@@ -190,6 +210,7 @@ type NewDecision struct {
 	Cause          DecisionCause
 	Host           string // the egress host of a CauseEgressRequest Decision
 	Feature        string // the feature reference of a CauseFeatureSource Decision
+	FeatureDigest  string // the manifest digest it resolved to, which an allow is bound to
 	ResumeAt       time.Time
 	Now            time.Time
 	Timeout        time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
@@ -203,7 +224,7 @@ var (
 	ErrDecisionSHA  = invalid("a review decision needs the commit SHA it is about")
 	ErrDecisionHost = invalid("an egress request is a blocking approval with a valid host name, and no other decision names a host")
 
-	ErrDecisionFeature = invalid("a feature source request is a blocking approval with a valid feature reference, and no other decision names one")
+	ErrDecisionFeature = invalid("a feature source request is a blocking approval with a valid feature reference and manifest digest, and no other decision names either")
 
 	ErrDecisionTimeout = invalid("a decision timeout cannot be negative")
 	ErrDecisionTime    = invalid("a time is needed and it is zero")
@@ -247,25 +268,27 @@ func raise(spec NewDecision) (*Decision, error) {
 	}
 
 	if feat := spec.Cause == CauseFeatureSource; feat != (spec.Feature != "") ||
-		(feat && (spec.Kind != DecisionApproval || !spec.Blocking || !ValidFeatureRef(spec.Feature))) {
+		(feat && (spec.Kind != DecisionApproval || !spec.Blocking || !ValidFeatureRef(spec.Feature) || !ValidDigest(spec.FeatureDigest))) ||
+		(!feat && spec.FeatureDigest != "") {
 		return nil, ErrDecisionFeature
 	}
 
 	d := &Decision{
-		ID:        spec.ID,
-		TaskID:    spec.TaskID,
-		RunID:     spec.RunID,
-		Kind:      spec.Kind,
-		Blocking:  spec.Blocking,
-		Subject:   spec.Subject,
-		SHA:       spec.SHA,
-		Options:   append([]string(nil), spec.Options...),
-		Cause:     spec.Cause,
-		Host:      spec.Host,
-		Feature:   spec.Feature,
-		ResumeAt:  spec.ResumeAt,
-		Status:    DecisionOpen,
-		CreatedAt: spec.Now,
+		ID:            spec.ID,
+		TaskID:        spec.TaskID,
+		RunID:         spec.RunID,
+		Kind:          spec.Kind,
+		Blocking:      spec.Blocking,
+		Subject:       spec.Subject,
+		SHA:           spec.SHA,
+		Options:       append([]string(nil), spec.Options...),
+		Cause:         spec.Cause,
+		Host:          spec.Host,
+		Feature:       spec.Feature,
+		FeatureDigest: spec.FeatureDigest,
+		ResumeAt:      spec.ResumeAt,
+		Status:        DecisionOpen,
+		CreatedAt:     spec.Now,
 	}
 	var cut bool
 	d.Input, cut = capInput(spec.Input)
@@ -283,7 +306,7 @@ func raise(spec NewDecision) (*Decision, error) {
 	}
 	d.record(EventDecisionRaised, DecisionRaised{
 		ID: d.ID, RunID: d.RunID, Kind: d.Kind, Blocking: d.Blocking, Subject: d.Subject,
-		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, Host: d.Host, Feature: d.Feature, ResumeAt: d.ResumeAt,
+		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, Host: d.Host, Feature: d.Feature, FeatureDigest: d.FeatureDigest, ResumeAt: d.ResumeAt,
 	}, spec.Now)
 	return d, nil
 }
