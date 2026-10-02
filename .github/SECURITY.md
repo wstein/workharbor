@@ -2,7 +2,7 @@
 
 ## Status
 
-workharbor has no released versions yet, so there are no supported releases. Security-relevant material today is the [design](docs/content/docs/design/_index.md) and the [threat model](docs/content/docs/threat-model.md), the code that enforces them (the runtime adapter and its mount checks, the egress proxy, hardened host git, the policy guard, redaction, the configuration's secret handling), the CI workflows and the build tooling.
+workharbor has no released versions yet, so there are no supported releases. Security-relevant material today is the [design](../docs/content/docs/design/_index.md) and the [threat model](../docs/content/docs/threat-model.md), the code that enforces them (the runtime adapter and its mount checks, the egress proxy, hardened host git, the policy guard, redaction, the configuration's secret handling), the CI workflows and the build tooling.
 
 ## Reporting a vulnerability
 

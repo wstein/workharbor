@@ -1,8 +1,8 @@
 # Contributing to workharbor
 
-Thank you for your interest. workharbor is **building release 1** and has no release yet: the most valuable contributions right now are reviews of the [design](docs/content/docs/design/_index.md) and the [threat model](docs/content/docs/threat-model.md), spikes against the open decisions in §12, and bug reports against the existing packages and tooling.
+Thank you for your interest. workharbor is **building release 1** and has no release yet: the most valuable contributions right now are reviews of the [design](../docs/content/docs/design/_index.md) and the [threat model](../docs/content/docs/threat-model.md), spikes against the open decisions in §12, and bug reports against the existing packages and tooling.
 
-Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. [AGENTS.md](AGENTS.md) holds the full conventions and applies to humans as well as AI agents.
+Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. [AGENTS.md](../AGENTS.md) holds the full conventions and applies to humans as well as AI agents.
 
 ## Before you start
 
@@ -73,4 +73,4 @@ AI tools are welcome, including coding agents. You remain responsible for everyt
 
 ## License
 
-workharbor is released under the [EUPL-1.2](LICENSE). By contributing you agree that your contribution is licensed under the same terms.
+workharbor is released under the [EUPL-1.2](../LICENSE). By contributing you agree that your contribution is licensed under the same terms.

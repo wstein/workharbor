@@ -1,7 +1,7 @@
 # Dependabot version updates. A 7-day cooldown keeps brand-new releases (and any
 # compromised ones) out until they have had time to be noticed; security updates
 # are not delayed. Tool versions pinned in the Makefile and the
-# workflows are handled by Renovate (renovate.json), which Dependabot cannot read.
+# workflows are handled by Renovate (.github/renovate.json), which Dependabot cannot read.
 version: 2
 updates:
   - package-ecosystem: github-actions

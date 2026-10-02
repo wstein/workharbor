@@ -70,7 +70,7 @@ See [all milestones](https://github.com/wstein/workharbor/milestones), [open iss
 
 ## Contributing
 
-Contributions are welcome, especially design reviews and the open spikes. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome, especially design reviews and the open spikes. Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Code of Conduct](.github/CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](.github/SECURITY.md).
 
 ## License
 

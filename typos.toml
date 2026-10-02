@@ -2,7 +2,7 @@
 [files]
 extend-exclude = [
   "LICENSE",            # EUPL text, with its own spelling
-  "CODE_OF_CONDUCT.md", # third-party text
+  ".github/CODE_OF_CONDUCT.md", # third-party text
   "CHANGELOG.md",       # generated
   "go.sum",
   "internal/web/static/htmx.min.js", # vendored, minified (see static/VENDORED.md)
