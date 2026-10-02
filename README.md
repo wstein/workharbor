@@ -8,7 +8,7 @@
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
 > [!WARNING]
-> **Work in progress: no release yet.** The building blocks exist and are tested: the domain model and SQLite store, hardened host git, the Apple Container adapter with its egress proxy, the Claude Code adapter in degraded mode and the tool store. The supervisor service (`whr serve`) and the task commands below do not exist yet. Command names outside the stable set and parts of the architecture will change. Do not use it to supervise real work. Documentation: <https://wstein.github.io/workharbor/>.
+> **Work in progress: no release yet.** The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
 
 A self-hosted supervisor for AI coding agents. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
@@ -16,14 +16,15 @@ The command-line tool is **`whr`**.
 
 ## Concept
 
-- **Task supervision, not an IDE.** Tasks, workspaces, runs and environments are separate objects; attaching or detaching an editor never interrupts the agent.
+- **A supervisor for coding agents, not an IDE.** Tasks, runs, workspaces and environments are separate objects; attaching or detaching an editor never interrupts the agent.
+- **Workspaces with named agents.** A workspace is a folder with its own isolated environment; each named agent (`<workspace>/<role>`) works on its own branch there. A console environment gives you a shell next to them, without logging in to the host.
 - **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from your phone, the web app or the CLI.
 - **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each agent in its own lightweight VM, reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. Other runtimes follow through adapters.
 - **Your agent, your login, within its terms.** Claude Code first, with your own subscription or an API key. You sign in inside each environment; `whr` never handles a subscription login, and only you start runs ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
-- **Approval boundaries are policy.** Agents commit in their own checkouts on the host; after your cleanup and approval the supervisor pushes the branch and opens the PR. Merge, release and deploy stay with you.
+- **Approval boundaries are policy.** Agents commit inside their environment; the host never runs git there. An agent's commits leave as a git bundle, are checked on the host against a supervisor-owned mirror of the repository, and are pushed only after you approve the exact commit ("Ready to push?"). Merge, tag, release and deploy stay with you, enforced by the forge adapter, not by prompts.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
 
-## Planned CLI
+## CLI (provisional)
 
 ```bash
 whr serve                      # the supervisor: JSON API, web app, reconciler
@@ -36,12 +37,12 @@ whr approve <decision>
 whr answer <decision> <option>
 ```
 
-These are the stable commands of the first slice (design D37); none exists yet, and every other command is provisional.
+These are the stable commands of the first slice (design D37); they exist but have not run against a release yet. Others (`whr ws`, `whr agent`, `whr console`, `whr setup`, `whr doctor`, …) are provisional; see the [manual](https://wstein.github.io/workharbor/docs/manual/).
 
 ## Build
 
 ```bash
-make build         # bin/whr: whr version and whr tools build work today
+make build         # bin/whr
 make install       # whr, whr-shim and whr-proxy from a clean commit on origin/main
 ```
 

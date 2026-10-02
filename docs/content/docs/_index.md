@@ -4,7 +4,7 @@ cascade:
   type: docs
 ---
 
-Design and reference documentation for workharbor. The project is building release 1, dogfood first (D34): the domain model, the store, hardened host git, the Apple Container adapter with its egress proxy, the Claude Code adapter in degraded mode and the tool store exist and are tested; the supervisor service, `whr serve`, does not exist yet.
+Design and reference documentation for workharbor. The project is building release 1, dogfood first (D34): the supervisor (`whr serve`), the CLI, the web UI, workspaces with named agents, the console, the Apple Container adapter with its egress proxy, the Claude Code adapter and the tool store exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next.
 
 {{< cards >}}
   {{< card link="design" title="Design" subtitle="Architecture, domain model, security, CLI and delivery plan." icon="book-open" >}}
@@ -27,7 +27,7 @@ whr approve <decision>
 whr answer <decision> <option>
 ```
 
-These are the stable commands of the first slice ([D37](design/decisions.md)); none exists yet, and every other command is provisional.
+These are the stable commands of the first slice ([D37](design/decisions.md)); they exist but have not run against a release yet, and every other command is provisional.
 
 ## Stack
 
