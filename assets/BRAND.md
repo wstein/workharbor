@@ -8,7 +8,7 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 - **App icon** (square places only: `favicon.svg`, `favicon.ico`, the
   `favicon-*.png`, `apple-touch-icon.png`, the `android-chrome-*.png`,
   `logo.svg`/`logo.png`): the teal anchor on a rounded navy tile. Tile corner
-  radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px.
+  radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
 - **Horizontal lockup** (everything wide: the README banner, the social preview,
   the docs navbar): the bare teal anchor, no tile, then the wordmark. A tile never
   appears in a lockup, and a lockup never appears in a square place.
@@ -22,7 +22,7 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 | Gap anchor to wordmark | 0.6 × C |
 | Tagline (optional) | "Supervise AI coding agents. Stay in the loop.", IBM Plex Sans, outlined, cap height 0.4 × C, teal; baseline 0.85 × C below the wordmark's baseline, left-aligned with the wordmark |
 | Third line | none, anywhere |
-| Clear space | 0.6 × C to the left and right; at least 0.45 × C above and below |
+| Clear space | 0.6 × C to the left and right; at least 0.45 × C above and below the whole block (anchor and text), except in the README banner, where its fixed 150 px height allows 0.33 × C |
 
 ## Sizes
 
