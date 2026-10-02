@@ -209,3 +209,29 @@ func TestUsageReportJSONIsStable(t *testing.T) {
 		t.Errorf("an empty report has empty lists, not null: %s", empty)
 	}
 }
+
+// The audit trail of a commit is read by its SHA, and a review of that commit
+// is in it: the pin, the push and the Decision about it.
+func TestTheAuditTrailOfAPinnedCommit(t *testing.T) {
+	r := newRig(t)
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	a := r.load()
+	if _, err := a.PinRevision("r1", "agent/docs", sha); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.store.SaveTask(bg, a); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.svc.CommitAudit(bg, sha)
+	if err != nil || len(got) != 1 || got[0].Kind != domain.EventRevisionPinned || got[0].TaskID != "t1" {
+		t.Fatalf("trail = %+v, %v", got, err)
+	}
+	res, err := r.svc.VerifyAudit(bg, nil)
+	if err != nil || res.Checked == 0 || res.Unchained != 0 {
+		t.Errorf("verify = %+v, %v", res, err)
+	}
+	head, err := r.svc.AuditHead(bg)
+	if err != nil || head != res.Head {
+		t.Errorf("head = %+v, %v", head, err)
+	}
+}
