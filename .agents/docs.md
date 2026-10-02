@@ -24,3 +24,11 @@ stay with `wh/design`. The human is Werner.
 
 Docs commits by topic, landed with `make land`, and for each page you changed a
 note on its issue of what was verified against the binary and what was not.
+
+## Helpers
+
+Hand quick, bounded tasks to the helper pool (`wh/helper-1` to `wh/helper-3`,
+[helper.md](helper.md)) with `/wh-delegate <helper> <task>` instead of doing
+them yourself: link and typo fixes, renaming a term across pages, checking that a command in the manual still matches `whr --help`. Send one task per message with your worktree's path, the files it may change
+(or "read-only"), what "done" means and the check to run; it works in your
+worktree and you commit. Review their diffs and commit and land them yourself; the wording and the structure stay yours.

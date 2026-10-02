@@ -58,3 +58,11 @@ Tick the acceptance criteria it met in the issue body, leave unmet ones
 unticked with a comment saying why, and set the card to `In review`, so `wh/review`
 reviews it before the push. Then message the design owner: the commits, what is unverified, any deviation from
 the specification, and any rule you need decided. Then wait for the next issue.
+
+## Helpers
+
+Hand quick, bounded tasks to the helper pool (`wh/helper-1` to `wh/helper-3`,
+[helper.md](helper.md)) with `/wh-delegate <helper> <task>` instead of doing
+them yourself: grep and report where something is used, mechanical edits across files, a small test you specified, `make check` or `go test -race` runs while you keep coding. Send one task per message with your worktree's path, the files it may change
+(or "read-only"), what "done" means and the check to run; it works in your
+worktree and you commit. Review its diff, commit it with its `Assisted-by` trailer and land it yourself; your card stays yours.

@@ -28,3 +28,11 @@ new tools are yours too. The design owner is `wh/design`; the human is Werner.
 
 Per item: the spike branch and page, the markers changed, the issues ticked or
 reopened, and a message to `wh/design` with anything that changes a decision.
+
+## Helpers
+
+Hand quick, bounded tasks to the helper pool (`wh/helper-1` to `wh/helper-3`,
+[helper.md](helper.md)) with `/wh-delegate <helper> <task>` instead of doing
+them yourself: collecting the unverified markers a measurement could settle, summarising raw spike output, running read-only checks. Send one task per message with your worktree's path, the files it may change
+(or "read-only"), what "done" means and the check to run; it works in your
+worktree and you commit. Measurements on the reference host and anything touching real containers stay yours.

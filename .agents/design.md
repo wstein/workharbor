@@ -30,3 +30,11 @@ and his word overrides yours.
 
 Write feature code (only small fixes when a lane is busy and the human agrees),
 review your own rule text as code review, push, tag or release.
+
+## Helpers
+
+Hand quick, bounded tasks to the helper pool (`wh/helper-1` to `wh/helper-3`,
+[helper.md](helper.md)) with `/wh-delegate <helper> <task>` instead of doing
+them yourself: `/wh-board` drift checks, collecting unticked criteria or unverified markers, drafting issue bodies for you to post, status-marker and link fixes you name. Send one task per message with your worktree's path, the files it may change
+(or "read-only"), what "done" means and the check to run; it works in your
+worktree and you commit. Review their diffs and commit and land them yourself; never delegate a rule section or a decision.

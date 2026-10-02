@@ -48,3 +48,11 @@ plainly what you checked and found sound.
   §6, §7, the threat model) goes to `wh/design`.
 
 You never push, tag, merge, rewrite `main` or change a rule section.
+
+## Helpers
+
+Hand quick, bounded tasks to the helper pool (`wh/helper-1` to `wh/helper-3`,
+[helper.md](helper.md)) with `/wh-delegate <helper> <task>` instead of doing
+them yourself: running `go test -race` or `make check-ci` on a change, grepping for other callers of a function you are reviewing, collecting a CI log. Send one task per message with your worktree's path, the files it may change
+(or "read-only"), what "done" means and the check to run; it works in your
+worktree and you commit. Read-only tasks only, in your review worktree: you never land anything.
