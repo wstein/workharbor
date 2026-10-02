@@ -19,12 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -300,10 +302,15 @@ func (s *Store) install(name, version, platform, file, want string) (Entry, erro
 		}
 		return Entry{}, fmt.Errorf("%w: %s exists with other content", ErrChecksum, dir)
 	}
+	// The full hash is kept in the entry, next to the tool: the name carries only
+	// the first eight hex digits, 32 bits, which is a label and not a check.
+	if err := os.WriteFile(filepath.Join(stage, RecordedHashFile), []byte(sum+"\n"), 0o444); err != nil { //nolint:gosec // a public hash, read-only
+		return Entry{}, err
+	}
 	for _, p := range []struct {
 		path string
 		mode os.FileMode
-	}{{dst, 0o555}, {filepath.Join(stage, "bin"), 0o555}, {stage, 0o555}} {
+	}{{dst, 0o555}, {filepath.Join(stage, "bin"), 0o555}, {filepath.Join(stage, RecordedHashFile), 0o444}, {stage, 0o555}} {
 		if err := os.Chmod(p.path, p.mode); err != nil {
 			return Entry{}, err
 		}
@@ -399,42 +406,144 @@ func (s *Store) Profile(profile string, entries ...Entry) error {
 	return nil
 }
 
-// Verify re-hashes every entry and reports the ones that no longer match the
-// hash in their name, or are writable, or have lost their tool.
-func (s *Store) Verify() []string {
-	var problems []string
+// RecordedHashFile is the file in a store entry that holds the tool's full
+// SHA-256, written when the entry was made.
+const RecordedHashFile = "sha256"
+
+// Problem is something Verify found wrong in the store.
+type Problem struct {
+	Entry string // the store entry, or empty for the store itself
+	Msg   string
+	// Severe means the tool must not be trusted: its content, its mode or its
+	// shape is not what was installed. A problem that is not severe says only
+	// that a check could not be made.
+	Severe bool
+}
+
+func (p Problem) String() string {
+	if p.Entry == "" {
+		return p.Msg
+	}
+	return p.Entry + ": " + p.Msg
+}
+
+// Verify re-hashes every entry against its full SHA-256 and reports what does not
+// match. The hash is the one recorded in the entry (RecordedHashFile); an entry
+// from before it was recorded is checked against the built-in pin of the same
+// tool, version and platform, and, if there is neither, only against the eight
+// digits in its name, which is reported as a problem that is not severe. It also
+// reports a tool that is writable, that has been replaced by a link or anything but
+// a regular file, an entry that is itself a link, and a tool that has gone. Files
+// are opened without following a link.
+func (s *Store) Verify() []Problem {
+	var problems []Problem
 	entries, err := os.ReadDir(filepath.Join(s.Root, "store"))
 	if err != nil {
-		return []string{"cannot read the store: " + err.Error()}
+		return []Problem{{Msg: "cannot read the store: " + err.Error(), Severe: true}}
 	}
+	pins, _ := Pins()
 	for _, d := range entries {
 		if strings.HasPrefix(d.Name(), ".") {
 			continue
 		}
+		bad := func(severe bool, format string, args ...any) {
+			problems = append(problems, Problem{Entry: d.Name(), Msg: fmt.Sprintf(format, args...), Severe: severe})
+		}
 		parts := strings.SplitN(d.Name(), "-", 3)
-		if len(parts) < 3 || len(parts[0]) != 8 {
-			problems = append(problems, fmt.Sprintf("%s: not a store entry name", d.Name()))
+		if len(parts) < 3 || len(parts[0]) != 8 || !d.IsDir() {
+			bad(true, "not a store entry (a directory named <hash8>-<name>-<version>-<platform>)")
 			continue
 		}
-		name := ""
-		bins, _ := os.ReadDir(filepath.Join(s.Root, "store", d.Name(), "bin"))
-		for _, b := range bins {
-			name = b.Name()
-			path := filepath.Join(s.Root, "store", d.Name(), "bin", name)
-			sum, err := hashFile(path)
-			switch {
-			case err != nil:
-				problems = append(problems, fmt.Sprintf("%s: %v", d.Name(), err))
-			case !strings.HasPrefix(sum, parts[0]):
-				problems = append(problems, fmt.Sprintf("%s: the content hashes to %s, not the hash in the name", d.Name(), sum[:8]))
-			}
-			if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o222 != 0 {
-				problems = append(problems, fmt.Sprintf("%s: %s is writable", d.Name(), name))
+		dir := filepath.Join(s.Root, "store", d.Name())
+		want := recordedHash(dir, parts[0])
+		if want.err != "" {
+			bad(true, "%s", want.err)
+		}
+		var pinned string
+		for _, p := range pins {
+			if p.SHA256 != "" && d.Name() == fmt.Sprintf("%s-%s-%s-%s", p.SHA256[:8], p.Name, p.Version, p.Platform) {
+				pinned = p.SHA256
 			}
 		}
-		if name == "" {
-			problems = append(problems, fmt.Sprintf("%s: no tool in bin", d.Name()))
+		bins, _ := os.ReadDir(filepath.Join(dir, "bin"))
+		if len(bins) == 0 {
+			bad(true, "no tool in bin")
+		}
+		for _, b := range bins {
+			path := filepath.Join(dir, "bin", b.Name())
+			if !b.Type().IsRegular() {
+				bad(true, "%s is not a regular file (%v): a tool is never a link", b.Name(), b.Type())
+				continue
+			}
+			sum, err := hashRegular(path)
+			if err != nil {
+				bad(true, "%v", err)
+				continue
+			}
+			switch {
+			case want.sum != "":
+				if sum != want.sum {
+					bad(true, "the content hashes to %s, but %s was recorded", sum, want.sum)
+				}
+			case pinned != "":
+				if sum != pinned {
+					bad(true, "the content hashes to %s, but the pin says %s", sum, pinned)
+				}
+			case !strings.HasPrefix(sum, parts[0]):
+				bad(true, "the content hashes to %s, not the hash in the name", sum[:8])
+			default:
+				bad(false, "no full hash is recorded and no pin matches: only the first 32 bits of the hash in the name were checked")
+			}
+			if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o222 != 0 {
+				bad(true, "%s is writable", b.Name())
+			}
 		}
 	}
 	return problems
+}
+
+// recorded is the hash read from an entry's RecordedHashFile.
+type recorded struct {
+	sum string // empty when there is none
+	err string // set when there is one that cannot be trusted
+}
+
+// recordedHash reads the full hash recorded in an entry. A missing file is not an
+// error (an older entry); one that is a link, not a hash, or not the hash whose
+// first digits name the entry is.
+func recordedHash(dir, hash8 string) recorded {
+	path := filepath.Join(dir, RecordedHashFile)
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return recorded{}
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 128 {
+		return recorded{err: RecordedHashFile + " is not a small regular file"}
+	}
+	raw, err := os.ReadFile(path) //nolint:gosec // a store entry, checked above to be a small regular file
+	if err != nil {
+		return recorded{err: err.Error()}
+	}
+	sum := strings.TrimSpace(string(raw))
+	if !hashRe.MatchString(sum) || !strings.HasPrefix(sum, hash8) {
+		return recorded{err: "the recorded hash is not a SHA-256 that starts with the hash in the name"}
+	}
+	return recorded{sum: sum}
+}
+
+// hashRegular hashes a regular file, opened without following a link.
+func hashRegular(path string) (string, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0) //nolint:gosec // a store entry
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s is not a regular file", path)
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

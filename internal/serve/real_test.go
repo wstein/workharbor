@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/toolstore"
 )
 
 func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
@@ -424,5 +426,57 @@ func TestASpecMountsOnlyTheVolumesOfItsOwnEnvironment(t *testing.T) {
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whr-home-w2", Target: "/other"})
 	if _, err := runtime.Prepare(runtime.PrepareOptions{FS: runtime.OSFS{}, Home: t.TempDir(), Owns: ownsVolumes(spec)}, spec); err == nil || !strings.Contains(err.Error(), "does not belong") {
 		t.Errorf("Prepare accepted another workspace's volume: %v", err)
+	}
+}
+
+// whr serve refuses to start on a tool store whose tool is not what was installed,
+// and only mentions an entry it could not check fully (issue #125).
+func TestServeRefusesATamperedToolStoreAndMentionsAnUncheckedOne(t *testing.T) {
+	root := t.TempDir()
+	t.Cleanup(func() { // the store's entries are read-only; let the temp directory go
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				_ = os.Chmod(path, 0o755) //nolint:gosec // a test directory
+			}
+			return nil
+		})
+	})
+	st := &toolstore.Store{Root: root}
+	src := filepath.Join(t.TempDir(), "tool")
+	if err := os.WriteFile(src, []byte("good"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := st.AddFile("tool", "1.0", "linux-arm64", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logged []string
+	logf := func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	if err := checkToolStore(root, logf); err != nil || len(logged) != 0 {
+		t.Fatalf("a fresh store: %v, logged %v", err, logged)
+	}
+	// An entry from before the full hash was recorded: logged, not refused.
+	if err := os.Chmod(e.Dir, 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(e.Dir, toolstore.RecordedHashFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkToolStore(root, logf); err != nil || len(logged) != 1 || !strings.Contains(logged[0], "32 bits") {
+		t.Errorf("an unchecked entry: %v, logged %v", err, logged)
+	}
+	// A tool changed: refused, naming the tool store and what to do.
+	if err := os.Chmod(filepath.Join(e.Dir, "bin"), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.Chmod(e.Path(), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(e.Path(), []byte("evil"), 0o755); err != nil { //nolint:gosec // a test tampering with the tool
+		t.Fatal(err)
+	}
+	err = checkToolStore(root, logf)
+	if err == nil || !strings.Contains(err.Error(), "does not verify") || !strings.Contains(err.Error(), "whr tools build") {
+		t.Errorf("a tampered tool: %v", err)
 	}
 }

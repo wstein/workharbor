@@ -27,6 +27,7 @@ import (
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
+	"github.com/wstein/workharbor/internal/toolstore"
 )
 
 // Owner is the owner label of this supervisor's environments.
@@ -146,6 +147,26 @@ func AgentSpecFor(c *config.Config, auth agent.AuthMode) func(domain.Task, domai
 	}
 }
 
+// checkToolStore verifies the tool store against the hashes recorded when its
+// entries were made (issue #125) and refuses to start on a tool whose content, mode
+// or shape is not what was installed: every environment mounts the store and runs
+// what is in it. A check that could not be made, an entry from before the full hash
+// was recorded, is logged and does not stop the start.
+func checkToolStore(root string, logf func(string, ...any)) error {
+	var severe []string
+	for _, p := range (&toolstore.Store{Root: root}).Verify() {
+		if p.Severe {
+			severe = append(severe, p.String())
+			continue
+		}
+		logf("tool store: %s", p)
+	}
+	if len(severe) > 0 {
+		return fmt.Errorf("the tool store %s does not verify, so no environment would run it: %s (run `whr tools build` to make it again)", root, strings.Join(severe, "; "))
+	}
+	return nil
+}
+
 // toolProfile finds the tool store profile to use: the configured one, or the
 // only one there is.
 func toolProfile(c *config.Config) (string, error) {
@@ -227,6 +248,9 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	}
 	profile, err := toolProfile(c)
 	if err != nil {
+		return Deps{}, nil, err
+	}
+	if err := checkToolStore(c.Roots.ToolStore, logf); err != nil {
 		return Deps{}, nil, err
 	}
 	proxy, err := service.InstalledProxy(exe)

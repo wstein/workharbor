@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/sshca"
+	"github.com/wstein/workharbor/internal/toolstore"
 )
 
 // The setup steps beyond what `whr doctor` always checked (design D46, the manual's
@@ -762,7 +763,24 @@ func userSteps(d Deps) []Check {
 				if err != nil || len(ents) == 0 {
 					return Fail, "the tool store " + c.Roots.ToolStore + " has no profile"
 				}
-				return OK, "the tool store has a profile"
+				// The tools are what every environment runs: check them against the
+				// hashes recorded when they were installed.
+				var severe []string
+				unchecked := 0
+				for _, p := range (&toolstore.Store{Root: c.Roots.ToolStore}).Verify() {
+					if p.Severe {
+						severe = append(severe, p.String())
+					} else {
+						unchecked++
+					}
+				}
+				if len(severe) > 0 {
+					return Fail, "the tool store does not verify: " + oneLine(strings.Join(severe, "; "))
+				}
+				if unchecked > 0 {
+					return OK, fmt.Sprintf("the tool store has a profile; %d tool(s) have no full hash recorded and were checked only by the hash in their name", unchecked)
+				}
+				return OK, "the tool store has a profile and every tool matches its recorded hash"
 			},
 			Fix: &Fix{
 				Cmds: []Cmd{{Argv: []string{d.Whr, "tools", "build", "-store", "<tool_store>", "-shim", filepath.Join(d.prefix(), "libexec", "whr", "whr-shim-linux-arm64")}}},

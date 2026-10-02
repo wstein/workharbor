@@ -87,6 +87,9 @@ func TestPinnedDownloadIsVerifiedAndStoredReadOnly(t *testing.T) {
 	if p := s.Verify(); len(p) != 0 {
 		t.Errorf("a fresh store does not verify: %v", p)
 	}
+	if rec, err := os.ReadFile(filepath.Join(e.Dir, RecordedHashFile)); err != nil || strings.TrimSpace(string(rec)) != e.SHA256 { //nolint:gosec // a test file
+		t.Errorf("the full hash was not recorded in the entry: %q, %v", rec, err)
+	}
 	// Adding it again is a no-op.
 	again, err := s.Download(bg, v.pin(sum(bin)))
 	if err != nil || again.Dir != e.Dir {
@@ -255,7 +258,7 @@ func TestVerifyNoticesATamperedOrWritableEntry(t *testing.T) {
 	if err := os.Chmod(e.Path(), 0o755); err != nil { //nolint:gosec // a test making the tool writable
 		t.Fatal(err)
 	}
-	if p := strings.Join(s.Verify(), "\n"); !strings.Contains(p, "writable") {
+	if p := joinProblems(s.Verify()); !strings.Contains(p, "writable") {
 		t.Errorf("a writable tool was not noticed: %q", p)
 	}
 	if err := os.Chmod(filepath.Dir(e.Path()), 0o755); err != nil { //nolint:gosec // a test
@@ -264,7 +267,7 @@ func TestVerifyNoticesATamperedOrWritableEntry(t *testing.T) {
 	if err := os.WriteFile(e.Path(), []byte("evil"), 0o755); err != nil { //nolint:gosec // a test tampering with the tool
 		t.Fatal(err)
 	}
-	if p := strings.Join(s.Verify(), "\n"); !strings.Contains(p, "not the hash in the name") {
+	if p := joinProblems(s.Verify()); !strings.Contains(p, "but ") || !strings.Contains(p, "was recorded") {
 		t.Errorf("a tampered tool was not noticed: %q", p)
 	}
 	makeWritable(s.Root)
@@ -286,4 +289,152 @@ func TestThePinsAreWellFormed(t *testing.T) {
 func readString(path string) string {
 	b, _ := os.ReadFile(path) //nolint:gosec // a path in the test store
 	return string(b)
+}
+
+func joinProblems(ps []Problem) string {
+	var out []string
+	for _, p := range ps {
+		out = append(out, p.String())
+	}
+	return strings.Join(out, "\n")
+}
+
+func addTool(t *testing.T, s *Store) Entry {
+	t.Helper()
+	f := filepath.Join(t.TempDir(), "tool")
+	if err := os.WriteFile(f, []byte("good"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AddFile("tool", "1.0", "linux-arm64", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e
+}
+
+func severe(ps []Problem) bool {
+	for _, p := range ps {
+		if p.Severe {
+			return true
+		}
+	}
+	return false
+}
+
+// A change that keeps the first 32 bits of the hash (the eight digits in the name)
+// is caught by the full hash: the name was only ever a label.
+func TestVerifyComparesTheFullHashNotTheEightDigitsInTheName(t *testing.T) {
+	s := newStore(t)
+	e := addTool(t, s)
+	makeWritable(e.Dir)
+	if err := os.Chmod(e.Path(), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	// Record another full hash that shares the eight digits of the name, as a
+	// forged entry could: the binary no longer hashes to what is recorded.
+	forged := e.SHA256[:8] + strings.Repeat("0", 56)
+	if err := os.Chmod(filepath.Join(e.Dir, RecordedHashFile), 0o644); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.Dir, RecordedHashFile), []byte(forged+"\n"), 0o644); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.Chmod(e.Path(), 0o555); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if p := s.Verify(); !severe(p) || !strings.Contains(joinProblems(p), "was recorded") {
+		t.Errorf("a binary that does not match the recorded full hash passed: %v", p)
+	}
+	makeWritable(s.Root)
+}
+
+func TestVerifyRefusesALinkInPlaceOfTheToolTheEntryOrTheRecord(t *testing.T) {
+	// A symlink where the tool should be: its content may be what was installed,
+	// but a tool is never a link, and it must not be followed.
+	s := newStore(t)
+	e := addTool(t, s)
+	makeWritable(e.Dir)
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
+	if err := os.WriteFile(elsewhere, []byte("good"), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.Remove(e.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, e.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Verify(); !severe(p) || !strings.Contains(joinProblems(p), "not a regular file") {
+		t.Errorf("a link in place of the tool passed: %v", p)
+	}
+	makeWritable(s.Root)
+
+	// The entry itself a link to a directory elsewhere.
+	s = newStore(t)
+	e = addTool(t, s)
+	moved := filepath.Join(t.TempDir(), "real-entry")
+	makeWritable(e.Dir)
+	if err := os.Rename(e.Dir, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, e.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Verify(); !severe(p) || !strings.Contains(joinProblems(p), "not a store entry") {
+		t.Errorf("an entry that is a link passed: %v", p)
+	}
+	makeWritable(moved)
+
+	// The record a link to a file that says the right thing.
+	s = newStore(t)
+	e = addTool(t, s)
+	makeWritable(e.Dir)
+	rec := filepath.Join(t.TempDir(), "rec")
+	if err := os.WriteFile(rec, []byte(e.SHA256+"\n"), 0o644); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(e.Dir, RecordedHashFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(rec, filepath.Join(e.Dir, RecordedHashFile)); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Verify(); !severe(p) || !strings.Contains(joinProblems(p), RecordedHashFile) {
+		t.Errorf("a record that is a link passed: %v", p)
+	}
+	makeWritable(s.Root)
+}
+
+// An entry from before the full hash was recorded is checked against its pin if it
+// has one, and only against the name's eight digits, with a problem that is not
+// severe, if it has none.
+func TestVerifyHandlesAnEntryWithoutARecordedHash(t *testing.T) {
+	s := newStore(t)
+	e := addTool(t, s)
+	makeWritable(e.Dir)
+	if err := os.Remove(filepath.Join(e.Dir, RecordedHashFile)); err != nil {
+		t.Fatal(err)
+	}
+	p := s.Verify()
+	if len(p) != 1 || p[0].Severe || !strings.Contains(p[0].Msg, "32 bits") {
+		t.Errorf("an older entry with no pin: %v", p)
+	}
+	// With the first digits right and the rest forged, nothing but a pin can tell, and
+	// there is none: that is the problem's point. With a pin, it is caught.
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	dir := filepath.Join(s.Root, "store", fmt.Sprintf("%s-%s-%s-%s", pin.SHA256[:8], pin.Name, pin.Version, pin.Platform))
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin", pin.Name), []byte("not the pinned content"), 0o555); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if got := joinProblems(s.Verify()); !strings.Contains(got, "the pin says") {
+		t.Errorf("an entry that does not match its pin passed: %s", got)
+	}
+	makeWritable(s.Root)
 }
