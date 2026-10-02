@@ -174,8 +174,32 @@ func Run(ctx context.Context, d Deps) error {
 	} else {
 		logf("passkeys are off: set public_url to whr's https name to enrol one (D45)")
 	}
+	// Previews (D33): a listener per preview, on the configured ports, over a
+	// runtime that can reach an environment's ports.
+	var previews *service.Previews
+	if d.Config.Preview.On() {
+		pcfg := service.PreviewConfig{FirstPort: d.Config.Preview.FirstPort, LastPort: d.Config.Preview.LastPort}
+		if origin, host := d.Config.PublicOrigin(); origin != "" {
+			pcfg.Scheme, pcfg.Host = "https", host
+		}
+		if up, ok := d.Runtime.(runtime.Previewer); ok {
+			pcfg.Upstream = up
+		} else {
+			logf("previews are on, but the %s runtime cannot reach an environment's ports yet: opening one will say so (issue #72, #69)", d.Runtime.Name())
+		}
+		if previews, err = service.NewPreviews(svc, ws, pcfg); err != nil {
+			return err
+		}
+		sweepCtx, stopSweep := context.WithCancel(ctx)
+		swept := make(chan struct{})
+		go func() { defer close(swept); previews.Manager().Run(sweepCtx, 0) }()
+		defer func() { stopSweep(); <-swept }()
+	}
 	apiOpt := api.Options{Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
 	webOpt := web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }}
+	if previews != nil {
+		apiOpt.Previews, webOpt.Previews = previews, previews
+	}
 	if keys != nil { // a typed nil would look like a configured interface
 		apiOpt.Passkeys, webOpt.Passkeys = keys, keys
 		webOpt.Changes = changesOf{st: d.Store, svc: svc, revoke: scfg.RevokeTokens != nil}

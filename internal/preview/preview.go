@@ -135,25 +135,25 @@ func randomHex(n int) string {
 }
 
 // Open opens a preview of one port of one environment for a task, or returns the
-// one already open for that pair. The caller has checked that the port is one the
+// one already open for that pair (created is false then). The caller has checked that the port is one the
 // environment declares and that the human may open it.
-func (m *Manager) Open(ctx context.Context, task, env string, port int) (Preview, error) {
+func (m *Manager) Open(ctx context.Context, task, env string, port int) (pv Preview, created bool, err error) {
 	if port < 1 || port > 65535 {
-		return Preview{}, ErrBadPort
+		return Preview{}, false, ErrBadPort
 	}
 	if !m.cfg.Live(ctx, env) {
-		return Preview{}, ErrNotRunning
+		return Preview{}, false, ErrNotRunning
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, p := range m.previews {
 		if p.Env == env && p.Port == port {
-			return p.Preview, nil
+			return p.Preview, false, nil
 		}
 	}
 	ln, err := m.listen()
 	if err != nil {
-		return Preview{}, err
+		return Preview{}, false, err
 	}
 	now := m.cfg.Now()
 	p := &live{
@@ -174,7 +174,7 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int) (Preview
 			m.cfg.OnError(fmt.Errorf("preview %s: %w", p.ID, err))
 		}
 	}()
-	return p.Preview, nil
+	return p.Preview, true, nil
 }
 
 // listen takes the first free port of the range, or an ephemeral one.

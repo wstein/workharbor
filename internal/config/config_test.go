@@ -361,3 +361,27 @@ func TestConsoleDefaultsAndValidation(t *testing.T) {
 		t.Errorf("an IP address: %s", problems(err))
 	}
 }
+
+func TestPreviewPorts(t *testing.T) {
+	r := newRig(t)
+	if c, err := r.parse(t); err != nil || c.Preview.On() {
+		t.Fatalf("no preview section: %v", err)
+	}
+	r.cfg.Preview = Preview{FirstPort: 9400, LastPort: 9409}
+	if c, err := r.parse(t); err != nil || !c.Preview.On() {
+		t.Errorf("a valid range: %v", problems(err))
+	}
+	for name, p := range map[string]Preview{
+		"below 1024":     {FirstPort: 80, LastPort: 90},
+		"above 65535":    {FirstPort: 9400, LastPort: 70000},
+		"backwards":      {FirstPort: 9410, LastPort: 9400},
+		"only the end":   {LastPort: 9410},
+		"too many":       {FirstPort: 9400, LastPort: 9400 + MaxPreviewPorts},
+		"holds the UI's": {FirstPort: 8700, LastPort: 8800},
+	} {
+		r.cfg.Preview = p
+		if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "preview") {
+			t.Errorf("%s: %q", name, problems(err))
+		}
+	}
+}

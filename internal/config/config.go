@@ -174,6 +174,10 @@ type Config struct {
 	// Budgets limit the tokens and the cost a run and a task may use (design
 	// §7.4). Optional: none means no limit.
 	Budgets Budgets `json:"budgets,omitzero"`
+	// Preview turns on the preview proxy (D33, issue #72): the loopback ports a
+	// preview of an agent's dev server may listen on, which the forwarder maps.
+	// Optional: without it there are no previews.
+	Preview Preview `json:"preview,omitzero"`
 	// ToolProfile names the profile of the tool store the environments use
 	// (`profiles/<name>`). Optional when the store has exactly one.
 	ToolProfile string `json:"tool_profile,omitempty"`
@@ -225,6 +229,20 @@ func (c Console) Resolved() Console {
 	}
 	return c
 }
+
+// Preview is the range of loopback ports previews listen on, each with an origin
+// of its own (D33). Both ends are set, or neither: no range, no previews.
+type Preview struct {
+	FirstPort int `json:"first_port,omitempty"`
+	LastPort  int `json:"last_port,omitempty"`
+}
+
+// On reports whether previews are configured.
+func (p Preview) On() bool { return p.FirstPort != 0 }
+
+// MaxPreviewPorts is the most ports the range may hold: a preview is a listener
+// and a forwarder rule, and each one shows agent-written code.
+const MaxPreviewPorts = 50
 
 // Budgets are the per-run and per-task limits. A soft threshold warns once; a
 // hard limit ends the task as failed. They count what the agent reported, the
@@ -354,6 +372,20 @@ func (c *Config) Validate() error {
 		add("listen: %s", err)
 	}
 
+	if p := c.Preview; p != (Preview{}) {
+		switch {
+		case p.FirstPort < 1024 || p.LastPort > 65535 || p.LastPort < p.FirstPort:
+			add("preview: first_port and last_port must be ports from 1024 to 65535, first not above last")
+		case p.LastPort-p.FirstPort+1 > MaxPreviewPorts:
+			add("preview: at most %d ports (first_port to last_port)", MaxPreviewPorts)
+		default:
+			if _, port, err := net.SplitHostPort(c.Listen); err == nil {
+				if n, _ := strconv.Atoi(port); n >= p.FirstPort && n <= p.LastPort {
+					add("preview: the range holds the port whr listens on (%d): a preview needs an origin of its own", n)
+				}
+			}
+		}
+	}
 	for name, l := range map[string]BudgetLimit{"budgets.per_run": c.Budgets.PerRun, "budgets.per_task": c.Budgets.PerTask} {
 		if l.MaxTokens < 0 || l.MaxCostUSD < 0 || math.IsNaN(l.MaxCostUSD) || math.IsInf(l.MaxCostUSD, 0) {
 			add("%s: a limit cannot be negative", name)

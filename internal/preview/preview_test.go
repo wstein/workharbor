@@ -122,7 +122,7 @@ func (r *rig) advance(d time.Duration) { r.mu.Lock(); r.now = r.now.Add(d); r.mu
 
 func (r *rig) open() Preview {
 	r.t.Helper()
-	p, err := r.m.Open(bg, "t1", "env1", 3000)
+	p, _, err := r.m.Open(bg, "t1", "env1", 3000)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestAStoppedEnvironmentsPreviewRefusesAndCloses(t *testing.T) {
 	if len(r.m.List()) != 0 {
 		t.Errorf("the preview stayed open: %+v", r.m.List())
 	}
-	if _, err := r.m.Open(bg, "t1", "env1", 3000); !errors.Is(err, ErrNotRunning) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 3000); !errors.Is(err, ErrNotRunning) {
 		t.Errorf("open on a stopped environment: %v", err)
 	}
 	if c, err := (&net.Dialer{Timeout: time.Second}).DialContext(bg, "tcp", strings.TrimPrefix(b, "http://")); err == nil {
@@ -332,7 +332,7 @@ func TestAStoppedEnvironmentsPreviewRefusesAndCloses(t *testing.T) {
 func TestASweepClosesWhatTheEnvironmentLeftAndWhatGrewOld(t *testing.T) {
 	r := newRig(t)
 	p := r.open()
-	q, _ := r.m.Open(bg, "t2", "env2", 3000)
+	q, _, _ := r.m.Open(bg, "t2", "env2", 3000)
 	r.setRunning("env1", false)
 	r.advance(liveFor + time.Second)
 	r.m.Sweep(bg)
@@ -398,21 +398,21 @@ func TestPortsComeFromTheRangeAndOneEnvironmentPortHasOnePreview(t *testing.T) {
 		t.Skip("no two ports close together")
 	}
 	r := newRig(t, func(c *Config) { c.FirstPort, c.LastPort = lo, hi })
-	a, err := r.m.Open(bg, "t1", "env1", 3000)
+	a, _, err := r.m.Open(bg, "t1", "env1", 3000)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if a.Listen < lo || a.Listen > hi {
 		t.Errorf("listening on %d, outside %d-%d", a.Listen, lo, hi)
 	}
-	if again, _ := r.m.Open(bg, "t1", "env1", 3000); again.ID != a.ID {
+	if again, created, _ := r.m.Open(bg, "t1", "env1", 3000); again.ID != a.ID || created {
 		t.Errorf("the same port of the same environment opened a second preview")
 	}
-	if _, err := r.m.Open(bg, "t1", "env1", 3001); err != nil && !errors.Is(err, ErrNoPort) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 3001); err != nil && !errors.Is(err, ErrNoPort) {
 		t.Fatal(err)
 	}
 	for port := 4000; ; port++ {
-		if _, err := r.m.Open(bg, "t1", "env1", port); err != nil {
+		if _, _, err := r.m.Open(bg, "t1", "env1", port); err != nil {
 			if !errors.Is(err, ErrNoPort) {
 				t.Fatal(err)
 			}
@@ -422,7 +422,7 @@ func TestPortsComeFromTheRangeAndOneEnvironmentPortHasOnePreview(t *testing.T) {
 			t.Fatal("the range never ran out")
 		}
 	}
-	if _, err := r.m.Open(bg, "t1", "env1", 70000); !errors.Is(err, ErrBadPort) {
+	if _, _, err := r.m.Open(bg, "t1", "env1", 70000); !errors.Is(err, ErrBadPort) {
 		t.Errorf("a bad port: %v", err)
 	}
 }
