@@ -27,7 +27,7 @@ A checklist for the host, in order. Each step says why. Steps marked {{< status 
 
 - Use your own administrator account for setup only: Homebrew, `sudo`, system settings. Each step below says which account runs it.
 - Create a **standard user `whr`** for workharbor and Apple Container. Agents never run next to your own home directory, keychain or SSH keys.
-- **`whr` needs a desktop login session**, not only SSH. Apple Container registers its services in the logged-in user's GUI launchd domain (`gui/<uid>`), and its state lives in that user's `~/Library/Application Support/com.apple.container`: a shell from SSH, `sudo -u whr` or `su whr` cannot start or reach them. So log in as `whr` on the Mac (or over Screen Sharing), start what step 6 and step 13 start from a Terminal in that session, and leave the session logged in; use fast user switching to reach your own account. Commands that do not touch containers (files, `make install`, the configuration) also work from `sudo -iu whr`.
+- **`whr` needs a desktop login session**, not only SSH. Apple Container registers its services in the logged-in user's GUI launchd domain (`gui/<uid>`), and its state lives in that user's `~/Library/Application Support/com.apple.container`: a shell from SSH, `sudo -u whr` or `su whr` cannot start or reach them. So log in as `whr` on the Mac (or over Screen Sharing), start what step 6 and step 13 start from a Terminal in that session, and leave the session logged in; use fast user switching to reach your own account. Commands that do not touch containers (files, the configuration, `whr tools build`) also work from `sudo -iu whr`.
 - Whether Apple Container runs for a **standard (non-administrator) user** is {{< status unverified >}}: the services are per user, but nobody has tried it on a fresh standard account yet. Check it once in step 6; if it fails, tell us in issue #38 before you make `whr` an administrator.
 
 ```bash
@@ -55,7 +55,7 @@ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1
 
 ## 5. Software (Homebrew)
 
-**As the administrator.** Homebrew's prefix `/opt/homebrew` belongs to the account that installed it, so `whr` cannot install, upgrade or pin anything; it only runs what is installed. Install the Xcode Command Line Tools (`xcode-select --install`, for `make` and the compilers), [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading anything you did not ask for: `HOMEBREW_NO_AUTO_UPDATE` stops the automatic index refresh, `HOMEBREW_NO_INSTALL_UPGRADE` stops `brew install` from upgrading what is installed, and `brew pin` (step 6) holds a version through `brew upgrade`.
+**As the administrator.** Homebrew's prefix `/opt/homebrew` belongs to the account that installed it, so `whr` cannot install, upgrade or pin anything; it only runs what is installed. Install the Xcode Command Line Tools (`xcode-select --install`, for `make`), [Homebrew](https://brew.sh), then the host packages from a `Brewfile`. Keep Homebrew from upgrading anything you did not ask for: `HOMEBREW_NO_AUTO_UPDATE` stops the automatic index refresh, `HOMEBREW_NO_INSTALL_UPGRADE` stops `brew install` from upgrading what is installed, and `brew pin` (step 6) holds a version through `brew upgrade`.
 
 ```bash
 echo 'export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1' >> ~/.zprofile
@@ -65,9 +65,9 @@ echo 'export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1' >> ~/.zpro
 # Brewfile: the whole host software for workharbor (D28)
 brew "container"      # Apple Container; workharbor was measured with 1.5.0
 brew "git"
-brew "go"             # builds whr with make install (step 13) until there are releases
+brew "gh"             # downloads and verifies whr's draft releases (step 13) until v0.1.0
 cask "tailscale"      # only for the Tailscale option in step 7
-# tap "wstein/tap"; brew "whr"   # from the first release (issue #62)
+# tap "wstein/tap"; brew "whr"   # from v0.1.0 (issue #62); until then step 13
 ```
 
 ```bash
@@ -197,12 +197,23 @@ chmod 600 ~/.config/whr/github-app.pem
 
 **Keys for your own experiments** (a spike, a test) live in a password manager such as `pass` or 1Password, and a script reads them from a `0600` env file named by an environment variable, never inline: the repository's hooks refuse a literal key. If a secret leaks anyway, follow the runbook in [SECURITY.md](https://github.com/wstein/workharbor/blob/main/SECURITY.md).
 
-## 13. Build and configure whr (dogfood)
+## 13. Install and configure whr (dogfood)
 
-As the `whr` user (steps 1 to 3 from any `whr` shell, step 4 from a Terminal of its desktop session, step 2), in a checkout of the repository on a clean commit ([design D34](../design/decisions.md)):
+Until `v0.1.0` the host runs a **dogfood draft release**: a signed prerelease tag `v0.1.0-alpha.N` on `main` that CI built, attested and left as a draft ([design D24, D34](../design/decisions.md)). Nothing is built on the host. From `v0.1.0` on, `brew install wstein/tap/whr` replaces step 1.
 
-1. **Install.** `make install` builds `whr`, the launcher `whr-shim` and the egress proxy `whr-proxy` (both for the guest, linux-arm64) from the current commit, with the version stamp, and installs them under `PREFIX` (default `~/.local`; the guest binaries go to `libexec/whr`). It refuses a dirty tree and a commit that is not on `origin/main` (run `git fetch origin` first), so the supervisor always runs approved, committed code (D34). It builds with `GOWORK=off` and an empty `GOFLAGS`, so a parent `go.work` or your environment cannot change the build. `whr version` shows the version and whether the tree was clean. `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
-2. **Fill the tool store.** `whr tools build -store <tool store> -shim ~/.local/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.
+1. **Install, as the administrator.** A draft can be downloaded only by a writer of the repository, so this runs with your own GitHub login (`gh auth login`), never in `whr`'s account. The prefix belongs to the administrator, so nothing running as `whr`, an agent that escaped included, can replace the supervisor:
+
+    ```bash
+    sudo install -d -o "$(id -un)" -g admin -m 755 /opt/whr
+    git clone https://github.com/wstein/workharbor.git && cd workharbor
+    make install-release VERSION=v0.1.0-alpha.1    # PREFIX=/opt/whr is the default
+    ```
+
+    It downloads the macOS archive, the guest archive and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of the repository's release workflow, and installs `whr` in `/opt/whr/bin` and the guest binaries `whr-shim` and `whr-proxy` in `/opt/whr/libexec/whr`; it installs nothing if a check fails. Whether `gh release download` finds a draft by its tag is {{< status unverified >}} until the first draft (issue #103). Upgrade the same way with the next tag. Then, as `whr`, add `export PATH=/opt/whr/bin:$PATH` to `~/.zprofile`: `whr version` shows the tag, and `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
+
+The remaining steps run as the `whr` user: steps 2 and 3 from any `whr` shell, step 4 from a Terminal of its desktop session (step 2).
+
+2. **Fill the tool store.** `whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. A checksum mismatch stops it with nothing stored.
 3. **Write the configuration file**, `~/.config/whr/config.json`. Secrets are paths (step 12), never values:
 
     ```json
