@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/wstein/workharbor/internal/agent"
@@ -24,6 +25,7 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
+	"github.com/wstein/workharbor/internal/web"
 )
 
 // Deps is everything Run needs, already built. `whr serve` builds the real ones
@@ -95,7 +97,12 @@ func Run(ctx context.Context, d Deps) error {
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
 		Topics: d.Topics, EditorDir: d.EditorDir,
 	})
-	srv, err := api.New(api.NewBackend(svc, ws), api.Options{
+	be := api.NewBackend(svc, ws)
+	auth, err := web.NewTokenAuth(token, nil)
+	if err != nil {
+		return err
+	}
+	srv, err := api.New(be, api.Options{
 		Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) },
 	})
 	if err != nil {
@@ -139,7 +146,14 @@ func Run(ctx context.Context, d Deps) error {
 		}
 	}()
 
-	err = srv.Serve(ctx, ln)
+	ui, err := web.New(be, web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }})
+	if err != nil {
+		return err
+	}
+	root := http.NewServeMux()
+	root.Handle("/v1/", srv.Handler()) // the JSON API: bearer token on every request
+	root.Handle("/", ui.Handler())     // the web UI: a session, set from the same token
+	err = srv.ServeHandler(ctx, ln, root)
 	stop()
 	<-loopDone
 	if errors.Is(err, context.Canceled) {

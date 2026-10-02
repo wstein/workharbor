@@ -1,0 +1,150 @@
+/* workharbor web UI: plain CSS, design tokens shared with the documentation site
+(navy and teal, light and dark). No framework; nothing depends on hover. */
+:root {
+  --bg: #f7f9fb;
+  --surface: #ffffff;
+  --text: #14233a;
+  --muted: #5a6a80;
+  --line: #d5dde7;
+  --navy: #14233a;
+  --teal: #0f8b8d;
+  --teal-text: #ffffff;
+  --danger: #b3261e;
+  --warn: #8a5a00;
+  --radius: 10px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1726;
+    --surface: #16233a;
+    --text: #e6edf6;
+    --muted: #9fb0c6;
+    --line: #2b3b57;
+    --teal: #35b8ba;
+    --teal-text: #08202a;
+    --danger: #ff8a80;
+    --warn: #ffcc66;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: var(--teal); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: var(--navy);
+  color: #fff;
+}
+.bar a { color: #fff; text-decoration: none; }
+.brand { font-weight: 700; margin-right: auto; }
+.bar nav { display: flex; gap: 4px; }
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+}
+.tab.current { background: rgba(255, 255, 255, 0.16); }
+.count {
+  background: var(--teal);
+  color: var(--teal-text);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+main { max-width: 60rem; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.5rem; margin: 8px 0 16px; }
+h2 { font-size: 1.15rem; margin: 24px 0 8px; }
+h3 { margin: 0 0 4px; font-size: 1rem; text-transform: capitalize; }
+.muted { color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 8px; max-width: 36rem; }
+label { font-weight: 600; }
+input, select, textarea, button, .button {
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+textarea { min-height: 88px; }
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+}
+.primary { background: var(--teal); color: var(--teal-text); border-color: var(--teal); font-weight: 700; }
+.danger { color: var(--danger); border-color: var(--danger); font-weight: 700; }
+.quiet { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.flash {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.flash.bad { border-left-color: var(--danger); }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.card a { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; text-decoration: none; }
+.state { font-size: 0.85em; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); }
+.state.awaiting_guidance { border-color: var(--warn); color: var(--warn); }
+.state.running { border-color: var(--teal); color: var(--teal); }
+.state.failed, .state.cancelled { border-color: var(--danger); color: var(--danger); }
+.decision {
+  padding: 8px 16px 16px;
+  margin: 0 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.subject { font-weight: 600; margin: 0 0 4px; }
+.untrusted {
+  margin: 4px 0;
+  padding: 8px;
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+}
+.transcript { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ev { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 4px 8px; border-left: 3px solid var(--line); background: var(--surface); }
+.ev .at { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev .label { font-weight: 700; }
+.ev .text { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1 1 100%; }
+.ev.message { border-left-color: var(--teal); }
+.ev.approval, .ev.error { border-left-color: var(--warn); }
+.ev .untrusted { flex: 1 1 100%; }
+/* a wide screen puts the harbor in two columns */
+@media (min-width: 56rem) {
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; align-items: start; }
+  main > h1, main > .flash, main > p { grid-column: 1 / -1; }
+}

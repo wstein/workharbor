@@ -240,7 +240,14 @@ func Listen(addr string) (net.Listener, error) {
 
 // Serve serves the API on ln until ctx ends.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	return s.ServeHandler(ctx, ln, s.Handler())
+}
+
+// ServeHandler serves h on ln until ctx ends, with the server's timeouts and its
+// orderly shutdown. `whr serve` uses it to put the web UI next to the API on one
+// listener (design §9.3).
+func (s *Server) ServeHandler(ctx context.Context, ln net.Listener, h http.Handler) error {
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	select {

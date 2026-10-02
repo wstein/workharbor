@@ -22,6 +22,7 @@ make changelog     # regenerate CHANGELOG.md
 make docs          # build the Hugo documentation site into _site
 make docs-serve    # serve the docs locally with live reload
 make hooks         # enable hooks and the commit template (once per clone)
+make generate      # compile the web UI's templ templates (the generated files are committed)
 make install       # install whr, whr-shim and whr-proxy from a clean commit on origin/main (D34)
 make install-release VERSION=<tag>  # install a (draft) release after checking checksums and attestation (D24)
 make check-ci      # what CI runs beyond make check: docs build, typos, lychee (online), gitleaks, actionlint
@@ -42,7 +43,7 @@ The pre-commit hook scans the staged change for secrets (gitleaks), then runs th
 - `internal/hostgit/`: the only way the host runs git on agent-writable repositories; it seeds a workspace's agent clone (D42), imports an agent's branch from a bundle, and keeps the forge mirror (the repository cache)
 - `internal/service/`: the service layer the JSON API and web UI share: workspaces and agents, runs, Decisions, the bundle export, prepare and push, the event stream, the reconciler
 - `internal/api/`: the JSON API (token, envelope, idempotency, SSE; `openapi.json` is the contract); `internal/cli/`: the cobra commands, a client of the API; `internal/serve/`: wires `whr serve` together from the configuration
-- `internal/config/`: the configuration file and safe reading of secret files; `internal/githubapp/`: the GitHub App manifest flow behind `whr github app create`; `internal/launchd/`: the LaunchAgent behind `whr service`; `internal/toolstore/`: the content-addressed tool store; `internal/egress/`: the allowlist proxy; `internal/notify/`: notifications (ntfy); `internal/devcontainer/`: the safe subset of `devcontainer.json` from the default branch, and building its image (D38); `internal/docscheck/`: tests that fail when the design and the code disagree
+- `internal/config/`: the configuration file and safe reading of secret files; `internal/githubapp/`: the GitHub App manifest flow behind `whr github app create`; `internal/launchd/`: the LaunchAgent behind `whr service`; `internal/web/`: the web UI (templ templates compiled by `make generate`, htmx vendored, session auth behind one interface); `internal/toolstore/`: the content-addressed tool store; `internal/egress/`: the allowlist proxy; `internal/notify/`: notifications (ntfy); `internal/devcontainer/`: the safe subset of `devcontainer.json` from the default branch, and building its image (D38); `internal/docscheck/`: tests that fail when the design and the code disagree
 - `internal/runtime/`, `agent/`, `forge/`, `ci/`: adapter contracts; `runtime/runtimetest/` and `agent/agenttest/` hold the fakes and conformance suites; `runtime/apple/` is the Apple Container adapter (its live suite runs with `-tags applecontainer`); `agent/claude/` is the Claude Code adapter; `forge/` holds the policy `Guard`, and `forge/github/` the GitHub App client
 - `internal/redact/`: secret redaction at ingest
 - `internal/commitlint/`: commit rules; `internal/exitcode/`, `internal/version/`: shared constants
