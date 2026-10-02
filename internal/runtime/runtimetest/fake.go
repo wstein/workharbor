@@ -55,8 +55,11 @@ type Fake struct {
 	networks map[string]string // network name to the environment it belongs to
 	sidecars map[string]bool
 	execs    []ExecCall
-	next     int
-	ip       int
+	// terminals and sizes are what the fake's terminals were asked and told.
+	terminals []TerminalCall
+	sizes     map[string][][2]uint16
+	next      int
+	ip        int
 }
 
 type fakeEnv struct {

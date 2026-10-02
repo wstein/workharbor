@@ -67,6 +67,36 @@ type Info struct {
 	EgressAllow []string
 }
 
+// TerminalRequest is a command to run in a running environment with a terminal:
+// a shell for the human, whose keystrokes arrive as bytes and whose screen is the
+// bytes that come back.
+type TerminalRequest struct {
+	Cmd        []string
+	Env        []string
+	Dir        string
+	Cols, Rows uint16 // the terminal's size; zero means 80 by 24
+}
+
+// Terminal is a running command with a terminal. Read gives its output, Write
+// its input, and a Read after the command ended returns io.EOF. Close hangs up
+// the terminal and ends the command.
+type Terminal interface {
+	io.ReadWriteCloser
+	// Resize tells the command the terminal's new size.
+	Resize(cols, rows uint16) error
+	// Wait returns the command's exit code once it has ended.
+	Wait() (exitCode int, err error)
+}
+
+// TerminalAdapter is implemented by an adapter that can run a command in an
+// environment with a terminal (design D43, `whr console`). It is separate from
+// Exec because a terminal is not a pair of pipes: it has a size, signals and one
+// stream for both outputs. It fails with ErrNotFound, ErrNotOwned or
+// ErrNotRunning like every method that takes an ID.
+type TerminalAdapter interface {
+	Terminal(ctx context.Context, envID string, req TerminalRequest) (Terminal, error)
+}
+
 // EgressUpdater is implemented by an adapter that can change what an
 // environment's egress sidecar allows (design §4.2, D38). It is for the one moment
 // it is safe: before an agent process starts in the environment, because the

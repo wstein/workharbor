@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -91,6 +92,7 @@ func Checks() []Check {
 		{"exec passes stdin to the command, also while it runs", checkStdin},
 		{"cancelling an exec ends the process in the guest", checkCancelKillsGuestProcess},
 		{"the network, volume and sidecar are created and removed", checkSurroundings},
+		{"a terminal has a size, input, output and the exit code", checkTerminal},
 		{"the egress allowlist can be changed, and only through a prepared spec", checkUpdateEgress},
 		{"a writable volume has one running writer", checkVolumeExclusive},
 		{"the prepared mounts are what the runtime mounts", checkMountsAsPrepared},
@@ -744,6 +746,116 @@ func checkSurroundings(ctx context.Context, h Harness) error {
 	}
 	if err := a.RemoveVolume(ctx, "wh-conformance-home-a"); err != nil {
 		return fmt.Errorf("removing a volume that is gone must succeed: %w", err)
+	}
+	return nil
+}
+
+// checkTerminal needs an adapter that implements runtime.TerminalAdapter; one that
+// does not has no terminal to check.
+func checkTerminal(ctx context.Context, h Harness) error {
+	a := h.Adapter
+	ta, ok := a.(runtime.TerminalAdapter)
+	if !ok {
+		return nil
+	}
+	id, err := startRunning(ctx, h)
+	if err != nil {
+		return err
+	}
+	// Output and the exit code.
+	run := func(cmd []string) (string, int, error) {
+		tm, err := ta.Terminal(ctx, id, runtime.TerminalRequest{Cmd: cmd, Cols: 100, Rows: 30})
+		if err != nil {
+			return "", 0, err
+		}
+		var out strings.Builder
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = io.Copy(&out, tm)
+		}()
+		code, err := tm.Wait()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			_ = tm.Close()
+			return out.String(), code, errors.New("the terminal's output did not end after the command did")
+		}
+		_ = tm.Close()
+		return out.String(), code, err
+	}
+	if out, code, err := run(h.Commands.Echo("terminal-hi")); err != nil || code != 0 || !strings.Contains(out, "terminal-hi") {
+		return fmt.Errorf("a terminal running echo: output %q, code %d, %s", out, code, show(err))
+	}
+	if _, code, err := run(h.Commands.Exit(3)); err != nil || code != 3 {
+		return fmt.Errorf("a terminal running exit 3: code %d, %s", code, show(err))
+	}
+	// Input and a resize reach a running command, and Close ends it.
+	tm, err := ta.Terminal(ctx, id, runtime.TerminalRequest{Cmd: h.Commands.Cat})
+	if err != nil {
+		return fmt.Errorf("Terminal(cat): %w", err)
+	}
+	var seen strings.Builder
+	var mu sync.Mutex
+	go func() {
+		b := make([]byte, 256)
+		for {
+			n, err := tm.Read(b)
+			mu.Lock()
+			seen.Write(b[:n])
+			mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+	if err := tm.Resize(120, 50); err != nil {
+		return fmt.Errorf("Resize: %w", err)
+	}
+	wrote := make(chan error, 1)
+	go func() { _, err := tm.Write([]byte("typed-text\n")); wrote <- err }()
+	select {
+	case err := <-wrote:
+		if err != nil {
+			return fmt.Errorf("Write: %w", err)
+		}
+	case <-time.After(10 * time.Second):
+		_ = tm.Close()
+		return errors.New("a Write to a terminal blocked: the command does not read its input")
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		mu.Lock()
+		got := strings.Contains(seen.String(), "typed-text")
+		mu.Unlock()
+		if got {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = tm.Close()
+			return errors.New("what was typed did not come back from cat in a terminal")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := tm.Close(); err != nil {
+		return fmt.Errorf("Close: %w", err)
+	}
+	waited := make(chan struct{})
+	go func() { _, _ = tm.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(10 * time.Second):
+		return errors.New("Close did not end the terminal's command")
+	}
+	// Only a running environment has a terminal, and only one this adapter owns.
+	if _, err := ta.Terminal(ctx, "no-such-environment", runtime.TerminalRequest{Cmd: h.Commands.Echo("x")}); !errors.Is(err, runtime.ErrNotFound) && !errors.Is(err, runtime.ErrNotOwned) {
+		return fmt.Errorf("a terminal in an unknown environment = %s", show(err))
+	}
+	if err := a.Stop(ctx, id); err != nil {
+		return err
+	}
+	if _, err := ta.Terminal(ctx, id, runtime.TerminalRequest{Cmd: h.Commands.Echo("x")}); !errors.Is(err, runtime.ErrNotRunning) {
+		return fmt.Errorf("a terminal in a stopped environment = %s, want ErrNotRunning", show(err))
 	}
 	return nil
 }
