@@ -66,6 +66,9 @@ type harborPage struct {
 	Agents   []agentChoice
 	Key      string // the idempotency key of the start form
 	Flash    string
+	// Usage is the account's usage, which leads the page (§5.7); nil when there
+	// is nothing to show.
+	Usage *usageBox
 }
 
 type decisionRow struct {
@@ -122,6 +125,8 @@ type taskPage struct {
 	// Previews are the ports the task's environment declares for previews, each
 	// with its open preview if there is one (D33).
 	Previews []previewRow
+	// Usage is the task's usage line (turns, tokens, cost), or empty.
+	Usage string
 	// PreviewsOn says the UI has the preview proxy, so the section is shown.
 	PreviewsOn bool
 	// Panes is the task list beside the task on a wide screen in landscape (§9.6

@@ -147,10 +147,35 @@ templ taskList(rows []taskRow) {
 	</ul>
 }
 
+templ usagePanel(u *usageBox) {
+	<section aria-labelledby="usage" class="usage">
+		<h2 id="usage">Usage</h2>
+		for _, w := range u.Windows {
+			<p class="window">
+				<label for={ "win-" + w.ID }>{ w.Name }</label>
+				<meter id={ "win-" + w.ID } min="0" max="100" low="70" high="90" optimum="0" value={ itoa(int64(w.Percent)) }>{ itoa(int64(w.Percent)) }%</meter>
+				<span>{ itoa(int64(w.Percent)) }%</span>
+				if w.Resets != "" {
+					<span class="muted">{ w.Resets }</span>
+				}
+			</p>
+		}
+		if u.Totals != "" {
+			<p class="muted">{ u.Totals }</p>
+		}
+		if u.Balance != "" {
+			<p class="muted">Balance: { u.Balance }</p>
+		}
+	</section>
+}
+
 templ harborView(p harborPage) {
 	@layout(p.nav, "Harbor") {
 		<h1>Harbor</h1>
 		@flashNote(p.Flash)
+		if p.Usage != nil {
+			@usagePanel(p.Usage)
+		}
 		<section aria-labelledby="needs">
 			<h2 id="needs">Needs you</h2>
 			if len(p.NeedsYou) == 0 {
@@ -336,6 +361,9 @@ templ taskView(p taskPage) {
 				<a href={ templ.SafeURL(p.PRURL) } rel="noreferrer">pull request</a>
 			}
 		</p>
+		if p.Usage != "" {
+			<p class="muted usage">{ p.Usage }</p>
+		}
 		if len(p.Decisions) > 0 {
 			<section aria-labelledby="open">
 				<h2 id="open">Waiting for you</h2>

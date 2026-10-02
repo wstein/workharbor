@@ -48,6 +48,9 @@ type fake struct {
 	opens     []string
 	events    chan domain.Event
 
+	usage        func(service.UsageQuery) (service.UsageReport, error)
+	usageQueries []service.UsageQuery
+
 	tasks    []store.TaskSummary
 	inbox    []domain.Decision
 	logs     []domain.Event
@@ -155,8 +158,15 @@ func (f *fake) KillAll(context.Context, string) (service.KillReport, error) {
 	return service.KillReport{}, errors.New("not used")
 }
 
-func (f *fake) Usage(context.Context, service.UsageQuery) (service.UsageReport, error) {
-	return service.UsageReport{}, errors.New("not used")
+func (f *fake) Usage(_ context.Context, q service.UsageQuery) (service.UsageReport, error) {
+	f.mu.Lock()
+	f.usageQueries = append(f.usageQueries, q)
+	fn := f.usage
+	f.mu.Unlock()
+	if fn != nil {
+		return fn(q)
+	}
+	return service.UsageReport{Rows: []service.UsageRow{}, Windows: []store.WindowReading{}}, nil
 }
 
 func (f *fake) Log(context.Context, domain.ID, int64, int) ([]domain.Event, error) {

@@ -138,7 +138,7 @@ func (s *Server) harbor(w http.ResponseWriter, r *http.Request, sess Session) {
 		s.fail(w, r, sess, err)
 		return
 	}
-	p := harborPage{nav: s.navOf(r, sess, "harbor"), Key: newKey(), Flash: flash(r)}
+	p := harborPage{nav: s.navOf(r, sess, "harbor"), Key: newKey(), Flash: flash(r), Usage: s.harborUsage(r.Context())}
 	p.NeedsYou, p.Others = taskRows(tasks)
 	for _, w := range ws {
 		for _, a := range w.Agents {
@@ -260,6 +260,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request, sess Session) {
 	p.nav, p.SayKey, p.ActKey, p.Flash = s.navOf(r, sess, "harbor"), newKey(), newKey(), flash(r)
 	p.Decisions = decisionRows(v.Open, newKey)
 	p.StepUp = s.stepUpAvailable(r.Context())
+	p.Usage = s.taskUsage(r.Context(), string(id))
 	s.previewRows(r.Context(), id, &p)
 	s.paneRows(r.Context(), id, &p)
 	if len(evs) > maxShown {
