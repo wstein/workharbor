@@ -349,7 +349,7 @@ func TestTheNumberOfOpenCeremoniesIsBounded(t *testing.T) {
 	}
 }
 
-// Sign-in is rate limited as a whole: too many beginnings, or five refused
+// Sign-in is rate limited as a whole: too many beginnings, or ...
 // assertions, stop it for the rest of the minute.
 func TestSignInIsRateLimited(t *testing.T) {
 	r := newRig(t)
@@ -369,20 +369,19 @@ func TestSignInIsRateLimited(t *testing.T) {
 		t.Fatalf("a minute later: %v", err)
 	}
 
-	// a finish with a ceremony nobody issued costs nothing to send and never counts:
-	// anyone who reaches the forwarder could otherwise keep the human out
+	// no number of refused assertions, made up or tried against real challenges,
+	// stops a valid sign-in: an assertion cannot be guessed, and a lockout would only
+	// be a lever for anyone who reaches the forwarder
 	opts, cer, err := r.svc.LoginBegin(bg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range 5 * maxLoginFails {
+	for i := range 50 {
 		if _, err := r.svc.LoginFinish(bg, "guess", passkeytest.Post(map[string]string{})); err == nil || errors.Is(err, ErrTooMany) {
-			t.Fatalf("guess %d: %v", i, err)
+			t.Fatalf("garbage %d: %v", i, err)
 		}
 	}
-	// refused assertions on real ceremonies count, and five stop everything, even
-	// a sign-in that would have been right
-	for i := range maxLoginFails {
+	for i := range 8 {
 		o, c, err := r.svc.LoginBegin(bg)
 		if err != nil {
 			t.Fatalf("begin %d: %v", i, err)
@@ -393,19 +392,8 @@ func TestSignInIsRateLimited(t *testing.T) {
 		}
 	}
 	good := a.Assert(opts.(*protocol.CredentialAssertion), origin)
-	if _, err := r.svc.LoginFinish(bg, cer, good); !errors.Is(err, ErrTooMany) {
-		t.Fatalf("a sign-in after five refusals: %v", err)
-	}
-	if _, _, err := r.svc.LoginBegin(bg); !errors.Is(err, ErrTooMany) {
-		t.Errorf("a begin after five refusals: %v", err)
-	}
-	r.advance(loginWindow + time.Second)
-	opts, cer, err = r.svc.LoginBegin(bg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.svc.LoginFinish(bg, cer, a.Assert(opts.(*protocol.CredentialAssertion), origin)); err != nil {
-		t.Errorf("a right sign-in after the minute: %v", err)
+	if _, err := r.svc.LoginFinish(bg, cer, good); err != nil {
+		t.Fatalf("a valid sign-in after refusals: %v", err)
 	}
 }
 

@@ -41,12 +41,12 @@ const (
 	// maxCeremonies bounds the challenges held in memory, so unauthenticated
 	// requests to begin a sign-in cannot grow the map without limit.
 	maxCeremonies = 64
-	// The sign-in is rate limited as a whole, not per client: there is one owner
-	// and the clients arrive through a forwarder that hides their address. Five
-	// refused assertions in a minute stop sign-in for the rest of that minute, and
-	// at most 30 sign-ins may begin in a minute.
+	// Beginning a sign-in is rate limited as a whole, not per client: there is one
+	// owner and the clients arrive through a forwarder that hides their address, so
+	// at most 30 may begin in a minute. A refused assertion is not counted: an
+	// assertion cannot be guessed, and a lockout would only give anyone who reaches
+	// the forwarder a lever against the human (D45, issue #101).
 	loginWindow   = time.Minute
-	maxLoginFails = 5
 	maxLoginBegin = 30
 )
 
@@ -104,7 +104,6 @@ type Service struct {
 	enrolling map[[sha256.Size]byte]enrolment
 	ceremony  map[string]ceremony
 	begins    []time.Time // sign-ins begun within loginWindow
-	fails     []time.Time // refused sign-in assertions within loginWindow
 }
 
 type enrolment struct {
@@ -308,24 +307,16 @@ func (s *Service) recent(ts []time.Time) []time.Time {
 	return out
 }
 
-// allowLogin counts a sign-in beginning and reports whether the limits let it.
-func (s *Service) allowLogin(begin bool) bool {
+// allowBegin counts a sign-in beginning and reports whether the limit lets it.
+func (s *Service) allowBegin() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.fails, s.begins = s.recent(s.fails), s.recent(s.begins)
-	if len(s.fails) >= maxLoginFails || (begin && len(s.begins) >= maxLoginBegin) {
+	s.begins = s.recent(s.begins)
+	if len(s.begins) >= maxLoginBegin {
 		return false
 	}
-	if begin {
-		s.begins = append(s.begins, s.now())
-	}
+	s.begins = append(s.begins, s.now())
 	return true
-}
-
-func (s *Service) failLogin() {
-	s.mu.Lock()
-	s.fails = append(s.fails, s.now())
-	s.mu.Unlock()
 }
 
 // take returns a ceremony of a kind and forgets it: a challenge is used once,
@@ -430,7 +421,7 @@ func (s *Service) Revoke(ctx context.Context, idOrPrefix string) error {
 // LoginBegin starts a sign-in with a discoverable credential: the browser offers the
 // passkeys it holds for this site.
 func (s *Service) LoginBegin(ctx context.Context) (options any, ceremonyID string, err error) {
-	if !s.allowLogin(true) {
+	if !s.allowBegin() {
 		return nil, "", ErrTooMany
 	}
 	if ok, err := s.Enrolled(ctx); err != nil || !ok {
@@ -452,22 +443,12 @@ func (s *Service) LoginBegin(ctx context.Context) (options any, ceremonyID strin
 
 // LoginFinish checks the assertion and returns the ID of the passkey that signed in.
 func (s *Service) LoginFinish(ctx context.Context, ceremonyID string, r *http.Request) (id string, err error) {
-	if !s.allowLogin(false) {
-		return "", ErrTooMany
-	}
-	// Only an assertion that was tried against a real ceremony counts as refused.
-	// A finish with an unknown or expired ceremony ID costs nothing to make and
-	// could otherwise be sent by anyone who reaches the forwarder to keep the human
-	// out for as long as they like.
+	// An assertion that fails costs the attacker nothing and the owner nothing: it
+	// is not counted, and an unknown or expired challenge is refused as it is.
 	c, err := s.take(ceremonyID, "login")
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if err != nil {
-			s.failLogin()
-		}
-	}()
 	o, _, err := s.owner(ctx)
 	if err != nil {
 		return "", err
