@@ -147,10 +147,10 @@ func TestOpenPrintsThePathAndWarnsAboutAutoRunFiles(t *testing.T) {
 	var sent string
 	s.h["POST /v1/workspaces/docs-ws/open"] = func(w http.ResponseWriter, _ *http.Request, body string) {
 		sent = body
-		_, _ = io.WriteString(w, ok(`{"path":"/Users/whr/open/docs-ws-runtime","warnings":[".vscode/tasks.json","evil\u001b[31mname"]}`))
+		_, _ = io.WriteString(w, ok(`{"path":"/Users/whr/open/docs-ws.runtime","warnings":[".vscode/tasks.json","evil\u001b[31mname"]}`))
 	}
 	code, out, errOut := s.runCLI("", "open", "docs-ws/runtime")
-	if code != exitcode.OK || out != "/Users/whr/open/docs-ws-runtime\n" || sent != `{"role":"runtime"}` {
+	if code != exitcode.OK || out != "/Users/whr/open/docs-ws.runtime\n" || sent != `{"role":"runtime"}` {
 		t.Fatalf("exit %d, stdout %q, sent %q", code, out, sent)
 	}
 	if !strings.Contains(errOut, ".vscode/tasks.json") || strings.Contains(errOut, "\x1b") {

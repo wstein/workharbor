@@ -38,7 +38,9 @@ func (w *Workspaces) OpenCopy(ctx context.Context, workspace, role string) (Edit
 		return EditorCopy{}, fmt.Errorf("open the repository %s: %w", ws.Repo, err)
 	}
 	pub := NewPublisher(w.svc, PublishConfig{Repo: repo, Cache: cache, Workspaces: w})
-	dest := filepath.Join(w.cfg.EditorDir, ws.Name+"-"+a.Role)
+	// Names and roles are lowercase letters, digits and "-", so "." cannot occur in
+	// either: workspace a-b with role c and workspace a with role b-c never share a copy.
+	dest := filepath.Join(w.cfg.EditorDir, ws.Name+"."+a.Role)
 	return pub.OpenCopy(ctx, Request{Agent: a.ID, Branch: a.Branch, Target: ws.Integration}, dest)
 }
 

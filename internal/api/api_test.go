@@ -180,7 +180,7 @@ func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.Edit
 	case role == "":
 		return service.EditorCopy{}, &domain.InvalidError{Msg: "workspace " + workspace + " has several agents (docs, runtime): name one"}
 	}
-	return service.EditorCopy{Path: "/Users/whr/.local/state/whr/open/" + workspace + "-" + role, Warnings: []string{".vscode/tasks.json"}}, nil
+	return service.EditorCopy{Path: "/Users/whr/.local/state/whr/open/" + workspace + "." + role, Warnings: []string{".vscode/tasks.json"}}, nil
 }
 
 func (f *fake) Subscribe(_ context.Context, _ domain.ID, since int64) (<-chan domain.Event, error) {

@@ -3,7 +3,7 @@ HTTP OK (200)
   "schema_version": 1,
   "ok": true,
   "data": {
-    "path": "/Users/whr/.local/state/whr/open/docs-ws-runtime",
+    "path": "/Users/whr/.local/state/whr/open/docs-ws.runtime",
     "warnings": [
       ".vscode/tasks.json"
     ]

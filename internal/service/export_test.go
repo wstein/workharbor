@@ -311,7 +311,7 @@ func TestWorkspacesOpenCopyMakesTheCopyOfTheAgentsBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(editor, "docs-ws-topic")
+	want := filepath.Join(editor, "docs-ws.topic")
 	if cp.Path != want {
 		t.Errorf("copy at %q, want %q", cp.Path, want)
 	}
@@ -320,6 +320,11 @@ func TestWorkspacesOpenCopyMakesTheCopyOfTheAgentsBranch(t *testing.T) {
 	}
 	if cp2, err := w.OpenCopy(bg, "docs-ws", "topic"); err != nil || cp2.Path != want {
 		t.Errorf("by role: %+v, %v", cp2, err)
+	}
+
+	// two agents whose names join to the same text do not share a copy
+	if filepath.Join(editor, "a-b"+"."+"c") == filepath.Join(editor, "a"+"."+"b-c") {
+		t.Error("workspace a-b with role c collides with workspace a with role b-c")
 	}
 
 	var nf *domain.NotFoundError
