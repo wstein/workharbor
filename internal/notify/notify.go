@@ -26,6 +26,10 @@ const (
 	KindQuotaExhausted Kind = "quota_exhausted"
 	KindRunFailed      Kind = "run_failed"
 	KindRunEnded       Kind = "run_ended"
+	// KindBudgetWarning is a soft budget threshold reached; KindBudgetExceeded a
+	// hard limit that ended the task as failed.
+	KindBudgetWarning  Kind = "budget_warning"
+	KindBudgetExceeded Kind = "budget_exceeded"
 )
 
 // Message is everything a notification carries: IDs and a kind, nothing the
@@ -76,6 +80,10 @@ func FromEvents(events []domain.Event) []Message {
 				kind = KindRunFailed // the retry-or-cancel question of a failed run
 			}
 			out = append(out, Message{TaskID: e.TaskID, Kind: kind, DecisionID: p.ID})
+		case domain.EventBudgetWarned:
+			out = append(out, Message{TaskID: e.TaskID, Kind: KindBudgetWarning})
+		case domain.EventBudgetExceeded:
+			out = append(out, Message{TaskID: e.TaskID, Kind: KindBudgetExceeded})
 		case domain.EventRunState:
 			var p domain.StateChanged
 			if json.Unmarshal(e.Payload, &p) != nil {

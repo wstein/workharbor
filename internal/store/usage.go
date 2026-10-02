@@ -214,3 +214,17 @@ func (s *Store) LatestBalance(ctx context.Context, agent string) (*BalanceReadin
 	}
 	return &BalanceReading{Agent: agent, RemainingMicroUSD: remaining, At: fromNano(at)}, nil
 }
+
+// BudgetWarned reports whether the soft threshold of a budget was already
+// recorded for a task, so a budget warns once and not on every turn after it.
+func (s *Store) BudgetWarned(ctx context.Context, task domain.ID, b domain.BudgetBreach) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE task_id = ? AND kind = ?
+		AND json_extract(CAST(payload AS TEXT), '$.scope') = ? AND json_extract(CAST(payload AS TEXT), '$.metric') = ?
+		AND COALESCE(json_extract(CAST(payload AS TEXT), '$.run_id'), '') = ?`,
+		string(task), string(domain.EventBudgetWarned), string(b.Scope), string(b.Metric), string(b.RunID)).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("store: budget warnings: %w", err)
+	}
+	return n > 0, nil
+}
