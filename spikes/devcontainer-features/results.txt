@@ -1,0 +1,19 @@
+# spike #108 on container CLI version 1.5.0 (build: release, commit: unspeci), 2026-10-02T14:53:27Z
+feature node:1 blob sha256:fdb79b02336bfce18522defa1249d6880e0de5a185b4f25fe53d1a6bfb6f07ba (28160 bytes), files: NOTES.md README.md devcontainer-feature.json install.sh
+  declares: id=node version=1.7.1 options=installYarnUsingApt,nodeGypDependencies,nvmInstallPath,nvmVersion,pnpmVersion,version installsAfter=['ghcr.io/devcontainers/features/common-utils']
+  keys outside the safe subset: refused=none lifecycle=none containerEnv=['NVM_DIR', 'NVM_SYMLINK_CURRENT', 'PATH']
+feature python:1 blob sha256:83cde74c25a426c96d346e01b80346af24cda6f3b061522c8096063e5875ca93 (55296 bytes), files: NOTES.md README.md devcontainer-feature.json install.sh
+  declares: id=python version=1.8.0 options=configureJupyterlabAllowOrigin,enableShared,httpProxy,installJupyterlab,installPath,installTools,optimize,toolsToInstall,version installsAfter=['ghcr.io/devcontainers/features/common-utils', 'ghcr.io/devcontainers/features/oryx']
+  keys outside the safe subset: refused=none lifecycle=none containerEnv=['PATH', 'PIPX_BIN_DIR', 'PIPX_HOME', 'PYTHON_PATH']
+  generated Dockerfile ENV lines: ENV NVM_DIR="/usr/local/share/nvm";ENV NVM_SYMLINK_CURRENT="true";ENV PATH="/usr/local/share/nvm/current/bin:${PATH}"
+build node-ubuntu: ok in 9 s
+  run: [6/6] Starting container [2s] v24.21.0 11.19.0
+  generated Dockerfile ENV lines: ENV NVM_DIR="/usr/local/share/nvm";ENV NVM_SYMLINK_CURRENT="true";ENV PATH="/usr/local/share/nvm/current/bin:${PATH}"
+build node-fedora: ok in 12 s
+  run: [6/6] Starting container [1s] v24.21.0 11.19.0
+  generated Dockerfile ENV lines: ENV PYTHON_PATH="/usr/local/python/current";ENV PIPX_HOME="/usr/local/py-utils";ENV PIPX_BIN_DIR="/usr/local/py-utils/bin";ENV PATH="/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:${PATH}"
+build python-ubuntu: ok in 9 s
+  run: [6/6] Starting container [1s] [6/6] Starting container [1s] Python 3.12.3
+  generated Dockerfile ENV lines: ENV PYTHON_PATH="/usr/local/python/current";ENV PIPX_HOME="/usr/local/py-utils";ENV PIPX_BIN_DIR="/usr/local/py-utils/bin";ENV PATH="/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:${PATH}"
+build python-fedora: ok in 14 s
+  run: [6/6] Starting container [1s] [6/6] Starting container [1s] Python 3.14.7
