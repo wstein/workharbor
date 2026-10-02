@@ -23,6 +23,7 @@ type stub struct {
 	queue    []scenario
 	known    map[string]bool
 	sessions int
+	requests int
 	calls    [][]string // the command lines it was started with
 	envs     [][]string
 	dirs     []string
@@ -51,6 +52,16 @@ func (s *stub) Block()                      { s.arrange(scenario{kind: "block"})
 func (s *stub) AuthExpires()                { s.arrange(scenario{kind: "auth"}) }
 func (s *stub) QuotaExhausted(at time.Time) { s.arrange(scenario{kind: "quota", reset: at}) }
 
+func (s *stub) nextRequestID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requests++
+	return fmt.Sprintf("req-%d", s.requests)
+}
+
+// argsOf returns the command's arguments.
+func argsOf(cmd []string) []string { return cmd }
+
 func (s *stub) next() scenario {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -75,6 +86,9 @@ func argAfter(cmd []string, flag string) string {
 	}
 	return ""
 }
+
+// ctlResponse is a control_response the host wrote to the stub's stdin.
+type ctlResponse struct{ id, behavior, message string }
 
 type stubStream struct {
 	chunks chan runtime.Chunk
@@ -108,19 +122,41 @@ func (s *stub) Exec(ctx context.Context, _ string, req runtime.ExecRequest) (run
 
 func (s *stub) process(ctx context.Context, st *stubStream, req runtime.ExecRequest) {
 	lines := make(chan string)
+	ctl := make(chan ctlResponse, 8)
 	go func() {
 		defer close(lines)
+		defer close(ctl)
 		sc := bufio.NewScanner(req.Stdin)
 		sc.Buffer(make([]byte, 0, 1<<16), 1<<24)
 		for sc.Scan() {
 			var m struct {
+				Type     string `json:"type"`
+				Response struct {
+					Subtype   string `json:"subtype"`
+					RequestID string `json:"request_id"`
+					Response  struct {
+						Behavior string `json:"behavior"`
+						Message  string `json:"message"`
+					} `json:"response"`
+				} `json:"response"`
 				Message struct {
 					Content []struct {
 						Text string `json:"text"`
 					} `json:"content"`
 				} `json:"message"`
 			}
-			if json.Unmarshal(sc.Bytes(), &m) == nil && len(m.Message.Content) > 0 {
+			if json.Unmarshal(sc.Bytes(), &m) != nil {
+				continue
+			}
+			if m.Type == "control_response" {
+				select {
+				case ctl <- ctlResponse{id: m.Response.RequestID, behavior: m.Response.Response.Behavior, message: m.Response.Response.Message}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+			if len(m.Message.Content) > 0 {
 				select {
 				case lines <- m.Message.Content[0].Text:
 				case <-ctx.Done():
@@ -223,11 +259,44 @@ func (s *stub) process(ctx context.Context, st *stubStream, req runtime.ExecRequ
 		out(map[string]any{"type": "assistant", "session_id": id, "message": map[string]any{"content": []map[string]any{
 			{"type": "tool_use", "id": "tu1", "name": sc.tool, "input": map[string]any{"command": sc.input}},
 		}}})
-		if slices.Contains(allowed, sc.tool) {
+		toolResult := func(content string, isErr bool) {
 			out(map[string]any{"type": "user", "session_id": id, "message": map[string]any{"content": []map[string]any{
-				{"type": "tool_result", "tool_use_id": "tu1", "content": "ok"},
+				{"type": "tool_result", "tool_use_id": "tu1", "content": content, "is_error": isErr},
 			}}})
-		} else {
+		}
+		switch {
+		case slices.Contains(argsOf(req.Cmd), "--permission-prompt-tool"):
+			// manual mode: the CLI asks the host and waits for the answer to its
+			// request_id; an answer to another ID is ignored (spike #7, case 6)
+			reqID := s.nextRequestID()
+			out(map[string]any{"type": "control_request", "request_id": reqID, "request": map[string]any{
+				"subtype": "can_use_tool", "tool_name": sc.tool, "input": map[string]any{"command": sc.input}, "tool_use_id": "tu1",
+			}})
+		wait:
+			for {
+				select {
+				case r, ok := <-ctl:
+					if !ok { // stdin closed before an answer: the tool does not run (case 3)
+						toolResult("Tool permission request failed: AbortError: Tool permission stream closed before response received", true)
+						break wait
+					}
+					if r.id != reqID {
+						continue
+					}
+					if r.behavior == "allow" {
+						toolResult("ok", false)
+					} else {
+						toolResult(r.message, true)
+					}
+					break wait
+				case <-ctx.Done():
+					cancelled()
+					return
+				}
+			}
+		case slices.Contains(allowed, sc.tool):
+			toolResult("ok", false)
+		default:
 			out(map[string]any{"type": "system", "subtype": "permission_denied", "session_id": id, "tool_name": sc.tool})
 		}
 		out(text("finished"))

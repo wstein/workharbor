@@ -38,10 +38,11 @@ type Config struct {
 	ResumeProbe time.Duration
 }
 
-// Adapter is the Claude Code agent adapter. Until the approval route of spike
-// #7 exists it reports no host approvals, so it runs in the degraded mode
-// (design §5.2): mid-run messages work, permission prompts do not reach the
-// host, and only an allowlist is permitted.
+// Adapter is the Claude Code agent adapter. In manual mode the CLI runs with
+// `--permission-prompt-tool stdio` and every permission prompt reaches the
+// host as a control_request on the exec's stdout; the host's answer goes back
+// as a control_response on its stdin, matched by request_id (D26, spike #7).
+// In dontAsk mode nothing is asked: only the allowlist runs (design §5.2).
 type Adapter struct {
 	r           Runner
 	cfg         Config
@@ -150,7 +151,7 @@ func (a *Adapter) Capabilities() agent.Capabilities {
 		Headless:          true,
 		StructuredEvents:  true,
 		MidRunInstruction: true,
-		HostApprovals:     false, // needs spike #7
+		HostApprovals:     true, // the stdio control protocol (D26)
 		SessionResume:     true,
 		AwaitingGuidance:  false,
 		ReportsQuota:      true, // unverified rule, design §5.2
@@ -175,14 +176,19 @@ func (a *Adapter) Resume(ctx context.Context, spec agent.StartSpec, sessionID st
 }
 
 func (a *Adapter) args(spec agent.StartSpec, resume string) []string {
-	args := []string{
-		a.cfg.Bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-		"--permission-prompts", "none", "--permission-mode", string(agent.PermissionDontAsk),
+	args := []string{a.cfg.Bin, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"}
+	if spec.Mode() == agent.PermissionManual {
+		// Every prompt goes to the host over the control channel (D26).
+		args = append(args, "--permission-mode", string(agent.PermissionManual), "--permission-prompts", "host", "--permission-prompt-tool", "stdio")
+	} else {
+		args = append(args, "--permission-prompts", "none", "--permission-mode", string(agent.PermissionDontAsk))
+	}
+	args = append(args,
 		// The CLI reads only what the supervisor passes. The agent writes its
 		// repository and its home, and both are settings sources: pinning the
 		// sources to user was measured not to be enough (design §5.2).
 		"--setting-sources", "", "--settings", a.cfg.Settings, "--strict-mcp-config", "--disable-slash-commands",
-	}
+	)
 	if len(spec.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(spec.AllowedTools, ","))
 	}
@@ -222,9 +228,11 @@ func (a *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume strin
 		return nil, err
 	}
 
+	actx, acancel := context.WithCancel(pctx)
 	s := &session{
 		cancel: cancel, stdin: pw, events: make(chan agent.Event, 256), done: make(chan struct{}),
-		inited: make(chan struct{}), p: newParser(a.now, true, spec.AllowedTools), resume: resume != "",
+		inited: make(chan struct{}), p: newParser(a.now, spec.Mode() == agent.PermissionDontAsk, spec.AllowedTools), resume: resume != "",
+		now: a.now, approver: spec.Approver, timeout: spec.ApprovalTimeout, actx: actx, acancel: acancel, open: map[string]bool{},
 	}
 	go s.run(pctx, st)
 	// The prompt is the first message; the CLI reports its session ID only after it.
@@ -246,6 +254,19 @@ type session struct {
 	inited chan struct{} // closed when the session event arrives
 	resume bool
 	p      *parser // used by run, and by probe after ready
+	now    func() time.Time
+
+	// Permission prompts (D26). Each control_request is asked of the approver in
+	// its own goroutine, under actx, which ends when the session is stopped or
+	// the output ends, so no prompt outlives the process.
+	approver agent.Approver
+	timeout  time.Duration
+	actx     context.Context
+	acancel  context.CancelFunc
+	asks     sync.WaitGroup
+	omu      sync.Mutex
+	ord      sync.Mutex      // orders events: an approval's record precedes what the CLI does after the answer
+	open     map[string]bool // request IDs asked and not yet answered
 
 	wmu         sync.Mutex  // one message at a time on stdin
 	stdinClosed atomic.Bool // set before the pipe is closed
@@ -270,6 +291,11 @@ func (s *session) send(text string) error {
 	if err != nil {
 		return err
 	}
+	return s.writeLine(line)
+}
+
+// writeLine writes one line to the process's stdin, one at a time.
+func (s *session) writeLine(line []byte) error {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	if s.stdinClosed.Load() {
@@ -288,7 +314,11 @@ func (s *session) closeStdin() {
 	_ = s.stdin.Close()
 }
 
-func (s *session) emit(e agent.Event) { s.events <- e }
+func (s *session) emit(e agent.Event) {
+	s.ord.Lock()
+	defer s.ord.Unlock()
+	s.events <- e
+}
 
 func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 	defer close(s.done)
@@ -304,6 +334,9 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 				s.observe(e)
 				s.emit(e)
 			}
+			for _, cr := range s.p.takeControls() {
+				s.control(cr)
+			}
 			if s.p.result != nil {
 				s.closeStdin()
 			}
@@ -314,6 +347,10 @@ func (s *session) run(ctx context.Context, st runtime.ExecStream) {
 	}
 	code, err := st.Wait()
 	s.closeStdin()
+	// No prompt outlives the process: whatever is still open is denied and
+	// recorded before the events end (D26).
+	s.acancel()
+	s.asks.Wait()
 
 	id := s.p.sessionID
 	res, ok := s.p.outcome()
@@ -466,4 +503,99 @@ func (s *session) Wait() (agent.Result, error) {
 func itoa(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+// control puts one control_request to the host. A permission prompt is asked of
+// the approver, which may take as long as a human does, so it runs apart from
+// the reader; anything else is refused at once, because an unanswered request
+// leaves the CLI waiting.
+func (s *session) control(cr controlRequest) {
+	if cr.Subtype != "can_use_tool" {
+		s.emit(s.p.errorEvent("a control request of kind " + capText(cr.Subtype) + " is not supported and was refused"))
+		if err := s.respond(controlError(cr.ID, "unsupported control request")); err != nil {
+			s.cancel() // the channel is gone while the agent runs: stop it (D26)
+		}
+		return
+	}
+	text, plan := approvalInput(cr.Tool, cr.Input)
+	req := agent.ApprovalRequest{ID: cr.ID, Tool: cr.Tool, Input: text, Plan: plan}
+
+	s.omu.Lock()
+	dup := s.open[cr.ID]
+	s.open[cr.ID] = true
+	s.omu.Unlock()
+	s.asks.Add(1)
+	go func() {
+		defer s.asks.Done()
+		if dup { // one open request per ID: a second with the same ID is not asked
+			s.answer(req, agent.Approval{Reason: "a request with this ID is already open: denied"})
+			return
+		}
+		a := agent.Ask(s.actx, s.approver, s.timeout, req)
+		s.omu.Lock()
+		delete(s.open, cr.ID)
+		s.omu.Unlock()
+		s.answer(req, a)
+	}()
+}
+
+// answer sends the control_response to the request it is for, by request_id,
+// and records what the agent was told. An allow that could not be delivered is
+// recorded as the denial it is, and the agent is stopped: the channel is gone
+// while it still runs, and a request must not outlive its channel (D26).
+func (s *session) answer(req agent.ApprovalRequest, a agent.Approval) {
+	// The record is emitted before the CLI can react to the answer, so the
+	// stream reads in the order things happened: the lock is held across both.
+	s.ord.Lock()
+	defer s.ord.Unlock()
+	reason := a.Reason
+	if err := s.respond(controlAnswer(req.ID, a)); err != nil {
+		if a.Allow {
+			a, reason = agent.Approval{}, "the channel to the agent was lost before the answer: denied"
+		}
+		s.mu.Lock()
+		stopped := s.stopped
+		s.mu.Unlock()
+		if !stopped {
+			s.cancel() // the runtime ends the process in the guest (D25)
+		}
+	}
+	e := agent.Event{Kind: agent.EventApproval, At: s.now(), Tool: req.Tool, Input: capText(req.Input)}
+	s.mu.Lock()
+	e.SessionID = s.id
+	s.mu.Unlock()
+	e.Approval = &agent.ApprovalRecord{ID: req.ID, Allow: a.Allow, Reason: reason}
+	s.events <- e
+}
+
+// respond writes a control_response line.
+func (s *session) respond(v any) error {
+	line, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return s.writeLine(line)
+}
+
+// controlAnswer is the control_response of spike #7: success with allow or deny.
+// A denial carries its reason as the message the agent sees.
+func controlAnswer(id string, a agent.Approval) map[string]any {
+	body := map[string]any{"behavior": "deny", "message": denialMessage(a.Reason)}
+	if a.Allow {
+		body = map[string]any{"behavior": "allow"}
+	}
+	return map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": id, "response": body}}
+}
+
+// controlError refuses a request the adapter does not support. The shape is the
+// SDK's error response and is unverified against the CLI.
+func controlError(id, msg string) map[string]any {
+	return map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": id, "error": msg}}
+}
+
+func denialMessage(reason string) string {
+	if reason == "" {
+		return "Denied by the supervisor"
+	}
+	return capText(reason)
 }

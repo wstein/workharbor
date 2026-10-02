@@ -1,0 +1,96 @@
+{
+  "asked": [
+    {
+      "id": "decb182c-6bcc-412b-b70d-581d3581636d",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/reqid_test.txt\",\"content\":\"REQID_TEST\"}"
+    }
+  ],
+  "events": [
+    {
+      "kind": "session",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "text": "claude-haiku-4-5-20251001"
+    },
+    {
+      "kind": "tool_call",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/reqid_test.txt\",\"content\":\"REQID_TEST\"}"
+    },
+    {
+      "kind": "approval",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/reqid_test.txt\",\"content\":\"REQID_TEST\"}",
+      "approval": {
+        "id": "decb182c-6bcc-412b-b70d-581d3581636d",
+        "allow": false,
+        "reason": "Denied after bad request_id test"
+      }
+    },
+    {
+      "kind": "tool_result",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "text": "Denied after bad request_id test"
+    },
+    {
+      "kind": "message",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "text": "The Write tool call was denied with an error related to a request ID test. I'm unable to complete the task as requested. This appears to be a system-level issue preventing the file write operation."
+    },
+    {
+      "kind": "usage",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+      "usage": {
+        "model": "claude-haiku-4-5-20251001",
+        "tokens": {
+          "input": 18,
+          "output": 285,
+          "cache_read": 43498,
+          "cache_write": 224
+        },
+        "cost": {
+          "micro_usd": 6241,
+          "source": "reported"
+        },
+        "windows": [
+          {
+            "name": "five_hour",
+            "utilization": 0.66,
+            "resets_at": "2026-10-01T11:50:00Z"
+          },
+          {
+            "name": "seven_day",
+            "utilization": 0.24,
+            "resets_at": "2026-10-06T09:00:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "responses": [
+    {
+      "response": {
+        "request_id": "decb182c-6bcc-412b-b70d-581d3581636d",
+        "response": {
+          "behavior": "deny",
+          "message": "Denied after bad request_id test"
+        },
+        "subtype": "success"
+      },
+      "type": "control_response"
+    }
+  ],
+  "result": {
+    "status": "completed",
+    "session_id": "63229e50-5c19-4ec8-9034-43e590a573a3",
+    "text": "The Write tool call was denied with an error related to a request ID test. I'm unable to complete the task as requested. This appears to be a system-level issue preventing the file write operation."
+  }
+}

@@ -86,7 +86,8 @@ type parser struct {
 	pending   map[string]string // tool_use ID to tool name, until its outcome is known
 	order     []string          // pending IDs, oldest first
 
-	denials    int // denials that matched no tool use, for unique IDs
+	controls   []controlRequest // control_request lines seen, for the session to answer
+	denials    int              // denials that matched no tool use, for unique IDs
 	sawInit    bool
 	authFailed bool
 	exhausted  bool
@@ -164,6 +165,8 @@ func (p *parser) line(b []byte) []agent.Event {
 		return p.rateLimit(ev)
 	case "result":
 		return p.finish(ev)
+	case "control_request":
+		return p.control(b)
 	}
 	return nil // stream_event deltas and anything new: not part of the contract yet
 }
@@ -436,4 +439,61 @@ func parseTime(raw json.RawMessage) time.Time {
 
 func clamp01(f float64) float64 {
 	return math.Min(1, math.Max(0, f))
+}
+
+// controlRequest is a request of the CLI to the host on the stdio control
+// channel (design D26). Only can_use_tool, a permission prompt, is understood;
+// the shape is from spike #7 (spikes/agent-approval/results).
+type controlRequest struct {
+	ID      string
+	Subtype string
+	Tool    string
+	Input   json.RawMessage
+	UseID   string
+}
+
+// control records a control_request for the session to answer. A request with
+// no ID cannot be answered, so it is reported and dropped.
+func (p *parser) control(b []byte) []agent.Event {
+	var raw struct {
+		RequestID string `json:"request_id"`
+		Request   struct {
+			Subtype  string          `json:"subtype"`
+			ToolName string          `json:"tool_name"`
+			Input    json.RawMessage `json:"input"`
+			ToolUse  string          `json:"tool_use_id"`
+		} `json:"request"`
+	}
+	if json.Unmarshal(b, &raw) != nil || raw.RequestID == "" {
+		return []agent.Event{p.errorEvent("a control request without an ID was dropped")}
+	}
+	p.controls = append(p.controls, controlRequest{ID: raw.RequestID, Subtype: raw.Request.Subtype, Tool: raw.Request.ToolName, Input: raw.Request.Input, UseID: raw.Request.ToolUse})
+	return nil
+}
+
+// takeControls returns the control requests seen since the last call.
+func (p *parser) takeControls() []controlRequest {
+	c := p.controls
+	p.controls = nil
+	return c
+}
+
+// approvalInput is what the human is shown of a permission prompt: a Bash
+// command, a plan, or else the tool's input as compact JSON. It is untrusted
+// and capped by the caller.
+func approvalInput(tool string, raw json.RawMessage) (text string, plan bool) {
+	var in map[string]any
+	if json.Unmarshal(raw, &in) == nil {
+		switch tool {
+		case "Bash":
+			if c, ok := in["command"].(string); ok {
+				return c, false
+			}
+		case "ExitPlanMode":
+			if pl, ok := in["plan"].(string); ok {
+				return pl, true
+			}
+		}
+	}
+	return compact(raw), tool == "ExitPlanMode"
 }

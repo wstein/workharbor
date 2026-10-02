@@ -30,8 +30,8 @@ func harness(t *testing.T) (agenttest.Harness, *stub) {
 	}, st
 }
 
-// The adapter meets the contract, in the degraded mode: it reports mid-run
-// injection and no host approvals until spike #7.
+// The adapter meets the contract in full mode: mid-run injection and host
+// approvals over the stdio control protocol (D26).
 func TestPassesTheSuite(t *testing.T) {
 	agenttest.Run(t, func(t *testing.T) agenttest.Harness {
 		h, _ := harness(t)
@@ -39,11 +39,11 @@ func TestPassesTheSuite(t *testing.T) {
 	})
 }
 
-func TestReportsTheDegradedMode(t *testing.T) {
+func TestReportsTheFullMode(t *testing.T) {
 	h, _ := harness(t)
 	c := h.Adapter.Capabilities()
-	if c.Mode() != agent.ModeDegraded || c.HostApprovals || !c.MidRunInstruction {
-		t.Errorf("capabilities %+v give mode %s, want degraded with injection and no host approvals", c, c.Mode())
+	if c.Mode() != agent.ModeFull || !c.HostApprovals || !c.MidRunInstruction {
+		t.Errorf("capabilities %+v give mode %s, want full with injection and host approvals", c, c.Mode())
 	}
 }
 
@@ -102,14 +102,10 @@ func dontAsk(h agenttest.Harness) agent.StartSpec {
 	return s
 }
 
-func TestManualModeAndMissingPrompt(t *testing.T) {
+func TestManualModeNeedsAnApproverAndAPrompt(t *testing.T) {
 	h, _ := harness(t)
-	manual := h.Spec()
-	manual.Approver = agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.Approval, error) {
-		return agent.Approval{Allow: true}, nil
-	})
-	if _, err := h.Adapter.Start(context.Background(), manual); !errors.Is(err, agent.ErrUnsupported) {
-		t.Errorf("manual mode = %v, want ErrUnsupported until spike #7", err)
+	if _, err := h.Adapter.Start(context.Background(), h.Spec()); !errors.Is(err, agent.ErrNoApprover) {
+		t.Errorf("manual mode without an approver = %v, want ErrNoApprover", err)
 	}
 	empty := dontAsk(h)
 	empty.Prompt = " "

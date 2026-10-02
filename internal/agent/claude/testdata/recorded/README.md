@@ -15,8 +15,10 @@ branch `spike/agent-approval`, commit `22ddc7f`, `spikes/agent-approval/results/
 | `case7-resume.jsonl` | a session resumed after its process was killed mid-tool-call |
 
 They were recorded in `manual` mode with the stdio approval channel (D26), not in
-`dontAsk`, so they contain `control_request` events the adapter does not act on
-yet. They hold real session IDs, request IDs and a short model output; no
+`dontAsk`, so they contain `control_request` events. `approval_test.go` replays
+them against the adapter: the adapter answers each request on stdin as the spike
+supervisor did, and the `*.session.golden.json` files are what the adapter
+asked, wrote and reported. They hold real session IDs, request IDs and a short model output; no
 credential is in them (checked with gitleaks).
 
 The fixtures one directory up (`../*.jsonl`) are constructed from the shapes the

@@ -1,0 +1,40 @@
+{
+  "asked": [
+    {
+      "id": "0c2e4aa6-663f-481a-83b0-7a1478e15d60",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/eof_test.txt\",\"content\":\"EOF_SECRET\"}"
+    }
+  ],
+  "events": [
+    {
+      "kind": "session",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c214f11-e108-4cc6-bf00-7f13a866b7b0",
+      "text": "claude-haiku-4-5-20251001"
+    },
+    {
+      "kind": "tool_call",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c214f11-e108-4cc6-bf00-7f13a866b7b0",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/eof_test.txt\",\"content\":\"EOF_SECRET\"}"
+    },
+    {
+      "kind": "approval",
+      "at": "2026-10-01T12:00:00Z",
+      "session_id": "2c214f11-e108-4cc6-bf00-7f13a866b7b0",
+      "tool": "Write",
+      "input": "{\"file_path\":\"/work/eof_test.txt\",\"content\":\"EOF_SECRET\"}",
+      "approval": {
+        "id": "0c2e4aa6-663f-481a-83b0-7a1478e15d60",
+        "allow": false,
+        "reason": "the channel to the agent was lost before the answer: denied"
+      }
+    }
+  ],
+  "result": {
+    "status": "stopped",
+    "session_id": "2c214f11-e108-4cc6-bf00-7f13a866b7b0"
+  }
+}
