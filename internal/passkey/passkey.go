@@ -455,15 +455,19 @@ func (s *Service) LoginFinish(ctx context.Context, ceremonyID string, r *http.Re
 	if !s.allowLogin(false) {
 		return "", ErrTooMany
 	}
-	defer func() {
-		if err != nil {
-			s.failLogin() // an unknown challenge counts too: it is a guess
-		}
-	}()
+	// Only an assertion that was tried against a real ceremony counts as refused.
+	// A finish with an unknown or expired ceremony ID costs nothing to make and
+	// could otherwise be sent by anyone who reaches the forwarder to keep the human
+	// out for as long as they like.
 	c, err := s.take(ceremonyID, "login")
 	if err != nil {
 		return "", err
 	}
+	defer func() {
+		if err != nil {
+			s.failLogin()
+		}
+	}()
 	o, _, err := s.owner(ctx)
 	if err != nil {
 		return "", err

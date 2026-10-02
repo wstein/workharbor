@@ -369,16 +369,27 @@ func TestSignInIsRateLimited(t *testing.T) {
 		t.Fatalf("a minute later: %v", err)
 	}
 
-	// refused assertions (here: challenges nobody issued) count, and five stop everything,
-	// even a sign-in that would have been right
-	r.advance(loginWindow + time.Second)
+	// a finish with a ceremony nobody issued costs nothing to send and never counts:
+	// anyone who reaches the forwarder could otherwise keep the human out
 	opts, cer, err := r.svc.LoginBegin(bg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range maxLoginFails {
+	for i := range 5 * maxLoginFails {
 		if _, err := r.svc.LoginFinish(bg, "guess", passkeytest.Post(map[string]string{})); err == nil || errors.Is(err, ErrTooMany) {
 			t.Fatalf("guess %d: %v", i, err)
+		}
+	}
+	// refused assertions on real ceremonies count, and five stop everything, even
+	// a sign-in that would have been right
+	for i := range maxLoginFails {
+		o, c, err := r.svc.LoginBegin(bg)
+		if err != nil {
+			t.Fatalf("begin %d: %v", i, err)
+		}
+		bad := a.Assert(o.(*protocol.CredentialAssertion), "https://evil.example") // the wrong origin
+		if _, err := r.svc.LoginFinish(bg, c, bad); err == nil || errors.Is(err, ErrTooMany) {
+			t.Fatalf("refusal %d: %v", i, err)
 		}
 	}
 	good := a.Assert(opts.(*protocol.CredentialAssertion), origin)
@@ -395,5 +406,14 @@ func TestSignInIsRateLimited(t *testing.T) {
 	}
 	if _, err := r.svc.LoginFinish(bg, cer, a.Assert(opts.(*protocol.CredentialAssertion), origin)); err != nil {
 		t.Errorf("a right sign-in after the minute: %v", err)
+	}
+}
+
+// Unauthenticated clients may hold at most maxLoginBegin ceremonies a minute, each
+// for ChallengeTTL, so a step-up or an enrolment always finds room under the cap.
+func TestTheCapLeavesRoomForAStepUpUnderTheBeginLimit(t *testing.T) {
+	const held = maxLoginBegin * int(ChallengeTTL/loginWindow) // begins that may still be open
+	if room := maxCeremonies - held; room < 4 {
+		t.Errorf("only %d ceremonies are left for a step-up or an enrolment while sign-ins hold %d of %d", room, held, maxCeremonies)
 	}
 }
