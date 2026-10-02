@@ -38,6 +38,16 @@ const (
 	ChallengeTTL  = 2 * time.Minute
 	maxPending    = 16
 	maxNameLength = 60
+	// maxCeremonies bounds the challenges held in memory, so unauthenticated
+	// requests to begin a sign-in cannot grow the map without limit.
+	maxCeremonies = 64
+	// The sign-in is rate limited as a whole, not per client: there is one owner
+	// and the clients arrive through a forwarder that hides their address. Five
+	// refused assertions in a minute stop sign-in for the rest of that minute, and
+	// at most 30 sign-ins may begin in a minute.
+	loginWindow   = time.Minute
+	maxLoginFails = 5
+	maxLoginBegin = 30
 )
 
 // Errors a caller can tell apart.
@@ -45,6 +55,8 @@ var (
 	ErrBadToken     = errors.New("passkey: the enrolment link is not valid, has expired or was already used")
 	ErrBadCeremony  = errors.New("passkey: the challenge is not valid, has expired or was already used")
 	ErrNotEnrolled  = errors.New("passkey: no passkey is enrolled")
+	ErrBusy         = errors.New("passkey: too many sign-ins are open: wait a moment")
+	ErrTooMany      = errors.New("passkey: too many sign-in attempts: wait a minute")
 	ErrCloned       = errors.New("passkey: the authenticator's counter went backwards: it may be cloned, so it was refused")
 	ErrNotVerified  = errors.New("passkey: the authenticator did not verify the user")
 	ErrWrongBinding = errors.New("passkey: the assertion is for another decision or commit")
@@ -86,6 +98,8 @@ type Service struct {
 	mu        sync.Mutex
 	enrolling map[[sha256.Size]byte]enrolment
 	ceremony  map[string]ceremony
+	begins    []time.Time // sign-ins begun within loginWindow
+	fails     []time.Time // refused sign-in assertions within loginWindow
 }
 
 type enrolment struct {
@@ -248,7 +262,11 @@ func (s *Service) EnrolBegin(ctx context.Context, token string) (options any, ce
 	if err != nil {
 		return nil, "", fmt.Errorf("passkey: %w", err)
 	}
-	return creation, s.keep(ceremony{kind: "enrol", session: *session, name: en.name}), nil
+	id, err := s.keep(ceremony{kind: "enrol", session: *session, name: en.name})
+	if err != nil {
+		return nil, "", err
+	}
+	return creation, id, nil
 }
 
 func excluded(cs []webauthn.Credential) []protocol.CredentialDescriptor {
@@ -259,14 +277,50 @@ func excluded(cs []webauthn.Credential) []protocol.CredentialDescriptor {
 	return out
 }
 
-func (s *Service) keep(c ceremony) string {
+// keep stores a ceremony under a new ID, or refuses when too many are open.
+func (s *Service) keep(c ceremony) (string, error) {
 	id := random(24)
 	c.expires = s.now().Add(ChallengeTTL)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sweepLocked()
+	if len(s.ceremony) >= maxCeremonies {
+		return "", ErrBusy
+	}
 	s.ceremony[id] = c
-	return id
+	return id, nil
+}
+
+// recent drops the times older than the window and returns what is left.
+func (s *Service) recent(ts []time.Time) []time.Time {
+	cut := s.now().Add(-loginWindow)
+	out := ts[:0]
+	for _, t := range ts {
+		if t.After(cut) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// allowLogin counts a sign-in beginning and reports whether the limits let it.
+func (s *Service) allowLogin(begin bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fails, s.begins = s.recent(s.fails), s.recent(s.begins)
+	if len(s.fails) >= maxLoginFails || (begin && len(s.begins) >= maxLoginBegin) {
+		return false
+	}
+	if begin {
+		s.begins = append(s.begins, s.now())
+	}
+	return true
+}
+
+func (s *Service) failLogin() {
+	s.mu.Lock()
+	s.fails = append(s.fails, s.now())
+	s.mu.Unlock()
 }
 
 // take returns a ceremony of a kind and forgets it: a challenge is used once,
@@ -361,6 +415,9 @@ func (s *Service) Revoke(ctx context.Context, idOrPrefix string) error {
 // LoginBegin starts a sign-in with a discoverable credential: the browser offers the
 // passkeys it holds for this site.
 func (s *Service) LoginBegin(ctx context.Context) (options any, ceremonyID string, err error) {
+	if !s.allowLogin(true) {
+		return nil, "", ErrTooMany
+	}
 	if ok, err := s.Enrolled(ctx); err != nil || !ok {
 		if err == nil {
 			err = ErrNotEnrolled
@@ -371,11 +428,23 @@ func (s *Service) LoginBegin(ctx context.Context) (options any, ceremonyID strin
 	if err != nil {
 		return nil, "", fmt.Errorf("passkey: %w", err)
 	}
-	return assertion, s.keep(ceremony{kind: "login", session: *session}), nil
+	id, err := s.keep(ceremony{kind: "login", session: *session})
+	if err != nil {
+		return nil, "", err
+	}
+	return assertion, id, nil
 }
 
 // LoginFinish checks the assertion and returns the ID of the passkey that signed in.
-func (s *Service) LoginFinish(ctx context.Context, ceremonyID string, r *http.Request) (string, error) {
+func (s *Service) LoginFinish(ctx context.Context, ceremonyID string, r *http.Request) (id string, err error) {
+	if !s.allowLogin(false) {
+		return "", ErrTooMany
+	}
+	defer func() {
+		if err != nil {
+			s.failLogin() // an unknown challenge counts too: it is a guess
+		}
+	}()
 	c, err := s.take(ceremonyID, "login")
 	if err != nil {
 		return "", err
@@ -449,7 +518,11 @@ func (s *Service) StepUpBegin(ctx context.Context, holder string, b Binding) (op
 	if err != nil {
 		return nil, "", fmt.Errorf("passkey: %w", err)
 	}
-	return assertion, s.keep(ceremony{kind: "stepup", session: *session, holder: holder, bind: b}), nil
+	id, err := s.keep(ceremony{kind: "stepup", session: *session, holder: holder, bind: b})
+	if err != nil {
+		return nil, "", err
+	}
+	return assertion, id, nil
 }
 
 // StepUpFinish checks the assertion against the challenge it answers, for the

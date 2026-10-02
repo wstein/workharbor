@@ -364,3 +364,21 @@ func TestWithoutAPasskeyAReviewHasNoWebAnswer(t *testing.T) {
 		t.Errorf("a step-up with nothing enrolled: %d", resp.StatusCode)
 	}
 }
+
+// The limits of the sign-in answer 429, not a refusal that looks like a wrong passkey.
+func TestTooManySignInsAnswer429(t *testing.T) {
+	p := newPKRig(t)
+	b := p.browser()
+	p.enrol(b)
+	var last int
+	for range 40 {
+		resp, _ := b.postJSON("/passkey/login/begin", []byte(`{}`), nil)
+		last = resp.StatusCode
+		if last != 200 {
+			break
+		}
+	}
+	if last != http.StatusTooManyRequests {
+		t.Errorf("after many sign-ins began: %d, want 429", last)
+	}
+}

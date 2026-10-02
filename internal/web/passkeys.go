@@ -119,7 +119,7 @@ func (s *Server) enrolBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	opts, cer, err := s.opt.Passkeys.EnrolBegin(r.Context(), in.Token)
 	if err != nil {
-		jsonError(w, http.StatusForbidden, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
 		return
 	}
 	jsonReply(w, http.StatusOK, map[string]any{"options": opts, "ceremony": cer})
@@ -133,7 +133,7 @@ func (s *Server) enrolFinish(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
 	info, err := s.opt.Passkeys.EnrolFinish(r.Context(), r.Header.Get("X-Ceremony"), r)
 	if err != nil {
-		jsonError(w, http.StatusForbidden, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
 		return
 	}
 	jsonReply(w, http.StatusOK, map[string]string{"name": info.Name})
@@ -146,7 +146,7 @@ func (s *Server) passkeyLoginBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	opts, cer, err := s.opt.Passkeys.LoginBegin(r.Context())
 	if err != nil {
-		jsonError(w, http.StatusForbidden, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
 		return
 	}
 	jsonReply(w, http.StatusOK, map[string]any{"options": opts, "ceremony": cer})
@@ -163,7 +163,7 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
 	if _, err := s.opt.Passkeys.LoginFinish(r.Context(), r.Header.Get("X-Ceremony"), r); err != nil {
-		jsonError(w, http.StatusUnauthorized, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusUnauthorized), passkeyMessage(err))
 		return
 	}
 	starter.Start(w, r)
@@ -172,12 +172,23 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 // passkeyMessage is what the page's script may show: a short sentence for the
 // refusals the human can act on, and nothing from the library's internals.
+// passkeyStatus is the HTTP status of a refused ceremony: 429 when the limits
+// stopped it, else the handler's own.
+func passkeyStatus(err error, otherwise int) int {
+	if errors.Is(err, passkey.ErrTooMany) || errors.Is(err, passkey.ErrBusy) {
+		return http.StatusTooManyRequests
+	}
+	return otherwise
+}
+
 func passkeyMessage(err error) string {
 	switch {
 	case errors.Is(err, passkey.ErrBadToken):
 		return "This enrolment link is not valid, has expired or was already used. Run `whr passkey add` on the host again."
 	case errors.Is(err, passkey.ErrBadCeremony):
 		return "That took too long or was already used. Try again."
+	case errors.Is(err, passkey.ErrTooMany), errors.Is(err, passkey.ErrBusy):
+		return "Too many sign-in attempts. Wait a minute and try again."
 	case errors.Is(err, passkey.ErrNotEnrolled):
 		return "No passkey is enrolled. Enrol one from the host with `whr passkey add`."
 	case errors.Is(err, passkey.ErrCloned):
@@ -206,7 +217,7 @@ func (s *Server) stepUpBegin(w http.ResponseWriter, r *http.Request, sess Sessio
 	}
 	opts, cer, err := s.opt.Passkeys.StepUpBegin(r.Context(), sess.CSRF, passkey.Binding{Decision: string(d.ID), SHA: bindsTo(d)})
 	if err != nil {
-		jsonError(w, http.StatusForbidden, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
 		return
 	}
 	jsonReply(w, http.StatusOK, map[string]any{"options": opts, "ceremony": cer})
@@ -250,7 +261,7 @@ func (s *Server) stepUpFinish(w http.ResponseWriter, r *http.Request, sess Sessi
 	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
 	got, err := s.opt.Passkeys.StepUpFinish(r.Context(), cer, sess.CSRF, r)
 	if err != nil {
-		jsonError(w, http.StatusForbidden, passkeyMessage(err))
+		jsonError(w, passkeyStatus(err, http.StatusForbidden), passkeyMessage(err))
 		return
 	}
 	if got.Decision != string(d.ID) || got.SHA != bindsTo(d) {

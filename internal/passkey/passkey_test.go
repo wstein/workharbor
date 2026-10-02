@@ -325,3 +325,75 @@ func TestTheOriginMustBeHTTPSAndTheRPIDItsHost(t *testing.T) {
 		t.Errorf("a loopback test origin: %v", err)
 	}
 }
+
+// The challenges held in memory are bounded, so requests that begin a ceremony
+// cannot grow the map without limit.
+func TestTheNumberOfOpenCeremoniesIsBounded(t *testing.T) {
+	r := newRig(t)
+	r.enrol(passkeytest.New(t, ownerID), "phone")
+	for i := range maxCeremonies {
+		if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
+			t.Fatalf("step-up %d: %v", i, err)
+		}
+	}
+	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); !errors.Is(err, ErrBusy) {
+		t.Fatalf("a ceremony past the cap: %v", err)
+	}
+	if n := len(r.svc.ceremony); n != maxCeremonies {
+		t.Errorf("%d ceremonies held, want %d", n, maxCeremonies)
+	}
+	// expired ones make room again
+	r.advance(ChallengeTTL + time.Second)
+	if _, _, err := r.svc.StepUpBegin(bg, "session", Binding{Decision: "d", SHA: "s"}); err != nil {
+		t.Errorf("after the challenges expired: %v", err)
+	}
+}
+
+// Sign-in is rate limited as a whole: too many beginnings, or five refused
+// assertions, stop it for the rest of the minute.
+func TestSignInIsRateLimited(t *testing.T) {
+	r := newRig(t)
+	a := passkeytest.New(t, ownerID)
+	r.enrol(a, "phone")
+
+	for i := range maxLoginBegin {
+		if _, _, err := r.svc.LoginBegin(bg); err != nil {
+			t.Fatalf("begin %d: %v", i, err)
+		}
+	}
+	if _, _, err := r.svc.LoginBegin(bg); !errors.Is(err, ErrTooMany) {
+		t.Fatalf("a 31st begin in a minute: %v", err)
+	}
+	r.advance(loginWindow + time.Second)
+	if _, _, err := r.svc.LoginBegin(bg); err != nil {
+		t.Fatalf("a minute later: %v", err)
+	}
+
+	// refused assertions (here: challenges nobody issued) count, and five stop everything,
+	// even a sign-in that would have been right
+	r.advance(loginWindow + time.Second)
+	opts, cer, err := r.svc.LoginBegin(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range maxLoginFails {
+		if _, err := r.svc.LoginFinish(bg, "guess", passkeytest.Post(map[string]string{})); err == nil || errors.Is(err, ErrTooMany) {
+			t.Fatalf("guess %d: %v", i, err)
+		}
+	}
+	good := a.Assert(opts.(*protocol.CredentialAssertion), origin)
+	if _, err := r.svc.LoginFinish(bg, cer, good); !errors.Is(err, ErrTooMany) {
+		t.Fatalf("a sign-in after five refusals: %v", err)
+	}
+	if _, _, err := r.svc.LoginBegin(bg); !errors.Is(err, ErrTooMany) {
+		t.Errorf("a begin after five refusals: %v", err)
+	}
+	r.advance(loginWindow + time.Second)
+	opts, cer, err = r.svc.LoginBegin(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.svc.LoginFinish(bg, cer, a.Assert(opts.(*protocol.CredentialAssertion), origin)); err != nil {
+		t.Errorf("a right sign-in after the minute: %v", err)
+	}
+}
