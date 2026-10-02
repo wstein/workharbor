@@ -87,12 +87,11 @@ type Workspaces struct {
 	svc *Service
 	cfg WorkspaceConfig
 
-	// mu guards rebuilding: the workspaces whose environment is being replaced
-	// (Rebuild). A run is not started in one, and a rebuild is not started in a
-	// workspace that has a live run, under the same lock, so the two cannot pass
-	// each other's check.
-	mu         sync.Mutex
-	rebuilding map[domain.ID]bool
+	// mu orders a run's save and a rebuild's start (Rebuild; the registry of
+	// rebuilds is the service's): a run is not saved in a workspace being
+	// rebuilt, and a rebuild is not started in a workspace that has an unfinished
+	// run, under the same lock, so the two cannot pass each other's check.
+	mu sync.Mutex
 }
 
 // NewWorkspaces returns the workspace operations of a service.
@@ -388,6 +387,9 @@ func (w *Workspaces) AddAgent(ctx context.Context, workspace, role, instructions
 	if ws.EnvID == "" {
 		return domain.Agent{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
+	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+		return domain.Agent{}, err
+	}
 	a, ev, err := domain.NewAgent(w.cfg.NewID(), ws.ID, role, instructions, profile, w.svc.clock.Now())
 	if err != nil {
 		return domain.Agent{}, err
@@ -455,6 +457,9 @@ func (w *Workspaces) agentAndWorkspace(ctx context.Context, agentID domain.ID) (
 // ensureEnvironment starts the workspace's environment if it is not running and
 // waits until exec answers.
 func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace) error {
+	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+		return err
+	}
 	info, err := w.svc.rt.Inspect(ctx, string(ws.EnvID))
 	if err != nil {
 		return err
@@ -474,11 +479,20 @@ func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace)
 func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, agg *domain.TaskAggregate) ([]domain.Event, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.rebuilding[ws.ID] {
+	if w.svc.rebuilding(ws.ID) {
 		return nil, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: start the task when it is done", ws.Name)
 	}
+	// The record is read again under the lock: a start that loaded it before a
+	// rebuild switched the environment must not save its run against the old one.
+	cur, err := w.svc.store.Workspace(ctx, string(ws.ID))
+	if err != nil {
+		return nil, err
+	}
+	if cur.EnvID != ws.EnvID {
+		return nil, domain.NewConflict(domain.RuleEnvRunning, "the environment of workspace %s changed (rebuilt) while the task was starting: start it again", ws.Name)
+	}
 	var saved []domain.Event
-	err := w.svc.store.Update(ctx, func(tx *store.Tx) error {
+	err = w.svc.store.Update(ctx, func(tx *store.Tx) error {
 		live, err := tx.LiveRuns(ctx, ws.EnvID)
 		if err != nil {
 			return err
@@ -814,6 +828,9 @@ func (w *Workspaces) Rebase(ctx context.Context, agentID domain.ID) error {
 	}
 	if ws.EnvID == "" {
 		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
+	}
+	if err := w.svc.refuseWhileRebuilding(ws); err != nil {
+		return err
 	}
 	live, err := w.svc.store.LiveRuns(ctx, ws.EnvID)
 	if err != nil {

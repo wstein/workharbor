@@ -214,3 +214,112 @@ func TestRebuildOfAnUnknownWorkspaceOrOneWithoutAnEnvironment(t *testing.T) {
 		t.Errorf("an unknown workspace: %v", err)
 	}
 }
+
+// interruptedRun saves a task whose run in the workspace's environment was
+// interrupted with a session, the state the reconciler resumes.
+func interruptedRun(t *testing.T, r *wsRig, w domain.Workspace, a domain.Agent, id domain.ID) {
+	t.Helper()
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t-" + id, Repo: w.Repo, Issue: "#3", State: domain.TaskQueued, AgentID: a.ID, CreatedAt: r.svc.clock.Now()})
+	agg.AddEnvironment(domain.Environment{ID: w.EnvID, Backend: "fake", State: domain.EnvRunning})
+	for _, err := range []error{
+		agg.StartRun(domain.Run{ID: id, WorkspaceID: w.ID, AgentID: a.ID, EnvID: w.EnvID}),
+		agg.MarkRunning(id),
+		agg.RecordSession(id, "sess-"+string(id)),
+		agg.Interrupt(id),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := r.store.SaveTask(bg, agg); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRebuildIsRefusedWhileARunIsInterruptedAndNamesIt(t *testing.T) {
+	r := newWsRig(t)
+	w, a := r.create("docs-ws")
+	interruptedRun(t, r, w, a, "r-int")
+	if live, _ := r.store.LiveRuns(bg, w.EnvID); len(live) != 0 {
+		t.Fatalf("setup: the run is live: %+v", live)
+	}
+	_, err := r.ws.Rebuild(bg, "docs-ws", "werner")
+	var ce *domain.ConflictError
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "r-int") || !strings.Contains(err.Error(), string(domain.RunInterrupted)) {
+		t.Fatalf("err = %v, want a conflict that names run r-int and its state", err)
+	}
+	got, _ := r.store.Workspace(bg, "docs-ws")
+	if got.EnvID != w.EnvID || envCount(t, r) != 1 {
+		t.Errorf("a refused rebuild changed something: env %s, %d environments", got.EnvID, envCount(t, r))
+	}
+	if info, _ := r.rt.Adapter.Inspect(bg, string(w.EnvID)); info.State != domain.EnvRunning {
+		t.Errorf("the old environment was stopped by a refused rebuild: %v", info.State)
+	}
+}
+
+func TestNothingStartsTheOldEnvironmentWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
+	r := newWsRig(t)
+	w, a := r.create("docs-ws")
+	pub := NewPublisher(r.svc, PublishConfig{Workspaces: r.ws})
+	var (
+		once                                 sync.Once
+		recErr, exportErr, addErr, rebaseErr error
+		oldState                             domain.EnvState
+		rep                                  Report
+	)
+	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
+		if len(cmd) == 2 && cmd[0] == "git" && cmd[1] == "--version" {
+			once.Do(func() { // the new environment is being checked, the old one is stopped
+				interruptedRun(t, r, w, a, "r-late")
+				rep, recErr = r.svc.Reconcile(bg)
+				exportErr = pub.exportBranch(bg, Request{Agent: a.ID, Branch: a.Branch}, "r-late", false)
+				_, addErr = r.ws.AddAgent(bg, "docs-ws", "extra", "x", "")
+				rebaseErr = r.ws.Rebase(bg, a.ID)
+				info, _ := r.rt.Adapter.Inspect(bg, string(w.EnvID))
+				oldState = info.State
+			})
+		}
+		return nil, "", 0, false
+	}
+	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
+		t.Fatal(err)
+	}
+	if recErr != nil || len(rep.Resumed) != 0 {
+		t.Errorf("the reconciler resumed during the rebuild: %+v, %v", rep, recErr)
+	}
+	for name, err := range map[string]error{"export": exportErr, "AddAgent": addErr, "Rebase": rebaseErr} {
+		var ce *domain.ConflictError
+		if !errors.As(err, &ce) || !strings.Contains(err.Error(), "being rebuilt") {
+			t.Errorf("%s during the rebuild: %v, want a conflict", name, err)
+		}
+	}
+	if oldState == domain.EnvRunning {
+		t.Error("the old environment was started during the rebuild")
+	}
+	// The run is still interrupted: the next pass takes it up, once the rebuild is over.
+	got, _ := r.store.LoadTask(bg, "t-r-late")
+	if run, _ := got.Run("r-late"); run.State != domain.RunInterrupted {
+		t.Errorf("run = %s, want interrupted for the next pass", run.State)
+	}
+}
+
+func TestARunIsNotSavedAgainstAnEnvironmentThatWasRebuiltMeanwhile(t *testing.T) {
+	r := newWsRig(t)
+	stale, a := r.create("docs-ws") // the record a start loaded before the swap
+	if _, err := r.ws.Rebuild(bg, "docs-ws", "werner"); err != nil {
+		t.Fatal(err)
+	}
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t-stale", Repo: stale.Repo, Issue: "#4", State: domain.TaskQueued, AgentID: a.ID, CreatedAt: r.svc.clock.Now()})
+	agg.AddEnvironment(domain.Environment{ID: stale.EnvID, Backend: "fake", State: domain.EnvRunning})
+	if err := agg.StartRun(domain.Run{ID: "r-stale", WorkspaceID: stale.ID, AgentID: a.ID, EnvID: stale.EnvID}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := r.ws.saveStartingRun(bg, stale, agg)
+	var ce *domain.ConflictError
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("err = %v, want a conflict that says the environment changed", err)
+	}
+	if _, lerr := r.store.LoadTask(bg, "t-stale"); lerr == nil {
+		t.Error("the run was saved against the old environment")
+	}
+}

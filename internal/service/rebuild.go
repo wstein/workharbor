@@ -24,7 +24,8 @@ type RebuildResult struct {
 // so every worktree and branch stay; the container, its network and its egress
 // sidecar are new, with the allowed hosts as at provision.
 //
-// It is refused while any run of the workspace is live, and never started by
+// It is refused while any run of the workspace is unfinished (an interrupted
+// one is, too: the reconciler would resume it in the old environment), and never started by
 // itself. The new image is built and the new spec checked first, so a repository
 // whose image cannot be built costs nothing. Then the old environment is stopped,
 // because a volume is held by one running environment at a time, the new one is
@@ -106,33 +107,31 @@ func (w *Workspaces) Rebuild(ctx context.Context, workspace, actor string) (Rebu
 	return res, nil
 }
 
-// beginRebuild refuses a workspace with a live run, naming it, and marks the
+// beginRebuild refuses a workspace with an unfinished run (live or interrupted),
+// naming it, and marks the
 // workspace as being rebuilt, under the lock a run's start takes.
 func (w *Workspaces) beginRebuild(ctx context.Context, ws domain.Workspace) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.rebuilding[ws.ID] {
+	if w.svc.rebuilding(ws.ID) {
 		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
 	}
-	live, err := w.svc.store.LiveRuns(ctx, ws.EnvID)
+	open, err := w.svc.store.UnfinishedRuns(ctx, ws.EnvID)
 	if err != nil {
 		return err
 	}
-	if len(live) > 0 {
-		r := live[0]
-		return domain.NewConflict(domain.RuleAgentActive, "workspace %s has run %s (%s) of agent %s: finish or stop it before a rebuild", ws.Name, r.ID, r.State, r.AgentID)
+	if len(open) > 0 {
+		r := open[0]
+		return domain.NewConflict(domain.RuleAgentActive, "workspace %s has run %s (%s) of agent %s: finish, stop or fail it before a rebuild", ws.Name, r.ID, r.State, r.AgentID)
 	}
-	if w.rebuilding == nil {
-		w.rebuilding = map[domain.ID]bool{}
+	if !w.svc.markRebuilding(ws.ID) {
+		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is already being rebuilt", ws.Name)
 	}
-	w.rebuilding[ws.ID] = true
 	return nil
 }
 
 func (w *Workspaces) endRebuild(ws domain.Workspace) {
-	w.mu.Lock()
-	delete(w.rebuilding, ws.ID)
-	w.mu.Unlock()
+	w.svc.unmarkRebuilding(ws.ID)
 }
 
 // networkSuffix makes an ID into a few characters a network name may hold.

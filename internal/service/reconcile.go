@@ -149,6 +149,11 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if !ok || (r.State != domain.RunInterrupted && r.State != domain.RunPaused) {
 		return nil
 	}
+	// A workspace being rebuilt has its environment replaced: the old one is not
+	// started for this run. The next pass takes it up, in the new one or not.
+	if s.rebuilding(r.WorkspaceID) {
+		return nil
+	}
 	// A run that cannot resume (an open login or quota question) costs no
 	// container: the human has to answer first.
 	if agg.ResumeBlocked(run) != nil {

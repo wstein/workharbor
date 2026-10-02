@@ -126,6 +126,48 @@ type Service struct {
 	bus           bus                               // live events for subscribers (design §5.3)
 	board         boardQueue                        // card updates waiting for the worker (D30)
 	approvals     map[domain.ID]chan agent.Approval // approval Decisions an agent is waiting for (D26)
+	// rebuilds are the workspaces whose environment is being replaced (issue
+	// #128), guarded by rebuildMu alone, which is never held across a call out.
+	// Every path that starts or uses a workspace's environment asks it.
+	rebuildMu sync.Mutex
+	rebuilds  map[domain.ID]bool
+}
+
+// rebuilding reports whether the workspace's environment is being replaced.
+func (s *Service) rebuilding(ws domain.ID) bool {
+	s.rebuildMu.Lock()
+	defer s.rebuildMu.Unlock()
+	return s.rebuilds[ws]
+}
+
+// markRebuilding marks the workspace as being rebuilt; false if it already was.
+func (s *Service) markRebuilding(ws domain.ID) bool {
+	s.rebuildMu.Lock()
+	defer s.rebuildMu.Unlock()
+	if s.rebuilds[ws] {
+		return false
+	}
+	if s.rebuilds == nil {
+		s.rebuilds = map[domain.ID]bool{}
+	}
+	s.rebuilds[ws] = true
+	return true
+}
+
+func (s *Service) unmarkRebuilding(ws domain.ID) {
+	s.rebuildMu.Lock()
+	delete(s.rebuilds, ws)
+	s.rebuildMu.Unlock()
+}
+
+// refuseWhileRebuilding is the conflict a path that would start or use the
+// workspace's environment gets while it is being replaced: the old one is not
+// started, and the caller tries again when the rebuild is done.
+func (s *Service) refuseWhileRebuilding(ws domain.Workspace) error {
+	if s.rebuilding(ws.ID) {
+		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: try again when it is done", ws.Name)
+	}
+	return nil
 }
 
 // slot is a run's entry in the sessions map. It is put there before the agent

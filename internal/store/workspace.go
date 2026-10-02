@@ -248,12 +248,23 @@ func (tx *Tx) LiveRuns(ctx context.Context, env domain.ID) ([]domain.Run, error)
 	return liveRuns(ctx, tx.tx, env)
 }
 
+// UnfinishedRuns lists the runs of an environment that are not over: the live
+// ones and the interrupted ones, which the reconciler resumes there.
+func (s *Store) UnfinishedRuns(ctx context.Context, env domain.ID) ([]domain.Run, error) {
+	return runsIn(ctx, s.db, env, `'starting', 'running', 'paused', 'interrupted'`)
+}
+
 type querier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func liveRuns(ctx context.Context, q querier, env domain.ID) ([]domain.Run, error) {
-	rows, err := q.QueryContext(ctx, `SELECT id, task_id, workspace_id, agent_id, env_id, state FROM runs WHERE env_id = ? AND state IN ('starting', 'running', 'paused') ORDER BY id`, string(env))
+	return runsIn(ctx, q, env, `'starting', 'running', 'paused'`)
+}
+
+// runsIn lists an environment's runs in the given states, a constant list.
+func runsIn(ctx context.Context, q querier, env domain.ID, states string) ([]domain.Run, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id, task_id, workspace_id, agent_id, env_id, state FROM runs WHERE env_id = ? AND state IN (`+states+`) ORDER BY id`, string(env)) //nolint:gosec // states is a constant list
 	if err != nil {
 		return nil, fmt.Errorf("store: live runs: %w", err)
 	}
