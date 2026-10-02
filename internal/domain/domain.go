@@ -60,7 +60,11 @@ type Task struct {
 	Untrusted bool
 	// Workflow is the repository's preset when the task started (D47). A looser
 	// preset never applies to a task already started. Empty means the default.
-	Workflow  string
+	Workflow string
+	// Branch is the integration branch the repository had when the task started
+	// (empty for a published repository, or a task from before it was recorded). The
+	// task publishes to it whatever the configuration says now (D47, §6).
+	Branch    string
 	CreatedAt time.Time
 }
 

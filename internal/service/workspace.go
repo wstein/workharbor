@@ -61,6 +61,9 @@ type WorkspaceConfig struct {
 	// Workflow returns the preset a repository runs under (D47); a task keeps the
 	// one it started under. Nil means the default preset.
 	Workflow func(repo string) string
+	// Branch returns the integration branch a repository runs under; a task keeps
+	// the one it started with (D47). Nil or empty means none.
+	Branch func(repo string) string
 	// Trust is the trust tier of issue #53: it says whether an issue may start
 	// a run. Nil allows every issue, today. It is the place to add the tiers,
 	// not a way around them.
@@ -320,7 +323,7 @@ func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID
 	}
 	task, run := w.cfg.NewID(), w.cfg.NewID()
 	agg := domain.NewTaskAggregate(domain.Task{
-		ID: task, Repo: ws.Repo, Issue: req.Issue, State: domain.TaskQueued, AgentID: a.ID, Workflow: w.workflowOf(ws.Repo), CreatedAt: w.svc.clock.Now(),
+		ID: task, Repo: ws.Repo, Issue: req.Issue, State: domain.TaskQueued, AgentID: a.ID, Workflow: w.workflowOf(ws.Repo), Branch: w.branchOf(ws.Repo), CreatedAt: w.svc.clock.Now(),
 	})
 	agg.AddEnvironment(domain.Environment{ID: ws.EnvID, Backend: w.svc.rt.Name(), State: domain.EnvRunning})
 	if err := w.launch(ctx, agg, ws, a, run, req.Prompt); err != nil {
@@ -753,6 +756,14 @@ func (w *Workspaces) Remove(ctx context.Context, workspace string) error {
 		}
 	}
 	return w.svc.store.RemoveWorkspace(ctx, ws, domain.RemovedWorkspaceEvent(ws, w.svc.clock.Now()))
+}
+
+// branchOf is the integration branch a task started now would keep.
+func (w *Workspaces) branchOf(repo string) string {
+	if w.cfg.Branch == nil {
+		return ""
+	}
+	return w.cfg.Branch(repo)
 }
 
 // workflowOf is the preset a task started now would keep.

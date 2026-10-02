@@ -52,7 +52,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 14 || name != "0014_egress_source.sql" || applied != fixed.UnixNano() {
+	if n != 15 || name != "0015_task_branch.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -86,8 +86,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 14 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 14", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 15 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 15", n, err)
 	}
 }
 
@@ -159,11 +159,14 @@ func TestWorkflowsAreRecordedAndChangesAreAudited(t *testing.T) {
 	}
 
 	// the task keeps the preset it started under, across a save and a load
-	agg := domain.NewTaskAggregate(domain.Task{ID: "t-wf", Repo: "a/b", State: domain.TaskQueued, Workflow: "published", CreatedAt: at})
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t-wf", Repo: "a/b", State: domain.TaskQueued, Workflow: "published", Branch: "develop", CreatedAt: at})
 	if _, err := s.SaveTask(bg, agg); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.LoadTask(bg, "t-wf")
+	if err == nil && got.Task().Branch != "develop" {
+		t.Errorf("task branch %q", got.Task().Branch)
+	}
 	if err != nil || got.Task().Workflow != "published" {
 		t.Errorf("task workflow %q, %v", got.Task().Workflow, err)
 	}

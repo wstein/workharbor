@@ -180,6 +180,7 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	// table would let an action run on its own. The supervisor does not know
 	// whether the repository is private, so it assumes it is (design §7.1).
 	preset := effectivePreset(agg.Task().Workflow, p.cfg.Workflow)
+	branch := p.branchOf(agg.Task())
 	guard := p.cfg.Guard.WithTable(preset.Table()).For(policy.Context{UntrustedInput: agg.Task().Untrusted, PrivateData: true, Egress: true})
 	if err := guard.Push(ctx, p.cfg.ForgeRepo, cand.Branch, ap); err != nil {
 		return forge.PullRequest{}, err
@@ -189,10 +190,10 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	case !preset.OpensPR():
 		// prototype: the integration branch moves to the approved commit, only as
 		// a fast-forward and never forced; there is no pull request (D47).
-		if p.cfg.Branch == "" {
+		if branch == "" {
 			return forge.PullRequest{}, errors.New("the prototype workflow needs the integration branch to move")
 		}
-		if err := guard.FastForward(ctx, p.cfg.ForgeRepo, cand.Branch, p.cfg.Branch, ap); err != nil {
+		if err := guard.FastForward(ctx, p.cfg.ForgeRepo, cand.Branch, branch, ap); err != nil {
 			return forge.PullRequest{}, err
 		}
 		pr = forge.PullRequest{Repo: p.cfg.ForgeRepo, Branch: cand.Branch, SHA: cand.SHA}
@@ -204,7 +205,7 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 		}
 	default:
 		var err error
-		if base := p.prBase(preset); base != "" {
+		if base := p.prBase(preset, branch); base != "" {
 			pr, err = guard.OpenPRInto(ctx, p.cfg.ForgeRepo, base, cand.Branch, ap, title, body)
 		} else {
 			pr, err = guard.OpenPR(ctx, p.cfg.ForgeRepo, cand.Branch, ap, title, body)
@@ -225,26 +226,43 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	return pr, err
 }
 
-// effectivePreset is the preset a task publishes under: its own, from when it
-// started, wins over the repository's current one, so a looser preset never
-// applies to a run already started (D47); without either it is the default.
+// effectivePreset is the preset a task publishes under: the stricter of its own,
+// from when it started, and the repository's current one, so a looser preset never
+// applies to a run already started and a stricter one applies at once (D47, §6).
+// Without a task preset the repository's is used, and without either the default.
 func effectivePreset(task string, repo policy.Preset) policy.Preset {
+	own := policy.Preset("")
 	if p, err := policy.ParsePreset(task); err == nil && task != "" {
-		return p
+		own = p
 	}
-	if repo != "" {
+	switch {
+	case own == "" && repo == "":
+		return policy.DefaultPreset
+	case own == "":
 		return repo
+	case repo == "":
+		return own
 	}
-	return policy.DefaultPreset
+	return policy.Stricter(own, repo)
+}
+
+// branchOf is the integration branch a task publishes to: the one it started
+// with, and the repository's current one only for a task from before it was
+// recorded (D47, §6).
+func (p *Publisher) branchOf(t domain.Task) string {
+	if t.Branch != "" {
+		return t.Branch
+	}
+	return p.cfg.Branch
 }
 
 // prBase is the branch a pull request goes into: the integration branch, or the
 // default branch (empty) for a published repository.
-func (p *Publisher) prBase(preset policy.Preset) string {
+func (p *Publisher) prBase(preset policy.Preset, branch string) string {
 	if preset.ToDefaultBranch() {
 		return ""
 	}
-	return p.cfg.Branch
+	return branch
 }
 
 func parsePRNumber(url string) int {

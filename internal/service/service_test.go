@@ -64,6 +64,12 @@ type rigOption func(*rigSetup)
 type rigSetup struct {
 	session    string // the session ID recorded on the run; "" records none
 	setSession bool
+	task       func(*domain.Task) // changes the task before it is saved
+}
+
+// withTask changes the task the rig saves (its workflow, its branch).
+func withTask(f func(*domain.Task)) rigOption {
+	return func(o *rigSetup) { o.task = f }
 }
 
 // withSession records a session ID on the run other than the real one ("" for none).
@@ -116,7 +122,11 @@ func newRig(t *testing.T, opts ...rigOption) *rig {
 	for range sess.Events() {
 	}
 
-	a := domain.NewTaskAggregate(domain.Task{ID: "t1", Repo: "wstein/workharbor", Issue: "#23", State: domain.TaskRunning, CreatedAt: t0})
+	task := domain.Task{ID: "t1", Repo: "wstein/workharbor", Issue: "#23", State: domain.TaskRunning, CreatedAt: t0}
+	if setup.task != nil {
+		setup.task(&task)
+	}
+	a := domain.NewTaskAggregate(task)
 	a.AddEnvironment(domain.Environment{ID: r.env, Backend: "fake", State: domain.EnvRunning})
 	must(t, a.StartRun(domain.Run{ID: "r1", WorkspaceID: "w1", EnvID: r.env}))
 	must(t, a.MarkRunning("r1"))

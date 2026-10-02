@@ -619,14 +619,15 @@ func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
 	}
 }
 
-func TestTheEffectivePresetPrefersTheTasksOwn(t *testing.T) {
+func TestTheEffectivePresetIsTheStricterOfTheTaskAndTheRepository(t *testing.T) {
 	for _, c := range []struct {
 		task string
 		repo policy.Preset
 		want policy.Preset
 	}{
 		{"published", policy.Prototype, policy.Published},
-		{"prototype", policy.Published, policy.Prototype},
+		{"prototype", policy.Published, policy.Published},
+		{"integration", policy.Prototype, policy.Integration},
 		{"", policy.Prototype, policy.Prototype},
 		{"", "", policy.Integration},
 		{"nonsense", policy.Published, policy.Published},

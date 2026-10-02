@@ -70,12 +70,12 @@ type pubRig struct {
 // newPubRig builds the chain: a forge repository, the cache, an agent
 // checkout with two commits and a fixup, the supervisor's copy, a remote, and
 // a task whose run has stopped.
-func newPubRig(t *testing.T) *pubRig {
+func newPubRig(t *testing.T, opts ...rigOption) *pubRig {
 	t.Helper()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
 		t.Skip("ssh-keygen is not available")
 	}
-	r := newRig(t)
+	r := newRig(t, opts...)
 	pr := &pubRig{rig: r}
 	base := t.TempDir()
 	pr.home = filepath.Join(base, "home")
@@ -348,9 +348,9 @@ func hasCall(f *remoteForge, prefix string) bool {
 }
 
 // prepared returns an approved rig set to a workflow.
-func approvedUnder(t *testing.T, preset policy.Preset, branch string) (*pubRig, string) {
+func approvedUnder(t *testing.T, preset policy.Preset, branch string, opts ...rigOption) (*pubRig, string) {
 	t.Helper()
-	p := newPubRig(t)
+	p := newPubRig(t, opts...)
 	p.pub.cfg.Workflow, p.pub.cfg.Branch = preset, branch
 	prepared, err := p.pub.Prepare(bg, p.req)
 	must(t, err)
@@ -434,5 +434,43 @@ func TestEveryPresetNeedsTheApprovalOfTheCommit(t *testing.T) {
 		if p.remoteHas() || len(p.forge.PRs) != 0 || len(p.forge.FastForwards) != 0 {
 			t.Errorf("%s: a refused publish reached the forge: %v", preset, p.forge.Calls)
 		}
+	}
+}
+
+// A task keeps the branch it started with, and publishes under the stricter of
+// its own preset and the repository's current one (D47, §6).
+func TestATaskPublishesToItsOwnBranchUnderTheStricterPreset(t *testing.T) {
+	started := func(workflow, branch string) rigOption {
+		return withTask(func(tk *domain.Task) { tk.Workflow, tk.Branch = workflow, branch })
+	}
+	// the configuration moved the integration branch: the task still goes to its own
+	p, sha := approvedUnder(t, policy.Prototype, "elsewhere", started("prototype", "develop"))
+	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.forge.FastForwards) != 1 || p.forge.FastForwards[0] != "wstein/workharbor:develop@"+sha {
+		t.Errorf("the task did not keep its branch: %v", p.forge.FastForwards)
+	}
+	// a prototype task in a repository that is now published opens a PR into the
+	// default branch, and is no longer fast-forwarded
+	q, _ := approvedUnder(t, policy.Published, "", started("prototype", "develop"))
+	if _, err := q.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.forge.FastForwards) != 0 || hasCall(q.forge, "OpenPRInto") || !hasCall(q.forge, "OpenPR wstein/workharbor:agent/topic@") {
+		t.Errorf("a stricter repository did not apply: %v, moves %v", q.forge.Calls, q.forge.FastForwards)
+	}
+	// a published task in a repository that is now a prototype stays published
+	r, _ := approvedUnder(t, policy.Prototype, "develop", started("published", ""))
+	if _, err := r.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.forge.FastForwards) != 0 || hasCall(r.forge, "OpenPRInto") {
+		t.Errorf("a looser repository applied to a started task: %v, moves %v", r.forge.Calls, r.forge.FastForwards)
+	}
+	// an integration task goes into its own branch, not the repository's new one
+	s, _ := approvedUnder(t, policy.Integration, "next", started("integration", "develop"))
+	if _, err := s.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil || !hasCall(s.forge, "OpenPRInto wstein/workharbor:develop<-agent/topic@") {
+		t.Errorf("integration task: %v %v", err, s.forge.Calls)
 	}
 }

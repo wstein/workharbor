@@ -122,6 +122,14 @@ func Run(ctx context.Context, d Deps) error {
 			}
 			return ""
 		},
+		Branch: func(repo string) string {
+			for _, r := range d.Config.Repositories {
+				if strings.EqualFold(r.Name, repo) {
+					return workflowBranch(r)
+				}
+			}
+			return ""
+		},
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
 		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment,
 	})
@@ -260,4 +268,14 @@ func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) erro
 		}
 	}
 	return nil
+}
+
+// workflowBranch is the integration branch a repository runs under: the one its
+// preset writes to, or none for a published repository, whose pull requests go to
+// the default branch.
+func workflowBranch(r config.Repository) string {
+	if r.Preset().ToDefaultBranch() {
+		return ""
+	}
+	return r.Target("")
 }

@@ -45,6 +45,32 @@ func (p Preset) Table() Table {
 	return t
 }
 
+// Stricter returns the stricter of two presets: published over integration over
+// prototype. A task publishes under the stricter of its own and its repository's
+// current preset, so a looser preset never applies to a task already started and
+// a stricter one applies at once (D47).
+func Stricter(a, b Preset) Preset {
+	rank := func(p Preset) int {
+		switch p {
+		case Published:
+			return 2
+		case Prototype:
+			return 0
+		}
+		return 1 // integration, and the default
+	}
+	if a == "" {
+		a = DefaultPreset
+	}
+	if b == "" {
+		b = DefaultPreset
+	}
+	if rank(b) > rank(a) {
+		return b
+	}
+	return a
+}
+
 // AgentMode is the permission mode the agent runs in unless the human overrides
 // it: published asks for every tool (host approvals), the others run a fixed
 // allowlist.

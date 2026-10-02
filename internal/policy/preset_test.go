@@ -70,3 +70,19 @@ func TestParsePreset(t *testing.T) {
 		}
 	}
 }
+
+func TestStricterTakesPublishedOverIntegrationOverPrototype(t *testing.T) {
+	for _, tc := range []struct{ a, b, want Preset }{
+		{Prototype, Integration, Integration},
+		{Integration, Prototype, Integration},
+		{Integration, Published, Published},
+		{Published, Prototype, Published},
+		{Prototype, Prototype, Prototype},
+		{"", Prototype, Integration},
+		{Prototype, "", Integration},
+	} {
+		if got := Stricter(tc.a, tc.b); got != tc.want {
+			t.Errorf("Stricter(%q, %q) = %q, want %q", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
