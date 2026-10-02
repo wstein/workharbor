@@ -222,3 +222,21 @@ func TestTheFileIsDecodedStrictly(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentPermissionMode(t *testing.T) {
+	r := newRig(t)
+	for _, ok := range []string{"", "dontAsk", "manual"} {
+		r.cfg.AgentPermissionMode, r.cfg.AgentAllowedTools = ok, nil
+		if _, err := r.parse(t); err != nil {
+			t.Errorf("mode %q: %s", ok, problems(err))
+		}
+	}
+	r.cfg.AgentPermissionMode = "bypassPermissions"
+	if _, err := r.parse(t); !strings.Contains(problems(err), "agent_permission_mode") {
+		t.Errorf("an unknown mode: %s", problems(err))
+	}
+	r.cfg.AgentPermissionMode, r.cfg.AgentAllowedTools = "manual", []string{"Read"}
+	if _, err := r.parse(t); !strings.Contains(problems(err), "agent_allowed_tools") {
+		t.Errorf("an allowlist in manual mode: %s", problems(err))
+	}
+}

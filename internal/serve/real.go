@@ -64,14 +64,23 @@ func (o SpecOptions) For(w domain.Workspace) runtime.Spec {
 	}
 }
 
-// AgentSpec returns the StartSpec of a run. Until host approvals exist (#75)
-// the agent runs in dontAsk mode with the supervisor's own allowlist, which is
-// required: with none, nothing would be allowed.
-func AgentSpec(allowed []string, auth agent.AuthMode) func(domain.Task, domain.Run) agent.StartSpec {
+// AgentSpec returns the StartSpec of a run. In dontAsk mode the agent runs only
+// the supervisor's own allowlist, which is required: with none, nothing would
+// be allowed. In manual mode every prompt goes to the human (D26): the service
+// supplies the approver and there is no allowlist.
+func AgentSpec(mode agent.PermissionMode, allowed []string, auth agent.AuthMode) func(domain.Task, domain.Run) agent.StartSpec {
+	if mode == "" {
+		mode = agent.PermissionDontAsk
+	}
 	return func(domain.Task, domain.Run) agent.StartSpec {
+		var tools []string
+		if mode == agent.PermissionDontAsk {
+			tools = append([]string(nil), allowed...)
+		}
 		return agent.StartSpec{
-			Auth: auth, PermissionMode: agent.PermissionDontAsk, AllowedTools: append([]string(nil), allowed...),
-			Prompt: "continue",
+			Auth: auth, PermissionMode: mode, AllowedTools: tools,
+			ApprovalTimeout: domain.DefaultApprovalTimeout,
+			Prompt:          "continue",
 			// A read-only root has no home: tools that want one (git, the
 			// agent's own config lookups) use the agent home volume.
 			Env: []string{"HOME=" + GuestHome},
@@ -153,8 +162,12 @@ func StateDir(c *config.Config, home string) string {
 // and the spec factory. exe is the path of the running whr, which says where
 // the installed egress proxy is. The returned function releases what was opened.
 func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps, func(), error) {
-	if len(c.AgentAllowedTools) == 0 {
-		return Deps{}, nil, errors.New("agent_allowed_tools is needed: while the agent runs in the degraded dontAsk mode (D26, issue #75) only the tools you list may run")
+	permission := agent.PermissionMode(c.AgentPermissionMode)
+	if permission == "" {
+		permission = agent.PermissionDontAsk
+	}
+	if permission == agent.PermissionDontAsk && len(c.AgentAllowedTools) == 0 {
+		return Deps{}, nil, errors.New("agent_allowed_tools is needed in the dontAsk mode: only the tools you list may run (or set agent_permission_mode to manual to approve each one yourself, D26)")
 	}
 	profile, err := toolProfile(c)
 	if err != nil {
@@ -224,7 +237,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	}
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
-		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpec(c.AgentAllowedTools, mode), Logf: logf,
+		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpec(permission, c.AgentAllowedTools, mode), Logf: logf,
 	}, func() {
 		_ = git.Close()
 		_ = st.Close()

@@ -1,10 +1,12 @@
 package serve
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +66,7 @@ func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
 }
 
 func TestTheAgentRunsInTheDegradedModeWithTheSupervisorsAllowlist(t *testing.T) {
-	spec := AgentSpec([]string{"Read", "Bash(git status:*)"}, agent.AuthSubscription)(domain.Task{}, domain.Run{})
+	spec := AgentSpec(agent.PermissionDontAsk, []string{"Read", "Bash(git status:*)"}, agent.AuthSubscription)(domain.Task{}, domain.Run{})
 	if spec.PermissionMode != agent.PermissionDontAsk || len(spec.AllowedTools) != 2 || spec.Auth != agent.AuthSubscription {
 		t.Errorf("spec = %+v", spec)
 	}
@@ -74,10 +76,29 @@ func TestTheAgentRunsInTheDegradedModeWithTheSupervisorsAllowlist(t *testing.T) 
 	}
 	// The allowlist is a copy: changing the result must not change the config's.
 	allowed := []string{"Read"}
-	s := AgentSpec(allowed, agent.AuthAPIKey)(domain.Task{}, domain.Run{})
+	s := AgentSpec("", allowed, agent.AuthAPIKey)(domain.Task{}, domain.Run{})
 	s.AllowedTools[0] = "Bash"
 	if allowed[0] != "Read" {
 		t.Error("the allowlist is shared with the configuration")
+	}
+}
+
+// In manual mode every prompt goes to the human: no allowlist, and the spec is
+// valid only for an agent that routes approvals to the host. The service
+// supplies the approver.
+func TestManualModeHasNoAllowlistAndNeedsHostApprovals(t *testing.T) {
+	spec := AgentSpec(agent.PermissionManual, []string{"Read"}, agent.AuthSubscription)(domain.Task{}, domain.Run{})
+	if spec.PermissionMode != agent.PermissionManual || len(spec.AllowedTools) != 0 || spec.ApprovalTimeout <= 0 {
+		t.Fatalf("spec = %+v", spec)
+	}
+	degraded := agent.Capabilities{AuthModes: []agent.AuthMode{agent.AuthSubscription}}
+	if err := degraded.CheckSpec(spec); !errors.Is(err, agent.ErrUnsupported) {
+		t.Errorf("a degraded agent accepted manual mode: %v", err)
+	}
+	full := agent.Capabilities{HostApprovals: true, MidRunInstruction: true, AuthModes: []agent.AuthMode{agent.AuthSubscription}}
+	spec.Approver = agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.Approval, error) { return agent.Approval{}, nil })
+	if err := full.CheckSpec(spec); err != nil {
+		t.Errorf("an agent with host approvals refused the spec: %v", err)
 	}
 }
 

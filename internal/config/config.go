@@ -74,9 +74,14 @@ type Config struct {
 	// ToolProfile names the profile of the tool store the environments use
 	// (`profiles/<name>`). Optional when the store has exactly one.
 	ToolProfile string `json:"tool_profile,omitempty"`
-	// AgentAllowedTools are the tools the agent may use without asking, while
-	// it runs in the degraded dontAsk mode (design §5.2): the supervisor's own
-	// choice, never the repository's. Required to run an agent for now.
+	// AgentPermissionMode is how the agent's permission prompts are handled:
+	// "dontAsk" (the default) never asks and runs only AgentAllowedTools, and
+	// "manual" routes every prompt to the human as an approval Decision over
+	// the stdio control channel (D26). Optional.
+	AgentPermissionMode string `json:"agent_permission_mode,omitempty"`
+	// AgentAllowedTools are the tools the agent may use without asking in the
+	// dontAsk mode (design §5.2): the supervisor's own choice, never the
+	// repository's. Required in dontAsk, and refused in manual.
 	AgentAllowedTools []string `json:"agent_allowed_tools,omitempty"`
 }
 
@@ -247,6 +252,16 @@ func (c *Config) Validate() error {
 		if !validEgressHost(h) {
 			add("environment.egress_allow: %q is not a host name (no IP address, wildcard, port or path)", h)
 		}
+	}
+
+	switch c.AgentPermissionMode {
+	case "", "dontAsk":
+	case "manual":
+		if len(c.AgentAllowedTools) > 0 {
+			add("agent_allowed_tools: an allowlist is for the dontAsk mode; in manual mode every prompt goes to you")
+		}
+	default:
+		add("agent_permission_mode: %q is not dontAsk or manual", c.AgentPermissionMode)
 	}
 
 	if c.GitHub.AppID <= 0 {
