@@ -932,6 +932,81 @@
         }
       }
     },
+    "/v1/workspaces/{workspace}/open": {
+      "post": {
+        "operationId": "openCopy",
+        "summary": "Make the supervisor-owned editor copy of an agent's branch (never the agent's checkout)",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/EditorCopy"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenCopyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace}/agents": {
       "post": {
         "operationId": "addAgent",
@@ -1569,6 +1644,35 @@
           },
           "branch": {
             "type": "string"
+          }
+        }
+      },
+      "OpenCopyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "the agent whose branch to open; empty means the workspace's only agent"
+          }
+        }
+      },
+      "EditorCopy": {
+        "type": "object",
+        "required": [
+          "path",
+          "warnings"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "description": "files in the copy that an editor may act on by itself; untrusted text",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

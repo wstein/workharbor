@@ -165,6 +165,16 @@ func (f *fake) RemoveAgent(_ context.Context, _, role string) error {
 	return nil
 }
 
+func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.EditorCopy, error) {
+	switch {
+	case workspace == "nope":
+		return service.EditorCopy{}, &domain.NotFoundError{Kind: "workspace", ID: workspace}
+	case role == "":
+		return service.EditorCopy{}, &domain.InvalidError{Msg: "workspace " + workspace + " has several agents (docs, runtime): name one"}
+	}
+	return service.EditorCopy{Path: "/Users/whr/.local/state/whr/open/" + workspace + "-" + role, Warnings: []string{".vscode/tasks.json"}}, nil
+}
+
 func (f *fake) Subscribe(_ context.Context, _ domain.ID, since int64) (<-chan domain.Event, error) {
 	f.mu.Lock()
 	f.since = append(f.since, since)
@@ -460,6 +470,10 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"remove-workspace-busy":          {"DELETE", "/v1/workspaces/busy", ""},
 		"add-agent":                      {"POST", "/v1/workspaces/docs-ws/agents", `{"role":"runtime"}`},
 		"add-agent-unknown-workspace":    {"POST", "/v1/workspaces/nope/agents", `{"role":"runtime"}`},
+		"open-copy":                      {"POST", "/v1/workspaces/docs-ws/open", `{"role":"runtime"}`},
+		"open-copy-ambiguous":            {"POST", "/v1/workspaces/docs-ws/open", ""},
+		"open-copy-unknown-workspace":    {"POST", "/v1/workspaces/nope/open", `{"role":"x"}`},
+		"open-copy-unknown-field":        {"POST", "/v1/workspaces/docs-ws/open", `{"role":"x","dir":"/etc"}`},
 		"remove-agent":                   {"DELETE", "/v1/workspaces/docs-ws/agents/runtime", ""},
 		"remove-agent-busy":              {"DELETE", "/v1/workspaces/docs-ws/agents/busy", ""},
 	} {
@@ -719,7 +733,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 16 {
+	if got := Routes(); len(got) != 17 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

@@ -39,8 +39,11 @@ type Deps struct {
 	Owner string
 	// Spec returns an environment's spec for a workspace, and Prepare is
 	// runtime.Prepare with this host's options.
-	Spec    func(domain.Workspace) runtime.Spec
-	Prepare func(runtime.Spec) (runtime.PreparedSpec, error)
+	// Topics and EditorDir make `whr open` work (optional).
+	Topics    service.TopicsFunc
+	EditorDir string
+	Spec      func(domain.Workspace) runtime.Spec
+	Prepare   func(runtime.Spec) (runtime.PreparedSpec, error)
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
 	Clock     service.Clock
@@ -83,6 +86,7 @@ func Run(ctx context.Context, d Deps) error {
 	defer svc.Shutdown()
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues,
+		Topics: d.Topics, EditorDir: d.EditorDir,
 	})
 	srv, err := api.New(api.NewBackend(svc, ws), api.Options{
 		Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) },

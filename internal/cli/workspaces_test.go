@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -135,5 +137,36 @@ func TestCompletionScriptsAreGeneratedForEveryShell(t *testing.T) {
 		if code, out, _ := s.runCLI("", args...); code != exitcode.Usage || out != "" {
 			t.Errorf("%v: exit %d, stdout %q, want usage and no data", args, code, out)
 		}
+	}
+}
+
+// whr open prints the path of the supervisor's copy on stdout and warns about
+// files an editor may run on stderr, as untrusted text.
+func TestOpenPrintsThePathAndWarnsAboutAutoRunFiles(t *testing.T) {
+	s := newStub(t)
+	var sent string
+	s.h["POST /v1/workspaces/docs-ws/open"] = func(w http.ResponseWriter, _ *http.Request, body string) {
+		sent = body
+		_, _ = io.WriteString(w, ok(`{"path":"/Users/whr/open/docs-ws-runtime","warnings":[".vscode/tasks.json","evil\u001b[31mname"]}`))
+	}
+	code, out, errOut := s.runCLI("", "open", "docs-ws/runtime")
+	if code != exitcode.OK || out != "/Users/whr/open/docs-ws-runtime\n" || sent != `{"role":"runtime"}` {
+		t.Fatalf("exit %d, stdout %q, sent %q", code, out, sent)
+	}
+	if !strings.Contains(errOut, ".vscode/tasks.json") || strings.Contains(errOut, "\x1b") {
+		t.Errorf("stderr %q: the warning must list the files and carry no control characters", errOut)
+	}
+
+	// without a role the body is empty, and the server decides
+	code, _, _ = s.runCLI("", "open", "docs-ws")
+	if code != exitcode.OK || sent != "" {
+		t.Errorf("no role: exit %d, sent %q", code, sent)
+	}
+	s.reply("POST /v1/workspaces/many/open", 400, fail("usage", exitcode.Usage, "workspace many has several agents (a, b): name one"))
+	if code, _, errOut := s.runCLI("", "open", "many"); code != exitcode.Usage || !strings.Contains(errOut, "name one") {
+		t.Errorf("an ambiguous workspace: exit %d, stderr %q", code, errOut)
+	}
+	if code, _, _ := s.runCLI("", "open", "/runtime"); code != exitcode.Usage {
+		t.Errorf("no workspace: exit %d, want usage", code)
 	}
 }

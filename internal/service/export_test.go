@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -290,5 +291,57 @@ func TestOpenCopyIsFreshWhileTheEnvironmentRunsAndNeverTheCheckout(t *testing.T)
 	}
 	if rel, err := filepath.Rel(b.checkout, dir); err == nil && !strings.HasPrefix(rel, "..") {
 		t.Error("the copy is inside the agent's checkout")
+	}
+}
+
+// `whr open` finds the agent of a workspace, exports its branch and makes the
+// copy in the supervisor's editor directory.
+func TestWorkspacesOpenCopyMakesTheCopyOfTheAgentsBranch(t *testing.T) {
+	b := newPubRig(t)
+	editor := t.TempDir()
+	topics := func(_ context.Context, repo string) (*hostgit.Repo, *hostgit.Cache, error) {
+		if repo != "wstein/workharbor" {
+			return nil, nil, errors.New("unexpected repository " + repo)
+		}
+		return b.repo, b.pub.cfg.Cache, nil
+	}
+	w := NewWorkspaces(b.svc, WorkspaceConfig{NewID: func() domain.ID { return "x" }, Topics: topics, EditorDir: editor})
+
+	cp, err := w.OpenCopy(bg, "docs-ws", "") // the only agent
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(editor, "docs-ws-topic")
+	if cp.Path != want {
+		t.Errorf("copy at %q, want %q", cp.Path, want)
+	}
+	if _, err := os.Stat(filepath.Join(want, "a.txt")); err != nil {
+		t.Errorf("the agent's file is not in the copy: %v", err)
+	}
+	if cp2, err := w.OpenCopy(bg, "docs-ws", "topic"); err != nil || cp2.Path != want {
+		t.Errorf("by role: %+v, %v", cp2, err)
+	}
+
+	var nf *domain.NotFoundError
+	if _, err := w.OpenCopy(bg, "docs-ws", "nope"); !errors.As(err, &nf) {
+		t.Errorf("an unknown role = %v, want not found", err)
+	}
+	if _, err := w.OpenCopy(bg, "nope", ""); !errors.As(err, &nf) {
+		t.Errorf("an unknown workspace = %v, want not found", err)
+	}
+
+	// With two agents an empty role is ambiguous and says which exist.
+	ws, _ := b.store.Workspace(bg, "docs-ws")
+	ag, aev, err := domain.NewAgent("a2", ws.ID, "second", "", "", t0)
+	must(t, err)
+	must(t, b.store.AddAgent(bg, ag, aev))
+	var inv *domain.InvalidError
+	if _, err := w.OpenCopy(bg, "docs-ws", ""); !errors.As(err, &inv) || !strings.Contains(err.Error(), "second") || !strings.Contains(err.Error(), "topic") {
+		t.Errorf("an ambiguous workspace = %v, want the roles listed", err)
+	}
+
+	bare := NewWorkspaces(b.svc, WorkspaceConfig{NewID: func() domain.ID { return "x" }})
+	if _, err := bare.OpenCopy(bg, "docs-ws", "topic"); !errors.Is(err, ErrNoEditorCopies) {
+		t.Errorf("no setup = %v, want ErrNoEditorCopies", err)
 	}
 }

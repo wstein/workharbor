@@ -39,6 +39,12 @@ type WorkspaceConfig struct {
 	NewID func() domain.ID
 	// Issues loads an issue from the forge. Optional: Run needs it.
 	Issues IssueSource
+	// Topics and EditorDir make `whr open` work: Topics opens the supervisor's
+	// own repository and the mirror of a forge repository, and EditorDir is the
+	// directory the editor copies are made in, outside every workspace root.
+	// Optional.
+	Topics    TopicsFunc
+	EditorDir string
 	// Trust is the trust tier of issue #53: it says whether an issue may start
 	// a run. Nil allows every issue, today. It is the place to add the tiers,
 	// not a way around them.

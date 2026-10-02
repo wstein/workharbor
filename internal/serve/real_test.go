@@ -15,6 +15,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -209,5 +210,41 @@ func TestTheGitHubClientIsBuiltFromTheAppKeyAndTheKeyIsRedacted(t *testing.T) {
 	}
 	if _, err := newGitHub(c, rd); err == nil || strings.Contains(err.Error(), "not a key at all") {
 		t.Errorf("a bad key = %v", err)
+	}
+}
+
+// `whr open` needs the mirror and the supervisor's own repository of a forge
+// repository, both in the state directory and nowhere an agent writes.
+func TestTopicsOpensTheMirrorAndTheSupervisorsOwnRepository(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"mirrors", "topics"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git, err := hostgit.New(hostgit.WithCacheRoot(filepath.Join(dir, "mirrors")))
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { _ = git.Close() })
+	topics := Topics(git, &config.Config{Repositories: []config.Repository{{Name: "wstein/workharbor", CloneDepth: 5}}}, dir)
+
+	repo, cache, err := topics(context.Background(), "wstein/workharbor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(cache.Path()) != filepath.Join(dir, "mirrors") || filepath.Dir(repo.Path()) != filepath.Join(dir, "topics") {
+		t.Errorf("mirror %s, repository %s: not under the state directory", cache.Path(), repo.Path())
+	}
+	// opened again, it is the same place and still works
+	repo2, cache2, err := topics(context.Background(), "wstein/workharbor")
+	if err != nil || repo2.Path() != repo.Path() || cache2.Path() != cache.Path() {
+		t.Errorf("reopen: %v", err)
+	}
+	if _, _, err := topics(context.Background(), "../etc/passwd"); err == nil {
+		t.Error("a repository name that is a path was accepted")
 	}
 }

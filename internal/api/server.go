@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -44,6 +45,7 @@ type Backend interface {
 	RemoveWorkspace(ctx context.Context, workspace string) error
 	AddAgent(ctx context.Context, workspace, role, instructions, profile string) (domain.Agent, error)
 	RemoveAgent(ctx context.Context, workspace, role string) error
+	OpenCopy(ctx context.Context, workspace, role string) (service.EditorCopy, error)
 	Subscribe(ctx context.Context, task domain.ID, since int64) (<-chan domain.Event, error)
 	Log(ctx context.Context, task domain.ID, since int64, limit int) ([]domain.Event, error)
 }
@@ -155,6 +157,7 @@ var routes = []route{
 	{http.MethodDelete, "/v1/workspaces/{workspace}", (*Server).removeWorkspace},
 	{http.MethodPost, "/v1/workspaces/{workspace}/agents", (*Server).addAgent},
 	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
+	{http.MethodPost, "/v1/workspaces/{workspace}/open", (*Server).openCopy},
 }
 
 // Routes returns the "METHOD path" of every route, for the contract test.
@@ -559,5 +562,42 @@ func (s *Server) removeAgent(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+type openCopyBody struct {
+	Role string `json:"role,omitempty"`
+}
+
+// openCopy makes the supervisor-owned editor copy of an agent's branch (design
+// §4.5). The body is optional: without a role it is the workspace's only agent.
+func (s *Server) openCopy(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var b openCopyBody
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	if err != nil {
+		writeError(w, usageError{"the request body could not be read: " + err.Error()})
+		return
+	}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if err := decodeStrict(raw, &b); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		c, err := s.be.OpenCopy(r.Context(), string(name), b.Role)
+		if err != nil {
+			return 0, nil, err
+		}
+		warnings := c.Warnings
+		if warnings == nil {
+			warnings = []string{}
+		}
+		return http.StatusOK, editorCopyView{Path: c.Path, Warnings: warnings}, nil
 	})
 }

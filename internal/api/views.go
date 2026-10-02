@@ -148,3 +148,9 @@ func eventOf(e domain.Event) eventView {
 	}
 	return v
 }
+
+// editorCopyView is the answer to opening a workspace's editor copy.
+type editorCopyView struct {
+	Path     string   `json:"path"`
+	Warnings []string `json:"warnings"` // untrusted: file names from the repository
+}

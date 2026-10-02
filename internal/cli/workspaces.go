@@ -257,3 +257,52 @@ func group(c *cobra.Command) {
 		return cmd.Help()
 	}
 }
+
+// newOpen is `whr open <workspace>[/<role>]` (design §4.5, issue #59): it asks
+// the supervisor to make its own copy of the agent's branch and prints the
+// copy's path, so `code "$(whr open docs)"` opens it. It is never the agent's
+// checkout: the agent writes that, and its config and hooks would run in the
+// developer's editor.
+func newOpen(s *state) *cobra.Command {
+	return &cobra.Command{
+		Use:               "open <workspace>[/<role>]",
+		Short:             "Make the supervisor's own copy of an agent's branch for your editor and print its path",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: s.completeAgentRefs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			wsName, role, _ := strings.Cut(args[0], "/")
+			if wsName == "" {
+				return usageError{"name the workspace, and the agent as <workspace>/<role> when it has several"}
+			}
+			c, err := s.api()
+			if err != nil {
+				return err
+			}
+			var body any
+			if role != "" {
+				body = map[string]string{"role": role}
+			}
+			raw, data, err := c.Do(cmd.Context(), "POST", "/v1/workspaces/"+url.PathEscape(wsName)+"/open", body, newKey())
+			if err != nil {
+				return err
+			}
+			var cp struct {
+				Path     string   `json:"path"`
+				Warnings []string `json:"warnings"`
+			}
+			if err := json.Unmarshal(data, &cp); err != nil {
+				return fmt.Errorf("the answer is not what this whr expects: %w", err)
+			}
+			if err := s.emit(raw, func(w io.Writer) error { _, err := fmt.Fprintln(w, clean(cp.Path)); return err }); err != nil {
+				return err
+			}
+			if len(cp.Warnings) > 0 { // file names from the repository: untrusted text
+				fmt.Fprintln(s.env.Stderr, "These files in the copy can run things when an editor opens the folder; trust it only after reading them:")
+				for _, f := range cp.Warnings {
+					fmt.Fprintln(s.env.Stderr, "  "+clean(f))
+				}
+			}
+			return nil
+		},
+	}
+}

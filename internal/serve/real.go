@@ -198,7 +198,20 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	if err != nil {
 		return Deps{}, nil, err
 	}
-	git, err := hostgit.New()
+	// The mirrors of the forge repositories and the supervisor's own repositories
+	// live in the state directory, outside every workspace root; an editor copy
+	// is never made in one (D42, §4.5).
+	for _, d := range []string{"mirrors", "topics", EditorCopyDir} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {
+			_ = st.Close()
+			return Deps{}, nil, err
+		}
+	}
+	gitOpts := []hostgit.Option{hostgit.WithCacheRoot(filepath.Join(dir, "mirrors"))}
+	for _, root := range c.Roots.Workspaces {
+		gitOpts = append(gitOpts, hostgit.WithWorkspaceRoot(root))
+	}
+	git, err := hostgit.New(gitOpts...)
 	if err != nil {
 		_ = st.Close()
 		return Deps{}, nil, err
@@ -237,6 +250,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	}
 	return Deps{
 		Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
+		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpec(permission, c.AgentAllowedTools, mode), Logf: logf,
 	}, func() {
 		_ = git.Close()
@@ -261,4 +275,43 @@ func newGitHub(c *config.Config, rd *redact.Redactor) (*github.Client, error) {
 		repos[i] = r.Name
 	}
 	return github.New(github.Config{AppID: c.GitHub.AppID, Key: key, Repos: repos, Redactor: rd, BaseURL: c.GitHub.APIURL})
+}
+
+// EditorCopyDir is the directory of the state directory that `whr open` makes
+// its copies in.
+const EditorCopyDir = "open"
+
+// Topics opens, for a forge repository, the mirror (fed only from the forge)
+// and the supervisor's own bare repository that an agent's branch is imported
+// into (D42, §4.5). The mirror is fetched from the repository's public https
+// address: an authenticated fetch of a private repository comes with the push
+// flow (issue #27), so until then `whr open` on one fails at the fetch.
+func Topics(git *hostgit.Git, c *config.Config, dir string) service.TopicsFunc {
+	return func(ctx context.Context, repo string) (*hostgit.Repo, *hostgit.Cache, error) {
+		mirror, err := git.CachePath(repo)
+		if err != nil {
+			return nil, nil, err
+		}
+		depth := 0
+		for _, r := range c.Repositories {
+			if strings.EqualFold(r.Name, repo) {
+				depth = r.CloneDepth
+			}
+		}
+		cache, err := git.OpenCache(ctx, mirror, hostgit.CacheConfig{Source: "https://github.com/" + repo + ".git", CloneDepth: depth})
+		if err != nil {
+			return nil, nil, err
+		}
+		own := filepath.Join(dir, "topics", filepath.Base(mirror))
+		var topics *hostgit.Repo
+		if _, serr := os.Stat(own); serr == nil {
+			topics, err = git.OpenBare(ctx, own)
+		} else {
+			topics, err = git.InitBare(ctx, own)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return topics, cache, nil
+	}
 }
