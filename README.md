@@ -30,7 +30,7 @@ The command-line tool is **`whr`**.
 
 - An Apple-silicon Mac mini (or Mac) running macOS with [Apple Container](https://github.com/apple/container), the first runtime. Release 1 supports no other host.
 - A GitHub App for the repositories the agents work on: `whr github app create` makes it from a manifest.
-- An agent login: a Claude subscription or an API key, entered inside the environment, never given to `whr`.
+- An agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file.
 - Go, only to build from source.
 
 The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until the first release.
