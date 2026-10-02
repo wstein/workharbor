@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 
 	"github.com/wstein/workharbor/internal/domain"
 )
@@ -108,6 +109,18 @@ type EgressUpdater interface {
 	// stopped and on a running environment (a running one gets the new sidecar
 	// started), and fails with ErrNotFound or ErrNotOwned like every method.
 	UpdateEgress(ctx context.Context, envID string, prep PreparedSpec) error
+}
+
+// Previewer is implemented by an adapter that can open a connection to a TCP
+// port of an environment (design D33, issue #72): the way the preview proxy
+// reaches a dev server the agent runs. The connection goes over the
+// environment's internal network, through the sidecar, which relays it without
+// widening what the environment may reach (§7.2); it is for that one environment
+// and port, never another host. It fails with ErrNotFound, ErrNotOwned or
+// ErrNotRunning like every method that takes an ID. Whether an adapter's sidecar
+// can relay inbound traffic is measured, not assumed (issue #69).
+type Previewer interface {
+	DialPreview(ctx context.Context, envID string, port int) (net.Conn, error)
 }
 
 // Resources are what an environment depends on besides its own container.
