@@ -212,3 +212,36 @@ func TestAGuardForAnUntrustedRunAsksWhereTheTableAllowed(t *testing.T) {
 		t.Errorf("merge = %v", err)
 	}
 }
+
+// A board write is a supervisor action the table allows by default; forbidding
+// it stops it before the adapter, and an untrusted run's context does not
+// change it, because a card carries no text of the run.
+func TestBoardWritesFollowTheTableAndNotTheRunsContext(t *testing.T) {
+	u := forge.CardUpdate{Status: forge.StatusNeedsYou, Session: "docs/runtime"}
+	g, f := newGuard(policy.Default())
+	if err := g.UpdateCard(bg, "wstein/workharbor", 7, u); err != nil || len(f.CardsSeen()) != 1 {
+		t.Fatalf("default table: %v, cards %v", err, f.CardsSeen())
+	}
+	trifecta := g.For(policy.Context{UntrustedInput: true, PrivateData: true, Egress: true})
+	if err := trifecta.UpdateCard(bg, "wstein/workharbor", 7, u); err != nil {
+		t.Errorf("an untrusted run's context stopped a status write: %v", err)
+	}
+
+	for _, mode := range []policy.Mode{policy.Ask, policy.Forbid, ""} {
+		table := policy.Default()
+		table[policy.UpdateBoard] = mode
+		g, f := newGuard(table)
+		if err := g.UpdateCard(bg, "wstein/workharbor", 7, u); !errors.Is(err, forge.ErrForbidden) {
+			t.Errorf("mode %q: %v, want ErrForbidden", mode, err)
+		}
+		if len(f.Calls) != 0 {
+			t.Errorf("mode %q: a refused write reached the forge: %v", mode, f.Calls)
+		}
+	}
+
+	// an adapter without a board
+	bare := forge.NewGuard(struct{ forge.Adapter }{forgetest.NewFake()}, forgetest.NewFake(), policy.Default(), approvals{})
+	if err := bare.UpdateCard(bg, "wstein/workharbor", 7, u); !errors.Is(err, forge.ErrNoBoard) {
+		t.Errorf("no board = %v, want ErrNoBoard", err)
+	}
+}

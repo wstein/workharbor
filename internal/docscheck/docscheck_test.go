@@ -306,6 +306,7 @@ var policyRows = []struct {
 	{"| Commit in the topic's own checkout", []policy.Action{policy.Commit}},
 	{"| Push an `agent/*` branch", []policy.Action{policy.PushAgentBranch}},
 	{"| Open/update PR, comment on issue", []policy.Action{policy.OpenPR, policy.CommentIssue}},
+	{"| Write the project board", []policy.Action{policy.UpdateBoard}},
 	{"| Merge, tag, release, deploy", []policy.Action{policy.Merge, policy.Tag, policy.Release, policy.Deploy}},
 }
 

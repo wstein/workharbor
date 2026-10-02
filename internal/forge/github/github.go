@@ -94,6 +94,9 @@ type Config struct {
 	HTTP *http.Client
 	// Redactor, if set, learns each installation token the moment it is minted.
 	Redactor *redact.Redactor
+	// Board, if set, is the project board the supervisor keeps current (D30). It
+	// adds the board's permission to the installation tokens.
+	Board *BoardConfig
 	// WebhookSecret verifies webhook signatures. Empty means webhooks are not
 	// accepted.
 	WebhookSecret []byte
@@ -110,6 +113,7 @@ type Client struct {
 	tokens  map[string]token  // by repository
 	bases   map[string]string // default branch by repository
 	install map[string]int64  // installation ID by repository
+	board   boardCache
 }
 
 type token struct {
@@ -131,6 +135,11 @@ func New(cfg Config) (*Client, error) {
 	for _, r := range cfg.Repos {
 		if !hostgit.ValidRepoName(r) {
 			return nil, fmt.Errorf("github: %q is not owner/name", r)
+		}
+	}
+	if cfg.Board != nil {
+		if err := ValidateBoard(*cfg.Board); err != nil {
+			return nil, err
 		}
 	}
 	if cfg.BaseURL == "" {
@@ -341,7 +350,7 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 	}
 	err = c.do(ctx, jwt, http.MethodPost, "/app/installations/"+strconv.FormatInt(id, 10)+"/access_tokens", map[string]any{
 		"repositories": []string{name},
-		"permissions":  AppPermissions(),
+		"permissions":  AppPermissionsFor(c.cfg.Board != nil),
 	}, &tok)
 	if err != nil {
 		return "", fmt.Errorf("mint an installation token for %s: %w", repo, err)
@@ -606,7 +615,8 @@ func (c *Client) CheckApp(ctx context.Context) (AppReport, error) {
 	if app.ID != c.cfg.AppID {
 		rep.Problems = append(rep.Problems, fmt.Sprintf("GitHub answered for App %d, not %d", app.ID, c.cfg.AppID))
 	}
-	rep.Problems = append(rep.Problems, permissionDiff("the App", app.Permissions)...)
+	want := AppPermissionsFor(c.cfg.Board != nil)
+	rep.Problems = append(rep.Problems, permissionDiff("the App", want, app.Permissions)...)
 	for _, repo := range c.cfg.Repos {
 		rr := RepoReport{Repo: repo}
 		var inst struct {
@@ -620,7 +630,7 @@ func (c *Client) CheckApp(ctx context.Context) (AppReport, error) {
 			return AppReport{}, err
 		default:
 			rr.Installed = true
-			rr.Problems = permissionDiff("the installation", inst.Permissions)
+			rr.Problems = permissionDiff("the installation", want, inst.Permissions)
 		}
 		rep.Repos = append(rep.Repos, rr)
 	}
@@ -628,8 +638,7 @@ func (c *Client) CheckApp(ctx context.Context) (AppReport, error) {
 }
 
 // permissionDiff lists what who has beyond or below AppPermissions.
-func permissionDiff(who string, got map[string]string) []string {
-	want := AppPermissions()
+func permissionDiff(who string, want, got map[string]string) []string {
 	var out []string
 	for _, k := range sortedPermKeys(want) {
 		if got[k] != want[k] {

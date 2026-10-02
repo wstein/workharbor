@@ -20,6 +20,10 @@ type Fake struct {
 	PRs      []forge.PullRequest
 	Comments []string
 	Calls    []string
+	// Cards are the board updates it was asked for, in order, and CardErr is
+	// what UpdateCard returns (a board write that fails).
+	Cards   []Card
+	CardErr error
 	// WebhookSecret is the header value VerifyWebhook accepts in X-Signature.
 	WebhookSecret string
 }
@@ -100,4 +104,27 @@ func (f *Fake) Push(_ context.Context, repo, branch, sha string) error {
 	defer f.mu.Unlock()
 	f.Branches[repo+":"+branch] = sha
 	return nil
+}
+
+// Card is one board update a Fake received.
+type Card struct {
+	Repo   string
+	Issue  int
+	Update forge.CardUpdate
+}
+
+// UpdateCard implements forge.Board.
+func (f *Fake) UpdateCard(_ context.Context, repo string, issue int, u forge.CardUpdate) error {
+	f.call("UpdateCard %s#%d %s", repo, issue, u.Status)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Cards = append(f.Cards, Card{Repo: repo, Issue: issue, Update: u})
+	return f.CardErr
+}
+
+// CardsSeen returns a copy of the board updates received so far.
+func (f *Fake) CardsSeen() []Card {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]Card(nil), f.Cards...)
 }

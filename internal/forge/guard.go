@@ -20,6 +20,8 @@ var (
 	ErrBranch = errors.New("only agent/* branches are pushed")
 	// ErrSHAMismatch means the forge's branch does not point at the approved commit.
 	ErrSHAMismatch = errors.New("the branch on the forge is not at the approved commit")
+	// ErrNoBoard means the forge adapter has no board.
+	ErrNoBoard = errors.New("the forge adapter has no project board")
 )
 
 // Guard wraps an Adapter and a Pusher with the autonomy table. It is the
@@ -67,6 +69,21 @@ func (g *Guard) CommentIssue(ctx context.Context, repo string, number int, body 
 		return err
 	}
 	return g.inner.CommentIssue(ctx, repo, number, body)
+}
+
+// UpdateCard writes a card on the project board when the table lets it run
+// unasked (D30). It is a supervisor action: agents never call it, and it takes
+// the plain table, not the run's context, because a card carries a status, an
+// agent name and a link and none of the run's untrusted text.
+func (g *Guard) UpdateCard(ctx context.Context, repo string, issue int, u CardUpdate) error {
+	if m := g.table.Decide(policy.UpdateBoard); m != policy.Auto {
+		return fmt.Errorf("%w: %s is %s", ErrForbidden, policy.UpdateBoard, m)
+	}
+	b, ok := g.inner.(Board)
+	if !ok {
+		return ErrNoBoard
+	}
+	return b.UpdateCard(ctx, repo, issue, u)
 }
 
 // allow refuses unless the table says the action runs on its own.

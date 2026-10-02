@@ -14,6 +14,7 @@ func TestDefault(t *testing.T) {
 		{PushAgentBranch, Ask},
 		{OpenPR, Auto},
 		{CommentIssue, Auto},
+		{UpdateBoard, Auto},
 		{Merge, Forbid},
 		{Tag, Forbid},
 		{Release, Forbid},

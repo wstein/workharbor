@@ -18,10 +18,13 @@ const (
 	PushAgentBranch Action = "push_agent_branch"
 	OpenPR          Action = "open_pr"
 	CommentIssue    Action = "comment_issue"
-	Merge           Action = "merge"
-	Tag             Action = "tag"
-	Release         Action = "release"
-	Deploy          Action = "deploy"
+	// UpdateBoard is the supervisor writing a task's state on the project board
+	// (D30). It is not an agent action: agents never write to the board.
+	UpdateBoard Action = "update_board"
+	Merge       Action = "merge"
+	Tag         Action = "tag"
+	Release     Action = "release"
+	Deploy      Action = "deploy"
 )
 
 // Mode says how an action is handled.
@@ -74,6 +77,7 @@ func Default() Table {
 		PushAgentBranch: Ask,
 		OpenPR:          Auto,
 		CommentIssue:    Auto,
+		UpdateBoard:     Auto,
 		Merge:           Forbid,
 		Tag:             Forbid,
 		Release:         Forbid,
@@ -117,6 +121,6 @@ func (t Table) Validate() error {
 
 // known lists every action a table may mention.
 var known = map[Action]bool{
-	Commit: true, PushAgentBranch: true, OpenPR: true, CommentIssue: true,
+	Commit: true, PushAgentBranch: true, OpenPR: true, CommentIssue: true, UpdateBoard: true,
 	Merge: true, Tag: true, Release: true, Deploy: true,
 }

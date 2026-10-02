@@ -67,3 +67,28 @@ type Pusher interface {
 type Verifier interface {
 	Approved(ctx context.Context, a Approval) bool
 }
+
+// The board statuses of D30. A task awaiting guidance goes first: "Needs you".
+const (
+	StatusNeedsYou    = "Needs you"
+	StatusInProgress  = "In progress"
+	StatusReadyToPush = "Ready to push"
+	StatusDone        = "Done"
+)
+
+// CardUpdate is what the supervisor writes on an issue's card (D30): the
+// status, who works on it and a link to the task. Nothing in it comes from the
+// issue's text, so untrusted input cannot steer it.
+type CardUpdate struct {
+	Status  string
+	Session string // the agent, "<workspace>/<role>"; empty leaves the field alone
+	Link    string // the task in the web UI; empty leaves the field alone
+}
+
+// Board is the optional capability of an adapter to keep a project board
+// current (D30). An adapter without a board does not implement it.
+type Board interface {
+	// UpdateCard sets the card of an issue, adding the issue to the board first
+	// when it is not on it.
+	UpdateCard(ctx context.Context, repo string, issue int, u CardUpdate) error
+}
