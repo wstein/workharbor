@@ -237,8 +237,12 @@ func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	cfg := func(workflow string) Deps {
-		return Deps{Config: &config.Config{Repositories: []config.Repository{{Name: "wstein/workharbor", Workflow: workflow}}}, Store: st}
+	cfg := func(workflow string, branch ...string) Deps {
+		r := config.Repository{Name: "wstein/workharbor", Workflow: workflow}
+		if len(branch) > 0 {
+			r.IntegrationBranch = branch[0]
+		}
+		return Deps{Config: &config.Config{Repositories: []config.Repository{r}}, Store: st}
 	}
 	var logs []string
 	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
@@ -250,14 +254,14 @@ func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
 	if err := applyWorkflows(ctx, cfg("integration"), logf); err != nil {
 		t.Errorf("the same preset: %v", err)
 	}
-	err = applyWorkflows(ctx, cfg("prototype"), logf)
+	err = applyWorkflows(ctx, cfg("prototype", "dev"), logf)
 	if err == nil || !strings.Contains(err.Error(), "--accept-workflow-change") || !strings.Contains(err.Error(), "policy change") {
 		t.Fatalf("an unconfirmed change = %v", err)
 	}
-	if w, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); w != "integration" {
+	if w, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); w.Workflow != "integration" {
 		t.Errorf("a refused change was recorded: %q", w)
 	}
-	d := cfg("prototype")
+	d := cfg("prototype", "dev")
 	d.AcceptWorkflowChange = true
 	if err := applyWorkflows(ctx, d, logf); err != nil {
 		t.Fatal(err)
@@ -266,7 +270,43 @@ func TestAChangeOfPresetNeedsTheHostsConfirmationAndIsAudited(t *testing.T) {
 	if len(ch) != 1 || ch[0].From != "integration" || ch[0].To != "prototype" || ch[0].ConfirmedBy != "host-cli" {
 		t.Errorf("audit %+v", ch)
 	}
-	if len(logs) != 1 || !strings.Contains(logs[0], "changed from integration to prototype") {
+	if len(logs) != 1 || !strings.Contains(logs[0], "changed from integration on \"develop\" to prototype") {
 		t.Errorf("logs %v", logs)
+	}
+}
+
+// A new integration branch is a policy change like a new preset, and the
+// repository's name in another case is the same repository (D47, §6).
+func TestAChangeOfIntegrationBranchNeedsTheHostsConfirmationToo(t *testing.T) {
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "workharbor.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	cfg := func(name, branch string) Deps {
+		return Deps{Config: &config.Config{Repositories: []config.Repository{{Name: name, Workflow: "integration", IntegrationBranch: branch}}}, Store: st}
+	}
+	logf := func(string, ...any) {}
+	ctx := context.Background()
+	if err := applyWorkflows(ctx, cfg("wstein/workharbor", "develop"), logf); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"wstein/workharbor", "Wstein/WorkHarbor"} {
+		err := applyWorkflows(ctx, cfg(name, "next"), logf)
+		if err == nil || !strings.Contains(err.Error(), "--accept-workflow-change") {
+			t.Fatalf("%s: an unconfirmed branch change = %v", name, err)
+		}
+	}
+	if rec, _, _ := st.RecordedWorkflow(ctx, "wstein/workharbor"); rec.Branch != "develop" {
+		t.Errorf("a refused change was recorded: %+v", rec)
+	}
+	d := cfg("WSTEIN/workharbor", "next")
+	d.AcceptWorkflowChange = true
+	if err := applyWorkflows(ctx, d, logf); err != nil {
+		t.Fatal(err)
+	}
+	ch, _ := st.WorkflowChanges(ctx, "wstein/workharbor")
+	if len(ch) != 1 || ch[0].FromBranch != "develop" || ch[0].ToBranch != "next" {
+		t.Errorf("audit %+v", ch)
 	}
 }

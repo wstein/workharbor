@@ -52,7 +52,7 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*), MAX(name), MAX(applied_at) FROM schema_migrations`).Scan(&n, &name, &applied); err != nil {
 		t.Fatal(err)
 	}
-	if n != 15 || name != "0015_task_branch.sql" || applied != fixed.UnixNano() {
+	if n != 16 || name != "0016_workflow_branch.sql" || applied != fixed.UnixNano() {
 		t.Errorf("schema_migrations: %d rows, %q at %d", n, name, applied)
 	}
 	for table, query := range map[string]string{
@@ -86,8 +86,8 @@ func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 15 {
-		t.Errorf("after a second open: %d migrations recorded, %v; want 15", n, err)
+	if err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 16 {
+		t.Errorf("after a second open: %d migrations recorded, %v; want 16", n, err)
 	}
 }
 
@@ -137,24 +137,39 @@ func TestWorkflowsAreRecordedAndChangesAreAudited(t *testing.T) {
 	if _, ok, err := s.RecordedWorkflow(bg, "a/b"); err != nil || ok {
 		t.Fatalf("nothing recorded yet: %v %v", ok, err)
 	}
-	if prev, changed, err := s.ApplyWorkflow(bg, "a/b", "integration", "serve", at); err != nil || changed || prev != "" {
+	integration := WorkflowRecord{Workflow: "integration", Branch: "develop"}
+	if prev, changed, err := s.ApplyWorkflow(bg, "a/b", integration, "serve", at); err != nil || changed || prev != (WorkflowRecord{}) {
 		t.Errorf("the first record is not a change: %q %v %v", prev, changed, err)
 	}
-	if _, changed, _ := s.ApplyWorkflow(bg, "a/b", "integration", "serve", at.Add(time.Hour)); changed {
+	if _, changed, _ := s.ApplyWorkflow(bg, "a/b", integration, "serve", at.Add(time.Hour)); changed {
 		t.Error("the same preset was a change")
 	}
-	prev, changed, err := s.ApplyWorkflow(bg, "a/b", "prototype", "host-cli", at.Add(2*time.Hour))
-	if err != nil || !changed || prev != "integration" {
+	// the same repository in another case is the same repository
+	if _, changed, _ := s.ApplyWorkflow(bg, "A/B", integration, "serve", at.Add(time.Hour)); changed {
+		t.Error("the same repository in capitals was a change")
+	}
+	if rec, ok, _ := s.RecordedWorkflow(bg, "A/b"); !ok || rec != integration {
+		t.Errorf("a name in another case found %+v, %v", rec, ok)
+	}
+	// a new integration branch under the same preset is a change too
+	if prev, changed, _ := s.ApplyWorkflow(bg, "a/b", WorkflowRecord{Workflow: "integration", Branch: "next"}, "host-cli", at.Add(90*time.Minute)); !changed || prev != integration {
+		t.Errorf("a new branch: %+v %v", prev, changed)
+	}
+	if _, _, err := s.ApplyWorkflow(bg, "a/b", integration, "host-cli", at.Add(100*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	prev, changed, err := s.ApplyWorkflow(bg, "a/b", WorkflowRecord{Workflow: "prototype", Branch: "dev"}, "host-cli", at.Add(2*time.Hour))
+	if err != nil || !changed || prev != integration {
 		t.Fatalf("a change: %q %v %v", prev, changed, err)
 	}
-	if w, _, _ := s.RecordedWorkflow(bg, "a/b"); w != "prototype" {
+	if w, _, _ := s.RecordedWorkflow(bg, "a/b"); w != (WorkflowRecord{Workflow: "prototype", Branch: "dev"}) {
 		t.Errorf("recorded %q", w)
 	}
 	ch, err := s.WorkflowChanges(bg, "a/b")
-	if err != nil || len(ch) != 1 || ch[0].From != "integration" || ch[0].To != "prototype" || ch[0].ConfirmedBy != "host-cli" || !ch[0].At.Equal(at.Add(2*time.Hour)) {
+	if err != nil || len(ch) != 3 || ch[0].ToBranch != "next" || ch[2].From != "integration" || ch[2].To != "prototype" || ch[2].FromBranch != "develop" || ch[2].ToBranch != "dev" || ch[2].ConfirmedBy != "host-cli" || !ch[2].At.Equal(at.Add(2*time.Hour)) {
 		t.Errorf("changes %+v, %v", ch, err)
 	}
-	if _, _, err := s.ApplyWorkflow(bg, "", "x", "y", at); err == nil {
+	if _, _, err := s.ApplyWorkflow(bg, "", WorkflowRecord{Workflow: "x"}, "y", at); err == nil {
 		t.Error("an empty repository was recorded")
 	}
 

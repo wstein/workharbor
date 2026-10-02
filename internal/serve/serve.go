@@ -249,13 +249,13 @@ func addRevoker(scfg *service.Config, d Deps) {
 // keeps the preset it started under either way.
 func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) error {
 	for _, r := range d.Config.Repositories {
-		want := string(r.Preset())
+		want := store.WorkflowRecord{Workflow: string(r.Preset()), Branch: workflowBranch(r)}
 		prev, ok, err := d.Store.RecordedWorkflow(ctx, r.Name)
 		if err != nil {
 			return err
 		}
 		if ok && prev != want && !d.AcceptWorkflowChange {
-			return fmt.Errorf("the workflow of %s is %s in the configuration and was %s: that is a policy change; check it and start with --accept-workflow-change to confirm it (tasks already started keep the %s they started under)", r.Name, want, prev, prev)
+			return fmt.Errorf("the workflow of %s is %s on %q in the configuration and was %s on %q: that is a policy change; check it and start with --accept-workflow-change to confirm it (tasks already started keep what they started under)", r.Name, want.Workflow, want.Branch, prev.Workflow, prev.Branch)
 		}
 		by := "serve"
 		if d.AcceptWorkflowChange {
@@ -264,7 +264,7 @@ func applyWorkflows(ctx context.Context, d Deps, logf func(string, ...any)) erro
 		if _, changed, err := d.Store.ApplyWorkflow(ctx, r.Name, want, by, time.Now()); err != nil {
 			return err
 		} else if changed {
-			logf("workflow of %s changed from %s to %s (confirmed on the host CLI)", r.Name, prev, want)
+			logf("workflow of %s changed from %s on %q to %s on %q (confirmed on the host CLI)", r.Name, prev.Workflow, prev.Branch, want.Workflow, want.Branch)
 		}
 	}
 	return nil
