@@ -355,7 +355,7 @@ func (s *Server) purgePage(w http.ResponseWriter, r *http.Request, sess Session)
 func (s *Server) purge(w http.ResponseWriter, r *http.Request, sess Session) {
 	id := domain.ID(r.PathValue("task"))
 	loc, err := s.once(r, func() (string, error) {
-		if _, err := s.be.PurgeTranscript(r.Context(), id, "web"); err != nil {
+		if _, err := s.be.PurgeTranscript(r.Context(), id, "web:"+sess.ID); err != nil {
 			return "", err
 		}
 		return "/tasks/" + url.PathEscape(string(id)) + "?flash=purged", nil

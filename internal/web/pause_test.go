@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -88,7 +89,10 @@ func TestPurgeAsksFirstAndSaysWhatGoesAndWhatStays(t *testing.T) {
 		t.Fatalf("purge: %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	b.do("POST", "/tasks/t1/purge", url.Values{"csrf": {csrf}, "key": {key}})
-	if len(r.be.purges) != 1 || r.be.purges[0] != "t1 by web" {
-		t.Errorf("purges = %v", r.be.purges)
+	// the audit entry names the device that purged, as listed on /devices
+	_, devices := b.do("GET", "/devices", nil)
+	id := regexp.MustCompile(`action="/devices/([0-9a-f]+)/revoke"`).FindStringSubmatch(devices)
+	if id == nil || len(r.be.purges) != 1 || r.be.purges[0] != "t1 by web:"+id[1] {
+		t.Errorf("purges = %v, device %v", r.be.purges, id)
 	}
 }
