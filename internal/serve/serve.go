@@ -62,15 +62,19 @@ type Deps struct {
 	Environment func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error)
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
-	Clock     service.Clock
-	Logf      func(format string, args ...any)
+	// AgentSpecFor makes AgentSpec for a configuration. Run uses it when a
+	// repository is held on its recorded workflow (a change nobody confirmed), so
+	// the permission mode follows the workflow it really runs under.
+	AgentSpecFor func(*config.Config) func(domain.Task, domain.Run) agent.StartSpec
+	Clock        service.Clock
+	Logf         func(format string, args ...any)
 	// ReconcileEvery is how often the reconciler compares the database with the
 	// runtime. Default 30 s.
 	ReconcileEvery time.Duration
 	// AcceptWorkflowChange confirms that a repository's workflow preset in the
 	// configuration may differ from the one recorded: a policy change, which the
-	// operator confirms on the host CLI (`whr serve --accept-workflow-change`)
-	// until the passkey of D45 exists.
+	// operator confirms on the host CLI (`whr serve --accept-workflow-change`) or,
+	// with a passkey enrolled, in the web UI (issue #107).
 	AcceptWorkflowChange bool
 	// SocketPath is the unix socket the JSON API is served on, and only there
 	// (D29, §7.5): the forwarded `listen` address serves the web UI alone.
@@ -118,7 +122,18 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	d.Config = withHeld(d.Config, held)
+	if len(held) > 0 {
+		d.Config = withHeld(d.Config, held)
+		// What a held repository runs under decides its agent's mode and whether an
+		// allowlist is needed: both are read from the held configuration, not the
+		// one in the file.
+		if needsAllowlist(d.Config) && len(d.Config.AgentAllowedTools) == 0 {
+			return errors.New("agent_allowed_tools is needed: a repository held on its recorded workflow runs its agent in the dontAsk mode, where only the tools you list may run")
+		}
+		if d.AgentSpecFor != nil {
+			d.AgentSpec = d.AgentSpecFor(d.Config)
+		}
+	}
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
 		Workflow: func(repo string) string {
 			for _, r := range d.Config.Repositories {

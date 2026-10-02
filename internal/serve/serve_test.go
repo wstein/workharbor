@@ -462,3 +462,21 @@ func TestAnUnconfirmedWorkflowChangeIsHeldWhenAPasskeyCanConfirmIt(t *testing.T)
 		t.Errorf("recorded = %+v", rec)
 	}
 }
+
+// A repository held on its recorded workflow runs its agent in the mode of that
+// workflow, and needs the allowlist it needs, whatever the file now says.
+func TestAHeldRepositoryRunsInTheModeOfItsRecordedWorkflow(t *testing.T) {
+	file := &config.Config{AgentAllowedTools: []string{"Read"}, Repositories: []config.Repository{{Name: "wstein/workharbor", Workflow: "published"}}}
+	held := withHeld(file, map[string]store.WorkflowRecord{"wstein/workharbor": {Workflow: "integration", Branch: "develop"}})
+	task := domain.Task{Repo: "wstein/workharbor"}
+	if got := AgentSpecFor(file, agent.AuthSubscription)(task, domain.Run{}).PermissionMode; got != agent.PermissionManual {
+		t.Fatalf("the file's own mode = %q, want manual", got)
+	}
+	spec := AgentSpecFor(held, agent.AuthSubscription)(task, domain.Run{})
+	if spec.PermissionMode != agent.PermissionDontAsk || len(spec.AllowedTools) != 1 {
+		t.Errorf("held spec = %q with tools %v, want dontAsk with the allowlist", spec.PermissionMode, spec.AllowedTools)
+	}
+	if !needsAllowlist(held) || needsAllowlist(file) {
+		t.Errorf("needsAllowlist: held %v, file %v", needsAllowlist(held), needsAllowlist(file))
+	}
+}

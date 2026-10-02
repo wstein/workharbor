@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -17,12 +18,13 @@ import (
 
 // fakeChanges is what whr serve gives the UI, with the calls counted.
 type fakeChanges struct {
-	mu       sync.Mutex
-	open     []Change
-	revoke   bool
-	confirms []string
-	revokes  int
-	failWith error
+	mu        sync.Mutex
+	open      []Change
+	revoke    bool
+	confirms  []string
+	revokes   int
+	revokeErr error
+	failWith  error
 }
 
 func (f *fakeChanges) Open(context.Context) ([]Change, error) {
@@ -47,6 +49,9 @@ func (f *fakeChanges) RevokeTokens(context.Context, string) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.revokes++
+	if f.revokeErr != nil {
+		return 1, f.revokeErr
+	}
 	return 2, nil
 }
 
@@ -249,5 +254,25 @@ func TestTheForgeTokensAreRevokedOnlyWithAPasskeyThatNamesTheOperation(t *testin
 	}
 	if resp, _ := none.beginAt(nb, ncsrf, base); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("a step-up for nothing: %d", resp.StatusCode)
+	}
+}
+
+// Tokens that were partly revoked are audited, so the page says that and not that
+// nothing was recorded.
+func TestAPartialRevocationIsReportedAsPartial(t *testing.T) {
+	f := &fakeChanges{open: twoChanges(), revoke: true, revokeErr: errors.New("one token could not be revoked")}
+	p := changeRig(t, f)
+	p.enrol(p.browser())
+	b := p.signIn()
+	csrf := csrfOf(t, b)
+	base := "/secrets/revoke-tokens/stepup"
+	_, cr := p.beginAt(b, csrf, base)
+	var assertion protocol.CredentialAssertion
+	if err := json.Unmarshal(cr.Options, &assertion); err != nil {
+		t.Fatal(err)
+	}
+	resp, raw := b.postJSON(base+"/finish", bodyOf(p.auth.Assert(&assertion, pkOrigin)), map[string]string{"X-CSRF-Token": csrf, "X-Ceremony": cr.Ceremony})
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "tokens_partial") {
+		t.Errorf("a partial revocation: %d %s", resp.StatusCode, raw)
 	}
 }

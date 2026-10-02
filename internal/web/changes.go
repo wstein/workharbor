@@ -104,7 +104,11 @@ func (s *Server) revokeFinish(w http.ResponseWriter, r *http.Request, sess Sessi
 		return
 	}
 	s.finishStepUp(w, r, sess, revokeBinding, "revoke", func() (string, error) {
-		_, err := s.opt.Changes.RevokeTokens(r.Context(), "web+passkey")
+		n, err := s.opt.Changes.RevokeTokens(r.Context(), "web+passkey")
+		if err != nil && n > 0 {
+			// some went and the entry is written: say so, not that nothing was recorded
+			return "/changes?flash=tokens_partial", nil
+		}
 		return "/changes?flash=tokens", err
 	})
 }

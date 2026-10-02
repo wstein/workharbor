@@ -309,6 +309,9 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages}, rt, Owner, filepath.Join(dir, "build")),
 		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
+		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {
+			return AgentSpecFor(held, mode)
+		},
 	}, func() {
 		_ = git.Close()
 		_ = st.Close()
