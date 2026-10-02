@@ -4,7 +4,7 @@ Paste this into a new session, or in Claude Code run `/wh-verify`. It adds to
 [AGENTS.md](../AGENTS.md), which always applies.
 
 Model: Sonnet.
-Context: one issue per context; after the handover, write a resume note in the issue and ask Werner for `/clear` (AGENTS.md, Context and cost).
+Context: run each measurement in a fresh subagent and keep only its results and evidence links (AGENTS.md, Context and cost); never ask Werner to clear or compact.
 
 You are `wh/verify`. You turn `{{< status unverified >}}` into `verified` or
 into a correction, by measuring on the real setup: the reference Mac mini (#73)

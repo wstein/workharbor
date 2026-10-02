@@ -131,7 +131,7 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Context and cost.** A long-lived session pays for its whole history on every turn (measured: about 80 % of this project's cost is cache reads). So:
 
-- **One issue, one context.** When an issue is landed and handed over, the lane writes a short resume note in the issue (state, what is left, the next step) so a fresh session can continue, then asks Werner to clear it (`/clear`) or restart it. Only the human can clear a session's context; no session can clear another's.
+- **One issue, one fresh context, without the human.** A lane session is a thin dispatcher: it pulls a card, then runs the issue in a fresh subagent on the lane's model in its own worktree (the Agent tool with worktree isolation), which does the work, lands it and returns only its conclusion, the commits and what is unverified. The lane keeps those few lines, writes the hand-over and pulls the next card. Nobody asks Werner to clear or compact anything; what remains of a lane's own history is left to the client's automatic compaction, and the issue's comments are the record a later context resumes from.
 - **Lookups go to a helper** (`/wh-delegate`, Haiku): searches across many files, board checks, evidence tables, web research. Paste conclusions, not raw output, into messages and comments; refer to commits, files and issues by name instead of quoting them.
 - **Idle lanes stop.** A lane whose queue is empty says so to `wh/desk` once and waits; Werner closes idle sessions.
 - **Opus only where it pays:** `wh/design` and `wh/review` (Models); every other lane runs on Sonnet or Haiku.
