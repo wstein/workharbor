@@ -480,3 +480,16 @@ func TestServeRefusesATamperedToolStoreAndMentionsAnUncheckedOne(t *testing.T) {
 		t.Errorf("a tampered tool: %v", err)
 	}
 }
+
+// A kept home volume is owned by the user it was made for, and `whr-shim chown`
+// runs only on a new volume. The user is therefore fixed by the supervisor, in
+// the spec of every workspace environment and of the console, so a rebuilt
+// environment never meets a volume owned by another user (issue #128).
+func TestTheUserOfAnEnvironmentIsFixedSoAKeptVolumeMeetsTheSameUID(t *testing.T) {
+	opts := SpecOptions{Owner: Owner, Env: config.Environment{Image: "img", CPUs: 1, MemoryMB: 512, DiskMB: 1024}, ToolStore: t.TempDir(), Proxy: "/p"}
+	for _, id := range []domain.ID{"w1", "w2"} {
+		if got := opts.For(domain.Workspace{ID: id}).User; got != "1000:1000" {
+			t.Errorf("the user of workspace %s's environment = %q, want 1000:1000", id, got)
+		}
+	}
+}
