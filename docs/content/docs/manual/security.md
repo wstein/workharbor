@@ -9,7 +9,7 @@ The short version of the [threat model](../threat-model.md) for whoever runs wor
 
 ## What workharbor is built to enforce
 
-workharbor has no runnable service yet (`whr serve` comes with issue #24): these are the design's guarantees. Each says how far it is built; the [design's status table](../design/_index.md) and the threat model track the rest.
+These are the design's guarantees. `whr serve` and the commands exist but have not run against a release, so none of this is {{< status verified >}} on a real setup unless it says so. Each item says how far it is built; the [design's status table](../design/_index.md) and the threat model track the rest.
 
 - **Agents never push, merge, tag, release or deploy.** They commit in their own checkout. workharbor pushes a branch only after you approve its exact commit in a "Ready to push?" decision, and a GitHub ruleset makes a human review the pull request (D15, D18). *Policy table, the push flow and its per-commit approval implemented; the check against a real GitHub ruleset and the GitHub client come with issue #27.*
 - **Approvals fail closed.** A request nobody answers in time, an approval for different code, or a lost connection to the agent ends in a denial (design §4.2). *Implemented in the domain; the agent's approval channel is being verified (issue #7).*
@@ -28,4 +28,34 @@ workharbor has no runnable service yet (`whr serve` comes with issue #24): these
 - **Revoke a token that was exposed**, at once: a token pasted into a chat, a terminal or a log is exposed. Agents and scripts pass tokens only through a `0600` env file, never on a command line.
 - **Review before you approve.** "Ready to push?" shows the commits and the diff: approve only what you have read.
 - **Treat issue text from strangers as untrusted.** workharbor holds runs on issues from unknown authors for your decision (issue #53).
-- **Keep the API off the open network**: Tailscale or your router's VPN, never a port forward to workharbor itself ([host setup, step 7](host-setup.md#7-reach-it-from-your-phone)).
+- **Keep workharbor off the open network**: Tailscale or your router's VPN, never a port forward to workharbor itself ([host setup, step 7](host-setup.md#7-reach-it-from-your-phone)).
+- **Encrypt an external SSD** on its own, because FileVault does not cover it, and **keep `whr`'s session logged in** (no automatic log-out), because the supervisor and the container system run in it ([host setup, step 3](host-setup.md#3-filevault-and-restarts)).
+
+## Who can reach it
+
+- **The JSON API is on a host-only unix socket**, `api.sock` in `whr`'s state directory (directory `0700`, socket `0600`), reached only by the CLI as the `whr` user. **The forwarder carries the web UI alone**, and the forwarded listener serves no `/v1` route, so a leaked API token cannot answer a review, allow an egress host or enrol a passkey from the phone network (D29, [design §7.5](../design/security.md#7-security)). *Implemented; the forwarder and the `pf` rules are not measured yet (issue #69).*
+- **The web UI listens on loopback only.** No guest reaches a loopback listener (measured, issue #69).
+
+## Passkeys
+
+With a passkey enrolled, the web UI signs in with it; the API token no longer signs in to the web UI (it stays for the CLI) (D45, [design §7.5](../design/security.md#7-security), [Run the supervisor](run-the-supervisor.md#passkeys-provisional)).
+
+- **Enrol and revoke only on the host**, with `whr passkey add` and `whr passkey rm`. The web UI has no route that adds or removes one.
+- **A fresh passkey assertion is needed** for a "Ready to push?" review, an egress host, a workflow change (preset or integration branch) and revoking the forge tokens. It names exactly what you approve, including the commit.
+- **There is no lockout after failed sign-ins**: a passkey assertion cannot be guessed, and a lockout would only let whoever reaches the forwarder keep you out. A flood can delay a new sign-in while it lasts; signed-in sessions, step-ups and the host CLI are unaffected.
+
+*Implemented and tested without a real phone ({{< status unverified >}}).*
+
+## Previews
+
+A preview shows agent-written code in your browser ([design D33](../design/decisions.md)). Each has an origin of its own and a CSP set by the proxy, needs its own token, forwards only to the one declared port and closes with its environment and its session.
+
+- **A preview can still leak by navigation.** The CSP stops its script from fetching or loading images from another site, but a link, a top-level navigation or a prefetch hint can carry data out past the egress allowlist. This is an accepted risk ([threat model](../threat-model.md)): only you open a preview, so look at where it navigates, and open one only for work you can read.
+- **A preview shares the UI's cookies**, because browsers do not isolate cookies by port. It can sign you out of the UI but not take a session over.
+
+## If your phone is lost
+
+1. On the host, as `whr`: `whr passkey ls`, then `whr passkey rm <id>`. This revokes the passkey and ends its sessions.
+2. In the web UI, from another device, open `/devices` and sign out any session that is still listed.
+3. Enrol a new passkey on the host with `whr passkey add`; recovery is always you at the host.
+4. If the phone also held an agent's subscription login, revoke it at the vendor ([vendor terms](vendor-terms.md)); `whr kill-all` cannot do that.
