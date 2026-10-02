@@ -801,9 +801,19 @@ func (w *Workspaces) Rebase(ctx context.Context, agentID domain.ID) error {
 }
 
 // gitEnv is the environment of a git command in the guest: the clone belongs to
-// the host user, the guest runs as another, so safe.directory is set for it.
+// the host user, the guest runs as another, so safe.directory is set for it. A
+// checkout's .git is written by agents, so what it configures is hostile input to
+// the supervisor's own git commands as it is to the host's (hostgit): hooks and
+// fsmonitor are off and the ext transport, which runs a command, is refused. The
+// settings go through GIT_CONFIG_COUNT, which wins over every file.
 func gitEnv(extra ...string) []string {
-	return append([]string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=safe.directory", "GIT_CONFIG_VALUE_0=*"}, extra...)
+	return append([]string{
+		"GIT_CONFIG_COUNT=4",
+		"GIT_CONFIG_KEY_0=safe.directory", "GIT_CONFIG_VALUE_0=*",
+		"GIT_CONFIG_KEY_1=core.hooksPath", "GIT_CONFIG_VALUE_1=/dev/null",
+		"GIT_CONFIG_KEY_2=core.fsmonitor", "GIT_CONFIG_VALUE_2=false",
+		"GIT_CONFIG_KEY_3=protocol.ext.allow", "GIT_CONFIG_VALUE_3=never",
+	}, extra...)
 }
 
 // RemoveAgent removes an agent record. It is refused (store.RuleInUse) while a
@@ -819,7 +829,37 @@ func (w *Workspaces) RemoveAgent(ctx context.Context, workspace, role string) er
 	if err != nil {
 		return err
 	}
-	return w.svc.store.RemoveAgent(ctx, a, domain.RemovedAgentEvent(a, w.svc.clock.Now()))
+	if err := w.svc.store.RemoveAgent(ctx, a, domain.RemovedAgentEvent(a, w.svc.clock.Now())); err != nil {
+		return err
+	}
+	w.clearBuildDir(ctx, ws, a)
+	return nil
+}
+
+// clearBuildDir empties the agent's directory on the build volume, so a role that
+// is added again later does not inherit the old one's output (a virtual
+// environment of another branch's dependencies). The record is already gone, so a
+// failure, such as a stopped environment, is reported and not returned: the
+// directory is then cleared by the next RemoveAgent of that role, or stays until
+// the workspace goes.
+func (w *Workspaces) clearBuildDir(ctx context.Context, ws domain.Workspace, a domain.Agent) {
+	if w.cfg.BuildDir == "" || ws.EnvID == "" {
+		return
+	}
+	dir := path.Join(w.cfg.BuildDir, a.Role)
+	// The role is a checked name, but this runs rm: refuse anything that is not a
+	// direct child of the build directory.
+	if path.Dir(dir) != path.Clean(w.cfg.BuildDir) || a.Role == "" || a.Role == "." || a.Role == ".." {
+		w.svc.report(fmt.Errorf("not clearing %q: it is not a directory of an agent below %s", dir, w.cfg.BuildDir))
+		return
+	}
+	out, code, err := w.svc.exec(ctx, string(ws.EnvID), runtime.ExecRequest{Cmd: []string{"rm", "-rf", "--", dir}})
+	if err == nil && code != 0 {
+		err = fmt.Errorf("rm exited %d: %s", code, strings.TrimSpace(out))
+	}
+	if err != nil {
+		w.svc.report(fmt.Errorf("clear the build directory of agent %s: %w", a.Role, err))
+	}
 }
 
 // Remove removes a workspace: its environment, with its network, sidecar and
