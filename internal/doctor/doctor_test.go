@@ -28,6 +28,7 @@ type rig struct {
 	instPerms    map[string]string
 	appStatus    int
 	graphql      func() string // the body answered for POST /graphql
+	mintStatus   int           // when set, the status of an installation token request that asks for the board
 }
 
 func newRig(t *testing.T) *rig {
@@ -68,6 +69,12 @@ func newRig(t *testing.T) *rig {
 			w.WriteHeader(r.instStatus)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": 5, "permissions": r.instPerms, "message": "Not Found"})
 		case strings.HasSuffix(req.URL.Path, "/access_tokens"):
+			raw, _ := io.ReadAll(req.Body)
+			if r.mintStatus != 0 && strings.Contains(string(raw), "organization_projects") {
+				w.WriteHeader(r.mintStatus)
+				_ = json.NewEncoder(w).Encode(map[string]string{"message": "The permissions requested are not granted to this installation."})
+				return
+			}
 			w.WriteHeader(201)
 			_ = json.NewEncoder(w).Encode(map[string]any{"token": "ghs_installationtoken0123456789", "expires_at": "2099-01-01T00:00:00Z"})
 		case req.URL.Path == "/graphql" && r.graphql != nil:

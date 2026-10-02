@@ -74,6 +74,7 @@ const (
 	StatusInProgress  = "In progress"
 	StatusReadyToPush = "Ready to push"
 	StatusDone        = "Done"
+	StatusTodo        = "Todo"
 )
 
 // CardUpdate is what the supervisor writes on an issue's card (D30): the

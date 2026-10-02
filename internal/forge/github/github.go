@@ -318,16 +318,27 @@ func oneLine(s string) string {
 // on the host). It is cached until a minute before it expires and registered
 // with the redactor.
 func (c *Client) installationToken(ctx context.Context, repo string) (string, error) {
+	return c.tokenFor(ctx, repo, false)
+}
+
+// tokenFor mints (or reuses) a token for repo. Every token has AppPermissions;
+// only the board's own token adds organization_projects, so an installation that
+// lacks it, or a board that is user-owned, costs the board and nothing else:
+// issues, comments and pushes keep their token (design D30).
+func (c *Client) tokenFor(ctx context.Context, repo string, board bool) (string, error) {
 	if err := c.allowed(repo); err != nil {
 		return "", err
 	}
 	key := strings.ToLower(repo)
+	if board {
+		key += "#board"
+	}
 	c.mu.Lock()
 	if t, ok := c.tokens[key]; ok && c.cfg.Now().Add(time.Minute).Before(t.expires) {
 		c.mu.Unlock()
 		return t.value, nil
 	}
-	id := c.install[key]
+	id := c.install[strings.ToLower(repo)]
 	c.mu.Unlock()
 
 	jwt, err := c.appJWT()
@@ -350,9 +361,13 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 	}
 	err = c.do(ctx, jwt, http.MethodPost, "/app/installations/"+strconv.FormatInt(id, 10)+"/access_tokens", map[string]any{
 		"repositories": []string{name},
-		"permissions":  AppPermissionsFor(c.cfg.Board != nil),
+		"permissions":  AppPermissionsFor(board),
 	}, &tok)
 	if err != nil {
+		var ae *APIError
+		if board && errors.As(err, &ae) && (ae.Status == http.StatusUnprocessableEntity || ae.Status == http.StatusForbidden) {
+			return "", fmt.Errorf("%w: %w: %w", ErrBoard, ErrBoardNotWritable, ErrBoardPermission)
+		}
 		return "", fmt.Errorf("mint an installation token for %s: %w", repo, err)
 	}
 	if tok.Token == "" || tok.ExpiresAt.IsZero() {
@@ -362,7 +377,7 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 		c.cfg.Redactor.Add(tok.Token)
 	}
 	c.mu.Lock()
-	c.install[key] = id
+	c.install[strings.ToLower(repo)] = id
 	c.tokens[key] = token{value: tok.Token, expires: tok.ExpiresAt}
 	c.mu.Unlock()
 	return tok.Token, nil
@@ -371,17 +386,26 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 // call makes an installation-authenticated request for repo, retrying once with
 // a fresh token if the cached one was refused.
 func (c *Client) call(ctx context.Context, repo, method, path string, body, out any) error {
-	tok, err := c.installationToken(ctx, repo)
+	return c.callWith(ctx, repo, false, method, path, body, out)
+}
+
+// callWith is call with the board's token when board is set.
+func (c *Client) callWith(ctx context.Context, repo string, board bool, method, path string, body, out any) error {
+	tok, err := c.tokenFor(ctx, repo, board)
 	if err != nil {
 		return err
 	}
 	err = c.do(ctx, tok, method, path, body, out)
 	var ae *APIError
 	if errors.As(err, &ae) && ae.Status == http.StatusUnauthorized {
+		key := strings.ToLower(repo)
+		if board {
+			key += "#board"
+		}
 		c.mu.Lock()
-		delete(c.tokens, strings.ToLower(repo)) // revoked or expired early: mint again
+		delete(c.tokens, key) // revoked or expired early: mint again
 		c.mu.Unlock()
-		if tok, err = c.installationToken(ctx, repo); err != nil {
+		if tok, err = c.tokenFor(ctx, repo, board); err != nil {
 			return err
 		}
 		err = c.do(ctx, tok, method, path, body, out)

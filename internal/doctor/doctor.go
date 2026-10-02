@@ -162,6 +162,8 @@ func Checks(d Deps) []Check {
 			}
 			rep, err := gh.CheckBoard(ctx)
 			switch {
+			case errors.Is(err, github.ErrBoardPermission):
+				return Fail, "the App's installation lacks organization_projects: write: accept the new permission on the installation (the App's settings page); issues, comments and pushes are not affected"
 			case errors.Is(err, github.ErrBoardNotWritable):
 				return Fail, fmt.Sprintf("board not writable: the App cannot reach project %d of %s (it lacks the Projects permission, or this is a user-owned project, which an App's token may not reach: use an organization's project, D30)", c.Board.Number, c.Board.Owner)
 			case errors.Is(err, github.ErrBoard):

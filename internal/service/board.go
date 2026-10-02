@@ -24,6 +24,10 @@ func boardStatus(state domain.TaskState) string {
 		return forge.StatusReadyToPush
 	case domain.TaskCompleted:
 		return forge.StatusDone
+	case domain.TaskFailed:
+		return forge.StatusNeedsYou // a failed task waits for a human (D30)
+	case domain.TaskCancelled:
+		return forge.StatusTodo // a cancelled one goes back to the backlog
 	}
 	return ""
 }

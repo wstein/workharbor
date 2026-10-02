@@ -304,3 +304,29 @@ func TestCheckBoardReadsTheProjectWithoutWriting(t *testing.T) {
 		t.Errorf("no status field: %+v, %v", rep, err)
 	}
 }
+
+// The board has its own token: an installation that lacks the board's permission
+// loses the board and nothing else.
+func TestTheBoardHasItsOwnToken(t *testing.T) {
+	c, _, f := boardRig(t, nil)
+	f.handlers["GET /repos/wstein/workharbor/issues/7"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"number": 7, "title": "T", "body": "B", "author_association": "OWNER", "user": map[string]string{"login": "wstein"}})
+	}
+	if _, err := c.GetIssue(bg, "wstein/workharbor", 7); err != nil {
+		t.Fatal(err)
+	}
+	if body := f.bodies["POST /app/installations/7/access_tokens"]; strings.Contains(body, BoardPermission) {
+		t.Errorf("the ordinary token was asked for the board's permission: %s", body)
+	}
+
+	// an installation that has not accepted the permission refuses the board's token
+	f.denyBoardMint = true
+	c2 := f.client(t, func(cfg *Config) { cfg.Board = &BoardConfig{Owner: "wstein", Number: 6} })
+	err := c2.UpdateCard(bg, "wstein/workharbor", 7, update)
+	if !errors.Is(err, ErrBoardPermission) || !errors.Is(err, ErrBoardNotWritable) || !errors.Is(err, ErrBoard) {
+		t.Fatalf("a refused board token = %v, want ErrBoardPermission", err)
+	}
+	if _, err := c2.GetIssue(bg, "wstein/workharbor", 7); err != nil {
+		t.Errorf("a board refusal broke issues: %v", err)
+	}
+}

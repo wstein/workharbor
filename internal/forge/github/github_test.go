@@ -66,6 +66,8 @@ type fakeGitHub struct {
 	handlers  map[string]func(w http.ResponseWriter, r *http.Request)
 	lastRepos []string
 	validTok  map[string]bool
+	// denyBoardMint makes the installation refuse a token that asks for the board's permission.
+	denyBoardMint bool
 }
 
 func newFake(t *testing.T, now func() time.Time) *fakeGitHub {
@@ -144,6 +146,10 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if h != nil {
 		h(w, r)
+		return
+	}
+	if f.denyBoardMint && strings.HasSuffix(r.URL.Path, "/access_tokens") && strings.Contains(string(b), BoardPermission) {
+		reply(422, map[string]string{"message": "The permissions requested are not granted to this installation."})
 		return
 	}
 	switch {

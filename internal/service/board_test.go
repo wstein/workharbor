@@ -18,9 +18,9 @@ func TestTaskStatesMapToBoardStatuses(t *testing.T) {
 		domain.TaskRunning:          forge.StatusInProgress,
 		domain.TaskReadyForReview:   forge.StatusReadyToPush,
 		domain.TaskCompleted:        forge.StatusDone,
+		domain.TaskFailed:           forge.StatusNeedsYou, // a human has to look
+		domain.TaskCancelled:        forge.StatusTodo,     // no card stays In progress for a stopped task
 		domain.TaskQueued:           "",
-		domain.TaskCancelled:        "",
-		domain.TaskFailed:           "",
 	} {
 		if got := boardStatus(state); got != want {
 			t.Errorf("%s -> %q, want %q", state, got, want)
@@ -101,7 +101,7 @@ func TestOnlyTasksFromIssuesAndStatesWithAStatusAreMirrored(t *testing.T) {
 	bare.TaskID = "t-bare"
 	r.svc.mirror([]domain.Event{bare})
 	// states that map to no status, and events that are not task states
-	r.svc.mirror([]domain.Event{stateEvent("cancelled"), stateEvent("failed"), stateEvent("queued")})
+	r.svc.mirror([]domain.Event{stateEvent("queued"), stateEvent("not-a-state")})
 	run := domain.Event{TaskID: "t1", Kind: domain.EventRunState, Payload: []byte(`{"object":"run","id":"r1","to":"running"}`)}
 	r.svc.mirror([]domain.Event{run})
 	r.svc.WaitBoard()

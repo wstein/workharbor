@@ -49,6 +49,11 @@ type BoardConfig struct {
 // returned together with ErrBoard, and `whr doctor` names it.
 var ErrBoardNotWritable = errors.New("github: the App cannot reach the project board")
 
+// ErrBoardPermission is the installation refusing a token with the board's
+// permission: the App has it, but the installation has not accepted it. It comes
+// with ErrBoard and ErrBoardNotWritable, and only the board is affected.
+var ErrBoardPermission = errors.New("github: the installation lacks organization_projects: write")
+
 // ErrBoard is a board write that GitHub refused or could not do: the project,
 // a field or an option is missing, or GraphQL returned errors.
 var ErrBoard = errors.New("github: the project board could not be updated")
@@ -93,7 +98,7 @@ func (c *Client) graphQL(ctx context.Context, repo, query string, vars map[strin
 			Type    string `json:"type"`
 		} `json:"errors"`
 	}
-	if err := c.call(ctx, repo, http.MethodPost, "/graphql", map[string]any{"query": query, "variables": vars}, &resp); err != nil {
+	if err := c.callWith(ctx, repo, true, http.MethodPost, "/graphql", map[string]any{"query": query, "variables": vars}, &resp); err != nil {
 		return err
 	}
 	if len(resp.Errors) > 0 {
