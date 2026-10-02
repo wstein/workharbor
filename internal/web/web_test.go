@@ -188,7 +188,10 @@ type rig struct {
 	mu   sync.Mutex
 }
 
-func newRig(t *testing.T) *rig {
+func newRig(t *testing.T) *rig { return newRigWith(t) }
+
+// newRigWith is newRig with the options of the UI changed.
+func newRigWith(t *testing.T, more ...func(*Options)) *rig {
 	t.Helper()
 	st, err := store.Open(bg, filepath.Join(t.TempDir(), "workharbor.db"))
 	if err != nil {
@@ -200,7 +203,11 @@ func newRig(t *testing.T) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ui, err := New(r.be, Options{Auth: r.auth, Store: st, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }})
+	opt := Options{Auth: r.auth, Store: st, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }}
+	for _, m := range more {
+		m(&opt)
+	}
+	ui, err := New(r.be, opt)
 	if err != nil {
 		t.Fatal(err)
 	}

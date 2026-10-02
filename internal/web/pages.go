@@ -180,6 +180,11 @@ func (s *Server) inbox(w http.ResponseWriter, r *http.Request, sess Session) {
 	}
 	p := inboxPage{nav: s.navOf(r, sess, "inbox"), Decisions: decisionRows(in, newKey), Flash: flash(r)}
 	p.StepUp = s.stepUpAvailable(r.Context())
+	if s.opt.Previews != nil {
+		for _, v := range s.opt.Previews.List(r.Context()) {
+			p.Previews = append(p.Previews, previewRow{ID: v.ID, TaskID: v.Task, Port: v.Port})
+		}
+	}
 	s.render(w, r, http.StatusOK, inboxView(p))
 }
 
@@ -254,6 +259,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request, sess Session) {
 	p.nav, p.SayKey, p.ActKey, p.Flash = s.navOf(r, sess, "harbor"), newKey(), newKey(), flash(r)
 	p.Decisions = decisionRows(v.Open, newKey)
 	p.StepUp = s.stepUpAvailable(r.Context())
+	s.previewRows(r.Context(), id, &p)
 	if len(evs) > maxShown {
 		p.Earlier = len(evs) - maxShown
 		evs = evs[len(evs)-maxShown:]

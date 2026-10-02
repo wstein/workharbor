@@ -233,7 +233,31 @@ templ inboxView(p inboxPage) {
 		for _, d := range p.Decisions {
 			@decisionCard(d, p.CSRF, p.StepUp)
 		}
+		if len(p.Previews) > 0 {
+			<section aria-labelledby="previews-h">
+				<h2 id="previews-h">Open previews</h2>
+				<ul class="rows">
+					for _, v := range p.Previews {
+						<li>
+							<a href={ templ.SafeURL("/tasks/" + v.TaskID) }>{ v.TaskID }</a>
+							<span class="muted">port { strconv.Itoa(v.Port) }</span>
+							@previewButtons(v, p.CSRF)
+						</li>
+					}
+				</ul>
+			</section>
+		}
 	}
+}
+
+// previewButtons opens an open preview in a new tab (a link, because the preview
+// has an origin of its own) and closes it.
+templ previewButtons(v previewRow, csrf string) {
+	<a class="button" href={ templ.SafeURL("/previews/" + v.ID + "/go") } target="_blank" rel="noopener noreferrer" hx-boost="false">Open preview</a>
+	<form method="post" action={ templ.SafeURL("/previews/" + v.ID + "/close") } hx-boost="false">
+		<input type="hidden" name="csrf" value={ csrf }/>
+		<button class="quiet">Close</button>
+	</form>
 }
 
 templ eventItem(e eventRow) {
@@ -278,6 +302,29 @@ templ taskView(p taskPage) {
 				for _, d := range p.Decisions {
 					@decisionCard(d, p.CSRF, p.StepUp)
 				}
+			</section>
+		}
+		if p.PreviewsOn && len(p.Previews) > 0 {
+			<section aria-labelledby="previews-h">
+				<h2 id="previews-h">Previews</h2>
+				<p class="muted">A web app the agent runs, shown through workharbor on a port and an origin of its own. It is code the agent wrote: it cannot see this page, and its link works once.</p>
+				<ul class="rows">
+					for _, v := range p.Previews {
+						<li>
+							<strong>port { strconv.Itoa(v.Port) }</strong>
+							if v.ID != "" {
+								@previewButtons(v, p.CSRF)
+							} else {
+								<form method="post" action={ templ.SafeURL("/tasks/" + p.ID + "/previews") } hx-boost="false">
+									<input type="hidden" name="csrf" value={ p.CSRF }/>
+									<input type="hidden" name="key" value={ v.Key }/>
+									<input type="hidden" name="port" value={ strconv.Itoa(v.Port) }/>
+									<button>Start a preview</button>
+								</form>
+							}
+						</li>
+					}
+				</ul>
 			</section>
 		}
 		<section aria-labelledby="transcript-h">

@@ -80,9 +80,17 @@ type decisionRow struct {
 	Key string
 }
 
+// previewRow is an open preview of a task's dev server, or a declared port that
+// could be opened (ID empty).
+type previewRow struct {
+	ID, TaskID, Key string
+	Port            int
+}
+
 type inboxPage struct {
 	nav
 	Decisions []decisionRow
+	Previews  []previewRow
 	Flash     string
 	// StepUp says a passkey is enrolled, so a review can be answered here.
 	StepUp bool
@@ -111,6 +119,11 @@ type taskPage struct {
 	CanPause, CanResume                          bool // a run is running, or is paused
 	ActKey                                       string
 	StepUp                                       bool
+	// Previews are the ports the task's environment declares for previews, each
+	// with its open preview if there is one (D33).
+	Previews []previewRow
+	// PreviewsOn says the UI has the preview proxy, so the section is shown.
+	PreviewsOn bool
 }
 
 type purgePage struct {

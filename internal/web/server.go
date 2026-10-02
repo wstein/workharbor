@@ -41,6 +41,9 @@ type Options struct {
 	// change the host has not confirmed and the revocation of the forge tokens
 	// (D45, issue #107). Without Passkeys it only lists them.
 	Changes Changes
+	// Previews, if set, adds the previews of an agent's dev servers to the task
+	// view and the inbox (D33). Without it the UI shows none.
+	Previews api.Previews
 	// OnError hears an internal error, which the browser only sees as a generic
 	// message. Optional.
 	OnError func(error)
@@ -119,6 +122,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /tasks/{task}/purge", s.authed(true, s.purge))
 	mux.HandleFunc("POST /tasks/{task}/open", s.authed(true, s.open))
 	mux.HandleFunc("POST /decisions/{decision}/answer", s.authed(true, s.answer))
+	mux.HandleFunc("POST /tasks/{task}/previews", s.authed(true, s.startPreview))
+	mux.HandleFunc("GET /previews/{preview}/go", s.authed(false, s.goPreview))
+	mux.HandleFunc("POST /previews/{preview}/close", s.authed(true, s.closePreview))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", csp)
