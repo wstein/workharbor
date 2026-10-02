@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -159,6 +160,12 @@ func TestPlantedConfigDoesNotTakeEffectWithTheRealCLI(t *testing.T) {
 // installs a pinned CLI, so there a missing CLI fails instead of skipping.
 func claudeBin(t *testing.T) string {
 	t.Helper()
+	if goruntime.GOOS == "darwin" {
+		// The real CLI keeps its login in the macOS keychain, and a test must never
+		// reach the human's keychain (or ask for one that is not there). CI runs
+		// these on Linux, where the login is a file in the config directory.
+		t.Skip("the real CLI may use the macOS keychain: these tests run on Linux")
+	}
 	bin, err := exec.LookPath("claude")
 	if err != nil {
 		skipOrFail(t, "the claude CLI is not installed")

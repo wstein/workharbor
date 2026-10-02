@@ -5,21 +5,18 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 )
 
 // guestGit runs git in the agent's checkout, as the guest would.
 func (b *pubRig) guestGit(args ...string) (string, error) {
-	cmd := exec.CommandContext(bg, "git", args...) //nolint:gosec // test helper
-	cmd.Dir = b.checkout
-	cmd.Env = append(os.Environ(), "HOME="+b.home, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1",
-		"GIT_AUTHOR_NAME=agent", "GIT_AUTHOR_EMAIL=agent@example.test", "GIT_COMMITTER_NAME=agent", "GIT_COMMITTER_EMAIL=agent@example.test")
+	cmd := gittest.Git(bg, b.home, b.checkout, gittest.Identity, args...)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()

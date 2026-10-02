@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 func TestVersionPrintsDataOnStdoutAndNothingOnStderr(t *testing.T) {
@@ -99,8 +100,7 @@ func TestMakeBuildStampsTheBinary(t *testing.T) {
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatal(err)
 	}
-	head := exec.CommandContext(t.Context(), "git", "rev-parse", "--short=7", "HEAD") //nolint:gosec // fixed arguments
-	head.Dir = root
+	head := gittest.Git(t.Context(), "", root, nil, "rev-parse", "--short=7", "HEAD")
 	want, err := head.Output()
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +217,7 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	clone := filepath.Join(t.TempDir(), "src")
 	gitIn := func(dir string, args ...string) {
 		t.Helper()
-		cmd := exec.CommandContext(t.Context(), "git", args...) //nolint:gosec // fixed arguments
-		cmd.Dir = dir
+		cmd := gittest.Git(t.Context(), "", dir, gittest.Identity, args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}

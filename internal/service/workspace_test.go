@@ -17,6 +17,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/forgetest"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
@@ -74,8 +75,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=h", "-c", "user.email=h@h", "commit", "-q", "--allow-empty", "-m", "base"}} {
-		cmd := exec.Command("git", append([]string{"-C", r.forge}, args...)...) //nolint:gosec,noctx // test setup
-		cmd.Env = []string{"HOME=" + outside, "GIT_CONFIG_NOSYSTEM=1", "PATH=" + os.Getenv("PATH")}
+		cmd := gittest.Git(bg, outside, r.forge, nil, args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}

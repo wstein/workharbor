@@ -14,6 +14,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/forge/forgetest"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
@@ -21,10 +22,7 @@ import (
 
 func plainGit(t *testing.T, home, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // test helper
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "HOME="+home, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1",
-		"GIT_AUTHOR_NAME=agent", "GIT_AUTHOR_EMAIL=agent@example.test", "GIT_COMMITTER_NAME=agent", "GIT_COMMITTER_EMAIL=agent@example.test")
+	cmd := gittest.Git(context.Background(), home, dir, gittest.Identity, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -42,8 +40,7 @@ type remoteForge struct {
 }
 
 func (f *remoteForge) BranchSHA(_ context.Context, _, branch string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch) //nolint:gosec // test helper
-	cmd.Dir = f.remote
+	cmd := gittest.Git(context.Background(), f.home, f.remote, nil, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", errors.New("no such branch")
@@ -123,7 +120,7 @@ func newPubRig(t *testing.T) *pubRig {
 	must(t, err)
 
 	key := filepath.Join(root, "bot-key")
-	if out, err := exec.CommandContext(bg, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil { //nolint:gosec // a test key in a temp dir
+	if out, err := gittest.SSHKeygen(bg, pr.home, "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil {
 		t.Fatalf("ssh-keygen: %v\n%s", err, out)
 	}
 

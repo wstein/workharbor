@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/wstein/workharbor/internal/commitlint"
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 type prep struct {
@@ -44,7 +45,7 @@ func newPrep(t *testing.T) *prep {
 	}
 
 	p.key = filepath.Join(p.base, "bot-key")
-	if out, err := exec.CommandContext(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", p.key).CombinedOutput(); err != nil { //nolint:gosec // a test key in a temp dir
+	if out, err := gittest.SSHKeygen(ctx, t.TempDir(), "-q", "-t", "ed25519", "-N", "", "-f", p.key).CombinedOutput(); err != nil {
 		t.Fatalf("ssh-keygen: %v\n%s", err, out)
 	}
 

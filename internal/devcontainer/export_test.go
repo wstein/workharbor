@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 // gitRepo is a real repository the tests commit to; its Run is what hostgit's
@@ -29,9 +31,7 @@ func newGitRepo(t *testing.T) *gitRepo {
 
 func (g *gitRepo) git(args ...string) {
 	g.t.Helper()
-	cmd := exec.Command( //nolint:gosec,noctx // a test running git in its own temporary repository
-		"git", append([]string{"-C", g.dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	cmd := gittest.Git(context.Background(), "", g.dir, nil, append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		g.t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -39,8 +39,7 @@ func (g *gitRepo) git(args ...string) {
 }
 
 func (g *gitRepo) Run(ctx context.Context, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", g.dir}, args...)...) //nolint:gosec // a test running git in its own temporary repository
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	cmd := gittest.Git(ctx, "", g.dir, nil, args...)
 	return cmd.Output()
 }
 
