@@ -24,6 +24,19 @@ Two limits hold whatever a repository's table says (issue #51). Merge, tag, rele
 
 Enforcement is outside the agent: forge branch protection, required human review, and a bot identity that cannot bypass them. Approval is per commit SHA (ties to ReviewCandidate). Every approval is a Decision record.
 
+**Workflow presets (D47, issue #105).** Each repository names one in the supervisor's configuration (`repositories[].workflow`); the repository never chooses it. A preset sets the rows above, within the two limits, and the forge flow around them:
+
+| | `prototype` | `integration` (default) | `published` |
+| --- | --- | --- | --- |
+| Approved commits go to | the integration branch, fast-forwarded to the approved SHA; no PR | a PR into the integration branch (`develop`) | a PR into the default branch |
+| Approval | "Ready to push?" per head SHA; one Decision may cover a topic's series | per SHA, plus the forge's review | per SHA, the forge's review and required checks |
+| Promotion to `main` | the human | the human merges and promotes | not applicable |
+| Agent permission mode | `dontAsk` with the allowlist | `dontAsk` with the allowlist | `manual` (host approvals, §4.2) |
+| Egress requests (§4.2) | asked once per repository | asked once per repository | asked again when their source changes; lockfile suggestions ignored |
+| Ruleset `whr doctor` expects | force push blocked on the integration branch | the integration branch protected, PR required | the default branch requires review, checks and signed commits; no bypass actor |
+
+The fast-forward of `prototype` is never forced: a branch that moved is refused and the topic is rebased (§4.2). It is the human's approval carried out by the supervisor, so the floor holds. Changing a preset is a policy change: it is audited, it needs a passkey assertion once D45 exists, and a looser preset never applies to a run already started.
+
 **Agent permission modes.** The agent CLIs have their own coarse modes. In the spike with Claude Code (a fixed allowlist of `Read` and a few harmless shell prefixes) they behaved as follows for a file write:
 
 | Mode | Behaviour |
