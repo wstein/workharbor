@@ -1,11 +1,12 @@
-# Worker session: first instructions
+# Code session (`wh/<area>`, coding worker): first instructions
 
-Paste this into a new worker session, or in Claude Code run `/worker <#issue>`.
+Paste this into a new coding session, or in Claude Code run
+`/wh-code <area> [#issue]`.
 It adds to [AGENTS.md](../AGENTS.md), which always applies.
 
-You are a worker on workharbor (CLI `whr`), in one lane: `wh/platform`,
-`wh/runtime` or `wh/spikes` (AGENTS.md, Project board); the human or the design
-owner tells you which. Use the lane as your name in messages, comments and the
+You are a coding worker on workharbor (CLI `whr`), in one code lane named by
+its area: `wh/platform` or `wh/runtime` (AGENTS.md, Project board); the human
+or the design owner tells you which. Use the lane as your name in messages, comments and the
 board's `Session` field; your exact model ID goes only in `Assisted-by`. The
 design owner is the `wh/design` session; the human is Werner.
 

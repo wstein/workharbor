@@ -1,4 +1,4 @@
-# Helpers (`wh/helper`): quick tasks as subagents
+# Helpers: quick tasks as subagents (not a lane)
 
 A helper is a subagent on a small, fast model that a lane starts inside its own
 session for one quick, bounded task (`.claude/agents/wh-helper.md`; in Claude

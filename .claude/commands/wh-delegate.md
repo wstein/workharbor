@@ -1,5 +1,5 @@
 ---
-description: Hand a quick task to a helper subagent (wh/helper) in this session
+description: Hand a quick task to a helper subagent in this session
 argument-hint: "<task>"
 ---
 
