@@ -2,12 +2,15 @@ package web
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wstein/workharbor/internal/domain"
 )
 
 const (
@@ -172,5 +175,80 @@ func TestAPhoneSessionEndsAfterAShortIdleTime(t *testing.T) {
 	// the computer was idle for the same time and is still in (12 hours is the limit)
 	if resp, _ := desk.do("GET", "/inbox", nil); resp.StatusCode != 200 {
 		t.Errorf("an idle computer was signed out after %v: %d", 16*time.Minute+40*time.Minute, resp.StatusCode)
+	}
+}
+
+// openStream opens the live stream as a signed-in browser would.
+func (b *browser) openStream() *http.Response {
+	b.r.t.Helper()
+	req, _ := http.NewRequestWithContext(bg, "GET", b.r.srv.URL+"/tasks/t1/events", nil)
+	for k, v := range b.hd {
+		req.Header[k] = v
+	}
+	for _, c := range b.c.Jar.Cookies(&url.URL{Scheme: "http", Host: strings.TrimPrefix(b.r.srv.URL, "http://")}) {
+		req.AddCookie(c)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		b.r.t.Fatalf("stream: %v %v", resp, err)
+	}
+	return resp
+}
+
+// ended reports whether the stream's body ends within a few seconds.
+func ended(resp *http.Response) bool {
+	done := make(chan struct{})
+	go func() { _, _ = io.Copy(io.Discard, resp.Body); close(done) }()
+	select {
+	case <-done:
+		return true
+	case <-time.After(5 * time.Second):
+		return false
+	}
+}
+
+// A live stream ends with its session: a sign-out, a revoke from another device and
+// an idle expiry all close it, and an open stream does not keep an idle session alive.
+func TestALiveStreamDoesNotOutliveItsSession(t *testing.T) {
+	r := newRig(t)
+	r.be.events = make(chan domain.Event) // never delivers: the stream only ends with its session
+
+	// sign-out
+	b := r.browser().asDevice(ipad)
+	b.signIn()
+	resp := b.openStream()
+	defer func() { _ = resp.Body.Close() }()
+	csrf := csrfOf(t, b)
+	b.do("POST", "/logout", url.Values{"csrf": {csrf}})
+	if !ended(resp) {
+		t.Error("the stream outlived the sign-out")
+	}
+
+	// revoke from another device
+	phone, tablet := r.browser().asDevice(iphone), r.browser().asDevice(ipad)
+	phone.signIn()
+	r.advance(time.Minute)
+	tablet.signIn()
+	stream := phone.openStream()
+	defer func() { _ = stream.Body.Close() }()
+	_, page := tablet.do("GET", "/devices", nil)
+	revoke := regexp.MustCompile(`action="/devices/([0-9a-f]+)/revoke"`).FindAllStringSubmatch(page, -1)
+	tabletCSRF := csrfOf(t, tablet)
+	tablet.do("POST", "/devices/"+revoke[1][1]+"/revoke", url.Values{"csrf": {tabletCSRF}})
+	if !ended(stream) {
+		t.Error("the stream outlived a revoke from another device")
+	}
+
+	// idle expiry: nothing but the open stream, which must not count as use
+	idle := r.browser().asDevice(iphone)
+	idle.signIn()
+	s3 := idle.openStream()
+	defer func() { _ = s3.Body.Close() }()
+	r.advance(20 * time.Minute)
+	if !ended(s3) {
+		t.Error("an idle phone's stream kept its session alive")
+	}
+	if resp, _ := idle.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("the session of an idle stream is still valid: %d", resp.StatusCode)
 	}
 }

@@ -61,6 +61,17 @@ type Devices interface {
 	Revoke(id string) bool
 }
 
+// Streams is an Auth whose sessions can be watched by a long-lived response, so a
+// live stream does not outlive its session (sign-out, revoke, expiry).
+type Streams interface {
+	// Peek reports whether the session of r is still valid. It does not count as
+	// use, so an open stream does not keep an idle session alive.
+	Peek(r *http.Request) bool
+	// Watch calls end when the session of r ends. The returned function stops
+	// watching; it is safe to call after the session ended.
+	Watch(r *http.Request, end func()) (stop func())
+}
+
 // Errors of signing in.
 var (
 	ErrBadCredentials = errors.New("that is not the token")
@@ -87,6 +98,8 @@ type TokenAuth struct {
 
 	mu       sync.Mutex
 	sessions map[[sha256.Size]byte]tokenSession // by the hash of the cookie value
+	watchers map[[sha256.Size]byte]map[uint64]func()
+	nextW    uint64
 	failures []time.Time
 }
 
@@ -126,16 +139,18 @@ func (a *TokenAuth) Session(r *http.Request) (Session, bool) {
 		return Session{}, false
 	}
 	key := sha256.Sum256([]byte(c.Value))
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	s, ok := a.sessions[key]
 	now := a.now()
+	a.mu.Lock()
+	s, ok := a.sessions[key]
 	if !ok || !now.Before(s.expires) || now.Sub(s.lastSeen) > s.idle {
-		delete(a.sessions, key)
+		ends := a.dropLocked(key)
+		a.mu.Unlock()
+		runAll(ends)
 		return Session{}, false
 	}
 	s.lastSeen = now
 	a.sessions[key] = s
+	a.mu.Unlock()
 	return Session{CSRF: s.csrf, ID: s.id}, true
 }
 
@@ -201,8 +216,9 @@ func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) {
 func (a *TokenAuth) SignOut(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(cookieName); err == nil {
 		a.mu.Lock()
-		delete(a.sessions, sha256.Sum256([]byte(c.Value)))
+		ends := a.dropLocked(sha256.Sum256([]byte(c.Value)))
 		a.mu.Unlock()
+		runAll(ends)
 	}
 	//nolint:gosec // clearing the cookie, with the same attributes it was set with
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isHTTPS(r), MaxAge: -1})
@@ -223,11 +239,13 @@ func (a *TokenAuth) Devices(r *http.Request) []Device {
 	}
 	now := a.now()
 	a.mu.Lock()
+	var ends []func()
+	defer func() { runAll(ends) }()
 	defer a.mu.Unlock()
 	var out []Device
 	for key, s := range a.sessions {
 		if !now.Before(s.expires) || now.Sub(s.lastSeen) > s.idle {
-			delete(a.sessions, key)
+			ends = append(ends, a.dropLocked(key)...)
 			continue
 		}
 		out = append(out, Device{ID: s.id, Label: s.label, Since: s.since, LastSeen: s.lastSeen, Current: key == mine})
@@ -239,14 +257,79 @@ func (a *TokenAuth) Devices(r *http.Request) []Device {
 // Revoke implements the Devices interface.
 func (a *TokenAuth) Revoke(id string) bool {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	for key, s := range a.sessions {
 		if s.id == id {
-			delete(a.sessions, key)
+			ends := a.dropLocked(key)
+			a.mu.Unlock()
+			runAll(ends)
 			return true
 		}
 	}
+	a.mu.Unlock()
 	return false
+}
+
+// dropLocked deletes a session and returns what watches it, which the caller runs
+// after it has released the lock.
+func (a *TokenAuth) dropLocked(key [sha256.Size]byte) []func() {
+	delete(a.sessions, key)
+	var ends []func()
+	for _, f := range a.watchers[key] {
+		ends = append(ends, f)
+	}
+	delete(a.watchers, key)
+	return ends
+}
+
+func runAll(fs []func()) {
+	for _, f := range fs {
+		f()
+	}
+}
+
+// Peek implements Streams.
+func (a *TokenAuth) Peek(r *http.Request) bool {
+	c, err := r.Cookie(cookieName)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	key := sha256.Sum256([]byte(c.Value))
+	now := a.now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	s, ok := a.sessions[key]
+	return ok && now.Before(s.expires) && now.Sub(s.lastSeen) <= s.idle
+}
+
+// Watch implements Streams.
+func (a *TokenAuth) Watch(r *http.Request, end func()) func() {
+	c, err := r.Cookie(cookieName)
+	if err != nil || c.Value == "" {
+		end()
+		return func() {}
+	}
+	key := sha256.Sum256([]byte(c.Value))
+	a.mu.Lock()
+	if _, ok := a.sessions[key]; !ok {
+		a.mu.Unlock()
+		end()
+		return func() {}
+	}
+	if a.watchers == nil {
+		a.watchers = map[[sha256.Size]byte]map[uint64]func(){}
+	}
+	if a.watchers[key] == nil {
+		a.watchers[key] = map[uint64]func(){}
+	}
+	a.nextW++
+	id := a.nextW
+	a.watchers[key][id] = end
+	a.mu.Unlock()
+	return func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		delete(a.watchers[key], id)
+	}
 }
 
 // deviceOf names a browser from its User-Agent, in a few fixed words (the header

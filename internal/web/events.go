@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -32,7 +33,15 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, sess Session) {
 		s.fail(w, r, sess, err)
 		return
 	}
-	ch, err := s.be.Subscribe(r.Context(), task, since)
+	// The stream ends with its session: sign-out, a revoke from another device and
+	// expiry all cancel it, and a heartbeat checks again without counting as use.
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	streams, _ := s.opt.Auth.(Streams)
+	if streams != nil {
+		defer streams.Watch(r, cancel)()
+	}
+	ch, err := s.be.Subscribe(ctx, task, since)
 	if err != nil {
 		s.fail(w, r, sess, err)
 		return
@@ -49,9 +58,12 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, sess Session) {
 	defer tick.Stop()
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
 		case <-tick.C:
+			if streams != nil && !streams.Peek(r) {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 				return
 			}
