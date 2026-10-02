@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: release-prep release-snapshot build install install-release check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged secrets-range land
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -112,13 +112,23 @@ release-snapshot:
 # workflows (actionlint). typos and lychee come from Homebrew
 # (brew install typos-cli lychee); the rest run through pinned `go run`.
 TYPOS_VERSION := 1.50.3
-check-ci: docs check-hooks
+check-ci: docs check-hooks check-generated
 	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
 	typos --config typos.toml .
 	lychee --config lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+# The web UI's templates (internal/web/*.templ, D8) are compiled to Go by templ,
+# pinned here; the generated files are committed. check-generated fails when a
+# template was changed without regenerating.
+TEMPL := github.com/a-h/templ/cmd/templ@v0.3.1020
+generate:
+	go run $(TEMPL) generate -path internal/web
+
+check-generated: generate
+	@git diff --exit-code -- 'internal/web/*_templ.go' >/dev/null || { echo "the generated templates are stale: run make generate and commit them" >&2; exit 1; }
 
 # Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
 docs:

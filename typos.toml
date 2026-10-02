@@ -5,6 +5,8 @@ extend-exclude = [
   "CODE_OF_CONDUCT.md", # third-party text
   "CHANGELOG.md",       # generated
   "go.sum",
+  "internal/web/static/htmx.min.js", # vendored, minified (see static/VENDORED.md)
+  "internal/web/static/sse.js",      # vendored
   "**/testdata/**/*.jsonl",       # agent stream fixtures (in testdata/ and subdirectories)
   "**/testdata/*.jsonl",
   "**/testdata/**/*.golden.json", # outputs generated from them
