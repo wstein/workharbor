@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -12,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/termproto"
 )
 
@@ -59,7 +63,8 @@ func TestSSHConfigPrintsABlockAndAsksNothing(t *testing.T) {
 	for _, want := range []string{
 		"Host whr-console", "User whr", "ProxyCommand '/opt/whr bin/whr' ssh --proxy --forward",
 		"IdentityFile " + filepath.Join(dir, "id_ed25519"), "CertificateFile " + filepath.Join(dir, "id_ed25519-cert.pub"),
-		"UserKnownHostsFile " + filepath.Join(dir, "known_hosts"), "StrictHostKeyChecking yes", "IdentitiesOnly yes", "ForwardAgent no",
+		"UserKnownHostsFile " + filepath.Join(dir, "known_hosts"), "StrictHostKeyChecking yes", "IdentitiesOnly yes", "ForwardAgent no", "IdentityAgent none",
+		`Match host whr-console exec "'/opt/whr bin/whr' ssh --refresh --forward"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the block lacks %q:\n%s", want, out)
@@ -106,7 +111,7 @@ func TestSSHGetsACertificateForAKeyThatStaysHereAndRunsSSHWithOnlyThat(t *testin
 	joined := strings.Join(got, " ")
 	for _, want := range []string{
 		"-F /dev/null", "IdentitiesOnly=yes", "-i " + filepath.Join(dir, "id_ed25519"), "CertificateFile=" + filepath.Join(dir, "id_ed25519-cert.pub"),
-		"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "PasswordAuthentication=no", "ForwardAgent=no", "-l whr",
+		"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "PasswordAuthentication=no", "ForwardAgent=no", "IdentityAgent=none", "-l whr",
 		"ProxyCommand='/opt/whr bin/whr' ssh --proxy",
 	} {
 		if !strings.Contains(joined, want) {
@@ -278,4 +283,124 @@ func eventually(t *testing.T, cond func() bool) {
 // readTest reads a file the test's own run made.
 func readTest(path string) ([]byte, error) {
 	return os.ReadFile(path) //nolint:gosec // a file in the test's own temporary directory
+}
+
+// signingStub answers the certificate route like the supervisor: it signs the
+// public key in the request with an authority of its own, for ttl.
+func (s *stub) signingStub(t *testing.T, ttl time.Duration) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ca")
+	if err := sshca.Generate(path); err != nil {
+		t.Fatal(err)
+	}
+	ca, err := sshca.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.reply("GET /v1/console", 200, ok(`{"env_id":"e","read_write":[],"reused":true}`))
+	s.mu.Lock()
+	s.h["POST /v1/console/ssh/certificate"] = func(w http.ResponseWriter, _ *http.Request, body string) {
+		var req struct {
+			PublicKey  string `json:"public_key"`
+			Forwarding bool   `json:"forwarding"`
+		}
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Error(err)
+		}
+		pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(req.PublicKey))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		line, _, err := ca.Sign(pub, sshca.Request{Principal: "whr", KeyID: "t", TTL: ttl, Forwarding: req.Forwarding})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		out, _ := json.Marshal(map[string]any{"certificate": strings.TrimSpace(string(line)), "host_key": sshTestHost, "principal": "whr", "expires_at": "x"})
+		_, _ = io.WriteString(w, ok(string(out)))
+	}
+	s.mu.Unlock()
+}
+
+func TestACertificateThatIsStillFreshIsReusedAndOneThatIsNotIsReplaced(t *testing.T) {
+	s := newStub(t)
+	s.signingStub(t, 10*time.Minute)
+	dir := filepath.Join(t.TempDir(), "ssh")
+	certs := func() int { return len(s.requests("POST /v1/console/ssh/certificate")) }
+	run := func(args ...string) int {
+		code, _, errOut := s.runSSHCLI(dir, func([]string) int { return 0 }, strings.NewReader(""), args...)
+		if code != 0 {
+			t.Fatalf("%v: code %d: %s", args, code, errOut)
+		}
+		return certs()
+	}
+	if n := run("ssh"); n != 1 {
+		t.Fatalf("first connection signed %d certificates", n)
+	}
+	if n := run("ssh"); n != 1 {
+		t.Errorf("a certificate with nine minutes left was not reused: %d signings", n)
+	}
+	// ssh's Match exec asks too, and says nothing.
+	code, out, _ := s.runSSHCLI(dir, nil, strings.NewReader(""), "ssh", "--refresh")
+	if code != 0 || out != "" || certs() != 1 {
+		t.Errorf("--refresh: code %d, stdout %q, %d signings", code, out, certs())
+	}
+	// A different wish for forwarding needs a different certificate.
+	if n := run("ssh", "--forward"); n != 2 {
+		t.Errorf("a certificate without forwarding was reused for --forward: %d", n)
+	}
+	if n := run("ssh", "--forward"); n != 2 {
+		t.Errorf("the forwarding certificate was not reused: %d", n)
+	}
+	// A certificate that is nearly out is replaced every time.
+	short := newStub(t)
+	short.signingStub(t, 3*time.Minute)
+	dir2 := filepath.Join(t.TempDir(), "ssh")
+	for range 2 {
+		if code, _, errOut := short.runSSHCLI(dir2, func([]string) int { return 0 }, strings.NewReader(""), "ssh"); code != 0 {
+			t.Fatalf("code %d: %s", code, errOut)
+		}
+	}
+	if n := len(short.requests("POST /v1/console/ssh/certificate")); n != 2 {
+		t.Errorf("a certificate with three minutes left was reused: %d signings", n)
+	}
+	// A certificate that is not for this machine's key is not reused.
+	other := filepath.Join(dir, "id_ed25519.pub")
+	if err := os.Remove(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "id_ed25519")); err != nil {
+		t.Fatal(err)
+	}
+	if n := run("ssh", "--forward"); n != 3 {
+		t.Errorf("a new key was given the old certificate: %d", n)
+	}
+}
+
+func TestTheConfigBlockQuotesPathsAndDoublesPercentSigns(t *testing.T) {
+	s := newStub(t)
+	dir := filepath.Join(t.TempDir(), "my ssh")
+	code, out, errOut := s.runSSHCLI(dir, nil, strings.NewReader(""), "ssh", "--config")
+	if code != 0 {
+		t.Fatalf("code %d: %s", code, errOut)
+	}
+	for _, want := range []string{
+		`IdentityFile "` + filepath.Join(dir, "id_ed25519") + `"`, `CertificateFile "` + filepath.Join(dir, "id_ed25519-cert.pub") + `"`, `UserKnownHostsFile "` + filepath.Join(dir, "known_hosts") + `"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the block lacks %q:\n%s", want, out)
+		}
+	}
+	// A path ssh cannot be given safely is refused, not written.
+	for _, bad := range []string{`/tmp/a"b`, "/tmp/a\\b"} {
+		if code, out, _ := s.runSSHCLI(bad, nil, strings.NewReader(""), "ssh", "--config"); code == 0 || out != "" {
+			t.Errorf("%q: code %d, wrote %q", bad, code, out)
+		}
+	}
+	var buf, errBuf bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &buf, Stderr: &errBuf, Getenv: func(k string) string { return map[string]string{"WHR_SSH_DIR": dir}[k] }, Executable: func() (string, error) { return "/opt/50%/whr", nil }}
+	if code := Execute(context.Background(), env, []string{"ssh", "--config"}); code != 0 || !strings.Contains(buf.String(), `exec "'/opt/50%%/whr'`) && !strings.Contains(buf.String(), `exec "/opt/50%%/whr`) {
+		t.Errorf("a percent sign was not doubled for ssh's Match exec (code %d):\n%s", code, buf.String())
+	}
 }
