@@ -58,11 +58,13 @@ install-release:
 	scripts/install-release.sh "$(VERSION)" "$(if $(filter command line,$(origin PREFIX)),$(PREFIX),/opt/whr)"
 
 # Temporary Apple Container resources of spikes, live tests and debugging
-# (AGENTS.md): list them, or remove them. LANE=wh/spikes narrows to one lane.
+# (AGENTS.md): list them, or remove one lane's (LANE=wh/spikes); ALL=1 removes
+# every lane's, which can stop another session's running test.
 temp-ls:
 	scripts/temp-resources.sh $(if $(LANE),--lane $(LANE))
 
 temp-clean:
+	@test -n "$(LANE)$(ALL)" || { echo "usage: make temp-clean LANE=<lane> (ALL=1 removes every lane's, including other sessions' running tests)" >&2; exit 2; }
 	scripts/temp-resources.sh $(if $(LANE),--lane $(LANE)) --delete
 
 build:

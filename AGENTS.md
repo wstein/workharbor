@@ -29,7 +29,7 @@ make install-release VERSION=<tag>  # install a (draft) release after checking c
 make check-ci      # what CI runs beyond make check: docs build, typos, lychee (online), gitleaks, actionlint
 make land          # from your worktree: check, then fast-forward main if the shared checkout is on main
 make temp-ls       # list temporary containers, volumes, networks and images (LANE=<lane> to narrow)
-make temp-clean    # remove them
+make temp-clean    # remove one lane's: LANE=<lane> is required (ALL=1 for every lane, also other sessions' running tests)
 ```
 
 The pre-commit hook scans the staged change for secrets (gitleaks), then runs the format, lint and editorconfig checks; the pre-push hook scans every commit about to be pushed for secrets; the commit-msg hook runs `commitlint` (see Commits). Run `make hooks` once in every clone and worktree: `make check-ci` fails where the hooks are not enabled. CI runs `make check` and the tools of `make check-ci`; run both before you merge or rebase into `main`, so a red CI is caught before the push. `make check-ci` needs `typos` and `lychee` (`brew install typos-cli lychee`). Never bypass hooks with `--no-verify`.
