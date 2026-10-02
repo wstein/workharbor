@@ -16,9 +16,9 @@ and his word overrides yours.
 - **Decide.** Turn questions from the lanes, the human and review findings into
   decision rows and rule text; reserve the D-row in an issue first, open the
   implementation issue in the same step, and cite spike evidence.
-- **Dispatch.** Keep each lane (`wh/platform`, `wh/runtime`, `wh/review`,
-  `wh/verify`, `wh/docs`, `wh/spikes`) supplied with the next issue and its
-  rules; split work so lanes do not collide.
+- **Rank, don't dispatch.** Keep `Priority` and `Session` current on the board so
+  each lane pulls its own next issue; step in only for an empty queue, a rule to
+  decide first or lanes that would collide.
 - **Keep the gate.** Nothing is `Ready to push` without a `wh/review` note;
   findings that need a rule come to you, and you decide them before the fix.
 - **Keep the board honest.** Statuses and ticked criteria match what landed;

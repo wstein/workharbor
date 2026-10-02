@@ -21,7 +21,8 @@ design owner is the `wh/design` session; the human is Werner.
 
 ## How to work
 
-- Take issues only from the design owner or the human. Claim each one: board
+- Take your next issue yourself from the board (AGENTS.md, Pulling work): your
+  lane's highest-priority `Todo` card. Claim each one: board
   card `In progress`, `Session` your lane, and a
   `Claimed by <lane> (<tool>:<model-id>)` comment; then read the issue and its design sections.
 - Design first, then code. You may describe what you built in the design; you
