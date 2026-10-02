@@ -2,8 +2,8 @@
 
 A helper is a subagent on a small, fast model that a lane starts inside its own
 session for one quick, bounded task (`.claude/agents/wh-helper.md`; in Claude
-Code `/wh-delegate <task>`). It runs in the requester's worktree under the
-requester's permissions, sees only its task, and reports back to the requester,
+Code `/wh-delegate <task>`). It runs in the requester's worktree (`../workharbor-<role>`), never its own,
+under the requester's permissions, one editing helper at a time per worktree, sees only its task, and reports back to the requester,
 who reviews the result, commits it and lands it. A helper has no session,
 worktree, branch or card of its own. It adds to [AGENTS.md](../AGENTS.md), which
 always applies.
