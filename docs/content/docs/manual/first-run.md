@@ -9,10 +9,11 @@ A short path through the manual, in order. **Every command is provisional and ha
 
 1. **Prepare the host**, as the administrator: [Prepare the Mac mini](host-setup.md).
 2. **Install `whr`**, as the administrator: [Install, upgrade and release](install-upgrade-release.md). Then check it: `whr version`.
-3. **Set up** the `whr` user's part, in its desktop session, not over SSH: `whr setup` (and `whr setup host` as the administrator). `whr setup --dry-run` shows every fix first. The GitHub App comes from `whr github app create`, see [Prepare the Mac mini](host-setup.md).
+3. **Set up**: first `whr setup host` as the administrator, then `whr setup` as `whr` in its desktop session, not over SSH. `whr setup --dry-run` shows every fix first. The GitHub App comes from `whr github app create`, see [Prepare the Mac mini](host-setup.md).
 4. **Check** with `whr doctor`; fix what it reports, and treat "not verified" as not ok.
 5. **Start the supervisor**: `whr service install`, then `whr service status`. See [Run the supervisor](run-the-supervisor.md).
-6. **Add a workspace and an agent**: `whr ws add <name> --path <folder> --repo <owner/name> --role <role>`. It seeds the clone and starts the environment, which takes a while.
-7. **Sign in to the agent** inside its environment yourself (a subscription login is never put in a file for `whr`): [Agent vendor terms](vendor-terms.md).
-8. **Start a task**: `whr run <issue-url> --agent <workspace>/<role>`, then `whr logs <task> -f`, `whr inbox` and `whr approve`. See [Daily use](daily-use.md).
-9. **Before you rely on it**, read [Security notes](security.md).
+6. **Sign in to the web UI** on your phone or laptop through the forwarder, with the API token (see [Run the supervisor](run-the-supervisor.md)). Then enrol a passkey on the host with `whr passkey add`; from the first passkey on, the token no longer signs in to the web UI.
+7. **Add a workspace and an agent**: `whr ws add <name> --path <folder> --repo <owner/name> --role <role>`. It seeds the clone and starts the environment, which takes a while.
+8. **Sign in to the agent** inside its environment yourself (a subscription login is never put in a file for `whr`): [Agent vendor terms](vendor-terms.md).
+9. **Start a task**: `whr run <issue-url> --agent <workspace>/<role>`, then `whr logs <task> -f`, `whr inbox` and `whr approve`. See [Daily use](daily-use.md).
+10. **Before you rely on it**, read [Security notes](security.md).
