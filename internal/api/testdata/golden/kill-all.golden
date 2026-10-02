@@ -1,0 +1,13 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "cancelled": [
+      "t2"
+    ],
+    "tokens_revoked": 1,
+    "problems": []
+  }
+}
+

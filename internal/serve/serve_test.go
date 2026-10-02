@@ -204,3 +204,26 @@ func TestBudgetsAreConvertedToMicroDollars(t *testing.T) {
 		t.Errorf("Budgets = %+v, want %+v", got, want)
 	}
 }
+
+type revokingForge struct {
+	*forgetest.Fake
+	calls int
+}
+
+func (f *revokingForge) RevokeTokens(context.Context) (int, error) { f.calls++; return 3, nil }
+
+func TestKillAllGetsTheForgesRevoker(t *testing.T) {
+	var scfg service.Config
+	addRevoker(&scfg, Deps{Forge: forgetest.NewFake()})
+	if scfg.RevokeTokens != nil {
+		t.Error("a forge that cannot revoke must not get a revoker")
+	}
+	f := &revokingForge{Fake: forgetest.NewFake()}
+	addRevoker(&scfg, Deps{Forge: f})
+	if scfg.RevokeTokens == nil {
+		t.Fatal("no revoker")
+	}
+	if n, err := scfg.RevokeTokens(context.Background()); n != 3 || err != nil || f.calls != 1 {
+		t.Errorf("revoked %d, %v, calls %d", n, err, f.calls)
+	}
+}

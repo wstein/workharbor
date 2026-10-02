@@ -76,6 +76,9 @@ type Config struct {
 	Board forge.Board
 	// BoardLink returns the link to a task in the web UI for its card. Optional.
 	BoardLink func(task domain.ID) string
+	// RevokeTokens revokes the forge tokens the supervisor holds and returns how
+	// many it revoked: the token half of KillAll. Optional.
+	RevokeTokens func(ctx context.Context) (int, error)
 	// Budgets are the per-run and per-task limits on tokens and cost (§7.4).
 	// The zero value sets none. Optional.
 	Budgets Budgets

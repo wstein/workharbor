@@ -88,6 +88,7 @@ func Run(ctx context.Context, d Deps) error {
 		OnError: func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
+	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
 	ws := service.NewWorkspaces(svc, service.WorkspaceConfig{
@@ -168,4 +169,14 @@ func Budgets(b config.Budgets) service.Budgets {
 		return service.Limit{MaxTokens: l.MaxTokens, MaxCostMicroUSD: int64(math.Round(l.MaxCostUSD * 1e6))}
 	}
 	return service.Budgets{PerRun: limit(b.PerRun), PerTask: limit(b.PerTask), SoftPercent: b.SoftPercent}
+}
+
+// addRevoker gives kill-all the forge's way to revoke the tokens it holds, when
+// the forge adapter has one (the GitHub App client does).
+func addRevoker(scfg *service.Config, d Deps) {
+	if r, ok := d.Forge.(interface {
+		RevokeTokens(context.Context) (int, error)
+	}); ok {
+		scfg.RevokeTokens = r.RevokeTokens
+	}
 }

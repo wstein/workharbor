@@ -1155,6 +1155,73 @@
           }
         }
       }
+    },
+    "/v1/kill-all": {
+      "post": {
+        "operationId": "killAll",
+        "summary": "Stop every run, cancel every unfinished task and revoke the forge tokens",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "what the kill switch did",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/KillAllReport"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "description": "The kill switch (design \u00a77.7). It needs `{\"confirm\": true}`, goes on after a failure, and lists what failed in `problems`. It cannot revoke the agent's own credentials. The attempt is an audit entry whatever happened.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillAllRequest"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1674,6 +1741,45 @@
           "warnings": {
             "type": "array",
             "description": "files in the copy that an editor may act on by itself; untrusted text",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "KillAllRequest": {
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "KillAllReport": {
+        "type": "object",
+        "required": [
+          "cancelled",
+          "tokens_revoked",
+          "problems"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokens_revoked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
             "items": {
               "type": "string"
             }

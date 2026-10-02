@@ -38,6 +38,7 @@ type Backend interface {
 	Run(ctx context.Context, req service.RunRequest) (service.RunResult, error)
 	Say(ctx context.Context, task domain.ID, message string) (agent.Delivery, error)
 	Cancel(ctx context.Context, task domain.ID) error
+	KillAll(ctx context.Context, actor string) (service.KillReport, error)
 	Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error)
 	Inbox(ctx context.Context) ([]domain.Decision, error)
 	WorkspaceList(ctx context.Context) ([]service.WorkspaceView, error)
@@ -148,6 +149,7 @@ var routes = []route{
 	{http.MethodGet, "/v1/tasks/{task}", (*Server).showTask},
 	{http.MethodPost, "/v1/tasks/{task}/say", (*Server).say},
 	{http.MethodPost, "/v1/tasks/{task}/cancel", (*Server).cancel},
+	{http.MethodPost, "/v1/kill-all", (*Server).killAll},
 	{http.MethodGet, "/v1/tasks/{task}/events", (*Server).events},
 	{http.MethodGet, "/v1/tasks/{task}/log", (*Server).log},
 	{http.MethodGet, "/v1/inbox", (*Server).inbox},
@@ -408,6 +410,33 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{}, nil
+	})
+}
+
+type killAllBody struct {
+	Confirm bool `json:"confirm"`
+}
+
+// killAll is the kill switch: it stops every run, cancels every unfinished task
+// and revokes the forge tokens (design §7.7). It is refused without an explicit
+// confirmation, so a stray request cannot pull it.
+func (s *Server) killAll(w http.ResponseWriter, r *http.Request) {
+	var body killAllBody
+	raw, err := readBody(w, r, &body)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !body.Confirm {
+		writeError(w, usageError{`kill-all needs {"confirm": true}`})
+		return
+	}
+	s.idempotent(w, r, raw, func() (int, any, error) {
+		rep, err := s.be.KillAll(r.Context(), "api")
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, rep, nil
 	})
 }
 

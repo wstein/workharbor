@@ -46,6 +46,7 @@ type fake struct {
 	onShow   func(domain.ID) (service.TaskView, error)
 	onSay    func(domain.ID, string) (agent.Delivery, error)
 	onCancel func(domain.ID) error
+	onKill   func(actor string) (service.KillReport, error)
 	onAnswer func(domain.ID, domain.Response) (domain.ID, error)
 }
 
@@ -100,6 +101,13 @@ func (f *fake) Cancel(_ context.Context, id domain.ID) error {
 		return f.onCancel(id)
 	}
 	return nil
+}
+
+func (f *fake) KillAll(_ context.Context, actor string) (service.KillReport, error) {
+	if f.onKill != nil {
+		return f.onKill(actor)
+	}
+	return service.KillReport{Cancelled: []domain.ID{"t2"}, TokensRevoked: 1, Problems: []string{}}, nil
 }
 
 func (f *fake) Answer(_ context.Context, id domain.ID, r domain.Response) (domain.ID, error) {
@@ -450,6 +458,9 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"run-held":                       {"POST", "/v1/tasks", `{"issue_url":"https://github.com/wstein/workharbor/issues/666","agent":"docs-ws/docs"}`},
 		"say":                            {"POST", "/v1/tasks/t2/say", `{"message":"use the helper"}`},
 		"cancel":                         {"POST", "/v1/tasks/t2/cancel", ``},
+		"kill-all":                       {"POST", "/v1/kill-all", `{"confirm":true}`},
+		"kill-all-unconfirmed":           {"POST", "/v1/kill-all", `{"confirm":false}`},
+		"kill-all-empty":                 {"POST", "/v1/kill-all", ``},
 		"answer":                         {"POST", "/v1/decisions/d1/answer", `{"option":"allow","sha":"abc123"}`},
 		"not-found":                      {"GET", "/v1/tasks/nope", ""},
 		"unknown-route":                  {"GET", "/v1/nothing", ""},
@@ -733,7 +744,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 17 {
+	if got := Routes(); len(got) != 18 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}
