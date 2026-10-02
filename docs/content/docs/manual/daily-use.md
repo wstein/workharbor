@@ -5,7 +5,7 @@ weight: 3
 toc: true
 ---
 
-A draft of the everyday commands. **Every command here is provisional and has not been run against a release yet** ({{< status unverified >}}); `wh/docs` will check each one against `v0.1.0` (issue #65). Start the supervisor first: [Run the supervisor](run-the-supervisor.md).
+A draft of the everyday commands, checked against `whr --help` of a build from `main`. **Every command here is provisional and has not been run against a release yet** ({{< status unverified >}}); `wh/docs` will check each one against `v0.1.0` (issue #65). Start the supervisor first: [Run the supervisor](run-the-supervisor.md).
 
 ## Start a task
 

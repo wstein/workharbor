@@ -5,7 +5,7 @@ weight: 2
 toc: true
 ---
 
-A draft of the commands that exist today. **Every command on this page is provisional, and none of them has been run against a release yet** ({{< status unverified >}}): the text follows the commands' own `--help` and the design, and `wh/docs` will check it against `v0.1.0` (issue #65). Prepare the host first: [Prepare the Mac mini](host-setup.md).
+A draft of the commands that exist today; they were checked against `whr --help` of a build from `main`, not run. **Every command on this page is provisional, and none of them has been run against a release yet** ({{< status unverified >}}): the text follows the commands' own `--help` and the design, and `wh/docs` will check it against `v0.1.0` (issue #65). Prepare the host first ([Prepare the Mac mini](host-setup.md)) and install `whr` ([Install, upgrade and release](install-upgrade-release.md)).
 
 Every command takes `--config <file>` (default `$WHR_CONFIG`, then `~/.config/whr/config.json`) and `--json`, which prints the API's envelope instead of text. Stdout is data and stderr is for you, so `whr preview open ... | pbcopy` copies only the link.
 
@@ -26,7 +26,7 @@ Two wizards, each checking a step first, showing the exact commands of its fix a
 
 `whr serve` runs the supervisor: the reconciler, the JSON API and the web UI. The API listens **only** on a private unix socket, `api.sock` in `state_dir` (the directory must be a real directory owned by `whr` with mode `0700`); the web UI listens on the loopback address `listen`, which a forwarder such as `tailscale serve` carries to your phone. Only one `whr serve` can run per state directory.
 
-If a repository's workflow in the configuration differs from the one recorded, `whr serve` stops (a policy change must be confirmed). Start it once with `--accept-workflow-change`, or, with a passkey enrolled, start it normally and confirm the change on the web page *Changes* (it applies at the next start).
+If a repository's workflow in the configuration (its preset or its integration branch) differs from the one recorded, `whr serve` stops: that is a policy change and must be confirmed. This also happens once after upgrading across migration 0016, see [Install, upgrade and release](install-upgrade-release.md). Start it once with `--accept-workflow-change`, or, with a passkey enrolled, start it normally and confirm the change on the web page *Changes* (it applies at the next start).
 
 `whr service install` writes a macOS LaunchAgent that starts the container system and then `whr serve`, kept alive, in the `whr` user's login session. `whr service status` says whether it is loaded; `whr service uninstall` removes it (the logs stay). The LaunchAgent needs a logged-in session: see the automatic log-out step in the host page.
 

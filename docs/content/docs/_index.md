@@ -11,7 +11,7 @@ Design and reference documentation for workharbor. The project is building relea
   {{< card link="threat-model" title="Threat model" subtitle="Assets, trust boundaries, threats, controls and accepted risks." icon="shield-check" >}}
   {{< card link="glossary" title="Glossary" subtitle="Task, topic, run, Decision, ReviewCandidate, tool store and the other terms." icon="academic-cap" >}}
   {{< card link="spikes" title="Spikes" subtitle="The measured results behind the design." icon="beaker" >}}
-  {{< card link="manual" title="Manual" subtitle="Prepare the Mac mini, the security notes and the agent vendors' terms." icon="book-open" >}}
+  {{< card link="manual" title="Manual" subtitle="Prepare the Mac mini, install and run whr, the security notes and the vendors' terms." icon="book-open" >}}
 {{< /cards >}}
 
 ## Planned CLI
