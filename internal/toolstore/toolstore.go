@@ -459,10 +459,13 @@ func (s *Store) Verify() []Problem {
 		if want.err != "" {
 			bad(true, "%s", want.err)
 		}
+		// A directory belongs to a pin by name, version and platform, whatever its
+		// first eight digits say; a different eight digits is a look-alike.
 		var pinned string
-		for _, p := range pins {
-			if p.SHA256 != "" && d.Name() == fmt.Sprintf("%s-%s-%s-%s", p.SHA256[:8], p.Name, p.Version, p.Platform) {
-				pinned = p.SHA256
+		if p, ok := pinFor(pins, d.Name()); ok {
+			pinned = p.SHA256
+			if parts[0] != p.SHA256[:8] {
+				bad(true, "the directory is for the pinned %s %s %s but its hash %s differs from the pin %s", p.Name, p.Version, p.Platform, parts[0], p.SHA256[:8])
 			}
 		}
 		bins, _ := os.ReadDir(filepath.Join(dir, "bin"))
@@ -503,6 +506,102 @@ func (s *Store) Verify() []Problem {
 			}
 			if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o222 != 0 {
 				bad(true, "%s is writable", b.Name())
+			}
+		}
+	}
+	return append(problems, s.verifyProfiles(pins)...)
+}
+
+// pinFor returns the pin (with a hash) that a store directory name is for: the
+// name is eight hex digits, then -<name>-<version>-<platform> of the pin. Tool
+// names contain dashes, so the name is matched against the pins, not split.
+func pinFor(pins []Pin, dirName string) (Pin, bool) {
+	for _, p := range pins {
+		suffix := "-" + p.Name + "-" + p.Version + "-" + p.Platform
+		if len(p.SHA256) != 64 || !strings.HasSuffix(dirName, suffix) {
+			continue
+		}
+		if prefix := strings.TrimSuffix(dirName, suffix); len(prefix) == 8 && isHex(prefix) {
+			return p, true
+		}
+	}
+	return Pin{}, false
+}
+
+func isHex(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// verifyProfiles checks that every profile holds only the relative links
+// Profile writes, each into an existing entry of this store whose tool is the
+// link's own name, and that a pinned tool's link goes to the pin's own entry.
+func (s *Store) verifyProfiles(pins []Pin) []Problem {
+	profiles := filepath.Join(s.Root, "profiles")
+	list, err := os.ReadDir(profiles)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return []Problem{{Msg: "cannot read the profiles: " + err.Error(), Severe: true}}
+	}
+	var problems []Problem
+	for _, pd := range list {
+		if strings.HasPrefix(pd.Name(), ".") {
+			continue
+		}
+		if !pd.IsDir() {
+			problems = append(problems, Problem{Entry: "profiles/" + pd.Name(), Msg: "not a profile directory", Severe: true})
+			continue
+		}
+		binDir := filepath.Join(profiles, pd.Name(), "bin")
+		links, err := os.ReadDir(binDir)
+		if err != nil {
+			problems = append(problems, Problem{Entry: "profiles/" + pd.Name(), Msg: "cannot read bin: " + err.Error(), Severe: true})
+			continue
+		}
+		for _, l := range links {
+			name := "profiles/" + pd.Name() + "/bin/" + l.Name()
+			bad := func(format string, args ...any) {
+				problems = append(problems, Problem{Entry: name, Msg: fmt.Sprintf(format, args...), Severe: true})
+			}
+			if l.Type()&fs.ModeSymlink == 0 {
+				bad("not a link (%v): a profile holds only links into the store", l.Type())
+				continue
+			}
+			target, err := os.Readlink(filepath.Join(binDir, l.Name()))
+			if err != nil {
+				bad("%v", err)
+				continue
+			}
+			seg := strings.Split(target, "/")
+			if len(seg) != 7 || seg[0] != ".." || seg[1] != ".." || seg[2] != ".." || seg[3] != "store" || seg[5] != "bin" ||
+				seg[4] == "" || seg[4] == "." || seg[4] == ".." || strings.HasPrefix(seg[4], ".") || seg[6] != l.Name() {
+				bad("the link target %q is not ../../../store/<entry>/bin/%s", target, l.Name())
+				continue
+			}
+			entry := filepath.Join(s.Root, "store", seg[4])
+			if info, err := os.Lstat(entry); err != nil || !info.IsDir() {
+				bad("the link points to %s, which is not an entry of the store", seg[4])
+				continue
+			}
+			if info, err := os.Lstat(filepath.Join(entry, "bin", l.Name())); err != nil || !info.Mode().IsRegular() {
+				bad("the entry %s has no tool %s", seg[4], l.Name())
+				continue
+			}
+			for _, p := range pins {
+				if len(p.SHA256) == 64 && p.Name == l.Name() && strings.HasSuffix(seg[4], "-"+p.Name+"-"+p.Version+"-"+p.Platform) &&
+					seg[4] != p.SHA256[:8]+"-"+p.Name+"-"+p.Version+"-"+p.Platform {
+					bad("the link points to %s, not the pin's own entry %s-%s-%s-%s", seg[4], p.SHA256[:8], p.Name, p.Version, p.Platform)
+				}
+			}
+			if sum, err := hashRegular(filepath.Join(entry, "bin", l.Name())); err != nil || len(seg[4]) < 8 || !strings.HasPrefix(sum, seg[4][:8]) {
+				bad("the entry %s does not hold the content its name says", seg[4])
+				continue
 			}
 		}
 	}

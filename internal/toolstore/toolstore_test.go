@@ -469,3 +469,147 @@ func TestAPinDecidesEvenWhenTheRecordAgreesWithATamperedTool(t *testing.T) {
 	}
 	makeWritable(s.Root)
 }
+
+// writeEntry makes a store entry by hand, as the store owner could: a tool and,
+// if record is set, a record file.
+func writeEntry(t *testing.T, s *Store, dirName, tool string, content []byte, record string) string {
+	t.Helper()
+	dir := filepath.Join(s.Root, "store", dirName)
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin", tool), content, 0o555); err != nil { //nolint:gosec // a test
+		t.Fatal(err)
+	}
+	if record != "" {
+		if err := os.WriteFile(filepath.Join(dir, RecordedHashFile), []byte(record+"\n"), 0o444); err != nil { //nolint:gosec // a test
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// A look-alike directory with another hash8, a tampered tool and a record that
+// agrees with it must not escape the pin.
+func TestAPinnedToolInADirectoryWithAnotherHash8IsSevere(t *testing.T) {
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	if pin.SHA256[:8] == "deadbeef" {
+		t.Skip("pin starts with deadbeef")
+	}
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	evil := []byte("a tampered tool")
+	h := sum(evil)
+	writeEntry(t, s, "deadbeef-"+pin.Name+"-"+pin.Version+"-"+pin.Platform, pin.Name, evil, "deadbeef"+h[8:])
+	got := joinProblems(s.Verify())
+	if !severe(s.Verify()) || !strings.Contains(got, "differs from the pin") {
+		t.Errorf("a look-alike of a pinned tool was not caught: %s", got)
+	}
+}
+
+func TestAPinnedToolWithTheRightHash8ButOtherContentIsSevere(t *testing.T) {
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	evil := []byte("a tampered tool")
+	writeEntry(t, s, pin.SHA256[:8]+"-"+pin.Name+"-"+pin.Version+"-"+pin.Platform, pin.Name, evil, "")
+	if got := joinProblems(s.Verify()); !severe(s.Verify()) || !strings.Contains(got, "the pin says") {
+		t.Errorf("other content under the pin's own name was not caught: %s", got)
+	}
+}
+
+func TestVerifyChecksProfileLinks(t *testing.T) {
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	e := addTool(t, s)
+	if err := s.Profile("good", e); err != nil {
+		t.Fatal(err)
+	}
+	if ps := s.Verify(); len(ps) != 0 {
+		t.Fatalf("a profile made by Profile did not verify: %s", joinProblems(ps))
+	}
+
+	look := "deadbeef-tool-1.0-linux-arm64"
+	writeEntry(t, s, look, "tool", []byte("good"), "")
+	outside := t.TempDir()
+	cases := map[string]func(bin string) error{
+		"lookalike": func(bin string) error {
+			return os.Symlink("../../../store/"+look+"/bin/tool", filepath.Join(bin, "tool"))
+		},
+		"absolute": func(bin string) error { return os.Symlink(e.Path(), filepath.Join(bin, "tool")) },
+		"escaping": func(bin string) error {
+			return os.Symlink("../../../../"+filepath.Base(outside)+"/tool", filepath.Join(bin, "tool"))
+		},
+		"extradots": func(bin string) error {
+			return os.Symlink("../../../store/../store/"+filepath.Base(e.Dir)+"/bin/tool", filepath.Join(bin, "tool"))
+		},
+		"regular": func(bin string) error { return os.WriteFile(filepath.Join(bin, "tool"), []byte("good"), 0o600) },
+		"missing": func(bin string) error {
+			return os.Symlink("../../../store/00000000-tool-1.0-linux-arm64/bin/tool", filepath.Join(bin, "tool"))
+		},
+		"othername": func(bin string) error {
+			return os.Symlink("../../../store/"+filepath.Base(e.Dir)+"/bin/tool", filepath.Join(bin, "other"))
+		},
+	}
+	for name, mk := range cases {
+		t.Run(name, func(t *testing.T) {
+			bin := filepath.Join(s.Root, "profiles", "bad-"+name, "bin")
+			if err := os.MkdirAll(bin, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := mk(bin); err != nil {
+				t.Fatal(err)
+			}
+			var found bool
+			for _, p := range s.Verify() {
+				if p.Severe && strings.HasPrefix(p.Entry, "profiles/bad-"+name+"/bin/") {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("a %s profile link was not severe: %s", name, joinProblems(s.Verify()))
+			}
+		})
+	}
+}
+
+// A profile that points a pinned tool at a look-alike entry is refused as a
+// profile problem too, not only as an entry problem.
+func TestAProfileOfAPinnedToolMustPointAtThePinsOwnEntry(t *testing.T) {
+	pins, err := Pins()
+	if err != nil || len(pins) == 0 {
+		t.Skip("no built-in pin")
+	}
+	pin := pins[0]
+	if pin.SHA256[:8] == "deadbeef" {
+		t.Skip("pin starts with deadbeef")
+	}
+	s := newStore(t)
+	t.Cleanup(func() { makeWritable(s.Root) })
+	look := "deadbeef-" + pin.Name + "-" + pin.Version + "-" + pin.Platform
+	writeEntry(t, s, look, pin.Name, []byte("x"), "")
+	bin := filepath.Join(s.Root, "profiles", "p", "bin")
+	if err := os.MkdirAll(bin, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../../store/"+look+"/bin/"+pin.Name, filepath.Join(bin, pin.Name)); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, p := range s.Verify() {
+		if p.Severe && strings.HasPrefix(p.Entry, "profiles/p/") && strings.Contains(p.Msg, "pin's own entry") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the profile link to a look-alike was not caught: %s", joinProblems(s.Verify()))
+	}
+}
