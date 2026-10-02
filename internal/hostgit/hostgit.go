@@ -139,6 +139,10 @@ func (g *Git) envFor(fileTransport bool, extra ...string) []string {
 		"LANG=C",
 		"LC_ALL=C",
 		"GIT_CONFIG_NOSYSTEM=1",
+		// an explicit `git config --system` ignores GIT_CONFIG_NOSYSTEM; the host must
+		// never read Homebrew's system gitconfig (its osxkeychain helper), so the system
+		// file points nowhere as well
+		"GIT_CONFIG_SYSTEM=" + os.DevNull,
 		"GIT_CONFIG_GLOBAL=" + os.DevNull,
 		"GIT_ATTR_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",

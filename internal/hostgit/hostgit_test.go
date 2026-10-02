@@ -256,3 +256,24 @@ func TestTheFloorStopsTheKnownKeys(t *testing.T) {
 		}
 	})
 }
+
+// The host never reads the system or the global git configuration: Homebrew's
+// system gitconfig names the osxkeychain credential helper, and an explicit
+// `git config --system` ignores GIT_CONFIG_NOSYSTEM. This only reads the
+// environment hostgit builds; it starts no process.
+func TestTheEnvironmentPointsEveryConfigFileNowhere(t *testing.T) {
+	g, err := New()
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { _ = g.Close() })
+	env := strings.Join(g.Env(), "\n")
+	for _, want := range []string{"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0"} {
+		if !strings.Contains(env, want) {
+			t.Errorf("hostgit's environment lacks %s", want)
+		}
+	}
+	if !strings.Contains(strings.Join(g.Config(false), "\n"), "credential.helper=") {
+		t.Error("hostgit starts git with a credential helper")
+	}
+}
