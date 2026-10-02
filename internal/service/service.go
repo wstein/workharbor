@@ -76,6 +76,9 @@ type Config struct {
 	Board forge.Board
 	// BoardLink returns the link to a task in the web UI for its card. Optional.
 	BoardLink func(task domain.ID) string
+	// Budgets are the per-run and per-task limits on tokens and cost (§7.4).
+	// The zero value sets none. Optional.
+	Budgets Budgets
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)
@@ -212,6 +215,9 @@ func (s *Service) notify(ctx context.Context, events []domain.Event) {
 	}
 	cancelled := false
 	for _, e := range events {
+		if e.Kind == domain.EventBudgetExceeded {
+			cancelled = true // the budget message says why the run ended
+		}
 		if e.Kind == domain.EventTaskState {
 			var p domain.StateChanged
 			if json.Unmarshal(e.Payload, &p) == nil && p.To == string(domain.TaskCancelled) {

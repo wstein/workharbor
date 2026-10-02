@@ -1,0 +1,140 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/store"
+)
+
+// Limit is a budget of one scope. A zero field is no limit.
+type Limit struct {
+	MaxTokens       int64 // every token the agent reported: input, output, cache read and cache write
+	MaxCostMicroUSD int64 // the cost the agent reported, in millionths of a US dollar
+}
+
+// Budgets are the per-run and per-task limits of design §7.4. A soft
+// threshold warns once; a hard limit ends the task as failed (D13, D21). They
+// compare against the usage counters of §5.7, the same totals `whr usage`
+// shows, so they only count what the agent reported: a turn that reported
+// neither tokens nor a cost adds nothing, and a limit is never read as reached
+// because something is unknown.
+type Budgets struct {
+	PerRun, PerTask Limit
+	// SoftPercent is the share of a limit at which the human is warned, 1 to
+	// 99. Zero means 80.
+	SoftPercent int
+}
+
+// defaultSoftPercent is the warning threshold when none is configured.
+const defaultSoftPercent = 80
+
+func (b Budgets) soft() int64 {
+	if b.SoftPercent < 1 || b.SoftPercent > 99 {
+		return defaultSoftPercent
+	}
+	return int64(b.SoftPercent)
+}
+
+// counters are the totals a budget is compared with.
+type counters struct{ tokens, cost int64 }
+
+func total(rows []store.UsageRow) counters {
+	var c counters
+	for _, r := range rows {
+		c.tokens += r.Tokens.Input + r.Tokens.Output + r.Tokens.CacheRead + r.Tokens.CacheWrite
+		c.cost += r.ReportedMicroUSD
+	}
+	return c
+}
+
+// checkBudgets compares the totals of a run and of its task with the budgets
+// after a turn was recorded. The first hard limit reached ends the task as
+// failed, stops the session and is recorded; a soft threshold reached is
+// recorded and notified once. Errors are reported, never returned: the turn is
+// already recorded and the run goes on.
+func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
+	b := s.cfg.Budgets
+	if b == (Budgets{}) {
+		return
+	}
+	runRows, err := s.store.UsageTotals(ctx, store.UsageFilter{TaskID: task, RunID: run}, store.GroupAll)
+	if err != nil {
+		s.report(fmt.Errorf("budget: %w", err))
+		return
+	}
+	taskRows, err := s.store.UsageTotals(ctx, store.UsageFilter{TaskID: task}, store.GroupAll)
+	if err != nil {
+		s.report(fmt.Errorf("budget: %w", err))
+		return
+	}
+	checks := []struct {
+		scope  domain.BudgetScope
+		run    domain.ID
+		limit  Limit
+		counts counters
+	}{
+		{domain.BudgetRun, run, b.PerRun, total(runRows)},
+		{domain.BudgetTask, "", b.PerTask, total(taskRows)},
+	}
+	var warnings []domain.BudgetBreach
+	for _, c := range checks {
+		for _, m := range []struct {
+			metric      domain.BudgetMetric
+			limit, used int64
+		}{
+			{domain.BudgetTokens, c.limit.MaxTokens, c.counts.tokens},
+			{domain.BudgetCost, c.limit.MaxCostMicroUSD, c.counts.cost},
+		} {
+			if m.limit <= 0 {
+				continue
+			}
+			breach := domain.BudgetBreach{Scope: c.scope, Metric: m.metric, RunID: c.run, Limit: m.limit, Used: m.used}
+			if m.used >= m.limit {
+				s.exceed(ctx, task, run, breach)
+				return // the task is over; nothing else to warn about
+			}
+			if m.used*100 >= m.limit*b.soft() {
+				warnings = append(warnings, breach)
+			}
+		}
+	}
+	for _, w := range warnings {
+		s.warn(ctx, task, w)
+	}
+}
+
+// exceed ends the task for a hard limit and stops the live session.
+func (s *Service) exceed(ctx context.Context, task, run domain.ID, b domain.BudgetBreach) {
+	err := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ExceedBudget(b) })
+	var conflict *domain.ConflictError
+	switch {
+	case err == nil:
+		s.stopSession(run)
+	case errors.As(err, &conflict):
+		// The task is already over, or in review: nothing to end.
+	default:
+		s.report(fmt.Errorf("budget: %w", err))
+	}
+}
+
+// warn records a soft threshold once and notifies it.
+func (s *Service) warn(ctx context.Context, task domain.ID, b domain.BudgetBreach) {
+	done, err := s.store.BudgetWarned(ctx, task, b)
+	if err != nil {
+		s.report(err)
+		return
+	}
+	if done {
+		return
+	}
+	saved, err := s.store.Append(ctx, domain.NewBudgetWarned(task, b, s.clock.Now()))
+	if err != nil {
+		s.report(fmt.Errorf("budget: %w", err))
+		return
+	}
+	s.publish(saved)
+	s.notify(ctx, saved)
+}

@@ -265,3 +265,21 @@ func TestBoardIsOptionalAndChecked(t *testing.T) {
 		}
 	}
 }
+
+func TestBudgets(t *testing.T) {
+	r := newRig(t)
+	r.cfg.Budgets = Budgets{PerRun: BudgetLimit{MaxTokens: 500_000, MaxCostUSD: 2.5}, PerTask: BudgetLimit{MaxCostUSD: 10}, SoftPercent: 90}
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("valid budgets: %s", problems(err))
+	}
+	for name, b := range map[string]Budgets{
+		"budgets.per_run":      {PerRun: BudgetLimit{MaxTokens: -1}},
+		"budgets.per_task":     {PerTask: BudgetLimit{MaxCostUSD: -0.5}},
+		"budgets.soft_percent": {SoftPercent: 100},
+	} {
+		r.cfg.Budgets = b
+		if _, err := r.parse(t); !strings.Contains(problems(err), name) {
+			t.Errorf("%s: %s", name, problems(err))
+		}
+	}
+}

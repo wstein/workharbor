@@ -196,3 +196,11 @@ func TestTheBoardIsWiredThroughTheGuard(t *testing.T) {
 		t.Errorf("update: %v, cards %v", err, f.CardsSeen())
 	}
 }
+
+func TestBudgetsAreConvertedToMicroDollars(t *testing.T) {
+	got := Budgets(config.Budgets{PerRun: config.BudgetLimit{MaxTokens: 7, MaxCostUSD: 2.5}, PerTask: config.BudgetLimit{MaxCostUSD: 0.1 + 0.2}, SoftPercent: 70})
+	want := service.Budgets{PerRun: service.Limit{MaxTokens: 7, MaxCostMicroUSD: 2_500_000}, PerTask: service.Limit{MaxCostMicroUSD: 300_000}, SoftPercent: 70}
+	if got != want {
+		t.Errorf("Budgets = %+v, want %+v", got, want)
+	}
+}

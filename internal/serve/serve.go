@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"time"
 
@@ -81,6 +82,7 @@ func Run(ctx context.Context, d Deps) error {
 	}
 	scfg := service.Config{
 		Owner:   d.Owner,
+		Budgets: Budgets(d.Config.Budgets),
 		Spec:    d.AgentSpec,
 		NewID:   NewID,
 		OnError: func(err error) { logf("background error: %v", err) },
@@ -157,4 +159,13 @@ func addBoard(scfg *service.Config, d Deps) {
 	if b.PublicURL != "" {
 		scfg.BoardLink = func(task domain.ID) string { return notify.Link(b.PublicURL, notify.Message{TaskID: task}) }
 	}
+}
+
+// Budgets turns the configured budgets into the service's: dollars become
+// millionths of a dollar, so no float reaches a comparison with a total.
+func Budgets(b config.Budgets) service.Budgets {
+	limit := func(l config.BudgetLimit) service.Limit {
+		return service.Limit{MaxTokens: l.MaxTokens, MaxCostMicroUSD: int64(math.Round(l.MaxCostUSD * 1e6))}
+	}
+	return service.Budgets{PerRun: limit(b.PerRun), PerTask: limit(b.PerTask), SoftPercent: b.SoftPercent}
 }

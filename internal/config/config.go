@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -93,6 +94,9 @@ type Config struct {
 	StateDir string `json:"state_dir,omitempty"`
 	// Environment shapes the environments `whr serve` provisions. Optional.
 	Environment Environment `json:"environment,omitzero"`
+	// Budgets limit the tokens and the cost a run and a task may use (design
+	// §7.4). Optional: none means no limit.
+	Budgets Budgets `json:"budgets,omitzero"`
 	// ToolProfile names the profile of the tool store the environments use
 	// (`profiles/<name>`). Optional when the store has exactly one.
 	ToolProfile string `json:"tool_profile,omitempty"`
@@ -108,6 +112,23 @@ type Config struct {
 	// dontAsk mode (design §5.2): the supervisor's own choice, never the
 	// repository's. Required in dontAsk, and refused in manual.
 	AgentAllowedTools []string `json:"agent_allowed_tools,omitempty"`
+}
+
+// Budgets are the per-run and per-task limits. A soft threshold warns once; a
+// hard limit ends the task as failed. They count what the agent reported, the
+// same totals `whr usage` shows (design §5.7).
+type Budgets struct {
+	PerRun  BudgetLimit `json:"per_run,omitzero"`
+	PerTask BudgetLimit `json:"per_task,omitzero"`
+	// SoftPercent is the share of a limit at which the human is warned, 1 to
+	// 99. Default 80.
+	SoftPercent int `json:"soft_percent,omitempty"`
+}
+
+// BudgetLimit is one scope's limits. Zero is no limit.
+type BudgetLimit struct {
+	MaxTokens  int64   `json:"max_tokens,omitempty"`   // all reported tokens: input, output, cache read and write
+	MaxCostUSD float64 `json:"max_cost_usd,omitempty"` // the cost the agent reports
 }
 
 // Environment is the supervisor's choice of what an agent environment looks
@@ -206,6 +227,14 @@ func (c *Config) Validate() error {
 		add("listen: %s", err)
 	}
 
+	for name, l := range map[string]BudgetLimit{"budgets.per_run": c.Budgets.PerRun, "budgets.per_task": c.Budgets.PerTask} {
+		if l.MaxTokens < 0 || l.MaxCostUSD < 0 || math.IsNaN(l.MaxCostUSD) || math.IsInf(l.MaxCostUSD, 0) {
+			add("%s: a limit cannot be negative", name)
+		}
+	}
+	if p := c.Budgets.SoftPercent; p != 0 && (p < 1 || p > 99) {
+		add("budgets.soft_percent: %d is not from 1 to 99", p)
+	}
 	if b := c.Environment.Base; b != "" && !baseimage.Distro(b).Valid() {
 		add("environment.base: %q is not a first-class base (want fedora or ubuntu)", b)
 	}

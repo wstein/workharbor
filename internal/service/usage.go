@@ -63,6 +63,7 @@ func (s *Service) recordUsage(ctx context.Context, task, run domain.ID, e agent.
 		return
 	}
 	s.publish([]domain.Event{saved})
+	s.checkBudgets(ctx, task, run)
 }
 
 // UsageQuery selects what a usage report totals.
