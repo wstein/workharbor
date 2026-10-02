@@ -44,8 +44,8 @@ params:
     logo:
       path: images/logo-light.svg
       dark: images/logo-dark.svg
-      width: 178
-      height: 30
+      width: 254
+      height: 54
   search:
     enable: true
     type: flexsearch
