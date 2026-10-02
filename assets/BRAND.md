@@ -8,7 +8,7 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 - **App icon** (square places only: `favicon.svg`, `favicon.ico`, the
   `favicon-*.png`, `apple-touch-icon.png`, the `android-chrome-*.png`,
   `logo.svg`/`logo.png`): the teal anchor on a rounded navy tile. Tile corner
-  radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
+  radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. Every rounded tile, wherever it appears (the app icons, `logo.svg`, the banner, the social preview, the navbar logo), has a visible outline: 1.6 units in the 64-unit tile box (2.5 % of the side), colour `#2a4a7a`, drawn inside the tile's edge (#147). `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
 - **Horizontal lockup** (everything wide: the README banner, the social preview,
   the docs navbar): the bare teal anchor, no tile, then the wordmark. A tile never
   appears in a lockup, and a lockup never appears in a square place.
@@ -19,10 +19,12 @@ By Werner's decision (#143), these two assets keep the design of d466a1d:
 the anchor on its rounded tile beside the wordmark, "Harbor" in teal, and the
 IBM Plex Sans tagline. The tile is allowed there as an exception to "a tile never
 appears in a lockup": 96 px in the banner (64 units at scale 1.5) and 288 px in
-the social preview (scale 4.5). Still no third line: the social preview drops
-"Self-hosted · isolated workspaces · whr CLI". The docs navbar keeps the bare
-anchor, and every icon and logo follows the rules below; it stays one family
-(the same anchor, tile, wordmark, colours and type).
+the social preview (scale 4.5). The social preview also carries a third grey line,
+"Self-hosted · isolated workspaces" (never naming the `whr` CLI), by Werner's
+decision (#147). The docs navbar uses the same tile lockup in small, without the
+tagline: the tile about 40 px tall in the 56 px bar, the wordmark beside it at twice the size it would have in the social preview's proportion (#147).
+Every icon follows the rules below; it stays one family (the same anchor, tile,
+wordmark, colours and type).
 
 ## The lockup, in proportions of the wordmark's cap height C
 
@@ -32,7 +34,7 @@ anchor, and every icon and logo follows the rules below; it stays one family
 | Anchor | drawn height 2.4 × C, vertically centred on the wordmark's cap height; stroke 5.5 in the anchor's 64-unit drawing (4 in the app icon), so it holds its own beside the bold wordmark |
 | Gap anchor to wordmark | 0.6 × C |
 | Tagline (optional) | "Supervise AI coding agents. Stay in the loop.", IBM Plex Sans, outlined, cap height 0.4 × C, teal; baseline 0.85 × C below the wordmark's baseline, left-aligned with the wordmark |
-| Third line | none, anywhere |
+| Third line | none, except the social preview ("Self-hosted · isolated workspaces", #147) |
 | Clear space | 0.6 × C to the left and right; at least 0.45 × C above and below the whole block (anchor and text), except in the README banner, where its fixed 150 px height allows 0.33 × C |
 
 ## Sizes
@@ -41,7 +43,7 @@ anchor, and every icon and logo follows the rules below; it stays one family
 | --- | --- | --- | --- |
 | README banner | 1000 × 150 | 45 px (anchor 108 px as Werner approved; the block leaves about 15 px, 0.33 × C, above and below) | yes |
 | Social preview | 1280 × 640, lockup centred | 80 px (anchor 192 px) | yes |
-| Docs navbar | the navbar's height | 0.4 × navbar height (anchor about 54 px) | no |
+| Docs navbar | the tile lockup of the social preview in small: tile about 40 px in the 56 px bar, in both `logo-light.svg` and `logo-dark.svg` (#147) | wordmark beside the tile | no |
 
 ## Colours
 
