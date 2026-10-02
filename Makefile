@@ -7,7 +7,7 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -76,6 +76,11 @@ build:
 
 test:
 	go test ./...
+
+# The inner loop: skips the slowest tests (each guarded by testing.Short). make check,
+# make land and CI run the whole suite.
+test-short:
+	go test -short ./...
 
 # The race detector, on the packages that run goroutines of their own: the
 # service (starts, sessions, the reconciler), the API (streams), the store, the

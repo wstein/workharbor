@@ -364,6 +364,9 @@ func TestTheWrapperIsPlainShell(t *testing.T) {
 // repository the planted one.
 func TestTheWrapperNeutralisesWhatNeedsATerminal(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	for _, k := range []struct {
 		name    string
 		plant   func(b *gitBox)

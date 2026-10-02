@@ -106,6 +106,9 @@ func TestPrepareFromABundleLeavesTheEnvironmentRunning(t *testing.T) {
 
 func TestExportRefusesWhatIsNotWhole(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	t.Run("larger than the limit", func(t *testing.T) {
 		b := newPubRig(t)
 		b.pub.cfg.MaxBundle = 10
@@ -230,6 +233,9 @@ func TestARebaseConflictRaisesAQuestionForTheStoppedRun(t *testing.T) {
 // a branch that rewrote the pushed commits is refused.
 func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	b := newPubRig(t)
 	first, err := b.pub.Prepare(bg, b.req)
 	must(t, err)

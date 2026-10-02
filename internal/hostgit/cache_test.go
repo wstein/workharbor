@@ -156,6 +156,9 @@ func topicWithCommit(t *testing.T, c *Cache, base, name string) string {
 // fork point: then there is no merge base until the histories are deepened.
 func TestEnsureMergeBaseDeepensUntilThereIsOne(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()
@@ -196,6 +199,9 @@ func TestEnsureMergeBaseDeepensUntilThereIsOne(t *testing.T) {
 
 func TestEnsureMergeBaseGivesUpAtTheLimit(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	ctx := context.Background()
 	g := newGit(t)
 	base := t.TempDir()

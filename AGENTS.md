@@ -11,6 +11,7 @@ A self-hosted supervisor that lets AI coding agents work on repository issues in
 ```bash
 make build         # go build -o bin/whr ./cmd/whr
 make test          # go test ./...
+make test-short    # go test -short ./...: skips the slowest tests, for the inner loop; make check, make land and CI run the full suite
 make race          # go test -race on the packages with goroutines of their own (about a minute)
 make vet           # go vet ./...
 make fmt           # rewrite sources with gofumpt + goimports

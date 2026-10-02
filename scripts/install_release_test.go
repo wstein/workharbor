@@ -141,6 +141,9 @@ func TestTheAttestationIsPinnedToTheTag(t *testing.T) {
 // An older release than the installed one is refused unless the human says so, and an
 // installed version that cannot be read counts as a reason to ask.
 func TestAnOlderReleaseIsRefusedUnlessAllowed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	r := newRelease(t, "0.1.0", "v0.2.0")
 	if out, err := r.run(t, "v0.1.0", r.prefix); err == nil || !strings.Contains(out, "older than the installed v0.2.0") {
 		t.Fatalf("a downgrade was not refused: %v\n%s", err, out)

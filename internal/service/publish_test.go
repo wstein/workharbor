@@ -390,6 +390,9 @@ func TestThePrototypeFastForwardsTheIntegrationBranchWithoutAPR(t *testing.T) {
 
 func TestAPrototypeBranchThatMovedIsRefusedAndNeverForced(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	p, _ := approvedUnder(t, policy.Prototype, "develop")
 	p.forge.NotFF = true
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); !errors.Is(err, forge.ErrNotFastForward) {
@@ -410,6 +413,9 @@ func TestAPrototypeBranchThatMovedIsRefusedAndNeverForced(t *testing.T) {
 
 func TestIntegrationOpensAPRIntoTheIntegrationBranchAndPublishedIntoTheDefault(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	p, _ := approvedUnder(t, policy.Integration, "develop")
 	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
 		t.Fatal(err)

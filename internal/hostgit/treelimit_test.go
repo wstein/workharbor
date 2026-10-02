@@ -52,6 +52,9 @@ func bombRepo(t *testing.T, g *Git, depth int) *Repo {
 // written, quickly, by the prepare and the editor copy alike.
 func TestANestedTreeBombIsRefusedBeforeCheckout(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	r := bombRepo(t, g, 30) // 2^30 files from 31 tree objects
 	start := time.Now()
@@ -154,6 +157,9 @@ func TestTheTreeCheckHonoursItsDeadline(t *testing.T) {
 // The check is by commit ID and covers the commits in a range, each tree once.
 func TestCheckCommitsCoversEveryCommitOfARange(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")
@@ -212,6 +218,9 @@ func TestPrepareRefusesABombDeletedByALaterCommit(t *testing.T) {
 // the next commit deletes the files again. The topic's additions are capped as a whole.
 func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	p := newPrep(t)
 	ctx := context.Background()
 	path := p.repo.Path()
@@ -255,6 +264,9 @@ func TestPrepareRefusesAFixupChainWhoseSquashedTreeIsLarge(t *testing.T) {
 // Many small commits on top of a big tree are fine: what counts is what they add.
 func TestCheckCommitsAcceptsManySmallCommitsOnABigTree(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow: runs in the full suite (make test)")
+	}
 	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "r.git")
