@@ -126,3 +126,22 @@ func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
 		}
 	}
 }
+
+// Files sshd reads are replaced by a rename, never rewritten in place, and the host
+// key's public half is derived from its private half, never linked in beside it.
+func TestTheLauncherWritesAtomicallyAndDerivesThePublicHostKey(t *testing.T) {
+	script := string(SSHD())
+	for _, bad := range []string{">/tmp/whr-ssh-ca.pub", ">/tmp/whr-ssh-principals", ">/tmp/whr-proxy-vars", `ln "$tmp.pub"`, ": >"} {
+		if strings.Contains(script, bad) {
+			t.Errorf("the launcher still has %q", bad)
+		}
+	}
+	for _, want := range []string{"| put /tmp/whr-ssh-ca.pub", "| put /tmp/whr-ssh-principals", "} | put /tmp/whr-proxy-vars", "ssh-keygen -y -f", "mv -f"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the launcher lacks %q", want)
+		}
+	}
+	if n := strings.Count(script, `ln "$tmp"`); n != 1 {
+		t.Errorf("the host key is linked in %d places, want one", n)
+	}
+}

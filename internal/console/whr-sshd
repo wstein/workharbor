@@ -19,17 +19,26 @@ umask 077
 home=${HOME:-/home/whr}
 dir=$home/.whr-sshd
 
-# ensure_key makes the host key if there is none. It is made aside and linked in,
-# so two connections at once do not both write it.
+# put FILE writes standard input to FILE through a temporary file and a rename, so
+# sshd, and a second connection at the same time, never read half of it.
+put() {
+  t=$1.$$
+  cat >"$t" && mv -f "$t" "$1"
+}
+
+# ensure_key makes the host key if there is none. The private key is made aside
+# and linked in, so of two connections at once one wins; the public half is then
+# derived from the winner, so the pair always belongs together.
 ensure_key() {
   mkdir -p "$dir"
   if [ ! -s "$dir/host_ed25519" ]; then
     tmp=$dir/host_ed25519.$$
     ssh-keygen -q -t ed25519 -N '' -C whr-console -f "$tmp"
-    ln "$tmp.pub" "$dir/host_ed25519.pub" 2>/dev/null || :
     ln "$tmp" "$dir/host_ed25519" 2>/dev/null || :
     rm -f "$tmp" "$tmp.pub"
   fi
+  pub=$(ssh-keygen -y -f "$dir/host_ed25519") || exit 1
+  printf '%s whr-console\n' "$pub" | put "$dir/host_ed25519.pub"
 }
 
 if [ "${1:-}" = hostkey ]; then
@@ -54,20 +63,21 @@ case $WHR_SSH_CA in
 esac
 
 ensure_key
-printf '%s\n' "$WHR_SSH_CA" >/tmp/whr-ssh-ca.pub
-printf 'whr\n' >/tmp/whr-ssh-principals
+printf '%s\n' "$WHR_SSH_CA" | put /tmp/whr-ssh-ca.pub
+printf 'whr\n' | put /tmp/whr-ssh-principals
 
 # The proxy variables, for the login shells sshd starts (see /etc/profile.d and
 # the zsh start file): only these names, quoted.
-: >/tmp/whr-proxy-vars
-for name in HTTPS_PROXY HTTP_PROXY NO_PROXY; do
-  eval "value=\${$name:-}"
-  if [ -n "$value" ]; then
-    printf 'export %s=%s\n' "$name" "'$(printf '%s' "$value" | sed "s/'/'\\\\''/g")'" >>/tmp/whr-proxy-vars
-    lower=$(printf '%s' "$name" | tr 'A-Z' 'a-z')
-    printf 'export %s=%s\n' "$lower" "'$(printf '%s' "$value" | sed "s/'/'\\\\''/g")'" >>/tmp/whr-proxy-vars
-  fi
-done
+{
+  for name in HTTPS_PROXY HTTP_PROXY NO_PROXY; do
+    eval "value=\${$name:-}"
+    if [ -n "$value" ]; then
+      quoted="'$(printf '%s' "$value" | sed "s/'/'\\\\''/g")'"
+      lower=$(printf '%s' "$name" | tr 'A-Z' 'a-z')
+      printf 'export %s=%s\nexport %s=%s\n' "$name" "$quoted" "$lower" "$quoted"
+    fi
+  done
+} | put /tmp/whr-proxy-vars
 chmod 0644 /tmp/whr-proxy-vars
 
 exec /usr/sbin/sshd -i -e -f /etc/whr/sshd_config

@@ -119,6 +119,27 @@ func TestConsoleSSHLive(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Six first calls at once make one key, and its halves belong together.
+	hostKeys := make(chan string, 6)
+	for range 6 {
+		go func() {
+			out, _, _ := run([]string{"HOME=/home/whr"}, "/usr/local/bin/whr-sshd", "hostkey")
+			hostKeys <- out
+		}()
+	}
+	var first string
+	for range 6 {
+		k := <-hostKeys
+		if first == "" {
+			first = k
+		}
+		if k != first || !strings.HasPrefix(k, "ssh-ed25519 ") {
+			t.Errorf("concurrent first calls disagree: %q and %q", first, k)
+		}
+	}
+	if derived, _, code := run([]string{"HOME=/home/whr"}, "sh", "-c", "ssh-keygen -y -f /home/whr/.whr-sshd/host_ed25519"); code != 0 || !strings.HasPrefix(first, derived) {
+		t.Errorf("the public host key %q is not the private key's (%q)", first, derived)
+	}
 	hostLine, errOut, code := run([]string{"HOME=/home/whr"}, "/usr/local/bin/whr-sshd", "hostkey")
 	if code != 0 {
 		t.Fatalf("hostkey: exit %d: %s", code, errOut)
