@@ -34,7 +34,7 @@ menu:
         type: theme-toggle
 
 params:
-  description: Self-hosted supervisor for AI coding agents. Isolated workspaces, human-in-the-loop decisions, and the whr CLI.
+  description: "Self-hosted supervisor for AI coding agents: isolated workspaces and your approval for every push."
   theme:
     default: dark
     displayToggle: true
