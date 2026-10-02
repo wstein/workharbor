@@ -44,10 +44,12 @@ jobs:
           git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=.github/release-signers tag -v "$TAG" \
             || { echo "::error::$TAG is not signed by a key in .github/release-signers"; exit 1; }
       - name: The tagged commit is on main
+        # The tag may arrive before main does: re-fetch main every 15 seconds for
+        # up to 5 minutes until the tagged commit is reachable from it.
         run: |
           set -euo pipefail
           sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
-          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          SHA="$sha" scripts/wait-for-main.sh
           echo "sha=$sha" >> "$GITHUB_ENV"
       - name: CI passed on the tagged commit
         # The tag may be pushed together with main, so ci may still be queued or
