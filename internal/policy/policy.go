@@ -109,6 +109,12 @@ func (t Table) Decide(a Action) Mode {
 // opinion here, though Decide forbids it when no table lists it), and an invalid
 // mode counts as forbid. A preset's table can therefore tighten a configured one
 // but never loosen it (D47).
+//
+// "Never loosen" holds only because the configured table is Default() today, which
+// lists every action, so a row that only a preset lists cannot exist. If tables
+// the user configures arrive, a row that only the preset lists must be capped at
+// Default()'s mode for that action, or a preset could grant what the default
+// withholds.
 func (t Table) Stricter(other Table) Table {
 	out := Table{}
 	norm := func(m Mode) Mode {
