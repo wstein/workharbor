@@ -208,6 +208,21 @@ func Checks(d Deps) []Check {
 			}
 			return NotVerified, "the project and its four Status options were found; writing a card is not tested until a task changes state"
 		}},
+		{"forge-workflow", 2, func(ctx context.Context) (Status, string) {
+			c, err := load()
+			if err != nil {
+				return Fail, "needs a valid configuration (see the config check)"
+			}
+			mk := d.GitHub
+			if mk == nil {
+				mk = NewGitHub
+			}
+			gh, err := mk(c)
+			if err != nil {
+				return Fail, "github: " + oneLine(err.Error())
+			}
+			return workflowCheck(ctx, c, gh)
+		}},
 		{"forge-limits", 2, notVerified("that the bot cannot bypass branch protection, and that merge, tag, release and deploy stay forbidden, is enforced by the forge adapter but not checked against your repositories")},
 		{"agent-login", 3, needCfg(func(c *config.Config) (Status, string) {
 			if c.AgentAPIKeyEnvFile != "" {
