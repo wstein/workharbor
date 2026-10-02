@@ -14,7 +14,11 @@ workharbor is a self-hosted supervisor for AI coding agents: isolated workspaces
   {{< card link="manual" title="Manual" subtitle="Prepare the Mac mini, install and run whr, the security notes and the vendors' terms." icon="book-open" >}}
 {{< /cards >}}
 
-## Planned CLI
+## What you need
+
+An Apple-silicon Mac with macOS and Apple Container, a GitHub App for your repositories and an agent login (a Claude subscription or an API key, entered inside the environment). The [manual](manual/_index.md) covers each; it is a draft until the first release.
+
+## CLI (provisional)
 
 ```bash
 whr serve

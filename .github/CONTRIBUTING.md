@@ -52,7 +52,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 
 ## Releases
 
-Only the maintainer releases (design D24). Until `v0.1.0`, dogfood builds are prerelease tags `v0.1.0-alpha.N` whose draft is never published: skip step 1, tag a green commit of `main` (step 2), and install the draft on the host with `make install-release VERSION=v0.1.0-alpha.N` (the manual's host setup).
+Only the maintainer releases (design D24). Until `v0.1.0`, dogfood builds are prerelease tags `v0.1.0-alpha.N` whose draft is never published: skip step 1, tag a green commit of `main` (step 2), and install the draft on the host with `make install-release VERSION=v0.1.0-alpha.N` ([Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/) in the manual).
 
 1. **Prepare.** On a branch: `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release): prepare vX.Y.Z`. Merge it and wait for CI on `main`.
 2. **Tag.** The maintainer signs and annotates it: `git tag -s vX.Y.Z` on that commit, then pushes the tag. The workflow stops unless the tag is annotated, signed by a key in `.github/release-signers` (SSH signatures), on `main` and green in CI. Agents never tag.

@@ -26,6 +26,15 @@ The command-line tool is **`whr`**.
 - **Approval boundaries are policy.** Agents commit inside their environment; the host never runs git there. An agent's commits leave as a git bundle, are checked on the host against a supervisor-owned mirror of the repository, and are pushed only after you approve the exact commit ("Ready to push?"). Merge, tag, release and deploy stay with you, enforced by the forge adapter, not by prompts.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
 
+## What you need
+
+- An Apple-silicon Mac mini (or Mac) running macOS with [Apple Container](https://github.com/apple/container), the first runtime. Release 1 supports no other host.
+- A GitHub App for the repositories the agents work on: `whr github app create` makes it from a manifest.
+- An agent login: a Claude subscription or an API key, entered inside the environment, never given to `whr`.
+- Go, only to build from source.
+
+The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until the first release.
+
 ## CLI (provisional)
 
 ```bash
@@ -50,7 +59,7 @@ make install       # whr, whr-shim and whr-proxy from a clean commit on origin/m
 
 The dogfood host installs a draft release instead (`make install-release VERSION=<tag>`); from `v0.1.0` on, `brew install wstein/tap/whr`.
 
-Setting up the host is in the [manual](https://wstein.github.io/workharbor/docs/manual/).
+Setting up the host is in the [manual](https://wstein.github.io/workharbor/docs/manual/); installing, upgrading and releasing are on its [install page](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
 
 ## Stack
 
