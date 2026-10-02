@@ -308,15 +308,58 @@ func TestCheckCommitsCountsABlobPerOccurrence(t *testing.T) {
 	}
 }
 
-// The sizes are matched to their blobs by object name, so a line for a missing
+// The sizes are matched to their blobs by object name, so a line for another
 // object does not shift the sizes after it onto the wrong blob.
 func TestBlobBytesMatchesSizesByObjectName(t *testing.T) {
-	blobs := map[string]int64{"aaa": 2, "bbb": 1}
-	out := "zzz missing\naaa 100\nbbb 10\n"
-	if got := blobBytes(out, blobs, 1<<20); got != 210 {
-		t.Errorf("blobBytes = %d, want 210", got)
+	a, b, z := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("f", 40)
+	blobs := map[string]int64{a: 2, b: 1}
+	out := z + " 7\n" + a + " 100\n" + b + " 10\n"
+	if got, err := blobBytes(out, blobs, 1<<20); err != nil || got != 210 {
+		t.Errorf("blobBytes = %d, %v, want 210", got, err)
 	}
-	if got := blobBytes(out, blobs, 205); got <= 205 {
-		t.Errorf("blobBytes = %d, want more than the limit 205", got)
+	if got, err := blobBytes(out, blobs, 205); err != nil || got <= 205 {
+		t.Errorf("blobBytes = %d, %v, want more than the limit 205", got, err)
+	}
+}
+
+// blobBytes fails closed: anything but "<id> <size>" for every blob asked for is an
+// error, never 0 bytes.
+func TestBlobBytesFailsClosed(t *testing.T) {
+	a, b := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	blobs := map[string]int64{a: 1, b: 1}
+	for name, out := range map[string]string{
+		"missing":       a + " 5\n" + b + " missing\n",
+		"no answer":     a + " 5\n",
+		"garbage":       a + " 5\n" + b + " 5\nwhat is this\n",
+		"negative":      a + " 5\n" + b + " -3\n",
+		"short id":      a + " 5\nbbb 5\n",
+		"extra field":   a + " 5\n" + b + " 5 x\n",
+		"empty":         "",
+		"duplicate row": a + " 5\n" + a + " 5\n",
+	} {
+		if got, err := blobBytes(out, blobs, 1<<20); !errors.Is(err, ErrTreeUnreadable) {
+			t.Errorf("%s: blobBytes = %d, %v, want ErrTreeUnreadable", name, got, err)
+		}
+	}
+}
+
+// A tree that names a blob the object store lacks is refused, not counted as 0 bytes.
+func TestCheckCommitsRefusesAMissingBlob(t *testing.T) {
+	g := newGit(t, WithWorkspaceRoot(t.TempDir()))
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "r.git")
+	r, err := g.InitBare(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := plumbEnv(t)
+	ghost := strings.Repeat("1", 40)
+	tree := plumb(t, env, path, "100644 blob "+ghost+"\tghost\n", "mktree", "--missing")
+	tip := plumb(t, env, path, "", "commit-tree", tree, "-m", "ghost")
+	if err := r.CheckCommits(ctx, tip, ""); err == nil {
+		t.Fatal("CheckCommits accepted a tree with a missing blob")
+	}
+	if err := r.checkAdditions(ctx, []string{tip}, 1000, 1000); !errors.Is(err, ErrTreeUnreadable) {
+		t.Errorf("checkAdditions = %v, want ErrTreeUnreadable", err)
 	}
 }

@@ -19,6 +19,11 @@ import (
 // to disk (prepare, editor copy).
 var ErrTreeTooLarge = errors.New("the tree is larger than the host will check out")
 
+// ErrTreeUnreadable means the size of a blob the topic adds could not be read (the
+// object is missing, or git answered something unexpected). The byte check fails
+// closed: the topic is refused, never counted as 0 bytes.
+var ErrTreeUnreadable = errors.New("the size of a blob in the tree cannot be read")
+
 // The most a checkout of an agent's commit may hold.
 const (
 	MaxTreeEntries = 200_000
@@ -186,7 +191,10 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 	if err != nil {
 		return fmt.Errorf("git cat-file: %w: %s", err, strings.TrimSpace(serr.String()))
 	}
-	total := blobBytes(string(sizes), blobs, maxBytes)
+	total, err := blobBytes(string(sizes), blobs, maxBytes)
+	if err != nil {
+		return err
+	}
 	if total > maxBytes {
 		return fmt.Errorf("%w: the topic adds more than %d bytes", ErrTreeTooLarge, maxBytes)
 	}
@@ -195,26 +203,59 @@ func (r *Repo) checkAdditions(ctx context.Context, revs []string, maxEntries, ma
 
 // blobBytes sums the sizes that `cat-file --batch-check=%(objectname) %(objectsize)`
 // printed, each weighted by its occurrences in blobs. Sizes are matched by object name,
-// not by position: a missing object prints "<name> missing" and must not shift the rest.
-// It returns more than maxBytes as soon as the total passes it.
-func blobBytes(out string, blobs map[string]int64, maxBytes int64) int64 {
+// not by position. It fails closed: any line that is not exactly "<hex id> <size>"
+// (a "<name> missing" line included), or a requested blob without an answer, is an
+// ErrTreeUnreadable, never 0 bytes. It returns more than maxBytes as soon as the
+// total passes it.
+func blobBytes(out string, blobs map[string]int64, maxBytes int64) (int64, error) {
 	var total int64
-	for _, line := range strings.Split(out, "\n") {
-		f := strings.Fields(line)
-		if len(f) != 2 {
-			continue
+	answered := make(map[string]bool, len(blobs))
+	over := false
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		f := strings.Split(line, " ")
+		if len(f) != 2 || !isObjectID(f[0]) {
+			return 0, fmt.Errorf("%w: unexpected cat-file line %q", ErrTreeUnreadable, line)
 		}
 		n, perr := strconv.ParseInt(f[1], 10, 64)
+		if perr != nil || n < 0 {
+			return 0, fmt.Errorf("%w: no size for object %s", ErrTreeUnreadable, f[0])
+		}
 		count, ok := blobs[f[0]]
-		if perr != nil || !ok {
+		if !ok {
+			continue
+		}
+		if answered[f[0]] {
+			return 0, fmt.Errorf("%w: object %s listed twice", ErrTreeUnreadable, f[0])
+		}
+		answered[f[0]] = true
+		if over {
 			continue
 		}
 		if n > 0 && count > (maxBytes-total)/n {
-			return maxBytes + 1
+			over = true
+			continue
 		}
 		total += n * count
 	}
-	return total
+	if len(answered) != len(blobs) {
+		return 0, fmt.Errorf("%w: %d of %d blobs have no size", ErrTreeUnreadable, len(blobs)-len(answered), len(blobs))
+	}
+	if over {
+		return maxBytes + 1, nil
+	}
+	return total, nil
+}
+
+func isObjectID(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *Repo) checkTree(ctx context.Context, ref string, maxEntries, maxBytes int64) error {
