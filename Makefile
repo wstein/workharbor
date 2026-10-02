@@ -119,7 +119,7 @@ fmt-check:
 	if [ -n "$$diff" ]; then echo "$$diff"; echo "run 'make fmt'"; exit 1; fi
 
 lint:
-	go run $(GOLANGCI_LINT) run
+	go run $(GOLANGCI_LINT) run --config .config/golangci.yml
 
 # Enforce .editorconfig on all tracked files.
 editorconfig:
@@ -133,13 +133,13 @@ commitlint:
 
 # Regenerate CHANGELOG.md from Conventional Commits (git-cliff via npx).
 changelog:
-	npx --yes git-cliff@2 --output CHANGELOG.md
+	npx --yes git-cliff@2 --config .config/cliff.toml --output CHANGELOG.md
 
 # Prepare a release (design D24): regenerate CHANGELOG.md for VERSION and commit
 # it as chore(release). It does not tag; the human tags, signed, after CI passes.
 release-prep: check-clean
 	@echo "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$' || { echo "usage: make release-prep VERSION=vX.Y.Z" >&2; exit 1; }
-	npx --yes git-cliff@2.14.2 --tag "$(VERSION)" --output CHANGELOG.md
+	npx --yes git-cliff@2.14.2 --config .config/cliff.toml --tag "$(VERSION)" --output CHANGELOG.md
 	git add CHANGELOG.md
 	git commit -m "chore(release): prepare $(VERSION)"
 
@@ -147,7 +147,7 @@ release-prep: check-clean
 # The SBOM needs a tag, so it is skipped here; the snapshot workflow tags the
 # runner's copy and builds it too.
 release-snapshot:
-	go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean --skip=publish,sbom
+	go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --config .config/goreleaser.yaml --snapshot --clean --skip=publish,sbom
 
 # Run what CI runs beyond make check, before a branch is merged or rebased into
 # main: the docs build, spelling (typos), links (lychee, online, as CI does),
@@ -158,8 +158,8 @@ TYPOS_VERSION := 1.50.3
 check-ci: docs check-hooks check-generated
 	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
-	typos --config typos.toml .
-	lychee --config lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
+	typos --config .config/typos.toml .
+	lychee --config .config/lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
@@ -184,7 +184,7 @@ docs-serve:
 # Enable the repository git hooks and the commit message template.
 hooks:
 	git config core.hooksPath .githooks
-	git config commit.template .gitmessage
+	git config commit.template .config/gitmessage
 
 # Fail unless this clone runs the repository's hooks, which scan for secrets
 # before a commit and before a push: a session that never ran `make hooks`

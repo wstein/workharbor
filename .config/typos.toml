@@ -1,4 +1,4 @@
-# Spell checker settings for typos (.github/workflows/docs-quality.yml).
+# Spell checker settings for typos (.github/workflows/docs-quality.yml, make check-ci).
 [files]
 extend-exclude = [
   "LICENSE",            # EUPL text, with its own spelling

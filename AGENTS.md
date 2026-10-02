@@ -55,7 +55,7 @@ The pre-commit hook scans the staged change for secrets (gitleaks), then runs th
 
 - Web UI: server-rendered Go with `templ`, htmx and SSE, embedded in the binary (design D8). No Node toolchain, no SPA framework, no CSS framework. HTML handlers stay thin and call the same service layer as the JSON API; never duplicate business logic in a handler.
 - Go, standard library first. Add a dependency only when it is clearly justified, and say why in the commit message.
-- Formatting (gofumpt, goimports) and linting (`.golangci.yml`) are enforced; keep `make check` green. Follow `.editorconfig`.
+- Formatting (gofumpt, goimports) and linting (`.config/golangci.yml`) are enforced; keep `make check` green. Follow `.editorconfig`.
 - Add table-driven or small focused tests next to the code for domain logic and policy.
 - Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output contract: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
@@ -102,7 +102,7 @@ Assisted-by: Claude Code:claude-sonnet-5-5
 | `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` when it commits for an agent run. `Whr-Run` requires `Whr-Task`. |
 | `Changelog: skip`, `Changelog: highlight` | Optional, at most one. The changelog lists only `feat`, `fix`, `perf`, `revert` and breaking changes; `skip` leaves a commit out, `highlight` lists it under Highlights whatever its type. Neither hides or moves a breaking change. |
 
-`make hooks` also sets `.gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
+`make hooks` also sets `.config/gitmessage` as the commit template. `CHANGELOG.md` is generated from the commits by `make changelog` (git-cliff via `npx`); do not edit it by hand.
 
 Push only when the human asks for it in the session; never push on your own initiative, and a request covers that push only. Merge into `main` only as the workflow below describes. The repository allows only **rebase merges** (squash and merge commits are disabled), so every commit on a branch lands on `main` as written: write each one as final, with its trailers.
 
