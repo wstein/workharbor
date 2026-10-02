@@ -34,7 +34,9 @@ func (s *Server) passkeyMode(ctx context.Context) bool {
 		return false
 	}
 	ok, err := s.opt.Passkeys.Enrolled(ctx)
-	return err == nil && ok
+	// An error fails closed: if the store cannot say whether a passkey is enrolled,
+	// the token does not sign in, because it might be the very thing a passkey replaced.
+	return err != nil || ok
 }
 
 // stepUpAvailable says whether a review can be answered here: a passkey is enrolled.
@@ -162,11 +164,12 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, jsonLimit)
-	if _, err := s.opt.Passkeys.LoginFinish(r.Context(), r.Header.Get("X-Ceremony"), r); err != nil {
+	keyID, err := s.opt.Passkeys.LoginFinish(r.Context(), r.Header.Get("X-Ceremony"), r)
+	if err != nil {
 		jsonError(w, passkeyStatus(err, http.StatusUnauthorized), passkeyMessage(err))
 		return
 	}
-	starter.Start(w, r)
+	starter.StartFor(w, r, keyID)
 	jsonReply(w, http.StatusOK, map[string]string{"next": "/"})
 }
 

@@ -144,7 +144,13 @@ func Run(ctx context.Context, d Deps) error {
 	// Passkeys (D45) are bound to whr's HTTPS name, so they need public_url.
 	var keys *passkey.Service
 	if origin, host := d.Config.PublicOrigin(); origin != "" {
-		if keys, err = passkey.New(passkey.Config{RPID: host, Origin: origin, DisplayName: "workharbor", Now: d.Clock.Now}, d.Store); err != nil {
+		if keys, err = passkey.New(passkey.Config{
+			RPID: host, Origin: origin, DisplayName: "workharbor", Now: d.Clock.Now,
+			// the first passkey ends the sessions the API token started; a revoked
+			// passkey ends its own (D45)
+			OnFirstEnrolled: func() { auth.EndSessions(func(id string) bool { return id == "" }) },
+			OnRevoked:       func(id string) { auth.EndSessions(func(p string) bool { return p == id }) },
+		}, d.Store); err != nil {
 			return err
 		}
 	} else {

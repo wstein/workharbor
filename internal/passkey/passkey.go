@@ -69,6 +69,11 @@ type Config struct {
 	Origin      string
 	DisplayName string
 	Now         func() time.Time
+	// OnFirstEnrolled is called after the first passkey was enrolled: the web
+	// sessions started with the API token end then (D45). OnRevoked is called with
+	// the ID of a passkey that was revoked: its web sessions end. Both are optional.
+	OnFirstEnrolled func()
+	OnRevoked       func(id string)
 }
 
 // Binding is what a step-up challenge names: the Decision and, for a review, the
@@ -361,8 +366,12 @@ func (s *Service) EnrolFinish(ctx context.Context, ceremonyID string, r *http.Re
 	}
 	id := base64.RawURLEncoding.EncodeToString(cred.ID)
 	p := store.Passkey{ID: id, Name: c.name, Credential: raw, CreatedAt: s.now()}
+	first := len(o.creds) == 0
 	if err := s.st.AddPasskey(ctx, p); err != nil {
 		return Info{}, err
+	}
+	if first && s.cfg.OnFirstEnrolled != nil {
+		s.cfg.OnFirstEnrolled()
 	}
 	return infoOf(p, *cred), nil
 }
@@ -407,7 +416,13 @@ func (s *Service) Revoke(ctx context.Context, idOrPrefix string) error {
 	case 0:
 		return &domain.NotFoundError{Kind: "passkey", ID: idOrPrefix}
 	case 1:
-		return s.st.RevokePasskey(ctx, hit[0])
+		if err := s.st.RevokePasskey(ctx, hit[0]); err != nil {
+			return err
+		}
+		if s.cfg.OnRevoked != nil {
+			s.cfg.OnRevoked(hit[0])
+		}
+		return nil
 	}
 	return fmt.Errorf("passkey: %q matches several passkeys: give more of the ID", idOrPrefix)
 }

@@ -2,11 +2,14 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,23 +32,34 @@ type pkRig struct {
 	auth *passkeytest.Authn
 }
 
-func newPKRig(t *testing.T) *pkRig {
+func newPKRig(t *testing.T) *pkRig { return newPKRigWith(t, nil) }
+
+// newPKRigWith is newPKRig with the passkey service wrapped, to make it fail.
+func newPKRigWith(t *testing.T, wrap func(*passkey.Service) Passkeys) *pkRig {
 	t.Helper()
 	st, err := store.Open(bg, filepath.Join(t.TempDir(), "workharbor.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	svc, err := passkey.New(passkey.Config{RPID: "whr.example.test", Origin: pkOrigin}, st)
-	if err != nil {
-		t.Fatal(err)
-	}
 	r := &rig{t: t, be: &fake{}, now: t0}
 	r.auth, err = NewTokenAuth([]byte(token), func() time.Time { r.mu.Lock(); defer r.mu.Unlock(); return r.now })
 	if err != nil {
 		t.Fatal(err)
 	}
-	ui, err := New(r.be, Options{Auth: r.auth, Store: st, Passkeys: svc, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }})
+	svc, err := passkey.New(passkey.Config{
+		RPID: "whr.example.test", Origin: pkOrigin,
+		OnFirstEnrolled: func() { r.auth.EndSessions(func(id string) bool { return id == "" }) },
+		OnRevoked:       func(id string) { r.auth.EndSessions(func(p string) bool { return p == id }) },
+	}, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys Passkeys = svc
+	if wrap != nil {
+		keys = wrap(svc)
+	}
+	ui, err := New(r.be, Options{Auth: r.auth, Store: st, Passkeys: keys, Heartbeat: 20 * time.Millisecond, Now: func() time.Time { return t0 }, OnError: func(err error) { t.Errorf("internal error: %v", err) }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +99,9 @@ type ceremonyReply struct {
 }
 
 // enrol runs an enrolment through the HTTP endpoints, with no session.
-func (p *pkRig) enrol(b *browser) {
+func (p *pkRig) enrol(b *browser) { p.enrolAs(b, p.auth) }
+
+func (p *pkRig) enrolAs(b *browser, authn *passkeytest.Authn) {
 	p.t.Helper()
 	tok, _, err := p.svc.NewEnrolment("phone")
 	if err != nil {
@@ -103,14 +119,16 @@ func (p *pkRig) enrol(b *browser) {
 	if err := json.Unmarshal(cr.Options, &creation); err != nil {
 		p.t.Fatal(err)
 	}
-	resp, raw = b.postJSON("/passkey/enrol/finish", bodyOf(p.auth.Register(&creation, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
+	resp, raw = b.postJSON("/passkey/enrol/finish", bodyOf(authn.Register(&creation, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
 	if resp.StatusCode != 200 {
 		p.t.Fatalf("enrol finish: %d %s", resp.StatusCode, raw)
 	}
 }
 
 // signIn runs a passkey sign-in and returns the browser with a session.
-func (p *pkRig) signIn() *browser {
+func (p *pkRig) signIn() *browser { return p.signInAs(p.auth) }
+
+func (p *pkRig) signInAs(authn *passkeytest.Authn) *browser {
 	p.t.Helper()
 	jar, _ := cookiejar.New(nil)
 	b := &browser{r: p.rig, hd: http.Header{}, c: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
@@ -124,7 +142,7 @@ func (p *pkRig) signIn() *browser {
 	if err := json.Unmarshal(cr.Options, &assertion); err != nil {
 		p.t.Fatal(err)
 	}
-	resp, raw = b.postJSON("/passkey/login/finish", bodyOf(p.auth.Assert(&assertion, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
+	resp, raw = b.postJSON("/passkey/login/finish", bodyOf(authn.Assert(&assertion, pkOrigin)), map[string]string{"X-Ceremony": cr.Ceremony})
 	if resp.StatusCode != 200 || len(resp.Cookies()) == 0 {
 		p.t.Fatalf("login finish: %d %s", resp.StatusCode, raw)
 	}
@@ -380,5 +398,79 @@ func TestTooManySignInsAnswer429(t *testing.T) {
 	}
 	if last != http.StatusTooManyRequests {
 		t.Errorf("after many sign-ins began: %d, want 429", last)
+	}
+}
+
+// The first passkey ends every session the API token started: from then on the web
+// UI is by passkey, and a stolen token's session does not outlive the switch.
+func TestEnrollingTheFirstPasskeyEndsTheTokenSessions(t *testing.T) {
+	p := newPKRig(t)
+	tokenSession := p.browser()
+	tokenSession.signIn() // before any passkey, the token signs in
+	if resp, _ := tokenSession.do("GET", "/inbox", nil); resp.StatusCode != 200 {
+		t.Fatalf("a token session before the passkey: %d", resp.StatusCode)
+	}
+	p.enrol(p.browser())
+	if resp, _ := tokenSession.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("the token session survived the first passkey: %d", resp.StatusCode)
+	}
+	// a second passkey is not "the first": passkey sessions are untouched
+	signed := p.signIn()
+	other := passkeytest.New(t, passkey.OwnerID())
+	p.enrolAs(p.browser(), other)
+	if resp, _ := signed.do("GET", "/inbox", nil); resp.StatusCode != 200 {
+		t.Errorf("a second passkey ended a passkey session: %d", resp.StatusCode)
+	}
+}
+
+// Each session is tied to the passkey that signed it in, and revoking the passkey
+// (whr passkey rm) ends those sessions and their live streams, and no others.
+func TestRevokingAPasskeyEndsItsSessions(t *testing.T) {
+	p := newPKRig(t)
+	p.be.events = make(chan domain.Event)
+	phone, laptop := p.auth, passkeytest.New(t, passkey.OwnerID())
+	p.enrolAs(p.browser(), phone)
+	p.enrolAs(p.browser(), laptop)
+	onPhone, onLaptop := p.signInAs(phone), p.signInAs(laptop)
+	stream := onPhone.openStream()
+	defer func() { _ = stream.Body.Close() }()
+
+	list, err := p.svc.List(bg)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list = %v, %v", list, err)
+	}
+	// the phone's passkey is the first one
+	if err := p.svc.Revoke(bg, list[0].ID[:12]); err != nil {
+		t.Fatal(err)
+	}
+	if resp, _ := onPhone.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("a session of the revoked passkey: %d", resp.StatusCode)
+	}
+	if !ended(stream) {
+		t.Error("the stream of a revoked passkey's session stayed open")
+	}
+	if resp, _ := onLaptop.do("GET", "/inbox", nil); resp.StatusCode != 200 {
+		t.Errorf("the other passkey's session ended: %d", resp.StatusCode)
+	}
+}
+
+// failingEnrolled is a passkey service whose store cannot say whether a passkey is
+// enrolled.
+type failingEnrolled struct{ *passkey.Service }
+
+func (failingEnrolled) Enrolled(context.Context) (bool, error) {
+	return false, errors.New("database is locked")
+}
+
+// If the store cannot say whether a passkey is enrolled, the token does not sign in.
+func TestAnEnrolledErrorFailsClosed(t *testing.T) {
+	p := newPKRigWith(t, func(s *passkey.Service) Passkeys { return failingEnrolled{s} })
+	b := p.browser()
+	resp, body := b.do("POST", "/login", url.Values{"token": {token}})
+	if resp.StatusCode == http.StatusSeeOther || len(resp.Cookies()) != 0 {
+		t.Fatalf("the token signed in although enrolment could not be checked: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := b.do("GET", "/inbox", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("a session without a sign-in: %d", resp.StatusCode)
 	}
 }

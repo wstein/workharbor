@@ -40,7 +40,9 @@ type Auth interface {
 // Starter is an Auth that can begin a session for a request that was verified by
 // other means, as the passkey sign-in does.
 type Starter interface {
-	Start(w http.ResponseWriter, r *http.Request)
+	// StartFor begins the session of the passkey the sign-in was made with, so a
+	// revoked passkey takes its sessions with it.
+	StartFor(w http.ResponseWriter, r *http.Request, passkeyID string)
 }
 
 // Device is a signed-in browser as the device list shows it.
@@ -111,6 +113,7 @@ type tokenSession struct {
 	idle     time.Duration
 	label    string
 	id       string
+	passkey  string // the passkey the session was started with; empty for the API token
 }
 
 // NewTokenAuth returns the token authentication. now may be nil.
@@ -192,7 +195,10 @@ func (a *TokenAuth) SignIn(w http.ResponseWriter, r *http.Request) error {
 // (a passkey): a random ID in a cookie that is HttpOnly, SameSite=Strict, without a
 // Domain attribute (so only this host gets it) and Secure when the request came
 // over HTTPS.
-func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) {
+func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) { a.StartFor(w, r, "") }
+
+// StartFor implements Starter: Start for a session that belongs to a passkey.
+func (a *TokenAuth) StartFor(w http.ResponseWriter, r *http.Request, passkeyID string) {
 	id := randomHex(32)
 	now := a.now()
 	label, phone := deviceOf(r.UserAgent())
@@ -202,7 +208,7 @@ func (a *TokenAuth) Start(w http.ResponseWriter, r *http.Request) {
 	}
 	a.mu.Lock()
 	a.sessions[sha256.Sum256([]byte(id))] = tokenSession{
-		csrf: randomHex(32), expires: now.Add(sessionTTL), since: now, lastSeen: now, idle: idle, label: label, id: randomHex(6),
+		csrf: randomHex(32), expires: now.Add(sessionTTL), since: now, lastSeen: now, idle: idle, label: label, id: randomHex(6), passkey: passkeyID,
 	}
 	a.mu.Unlock()
 	//nolint:gosec // Secure is set when the request came over HTTPS: the forwarder terminates TLS (D29) and the loopback listener is plain HTTP
@@ -267,6 +273,22 @@ func (a *TokenAuth) Revoke(id string) bool {
 	}
 	a.mu.Unlock()
 	return false
+}
+
+// EndSessions ends every session whose passkey ID the function accepts (the empty
+// ID is a session started with the API token), and with it the live streams of those
+// sessions. The passkey service calls it when the first passkey is enrolled (the
+// token-started sessions end) and when a passkey is revoked (its sessions end).
+func (a *TokenAuth) EndSessions(match func(passkeyID string) bool) {
+	a.mu.Lock()
+	var ends []func()
+	for key, s := range a.sessions {
+		if match(s.passkey) {
+			ends = append(ends, a.dropLocked(key)...)
+		}
+	}
+	a.mu.Unlock()
+	runAll(ends)
 }
 
 // dropLocked deletes a session and returns what watches it, which the caller runs
