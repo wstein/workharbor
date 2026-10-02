@@ -304,6 +304,9 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}, s)
 	}
 	consoleDistro := baseimage.Distro(spec.Base)
+	if c.Console.Base != "" {
+		consoleDistro = baseimage.Distro(c.Console.Base) // the console's own base, Alpine allowed (#93)
+	}
 	consoleTag, err := console.Tag(consoleDistro)
 	if err != nil {
 		_ = git.Close()

@@ -11,10 +11,10 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
-var fromRe = regexp.MustCompile(`(?m)^FROM (docker\.io/library/(fedora|ubuntu)@sha256:[0-9a-f]{64})$`)
+var fromRe = regexp.MustCompile(`(?m)^FROM (docker\.io/library/(fedora|ubuntu|alpine)@sha256:[0-9a-f]{64})$`)
 
 func TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools(t *testing.T) {
-	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu} {
+	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu, Alpine} {
 		cf, err := Containerfile(d)
 		if err != nil {
 			t.Fatal(err)
@@ -24,10 +24,13 @@ func TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools(t *testing.T) {
 		if m == nil || len(fromRe.FindAllString(text, -1)) != 1 {
 			t.Fatalf("%s: want one FROM pinned by digest:\n%s", d, text)
 		}
-		// The console and the base image of D44 are the same stock image.
-		base, _ := baseimage.Containerfile(d)
-		if !strings.Contains(string(base), m[1]) {
-			t.Errorf("%s: the console's base %s is not the base image's", d, m[1])
+		// The console and the base image of D44 are the same stock image; Alpine has
+		// no base image, only a console.
+		if d.Valid() {
+			base, _ := baseimage.Containerfile(d)
+			if !strings.Contains(string(base), m[1]) {
+				t.Errorf("%s: the console's base %s is not the base image's", d, m[1])
+			}
 		}
 		for _, tool := range []string{"git", "zsh", "fish", "jq", "curl", "ripgrep", "tmux", "make", "less", "util-linux", "ca-certificates"} {
 			if !strings.Contains(text, tool) {
@@ -43,12 +46,19 @@ func TestConsoleImagesArePinnedLikeTheBaseImagesAndHaveTheTools(t *testing.T) {
 				t.Errorf("%s: %q does not belong in the console (D43: no engine, no credentials)", d, banned)
 			}
 		}
-		if !strings.Contains(text, "COPY whr-git /usr/local/bin/git") || !strings.Contains(text, "useradd -u 1000") {
+		hasUser := strings.Contains(text, "useradd -u 1000") || strings.Contains(text, "adduser -D -u 1000")
+		if !strings.Contains(text, "COPY whr-git /usr/local/bin/git") || !hasUser {
 			t.Errorf("%s: the wrapper or the user is missing", d)
 		}
 	}
-	if _, err := Containerfile("alpine"); err == nil {
-		t.Error("alpine is not a first-class base")
+	if _, err := Containerfile("arch"); err == nil {
+		t.Error("arch has no console image")
+	}
+	if Alpine.Valid() {
+		t.Error("alpine became a base for agent environments by way of the console")
+	}
+	if _, err := baseimage.Containerfile(Alpine); err == nil {
+		t.Error("alpine has a base image: it is for the console only until musl is verified for the agents (#93)")
 	}
 }
 
@@ -58,6 +68,9 @@ func TestTagChangesWithTheWrapperAndThePin(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, _ := Tag(baseimage.Ubuntu)
+	if al, err := Tag(Alpine); err != nil || !strings.HasPrefix(al, "whr-console/alpine:") || al == a || al == u || !runtime.ValidImage(al) {
+		t.Errorf("alpine tag %q, %v", al, err)
+	}
 	b, _ := Tag(baseimage.Fedora)
 	if a != b || a == u || !strings.HasPrefix(a, "whr-console/fedora:") || !runtime.ValidImage(a) {
 		t.Errorf("tags %s %s %s", a, b, u)
@@ -115,7 +128,19 @@ func TestEnsureStagesTheWrapperInTheContextAndBuildsOnce(t *testing.T) {
 	if _, built, _ := baseimage.Ensure(context.Background(), fb, baseimage.Ubuntu, dir); !built {
 		t.Error("the base image must build on its own")
 	}
-	if _, _, err := Ensure(context.Background(), fb, "alpine", dir); err == nil {
+	if _, _, err := Ensure(context.Background(), fb, "arch", dir); err == nil {
 		t.Error("an unknown base must fail")
+	}
+}
+
+// An sshd built without PAM refuses a locked account, certificate or not, so the
+// Alpine image gives the console user a password field that is not "!" (#93).
+func TestTheAlpineConsoleUserIsNotLockedForSSHD(t *testing.T) {
+	cf, err := Containerfile(Alpine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cf), "s/^whr:!:/whr:*:/") {
+		t.Error("the account would be locked: sshd without PAM refuses it")
 	}
 }

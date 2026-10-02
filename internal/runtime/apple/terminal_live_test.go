@@ -74,7 +74,7 @@ func TestTerminalLive(t *testing.T) {
 		t.Fatal("the Apple adapter has no terminal")
 	}
 	tm, err := ta.Terminal(ctx, id, runtime.TerminalRequest{
-		Cmd:  []string{"sh", "-c", "echo TERM=$TERM; test -t 0 && echo ISTTY; stty size; read x; echo got:$x; stty size; exit 7"},
+		Cmd:  []string{"sh", "-c", "echo TERM=$TERM; test -t 0 && echo ISTTY; sleep 1; stty size; read x; echo got:$x; stty size; exit 7"},
 		Env:  []string{"TERM=xterm-256color"},
 		Cols: 100, Rows: 30,
 	})
@@ -85,6 +85,8 @@ func TestTerminalLive(t *testing.T) {
 	go out.copy(tm)
 	waitFor(t, &out, "TERM=xterm-256color")
 	waitFor(t, &out, "ISTTY")
+	// container exec hands the guest the size after the command starts, and the
+	// adapter nudges it at 500 ms: a command that reads the size must not do it first.
 	waitFor(t, &out, "30 100")
 	if err := tm.Resize(120, 50); err != nil {
 		t.Fatal(err)

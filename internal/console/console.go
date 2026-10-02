@@ -10,14 +10,28 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/wstein/workharbor/internal/baseimage"
 )
 
-//go:embed whr-git whr-sshd sshd_config Containerfile.fedora Containerfile.ubuntu
+//go:embed whr-git whr-sshd sshd_config Containerfile.fedora Containerfile.ubuntu Containerfile.alpine
 var files embed.FS
+
+// Alpine is the console's third base (issue #93): it has a console image and is
+// not a base for agent environments (baseimage.Distro), because musl and busybox
+// are tried here first. It is a baseimage.Distro value only so the console's
+// functions take one type for every base.
+const Alpine baseimage.Distro = "alpine"
+
+// ValidBase reports whether d is a base the console has an image for: the
+// first-class bases and Alpine.
+func ValidBase(d baseimage.Distro) bool { return d.Valid() || d == Alpine }
+
+// ErrUnknownBase is returned for a base the console has no image for.
+var ErrUnknownBase = errors.New("console: no console image for this base (want fedora, ubuntu or alpine)")
 
 // GitWrapper is the script installed as /usr/local/bin/git in the console image.
 // It runs the real git with hooks and fsmonitor off and every setting that runs
@@ -46,8 +60,8 @@ func mustRead(name string) []byte {
 
 // Containerfile returns the console image definition of a base.
 func Containerfile(d baseimage.Distro) ([]byte, error) {
-	if !d.Valid() {
-		return nil, fmt.Errorf("%w: %q", baseimage.ErrUnknownDistro, string(d))
+	if !ValidBase(d) {
+		return nil, fmt.Errorf("%w: %q", ErrUnknownBase, string(d))
 	}
 	return files.ReadFile("Containerfile." + string(d))
 }
