@@ -212,3 +212,39 @@ func TestPurgeIsRefusedWhileTheRunIsRunning(t *testing.T) {
 		t.Errorf("a refused purge deleted: %+v", size)
 	}
 }
+
+// A pause or cancel that arrives after the run was marked running but before its
+// session is attached is remembered and honoured when the session comes up: the
+// agent never runs on after it was told to stop.
+func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
+	for name, stop := range map[string]func(*rig) error{
+		"pause":  func(r *rig) error { return r.svc.Pause(bg, "t1") },
+		"cancel": func(r *rig) error { return r.svc.Cancel(bg, "t1") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			sl := r.svc.begin("r1") // the launch is in progress: the run is running, no session yet
+			if err := stop(r); err != nil {
+				t.Fatal(err)
+			}
+			r.agent.Block()
+			sess, err := r.agent.Resume(bg, spec(), r.session)
+			must(t, err)
+			r.svc.attach("t1", "r1", sl, sess)
+
+			done := make(chan struct{})
+			go func() { r.svc.Wait(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the agent kept running after it was told to stop")
+			}
+			if r.svc.attached("r1") {
+				t.Error("the stopped session is still attached")
+			}
+			if got := r.runState(); name == "pause" && got != domain.RunPaused {
+				t.Errorf("run = %s, want paused", got)
+			}
+		})
+	}
+}

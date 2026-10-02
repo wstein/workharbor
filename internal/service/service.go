@@ -124,7 +124,15 @@ type Service struct {
 // slot is a run's entry in the sessions map. It is put there before the agent
 // is called, so a run whose launch is in progress is not mistaken for a lost
 // one, and the session is filled in once the agent is up.
-type slot struct{ sess agent.Session }
+//
+// A stop that arrives before the session is up (a pause or a cancel between the
+// run being marked running and the session being attached) is remembered in
+// stopRequested, and attach honours it, so the agent never runs on after it was
+// told to stop. Both fields are guarded by Service.mu.
+type slot struct {
+	sess          agent.Session
+	stopRequested bool
+}
 
 // New returns a service.
 func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg Config) *Service {
@@ -298,12 +306,16 @@ func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 		return
 	}
 	sl.sess = sess
+	stopNow := sl.stopRequested
 	s.wg.Add(1) // under s.mu, so it happens before Shutdown sets closing or not at all
 	s.mu.Unlock()
 	go func() {
 		defer s.wg.Done()
 		defer s.end(run, sl)
 		ctx := context.Background()
+		if stopNow {
+			_ = sess.Stop(ctx) // asked to stop while it was starting
+		}
 		for e := range sess.Events() {
 			switch e.Kind {
 			case agent.EventSession:
@@ -436,12 +448,22 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 	return err
 }
 
+// stopSession stops a run's agent. When the session is not up yet it records the
+// request on the run's slot, and attach stops the session as soon as it exists.
 func (s *Service) stopSession(run domain.ID) {
 	s.mu.Lock()
 	sl := s.sessions[run]
+	if sl == nil {
+		s.mu.Unlock()
+		return
+	}
+	sess := sl.sess
+	if sess == nil {
+		sl.stopRequested = true
+	}
 	s.mu.Unlock()
-	if sl != nil && sl.sess != nil {
-		_ = sl.sess.Stop(context.Background())
+	if sess != nil {
+		_ = sess.Stop(context.Background())
 	}
 }
 
