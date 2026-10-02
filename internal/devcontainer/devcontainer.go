@@ -111,40 +111,42 @@ var refused = map[string]string{
 	"workspaceMount":    "mounts come only from the supervisor's configuration",
 }
 
-// namesBuiltImage reports whether ref is under the host reserved for images the
-// supervisor builds (design §7, rule 4a), whatever the case of the host.
-func namesBuiltImage(ref string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(ref)), runtime.BuiltImageHost)
+// builtName is the reserved registry name without its trailing slash.
+var builtName = strings.TrimSuffix(runtime.BuiltImageHost, "/")
+
+// squash lower-cases text and removes what a Dockerfile or a builder lets
+// split or quote a word: backslashes, backticks, quotes and white space.
+func squash(text string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\\', '`', '"', '\'', '\r', '\n', '\t', ' ':
+			return -1
+		}
+		return r
+	}, strings.ToLower(text))
 }
 
-// RefuseBuiltFrom returns an error naming the first FROM of a Dockerfile that
-// names an image under the supervisor's reserved host: a repository must not
-// build on another repository's built image. A FROM that names an earlier stage
-// is not an image.
+// namesBuiltImage reports whether ref is under the host reserved for images the
+// supervisor builds (design §7, rule 4a), whatever the case, quoting or spacing.
+func namesBuiltImage(ref string) bool {
+	return strings.HasPrefix(squash(ref), runtime.BuiltImageHost)
+}
+
+// mentionsBuiltHost reports whether text contains the reserved host anywhere,
+// in any case and with any quoting or line continuation in the middle of it.
+func mentionsBuiltHost(text string) bool {
+	return strings.Contains(squash(text), builtName)
+}
+
+// RefuseBuiltFrom returns an error when a Dockerfile mentions the supervisor's
+// reserved host anywhere: a repository must not build on, copy from or mount
+// another repository's built image. It scans the text and parses nothing, so a
+// FROM, COPY --from, RUN --mount, an ARG default or a continued or quoted
+// spelling are all caught. A name assembled from ARG pieces is not (defence in
+// depth: the builder's resolution of such a name is unverified).
 func RefuseBuiltFrom(dockerfile []byte) error {
-	stages := map[string]bool{}
-	text := strings.ReplaceAll(string(dockerfile), "\\\r\n", " ")
-	text = strings.ReplaceAll(text, "\\\n", " ")
-	for _, line := range strings.Split(text, "\n") {
-		f := strings.Fields(line)
-		if len(f) < 2 || !strings.EqualFold(f[0], "FROM") {
-			continue
-		}
-		var rest []string
-		for _, t := range f[1:] {
-			if !strings.HasPrefix(t, "--") {
-				rest = append(rest, t)
-			}
-		}
-		if len(rest) == 0 {
-			continue
-		}
-		if !stages[strings.ToLower(rest[0])] && namesBuiltImage(rest[0]) {
-			return fmt.Errorf("devcontainer: the Dockerfile builds FROM %s, an image under %s that the supervisor builds: a repository does not name one", rest[0], runtime.BuiltImageHost)
-		}
-		if len(rest) >= 3 && strings.EqualFold(rest[1], "AS") {
-			stages[strings.ToLower(rest[2])] = true
-		}
+	if mentionsBuiltHost(string(dockerfile)) {
+		return fmt.Errorf("devcontainer: the Dockerfile mentions %s, the host of images the supervisor builds: a repository does not name one", builtName)
 	}
 	return nil
 }
@@ -200,9 +202,12 @@ func Parse(data []byte) (Config, error) {
 					problems = append(problems, key+" (an absolute path is refused)")
 				}
 			}
-			for name := range b.Args {
+			for name, val := range b.Args {
 				if isReservedEnv(name) {
 					problems = append(problems, "build.args."+name+" (the supervisor sets it)")
+				}
+				if mentionsBuiltHost(val) {
+					problems = append(problems, "build.args."+name+" (a value naming "+builtName+", the host of images the supervisor builds)")
 				}
 			}
 		}

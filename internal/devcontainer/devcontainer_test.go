@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -333,7 +334,7 @@ func TestWorkharborHints(t *testing.T) {
 }
 
 func TestParseRefusesAnImageUnderTheSupervisorsBuiltHost(t *testing.T) {
-	for _, image := range []string{"whr.invalid/whr-env/o1:abc", "WHR.INVALID/whr-base/o1:abc", " whr.invalid/x"} {
+	for _, image := range []string{"whr.invalid/whr-env/o1:abc", "WHR.INVALID/whr-base/o1:abc", " whr.invalid/x", "whr\\t.invalid/x", "'whr.invalid'/x"} {
 		_, err := Parse([]byte(`{"image": "` + image + `"}`))
 		var re *RefusedError
 		if !errors.As(err, &re) || !strings.Contains(err.Error(), "image") {
@@ -345,25 +346,58 @@ func TestParseRefusesAnImageUnderTheSupervisorsBuiltHost(t *testing.T) {
 	}
 }
 
-func TestRefuseBuiltFromReadsEveryStage(t *testing.T) {
-	refused := []string{
-		"FROM whr.invalid/whr-env/o1:abc\n",
-		"from --platform=linux/arm64 WHR.invalid/whr-base/o1:abc AS x\nRUN true\n",
-		"FROM fedora AS base\nRUN true\nFROM whr.invalid/whr-env/o1:abc\nCOPY --from=base /a /a\n",
-		"FROM fedora\r\nFROM \\\r\n  whr.invalid/x\r\n",
+func TestRefuseBuiltFromScansTheWholeText(t *testing.T) {
+	const img = "whr.invalid/whr-env/x:y"
+	refused := map[string]string{
+		"from":            "FROM " + img + "\n",
+		"platform":        "from --platform=linux/arm64 WHR.invalid/whr-base/o1:abc AS x\n",
+		"later stage":     "FROM fedora AS base\nFROM " + img + "\nCOPY --from=base /a /a\n",
+		"crlf continued":  "FROM fedora\r\nFROM \\\r\n  whr.invalid/x\r\n",
+		"arg braces":      "ARG B=" + img + "\nFROM ${B}\n",
+		"arg dollar":      "ARG B=" + img + "\nFROM $B\n",
+		"backtick escape": "# escape=`\nFROM `\n  " + img + "\n",
+		"backslash split": "FROM whr.\\\ninvalid/x\n",
+		"backtick split":  "# escape=`\nFROM whr.`\ninvalid/x\n",
+		"copy from":       "FROM fedora\nCOPY --from=" + img + " /a /b\n",
+		"run mount":       "FROM fedora\nRUN --mount=type=bind,from=" + img + ",target=/m true\n",
+		"upper case":      "FROM WHR.INVALID/whr-env/x:y\n",
+		"double quoted":   "FROM \"whr.invalid/x\"\n",
+		"single quoted":   "FROM 'whr'.'invalid'/x\n",
+		"in a comment":    "# FROM whr.invalid/x\nFROM fedora\n",
 	}
-	for _, df := range refused {
+	for name, df := range refused {
 		if err := RefuseBuiltFrom([]byte(df)); err == nil {
-			t.Errorf("accepted %q", df)
+			t.Errorf("%s: accepted %q", name, df)
 		}
 	}
-	accepted := []string{
-		"FROM fedora\n", "FROM fedora AS base\nFROM base AS x\nFROM x\n", "FROM --platform=linux/arm64 ghcr.io/x/y:1\n",
-		"# FROM whr.invalid/x\nFROM fedora\nRUN echo FROM whr.invalid/x\n",
-	}
-	for _, df := range accepted {
+	legit := "FROM golang:1.24 AS build\nRUN go build -o /out .\nFROM scratch\nCOPY --from=build /out /out\n"
+	for _, df := range []string{"FROM fedora\n", "FROM --platform=linux/arm64 ghcr.io/x/y:1\n", legit} {
 		if err := RefuseBuiltFrom([]byte(df)); err != nil {
 			t.Errorf("refused %q: %v", df, err)
 		}
+	}
+}
+
+// KNOWN LIMITATION, not a feature: a name assembled from ARG pieces is not in
+// the text, so the scan accepts it. This test documents the gap (design §5.1,
+// the D38 bullet); it must be changed, not deleted, if the gap is ever closed.
+func TestRefuseBuiltFromKnownGapNameAssembledFromArgs(t *testing.T) {
+	df := "ARG H=whr\nARG D=invalid\nFROM ${H}.${D}/x\n"
+	if err := RefuseBuiltFrom([]byte(df)); err != nil {
+		t.Fatalf("the gap is closed (good): update the docs and this test: %v", err)
+	}
+}
+
+func TestParseRefusesBuildArgsNamingTheBuiltHost(t *testing.T) {
+	for _, v := range []string{"whr.invalid/whr-env/x:y", "WHR.INVALID/x", "whr.\\\ninvalid/x", "'whr.invalid'/x", "a b whr . invalid"} {
+		doc := `{"build": {"dockerfile": "Dockerfile", "args": {"B": ` + strconv.Quote(v) + `}}}`
+		_, err := Parse([]byte(doc))
+		var re *RefusedError
+		if !errors.As(err, &re) || !strings.Contains(err.Error(), "build.args.B") {
+			t.Errorf("value %q: err = %v, want a refusal naming build.args.B", v, err)
+		}
+	}
+	if _, err := Parse([]byte(`{"build": {"dockerfile": "Dockerfile", "args": {"B": "golang:1.24"}}}`)); err != nil {
+		t.Errorf("a plain build arg is refused: %v", err)
 	}
 }

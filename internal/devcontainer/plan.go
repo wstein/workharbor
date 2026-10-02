@@ -68,7 +68,7 @@ func (e Environment) Stage(ctx context.Context, r Runner, owner, workDir string)
 		return runtime.BuildSpec{}, Exported{}, fmt.Errorf("devcontainer: the Dockerfile %s: %w", e.Dockerfile, err)
 	}
 	if err := RefuseBuiltFrom(dockerfile); err != nil {
-		return runtime.BuildSpec{}, Exported{}, err
+		return runtime.BuildSpec{}, Exported{}, fmt.Errorf("%s: %w", e.Dockerfile, err)
 	}
 	ctxDir := filepath.Join(workDir, "context")
 	res, err := Export(ctx, r, e.Commit, e.Context, ctxDir, Limits{})

@@ -158,7 +158,7 @@ func TestStageRefusesADockerfileThatBuildsFromABuiltImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := env.Stage(context.Background(), g, "o1", t.TempDir()); err == nil || !strings.Contains(err.Error(), "whr.invalid/") {
-		t.Fatalf("Stage err = %v, want a refusal naming whr.invalid/", err)
+	if _, _, err := env.Stage(context.Background(), g, "o1", t.TempDir()); err == nil || !strings.Contains(err.Error(), "whr.invalid") {
+		t.Fatalf("Stage err = %v, want a refusal naming whr.invalid", err)
 	}
 }
