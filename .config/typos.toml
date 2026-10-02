@@ -1,5 +1,6 @@
 # Spell checker settings for typos (.github/workflows/docs-quality.yml, make check-ci).
 [files]
+ignore-hidden = false
 extend-exclude = [
   "LICENSE",            # EUPL text, with its own spelling
   ".github/CODE_OF_CONDUCT.md", # third-party text

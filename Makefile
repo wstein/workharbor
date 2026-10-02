@@ -166,7 +166,7 @@ check-ci: docs check-hooks check-generated
 	typos --config .config/typos.toml .
 	lychee --config .config/lychee.toml --no-progress \
 		--remap 'https://github\.com/wstein/workharbor/(?:blob|tree)/main/([^?#]*)(?:[?#].*)? file://$(CURDIR)/$$1' \
-		'*.md' 'docs/content/**/*.md' 'design/**/*.md'
+		'*.md' '.github/*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 

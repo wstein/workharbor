@@ -23,7 +23,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --config .config/lychee.toml --no-progress '*.md' 'docs/content/**/*.md' 'design/**/*.md'
+          args: --config .config/lychee.toml --no-progress '*.md' '.github/*.md' 'docs/content/**/*.md' 'design/**/*.md'
           fail: true
 
   spelling:
