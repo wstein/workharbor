@@ -245,3 +245,89 @@ func TestBoardWritesFollowTheTableAndNotTheRunsContext(t *testing.T) {
 		t.Errorf("no board = %v, want ErrNoBoard", err)
 	}
 }
+
+// The prototype workflow moves the integration branch to the approved commit:
+// the human's approval carried out by the supervisor, never forced, never an
+// agent's merge (D47).
+func TestFastForwardNeedsTheApprovedCommitAndAPresetThatAllowsIt(t *testing.T) {
+	ok := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	g, f := newGuard(policy.Prototype.Table())
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+
+	for name, ap := range map[string]forge.Approval{"no approval": {}, "another SHA": {DecisionID: "d1", SHA: "bbb222"}, "an unknown decision": {DecisionID: "d9", SHA: "aaa111"}} {
+		if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ap); !errors.Is(err, forge.ErrNotApproved) {
+			t.Errorf("%s: %v, want ErrNotApproved", name, err)
+		}
+	}
+	if len(f.FastForwards) != 0 {
+		t.Fatalf("a refused move reached the forge: %v", f.FastForwards)
+	}
+	// the agent's branch on the forge must be at the approved commit
+	f.Branches["wstein/workharbor:agent/topic"] = "ccc333"
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ok); !errors.Is(err, forge.ErrSHAMismatch) {
+		t.Errorf("a branch at another commit: %v", err)
+	}
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	// an agent branch, or a strange name, is never the target
+	for _, to := range []string{"agent/other", "", "-x", "a..b"} {
+		if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", to, ok); !errors.Is(err, forge.ErrTarget) {
+			t.Errorf("target %q: %v, want ErrTarget", to, err)
+		}
+	}
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ok); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.FastForwards) != 1 || f.FastForwards[0] != "wstein/workharbor:develop@aaa111" {
+		t.Errorf("moves %v", f.FastForwards)
+	}
+	// a branch that moved is refused and never forced
+	f.NotFF = true
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ok); !errors.Is(err, forge.ErrNotFastForward) {
+		t.Errorf("a branch that moved: %v", err)
+	}
+
+	// the other presets forbid it, before anything reaches the forge
+	for _, p := range []policy.Preset{policy.Integration, policy.Published} {
+		g2, f2 := newGuard(p.Table())
+		f2.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+		if err := g2.FastForward(bg, "wstein/workharbor", "agent/topic", "develop", ok); !errors.Is(err, forge.ErrForbidden) {
+			t.Errorf("%s: %v, want ErrForbidden", p, err)
+		}
+		if len(f2.Calls) != 0 {
+			t.Errorf("%s: a forbidden move reached the forge: %v", p, f2.Calls)
+		}
+	}
+	// merge, tag, release and deploy stay refused whatever the preset
+	for _, p := range []policy.Preset{policy.Prototype, policy.Integration, policy.Published} {
+		g3, f3 := newGuard(p.Table())
+		for _, err := range []error{g3.Merge(bg, "r", 1), g3.Tag(bg, "r", "v1"), g3.Release(bg, "r", "v1"), g3.Deploy(bg, "r", "prod")} {
+			if !errors.Is(err, forge.ErrForbidden) {
+				t.Errorf("%s: %v", p, err)
+			}
+		}
+		if len(f3.Calls) != 0 {
+			t.Errorf("%s: %v", p, f3.Calls)
+		}
+	}
+}
+
+func TestAPullRequestIntoAnotherBranch(t *testing.T) {
+	ok := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	g, f := newGuard(policy.Integration.Table())
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	if _, err := g.OpenPRInto(bg, "wstein/workharbor", "agent/x", "agent/topic", ok, "t", "b"); !errors.Is(err, forge.ErrTarget) {
+		t.Errorf("an agent branch as the base: %v", err)
+	}
+	if _, err := g.OpenPRInto(bg, "wstein/workharbor", "develop", "agent/topic", forge.Approval{}, "t", "b"); !errors.Is(err, forge.ErrNotApproved) {
+		t.Errorf("no approval: %v", err)
+	}
+	if pr, err := g.OpenPRInto(bg, "wstein/workharbor", "develop", "agent/topic", ok, "t", "b"); err != nil || pr.SHA != "aaa111" {
+		t.Errorf("%+v, %v", pr, err)
+	}
+	// the prototype has no PR at all
+	gp, fp := newGuard(policy.Prototype.Table())
+	fp.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	if _, err := gp.OpenPRInto(bg, "wstein/workharbor", "develop", "agent/topic", ok, "t", "b"); !errors.Is(err, forge.ErrForbidden) {
+		t.Errorf("a prototype PR: %v", err)
+	}
+}

@@ -20,6 +20,13 @@ var (
 	ErrBranch = errors.New("only agent/* branches are pushed")
 	// ErrSHAMismatch means the forge's branch does not point at the approved commit.
 	ErrSHAMismatch = errors.New("the branch on the forge is not at the approved commit")
+	// ErrTarget means the branch approved commits would go to is not one the
+	// supervisor may move or open a pull request into.
+	ErrTarget = errors.New("not a branch approved commits may go to")
+	// ErrNoFastForward means the forge adapter cannot fast-forward a branch.
+	ErrNoFastForward = errors.New("the forge adapter cannot fast-forward a branch")
+	// ErrNoBasedPR means the forge adapter cannot open a pull request into another branch.
+	ErrNoBasedPR = errors.New("the forge adapter cannot open a pull request into another branch")
 	// ErrNoBoard means the forge adapter has no board.
 	ErrNoBoard = errors.New("the forge adapter has no project board")
 )
@@ -147,6 +154,63 @@ func (g *Guard) OpenPR(ctx context.Context, repo, branch string, ap Approval, ti
 		return PullRequest{}, err
 	}
 	return g.inner.OpenPR(ctx, repo, branch, ap.SHA, title, body)
+}
+
+// WithTable returns a Guard that decides with another table, such as the one of
+// a repository's workflow preset (D47). The ceilings still apply to it.
+func (g *Guard) WithTable(t policy.Table) *Guard {
+	cp := *g
+	cp.table = t
+	return &cp
+}
+
+// target checks a branch approved commits go to: a real branch name that is not
+// an agent branch, so an agent can never be both writer and target.
+func target(branch string) error {
+	if branch == "" || strings.HasPrefix(branch, "agent/") || strings.Contains(branch, "..") || strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("%w: %q", ErrTarget, branch)
+	}
+	return nil
+}
+
+// FastForward moves the integration branch to the approved commit, which must be
+// the head of the agent's branch on the forge, only as a fast-forward (the
+// prototype workflow, D47). It is the human's approval carried out by the
+// supervisor: it needs the per-SHA approval like a push, and the table must not
+// forbid it. A branch that moved is refused with ErrNotFastForward.
+func (g *Guard) FastForward(ctx context.Context, repo, from, to string, ap Approval) error {
+	if err := target(to); err != nil {
+		return err
+	}
+	if err := g.approve(ctx, policy.FastForwardBranch, ap); err != nil {
+		return err
+	}
+	if err := g.onForge(ctx, repo, from, ap); err != nil {
+		return err
+	}
+	ff, ok := g.inner.(FastForwarder)
+	if !ok {
+		return ErrNoFastForward
+	}
+	return ff.FastForward(ctx, repo, to, ap.SHA)
+}
+
+// OpenPRInto opens a pull request for the approved commit into base.
+func (g *Guard) OpenPRInto(ctx context.Context, repo, base, branch string, ap Approval, title, body string) (PullRequest, error) {
+	if err := target(base); err != nil {
+		return PullRequest{}, err
+	}
+	if err := g.approve(ctx, policy.OpenPR, ap); err != nil {
+		return PullRequest{}, err
+	}
+	if err := g.onForge(ctx, repo, branch, ap); err != nil {
+		return PullRequest{}, err
+	}
+	b, ok := g.inner.(BasedPRs)
+	if !ok {
+		return PullRequest{}, ErrNoBasedPR
+	}
+	return b.OpenPRInto(ctx, repo, base, branch, ap.SHA, title, body)
 }
 
 // UpdatePR updates a pull request to the approved commit.

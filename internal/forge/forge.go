@@ -7,6 +7,7 @@ package forge
 
 import (
 	"context"
+	"errors"
 	"net/http"
 )
 
@@ -92,4 +93,21 @@ type Board interface {
 	// UpdateCard sets the card of an issue, adding the issue to the board first
 	// when it is not on it.
 	UpdateCard(ctx context.Context, repo string, issue int, u CardUpdate) error
+}
+
+// ErrNotFastForward is a branch update the forge refused because the branch has
+// moved on: the topic is rebased and approved again, never forced.
+var ErrNotFastForward = errors.New("the branch has commits the approved one does not: it is not a fast-forward")
+
+// FastForwarder is the optional capability of an adapter to move a branch to a
+// commit that is a fast-forward of it, never forced (the prototype workflow,
+// D47). It has no other way to change a branch.
+type FastForwarder interface {
+	FastForward(ctx context.Context, repo, branch, sha string) error
+}
+
+// BasedPRs is the optional capability to open a pull request into a branch other
+// than the default one (the integration workflow, D47).
+type BasedPRs interface {
+	OpenPRInto(ctx context.Context, repo, base, branch, sha, title, body string) (PullRequest, error)
 }

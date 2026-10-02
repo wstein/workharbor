@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -520,13 +521,24 @@ type prAnswer struct {
 // forge.Guard checks the approval before this is called; this check is the
 // adapter's own, so a branch moved after the approval is not published.
 func (c *Client) OpenPR(ctx context.Context, repo, branch, sha, title, body string) (forge.PullRequest, error) {
+	return c.OpenPRInto(ctx, repo, "", branch, sha, title, body)
+}
+
+// OpenPRInto implements forge.BasedPRs: a pull request into base, or into the
+// default branch when base is empty.
+func (c *Client) OpenPRInto(ctx context.Context, repo, base, branch, sha, title, body string) (forge.PullRequest, error) {
 	if err := c.checkBranch(ctx, repo, branch, sha); err != nil {
 		return forge.PullRequest{}, err
 	}
-	base, err := c.defaultBranch(ctx, repo)
-	if err != nil {
+	if base == "" {
+		var err error
+		if base, err = c.defaultBranch(ctx, repo); err != nil {
+			return forge.PullRequest{}, err
+		}
+	} else if _, err := escapeBranch(base); err != nil {
 		return forge.PullRequest{}, err
 	}
+	var err error
 	var v prAnswer
 	err = c.call(ctx, repo, http.MethodPost, "/repos/"+repo+"/pulls", map[string]any{"title": title, "head": branch, "base": base, "body": body}, &v)
 	if err != nil {
@@ -534,6 +546,27 @@ func (c *Client) OpenPR(ctx context.Context, repo, branch, sha, title, body stri
 	}
 	return forge.PullRequest{Repo: repo, Number: v.Number, URL: v.HTMLURL, Branch: branch, SHA: sha}, nil
 }
+
+// FastForward implements forge.FastForwarder: it moves a branch to sha with
+// force off, so GitHub refuses it unless sha is a descendant of the branch's
+// head. Whether a ruleset lets the App do this is unverified (issue #105).
+func (c *Client) FastForward(ctx context.Context, repo, branch, sha string) error {
+	esc, err := escapeBranch(branch)
+	if err != nil {
+		return err
+	}
+	if !shaRE.MatchString(sha) {
+		return fmt.Errorf("github: %q is not a commit", sha)
+	}
+	err = c.call(ctx, repo, http.MethodPatch, "/repos/"+repo+"/git/refs/heads/"+esc, map[string]any{"sha": sha, "force": false}, nil)
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusUnprocessableEntity && strings.Contains(strings.ToLower(ae.Message), "fast forward") {
+		return fmt.Errorf("%w: %s", forge.ErrNotFastForward, branch)
+	}
+	return err
+}
+
+var shaRE = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
 // UpdatePR implements forge.Adapter: it updates the title and body of a pull
 // request whose branch is now at sha.

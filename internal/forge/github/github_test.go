@@ -722,3 +722,79 @@ func TestARevokeThatFailsIsReportedAndTheTokenIsStillForgotten(t *testing.T) {
 		t.Errorf("a failed revoke must not keep the token: mints=%d err=%v", f.mints, err)
 	}
 }
+
+func TestFastForwardNeverForcesAndSaysWhenTheBranchMoved(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	f.handlers["PATCH /repos/wstein/workharbor/git/refs/heads/develop"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]string{"ref": "refs/heads/develop"})
+	}
+	c := f.client(t, nil)
+	sha := strings.Repeat("a", 40)
+	if err := c.FastForward(bg, "wstein/workharbor", "develop", sha); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	body := f.bodies["PATCH /repos/wstein/workharbor/git/refs/heads/develop"]
+	f.mu.Unlock()
+	if !strings.Contains(body, `"force":false`) || !strings.Contains(body, sha) {
+		t.Errorf("the request was %s: it must never force", body)
+	}
+	for _, bad := range []string{"", "not-a-sha", sha + "; drop"} {
+		if err := c.FastForward(bg, "wstein/workharbor", "develop", bad); err == nil {
+			t.Errorf("sha %q accepted", bad)
+		}
+	}
+	if err := c.FastForward(bg, "wstein/workharbor", "a..b", sha); err == nil {
+		t.Error("a bad branch accepted")
+	}
+	f.handlers["PATCH /repos/wstein/workharbor/git/refs/heads/develop"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 422, map[string]string{"message": "Update is not a fast forward"})
+	}
+	if err := c.FastForward(bg, "wstein/workharbor", "develop", sha); !errors.Is(err, forge.ErrNotFastForward) {
+		t.Errorf("a branch that moved = %v, want ErrNotFastForward", err)
+	}
+	if err := c.FastForward(bg, "evil/other", "develop", sha); !errors.Is(err, ErrNotAllowed) {
+		t.Errorf("another repository = %v", err)
+	}
+}
+
+func TestBranchRulesAndBypassActorsAreReadAndRefusalsAreUnreadable(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	f.handlers["GET /repos/wstein/workharbor/rules/branches/develop"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, []map[string]any{{"type": "pull_request", "ruleset_id": 5, "parameters": map[string]int{"required_approving_review_count": 1}}, {"type": "non_fast_forward", "ruleset_id": 5}})
+	}
+	f.handlers["GET /repos/wstein/workharbor/rulesets/5"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"bypass_actors": []map[string]any{{"actor_id": 1}, {"actor_id": 2}}})
+	}
+	f.handlers["GET /repos/wstein/workharbor/rulesets/6"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{"name": "no bypass list shown"})
+	}
+	f.handlers["GET /repos/wstein/workharbor/rulesets/7"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 403, map[string]string{"message": "Resource not accessible by integration"})
+	}
+	f.handlers["GET /repos/wstein/workharbor/rules/branches/main"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 403, map[string]string{"message": "Resource not accessible by integration"})
+	}
+	c := f.client(t, nil)
+	rules, err := c.BranchRules(bg, "wstein/workharbor", "develop")
+	if err != nil || len(rules) != 2 || rules[0].Type != "pull_request" || rules[0].RulesetID != 5 || !strings.Contains(string(rules[0].Parameters), "required_approving_review_count") {
+		t.Fatalf("%+v, %v", rules, err)
+	}
+	if n, known, err := c.BypassActors(bg, "wstein/workharbor", 5); err != nil || !known || n != 2 {
+		t.Errorf("bypass %d %v %v", n, known, err)
+	}
+	if _, known, err := c.BypassActors(bg, "wstein/workharbor", 6); err != nil || known {
+		t.Errorf("a ruleset without a bypass list shown: known %v, %v", known, err)
+	}
+	if _, known, err := c.BypassActors(bg, "wstein/workharbor", 7); err != nil || known {
+		t.Errorf("a refused ruleset read: known %v, %v", known, err)
+	}
+	if _, err := c.BranchRules(bg, "wstein/workharbor", "main"); !errors.Is(err, ErrRulesUnreadable) {
+		t.Errorf("a refused read = %v, want ErrRulesUnreadable", err)
+	}
+	if _, err := c.BranchRules(bg, "wstein/workharbor", "a..b"); err == nil {
+		t.Error("a bad branch accepted")
+	}
+}

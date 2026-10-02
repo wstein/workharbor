@@ -24,6 +24,10 @@ type Fake struct {
 	// what UpdateCard returns (a board write that fails).
 	Cards   []Card
 	CardErr error
+	// FastForwards are the branch moves it was asked for, and NotFF makes the next
+	// one refuse as the forge does for a branch that moved.
+	FastForwards []string
+	NotFF        bool
 	// WebhookSecret is the header value VerifyWebhook accepts in X-Signature.
 	WebhookSecret string
 }
@@ -127,4 +131,23 @@ func (f *Fake) CardsSeen() []Card {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]Card(nil), f.Cards...)
+}
+
+// FastForward implements forge.FastForwarder.
+func (f *Fake) FastForward(_ context.Context, repo, branch, sha string) error {
+	f.call("FastForward %s:%s@%s", repo, branch, sha)
+	if f.NotFF {
+		return forge.ErrNotFastForward
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.FastForwards = append(f.FastForwards, repo+":"+branch+"@"+sha)
+	f.Branches[repo+":"+branch] = sha
+	return nil
+}
+
+// OpenPRInto implements forge.BasedPRs.
+func (f *Fake) OpenPRInto(ctx context.Context, repo, base, branch, sha, title, body string) (forge.PullRequest, error) {
+	f.call("OpenPRInto %s:%s<-%s@%s", repo, base, branch, sha)
+	return f.OpenPR(ctx, repo, branch, sha, title, body)
 }
