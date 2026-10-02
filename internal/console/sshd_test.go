@@ -110,7 +110,7 @@ func TestTheLauncherIsPOSIXShAndRefusesAnythingButAnAuthorityKey(t *testing.T) {
 }
 
 func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
-	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu} {
+	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu, Alpine} {
 		cf, err := Containerfile(d)
 		if err != nil {
 			t.Fatal(err)

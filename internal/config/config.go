@@ -209,6 +209,10 @@ type Console struct {
 	// SSH certificates (issue #32): a secret file like the others (0600, outside
 	// every root), made by `whr setup`. Without it there is no SSH access.
 	SSHCAKeyFile string `json:"ssh_ca_key_file,omitempty"`
+	// Base is the console's own base: fedora, ubuntu or alpine (issue #93). Empty
+	// means environment.base. Alpine is for the console only: agent environments
+	// stay on a glibc base.
+	Base string `json:"base,omitempty"`
 }
 
 // DefaultConsoleEgress are the hosts a console may reach by default: the package
@@ -399,6 +403,9 @@ func (c *Config) Validate() error {
 		if !validEgressHost(h) {
 			add("console.egress_allow[%d]: %q is not a host name (no address, wildcard, port or path)", i, h)
 		}
+	}
+	if b := c.Console.Base; b != "" && b != "alpine" && !baseimage.Distro(b).Valid() {
+		add("console.base: %q is not a base with a console image (want fedora, ubuntu or alpine)", b)
 	}
 	if c.Console.CPUs < 0 || c.Console.MemoryMB < 0 || c.Console.DiskMB < 0 {
 		add("console: cpus, memory_mb and disk_mb cannot be negative")

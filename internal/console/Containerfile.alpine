@@ -1,0 +1,27 @@
+# The workharbor console on Alpine (design D43, issue #93): the stock image pinned by
+# digest (Alpine 3.24.2), the tools for the human's shell work, and the git wrapper that
+# runs git safely in a workspace whose .git an agent wrote. No Docker CLI and no
+# container engine, no credentials. Alpine uses musl and busybox, so the console is
+# the first place it is tried; agent environments stay on glibc bases. The digest is the
+# one of the stock image; changing this file changes the image's tag, so the next start
+# builds it again.
+FROM docker.io/library/alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+RUN apk add --no-cache \
+        git zsh fish jq curl ripgrep tmux vim make less util-linux util-linux-misc procps-ng findutils ca-certificates \
+        openssh-server openssh-client-default openssh-keygen \
+    && adduser -D -u 1000 -s /bin/zsh whr \
+    && sed -i 's/^whr:!:/whr:*:/' /etc/shadow
+COPY whr-git /usr/local/bin/git
+RUN chmod 0755 /usr/local/bin/git
+# The console's sshd (issue #32): started by the supervisor as the console user, with
+# the certificate authority's public key in WHR_SSH_CA. The configuration is in the
+# image; a login shell reads the proxy variables whr-sshd leaves in /tmp/whr-proxy-vars.
+# The account's password field is * and not !, because an sshd built without PAM refuses
+# a locked account even for a certificate.
+COPY whr-sshd /usr/local/bin/whr-sshd
+COPY sshd_config /etc/whr/sshd_config
+RUN chmod 0755 /usr/local/bin/whr-sshd \
+    && chmod 0644 /etc/whr/sshd_config \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' > /etc/profile.d/whr-env.sh \
+    && mkdir -p /etc/zsh \
+    && printf '%s\n' '[ -r /tmp/whr-proxy-vars ] && . /tmp/whr-proxy-vars' >> /etc/zsh/zshenv

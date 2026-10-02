@@ -19,7 +19,7 @@ import (
 // second time, and in it, as the console's user: checks the tools are there and
 // no container engine is, and plants a hook, an alias, a clean filter, a textconv
 // and an fsmonitor in a repository, which plain git runs and the wrapper does not.
-// No credential command runs. WHR_TEST_BASE=ubuntu runs it on the other base.
+// No credential command runs. WHR_TEST_BASE=ubuntu or alpine runs it on another base.
 //
 //	go test -tags applecontainer -run TestConsoleImageLive ./internal/console
 func TestConsoleImageLive(t *testing.T) {
@@ -27,8 +27,11 @@ func TestConsoleImageLive(t *testing.T) {
 		t.Skip("the container CLI is not installed")
 	}
 	d := baseimage.Default
-	if os.Getenv("WHR_TEST_BASE") == "ubuntu" {
+	switch os.Getenv("WHR_TEST_BASE") {
+	case "ubuntu":
 		d = baseimage.Ubuntu
+	case "alpine":
+		d = console.Alpine
 	}
 	a, err := apple.New("wh-console-live", apple.WithTemp("wh/runtime", "console-live"))
 	if err != nil {
