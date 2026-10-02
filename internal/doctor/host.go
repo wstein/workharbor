@@ -125,9 +125,14 @@ func hostSteps(d Deps) []Check {
 					if st, msg, ok := notHere(err); ok {
 						return st, msg
 					}
-					// defaults exits non-zero when the key is not set, which is the
-					// default: automatic log-out is off (unverified on macOS 26).
-					return OK, "automatic log-out is not set"
+					// defaults exits non-zero and says "does not exist" when the key is
+					// not set, which is the default: automatic log-out is off. Any
+					// other failure (a timeout, a bad plist) says nothing about the
+					// setting, so it is not a pass (unverified on macOS 26).
+					if strings.Contains(err.Error(), "does not exist") {
+						return OK, "automatic log-out is not set"
+					}
+					return NotVerified, "defaults did not answer, so the setting is not known: " + oneLine(err.Error())
 				}
 				delay := strings.TrimSpace(out)
 				if delay == "" || delay == "0" {
@@ -147,7 +152,7 @@ func hostSteps(d Deps) []Check {
 				if d.GOOS != "darwin" || d.Runner == nil {
 					return NotVerified, "not checked: " + errNotHere.Error()
 				}
-				vols, st, msg := d.workspaceVolumes()
+				vols, st, msg := d.workspaceVolumes(ctx)
 				if st != "" {
 					return st, msg
 				}
@@ -176,7 +181,7 @@ func hostSteps(d Deps) []Check {
 			Fix: &Fix{
 				Cmds: []Cmd{{Sudo: true, Argv: []string{"diskutil", "enableOwnership", "<volume>"}}},
 				Build: func(ctx context.Context, _ Prompter) ([]Cmd, error) {
-					vols, _, msg := d.workspaceVolumes()
+					vols, _, msg := d.workspaceVolumes(ctx)
 					if msg != "" && len(vols) == 0 {
 						return nil, errors.New(msg)
 					}
@@ -981,10 +986,20 @@ func validateKeepingUnknown(m map[string]any) error {
 	return errors.New("too many unknown keys")
 }
 
-// workspaceVolumes returns the volumes under /Volumes that hold a configured
-// workspace root, without duplicates. A status other than "" means the roots are not
-// known (no configuration yet), which is not verified rather than a failure.
-func (d Deps) workspaceVolumes() ([]string, Status, string) {
+// internalMounts are the mount points of the Mac's own disk, which FileVault covers.
+var internalMounts = map[string]bool{"/": true, "/System/Volumes/Data": true}
+
+// dfMount reads the mount point out of `df -P`: the last line's sixth column on,
+// since a mount point may hold spaces.
+var dfMount = regexp.MustCompile(`(?m)^\S+\s+\d+\s+\d+\s+\d+\s+\d+%\s+(.+)$`)
+
+// workspaceVolumes returns the mount points, other than the Mac's own disk, that
+// hold a configured workspace root, without duplicates. Each root is resolved
+// first, as the configuration does, so a link to an external disk counts as that
+// disk. A status other than "" means the roots or their disks are not known (no
+// configuration yet, a root that does not exist, a `df` that does not answer),
+// which is not verified rather than a pass.
+func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
 	// Only the roots are read, and not through config.Load: this check says what is
 	// wrong with a volume even while the rest of the configuration is not valid yet.
 	raw, err := os.ReadFile(d.ConfigPath)
@@ -1002,15 +1017,24 @@ func (d Deps) workspaceVolumes() ([]string, Status, string) {
 	var vols []string
 	seen := map[string]bool{}
 	for _, root := range cfg.Roots.Workspaces {
-		rest, ok := strings.CutPrefix(filepath.Clean(root), "/Volumes/")
-		if !ok || rest == "" {
+		resolved, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return nil, NotVerified, "the workspace root " + root + " cannot be resolved, so its disk is not known: " + oneLine(err.Error())
+		}
+		out, err := d.output(ctx, "df", "-P", resolved)
+		if err != nil {
+			return nil, NotVerified, "df did not say which disk " + resolved + " is on: " + oneLine(err.Error())
+		}
+		m := dfMount.FindStringSubmatch(out)
+		if m == nil {
+			return nil, NotVerified, "df's answer for " + resolved + " could not be read"
+		}
+		mount := strings.TrimSpace(m[1])
+		if internalMounts[mount] || seen[mount] {
 			continue
 		}
-		v := "/Volumes/" + strings.SplitN(rest, "/", 2)[0]
-		if !seen[v] {
-			seen[v] = true
-			vols = append(vols, v)
-		}
+		seen[mount] = true
+		vols = append(vols, mount)
 	}
 	return vols, "", ""
 }

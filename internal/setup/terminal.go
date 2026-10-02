@@ -29,9 +29,13 @@ type Terminal struct {
 // Output implements doctor.Runner.
 func (Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // a read-only command named by the steps
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
+	if err != nil && errb.Len() > 0 {
+		// what the command said is what tells "not set" from "could not read"
+		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
+	}
 	return out.Bytes(), err
 }
 

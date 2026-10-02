@@ -16,6 +16,10 @@ type scripted map[string]string
 
 func (s scripted) Output(_ context.Context, argv ...string) ([]byte, error) {
 	if out, ok := s[strings.Join(argv, " ")]; ok {
+		// "ERR:" scripts a failure, with what the command said on stderr
+		if msg, failed := strings.CutPrefix(out, "ERR:"); failed {
+			return nil, errors.New(msg)
+		}
 		return []byte(out), nil
 	}
 	return nil, errors.New("exit status 1")
@@ -420,9 +424,11 @@ func TestAutomaticLogOutIsOffWhenTheKeyIsAbsentOrZero(t *testing.T) {
 		want   Status
 		detail string
 	}{
-		"not set (defaults fails)": {scripted{}, OK, "not set"},
-		"zero":                     {scripted{autologoutKey: "0\n"}, OK, "off"},
-		"ten minutes":              {scripted{autologoutKey: "600\n"}, Fail, "after 600 seconds"},
+		"not set (defaults says so)": {scripted{autologoutKey: "ERR:exit status 1: The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist"}, OK, "not set"},
+		"defaults fails otherwise":   {scripted{autologoutKey: "ERR:signal: killed"}, NotVerified, "not known"},
+		"no answer at all":           {scripted{}, NotVerified, "not known"},
+		"zero":                       {scripted{autologoutKey: "0\n"}, OK, "off"},
+		"ten minutes":                {scripted{autologoutKey: "600\n"}, Fail, "after 600 seconds"},
 	} {
 		got, detail := status(steps(t, hostDeps(tc.out))["autologout"])
 		if got != tc.want || !strings.Contains(detail, tc.detail) {
@@ -447,6 +453,8 @@ const (
 	plain      = "   FileVault:                 No\n   Owners:                    Enabled\n"
 )
 
+// writeRoots writes a configuration whose workspace roots are the given
+// directories, which must exist: a root is resolved before its disk is asked.
 func writeRoots(t *testing.T, roots ...string) Deps {
 	t.Helper()
 	b, _ := json.Marshal(map[string]any{"roots": map[string]any{"workspaces": roots}})
@@ -459,28 +467,67 @@ func writeRoots(t *testing.T, roots ...string) Deps {
 	return d
 }
 
+// root makes a directory and returns its resolved path.
+func root(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// onDisk scripts `df -P` saying a directory is on a mount point.
+func onDisk(dir, mount string) (string, string) {
+	return "df -P " + dir, "Filesystem 512-blocks Used Available Capacity Mounted on\n/dev/disk5s1 100 1 99 1% " + mount + "\n"
+}
+
 func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {
 	check := func(out scripted, roots ...string) (Status, string) {
 		d := writeRoots(t, roots...)
 		d.Runner = out
 		return status(steps(t, d)["workspace-volume"])
 	}
-	if st, detail := check(scripted{"diskutil info /Volumes/ssd": goodVolume}, "/Volumes/ssd/workspaces", "/Volumes/ssd/other"); st != OK {
+	a, b := root(t), root(t)
+	ka, va := onDisk(a, "/Volumes/ssd")
+	kb, vb := onDisk(b, "/Volumes/ssd")
+	if st, detail := check(scripted{ka: va, kb: vb, "diskutil info /Volumes/ssd": goodVolume}, a, b); st != OK {
 		t.Errorf("a good volume: %s %q", st, detail)
 	}
-	if st, detail := check(scripted{}, "/Users/whr/workspaces"); st != OK || !strings.Contains(detail, "internal disk") {
+	ki, vi := onDisk(a, "/System/Volumes/Data")
+	if st, detail := check(scripted{ki: vi}, a); st != OK || !strings.Contains(detail, "internal disk") {
 		t.Errorf("roots on the internal disk: %s %q", st, detail)
 	}
 	for name, tc := range map[string]struct{ out, want string }{
 		"no ownership":  {noOwners, "ignores file ownership"},
 		"not encrypted": {plain, "is not encrypted"},
 	} {
-		if st, detail := check(scripted{"diskutil info /Volumes/ssd": tc.out}, "/Volumes/ssd/workspaces"); st != Fail || !strings.Contains(detail, tc.want) {
+		if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": tc.out}, a); st != Fail || !strings.Contains(detail, tc.want) {
 			t.Errorf("%s: %s %q", name, st, detail)
 		}
 	}
-	if st, _ := check(scripted{}, "/Volumes/ssd/workspaces"); st != NotVerified {
+	if st, _ := check(scripted{ka: va}, a); st != NotVerified {
 		t.Errorf("diskutil that does not answer: %s", st)
+	}
+	// a mount point that holds spaces is read whole
+	ks, vs := onDisk(a, "/Volumes/My SSD")
+	if st, detail := check(scripted{ks: vs, "diskutil info /Volumes/My SSD": plain}, a); st != Fail || !strings.Contains(detail, "/Volumes/My SSD is not encrypted") {
+		t.Errorf("a mount point with a space: %s %q", st, detail)
+	}
+	// df that does not answer, or a root that is not there: not a pass
+	if st, _ := check(scripted{}, a); st != NotVerified {
+		t.Errorf("df that does not answer: %s", st)
+	}
+	if st, _ := check(scripted{}, filepath.Join(a, "missing")); st != NotVerified {
+		t.Errorf("a root that does not exist: %s", st)
+	}
+	// a link to an external disk is that disk, not the internal one
+	link := filepath.Join(root(t), "ws")
+	if err := os.Symlink(a, link); err != nil {
+		t.Fatal(err)
+	}
+	if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": plain}, link); st != Fail || !strings.Contains(detail, "is not encrypted") {
+		t.Errorf("a root linked to an unencrypted external disk: %s %q", st, detail)
 	}
 	// without a configuration the roots are not known: not verified, never a pass
 	d := hostDeps(scripted{})
@@ -491,8 +538,10 @@ func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {
 
 	// the fix turns ownership on for the volumes that need it, as sudo argv, and
 	// leaves encryption to the human
-	d = writeRoots(t, "/Volumes/ssd/workspaces", "/Volumes/good/w")
-	d.Runner = scripted{"diskutil info /Volumes/ssd": noOwners, "diskutil info /Volumes/good": goodVolume}
+	c := root(t)
+	kc, vc := onDisk(c, "/Volumes/good")
+	d = writeRoots(t, a, c)
+	d.Runner = scripted{ka: va, kc: vc, "diskutil info /Volumes/ssd": noOwners, "diskutil info /Volumes/good": goodVolume}
 	fix := steps(t, d)["workspace-volume"].Fix
 	cmds, err := fix.Build(context.Background(), nil)
 	if err != nil || len(cmds) != 1 || !cmds[0].Sudo || strings.Join(cmds[0].Argv, " ") != "diskutil enableOwnership /Volumes/ssd" {
