@@ -84,10 +84,19 @@ func TestTheSocketRefusesAnOpenDirectoryAndASocketAlreadyServed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ListenSocket(path); err == nil || !strings.Contains(err.Error(), "already served") {
+	// a second supervisor is stopped by the lock, before it can touch the socket
+	if _, err := ListenSocket(path); err == nil || !strings.Contains(err.Error(), "another `whr serve`") {
 		t.Errorf("a second listener: %v", err)
 	}
-	_ = ln.Close() // a closed listener removes its socket; a leftover file is stale
+	if _, err := os.Lstat(path); err != nil {
+		t.Errorf("a refused second listener removed the first one's socket: %v", err)
+	}
+	_ = ln.Close() // a closed listener removes its socket and its lock; a leftover file is stale
+	if ln2, err := ListenSocket(path); err != nil {
+		t.Errorf("after the first closed: %v", err)
+	} else {
+		_ = ln2.Close()
+	}
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -102,5 +111,25 @@ func TestTheSocketRefusesAnOpenDirectoryAndASocketAlreadyServed(t *testing.T) {
 	}
 	if _, err := ListenSocket("api.sock"); err == nil {
 		t.Error("a relative path was accepted")
+	}
+}
+
+// A socket served by something that holds no lock (an older whr) is not taken over
+// either: the dial says so.
+func TestASocketServedWithoutTheLockIsNotTakenOver(t *testing.T) {
+	dir, err := os.MkdirTemp("", "whr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, SocketName)
+	var lc net.ListenConfig
+	other, err := lc.Listen(context.Background(), "unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.Close() }()
+	if _, err := ListenSocket(path); err == nil || !strings.Contains(err.Error(), "already served") {
+		t.Errorf("a socket served without the lock: %v", err)
 	}
 }

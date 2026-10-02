@@ -438,6 +438,8 @@ func (c *Config) Validate() error {
 	if c.StateDir != "" {
 		if dir, msg := checkDir(c.StateDir); msg != "" {
 			add("state_dir: %s", msg)
+		} else if err := CheckStateDir(c.StateDir); err != nil {
+			add("state_dir: %v", err)
 		} else {
 			for _, key := range sortedKeys(resolved) {
 				if strings.HasPrefix(key, "roots.workspaces") && (within(dir, resolved[key]) || within(resolved[key], dir)) {
@@ -585,6 +587,28 @@ func checkListen(addr string) string {
 		return fmt.Sprintf("%q is not a loopback address: a guest reaches every other address of the host (D29), so the API listens on 127.0.0.1 or ::1", host)
 	}
 	return ""
+}
+
+// CheckStateDir refuses a state directory that another user could enter or
+// replace things in: it must be a real directory (not a link) owned by this user,
+// with no permission for group or others. The configuration check and the start of
+// `whr serve` apply the same rule, so a configuration that passes does not fail at
+// start (D29, §7.5).
+func CheckStateDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory (a link to one is not accepted)", dir)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("the state directory %s is accessible to others (mode %04o): make it 0700, or the API socket could be reached by other users (D29)", dir, fi.Mode().Perm())
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
+		return fmt.Errorf("the state directory %s is owned by another user", dir)
+	}
+	return nil
 }
 
 // checkDir returns the resolved path of an existing, absolute, clean directory.

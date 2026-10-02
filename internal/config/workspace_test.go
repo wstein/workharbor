@@ -142,12 +142,31 @@ func TestEnvironmentAndStateDirAreChecked(t *testing.T) {
 	}
 	r = newRig(t)
 	state := filepath.Join(r.dir, "state")
-	if err := os.Mkdir(state, 0o750); err != nil {
+	if err := os.Mkdir(state, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	r.cfg.StateDir = state
 	if _, err := r.parse(t); err != nil {
 		t.Errorf("a separate state_dir: %v", err)
+	}
+	// the rule the start of whr serve applies: a directory others may enter, and a
+	// link to one, are refused here too and not first at start
+	if err := os.Chmod(state, 0o750); err != nil { //nolint:gosec // a directory mode, which the rule under test refuses
+		t.Fatal(err)
+	}
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "accessible to others") {
+		t.Errorf("a state_dir others may enter = %v", err)
+	}
+	if err := os.Chmod(state, 0o700); err != nil { //nolint:gosec // a directory mode
+		t.Fatal(err)
+	}
+	link := filepath.Join(r.dir, "state-link")
+	if err := os.Symlink(state, link); err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.StateDir = link
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "state_dir") {
+		t.Errorf("a state_dir that is a link = %v", err)
 	}
 	if got := (Environment{}).Resolved(); got.Image != "" || got.Base != DefaultBase || got.CPUs != 2 || got.MemoryMB != 4096 || got.EgressAllow[0] != "api.anthropic.com" {
 		t.Errorf("defaults = %+v", got)

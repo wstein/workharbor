@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -41,6 +42,57 @@ func ListenSocket(path string) (net.Listener, error) {
 	if err := checkSocketDir(dir); err != nil {
 		return nil, err
 	}
+	// One supervisor at a time: the lock is held for as long as the listener lives,
+	// so a second `whr serve` cannot remove the socket the first one serves.
+	lock, err := lockDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	ln, err := listenLocked(path)
+	if err != nil {
+		_ = lock.Close()
+		return nil, err
+	}
+	return &lockedListener{Listener: ln, lock: lock}, nil
+}
+
+// LockName is the lock file next to the socket.
+const LockName = SocketName + ".lock"
+
+// lockDir takes an exclusive lock on a file in the state directory, without
+// waiting and without following a link.
+func lockDir(dir string) (*os.File, error) {
+	//nolint:gosec // the name is the constant LockName in the state directory that was just checked
+	f, err := os.OpenFile(filepath.Join(dir, LockName), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("api: the lock file: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("api: another `whr serve` holds %s: is it already running?", filepath.Join(dir, LockName))
+		}
+		return nil, fmt.Errorf("api: lock %s: %w", f.Name(), err)
+	}
+	return f, nil
+}
+
+// lockedListener releases the lock when the listener is closed, after the socket
+// file is gone.
+type lockedListener struct {
+	net.Listener
+	lock *os.File
+	once sync.Once
+}
+
+func (l *lockedListener) Close() error {
+	err := l.Listener.Close()
+	l.once.Do(func() { _ = l.lock.Close() })
+	return err
+}
+
+// listenLocked binds the socket; the caller holds the lock.
+func listenLocked(path string) (net.Listener, error) {
 	if fi, err := os.Lstat(path); err == nil {
 		if fi.Mode()&os.ModeSocket == 0 {
 			return nil, fmt.Errorf("api: %s exists and is not a socket", path)
@@ -72,22 +124,10 @@ func ListenSocket(path string) (net.Listener, error) {
 	return ln, nil
 }
 
-// checkSocketDir refuses a directory that another user could enter or replace
-// things in: it must be a real directory (not a link) owned by this user, with no
-// permission for group or others.
+// checkSocketDir applies the rule the configuration check applies to state_dir.
 func checkSocketDir(dir string) error {
-	fi, err := os.Lstat(dir)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		return fmt.Errorf("api: %s is not a directory", dir)
-	}
-	if fi.Mode().Perm()&0o077 != 0 {
-		return fmt.Errorf("api: the socket directory %s is accessible to others (mode %04o): make it 0700, or the API socket could be reached by other users (D29)", dir, fi.Mode().Perm())
-	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
-		return fmt.Errorf("api: the socket directory %s is owned by another user", dir)
+	if err := config.CheckStateDir(dir); err != nil {
+		return fmt.Errorf("api: %w", err)
 	}
 	return nil
 }

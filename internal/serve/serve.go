@@ -234,6 +234,8 @@ func Run(ctx context.Context, d Deps) error {
 
 	ui, err := web.New(be, webOpt)
 	if err != nil {
+		_ = ln.Close()
+		_ = apiLn.Close()
 		return err
 	}
 	// The web listener has no /v1 route: a request for it is the web UI's own 404.
