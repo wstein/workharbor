@@ -30,6 +30,20 @@ egress proxy, the sandbox), a design choice, a dependency change, anything
 touching the keychain, credentials, `sudo`, launchd or real containers, and
 anything outward (push, tag, issue edit, board change, GitHub comment).
 
+## The allowlist
+
+`.claude/settings.json` lets every session read the repository, search, run the
+exact `make` checks, read GitHub and search the web without a prompt; everything
+else asks, and credential, push, merge, tag, release, `gh api` and `launchctl`
+commands and reads of the secret directories are denied. Two limits stay:
+`make check` and its siblings run the worktree's own test code, which is fine
+only while every writer of the worktree is trusted (accepted risk), and a
+prefix deny cannot catch every way to read a file, so the secret directories
+are protected by permissions, not by a sandbox ((open) whether one
+is available). Do not add an allow rule for a command that takes a flag to run
+another program, write a file or fetch a URL (`rg --pre`, `git grep -O`,
+`go test -exec`, `--output`, `WebFetch`).
+
 ## For the requester
 
 1. Give one task: what to do, the files it may change (or "read-only"), what
