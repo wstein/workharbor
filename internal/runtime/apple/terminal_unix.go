@@ -42,13 +42,14 @@ func (a *Adapter) Terminal(ctx context.Context, id string, req runtime.TerminalR
 		args = append(args, "-w", req.Dir)
 	}
 	cleanup := func() {}
+	var envp *envPipe
 	if len(req.Env) > 0 {
-		path, remove, err := envFile(req.Env)
-		if err != nil {
+		var err error
+		if envp, err = newEnvPipe(req.Env); err != nil {
 			return nil, err
 		}
-		cleanup = remove
-		args = append(args, "--env-file", path)
+		cleanup = envp.close
+		args = append(args, "--env-file", envFD)
 	}
 	args = append(args, id)
 	// The command runs through a small sh that records its own process ID, which
@@ -83,11 +84,17 @@ func (a *Adapter) Terminal(ctx context.Context, id string, req runtime.TerminalR
 	cmd := exec.Command(a.binary(), args...) //nolint:gosec,noctx // the container CLI with arguments built from checked values; the terminal outlives the request that opened it
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if envp != nil {
+		envp.attach(cmd)
+	}
 	if err := cmd.Start(); err != nil {
 		_ = master.Close()
 		_ = slave.Close()
 		cleanup()
 		return nil, fmt.Errorf("start container exec: %w", err)
+	}
+	if envp != nil {
+		envp.started()
 	}
 	_ = slave.Close() // the child has its own copy
 	t := &terminal{master: master, cmd: cmd, cleanup: cleanup, done: make(chan struct{})}

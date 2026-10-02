@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/runtime"
 )
@@ -20,14 +21,14 @@ out="$FAKE_OUT"
 printf '%s\n' "$@" > "$out.args"
 while [ $# -gt 0 ]; do
 	if [ "$1" = --env-file ]; then
-		cp "$2" "$out.env"
-		ls -l "$2" | cut -c1-10 > "$out.mode"
+		cat "$2" > "$out.env"
+		ls "$TMPDIR" > "$out.tmp"
 	fi
 	shift
 done
 `
 
-func TestExecPassesTheEnvironmentThroughAFileNeverArgv(t *testing.T) {
+func TestExecPassesTheEnvironmentThroughAPipeNeverArgvNeverAFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "container"), []byte(fakeContainer), 0o700); err != nil { //nolint:gosec // an executable test script
 		t.Fatal(err)
@@ -61,11 +62,16 @@ func TestExecPassesTheEnvironmentThroughAFileNeverArgv(t *testing.T) {
 	if string(env) != "CLAUDE_CODE_OAUTH_TOKEN="+secret+"\nB=x y=z\n" {
 		t.Errorf("env file = %q", env)
 	}
-	if mode, _ := os.ReadFile(out + ".mode"); strings.TrimSpace(string(mode)) != "-rw-------" { //nolint:gosec // a test file
-		t.Errorf("env file mode = %q, want -rw-------", mode)
+	// The CLI was told to read the descriptor of the pipe, and no file held the
+	// values at any time: the temp directory was empty while the CLI ran, and after.
+	if !strings.Contains(string(args), "--env-file\n/dev/fd/3\n") {
+		t.Errorf("the CLI was not told to read the pipe:\n%s", args)
 	}
-	if left, _ := filepath.Glob(filepath.Join(tmp, "whr-env-*")); len(left) != 0 {
-		t.Errorf("the env file was left behind: %v", left)
+	if during, _ := os.ReadFile(out + ".tmp"); strings.TrimSpace(string(during)) != "" { //nolint:gosec // a test file
+		t.Errorf("the temp directory held %q while the CLI ran", during)
+	}
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Errorf("the temp directory is not empty after the exec: %v", left)
 	}
 }
 
@@ -80,7 +86,7 @@ func TestBadEnvironmentEntriesAreRefusedWithoutTheirValue(t *testing.T) {
 		"nul":           "A=" + secret + "\x00",
 		"empty key":     "=" + secret,
 	} {
-		_, _, err := envFile([]string{entry})
+		_, err := newEnvPipe([]string{entry})
 		if !errors.Is(err, ErrBadEnv) {
 			t.Errorf("%s: err = %v, want ErrBadEnv", name, err)
 			continue
@@ -88,5 +94,46 @@ func TestBadEnvironmentEntriesAreRefusedWithoutTheirValue(t *testing.T) {
 		if strings.Contains(err.Error(), secret) {
 			t.Errorf("%s: the error shows the value: %v", name, err)
 		}
+	}
+}
+
+func TestSweepEnvFilesRemovesOnlyAFormerRunsPrivateFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Now().Add(-time.Hour)
+	mk := func(name string, mode os.FileMode, mtime time.Time) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("KEY=value\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, mtime, mtime); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	stale := mk("whr-env-111", 0o600, old)
+	fresh := mk("whr-env-222", 0o600, time.Now().Add(time.Minute))             // newer than this process: not a former run's
+	loose := mk("whr-env-333", 0o644, old)                                     // not private: not one of ours
+	other := mk("whr-something-444", 0o600, old)                               // another name
+	if err := os.Mkdir(filepath.Join(dir, "whr-env-555"), 0o700); err != nil { // a directory
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "whr-env-666")
+	if err := os.Symlink(other, link); err != nil {
+		t.Fatal(err)
+	}
+	removed := SweepEnvFiles(dir, time.Now())
+	if len(removed) != 1 || removed[0] != stale {
+		t.Fatalf("removed %v, want only %s", removed, stale)
+	}
+	for _, kept := range []string{fresh, loose, other, filepath.Join(dir, "whr-env-555"), link} {
+		if _, err := os.Lstat(kept); err != nil {
+			t.Errorf("%s was removed: %v", kept, err)
+		}
+	}
+	if got := SweepEnvFiles(filepath.Join(dir, "missing"), time.Now()); len(got) != 0 {
+		t.Errorf("a missing directory: %v", got)
 	}
 }

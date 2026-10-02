@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/agent/claude"
@@ -277,6 +278,11 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		_ = git.Close()
 		_ = st.Close()
 		return Deps{}, nil, err
+	}
+	// Env files an earlier run left in the temp directory (an agent's API key could
+	// be in one, from before the environment went through a pipe) go now.
+	if gone := apple.SweepEnvFiles("", time.Now()); len(gone) > 0 {
+		logf("removed %d env file(s) an earlier run left behind", len(gone))
 	}
 	ag := claude.New(rt, claude.Config{Bin: bin + "/claude", ConfigDir: GuestHome + "/.claude", Env: env})
 
