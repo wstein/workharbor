@@ -148,3 +148,17 @@ func TestStageBuildsFromTheDefaultBranchCommit(t *testing.T) {
 		t.Error("Stage of an image environment must fail")
 	}
 }
+
+func TestStageRefusesADockerfileThatBuildsFromABuiltImage(t *testing.T) {
+	g := newGitRepo(t)
+	g.write(".devcontainer/devcontainer.json", `{"build":{"dockerfile":"Dockerfile","context":".."}}`, 0o644)
+	g.write(".devcontainer/Dockerfile", "FROM fedora AS a\nFROM whr.invalid/whr-env/o1:abc\n", 0o644)
+	g.commit("default")
+	env, err := Resolve(context.Background(), g, "main", testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.Stage(context.Background(), g, "o1", t.TempDir()); err == nil || !strings.Contains(err.Error(), "whr.invalid/") {
+		t.Fatalf("Stage err = %v, want a refusal naming whr.invalid/", err)
+	}
+}

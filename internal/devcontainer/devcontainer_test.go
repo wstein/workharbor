@@ -331,3 +331,39 @@ func TestWorkharborHints(t *testing.T) {
 		t.Errorf("want the wildcard named in a note, got %d: %v", n, c.Notes)
 	}
 }
+
+func TestParseRefusesAnImageUnderTheSupervisorsBuiltHost(t *testing.T) {
+	for _, image := range []string{"whr.invalid/whr-env/o1:abc", "WHR.INVALID/whr-base/o1:abc", " whr.invalid/x"} {
+		_, err := Parse([]byte(`{"image": "` + image + `"}`))
+		var re *RefusedError
+		if !errors.As(err, &re) || !strings.Contains(err.Error(), "image") {
+			t.Errorf("image %q: err = %v, want a refusal naming image", image, err)
+		}
+	}
+	if _, err := Parse([]byte(`{"image": "ghcr.io/x/whr.invalid:1"}`)); err != nil {
+		t.Errorf("an unrelated image is refused: %v", err)
+	}
+}
+
+func TestRefuseBuiltFromReadsEveryStage(t *testing.T) {
+	refused := []string{
+		"FROM whr.invalid/whr-env/o1:abc\n",
+		"from --platform=linux/arm64 WHR.invalid/whr-base/o1:abc AS x\nRUN true\n",
+		"FROM fedora AS base\nRUN true\nFROM whr.invalid/whr-env/o1:abc\nCOPY --from=base /a /a\n",
+		"FROM fedora\r\nFROM \\\r\n  whr.invalid/x\r\n",
+	}
+	for _, df := range refused {
+		if err := RefuseBuiltFrom([]byte(df)); err == nil {
+			t.Errorf("accepted %q", df)
+		}
+	}
+	accepted := []string{
+		"FROM fedora\n", "FROM fedora AS base\nFROM base AS x\nFROM x\n", "FROM --platform=linux/arm64 ghcr.io/x/y:1\n",
+		"# FROM whr.invalid/x\nFROM fedora\nRUN echo FROM whr.invalid/x\n",
+	}
+	for _, df := range accepted {
+		if err := RefuseBuiltFrom([]byte(df)); err != nil {
+			t.Errorf("refused %q: %v", df, err)
+		}
+	}
+}

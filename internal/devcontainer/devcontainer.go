@@ -111,6 +111,44 @@ var refused = map[string]string{
 	"workspaceMount":    "mounts come only from the supervisor's configuration",
 }
 
+// namesBuiltImage reports whether ref is under the host reserved for images the
+// supervisor builds (design §7, rule 4a), whatever the case of the host.
+func namesBuiltImage(ref string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(ref)), runtime.BuiltImageHost)
+}
+
+// RefuseBuiltFrom returns an error naming the first FROM of a Dockerfile that
+// names an image under the supervisor's reserved host: a repository must not
+// build on another repository's built image. A FROM that names an earlier stage
+// is not an image.
+func RefuseBuiltFrom(dockerfile []byte) error {
+	stages := map[string]bool{}
+	text := strings.ReplaceAll(string(dockerfile), "\\\r\n", " ")
+	text = strings.ReplaceAll(text, "\\\n", " ")
+	for _, line := range strings.Split(text, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || !strings.EqualFold(f[0], "FROM") {
+			continue
+		}
+		var rest []string
+		for _, t := range f[1:] {
+			if !strings.HasPrefix(t, "--") {
+				rest = append(rest, t)
+			}
+		}
+		if len(rest) == 0 {
+			continue
+		}
+		if !stages[strings.ToLower(rest[0])] && namesBuiltImage(rest[0]) {
+			return fmt.Errorf("devcontainer: the Dockerfile builds FROM %s, an image under %s that the supervisor builds: a repository does not name one", rest[0], runtime.BuiltImageHost)
+		}
+		if len(rest) >= 3 && strings.EqualFold(rest[1], "AS") {
+			stages[strings.ToLower(rest[2])] = true
+		}
+	}
+	return nil
+}
+
 func isReservedEnv(name string) bool { return runtime.ReservedEnv(name) }
 
 // Parse reads devcontainer.json (JSON with comments and trailing commas).
@@ -128,6 +166,12 @@ func Parse(data []byte) (Config, error) {
 	for key, why := range refused {
 		if _, ok := raw[key]; ok {
 			problems = append(problems, key+" ("+why+")")
+		}
+	}
+	if v, ok := raw["image"]; ok {
+		var image string
+		if json.Unmarshal(v, &image) == nil && namesBuiltImage(image) {
+			problems = append(problems, "image (an image under "+runtime.BuiltImageHost+" is built by the supervisor and never named by a repository)")
 		}
 	}
 	for _, key := range []string{"remoteUser", "containerUser"} {
