@@ -2,6 +2,7 @@
 [files]
 ignore-hidden = false
 extend-exclude = [
+  ".git/",              # the repository database: ignore-hidden = false would walk it
   "LICENSE",            # EUPL text, with its own spelling
   ".github/CODE_OF_CONDUCT.md", # third-party text
   "CHANGELOG.md",       # generated
