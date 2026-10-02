@@ -222,7 +222,7 @@ func TestBuildPathsStayInsideTheRepository(t *testing.T) {
 
 // containerEnv may not set what the supervisor sets or the agent reads (D38).
 func TestReservedEnvironmentIsRefused(t *testing.T) {
-	for _, name := range []string{"HTTPS_PROXY", "https_proxy", "NO_PROXY", "PATH", "LD_PRELOAD", "HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "WHR_TASK", "OPENAI_API_KEY"} {
+	for _, name := range []string{"HTTPS_PROXY", "https_proxy", "NO_PROXY", "PATH", "LD_PRELOAD", "HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "WHR_TASK", "OPENAI_API_KEY", "BUILDKIT_SYNTAX", "BUILDKIT_INLINE_CACHE"} {
 		_, err := Parse([]byte(`{"image":"x","containerEnv":{"` + name + `":"v"}}`))
 		if !errors.Is(err, ErrRefused) {
 			t.Errorf("containerEnv.%s: err = %v, want ErrRefused", name, err)
@@ -399,5 +399,44 @@ func TestParseRefusesBuildArgsNamingTheBuiltHost(t *testing.T) {
 	}
 	if _, err := Parse([]byte(`{"build": {"dockerfile": "Dockerfile", "args": {"B": "golang:1.24"}}}`)); err != nil {
 		t.Errorf("a plain build arg is refused: %v", err)
+	}
+}
+
+func TestRefuseSyntaxDirective(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	accepted := map[string]string{
+		"none":                "FROM fedora\n",
+		"official no tag":     "# syntax=docker/dockerfile\nFROM fedora\n",
+		"official with tag":   "# syntax=docker/dockerfile:1.7\nFROM fedora\n",
+		"tag and digest":      "# syntax=docker/dockerfile:1.7@sha256:" + digest + "\nFROM fedora\n",
+		"spaces around":       "# syntax = docker/dockerfile:1\nFROM fedora\n",
+		"after instruction":   "FROM fedora\n# syntax=whr.invalid/x\nRUN true\n",
+		"after other comment": "# a note\n# syntax=docker/dockerfile:1\nFROM fedora\n",
+	}
+	for name, df := range accepted {
+		if err := RefuseSyntaxDirective([]byte(df)); err != nil {
+			t.Errorf("%s: refused %q: %v", name, df, err)
+		}
+	}
+	refused := map[string]string{
+		"custom image":    "# syntax=example.com/frontend:1\nFROM fedora\n",
+		"docker.io evil":  "# syntax=docker.io/evil/frontend\nFROM fedora\n",
+		"built host":      "# syntax=whr.invalid/whr-env/x:y\nFROM fedora\n",
+		"tag with space":  "# syntax=docker/dockerfile:1 x\nFROM fedora\n",
+		"no space":        "#syntax=evil/x\nFROM fedora\n",
+		"upper case key":  "# SYNTAX=evil/x\nFROM fedora\n",
+		"spaced equals":   "# syntax = evil/x\nFROM fedora\n",
+		"digest only":     "# syntax=docker/dockerfile@sha256:" + digest + "\nFROM fedora\n",
+		"short digest":    "# syntax=docker/dockerfile:1@sha256:abc\nFROM fedora\n",
+		"look-alike":      "# syntax=docker/dockerfile-evil\nFROM fedora\n",
+		"crlf":            "# syntax=evil/x\r\nFROM fedora\r\n",
+		"after a comment": "# a note\n\n# syntax=evil/x\nFROM fedora\n",
+		"bom":             "\xef\xbb\xbf# syntax=evil/x\nFROM fedora\n",
+	}
+	for name, df := range refused {
+		err := RefuseSyntaxDirective([]byte(df))
+		if err == nil || !strings.Contains(err.Error(), "syntax directive") {
+			t.Errorf("%s: accepted %q (err = %v)", name, df, err)
+		}
 	}
 }

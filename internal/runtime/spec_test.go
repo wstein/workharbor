@@ -192,3 +192,16 @@ func TestBuiltImagesLiveUnderTheReservedHost(t *testing.T) {
 		}
 	}
 }
+
+// BUILDKIT_SYNTAX names a build frontend, an image the builder runs.
+func TestBuildKitVariablesAreReserved(t *testing.T) {
+	for _, name := range []string{"BUILDKIT_SYNTAX", "BUILDKIT_INLINE_CACHE", "buildkit_syntax"} {
+		if !ReservedEnv(name) {
+			t.Errorf("ReservedEnv(%q) = false", name)
+		}
+		b := BuildSpec{Tag: "whr.invalid/whr-env/x:y", ContextDir: "/c", Dockerfile: "/d", Args: map[string]string{name: "x"}}
+		if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "build argument") {
+			t.Errorf("build argument %s: err = %v, want a refusal", name, err)
+		}
+	}
+}

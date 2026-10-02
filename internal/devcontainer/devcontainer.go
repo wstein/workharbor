@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -147,6 +148,38 @@ func mentionsBuiltHost(text string) bool {
 func RefuseBuiltFrom(dockerfile []byte) error {
 	if mentionsBuiltHost(string(dockerfile)) {
 		return fmt.Errorf("devcontainer: the Dockerfile mentions %s, the host of images the supervisor builds: a repository does not name one", builtName)
+	}
+	return nil
+}
+
+// syntaxDirectiveRe is a `# syntax=` parser directive in a comment line, the key
+// in any letter case and with or without spaces around the equals sign.
+var syntaxDirectiveRe = regexp.MustCompile(`(?i)^#\s*syntax\s*=\s*(.*)$`)
+
+// officialFrontendRe is the one Dockerfile frontend a repository may name: the
+// official image, optionally with a tag and a digest.
+var officialFrontendRe = regexp.MustCompile(`^docker/dockerfile(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(@sha256:[0-9a-f]{64})?)?$`)
+
+// RefuseSyntaxDirective returns an error when the leading comment block of a
+// Dockerfile, before its first instruction, has a `# syntax=` parser directive
+// naming anything but the official frontend (`docker/dockerfile`, with an optional
+// tag and digest). A custom frontend is an image the builder pulls and runs: it
+// could be a `whr.invalid/` image, or code that runs at build time. After the
+// first instruction a `# syntax=` line is only a comment, as Docker treats it.
+func RefuseSyntaxDirective(dockerfile []byte) error {
+	for _, line := range strings.Split(string(dockerfile), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "\ufeff"))
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "#") {
+			return nil // the first instruction: directives end here
+		}
+		if m := syntaxDirectiveRe.FindStringSubmatch(line); m != nil {
+			if v := strings.TrimSpace(m[1]); !officialFrontendRe.MatchString(v) {
+				return fmt.Errorf("devcontainer: the Dockerfile has a syntax directive naming %q: only docker/dockerfile, with an optional tag and digest, is allowed, because a frontend is an image the builder runs", v)
+			}
+		}
 	}
 	return nil
 }

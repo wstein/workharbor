@@ -17,8 +17,9 @@ var reservedEnv = map[string]bool{
 	"PATH": true, "HOME": true, "LD_PRELOAD": true, "LD_LIBRARY_PATH": true,
 }
 
-// reservedEnvPrefix are prefixes of variables the agent CLIs and workharbor read.
-var reservedEnvPrefix = []string{"WHR_", "CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_", "GEMINI_", "GOOGLE_"}
+// reservedEnvPrefix are prefixes of variables the agent CLIs, workharbor and the builder read (BUILDKIT_SYNTAX names a build frontend,
+// an image the builder runs).
+var reservedEnvPrefix = []string{"WHR_", "CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_", "GEMINI_", "GOOGLE_", "BUILDKIT_"}
 
 // ReservedEnv reports whether a variable name is one the supervisor sets or the
 // agent reads, in any letter case.
