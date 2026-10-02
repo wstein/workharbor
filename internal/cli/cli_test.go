@@ -563,3 +563,36 @@ func TestDoctorSaysNotVerifiedAndFailsOnlyOnFail(t *testing.T) {
 		t.Errorf("unknown check: exit %d, want usage", code)
 	}
 }
+
+func TestKillAllAsksFirstAndSaysWhatItDid(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/kill-all", 200, ok(`{"cancelled":["t-aaa111","t-bbb222"],"tokens_revoked":2,"problems":[]}`))
+	// Anything but the word stops before the request.
+	for _, in := range []string{"", "yes\n", "kill\n"} {
+		if code, out, errOut := s.runCLI(in, "kill-all"); code != exitcode.Usage || out != "" || !strings.Contains(errOut, "not confirmed") {
+			t.Errorf("input %q: exit %d, stdout %q, stderr %q", in, code, out, errOut)
+		}
+	}
+	if len(s.requests("POST /v1/kill-all")) != 0 {
+		t.Fatal("a request went out without a confirmation")
+	}
+	code, out, errOut := s.runCLI("kill-all\n", "kill-all")
+	if code != 0 || out != "t-aaa111\nt-bbb222\n" || !strings.Contains(errOut, "cancelled 2 task(s), revoked 2 forge token(s)") {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+	if reqs := s.requests("POST /v1/kill-all"); len(reqs) != 1 || !strings.Contains(reqs[0].body, `"confirm":true`) || reqs[0].header.Get("Idempotency-Key") == "" {
+		t.Errorf("requests = %+v", reqs)
+	}
+	if code, _, _ := s.runCLI("", "kill-all", "--yes"); code != 0 {
+		t.Errorf("--yes: exit %d", code)
+	}
+}
+
+func TestKillAllSaysWhatFailedAndExitsNonZero(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/kill-all", 200, ok(`{"cancelled":["t-aaa111"],"tokens_revoked":0,"problems":["revoke the token for a/b: 500"]}`))
+	code, out, errOut := s.runCLI("", "kill-all", "--yes")
+	if code != exitcode.Error || out != "t-aaa111\n" || !strings.Contains(errOut, "problem: revoke the token for a/b: 500") {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+}
