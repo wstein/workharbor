@@ -22,6 +22,8 @@ var flashes = map[string]string{
 	"injected":  "Sent: the agent has it now.",
 	"next_turn": "Sent: the agent gets it at its next step.",
 	"resumed":   "Sent: it starts a resumed turn.",
+	"revoked":   "That device is signed out.",
+	"gone":      "That device was already signed out.",
 }
 
 func flash(r *http.Request) string { return flashes[r.URL.Query().Get("flash")] }
@@ -76,6 +78,43 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 func (s *Server) logout(w http.ResponseWriter, r *http.Request, _ Session) {
 	s.opt.Auth.SignOut(w, r)
 	seeOther(w, r, "/login")
+}
+
+// devices lists the signed-in browsers (D35), so a lost phone is signed out from
+// the tablet.
+func (s *Server) devices(w http.ResponseWriter, r *http.Request, sess Session) {
+	p := devicesPage{nav: s.navOf(r, sess, "devices"), Flash: flash(r)}
+	if d, ok := s.opt.Auth.(Devices); ok {
+		p.Revocable = true
+		for _, v := range d.Devices(r) {
+			p.Devices = append(p.Devices, deviceRow{
+				ID: v.ID, Label: v.Label, Current: v.Current,
+				Since: v.Since.UTC().Format("2006-01-02 15:04 UTC"), LastSeen: v.LastSeen.UTC().Format("2006-01-02 15:04 UTC"),
+			})
+		}
+	}
+	s.render(w, r, http.StatusOK, devicesView(p))
+}
+
+// revokeDevice ends another browser's session. Ending the current one is a sign-out.
+// Revoking twice is the same as once, so it needs no idempotency key.
+func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request, sess Session) {
+	d, ok := s.opt.Auth.(Devices)
+	if !ok {
+		s.fail(w, r, sess, &httpError{status: http.StatusNotFound, msg: "this sign-in has no device list"})
+		return
+	}
+	id := r.PathValue("device")
+	if id == sess.ID {
+		s.opt.Auth.SignOut(w, r)
+		seeOther(w, r, "/login")
+		return
+	}
+	flash := "revoked"
+	if !d.Revoke(id) {
+		flash = "gone"
+	}
+	seeOther(w, r, "/devices?flash="+flash)
 }
 
 func (s *Server) harbor(w http.ResponseWriter, r *http.Request, sess Session) {

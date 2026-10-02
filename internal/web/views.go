@@ -25,6 +25,19 @@ type nav struct {
 	Active string
 }
 
+type deviceRow struct {
+	ID, Label, Since, LastSeen string
+	Current                    bool
+}
+
+type devicesPage struct {
+	nav
+	Devices []deviceRow
+	// Revocable is false when the sign-in cannot list its sessions.
+	Revocable bool
+	Flash     string
+}
+
 type taskRow struct {
 	ID, Repo, Issue, State, Agent string
 	NeedsYou                      bool

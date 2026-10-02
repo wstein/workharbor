@@ -68,7 +68,7 @@ func New(be api.Backend, opt Options) (*Server, error) {
 
 // csp forbids everything the pages do not use: no inline script or style, no
 // other origin, no framing.
-const csp = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+const csp = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // Handler returns the UI as an http.Handler. Everything but the sign-in page and
 // the static files needs a session, the live stream included, and every POST
@@ -81,6 +81,11 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		files.ServeHTTP(w, r)
 	})
+	mux.HandleFunc("GET /manifest.webmanifest", s.staticAt("manifest.webmanifest", "application/manifest+json"))
+	mux.HandleFunc("GET /sw.js", s.staticAt("sw.js", "text/javascript"))
+	mux.HandleFunc("GET /offline", s.staticAt("offline.html", "text/html; charset=utf-8"))
+	mux.HandleFunc("GET /devices", s.authed(false, s.devices))
+	mux.HandleFunc("POST /devices/{device}/revoke", s.authed(true, s.revokeDevice))
 	mux.HandleFunc("GET /enrol", s.enrolPage)
 	mux.HandleFunc("POST /passkey/enrol/begin", s.enrolBegin)
 	mux.HandleFunc("POST /passkey/enrol/finish", s.enrolFinish)
@@ -115,6 +120,22 @@ func (s *Server) Handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// staticAt serves one embedded file at a path outside /static, for the PWA's
+// manifest, service worker and offline page. They hold nothing private, and the
+// browser fetches them without a session, so they are public. The service worker
+// is never cached by the browser's HTTP cache, so an update reaches the device.
+func (s *Server) staticAt(name, contentType string) http.HandlerFunc {
+	body, err := staticFS.ReadFile("static/" + name)
+	if err != nil {
+		panic("web: missing embedded file " + name)
+	}
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(body)
+	}
 }
 
 // authed wraps a handler that needs a session. With write set it is a POST and

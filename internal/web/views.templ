@@ -14,6 +14,13 @@ templ layout(n nav, title string) {
 			<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'/>
 			<title>{ title } · workharbor</title>
 			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="manifest" href="/manifest.webmanifest"/>
+			<link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg"/>
+			<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png"/>
+			<meta name="theme-color" content="#0c1b33"/>
+			<meta name="apple-mobile-web-app-capable" content="yes"/>
+			<meta name="apple-mobile-web-app-title" content="workharbor"/>
+			<script src="/static/pwa.js" defer></script>
 			<script src="/static/htmx.min.js" defer></script>
 			<script src="/static/app.js" defer></script>
 			<script src="/static/sse.js" defer></script>
@@ -34,6 +41,7 @@ templ layout(n nav, title string) {
 								<span class="count">{ strconv.Itoa(n.Inbox) }</span>
 							}
 						</a>
+						<a href="/devices" class={ tab(n.Active, "devices") }>Devices</a>
 					</nav>
 					<form method="post" action="/logout" hx-boost="false">
 						<input type="hidden" name="csrf" value={ n.CSRF }/>
@@ -302,6 +310,37 @@ templ taskView(p taskPage) {
 		if p.Cancelable {
 			<p><a class="button danger" href={ templ.SafeURL("/tasks/" + p.ID + "/cancel") }>Cancel this task…</a></p>
 		}
+	}
+}
+
+templ devicesView(p devicesPage) {
+	@layout(p.nav, "Devices") {
+		<h1>Signed-in devices</h1>
+		@flashNote(p.Flash)
+		<p class="muted">Each browser that signed in has its own session. A phone signs itself out after 15 minutes without use. Sign out a lost device here, from another one.</p>
+		if !p.Revocable {
+			<p class="flash">This sign-in does not keep a list of devices.</p>
+		}
+		<ul class="rows">
+			for _, d := range p.Devices {
+				<li>
+					<strong>{ d.Label }</strong>
+					if d.Current {
+						<span class="count">this device</span>
+					}
+					<span class="muted">signed in { d.Since }, last used { d.LastSeen }</span>
+					<form method="post" action={ templ.SafeURL("/devices/" + d.ID + "/revoke") } hx-boost="false">
+						<input type="hidden" name="csrf" value={ p.CSRF }/>
+						if d.Current {
+							<button class="quiet">Sign out</button>
+						} else {
+							<button class="danger">Sign out this device</button>
+						}
+					</form>
+				</li>
+			}
+		</ul>
+		<p class="muted">The API token for the host's CLI is not a device: change <code>api_token_file</code> to replace it. A passkey is revoked on the host with <code>whr passkey rm</code>.</p>
 	}
 }
 

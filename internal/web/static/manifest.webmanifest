@@ -1,0 +1,16 @@
+{
+  "name": "workharbor",
+  "short_name": "workharbor",
+  "description": "Supervise AI coding agents: answer, approve and review from a phone or a tablet.",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0c1b33",
+  "background_color": "#0c1b33",
+  "icons": [
+    { "src": "/static/icons/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
