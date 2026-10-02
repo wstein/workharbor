@@ -5,7 +5,7 @@ weight: 1
 toc: true
 ---
 
-A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design/_index.md).
+A checklist for the host, in order. Each step says why. Steps marked {{< status unverified >}} have not been tried on a real setup yet. The design decisions behind this page are D28 (software) and D29 (reachability) in the [design](../design/_index.md). A setup wizard (`whr setup host` as the administrator, then `whr setup` as `whr`, design D46, issue #104) is coming that checks each step, shows the commands and runs them after you confirm; until it exists, follow the steps by hand, and they stay the reference afterwards.
 
 ## 1. Hardware and macOS
 

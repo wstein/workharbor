@@ -83,7 +83,7 @@ Push when a blocking Decision stops a task: the value of a supervisor is not hav
 
 ### 9.5 Onboarding
 
-First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and a config file, because the v0 web UI is scoped to remote control of running tasks (§9.3). A web wizard over the same service layer is a medium-term item (§13). Each step can be skipped and re-run later.
+First run is a guided sequence of six steps. The steps are the contract; the surface differs by phase. Release 1 delivers them through `whr login`, `whr doctor` and the setup wizard of D46, because the v0 web UI is scoped to remote control of running tasks (§9.3). A web wizard over the same steps is a medium-term item (§13). Each step can be skipped and re-run later.
 
 1. **Sign in.** Server URL (reached over the VPN, never public) and the single static access token, stored encrypted. OAuth sign-in comes later (§10).
 2. **Connect the forge.** GitHub in release 1 (D15): install the workharbor GitHub App on the chosen repositories; Gitea, Forgejo and GitLab later. Verify the limits the forge enforces, not prompts (§6): the bot can push `agent/*` branches and open PRs, branch protection requires a human review, the bot cannot bypass it, and merge, tag, release and deploy stay forbidden.
@@ -91,6 +91,8 @@ First run is a guided sequence of six steps. The steps are the contract; the sur
 4. **Check the host.** The checks of `whr doctor`: server and token, container runtime, forbidden mounts rejected, default-deny egress, agent session surviving a reboot, capacity (plan for 4 concurrent environments, §8). A check that has not been verified is reported as not verified, never as passed (spike #2 measured Apple Container isolation and egress; reboot survival is still unverified, §12).
 5. **Set up phone notifications.** ntfy provider (self-hosted or ntfy.sh), a generated random topic stored in the credential service, and a test push that carries the generic payload of §9.4. Remind that the link needs the VPN.
 6. **Ready.** Summary of what was configured and what is not yet verified, then the first command: `whr run <issue-url>`.
+
+**The setup wizard (D46, issue #104).** A setup step is a doctor check plus an optional fix, one value, so `whr doctor` and `whr setup` cannot disagree. A fix is a list of commands (argv, never a shell string) shown before it runs, or a guided text with the System Settings pane or link to open; after a fix the check runs again. `whr setup host` covers the administrator's part of the [host setup](../manual/host-setup.md) and `whr setup` the `whr` user's, in its desktop session; `--dry-run` prints every command, `--only` and `--from` pick steps, and a step whose check passes does nothing. The command set and their behaviour on macOS 26 are {{< status unverified >}} until the wizard has set up the reference Mac mini (#73).
 
 **Creating the App (step 2).** `whr github app create` (the name is provisional) makes the operator's own GitHub App through GitHub's manifest flow, so nobody fills in the creation form or downloads a `.pem`; the manual steps stay as the fallback ([host setup](../manual/host-setup.md), step 11). Every operator needs their own private App: the key mints tokens for every installation, so one cannot be shared.
 
