@@ -247,7 +247,7 @@ func TestOnlyAnOCIImageManifestWithLayersIsAFeature(t *testing.T) {
 }
 
 // A registry cannot send the client to a token endpoint on another host.
-func TestTheTokenRealmMustBeTheRegistrysOwn(t *testing.T) {
+func TestTheTokenRealmMustBeOnTheRegistryItself(t *testing.T) {
 	reg := newRegistry(t, []byte("x"))
 	reg.tokenRealm = "https://evil.example/token"
 	if _, err := reg.client().Resolve(bg, ref(t)); err == nil || !strings.Contains(err.Error(), "is not on ghcr.io") {
