@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -260,6 +261,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request, sess Session) {
 	p.Decisions = decisionRows(v.Open, newKey)
 	p.StepUp = s.stepUpAvailable(r.Context())
 	s.previewRows(r.Context(), id, &p)
+	s.paneRows(r.Context(), id, &p)
 	if len(evs) > maxShown {
 		p.Earlier = len(evs) - maxShown
 		evs = evs[len(evs)-maxShown:]
@@ -420,4 +422,25 @@ func (s *Server) open(w http.ResponseWriter, r *http.Request, sess Session) {
 		warnings = append(warnings, clip(w))
 	}
 	s.render(w, r, http.StatusOK, openView(openPage{nav: s.navOf(r, sess, "harbor"), ID: string(id), Repo: v.Task.Repo, Issue: v.Task.Issue, Path: cp.Path, Warnings: warnings}))
+}
+
+// paneRows fills the task list that sits beside the task on a wide screen: the
+// unfinished tasks, those that need you first, and this one even if it is finished.
+// A list that cannot be read leaves the pane out; the page does not fail for it.
+func (s *Server) paneRows(ctx context.Context, current domain.ID, p *taskPage) {
+	tasks, err := s.be.List(ctx, false)
+	if err != nil {
+		return
+	}
+	needs, others := taskRows(tasks)
+	seen := false
+	for _, group := range [][]taskRow{needs, others} {
+		for _, t := range group {
+			seen = seen || t.ID == string(current)
+			p.Panes = append(p.Panes, paneRow{ID: t.ID, Repo: t.Repo, Issue: t.Issue, State: t.State, Current: t.ID == string(current), NeedsYou: t.NeedsYou})
+		}
+	}
+	if !seen {
+		p.Panes = append(p.Panes, paneRow{ID: string(current), Repo: p.Repo, Issue: p.Issue, State: p.State, Current: true})
+	}
 }

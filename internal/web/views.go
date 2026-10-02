@@ -124,6 +124,15 @@ type taskPage struct {
 	Previews []previewRow
 	// PreviewsOn says the UI has the preview proxy, so the section is shown.
 	PreviewsOn bool
+	// Panes is the task list beside the task on a wide screen in landscape (§9.6
+	// T2); a phone does not show it.
+	Panes []paneRow
+}
+
+// paneRow is a task in the list beside the task page.
+type paneRow struct {
+	ID, Repo, Issue, State string
+	Current, NeedsYou      bool
 }
 
 type purgePage struct {

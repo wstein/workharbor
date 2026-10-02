@@ -143,8 +143,23 @@ button, .button {
 .ev.message { border-left-color: var(--teal); }
 .ev.approval, .ev.error { border-left-color: var(--warn); }
 .ev .untrusted { flex: 1 1 100%; }
+/* the task list beside a task is for a wide screen in landscape only; a phone gets one column and the list stays out of the way (design §9.6) */
+.tasklist { display: none; }
+.shortcuts { max-width: 60rem; margin: 0 auto; padding: 0 16px 16px; }
+.shortcuts summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.shortcuts dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+.shortcuts dd { margin: 0; }
+kbd { padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.tasklist a[aria-current="page"] { font-weight: 700; }
+.tasklist .card:has(a[aria-current="page"]) { border-color: var(--teal); }
 /* a wide screen puts the harbor in two columns */
 @media (min-width: 56rem) {
   main { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; align-items: start; }
   main > h1, main > .flash, main > p { grid-column: 1 / -1; }
+}
+/* a tablet in landscape: the task list and the task side by side, switching tasks without leaving the page */
+@media (min-width: 56rem) and (orientation: landscape) {
+  main > .panes { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .tasklist { display: block; position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
+  .pane-main > h1 { margin-top: 0; }
 }

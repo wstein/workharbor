@@ -34,15 +34,15 @@ templ layout(n nav, title string) {
 				<a class="brand" href="/">workharbor</a>
 				if n.CSRF != "" {
 					<nav>
-						<a href="/" class={ tab(n.Active, "harbor") }>Harbor</a>
-						<a href="/inbox" class={ tab(n.Active, "inbox") }>
+						<a href="/" data-shortcut="h" class={ tab(n.Active, "harbor") }>Harbor</a>
+						<a href="/inbox" data-shortcut="i" class={ tab(n.Active, "inbox") }>
 							Inbox
 							if n.Inbox > 0 {
 								<span class="count">{ strconv.Itoa(n.Inbox) }</span>
 							}
 						</a>
-						<a href="/changes" class={ tab(n.Active, "changes") }>Changes</a>
-						<a href="/devices" class={ tab(n.Active, "devices") }>Devices</a>
+						<a href="/changes" data-shortcut="c" class={ tab(n.Active, "changes") }>Changes</a>
+						<a href="/devices" data-shortcut="d" class={ tab(n.Active, "devices") }>Devices</a>
 					</nav>
 					<form method="post" action="/logout" hx-boost="false">
 						<input type="hidden" name="csrf" value={ n.CSRF }/>
@@ -53,6 +53,23 @@ templ layout(n nav, title string) {
 			<main>
 				{ children... }
 			</main>
+			if n.CSRF != "" {
+				<details id="shortcuts" class="shortcuts muted">
+					<summary>Keyboard shortcuts</summary>
+					<dl>
+						<dt><kbd>g</kbd> then <kbd>h</kbd> <kbd>i</kbd> <kbd>c</kbd> <kbd>d</kbd></dt>
+						<dd>Go to the harbor, inbox, changes, devices</dd>
+						<dt><kbd>j</kbd> / <kbd>k</kbd></dt>
+						<dd>Next and previous task in the list beside a task</dd>
+						<dt><kbd>m</kbd> or <kbd>/</kbd></dt>
+						<dd>Write to the agent</dd>
+						<dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd></dt>
+						<dd>Send the message you are typing</dd>
+						<dt><kbd>?</kbd></dt>
+						<dd>Show or hide this list</dd>
+					</dl>
+				</details>
+			}
 		</body>
 	</html>
 }
@@ -282,6 +299,29 @@ func evID(e eventRow) string {
 
 templ taskView(p taskPage) {
 	@layout(p.nav, p.Repo+p.Issue) {
+		<div class="panes">
+			if len(p.Panes) > 1 {
+				<aside class="tasklist" aria-label="Tasks">
+					<ul class="cards">
+						for _, t := range p.Panes {
+							<li class="card">
+								if t.Current {
+									<a href={ templ.SafeURL("/tasks/" + t.ID) } aria-current="page">
+										<strong>{ t.Repo }{ t.Issue }</strong>
+										<span class={ "state " + t.State }>{ t.State }</span>
+									</a>
+								} else {
+									<a href={ templ.SafeURL("/tasks/" + t.ID) }>
+										<strong>{ t.Repo }{ t.Issue }</strong>
+										<span class={ "state " + t.State }>{ t.State }</span>
+									</a>
+								}
+							</li>
+						}
+					</ul>
+				</aside>
+			}
+			<div class="pane-main">
 		<h1>{ p.Repo }{ p.Issue }</h1>
 		@flashNote(p.Flash)
 		<p>
@@ -371,6 +411,8 @@ templ taskView(p taskPage) {
 		if p.Cancelable {
 			<p><a class="button danger" href={ templ.SafeURL("/tasks/" + p.ID + "/cancel") }>Cancel this task…</a></p>
 		}
+			</div>
+		</div>
 	}
 }
 

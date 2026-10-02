@@ -24,3 +24,85 @@
     return source;
   };
 })();
+
+// Keyboard shortcuts for a tablet with a keyboard (design §9.6). They only move the
+// focus and follow the page's own links; nothing here answers a Decision, and a
+// key typed into a field is never a shortcut.
+(function () {
+  "use strict";
+  var pending = 0;
+
+  function typing(el) {
+    return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  }
+
+  function step(delta) {
+    var links = Array.prototype.slice.call(document.querySelectorAll(".tasklist a"));
+    if (!links.length) {
+      return;
+    }
+    var at = links.indexOf(document.activeElement);
+    if (at < 0) {
+      at = links.findIndex(function (a) {
+        return a.getAttribute("aria-current") === "page";
+      });
+    }
+    var next = links[Math.min(Math.max(at + delta, 0), links.length - 1)];
+    if (next) {
+      next.focus();
+    }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var el = e.target;
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && el && el.tagName === "TEXTAREA" && el.form) {
+      e.preventDefault();
+      if (el.form.requestSubmit) {
+        el.form.requestSubmit();
+      }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey || typing(el)) {
+      return;
+    }
+    if (pending && Date.now() - pending < 1500) {
+      pending = 0;
+      var link = document.querySelector('a[data-shortcut="' + e.key + '"]');
+      if (link) {
+        e.preventDefault();
+        link.click();
+      }
+      return;
+    }
+    switch (e.key) {
+      case "g":
+        pending = Date.now();
+        break;
+      case "j":
+        step(1);
+        break;
+      case "k":
+        step(-1);
+        break;
+      case "m":
+      case "/":
+        var box = document.getElementById("message");
+        if (box) {
+          e.preventDefault();
+          box.focus();
+        }
+        break;
+      case "?":
+        var help = document.getElementById("shortcuts");
+        if (help) {
+          help.open = !help.open;
+        }
+        break;
+      case "Escape":
+        if (document.activeElement && document.activeElement.blur) {
+          document.activeElement.blur();
+        }
+        break;
+    }
+  });
+})();
