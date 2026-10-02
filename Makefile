@@ -163,7 +163,7 @@ check-ci: docs check-hooks check-generated
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
 	typos --config .config/typos.toml .
 	lychee --config .config/lychee.toml --no-progress \
-		--remap 'https://github\.com/wstein/workharbor/(?:blob|tree)/main/(.*) file://$(CURDIR)/$$1' \
+		--remap 'https://github\.com/wstein/workharbor/(?:blob|tree)/main/([^?#]*)(?:[?#].*)? file://$(CURDIR)/$$1' \
 		'*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
