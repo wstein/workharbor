@@ -540,7 +540,8 @@ func (w *Workspaces) repoEnvironment(ctx context.Context, ws domain.Workspace) (
 }
 
 // gateEgress asks the human about the hosts the repository requests or suggests
-// and has not answered yet (design §4.2): one blocking approval per host, raised
+// and has not answered yet, and about the feature sources it uses outside the allowed
+// one (design §4.2): one blocking approval per host or reference, raised
 // for the run, which stays starting. It returns true when it did, and the agent
 // starts when the last request is answered (continueEgress). A repository that
 // cannot be read right now does not stop the run: it starts with the hosts
@@ -558,11 +559,20 @@ func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws dom
 	if err != nil {
 		return false, err
 	}
-	if len(pending) == 0 {
+	feats, err := w.svc.PendingFeatureSources(ctx, ws.Repo, env.Environment)
+	if err != nil {
+		return false, err
+	}
+	if len(pending) == 0 && len(feats) == 0 {
 		return false, nil
 	}
 	w.svc.holdForEgress(run, &egressWait{task: task, finish: start, sl: sl}) // before the requests are visible, so an answer finds it
 	if _, err := w.svc.RequestEgress(ctx, task, run, pending); err != nil {
+		w.svc.takeEgressWait(run)
+		return false, err
+	}
+	if err := w.svc.RequestFeatureSources(ctx, task, run, feats); err != nil {
+		// the host requests are raised already: the run fails and supersedes them
 		w.svc.takeEgressWait(run)
 		return false, err
 	}

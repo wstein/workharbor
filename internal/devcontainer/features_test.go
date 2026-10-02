@@ -145,7 +145,7 @@ func TestFeaturesAreFetchedOrderedAndBuiltOnTheImage(t *testing.T) {
 }
 
 // A refused feature or a foreign source is left out with a note and the environment
-// still resolves; features cannot be applied to a Dockerfile build.
+// still resolves; a foreign source is recorded to be asked about.
 func TestAnUnsafeOrForeignFeatureIsLeftOutWithANote(t *testing.T) {
 	reg := newFeatureRegistry(t, map[string]map[string]string{
 		"devcontainers/features/node":       {"devcontainer-feature.json": plainFeature, "install.sh": "x"},
@@ -170,13 +170,9 @@ func TestAnUnsafeOrForeignFeatureIsLeftOutWithANote(t *testing.T) {
 			t.Errorf("notes lack %q:\n%s", want, notes)
 		}
 	}
-	// a Dockerfile build keeps them requested, not applied
-	df, err := resolveWith(t, reg.opts(), map[string]string{
-		".devcontainer/devcontainer.json": `{"build":{"dockerfile":"Dockerfile"},"features":{"ghcr.io/devcontainers/features/node:1":{}}}`,
-		".devcontainer/Dockerfile":        "FROM scratch",
-	})
-	if err != nil || len(df.Features) != 0 || !strings.Contains(strings.Join(df.Notes, "|"), "built from a Dockerfile") {
-		t.Errorf("a Dockerfile build: features %d, notes %v, %v", len(df.Features), df.Notes, err)
+	// the foreign one is recorded to be asked about, as written
+	if len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0] != "ghcr.io/someone/else/thing:1" {
+		t.Errorf("foreign features = %v", env.ForeignFeatures)
 	}
 	// without a resolver they stay requested too, and the tag is the plain one
 	plain, err := resolveWith(t, testOpts, map[string]string{
@@ -231,5 +227,62 @@ func TestFeatureOptionsInTheFileAreReadAsStrings(t *testing.T) {
 		if _, err := Parse([]byte(bad)); err == nil {
 			t.Errorf("%s was accepted", bad)
 		}
+	}
+}
+
+// A foreign source the human allowed for the repository is applied like any other.
+func TestAnApprovedForeignFeatureIsApplied(t *testing.T) {
+	reg := newFeatureRegistry(t, map[string]map[string]string{
+		"someone/else/thing": {"devcontainer-feature.json": plainFeature, "install.sh": "x"},
+	})
+	o := reg.opts()
+	r := *o.Features
+	r.Approved = func(ref string) bool { return ref == "ghcr.io/someone/else/thing:1" }
+	o.Features = &r
+	env, err := resolveWith(t, o, map[string]string{
+		".devcontainer.json": `{"image":"docker.io/library/ubuntu:24.04","features":{"ghcr.io/someone/else/thing:1":{},"ghcr.io/other/one:2":{}}}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Features) != 1 || len(env.ForeignFeatures) != 1 || env.ForeignFeatures[0] != "ghcr.io/other/one:2" {
+		t.Errorf("features %d, foreign %v", len(env.Features), env.ForeignFeatures)
+	}
+}
+
+// Features of a Dockerfile environment apply on top of the image the Dockerfile builds:
+// two builds, the second from the tag of the first.
+func TestFeaturesApplyOnTopOfADockerfileImage(t *testing.T) {
+	reg := newFeatureRegistry(t, map[string]map[string]string{
+		"devcontainers/features/node": {"devcontainer-feature.json": plainFeature, "install.sh": "x"},
+	})
+	g := &fakeGit{files: map[string]string{}, modes: map[string]string{}}
+	g.files[strings.Repeat("a", 40)+":.devcontainer/devcontainer.json"] = `{"build":{"dockerfile":"Dockerfile"},"features":{"ghcr.io/devcontainers/features/node:1":{}}}`
+	g.files[strings.Repeat("a", 40)+":.devcontainer/Dockerfile"] = "FROM scratch\n"
+	env, err := Resolve(context.Background(), g, "main", reg.opts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Features) != 1 || !env.FeaturesOnDockerfile() || !env.Built() {
+		t.Fatalf("features %d, on dockerfile %v", len(env.Features), env.FeaturesOnDockerfile())
+	}
+	base, final := env.BaseTag("whr"), env.Tag("whr")
+	if base == final {
+		t.Fatal("the image with features has the tag of the one without")
+	}
+	first, _, err := env.Stage(context.Background(), g, "whr", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Tag != base {
+		t.Errorf("the Dockerfile build is tagged %s, want %s", first.Tag, base)
+	}
+	second, _, err := env.StageFeatures("whr", t.TempDir(), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	df, _ := os.ReadFile(second.Dockerfile)
+	if second.Tag != final || !strings.HasPrefix(string(df), "FROM "+base+"\n") {
+		t.Errorf("second build %s from:\n%s", second.Tag, df)
 	}
 }

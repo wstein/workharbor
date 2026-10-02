@@ -90,6 +90,71 @@ func (s *Service) RequestEgress(ctx context.Context, task, run domain.ID, reqs [
 	return ids, nil
 }
 
+// PendingFeatureSources lists the references of the features an environment takes from a
+// source outside the allowed one that the repository has not answered yet, allowed or
+// denied (D38, issue #127). Nothing in the repository allows a source.
+func (s *Service) PendingFeatureSources(ctx context.Context, repo string, env devcontainer.Environment) ([]string, error) {
+	if len(env.ForeignFeatures) == 0 {
+		return nil, nil
+	}
+	answers, err := s.store.FeatureSources(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, ref := range env.ForeignFeatures {
+		if !answers.Answered[ref] {
+			out = append(out, ref)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// ApprovedFeatureSources returns the feature references the human allowed for a
+// repository: what feature.Resolver.Approved reads when its environment is resolved.
+func (s *Service) ApprovedFeatureSources(ctx context.Context, repo string) (map[string]bool, error) {
+	answers, err := s.store.FeatureSources(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	return answers.Allowed, nil
+}
+
+// RequestFeatureSources raises one blocking approval per feature reference for a
+// starting run, in one change and all or nothing, like RequestEgress.
+func (s *Service) RequestFeatureSources(ctx context.Context, task, run domain.ID, refs []string) error {
+	for _, ref := range refs {
+		if !domain.ValidFeatureRef(ref) {
+			return fmt.Errorf("feature source request: %q is not a reference that can be asked about", ref)
+		}
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	return s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		for _, ref := range refs {
+			if _, err := a.RaiseFeatureSource(run, s.cfg.NewID(), ref, s.clock.Now()); err != nil {
+				return fmt.Errorf("feature source request for %q: %w", ref, err)
+			}
+		}
+		return nil
+	})
+}
+
+// keepFeatureAnswer stores the answer to a feature source request for the repository
+// of its task. Only an answered allow or deny is kept.
+func (s *Service) keepFeatureAnswer(ctx context.Context, d domain.Decision, option string) error {
+	if option != domain.AnswerAllow && option != domain.AnswerDeny {
+		return nil
+	}
+	agg, err := s.store.LoadTask(ctx, d.TaskID)
+	if err != nil {
+		return err
+	}
+	return s.store.SetFeatureSource(ctx, agg.Task().Repo, d.Feature, option == domain.AnswerAllow, d.ID, s.clock.Now())
+}
+
 // EgressAllow returns the hosts the human allowed for a repository: what to put
 // in the egress allowlist of its environments besides the supervisor's own.
 func (s *Service) EgressAllow(ctx context.Context, repo string) ([]string, error) {
@@ -169,7 +234,7 @@ func (s *Service) egressOpen(ctx context.Context, task, run domain.ID) (bool, er
 		return false, nil
 	}
 	for _, d := range agg.Decisions() {
-		if d.RunID == run && d.Cause == domain.CauseEgressRequest && d.Status == domain.DecisionOpen {
+		if d.RunID == run && d.Cause.AsksBeforeStart() && d.Status == domain.DecisionOpen {
 			return true, nil
 		}
 	}

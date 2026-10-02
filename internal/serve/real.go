@@ -365,8 +365,11 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		ConsoleSSH: consoleSSH,
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
-		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages, Features: &feature.Resolver{Client: oci.New(oci.Config{})}}, rt, Owner, filepath.Join(dir, "build")),
-		Topics:      Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
+		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages, Features: &feature.Resolver{Client: oci.New(oci.Config{})}}, rt, Owner, filepath.Join(dir, "build"), func(ctx context.Context, repo string) (map[string]bool, error) {
+			a, err := st.FeatureSources(ctx, repo)
+			return a.Allowed, err
+		}),
+		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
 		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {
 			return AgentSpecFor(held, mode)
@@ -555,7 +558,7 @@ func (o ConsoleOptions) For(rw []domain.Workspace) runtime.Spec {
 // directory of the supervisor's own (design §5.1). A mirror that cannot be
 // fetched is an error, which the caller reports; no host is allowed and nothing
 // is run for what could not be read.
-func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.Options, rt baseimage.Builder, owner, workDir string) func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error) {
+func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.Options, rt baseimage.Builder, owner, workDir string, approved func(ctx context.Context, repo string) (map[string]bool, error)) func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error) {
 	return func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error) {
 		_, cache, err := topics(ctx, repo)
 		if err != nil {
@@ -567,6 +570,16 @@ func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.O
 		mirror, err := git.OpenBare(ctx, cache.Path())
 		if err != nil {
 			return service.RepoEnvironment{}, err
+		}
+		// the feature sources the human allowed for this repository, and only those
+		if approved != nil && opt.Features != nil {
+			ok, err := approved(ctx, repo)
+			if err != nil {
+				return service.RepoEnvironment{}, err
+			}
+			r := *opt.Features
+			r.Approved = func(ref string) bool { return ok[ref] }
+			opt.Features = &r
 		}
 		env, err := devcontainer.Resolve(ctx, mirror, "refs/heads/"+branch, opt)
 		if err != nil {
@@ -592,17 +605,36 @@ func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.O
 					return "", err
 				}
 				defer func() { _ = os.RemoveAll(dir) }()
+				build := func(b runtime.BuildSpec) error {
+					if out, err := rt.Build(ctx, b); err != nil {
+						if len(out) > 2000 {
+							out = out[len(out)-2000:]
+						}
+						return fmt.Errorf("%w\n%s", err, out)
+					}
+					return nil
+				}
 				b, _, err := env.Stage(ctx, mirror, owner, dir)
 				if err != nil {
 					return "", err
 				}
-				if out, err := rt.Build(ctx, b); err != nil {
-					if len(out) > 2000 {
-						out = out[len(out)-2000:]
-					}
-					return "", fmt.Errorf("%w\n%s", err, out)
+				if !env.FeaturesOnDockerfile() {
+					return tag, build(b)
 				}
-				return tag, nil
+				// features on a Dockerfile: the repository's image first, then the
+				// features on top of it, the second build from the first's tag
+				if have, err := rt.HasImage(ctx, b.Tag); err != nil {
+					return "", err
+				} else if !have {
+					if err := build(b); err != nil {
+						return "", err
+					}
+				}
+				top, _, err := env.StageFeatures(owner, filepath.Join(dir, "features"), b.Tag)
+				if err != nil {
+					return "", err
+				}
+				return tag, build(top)
 			}
 		}
 		return re, nil

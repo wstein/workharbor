@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -79,7 +80,37 @@ const (
 	// the board's agent queue, which never starts a run by itself (D30, D40, issue
 	// #71). The human accepts it or cancels it.
 	CauseBoardQueue DecisionCause = "board_queue"
+	// CauseFeatureSource asks whether a repository may use a devcontainer feature
+	// from a source outside the allowed one (D38, issue #127). The reference is in the
+	// Decision's Feature field. Like an egress request it is asked before the agent
+	// starts, and its answer is kept per repository.
+	CauseFeatureSource DecisionCause = "feature_source"
 )
+
+// AsksBeforeStart reports whether a Decision of this cause is asked of a run that is
+// still starting: no agent waits for it, and the agent starts once none is open.
+func (c DecisionCause) AsksBeforeStart() bool {
+	return c == CauseEgressRequest || c == CauseFeatureSource
+}
+
+// ValidFeatureRef reports whether s can be asked about as a feature reference: a
+// registry path with a tag or digest, printable ASCII without spaces or quotes, short.
+// The reader (oci.ParseRef) checks it again before anything is fetched.
+func ValidFeatureRef(s string) bool {
+	if len(s) < 3 || len(s) > 255 || !strings.Contains(s, "/") {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '/' || c == '.' || c == '-' || c == '_' || c == ':' || c == '@':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 const (
 	// MaxDecisionInput is the most characters of an agent's input a Decision
@@ -122,6 +153,10 @@ type Decision struct {
 	// reader validated (ValidHost), kept apart from the subject and the input,
 	// which only describe it. Empty for every other Decision.
 	Host string
+	// Feature is the reference of a CauseFeatureSource Decision, as the repository
+	// wrote it: validated (ValidFeatureRef) and kept apart from the subject and the
+	// input. Empty for every other Decision.
+	Feature string
 
 	Status     DecisionStatus
 	CreatedAt  time.Time
@@ -154,6 +189,7 @@ type NewDecision struct {
 	Options        []string
 	Cause          DecisionCause
 	Host           string // the egress host of a CauseEgressRequest Decision
+	Feature        string // the feature reference of a CauseFeatureSource Decision
 	ResumeAt       time.Time
 	Now            time.Time
 	Timeout        time.Duration // zero: DefaultApprovalTimeout for an approval, none otherwise
@@ -166,6 +202,8 @@ var (
 	ErrDecisionRun  = invalid("a review decision has no run, and any other decision needs one")
 	ErrDecisionSHA  = invalid("a review decision needs the commit SHA it is about")
 	ErrDecisionHost = invalid("an egress request is a blocking approval with a valid host name, and no other decision names a host")
+
+	ErrDecisionFeature = invalid("a feature source request is a blocking approval with a valid feature reference, and no other decision names one")
 
 	ErrDecisionTimeout = invalid("a decision timeout cannot be negative")
 	ErrDecisionTime    = invalid("a time is needed and it is zero")
@@ -208,6 +246,11 @@ func raise(spec NewDecision) (*Decision, error) {
 		return nil, ErrDecisionHost
 	}
 
+	if feat := spec.Cause == CauseFeatureSource; feat != (spec.Feature != "") ||
+		(feat && (spec.Kind != DecisionApproval || !spec.Blocking || !ValidFeatureRef(spec.Feature))) {
+		return nil, ErrDecisionFeature
+	}
+
 	d := &Decision{
 		ID:        spec.ID,
 		TaskID:    spec.TaskID,
@@ -219,6 +262,7 @@ func raise(spec NewDecision) (*Decision, error) {
 		Options:   append([]string(nil), spec.Options...),
 		Cause:     spec.Cause,
 		Host:      spec.Host,
+		Feature:   spec.Feature,
 		ResumeAt:  spec.ResumeAt,
 		Status:    DecisionOpen,
 		CreatedAt: spec.Now,
@@ -239,7 +283,7 @@ func raise(spec NewDecision) (*Decision, error) {
 	}
 	d.record(EventDecisionRaised, DecisionRaised{
 		ID: d.ID, RunID: d.RunID, Kind: d.Kind, Blocking: d.Blocking, Subject: d.Subject,
-		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, Host: d.Host, ResumeAt: d.ResumeAt,
+		Input: d.Input, SHA: d.SHA, Deadline: d.Deadline, Cause: d.Cause, Host: d.Host, Feature: d.Feature, ResumeAt: d.ResumeAt,
 	}, spec.Now)
 	return d, nil
 }

@@ -39,6 +39,18 @@ func (e Environment) Tag(owner string) string {
 	return "whr-env/" + owner + ":" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// BaseTag is the tag of the image a Dockerfile builds before the features are applied
+// on top of it (D38, issue #127): the tag the environment would have without them.
+func (e Environment) BaseTag(owner string) string {
+	e.Features = nil
+	return e.Tag(owner)
+}
+
+// FeaturesOnDockerfile reports whether the environment applies features on top of the
+// image its Dockerfile builds, which takes two builds: Stage, then StageFeatures on
+// the tag of the first.
+func (e Environment) FeaturesOnDockerfile() bool { return e.Dockerfile != "" && len(e.Features) > 0 }
+
 // Stage writes what the build reads below workDir, from the commit the
 // environment was resolved at: the context in workDir/context and the
 // Dockerfile as workDir/Dockerfile, which may have lain outside the context in
@@ -49,7 +61,7 @@ func (e Environment) Stage(ctx context.Context, r Runner, owner, workDir string)
 		return runtime.BuildSpec{}, Exported{}, fmt.Errorf("devcontainer: the environment runs image %q and builds nothing", e.Image)
 	}
 	if e.Dockerfile == "" {
-		return e.stageFeatures(owner, workDir)
+		return e.StageFeatures(owner, workDir, e.Image)
 	}
 	dockerfile, err := file(ctx, r, e.Commit, e.Dockerfile)
 	if err != nil {
@@ -64,20 +76,25 @@ func (e Environment) Stage(ctx context.Context, r Runner, owner, workDir string)
 	if err := os.WriteFile(df, dockerfile, 0o600); err != nil {
 		return runtime.BuildSpec{}, res, err
 	}
-	b := runtime.BuildSpec{Tag: e.Tag(owner), ContextDir: ctxDir, Dockerfile: df, Args: e.BuildArgs}
+	tag := e.Tag(owner)
+	if e.FeaturesOnDockerfile() {
+		tag = e.BaseTag(owner) // the features are a second build on top of this image
+	}
+	b := runtime.BuildSpec{Tag: tag, ContextDir: ctxDir, Dockerfile: df, Args: e.BuildArgs}
 	return b, res, b.Validate()
 }
 
-// stageFeatures writes the build of an image with devcontainer features applied: a
+// StageFeatures writes the build of an image with devcontainer features applied: a
 // context that holds only the features, extracted again and checked, and a Dockerfile
-// that installs them in order on the environment's image (D38, issue #108). The
-// repository's own files are not part of it.
-func (e Environment) stageFeatures(owner, workDir string) (runtime.BuildSpec, Exported, error) {
+// that installs them in order on base (D38, issues #108 and #127): the environment's
+// image, or the tag of the image its Dockerfile built. The repository's own files are
+// not part of it.
+func (e Environment) StageFeatures(owner, workDir, base string) (runtime.BuildSpec, Exported, error) {
 	ctxDir := filepath.Join(workDir, "context")
 	if err := os.MkdirAll(ctxDir, 0o700); err != nil {
 		return runtime.BuildSpec{}, Exported{}, err
 	}
-	text, err := feature.Stage(ctxDir, e.Image, e.Features, oci.ExtractLimits{})
+	text, err := feature.Stage(ctxDir, base, e.Features, oci.ExtractLimits{})
 	if err != nil {
 		return runtime.BuildSpec{}, Exported{}, err
 	}

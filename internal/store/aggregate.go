@@ -260,13 +260,13 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (int64, err
 	values := []any{
 		string(d.TaskID), string(d.RunID), string(d.Kind), boolInt(d.Blocking), rd.String(d.Subject), rd.String(d.Input), boolInt(d.InputTruncated),
 		d.SHA, string(options), string(d.Status), toNano(d.CreatedAt), int64(d.Timeout), toNano(d.Deadline), answeredAt,
-		rd.String(d.Answer), rd.String(d.Reason), rd.String(d.AnsweredBy), string(d.SupersededBy), string(d.Cause), toNano(d.ResumeAt), d.Host,
+		rd.String(d.Answer), rd.String(d.Reason), rd.String(d.AnsweredBy), string(d.SupersededBy), string(d.Cause), toNano(d.ResumeAt), d.Host, d.Feature,
 	}
 	if expected == 0 {
 		args := append([]any{string(d.ID)}, values...)
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO decisions (id, version, task_id, run_id, kind, blocking, subject, input, input_truncated,
-			sha, options, status, created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at, hostname)
-			VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...); err != nil {
+			sha, options, status, created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at, hostname, feature)
+			VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...); err != nil {
 			var exists int
 			if tx.tx.QueryRowContext(ctx, `SELECT 1 FROM decisions WHERE id = ?`, string(d.ID)).Scan(&exists) == nil {
 				return 0, fmt.Errorf("decision %s: %w", d.ID, ErrStale)
@@ -277,7 +277,7 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (int64, err
 		args := append(values, string(d.ID), expected)
 		res, err := tx.tx.ExecContext(ctx, `UPDATE decisions SET version = version + 1, task_id = ?, run_id = ?, kind = ?, blocking = ?, subject = ?,
 			input = ?, input_truncated = ?, sha = ?, options = ?, status = ?, created_at = ?, timeout_ns = ?, deadline = ?, answered_at = ?,
-			answer = ?, reason = ?, answered_by = ?, superseded_by = ?, cause = ?, resume_at = ?, hostname = ? WHERE id = ? AND version = ?`, args...)
+			answer = ?, reason = ?, answered_by = ?, superseded_by = ?, cause = ?, resume_at = ?, hostname = ?, feature = ? WHERE id = ? AND version = ?`, args...)
 		if err != nil {
 			return 0, fmt.Errorf("store: save decision %s: %w", d.ID, err)
 		}
@@ -293,7 +293,7 @@ func (tx *Tx) writeDecision(ctx context.Context, d *domain.Decision) (int64, err
 }
 
 const decisionColumns = `id, version, task_id, run_id, kind, blocking, subject, input, input_truncated, sha, options, status,
-	created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at, hostname`
+	created_at, timeout_ns, deadline, answered_at, answer, reason, answered_by, superseded_by, cause, resume_at, hostname, feature`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -303,7 +303,7 @@ func scanDecision(r rowScanner) (*domain.Decision, error) {
 	var blocking, truncated int
 	var created, timeout, deadline, answeredAt, resumeAt int64
 	if err := r.Scan(&id, &d.Version, &task, &run, &kind, &blocking, &d.Subject, &d.Input, &truncated, &d.SHA, &options, &status,
-		&created, &timeout, &deadline, &answeredAt, &d.Answer, &d.Reason, &d.AnsweredBy, &superseded, &cause, &resumeAt, &d.Host); err != nil {
+		&created, &timeout, &deadline, &answeredAt, &d.Answer, &d.Reason, &d.AnsweredBy, &superseded, &cause, &resumeAt, &d.Host, &d.Feature); err != nil {
 		return nil, err
 	}
 	d.ID, d.TaskID, d.RunID, d.Kind, d.Status = domain.ID(id), domain.ID(task), domain.ID(run), domain.DecisionKind(kind), domain.DecisionStatus(status)

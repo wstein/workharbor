@@ -161,6 +161,7 @@ type DecisionRaised struct {
 	Deadline time.Time     `json:"deadline,omitzero"`
 	Cause    DecisionCause `json:"cause,omitempty"`
 	Host     string        `json:"host,omitempty"`
+	Feature  string        `json:"feature,omitempty"`
 	ResumeAt time.Time     `json:"resume_at,omitzero"`
 }
 

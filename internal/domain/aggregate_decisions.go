@@ -608,3 +608,15 @@ func (a *TaskAggregate) RaiseEgressRequest(runID, id ID, host, source string, no
 		Cause: CauseEgressRequest, Host: host, Now: now,
 	})
 }
+
+// RaiseFeatureSource asks the human whether a repository may use a devcontainer
+// feature from a source outside the allowed one (D38, issue #127): a blocking approval
+// for a starting run, with the cause feature_source and the reference in its own field.
+// The subject and input only describe it. An allow or deny is kept per repository.
+func (a *TaskAggregate) RaiseFeatureSource(runID, id ID, ref string, now time.Time) (Decision, error) {
+	return a.RaiseDecision(NewDecision{
+		ID: id, RunID: runID, Kind: DecisionApproval, Blocking: true,
+		Subject: "Allow the devcontainer feature " + ref + "?", Input: "requested by the repository's devcontainer.json; its install script runs as root while an image is built. Your answer applies to environments made after it; this workspace's environment keeps the image it has",
+		Cause: CauseFeatureSource, Feature: ref, Now: now,
+	})
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -70,6 +71,10 @@ type Environment struct {
 	// (D38, issue #108); the digests key the image tag, so a moved tag changes nothing
 	// until the next resolution.
 	Features []feature.Resolved
+	// ForeignFeatures are the references, as written, of features from a source outside
+	// the allowed one that the human has not allowed for this repository: left out of
+	// Features, and asked about (D38, issue #127).
+	ForeignFeatures []string
 
 	// SuggestedHosts are the package registries the repository's lockfiles
 	// imply. They are suggestions: the human confirms them once per repository
@@ -176,8 +181,7 @@ func Resolve(ctx context.Context, r Runner, ref string, opt Options) (Environmen
 // source that needs a Decision, is left out with a note that names why; a registry that
 // cannot be reached, a digest that does not match and an archive that is not safe fail
 // the resolution, because an environment that silently lacks its tools is worse than one
-// that does not start. Features apply to an image, so a build from a Dockerfile keeps
-// them requested and not applied.
+// that does not start. With a Dockerfile they apply on top of the image it builds.
 func resolveFeatures(ctx context.Context, env *Environment, opt Options) error {
 	reqs := env.Config.FeatureRequests
 	if len(reqs) == 0 {
@@ -185,13 +189,10 @@ func resolveFeatures(ctx context.Context, env *Environment, opt Options) error {
 	}
 	note := func(format string, args ...any) { env.Notes = append(env.Notes, fmt.Sprintf(format, args...)) }
 	switch {
-	case env.Dockerfile != "":
-		note("features: requested, not applied: they apply to an image, and this environment is built from a Dockerfile")
-		return nil
 	case opt.Features == nil:
 		note("features: requested, not applied: no feature resolver is configured")
 		return nil
-	case env.Image == "":
+	case env.Dockerfile == "" && env.Image == "":
 		note("features: requested, not applied: there is no base image to apply them to")
 		return nil
 	}
@@ -200,7 +201,10 @@ func resolveFeatures(ctx context.Context, env *Environment, opt Options) error {
 		f, err := opt.Features.Resolve(ctx, req)
 		switch {
 		case errors.Is(err, feature.ErrSourceNotAllowed):
-			note("feature %s is not applied: a source outside %s needs a Decision, which is not built yet", req.ID, feature.AllowedPrefix)
+			note("feature %s is not applied: a source outside %s needs the human's allow for this repository", req.ID, feature.AllowedPrefix)
+			if !slices.Contains(env.ForeignFeatures, req.ID) {
+				env.ForeignFeatures = append(env.ForeignFeatures, req.ID)
+			}
 		case errors.Is(err, feature.ErrRefused):
 			note("feature %s is not applied: %v", req.ID, err)
 		case err != nil:

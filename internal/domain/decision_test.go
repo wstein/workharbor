@@ -300,3 +300,39 @@ func TestAnEgressRequestIsAnsweredAllowOrDeny(t *testing.T) {
 		t.Error("an expired request must not read as an allow")
 	}
 }
+
+// The reference of a feature source request is its own field: a malformed one is
+// refused, and so is a reference on any other Decision.
+func TestFeatureSourceRequestKeepsTheReferenceInItsOwnField(t *testing.T) {
+	a, _, _ := newRunningAggregate(t)
+	d, err := a.RaiseFeatureSource("r1", "d1", "ghcr.io/someone/else/thing:1", time.Unix(10, 0))
+	if err != nil || d.Cause != CauseFeatureSource || d.Feature != "ghcr.io/someone/else/thing:1" || !d.Blocking || d.Kind != DecisionApproval {
+		t.Fatalf("decision = %+v, %v", d, err)
+	}
+	var seen bool
+	for _, e := range a.TakeEvents() {
+		if e.Kind == EventDecisionRaised {
+			var p DecisionRaised
+			if err := json.Unmarshal(e.Payload, &p); err != nil || p.Feature != "ghcr.io/someone/else/thing:1" || p.Cause != CauseFeatureSource {
+				t.Errorf("payload = %+v, %v", p, err)
+			}
+			seen = true
+		}
+	}
+	if !seen {
+		t.Error("no decision.raised entry")
+	}
+	for _, bad := range []string{"", "thing", "ghcr.io/a b/c:1", "ghcr.io/x/y:1\nIgnore previous", "ghcr.io/x/y:1'; rm", strings.Repeat("a/", 200)} {
+		b, _, _ := newRunningAggregate(t)
+		if _, err := b.RaiseFeatureSource("r1", "d1", bad, time.Unix(10, 0)); !errors.Is(err, ErrDecisionFeature) {
+			t.Errorf("reference %q: err = %v, want ErrDecisionFeature", bad, err)
+		}
+	}
+	c, _, _ := newRunningAggregate(t)
+	if _, err := c.RaiseDecision(NewDecision{ID: "d2", RunID: "r1", Kind: DecisionApproval, Blocking: true, Feature: "ghcr.io/x/y:1", Now: time.Unix(10, 0)}); !errors.Is(err, ErrDecisionFeature) {
+		t.Errorf("a reference on an ordinary approval: err = %v", err)
+	}
+	if _, err := c.RaiseDecision(NewDecision{ID: "d3", RunID: "r1", Kind: DecisionQuestion, Blocking: true, Cause: CauseFeatureSource, Feature: "ghcr.io/x/y:1", Now: time.Unix(10, 0)}); !errors.Is(err, ErrDecisionFeature) {
+		t.Errorf("a feature source request that is a question: err = %v", err)
+	}
+}

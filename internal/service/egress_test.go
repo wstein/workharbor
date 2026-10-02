@@ -227,3 +227,61 @@ func TestOtherPresetsAskOncePerRepository(t *testing.T) {
 		t.Errorf("allowed = %v", allow)
 	}
 }
+
+// A feature source outside the allowed one is asked once per repository and reference,
+// and the answer is kept like an egress host's (D38, issue #127).
+func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
+	r := newRig(t)
+	const repo = "wstein/workharbor"
+	env := devcontainer.Environment{ForeignFeatures: []string{"ghcr.io/someone/else/thing:1", "ghcr.io/other/one:2"}}
+	pending, err := r.svc.PendingFeatureSources(bg, repo, env)
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("pending = %v, %v", pending, err)
+	}
+	if err := r.svc.RequestFeatureSources(bg, "t1", "r1", pending); err != nil {
+		t.Fatal(err)
+	}
+	a := r.load()
+	if a.Task().State != domain.TaskAwaitingGuidance {
+		t.Errorf("task = %s, want awaiting_guidance", a.Task().State)
+	}
+	var ids []domain.ID
+	for _, d := range a.Decisions() {
+		if d.Cause != domain.CauseFeatureSource || !d.Blocking || d.Status != domain.DecisionOpen || d.Feature == "" {
+			t.Errorf("decision = %+v", d)
+		}
+		ids = append(ids, d.ID)
+	}
+	if ok, _ := r.svc.ApprovedFeatureSources(bg, repo); len(ok) != 0 {
+		t.Fatalf("approved before any answer: %v", ok)
+	}
+	for _, id := range ids {
+		d, _ := a.Decision(id)
+		opt := domain.AnswerDeny
+		if d.Feature == "ghcr.io/someone/else/thing:1" {
+			opt = domain.AnswerAllow
+		}
+		if err := r.svc.AnswerDecision(bg, id, domain.Response{Option: opt, By: "werner", At: t0}); err != nil {
+			t.Fatalf("answer %s: %v", d.Feature, err)
+		}
+	}
+	ok, err := r.svc.ApprovedFeatureSources(bg, repo)
+	if err != nil || len(ok) != 1 || !ok["ghcr.io/someone/else/thing:1"] {
+		t.Errorf("approved = %v, %v", ok, err)
+	}
+	if st := r.load().Task().State; st != domain.TaskRunning {
+		t.Errorf("task = %s after the last answer, want running again", st)
+	}
+	if again, _ := r.svc.PendingFeatureSources(bg, repo, env); len(again) != 0 {
+		t.Errorf("asked again for %v", again)
+	}
+	if other, _ := r.svc.PendingFeatureSources(bg, "wstein/other", env); len(other) != 2 {
+		t.Errorf("another repository must be asked for both: %v", other)
+	}
+	if err := r.svc.RequestFeatureSources(bg, "t1", "r1", []string{"bad ref"}); err == nil {
+		t.Error("a malformed reference was asked about")
+	}
+	if len(r.errs) != 0 {
+		t.Errorf("errors: %v", r.errs)
+	}
+}

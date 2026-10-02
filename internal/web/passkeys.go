@@ -45,10 +45,10 @@ func (s *Server) passkeyMode(ctx context.Context) bool {
 func (s *Server) stepUpAvailable(ctx context.Context) bool { return s.passkeyMode(ctx) }
 
 // sensitive reports whether answering a Decision needs a fresh passkey assertion
-// (D45): "Ready to push?" and an egress host; policy and preset changes and secret
+// (D45): "Ready to push?", an egress host and a feature source; policy and preset changes and secret
 // operations as those Decisions come. A web session alone never answers them.
 func sensitive(d *domain.Decision) bool {
-	return d.Kind == domain.DecisionReview || d.Cause == domain.CauseEgressRequest
+	return d.Kind == domain.DecisionReview || d.Cause == domain.CauseEgressRequest || d.Cause == domain.CauseFeatureSource
 }
 
 // bindsTo is what the challenge of a sensitive Decision names besides its ID: the
@@ -58,6 +58,9 @@ func bindsTo(d *domain.Decision) string {
 	if d.Cause == domain.CauseEgressRequest {
 		return "host:" + d.Host
 	}
+	if d.Cause == domain.CauseFeatureSource {
+		return "feature:" + d.Feature
+	}
 	return d.SHA
 }
 
@@ -66,6 +69,8 @@ func stepUpFor(d domain.Decision) string {
 	switch {
 	case d.Cause == domain.CauseEgressRequest:
 		return "this host"
+	case d.Cause == domain.CauseFeatureSource:
+		return "this feature source"
 	case d.Kind == domain.DecisionReview:
 		return "this commit"
 	}

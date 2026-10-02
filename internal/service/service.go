@@ -392,7 +392,7 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		return err
 	}
 	// An egress request is asked before the agent starts, so no agent waits for it.
-	if row.Kind == domain.DecisionApproval && row.Cause != domain.CauseEgressRequest && row.Status == domain.DecisionOpen && !s.approvalWaiting(id) {
+	if row.Kind == domain.DecisionApproval && !row.Cause.AsksBeforeStart() && row.Status == domain.DecisionOpen && !s.approvalWaiting(id) {
 		// The agent that asked is gone (stopped, paused, or the supervisor
 		// restarted), so there is nothing to answer: refused, not stored (D23).
 		return domain.NewConflict(domain.RuleDecisionClosed, "no agent is waiting for approval %s: its run was stopped or the supervisor restarted; the agent asks again after it resumes", id)
@@ -412,6 +412,14 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 			s.end(row.RunID, sl)
 		}
 		return err
+	}
+	if row.Cause == domain.CauseFeatureSource && row.Feature != "" {
+		if err := s.keepFeatureAnswer(ctx, *row, r.Option); err != nil {
+			return fmt.Errorf("keep the answer for %s: %w", row.Feature, err)
+		}
+		if err := s.continueEgress(ctx, row.TaskID, row.RunID); err != nil {
+			return fmt.Errorf("start the run after the feature answers: %w", err)
+		}
 	}
 	if row.Cause == domain.CauseEgressRequest && row.Host != "" {
 		if err := s.keepEgressAnswer(ctx, *row, r.Option); err != nil {
