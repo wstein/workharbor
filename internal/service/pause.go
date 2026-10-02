@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
@@ -43,10 +44,25 @@ func (s *Service) Pause(ctx context.Context, task domain.ID) error {
 func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error) {
 	var run domain.ID
 	var sl *slot
+	var unlock func()
+	defer func() {
+		if unlock != nil {
+			unlock()
+		}
+	}()
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		// The slot of an earlier attempt of this same call (the change is tried
+		// again after a stale write) must not make the run look attached.
+		if sl != nil {
+			s.end(run, sl)
+			sl = nil
+		}
 		r, ok := a.LiveRun()
 		if !ok {
 			return domain.NewConflict(domain.RuleTransition, "task %s has no run to resume", task)
+		}
+		if unlock == nil { // one resume of a run at a time, so two cannot both start it
+			unlock = s.lockRun(r.ID)
 		}
 		if s.attached(r.ID) {
 			return domain.NewConflict(domain.RuleTransition, "run %s is already running", r.ID)
@@ -57,9 +73,6 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 		}
 		// Before the change is saved, so the reconciler does not see a starting run
 		// with no session and take it for lost.
-		if sl != nil { // the change is tried again after a stale write
-			s.end(r.ID, sl)
-		}
 		sl = s.begin(r.ID)
 		return nil
 	})
@@ -117,4 +130,34 @@ func (s *Service) PurgeTranscript(ctx context.Context, task domain.ID, actor str
 	}
 	s.publish([]domain.Event{res.Audit})
 	return res, nil
+}
+
+// lockRun serialises the operations that start a run's agent: it returns the
+// function that releases the run. Different runs do not wait for each other.
+func (s *Service) lockRun(run domain.ID) func() {
+	s.mu.Lock()
+	if s.runLocks == nil {
+		s.runLocks = map[domain.ID]*runLock{}
+	}
+	l := s.runLocks[run]
+	if l == nil {
+		l = &runLock{}
+		s.runLocks[run] = l
+	}
+	l.refs++
+	s.mu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		s.mu.Lock()
+		if l.refs--; l.refs == 0 {
+			delete(s.runLocks, run)
+		}
+		s.mu.Unlock()
+	}
+}
+
+type runLock struct {
+	mu   sync.Mutex
+	refs int
 }

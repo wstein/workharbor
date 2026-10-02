@@ -248,3 +248,42 @@ func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
 		})
 	}
 }
+
+// Two resumes of the same run at once start the agent once: the other is told the
+// run is running (design §4.1: one live run).
+func TestConcurrentResumesStartTheAgentOnce(t *testing.T) {
+	r := newRig(t)
+	r.live()
+	must(t, r.svc.Pause(bg, "t1"))
+	r.svc.Wait()
+	r.agent.Block()
+	before := len(r.agent.Specs)
+
+	const n = 6
+	errs := make(chan error, n)
+	for range n {
+		go func() { _, err := r.svc.Resume(bg, "t1"); errs <- err }()
+	}
+	ok := 0
+	for range n {
+		if err := <-errs; err == nil {
+			ok++
+		} else {
+			var c *domain.ConflictError
+			if !errors.As(err, &c) {
+				t.Errorf("a refused resume is a conflict: %v", err)
+			}
+		}
+	}
+	if ok != 1 {
+		t.Errorf("%d resumes succeeded, want exactly one", ok)
+	}
+	if started := len(r.agent.Specs) - before; started != 1 {
+		t.Errorf("the agent was started %d times", started)
+	}
+	must(t, r.svc.Cancel(bg, "t1"))
+	r.svc.Wait()
+	if len(r.errs) != 0 {
+		t.Errorf("errors: %v", r.errs)
+	}
+}

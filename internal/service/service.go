@@ -111,6 +111,7 @@ type Service struct {
 	// egressWaits are the runs that stay starting until their egress requests are
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
+	runLocks    map[domain.ID]*runLock // one resume of a run at a time
 	// egressSources is what each open egress request was asked about (its
 	// devcontainer.json digest), kept to store with the answer.
 	egressSources map[domain.ID]string
