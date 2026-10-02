@@ -414,6 +414,10 @@ func TestRefuseSyntaxDirective(t *testing.T) {
 		"after other comment": "# a note\n# syntax=docker/dockerfile:1\nFROM fedora\n",
 		"slashes official":    "//syntax=docker/dockerfile:1\nFROM fedora\n",
 		"json without syntax": "{\"other\": 1}\n",
+		"shebang then code":   "#!/bin/sh\nFROM scratch\n",
+		// An official frontend after a shebang is harmless whether or not BuildKit
+		// honours it (unverified); a custom one is refused below.
+		"shebang official": "#!/bin/sh\n# syntax=docker/dockerfile:1\nFROM scratch\n",
 	}
 	for name, df := range accepted {
 		if err := RefuseSyntaxDirective([]byte(df)); err != nil {
@@ -442,6 +446,13 @@ func TestRefuseSyntaxDirective(t *testing.T) {
 		"json key":        "{\"syntax\":\"evil\"}\n",
 		"json key case":   "  {\"Syntax\": \"evil\"}\n",
 		"broken json":     "{\"syntax\":\"evil\"\n",
+		"shebang json":    "#!/bin/sh\n{\"syntax\":\"evil/x\"}\n",
+		"shebang bom":     "\ufeff#!/bin/sh\n{\"syntax\":\"evil/x\"}\n",
+		"shebang crlf":    "#!/bin/sh\r\n{\"syntax\":\"evil/x\"}\r\n",
+		"shebang blank":   "#!/bin/sh\n\n{\"syntax\":\"evil/x\"}\n",
+		"shebang space":   "#!/bin/sh\n {\"syntax\":\"evil/x\"}\n",
+		"shebang tab":     "#!/bin/sh\n\t{\"syntax\":\"evil/x\"}\n",
+		"shebang evil":    "#!/bin/sh\n# syntax=evil/x\nFROM scratch\n",
 	}
 	for name, df := range refused {
 		err := RefuseSyntaxDirective([]byte(df))

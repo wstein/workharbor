@@ -190,11 +190,21 @@ func syntaxDirective(line string) (string, bool) {
 // It is at least as strict as BuildKit's detection: the markers `#` and `//`, any
 // Unicode white space, and a file that starts with `{`, which BuildKit reads as
 // JSON, is refused when it has a "syntax" key (or does not decode, and mentions
-// one). After the first instruction a `# syntax=` line is only a comment, as
+// one), also after a `#!` first line, which BuildKit discards first. After the first instruction a `# syntax=` line is only a comment, as
 // Docker treats it. When unsure, it refuses: an odd first comment line can cost
 // a Dockerfile its build.
 func RefuseSyntaxDirective(dockerfile []byte) error {
-	text := strings.TrimSpace(strings.TrimPrefix(string(dockerfile), "\ufeff"))
+	text := strings.TrimPrefix(string(dockerfile), "\ufeff")
+	if strings.HasPrefix(text, "#!") {
+		// BuildKit drops a shebang first line before it looks for JSON or
+		// directives, so the rest is judged as if the file began after it.
+		if i := strings.IndexByte(text, '\n'); i >= 0 {
+			text = text[i+1:]
+		} else {
+			text = ""
+		}
+	}
+	text = strings.TrimSpace(text)
 	if strings.HasPrefix(text, "{") {
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(text), &raw); err != nil {
