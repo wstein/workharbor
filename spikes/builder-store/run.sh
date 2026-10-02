@@ -57,3 +57,31 @@ try inv-nopull whr.invalid/whtmp/x:1 ""
 try inv-pull whr.invalid/whtmp/x:1 "--pull"
 try loc-nopull whtmp/x:1 ""
 try loc-pull whtmp/x:1 "--pull"
+
+# COPY --from and RUN --mount from=, the other two ways a Dockerfile can name an image.
+try2() { # label dockerfile-text flag
+  lbl=$1 text=$2 flag=$3
+  d="$W/c-$lbl"; mkdir -p "$d"
+  printf '%s\n' "$text" > "$d/Dockerfile"
+  t0=$(date +%s)
+  # shellcheck disable=SC2086
+  container build --progress plain --tag whtmp/y:1 $LAB $flag --file "$d/Dockerfile" -- "$d" > "$W/$lbl.log" 2>&1
+  rc=$?
+  t1=$(date +%s)
+  if [ $rc = 0 ]; then
+    say "$lbl flag='$flag': exit 0 in $((t1 - t0)) s; marker-X lines in log: $(grep -c marker-X "$W/$lbl.log"); local image used"
+  else
+    say "$lbl flag='$flag': exit $rc in $((t1 - t0)) s; error:"
+    grep -iE 'error|fail|not found|denied|resolve|unauthorized|lookup' "$W/$lbl.log" | head -4 | sed 's/^/    /'
+  fi
+  container image delete whtmp/y:1 >/dev/null 2>&1
+}
+
+COPYDF='FROM scratch
+COPY --from=whr.invalid/whtmp/x:1 /marker /marker'
+MOUNTDF="FROM $ALPINE
+RUN --mount=type=bind,from=whr.invalid/whtmp/x:1,target=/m cat /m/marker"
+try2 copy-from-nopull "$COPYDF" ""
+try2 copy-from-pull "$COPYDF" "--pull"
+try2 mount-from-nopull "$MOUNTDF" ""
+try2 mount-from-pull "$MOUNTDF" "--pull"

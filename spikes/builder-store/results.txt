@@ -1,11 +1,19 @@
-# spike builder-store on container CLI version 1.5.0 (build: release, commit: unspeci), 2026-10-02T18:35:23Z
+# spike builder-store on container CLI version 1.5.0 (build: release, commit: unspeci), 2026-10-02T18:53:07Z
 build X: ok
 host store: whr.invalid/whtmp/x:1 whtmp/x:1
-FROM whr.invalid/whtmp/x:1 flag='': exit 0 in 3 s; marker printed: 1 line(s); local image used
+FROM whr.invalid/whtmp/x:1 flag='': exit 0 in 3 s; marker printed: 0 line(s); local image used
 FROM whr.invalid/whtmp/x:1 flag='--pull': exit 1 in 10 s; error:
     #1 [resolver] fetching image...whr.invalid/whtmp/x:1
     Error: internalError: "failed to resolve either repository hostname whr.invalid"
-FROM whtmp/x:1 flag='': exit 0 in 7 s; marker printed: 0 line(s); local image used
+FROM whtmp/x:1 flag='': exit 0 in 2 s; marker printed: 0 line(s); local image used
 FROM whtmp/x:1 flag='--pull': exit 1 in 1 s; error:
     #1 [resolver] fetching image...docker.io/whtmp/x:1
     Error: internalError: "HTTP request to https://registry-1.docker.io/v2/whtmp/x/manifests/1 failed with response: 401 Unauthorized. Reason: Unknown, no credentials found for host registry-1.docker.io"
+copy-from-nopull flag='': exit 0 in 2 s; marker-X lines in log: 0; local image used
+copy-from-pull flag='--pull': exit 1 in 10 s; error:
+    #1 [resolver] fetching image...whr.invalid/whtmp/x:1
+    Error: internalError: "failed to resolve either repository hostname whr.invalid"
+mount-from-nopull flag='': exit 0 in 4 s; marker-X lines in log: 1; local image used
+mount-from-pull flag='--pull': exit 1 in 11 s; error:
+    #1 [resolver] fetching image...docker.io/library/alpine:latest
+    Error: internalError: "failed to resolve either repository hostname whr.invalid"
