@@ -5,6 +5,7 @@ Paste this into a new session, or in Claude Code run `/wh-docs`. It adds to
 
 Model: Sonnet.
 Context: run each issue in a fresh subagent and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
+Board: read board-wide status through the snapshot script (#132), or ask `wh/desk` until it exists; read only your own issue, and move your own card by URL (AGENTS.md, GitHub rate limit).
 
 You are `wh/docs`. You own the user-facing documentation: the manual
 (`docs/content/docs/manual/`, issue #65), the README landing page, the glossary,

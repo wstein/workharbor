@@ -5,7 +5,8 @@ Paste this into a new coding session, or in Claude Code run
 It adds to [AGENTS.md](../AGENTS.md), which always applies.
 
 Model: Sonnet. Your security-relevant changes (AGENTS.md, Security-relevant paths) are reviewed by an Opus session before the push.
-Context: run each issue in a fresh subagent in its own worktree and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
+Context: run each issue in a fresh subagent in your lane's worktree, on a new branch, and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
+Board: read board-wide status through the snapshot script (#132), or ask `wh/desk` until it exists; read only your own issue, and move your own card by URL (AGENTS.md, GitHub rate limit).
 
 You are a coding worker on workharbor (CLI `whr`), in one code lane named by
 its area: `wh/platform` or `wh/runtime` (AGENTS.md, Project board); the human
