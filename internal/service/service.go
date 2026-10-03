@@ -429,14 +429,34 @@ func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 	}()
 }
 
+// suspend saves the run paused with its question first, then stops the agent as
+// Pause does (design 4.2, "Suspending is a pause"): a paused run has no agent
+// process (D11). A failed stop of the agent stops its environment instead (design
+// 4.1, issue #221). A repeated event changes nothing.
 func (s *Service) suspend(ctx context.Context, task, run domain.ID, cause domain.DecisionCause, reset time.Time) error {
-	return s.update(ctx, task, func(a *domain.TaskAggregate) error {
-		if r, ok := a.Run(run); !ok || r.State != domain.RunRunning {
+	var env domain.ID
+	changed := false
+	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		changed = false
+		r, ok := a.Run(run)
+		if !ok || r.State != domain.RunRunning {
 			return nil // already suspended or over: the event is a repeat
 		}
-		_, err := a.SuspendRun(run, cause, reset, s.cfg.NewID(), s.clock.Now())
-		return err
+		env = r.EnvID
+		if _, err := a.SuspendRun(run, cause, reset, s.cfg.NewID(), s.clock.Now()); err != nil {
+			return err
+		}
+		changed = true
+		return nil
 	})
+	if err != nil || !changed {
+		return err
+	}
+	// The run is paused, so the session's end is not taken for a loss.
+	if serr := s.stopSessionErr(run); serr != nil {
+		return s.stopEnvForPause(ctx, task, env, serr)
+	}
+	return nil
 }
 
 // finish applies a session's result to its run, unless the run is no longer

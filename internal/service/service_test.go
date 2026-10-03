@@ -455,6 +455,32 @@ func TestAnAuthEventSuspendsTheRun(t *testing.T) {
 	}
 }
 
+// Suspending is a pause (design 4.2): the run is saved paused with its question,
+// then the agent is stopped, and the session's end is not taken for a loss.
+func TestAnAuthEventStopsTheAgentOfTheSuspendedRun(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	_ = r.rt.Restart(bg)
+	base := r.agent.Stops() // the rig's own setup stops one
+	r.agent.AuthExpires()
+	r.reconcile()
+	r.svc.Wait()
+	if n := r.agent.Stops(); n != base+1 {
+		t.Errorf("stops = %d, want %d", n, base+1)
+	}
+	if got := r.runState(); got != domain.RunPaused {
+		t.Errorf("run = %s", got)
+	}
+	if ds := r.load().Decisions(); len(ds) != 1 || ds[0].Status != domain.DecisionOpen {
+		t.Errorf("decisions %+v", ds)
+	}
+	// a repeated event changes nothing and stops nothing
+	must(t, r.svc.suspend(bg, "t1", "r1", domain.CauseAuthExpired, time.Time{}))
+	if n := r.agent.Stops(); n != base+1 || len(r.load().Decisions()) != 1 {
+		t.Errorf("a repeat: stops %d, decisions %d", n, len(r.load().Decisions()))
+	}
+}
+
 func TestACompletedSessionStopsTheRun(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)

@@ -171,3 +171,41 @@ func TestAPauseWhoseEnvironmentStopFailsToIsStoppedByTheNextPass(t *testing.T) {
 		t.Error("the environment is marked started")
 	}
 }
+
+// A suspension whose agent cannot be stopped stops the environment instead.
+func TestASuspensionWhoseAgentStopFailsStopsTheEnvironment(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.liveStopFails()
+	c := r.counting()
+
+	must(t, r.svc.suspend(bg, "t1", "r1", domain.CauseQuotaExhausted, time.Time{}))
+	r.svc.Wait()
+	d := r.load().Decisions()
+	if c.stops.Load() != 1 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused || len(d) != 1 || d[0].Status != domain.DecisionOpen {
+		t.Errorf("stops %d, env %s, run %s, decisions %+v", c.stops.Load(), r.envState(), r.runState(), d)
+	}
+}
+
+// When the environment stop fails too, the run stays paused with its question,
+// the error says the agent may still run, and the next pass stops the environment.
+func TestASuspensionWhoseEnvironmentStopFailsToIsStoppedByTheNextPass(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.liveStopFails()
+	c := r.counting()
+	c.stopErr = errors.New("stop refused")
+
+	err := r.svc.suspend(bg, "t1", "r1", domain.CauseAuthExpired, time.Time{})
+	if err == nil || !strings.Contains(err.Error(), "agent may still run") {
+		t.Fatalf("suspend: %v", err)
+	}
+	r.svc.Wait()
+	if r.runState() != domain.RunPaused || r.svc.envStarted(r.env) || len(r.load().Decisions()) != 1 {
+		t.Fatalf("run %s, started mark %v", r.runState(), r.svc.envStarted(r.env))
+	}
+	c.stopErr = nil
+	if rep := r.reconcile(); len(rep.Errors) != 0 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused {
+		t.Errorf("errors %v, env %s, run %s", rep.Errors, r.envState(), r.runState())
+	}
+}
