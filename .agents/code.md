@@ -35,7 +35,13 @@ design owner is the `wh/design` session; the human is Werner.
   never write the rule sections (§3 decisions, §4.1 and §4.2, §6, §7, the threat
   model). Propose rule text in the issue and send it to the design owner.
   An issue you open carries labels as in AGENTS.md (GitHub rate limit).
-- Commits: atomic Conventional Commits with `Refs: #N` (`Closes: #N` on the
+- Test first, wherever the code has a test seam: write the test, run it and
+  see it fail for the reason the issue names, then write the code that makes
+  it pass. For a bug, first reproduce it with one command, before any
+  hypothesis; that command becomes the regression test.
+- Commits: atomic Conventional Commits, so an issue usually lands as several
+  (a test goes in the commit with the code that makes it pass, keeping every
+  commit green), with `Refs: #N` (`Closes: #N` on the
   last) and `Assisted-by: <tool>:<model-id>`. Never `Signed-off-by`, never
   `--no-verify`. Squash your own fixups before landing:
   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`.

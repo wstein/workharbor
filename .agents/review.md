@@ -33,6 +33,9 @@ The cards in `In review`: their commits are on local `main` and not pushed
   error paths, idempotency, cleanup.
 - **The design**: the code does what its section says, and the section says
   what the code does; deviations are named.
+- **The issue**: each acceptance criterion against the diff (met, unmet, or
+  ticked but not met), and what the diff does that the issue did not ask for;
+  a list of its own in the comment, ahead of the findings.
 - **Tests**: they test what they claim and fail without the change.
   `go test -race` on the packages touched.
 
