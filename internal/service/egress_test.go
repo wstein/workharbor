@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -323,5 +325,27 @@ func TestFeatureAnswerWithoutADigestIsNotAnError(t *testing.T) {
 	}
 	if ok, _ := r.svc.ApprovedFeatureSources(bg, "wstein/workharbor"); len(ok) != 0 {
 		t.Errorf("approved = %v, want nothing", ok)
+	}
+}
+
+// A task that cannot be read does not tell the preset, so the gate fails
+// instead of letting answers given under another file stand (#226).
+func TestGateEgressFailsClosedWhenTheTaskCannotBeRead(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	const repo = "wstein/workharbor"
+	must(t, r.store.SetEgressHost(bg, repo, "proxy.golang.org", true, "d1", "digest-1", t0))
+	boom := errors.New("read failed")
+	r.svc.loadTask = func(context.Context, domain.ID) (*domain.TaskAggregate, error) { return nil, boom }
+	ws := domain.Workspace{Repo: repo}
+	env := RepoEnvironment{Environment: publishedEnv("digest-2")}
+	env.Commit = "c1"
+	w := NewWorkspaces(r.svc, WorkspaceConfig{NewID: func() domain.ID { return "x" }})
+	waiting, err := w.gateEgress(bg, "t1", "r1", ws, env, func(context.Context) error { return nil }, nil)
+	if !errors.Is(err, boom) || waiting {
+		t.Fatalf("waiting %v, err %v: want the read error", waiting, err)
+	}
+	if len(r.load().Decisions()) != 0 {
+		t.Error("a request was raised on a state that could not be read")
 	}
 }

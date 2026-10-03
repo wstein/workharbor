@@ -643,15 +643,17 @@ func (w *Workspaces) repoEnvironment(ctx context.Context, ws domain.Workspace) (
 // starts when the last request is answered (continueEgress). A repository that
 // cannot be read right now does not stop the run: it starts with the hosts
 // already allowed, and the failure is reported, since no host is ever allowed
-// by what could not be read.
+// by what could not be read. A task that cannot be read does stop it: its
+// preset decides which old answers still count, so none is trusted (#226).
 func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws domain.Workspace, env RepoEnvironment, start func(context.Context) error, sl *slot) (bool, error) {
 	if env.Commit == "" {
 		return false, nil // nothing was read
 	}
-	published := false
-	if agg, err := w.svc.store.LoadTask(ctx, task); err == nil { // the preset the task started under
-		published = policy.Preset(agg.Task().Workflow) == policy.Published
+	agg, err := w.svc.loadTask(ctx, task) // the preset the task started under
+	if err != nil {
+		return false, err // fail closed: old answers are not trusted on a preset not known
 	}
+	published := policy.Preset(agg.Task().Workflow) == policy.Published
 	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env.Environment, published)
 	if err != nil {
 		return false, err
