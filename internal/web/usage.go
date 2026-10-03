@@ -226,3 +226,51 @@ func idOf(name string) string {
 	}
 	return b.String()
 }
+
+// limitsOf builds the limits panel from the service's report: only what the
+// adapters reported, `unknown` for the rest (D40), no logic of its own.
+func (s *Server) limitsOf(ctx context.Context) []limitView {
+	lr, ok := s.be.(api.LimitsReporter)
+	if !ok {
+		return nil
+	}
+	ps, err := lr.Limits(ctx)
+	if err != nil {
+		s.report(fmt.Errorf("limits: %w", err))
+		return nil
+	}
+	now := s.opt.Now()
+	age := func(at time.Time) string {
+		if d := now.Sub(at); d > time.Minute {
+			return shortDuration(d)
+		}
+		return "under a minute"
+	}
+	var out []limitView
+	for _, p := range ps {
+		v := limitView{Provider: p.Provider, Source: p.Source, Unknown: !p.Known, Low: p.Low}
+		if p.BudgetMicroUSD > 0 {
+			v.Budget = service.FormatMicroUSD(p.BudgetMicroUSD) + " per task (API key)"
+		}
+		for _, w := range p.Windows {
+			used := min(max(int(w.Used*100+0.5), 0), 100)
+			row := limitWindowView{
+				ID: idOf(w.Name), Name: strings.ReplaceAll(w.Name, "_", " "), Percent: used, Low: w.Low,
+				Used: fmt.Sprintf("%d%%", used), Left: fmt.Sprintf("%d%%", 100-used), Age: age(w.At),
+			}
+			if !w.ResetsAt.IsZero() {
+				if d := w.ResetsAt.Sub(now); d > 0 {
+					row.Resets = "resets in " + shortDuration(d)
+				} else {
+					row.Resets = "reset"
+				}
+			}
+			v.Windows = append(v.Windows, row)
+		}
+		if p.Balance != nil {
+			v.Balance = service.FormatMicroUSD(p.Balance.RemainingMicroUSD) + " left, read " + age(p.Balance.At) + " ago"
+		}
+		out = append(out, v)
+	}
+	return out
+}

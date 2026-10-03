@@ -50,6 +50,7 @@ type fake struct {
 	events    chan domain.Event
 
 	summary      func(period string) service.UsageSummary
+	limits       []service.ProviderLimits // nil: one provider with nothing reported
 	failSummary  error
 	usage        func(service.UsageQuery) (service.UsageReport, error)
 	usageQueries []service.UsageQuery
@@ -177,6 +178,14 @@ func (f *fake) UsageSummary(_ context.Context, period string) (service.UsageSumm
 		return service.UsageSummary{Period: period}, nil
 	}
 	return f.summary(period), nil
+}
+
+// Limits makes the fake a LimitsReporter.
+func (f *fake) Limits(context.Context) ([]service.ProviderLimits, error) {
+	if f.limits == nil {
+		return []service.ProviderLimits{{Provider: "claude", Source: "not reported by the claude adapter"}}, nil
+	}
+	return f.limits, nil
 }
 
 func (f *fake) Usage(_ context.Context, q service.UsageQuery) (service.UsageReport, error) {

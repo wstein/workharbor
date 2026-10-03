@@ -82,6 +82,20 @@ type usageCard struct {
 	SortLinks map[string]string
 }
 
+// limitView is one provider of the limits panel, already written as text.
+type limitView struct {
+	Provider, Source, Balance, Budget string
+	Unknown, Low                      bool
+	Windows                           []limitWindowView
+}
+
+// limitWindowView is one reported window: used and left, reset and age.
+type limitWindowView struct {
+	ID, Name, Used, Left, Resets, Age string
+	Percent                           int
+	Low                               bool
+}
+
 type usagePeriodLink struct {
 	Label, Href string
 	Current     bool
@@ -98,6 +112,9 @@ type harborPage struct {
 	// Usage is the account's usage, which leads the page (§5.7); nil when there
 	// is nothing to show.
 	Usage *usageCard
+	// Limits is the limits panel: one entry per provider; never empty when the
+	// backend reports limits.
+	Limits []limitView
 }
 
 type decisionRow struct {

@@ -115,6 +115,7 @@ func Run(ctx context.Context, d Deps) error {
 		Owner:             d.Owner,
 		PostCreateTimeout: d.Config.Environment.PostCreate(),
 		Budgets:           Budgets(d.Config.Budgets),
+		LowLimits:         service.LowLimits{WindowPercent: d.Config.Limits.WarnPercent, BalanceMicroUSD: int64(math.Round(d.Config.Limits.LowBalanceUSD * 1e6))},
 		Spec:              d.AgentSpec,
 		NewID:             NewID,
 		OnError:           func(err error) { logf("background error: %v", err) },

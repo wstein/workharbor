@@ -246,12 +246,51 @@ templ usageSection(c *usageCard) {
 	</section>
 }
 
+templ limitsSection(ls []limitView) {
+	<section aria-labelledby="limits-h" class="limits-card">
+		<h2 id="limits-h">Limits</h2>
+		for _, l := range ls {
+			<div class="limit">
+				<h3>{ l.Provider }</h3>
+				if l.Unknown {
+					<p>unknown <span class="muted">({ l.Source })</span></p>
+				} else {
+					if l.Low {
+						<p class="flash" role="alert">Low limit: { l.Provider } is running out.</p>
+					}
+					for _, w := range l.Windows {
+						<p class="window">
+							<label for={ "lim-" + idOf(l.Provider) + "-" + w.ID }>{ w.Name }</label>
+							<meter id={ "lim-" + idOf(l.Provider) + "-" + w.ID } min="0" max="100" low="70" high="90" optimum="0" value={ itoa(int64(w.Percent)) }>{ w.Used }</meter>
+							<span>{ w.Used } used, { w.Left } left</span>
+							if w.Resets != "" {
+								<span class="muted">{ w.Resets }</span>
+							}
+							<span class="muted">read { w.Age } ago</span>
+						</p>
+					}
+					if l.Balance != "" {
+						<p>Balance: { l.Balance }</p>
+					}
+					<p class="muted">Source: { l.Source }</p>
+				}
+				if l.Budget != "" {
+					<p class="muted">Budget: { l.Budget }</p>
+				}
+			</div>
+		}
+	</section>
+}
+
 templ harborView(p harborPage) {
 	@layout(p.nav, "Harbor") {
 		<h1>Harbor</h1>
 		@flashNote(p.Flash)
 		if p.Usage != nil {
 			@usageSection(p.Usage)
+		}
+		if len(p.Limits) > 0 {
+			@limitsSection(p.Limits)
 		}
 		if p.AgentRef != "" {
 			<p class="flash">Tasks of { p.AgentRef }. <a href="/">Show all</a></p>

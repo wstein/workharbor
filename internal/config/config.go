@@ -185,6 +185,8 @@ type Config struct {
 	// Budgets limit the tokens and the cost a run and a task may use (design
 	// §7.4). Optional: none means no limit.
 	Budgets Budgets `json:"budgets,omitzero"`
+	// Limits say when a provider limit the agent reported counts as low.
+	Limits Limits `json:"limits,omitzero"`
 	// Preview turns on the preview proxy (D33, issue #72): the loopback ports a
 	// preview of an agent's dev server may listen on, which the forwarder maps.
 	// Optional: without it there are no previews.
@@ -285,6 +287,16 @@ type Budgets struct {
 	// SoftPercent is the share of a limit at which the human is warned, 1 to
 	// 99. Default 80.
 	SoftPercent int `json:"soft_percent,omitempty"`
+}
+
+// Limits say when a limit an agent reported is low: the dashboard warns and a
+// push is sent. Zero values take the defaults.
+type Limits struct {
+	// WarnPercent is the share of a usage window used at which it is low, 1 to
+	// 99. Default 90.
+	WarnPercent int `json:"warn_percent,omitempty"`
+	// LowBalanceUSD is a reported balance at or under which it is low. Zero sets none.
+	LowBalanceUSD float64 `json:"low_balance_usd,omitempty"`
 }
 
 // BudgetLimit is one scope's limits. Zero is no limit.
@@ -437,6 +449,12 @@ func (c *Config) Validate() error {
 	}
 	if p := c.Budgets.SoftPercent; p != 0 && (p < 1 || p > 99) {
 		add("budgets.soft_percent: %d is not from 1 to 99", p)
+	}
+	if p := c.Limits.WarnPercent; p != 0 && (p < 1 || p > 99) {
+		add("limits.warn_percent: %d is not from 1 to 99", p)
+	}
+	if v := c.Limits.LowBalanceUSD; v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		add("limits.low_balance_usd: cannot be negative")
 	}
 	if b := c.Environment.Base; b != "" && !baseimage.Distro(b).Valid() {
 		add("environment.base: %q is not a first-class base (want fedora or ubuntu)", b)

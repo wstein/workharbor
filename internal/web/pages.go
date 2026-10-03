@@ -141,6 +141,7 @@ func (s *Server) harbor(w http.ResponseWriter, r *http.Request, sess Session) {
 	}
 	p := harborPage{nav: s.navOf(r, sess, "harbor"), Key: newKey(), Flash: flash(r)}
 	p.Usage = s.usageCardOf(r.Context(), r.URL.Query().Get("period"), r.URL.Query().Get("sort"))
+	p.Limits = s.limitsOf(r.Context())
 	if ref := r.URL.Query().Get("agent"); ref != "" { // the tasks of one agent, linked from the usage card
 		var mine []store.TaskSummary
 		for _, t := range tasks {

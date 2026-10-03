@@ -30,6 +30,8 @@ const (
 	// hard limit that ended the task as failed.
 	KindBudgetWarning  Kind = "budget_warning"
 	KindBudgetExceeded Kind = "budget_exceeded"
+	// KindLimitLow is a provider limit the agent reported as low (issue #172).
+	KindLimitLow Kind = "limit_low"
 )
 
 // Message is everything a notification carries: IDs and a kind, nothing the

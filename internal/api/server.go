@@ -628,6 +628,12 @@ type UsageSummarizer interface {
 	UsageSummary(ctx context.Context, period string) (service.UsageSummary, error)
 }
 
+// LimitsReporter is what the dashboard's limits panel needs of the backend
+// (issue #172): each provider's limits as its adapter reported them.
+type LimitsReporter interface {
+	Limits(ctx context.Context) ([]service.ProviderLimits, error)
+}
+
 // usageSummary serves the card of a period: today, 7d, 30d or all (default 7d), in the
 // supervisor's time zone.
 func (s *Server) usageSummary(w http.ResponseWriter, r *http.Request) {

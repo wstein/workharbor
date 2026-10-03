@@ -92,6 +92,8 @@ type Config struct {
 	// Budgets are the per-run and per-task limits on tokens and cost (§7.4).
 	// The zero value sets none. Optional.
 	Budgets Budgets
+	// LowLimits say when a provider's reported limit is low (issue #172).
+	LowLimits LowLimits
 	// OnError hears errors that happen in the background, such as a session's
 	// event handler losing a compare-and-swap for good. Optional.
 	OnError func(error)
@@ -118,6 +120,7 @@ type Service struct {
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
 	runLocks    map[domain.ID]*runLock // one resume of a run at a time
+	limitWarned map[string]bool        // low-limit readings already notified
 	// egressSources is what each open egress request was asked about (its
 	// devcontainer.json digest), kept to store with the answer.
 	egressSources map[domain.ID]string
