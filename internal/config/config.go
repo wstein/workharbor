@@ -45,6 +45,34 @@ type Repository struct {
 	// supervisor never moves (D47): the configuration cannot know the default
 	// branch, so whr doctor and the Guard check that. Published has none.
 	IntegrationBranch string `json:"integration_branch,omitempty"`
+	// Check is the command that checks this repository's work before a review
+	// is asked for (D51): the supervisor's own choice, which wins over the
+	// repository's `customizations.workharbor.check` and its
+	// `.pre-commit-config.yaml`. It runs in the task's environment, in a
+	// worktree at the prepared commit. Optional.
+	Check string `json:"check,omitempty"`
+	// CommitLint names the built-in linter that checks commit messages on the
+	// host (D51): "conventional" (the default) or "workharbor", the rules of
+	// this repository's internal/commitlint. A repository's own linter is its
+	// code and runs only inside its check.
+	CommitLint string `json:"commit_lint,omitempty"`
+}
+
+// Commit message linters a repository's commit_lint may name.
+const (
+	CommitLintConventional = "conventional"
+	CommitLintWorkharbor   = "workharbor"
+)
+
+// MaxCheck bounds a configured check command.
+const MaxCheck = 4096
+
+// Linter returns the repository's commit_lint, the default when unset.
+func (r Repository) Linter() string {
+	if r.CommitLint == "" {
+		return CommitLintConventional
+	}
+	return r.CommitLint
 }
 
 // Preset returns the repository's workflow. The configuration check has already
@@ -183,6 +211,11 @@ type Config struct {
 	// subscription credential; the human signs in inside the environment
 	// (D40), and a subscription token in this file is refused.
 	AgentAPIKeyEnvFile string `json:"agent_api_key_env_file,omitempty"`
+	// BotSigningKeyFile is the bot's SSH ed25519 private key (D51): a secret file
+	// like the others (0600, owned by the whr user, outside every root) that the
+	// prepared commits are signed with. Optional in the file, but without it no
+	// topic is prepared: nothing is ever committed unsigned.
+	BotSigningKeyFile string `json:"bot_signing_key_file,omitempty"`
 	// APITokenFile holds the API token that guards the API (D29).
 	APITokenFile string `json:"api_token_file"`
 	// StateDir holds the supervisor's database. Optional: an absolute path, or
@@ -501,6 +534,14 @@ func (c *Config) Validate() error {
 		if r.Workflow == string(policy.Prototype) && r.IntegrationBranch == "" {
 			add("%s.integration_branch: a prototype repository needs an integration branch that is not the default branch: the supervisor never moves the default branch", key)
 		}
+		switch r.CommitLint {
+		case "", CommitLintConventional, CommitLintWorkharbor:
+		default:
+			add("%s.commit_lint: %q is not %s or %s", key, r.CommitLint, CommitLintConventional, CommitLintWorkharbor)
+		}
+		if msg := checkCheckCommand(r.Check); msg != "" {
+			add("%s.check: %s", key, msg)
+		}
 		if r.Workflow == string(policy.Published) && r.IntegrationBranch != "" {
 			add("%s.integration_branch: a published repository has no integration branch: its pull requests go to the default branch", key)
 		}
@@ -610,6 +651,9 @@ func (c *Config) Validate() error {
 	secrets := map[string]string{"github.key_file": c.GitHub.KeyFile, "api_token_file": c.APITokenFile}
 	if c.AgentAPIKeyEnvFile != "" {
 		secrets["agent_api_key_env_file"] = c.AgentAPIKeyEnvFile
+	}
+	if c.BotSigningKeyFile != "" {
+		secrets["bot_signing_key_file"] = c.BotSigningKeyFile
 	}
 	if c.Console.SSHCAKeyFile != "" {
 		secrets["console.ssh_ca_key_file"] = c.Console.SSHCAKeyFile
@@ -752,6 +796,27 @@ func checkDir(path string) (string, string) {
 		return "", fmt.Sprintf("%q is not a directory", path)
 	}
 	return target, ""
+}
+
+// checkCheckCommand refuses a configured check command that is empty after
+// trimming (when set), too long, or holds a control character other than a tab:
+// it is one line handed to `sh -c`.
+func checkCheckCommand(cmd string) string {
+	if cmd == "" {
+		return ""
+	}
+	switch {
+	case strings.TrimSpace(cmd) == "":
+		return "is blank"
+	case len(cmd) > MaxCheck:
+		return fmt.Sprintf("is longer than %d bytes", MaxCheck)
+	}
+	for _, r := range cmd {
+		if r != '\t' && unicode.IsControl(r) {
+			return "must be one line without control characters"
+		}
+	}
+	return ""
 }
 
 // checkSecretFile requires a regular file, not a link, owned by the current

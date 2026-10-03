@@ -5,11 +5,14 @@ package doctor
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"net/url"
 	"os/exec"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/forge/github"
@@ -160,6 +163,7 @@ func Checks(d Deps) []Check {
 			}
 			return OK, fmt.Sprintf("App %d: the key file is private and a PEM key; not tried against GitHub", c.GitHub.AppID)
 		})},
+		{"bot-key", 2, needCfg(botKeyCheck)},
 		{"forge-app", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
@@ -367,6 +371,28 @@ func Failed(rs []Result) bool {
 		}
 	}
 	return false
+}
+
+// botKeyCheck checks the bot's signing key (D51): the configuration check has
+// refused a key file that is not 0600, not owned by this user, linked or inside
+// a root; this one reads it the way a prepare does and wants an unencrypted SSH
+// ed25519 private key, which git signs with and nothing can type a passphrase for.
+func botKeyCheck(c *config.Config) (Status, string) {
+	if c.BotSigningKeyFile == "" {
+		return Warn, "bot_signing_key_file is not set: no topic can be prepared for review, because nothing is ever committed unsigned (D51)"
+	}
+	b, err := config.ReadSecret(c.BotSigningKeyFile)
+	if err != nil {
+		return Fail, "bot_signing_key_file: " + oneLine(err.Error())
+	}
+	key, err := ssh.ParseRawPrivateKey(b)
+	if err != nil {
+		return Fail, "bot_signing_key_file does not hold an unencrypted SSH private key"
+	}
+	if _, ok := key.(*ed25519.PrivateKey); !ok {
+		return Fail, "bot_signing_key_file holds an SSH key that is not ed25519"
+	}
+	return OK, "the bot's signing key is a private, unencrypted ed25519 key (mode 0600, owned by this user); not tried against git"
 }
 
 // NewGitHub builds the App's client from the configuration: the key file read

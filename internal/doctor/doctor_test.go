@@ -2,9 +2,11 @@ package doctor
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/forge/github"
@@ -339,6 +343,63 @@ func TestNotificationsAreConfiguredOnlyWhenAnNtfyBlockValidates(t *testing.T) {
 	for _, res := range run(r.deps()) {
 		if res.Check == "notifications" && !strings.Contains(res.Detail, "ntfy: https://ntfy.example.com,") {
 			t.Errorf("detail %q, want only scheme and host", res.Detail)
+		}
+	}
+}
+
+func TestTheBotKeyCheck(t *testing.T) {
+	r := newRig(t)
+	statusOf := func() Result {
+		t.Helper()
+		r.write(t)
+		for _, res := range run(r.deps()) {
+			if res.Check == "bot-key" {
+				return res
+			}
+		}
+		t.Fatal("no bot-key check")
+		return Result{}
+	}
+	if res := statusOf(); res.Status != Warn || !strings.Contains(res.Detail, "bot_signing_key_file") {
+		t.Errorf("no key: %+v", res)
+	}
+	write := func(name string, pem []byte) string {
+		p := filepath.Join(r.dir, "secrets", name)
+		if err := os.WriteFile(p, pem, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	blk, err := ssh.MarshalPrivateKey(priv, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.BotSigningKeyFile = write("bot", pem.EncodeToMemory(blk))
+	if res := statusOf(); res.Status != OK {
+		t.Errorf("an ed25519 key: %+v", res)
+	}
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	rblk, err := ssh.MarshalPrivateKey(rsaKey, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.BotSigningKeyFile = write("bot-rsa", pem.EncodeToMemory(rblk))
+	if res := statusOf(); res.Status != Fail || !strings.Contains(res.Detail, "not ed25519") {
+		t.Errorf("an RSA key: %+v", res)
+	}
+	r.cfg.BotSigningKeyFile = write("bot-junk", []byte("not a key\n"))
+	if res := statusOf(); res.Status != Fail {
+		t.Errorf("junk: %+v", res)
+	}
+	if err := os.Chmod(r.cfg.BotSigningKeyFile, 0o640); err != nil { //nolint:gosec // a test making a secret too open
+		t.Fatal(err)
+	}
+	// the configuration check refuses it first, and says why
+	r.write(t)
+	for _, res := range run(r.deps()) {
+		if res.Check == "config" && (res.Status != Fail || !strings.Contains(res.Detail, "bot_signing_key_file") || !strings.Contains(res.Detail, "0600")) {
+			t.Errorf("a group-readable key: %+v", res)
 		}
 	}
 }

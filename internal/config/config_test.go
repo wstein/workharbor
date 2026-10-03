@@ -434,3 +434,63 @@ func TestLowBalanceIsBounded(t *testing.T) {
 		t.Errorf("the cap itself: %v", err)
 	}
 }
+
+// D51: the check command, the commit linter and the bot's signing key.
+func TestPublishSettings(t *testing.T) {
+	r := newRig(t)
+	c, err := r.parse(t)
+	if err != nil || c.Repositories[0].Linter() != CommitLintConventional || c.Repositories[0].Check != "" || c.BotSigningKeyFile != "" {
+		t.Fatalf("the defaults: %v", err)
+	}
+	r.cfg.Repositories = []Repository{{Name: "a/b", Check: "make check", CommitLint: "workharbor"}}
+	if c, err = r.parse(t); err != nil || c.Repositories[0].Linter() != CommitLintWorkharbor || c.Repositories[0].Check != "make check" {
+		t.Fatalf("set: %v", err)
+	}
+	for name, repo := range map[string]Repository{
+		"an unknown linter": {Name: "a/b", CommitLint: "strict"},
+		"a blank check":     {Name: "a/b", Check: "  "},
+		"a newline":         {Name: "a/b", Check: "make\ncheck"},
+		"a long check":      {Name: "a/b", Check: strings.Repeat("x", MaxCheck+1)},
+	} {
+		r.cfg.Repositories = []Repository{repo}
+		if _, err := r.parse(t); !strings.Contains(problems(err), "repositories[0].") {
+			t.Errorf("%s: %s", name, problems(err))
+		}
+	}
+}
+
+func TestBotSigningKeyIsASecretOutsideTheRoots(t *testing.T) {
+	r := newRig(t)
+	key := filepath.Join(r.dir, "secrets", "bot_ed25519")
+	if err := os.WriteFile(key, []byte("key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.BotSigningKeyFile = key
+	if _, err := r.parse(t); err != nil {
+		t.Fatalf("a good key file: %s", problems(err))
+	}
+	if err := os.Chmod(key, 0o640); err != nil { //nolint:gosec // a test making a secret too open
+		t.Fatal(err)
+	}
+	if got := problems(mustFail(t, r)); !strings.Contains(got, "bot_signing_key_file: ") || !strings.Contains(got, "0600") {
+		t.Errorf("a group-readable key: %s", got)
+	}
+	_ = os.Chmod(key, 0o600)
+	inRoot := filepath.Join(r.dir, "workspaces", "bot_ed25519")
+	if err := os.WriteFile(inRoot, []byte("key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.BotSigningKeyFile = inRoot
+	if got := problems(mustFail(t, r)); !strings.Contains(got, "bot_signing_key_file: ") || !strings.Contains(got, "workspace root") {
+		t.Errorf("a key in a workspace root: %s", got)
+	}
+}
+
+func mustFail(t *testing.T, r *rig) error {
+	t.Helper()
+	_, err := r.parse(t)
+	if err == nil {
+		t.Fatal("the configuration was accepted")
+	}
+	return err
+}
