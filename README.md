@@ -26,6 +26,16 @@ The command-line tool is **`whr`**.
 - **Approval boundaries are policy.** Agents commit inside their environment; the host never runs git there. An agent's commits leave as a git bundle, are checked on the host against a supervisor-owned mirror of the repository, and are pushed only after you approve the exact commit ("Ready to push?"). Merge, tag, release and deploy stay with you, enforced by the forge adapter, not by prompts.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
 
+## What goes wrong when agents run unsupervised
+
+Each failure below has an answer in the design. Release 1 is still being built, so these are the intended behaviour, not a track record.
+
+- **Nothing stops a push.** An agent can push its own work. Here an agent's commits leave as a bundle and go to the forge only after you approve the exact commit; merge, tag, release and deploy stay forbidden for agents ([approval boundaries](#concept), [security](docs/content/docs/manual/security.md)).
+- **No isolation.** An agent runs with your host's files and network. Here each agent works in its own environment and reaches the internet only through an allowlist proxy ([isolated by default](#concept)).
+- **Secrets are within reach.** Long-lived tokens end up where an agent can read them. Here forge credentials are short-lived and per run, and `whr` never handles a subscription login ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
+- **No way to follow or stop a run.** Here runs, decisions and events are visible in the dashboard and the CLI, and you can steer or stop a run from either (`whr logs`, `whr say`, [daily use](docs/content/docs/manual/daily-use.md)).
+- **One login shared by many agents.** Here each environment has its own sign-in, and only you start runs ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
+
 ## What you need
 
 - An Apple-silicon Mac mini (or Mac) running macOS with [Apple Container](https://github.com/apple/container), the first runtime. Release 1 supports no other host.
