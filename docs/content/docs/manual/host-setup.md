@@ -116,6 +116,10 @@ container list --all                                     # answers without an er
 
 `--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed first; without a kernel no container starts. The last two lines are the standard-user check of step 2: if `container system start` or `container list` fails with a permission or bootstrap error, note the message in issue #38. After a restart the system does not start by itself; the workharbor LaunchAgent (step 13) runs `container system start --disable-kernel-install` in `whr`'s session before it starts the supervisor, which then resumes the agents.
 
+### Over SSH
+
+Over SSH, use the `whr` CLI, which is a client of the API: `whr status`, `whr logs` and `whr doctor`; never run `container` directly. `container` commands and `whr setup` need `whr`'s desktop session, because Apple Container's services live in that user's GUI launchd domain and an SSH login is in another one, where `container system status` fails with `XPC connection error: Connection invalid` even while the services run {{< status unverified >}} (upstream apple/container#205; to be measured in #155). Over SSH, `whr doctor` therefore reports the checks that call `container` as `not_verified`; run them in the desktop session (Screen Sharing).
+
 ## 7. Reach it from your phone
 
 The web UI of workharbor listens on **loopback only** (`listen`), and the JSON API is not on the network at all: it is served on a unix socket, `api.sock` in the state directory (`~/.local/state/whr`, a `0700` directory), which only `whr`'s own account can open, so the `whr` commands work in `whr`'s session and a leaked API token is no use from the phone (D29). Sign-in to the web UI is by passkey once one is enrolled. A guest container reaches anything on the Mac's LAN address or on all interfaces, even from an isolated network, but not loopback (issue #69). Your phone reaches workharbor through a forwarder. Pick one option.
