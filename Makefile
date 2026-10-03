@@ -224,11 +224,13 @@ land:
 	$(MAKE) -s check check-ci commitlint || exit 1; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then echo "land: the shared checkout left main during the checks: stop and tell the human" >&2; exit 1; fi; \
-	if [ -n "$$(git -C "$$shared" status --porcelain --untracked-files=no)" ] && git -C "$$shared" diff HEAD --quiet; then \
-		echo "land: the shared checkout's index is stale (the tree equals HEAD): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared status --short>" >&2; exit 1; fi; \
+	scripts/index-state.sh "$$shared"; state=$$?; \
+	if [ "$$state" = 3 ]; then \
+		echo "land: the shared checkout's index is stale (every path that differs from HEAD equals HEAD in the tree): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; fi; \
+	if [ "$$state" != 0 ] && [ "$$state" != 4 ]; then echo "land: cannot read the shared checkout's index" >&2; exit 1; fi; \
 	git -C "$$shared" merge -q --ff-only "$$branch" || exit 1; \
 	echo "land: main is now $$(git rev-parse --short main)"; \
-	git -C "$$shared" diff --cached --quiet HEAD || { echo "land: the shared checkout's index differs from HEAD after the merge: git -C $$shared reset -q -- <files>" >&2; exit 1; }
+	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 
 # Scan the commits of a git log range for secrets: the pre-push hook runs it
 # with the range about to be pushed.
