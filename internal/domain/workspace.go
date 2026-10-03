@@ -23,7 +23,7 @@ type Workspace struct {
 	Name        string // unique
 	Path        string // the host folder
 	Repo        string // "owner/name": where the agent clone was seeded from
-	Integration string // "main" or "develop": what agents rebase onto
+	Integration string // a valid branch name outside agent/: what agents rebase onto
 	EnvID       ID     // empty until the environment exists
 	CreatedAt   time.Time
 }
@@ -110,8 +110,8 @@ func NewWorkspace(id ID, name, path, repo, integration string, now time.Time) (W
 		return Workspace{}, Event{}, invalid("workspace path " + quote(path) + " must be absolute and clean")
 	case !repoRE.MatchString(repo):
 		return Workspace{}, Event{}, invalid("repository " + quote(repo) + " must look like owner/name")
-	case integration != "main" && integration != "develop":
-		return Workspace{}, Event{}, invalid("integration branch " + quote(integration) + " must be main or develop")
+	case !ValidIntegrationBranch(integration):
+		return Workspace{}, Event{}, invalid("integration branch " + quote(integration) + " must be a valid branch name outside agent/")
 	}
 	w := Workspace{ID: id, Name: name, Path: path, Repo: repo, Integration: integration, CreatedAt: now.UTC()}
 	ev := newEvent(WorkspaceStream(id), EventWorkspaceAdded, WorkspaceAdded{ID: id, Name: name, Path: path, Repo: repo, Integration: integration}, now)

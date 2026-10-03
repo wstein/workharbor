@@ -1003,13 +1003,13 @@ func TestCreateNamesWhereAnUnacceptableBranchCameFrom(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
 	r.ws.cfg.Workflow = func(string) string { return "published" }
-	r.issues.DefaultBranch = "trunk"
+	r.issues.DefaultBranch = "agent/x"
 	_, _, err := r.ws.Create(bg, CreateRequest{Name: "w", Path: r.folder("w"), Repo: "a/b", Source: r.forge, Role: "docs"})
-	if err == nil || !strings.Contains(err.Error(), `"trunk"`) || !strings.Contains(err.Error(), "default branch of a/b") {
+	if err == nil || !strings.Contains(err.Error(), `"agent/x"`) || !strings.Contains(err.Error(), "default branch of a/b") {
 		t.Fatalf("err = %v, want the forge named as the source", err)
 	}
 	r.ws.cfg.Workflow = func(string) string { return "prototype" }
-	r.ws.cfg.Branch = func(string) string { return "staging" }
+	r.ws.cfg.Branch = func(string) string { return "agent/y" }
 	_, _, err = r.ws.Create(bg, CreateRequest{Name: "w", Path: r.folder("w2"), Repo: "a/b", Source: r.forge, Role: "docs"})
 	if err == nil || !strings.Contains(err.Error(), "integration_branch in the configuration") {
 		t.Fatalf("err = %v, want the configuration named as the source", err)

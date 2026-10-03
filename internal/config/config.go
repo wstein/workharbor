@@ -25,6 +25,7 @@ import (
 	"unicode"
 
 	"github.com/wstein/workharbor/internal/baseimage"
+	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/policy"
@@ -494,7 +495,7 @@ func (c *Config) Validate() error {
 		if _, err := policy.ParsePreset(r.Workflow); err != nil {
 			add("%s.workflow: %v", key, err)
 		}
-		if b := r.IntegrationBranch; b != "" && (!hostgit.ValidBranch(b) || strings.HasPrefix(b, "agent/")) {
+		if b := r.IntegrationBranch; b != "" && !domain.ValidIntegrationBranch(b) {
 			add("%s.integration_branch: %q is not a branch name an agent cannot write", key, b)
 		}
 		if r.Workflow == string(policy.Prototype) && r.IntegrationBranch == "" {

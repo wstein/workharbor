@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/domain"
 )
 
 // Repo is a bare repository the supervisor owns. Cleanup (rebase, fold,
@@ -75,22 +76,8 @@ func dirOf(path string) string {
 	return path[:i]
 }
 
-var branchRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+// ValidBranch reports whether name is a branch name hostgit accepts: the
+// shared ref-name rule of domain.ValidBranchName.
+func ValidBranch(name string) bool { return domain.ValidBranchName(name) }
 
-// validBranch accepts a plain branch name: no leading dash or slash, no
-// "..", no empty or dotted path elements, no ".lock" suffix.
-// ValidBranch reports whether name is a branch name hostgit accepts.
-func ValidBranch(name string) bool { return validBranch(name) }
-
-func validBranch(name string) bool {
-	if !branchRe.MatchString(name) || strings.Contains(name, "..") || strings.HasSuffix(name, "/") ||
-		strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, ".") || strings.Contains(name, "//") {
-		return false
-	}
-	for _, part := range strings.Split(name, "/") {
-		if part == "" || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
-			return false
-		}
-	}
-	return true
-}
+func validBranch(name string) bool { return domain.ValidBranchName(name) }

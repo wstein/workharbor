@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewWorkspace(t *testing.T) {
@@ -22,7 +23,7 @@ func TestNewWorkspace(t *testing.T) {
 		{"trailing slash", "w", "/ws/", "a/b", "main", ""},
 		{"repo without owner", "w", "/ws", "workharbor", "main", ""},
 		{"repo with a flag", "w", "/ws", "-x/y", "main", ""},
-		{"unknown integration", "w", "/ws", "a/b", "trunk", ""},
+		{"agent namespace", "w", "/ws", "a/b", "agent/x", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,5 +97,31 @@ func TestStartRunNeedsTheTasksAgent(t *testing.T) {
 	wantConflict(t, a.StartRun(Run{ID: "r1", EnvID: "e1", AgentID: "a2"}), RuleRunAgent)
 	if err := a.StartRun(Run{ID: "r1", EnvID: "e1", AgentID: "a1"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewWorkspaceIntegrationBranch(t *testing.T) {
+	for _, tc := range []struct {
+		branch string
+		ok     bool
+	}{
+		{"main", true},
+		{"develop", true},
+		{"master", true},
+		{"trunk", true},
+		{"release/1.x", true},
+		{"staging", true},
+		{"agent/x", false},
+		{"-x", false},
+		{"HEAD", false},
+		{"a..b", false},
+		{"", false},
+		{"a\x01b", false},
+		{"a\nb", false},
+	} {
+		_, _, err := NewWorkspace("id", "w", "/ws", "a/b", tc.branch, time.Time{})
+		if (err == nil) != tc.ok {
+			t.Errorf("branch %q: err = %v, want ok = %v", tc.branch, err, tc.ok)
+		}
 	}
 }
