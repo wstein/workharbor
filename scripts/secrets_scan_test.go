@@ -168,6 +168,38 @@ func TestHooksIgnoreMakeFlagsInTheEnvironment(t *testing.T) {
 	}
 }
 
+// TestHooksIgnoreMakefilesInTheEnvironment: make reads every file MAKEFILES
+// lists before the Makefile, so one can zero the finding or replace the shell
+// and make the scan a silent no-op. Both hooks unset it.
+func TestHooksIgnoreMakefilesInTheEnvironment(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"override":   "override GITLEAKS_FOUND := 0\n",
+		"true shell": "SHELL := /usr/bin/true\n",
+	} {
+		for _, h := range []struct {
+			name    string
+			script  func(env string) string
+			finding string
+		}{
+			{"pre-push", func(env string) string { return pushOf(env, zero) }, "holds a secret"},
+			{"pre-commit", func(env string) string { return env + " .githooks/pre-commit" }, "a secret is staged"},
+		} {
+			t.Run(h.name+"/"+name, func(t *testing.T) {
+				t.Parallel()
+				mk := filepath.Join(t.TempDir(), "extra.mk")
+				if err := os.WriteFile(mk, []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				out, err := scan(t, false, "42", h.script("env MAKEFILES="+mk))
+				if err == nil || !strings.Contains(out, h.finding) {
+					t.Fatalf("a finding must block, err = %v:\n%s", err, out)
+				}
+			})
+		}
+	}
+}
+
 // TestSecretScansRemoveTheirTempDirOnTerm: a TERM or HUP to the recipe still
 // removes the directory that holds the scanner.
 func TestSecretScansRemoveTheirTempDirOnTerm(t *testing.T) {

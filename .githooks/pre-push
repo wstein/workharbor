@@ -3,8 +3,9 @@
 # machine. Enable with `make hooks`. Git passes one line per ref on stdin:
 # <local ref> <local sha> <remote ref> <remote sha>.
 set -e
-# MAKEFLAGS and friends can turn a recipe off (GITLEAKS_FOUND=0, -n, -i).
-unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL
+# MAKEFLAGS, MAKEFILES and friends can turn a recipe off (GITLEAKS_FOUND=0,
+# -n, -i, a replaced SHELL).
+unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
 zero=0000000000000000000000000000000000000000
 while read -r _ local_sha _ remote_sha; do
   [ "$local_sha" = "$zero" ] && continue # a branch being deleted carries no commit
@@ -15,9 +16,10 @@ while read -r _ local_sha _ remote_sha; do
   else
     # The remote moved on and this clone never fetched its tip (a force push):
     # gitleaks reads an unresolvable range as clean, so scan what no remote ref
-    # has instead, which covers every commit the push adds. Blocking here
-    # would stop a legitimate force push for no gain; a new branch and a
-    # delete are handled above and never reach this.
+    # has instead: every commit reachable from the pushed tip that no
+    # remote-tracking ref holds (one that another remote's ref already holds
+    # is left out). Blocking here would stop a legitimate force push for no
+    # gain; a new branch and a delete are handled above and never reach this.
     range="$local_sha --not --remotes"
   fi
   # The recipe says which it is: a finding (gitleaks exit 42) or a scan that
