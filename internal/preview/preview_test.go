@@ -589,7 +589,13 @@ func TestAPreviewEndsWithTheLastSessionThatOpenedIt(t *testing.T) {
 // and dials must be refused, with no wait in between.
 func TestListIsEmptyOnlyAfterTheListenerIsClosed(t *testing.T) {
 	r := newRig(t)
-	for i := 0; i < 200; i++ {
+	// The race is narrow: 2000 rounds catch the old code 9 times in 10
+	// under -race; -short keeps the quick loop quick.
+	rounds := 2000
+	if testing.Short() {
+		rounds = 200
+	}
+	for i := 0; i < rounds; i++ {
 		p := r.open()
 		addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(p.Listen))
 		go r.m.Close(p.ID, "test")
