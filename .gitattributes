@@ -6,6 +6,11 @@
 # .editorconfig (end_of_line = lf). Git detects binary files itself.
 * text=auto eol=lf
 
+# No Git LFS in this repository: no filter=lfs rules. LFS pointers would break
+# host Git, bundles, mirrors and the isolated test environment. Images and
+# fonts total about 1.7 MB (largest file 524 KB). A binary above about 5 MB
+# needs a decision from wh/design first.
+
 # Images and fonts are binary: never converted, never diffed as text.
 *.png binary
 *.jpg binary
