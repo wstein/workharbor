@@ -316,8 +316,12 @@ func Run(ctx context.Context, d Deps) error {
 				return
 			case <-t.C:
 				rep, err := reconcile(loopCtx)
-				if err != nil && loopCtx.Err() == nil {
-					logf("reconcile: %v", err)
+				if err != nil {
+					// A pass that failed or was cut short by the shutdown has a
+					// partial report: never record it as the new error set.
+					if loopCtx.Err() == nil {
+						logf("reconcile: %v", err)
+					}
 					continue
 				}
 				errLog.note(rep.Errors)

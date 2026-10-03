@@ -583,3 +583,54 @@ func TestRedactedLogfMasksSecrets(t *testing.T) {
 		t.Errorf("log line = %q", got)
 	}
 }
+
+// A pass cut short by the shutdown returns a partial report: it is not recorded
+// as the new error set, so the log does not claim the errors cleared.
+func TestRunDoesNotRecordAPassCutShortByShutdown(t *testing.T) {
+	d, _ := newDeps(t)
+	var mu sync.Mutex
+	var lines []string
+	d.Logf = func(f string, a ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		lines = append(lines, fmt.Sprintf(f, a...))
+	}
+	var calls atomic.Int32
+	d.reconcile = func(ctx context.Context) (service.Report, error) {
+		if calls.Add(1) == 1 {
+			return service.Report{Errors: []error{errors.New("task t1: environment did not start")}}, nil
+		}
+		<-ctx.Done()
+		return service.Report{}, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, d) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for calls.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	for _, l := range lines {
+		if strings.Contains(l, "have cleared") || strings.Contains(l, "reconcile: context") {
+			t.Errorf("unexpected log line after a cancelled pass: %q", l)
+		}
+	}
+}
+
+func TestRedactedLogfEscapesControlCharacters(t *testing.T) {
+	var got string
+	redactedLogf(redact.New(), func(f string, a ...any) { got = fmt.Sprintf(f, a...) })(
+		"task %s: %v", "t1", errors.New("boom\n2026-01-01 forged line\r\x1b[2J\u009b31m\tend\x7f"))
+	if strings.ContainsAny(got, "\n\r\x1b\x7f\u009b") {
+		t.Errorf("log line has a raw control character: %q", got)
+	}
+	for _, want := range []string{`boom\n2026`, `\r\x1b[2J`, `\u009b31m`, "\tend", `\x7f`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("log line %q lacks %q", got, want)
+		}
+	}
+}
