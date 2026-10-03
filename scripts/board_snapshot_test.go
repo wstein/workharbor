@@ -37,12 +37,20 @@ func newBoard(t *testing.T) board {
 		t.Fatal(err)
 	}
 	gh := `#!/bin/sh
+if [ "$1 $2" = "api rate_limit" ]; then
+	echo "rate_limit" >> "` + b.bin + `/rate.log"
+	echo "${FAKE_RATE:-{\"resources\":{\"graphql\":{\"limit\":5000,\"remaining\":4900,\"reset\":1791032178}}}}"
+	exit 0
+fi
 echo "$*" >> "` + b.log + `"
 sleep 0.3
 if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exit 1; fi
-case "$1 $2" in
-"project item-edit") exit 0 ;;
-"project item-add") echo '{"id":"PVTI_x","title":"A new title","type":"Issue"}'; exit 0 ;;
+case "$*" in
+*addProjectV2ItemById*) echo '{"data":{}}'; exit 0 ;;
+*updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
+*projectItems*) if [ -n "$FAKE_NOITEM" ]; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
+*"fields(first"*) echo '{"data":{"node":{"fields":{"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
+*"issue(number"*) echo '{"data":{"repository":{"issue":{"id":"I_77","title":"A new title"}}}}'; exit 0 ;;
 esac
 cat "` + data + `"
 `
@@ -302,13 +310,18 @@ func TestBoardSnapshotMovePatchesCache(t *testing.T) {
 		t.Fatalf("card = %q", got)
 	}
 	l := b.lines(t)
-	want := []string{
-		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Status --value In review",
-		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Session --value wh/review",
-		"project item-edit 6 --owner wstein --url https://github.com/wstein/workharbor/issues/20 --field Priority --value P3",
+	// 1 refresh, 1 field-ID query (cached), then lookup + mutation per write.
+	if len(l) != 1+1+3*2 {
+		t.Fatalf("gh calls = %d, want 8: %q", len(l), l)
 	}
-	if len(l) != 4 || strings.Join(l[1:], "\n") != strings.Join(want, "\n") {
-		t.Fatalf("gh calls = %q", l)
+	joined := strings.Join(l, "\n")
+	for _, w := range []string{"-f f=F_status -f o=O_ir", "-f f=F_sess -f o=O_s1", "-f f=F_prio -f o=O_p3", "-f i=PVTI_x", "-F n=20"} {
+		if !strings.Contains(joined, w) {
+			t.Fatalf("missing %q in %q", w, l)
+		}
+	}
+	if strings.Contains(joined, "item-edit") || strings.Contains(joined, "item-list 6 --owner wstein --url") {
+		t.Fatalf("the --url route is used: %q", l)
 	}
 	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
 	var x, y struct {
@@ -383,8 +396,8 @@ func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
 	if _, err := os.Stat(b.snap); err == nil {
 		t.Fatal("a move created a cache")
 	}
-	if len(b.lines(t)) != 1 {
-		t.Fatalf("gh calls = %q, want only the edit", b.lines(t))
+	if len(b.lines(t)) != 3 {
+		t.Fatalf("gh calls = %q, want fields, lookup and mutation", b.lines(t))
 	}
 	// A stale cache is not patched either.
 	if _, _, err := b.run(t); err != nil {
@@ -411,8 +424,8 @@ func TestBoardSnapshotAdd(t *testing.T) {
 		t.Fatalf("add: %v %s", err, se)
 	}
 	l := b.lines(t)
-	if len(l) != 2 ||
-		l[1] != "project item-add 6 --owner wstein --url https://github.com/wstein/workharbor/issues/77 --format json" {
+	if len(l) != 3 || !strings.Contains(l[1], "issue(number") || !strings.Contains(l[2], "addProjectV2ItemById") ||
+		!strings.Contains(l[2], "-f c=I_77") {
 		t.Fatalf("gh calls = %q", l)
 	}
 	if got := b.card(t, "77"); !strings.HasPrefix(got, "#77\t") || !strings.HasSuffix(got, "A new title") {
@@ -481,8 +494,8 @@ func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
 	base := b.calls(t)
 	for _, st := range []string{"Ready to push", "Done"} {
 		_, se, err := b.run(t, "move", "20", st)
-		if err == nil || !strings.Contains(se, "wh/review") || !strings.Contains(se, "gh project item-edit") {
-			t.Fatalf("move %q: err %v, stderr %q; want a refusal naming wh/review and gh project item-edit", st, err, se)
+		if err == nil || !strings.Contains(se, "wh/review") || !strings.Contains(se, "board-snapshot.sh ready") {
+			t.Fatalf("move %q: err %v, stderr %q; want a refusal naming wh/review and ready", st, err, se)
 		}
 	}
 	if b.calls(t) != base {
@@ -529,7 +542,78 @@ func TestBoardSnapshotStaleLockTakeoverConcurrent(t *testing.T) {
 			t.Errorf("card %s = %q, want Blocked (a write was lost)", n, got)
 		}
 	}
-	if got := len(b.lines(t)); got != 1+len(nums) {
-		t.Errorf("gh calls = %d, want %d", got, 1+len(nums))
+	if got := len(b.lines(t)); got < 1+2*len(nums) || got > 1+3*len(nums) {
+		t.Errorf("gh calls = %d, want %d to %d", got, 1+2*len(nums), 1+3*len(nums))
+	}
+}
+
+func TestBoardSnapshotReadySetsReadyToPush(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	if _, se, err := b.run(t, "ready", "20"); err != nil {
+		t.Fatalf("ready: %v %s", err, se)
+	}
+	if got := b.card(t, "20"); !strings.Contains(got, "\tReady to push\t") {
+		t.Fatalf("card = %q", got)
+	}
+	if !strings.Contains(strings.Join(b.lines(t), "\n"), "-f o=O_rp") {
+		t.Fatalf("gh calls = %q", b.lines(t))
+	}
+	for _, args := range [][]string{{"ready"}, {"ready", "20", "Done"}, {"ready", "x"}} {
+		if _, _, err := b.run(t, args...); err == nil {
+			t.Errorf("%q accepted", args)
+		}
+	}
+}
+
+func TestBoardSnapshotWritesNeverUseURLRouteAndCacheFields(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	for _, v := range []string{"Blocked", "Todo"} {
+		if _, se, err := b.run(t, "move", "20", v); err != nil {
+			t.Fatalf("move: %v %s", err, se)
+		}
+	}
+	// Two writes: one field query (cached next to the snapshot), two lookups, two mutations.
+	if got := len(b.lines(t)); got != 5 {
+		t.Fatalf("gh calls = %d, want 5: %q", got, b.lines(t))
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(b.snap), "board-fields.json")); err != nil {
+		t.Fatal(err)
+	}
+	// A card that is not on the board fails and says so.
+	if _, se, err := b.runEnv(t, []string{"FAKE_NOITEM=1"}, "move", "20", "Todo"); err == nil || !strings.Contains(se, "not on the board") {
+		t.Fatalf("err %v, stderr %q; want not on the board", err, se)
+	}
+}
+
+func TestBoardSnapshotWarnsUnder20Percent(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	low := `{"resources":{"graphql":{"limit":5000,"remaining":900,"reset":1791032178}}}`
+	out, se, err := b.runEnv(t, []string{"FAKE_RATE=" + low})
+	if err != nil || !strings.Contains(se, "900 of 5000") || !strings.Contains(se, "resets at") {
+		t.Fatalf("err %v, stderr %q; want a warning with the numbers and reset", err, se)
+	}
+	if strings.Contains(out, "warning") {
+		t.Fatal("the warning went to stdout")
+	}
+	// Cached run: no GitHub call, no rate check, no warning.
+	if _, se, _ := b.runEnv(t, []string{"FAKE_RATE=" + low}); se != "" {
+		t.Fatalf("a cache hit warned: %q", se)
+	}
+	// Plenty left: silent.
+	b.age(t, 400)
+	if _, se, err := b.run(t); err != nil || se != "" {
+		t.Fatalf("err %v, stderr %q; want silence at 98%%", err, se)
+	}
+	// Only rate_limit calls are free: they are not in the gh log.
+	for _, l := range b.lines(t) {
+		if strings.Contains(l, "rate_limit") {
+			t.Fatalf("rate_limit logged as a counted call: %q", l)
+		}
 	}
 }

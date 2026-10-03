@@ -46,9 +46,11 @@ findings" or the findings, each with `file:line`, a concrete failure scenario
 and a severity (high, medium, low). Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
-- No findings: set the card to `Ready to push` with `gh project item-edit 6 --owner
-  wstein --url <issue-url> --field Status --value "Ready to push"`; the snapshot
-  script's `move` refuses that status on purpose.
+- No findings: set the card to `Ready to push` with
+  `scripts/board-snapshot.sh ready <issue-number>` (two small GraphQL calls by
+  item ID; never `gh project item-edit --url`, which trips a secondary rate
+  limit, #165). Only you run `ready`; the script's `move` refuses that status
+  on purpose.
 - Findings: send them to the author's lane, leave the card `In review`, and
   review the fixes when they land. A finding that needs a rule (§3, §4.1, §4.2,
   §6, §7, the threat model) goes to `wh/design`.

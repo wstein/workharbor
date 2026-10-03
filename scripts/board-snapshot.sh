@@ -9,16 +9,28 @@
 #   board-snapshot.sh priority <number> <P1|P2|P3>  set a card's Priority
 #   board-snapshot.sh add <number>             add an issue to the board
 #
+#   board-snapshot.sh ready <number>           set Ready to push (wh/review only)
+#
 # move sets only Todo, In progress, Blocked and In review: Ready to push
 # (wh/review) and Done (closing the issue, the human) are refused before any gh
-# call; they are set through `gh project item-edit` directly.
+# call. `ready` sets Ready to push and is for wh/review only (the review gate,
+# AGENTS.md); nobody else runs it. Done is set by the human or by closing the issue.
 #
-# The four writes run `gh project item-edit` / `item-add` by the issue's URL
-# and make no board query (add runs one `item-add --format json`, the only call). Only when GitHub accepts the write is that one card
+# Writes use the item-ID route, never `gh project item-edit --url`, whose
+# project-wide item lookup trips GitHub's secondary rate limit (#165): one call
+# finds the issue's project item (repository.issue.projectItems), one mutation
+# sets the field (updateProjectV2ItemFieldValue); add is a lookup of the issue's
+# node ID and addProjectV2ItemById. The project, field and option IDs are cached
+# in board-fields.json next to the snapshot (one query when missing; refetched
+# once if an option is not found). A write is at most two GraphQL calls, no
+# retry. Only when GitHub accepts the write is that one card
 # patched in the cache (under the lock, fetched_at unchanged: a write does not
 # make old data fresh). A failed write leaves the cache untouched and exits 1.
 # With no cache, or a stale one, the write still happens and the cache is left
 # alone. Values are checked against fixed lists before any gh call.
+#
+# Before any call to GitHub the script reads `gh api rate_limit` (free: it does
+# not count) and warns on stderr when the GraphQL budget is under 20 % (#165).
 #
 # The snapshot is {"fetched_at": <unix>, "items": [...]} in one file outside the
 # repository. While it is younger than WHR_BOARD_MAX_AGE seconds (default 300)
@@ -64,7 +76,7 @@ queue) [ -n "${args[1]:-}" ] || die "usage: board-snapshot.sh queue <lane>" ;;
 card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
   ;;
-move | session | priority | add)
+move | session | priority | add | ready)
   case ${args[1]:-} in '' | *[!0-9]* | 0*) die "usage: board-snapshot.sh $mode <number> ..." ;; esac
   [ ${#args[1]} -le 9 ] || die "the issue number is too long"
   case $mode in
@@ -72,7 +84,7 @@ move | session | priority | add)
     case ${args[2]:-} in
     "Todo" | "In progress" | "Blocked" | "In review") ;;
     "Ready to push" | "Done")
-      die "move does not set \"${args[2]}\": Ready to push is set only by wh/review and Done by closing the issue or by the human, through gh project item-edit directly" ;;
+      die "move does not set \"${args[2]}\": Ready to push is set only by wh/review (board-snapshot.sh ready <number>) and Done by closing the issue or by the human" ;;
     *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;
@@ -85,11 +97,11 @@ move | session | priority | add)
   priority)
     case ${args[2]:-} in P1 | P2 | P3) ;; *) die "priority must be one of: P1, P2, P3" ;; esac
     ;;
-  add) [ -z "${args[2]:-}" ] || die "usage: board-snapshot.sh add <number>" ;;
+  add | ready) [ -z "${args[2]:-}" ] || die "usage: board-snapshot.sh $mode <number>" ;;
   esac
-  [ "$mode" = add ] || [ ${#args[@]} -eq 3 ] || die "usage: board-snapshot.sh $mode <number> <value>"
+  [ "$mode" = add ] || [ "$mode" = ready ] || [ ${#args[@]} -eq 3 ] || die "usage: board-snapshot.sh $mode <number> <value>"
   ;;
-*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add)" ;;
+*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready)" ;;
 esac
 
 dir=$(dirname "$file")
@@ -105,8 +117,52 @@ fresh() {
   [ $((now - at)) -lt "$max_age" ] && [ "$at" -le "$now" ]
 }
 
+# rate_warn prints one stderr line when the GraphQL budget is under 20 %. It
+# reads `gh api rate_limit`, which costs nothing; any failure is silent.
+rate_warn() {
+  local out rem lim rst when
+  out=$(gh api rate_limit 2>/dev/null) || return 0
+  read -r rem lim rst < <(printf '%s' "$out" | jq -r '.resources.graphql | "\(.remaining) \(.limit) \(.reset)"' 2>/dev/null) || return 0
+  case $rem$lim$rst in '' | *[!0-9]*) return 0 ;; esac
+  [ "$lim" -gt 0 ] || return 0
+  if [ $((rem * 5)) -lt "$lim" ]; then
+    when=$(date -r "$rst" +%H:%M 2>/dev/null || date -d "@$rst" +%H:%M 2>/dev/null || echo "$rst")
+    echo "board-snapshot: warning: GitHub GraphQL budget is low: $rem of $lim left, resets at $when" >&2
+  fi
+}
+
+project=PVT_kwHNjWrOAZVCuA
+fields=$dir/board-fields.json
+
+# fields_fetch caches the field and option IDs of Status, Session and Priority.
+fields_fetch() {
+  local out tmp
+  out=$(gh api graphql -f query='query($p:ID!){node(id:$p){... on ProjectV2{fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}' -f p="$project") || return 1
+  tmp=$(mktemp "$dir/.board.XXXXXX")
+  if ! printf '%s' "$out" | jq '[.data.node.fields.nodes[] | select(.name == "Status" or .name == "Session" or .name == "Priority")
+      | {key: .name, value: {id: .id, options: ((.options // []) | map({key: .name, value: .id}) | from_entries)}}] | from_entries' >"$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  chmod 600 "$tmp"
+  mv "$tmp" "$fields"
+}
+
+# field_ids prints "<field id> <option id>" for a field and value.
+field_ids() {
+  local r
+  if [ -f "$fields" ]; then
+    r=$(jq -r --arg f "$1" --arg v "$2" '.[$f] | select(.) | [.id, (.options[$v] // empty)] | join(" ")' "$fields" 2>/dev/null || true)
+    case $r in *" "?*) printf '%s\n' "$r"; return 0 ;; esac
+  fi
+  fields_fetch || return 1
+  r=$(jq -r --arg f "$1" --arg v "$2" '.[$f] | select(.) | [.id, (.options[$v] // empty)] | join(" ")' "$fields") || return 1
+  case $r in *" "?*) printf '%s\n' "$r" ;; *) return 1 ;; esac
+}
+
 query() {
   local out tmp
+  rate_warn
   out=$(gh project item-list 6 --owner wstein --format json --limit 300) || return 1
   tmp=$(mktemp "$dir/.board.XXXXXX")
   if ! printf '%s' "$out" | jq --argjson now "$(date +%s)" '{
@@ -199,25 +255,36 @@ patch() {
 }
 
 case $mode in
-move | session | priority | add)
+move | session | priority | add | ready)
   n=${args[1]}
   url=https://github.com/wstein/workharbor/issues/$n
-  case $mode in
-  move) field=Status key=status ;;
-  session) field=Session key=session ;;
-  priority) field=Priority key=priority ;;
-  esac
+  rate_warn
   if [ "$mode" = add ]; then
-    out=$(gh project item-add 6 --owner wstein --url "$url" --format json) || die "GitHub refused the add; the cache is unchanged"
-    # One call: its JSON names the new item; the title is taken from it when
-    # there (unverified: not measured on the live API), else the card is
-    # cached with a null title (--refresh fills it).
-    title=$(printf '%s' "$out" | jq -r '.title // empty' 2>/dev/null || true)
+    # Two calls: the issue's node ID and title, then addProjectV2ItemById.
+    info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){id title}}}' -F n="$n") ||
+      die "GitHub refused the add; the cache is unchanged"
+    cid=$(printf '%s' "$info" | jq -r '.data.repository.issue.id // empty')
+    title=$(printf '%s' "$info" | jq -r '.data.repository.issue.title // empty')
+    [ -n "$cid" ] || die "issue #$n not found; the cache is unchanged"
+    gh api graphql -f query='mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}' -f p="$project" -f c="$cid" >/dev/null ||
+      die "GitHub refused the add; the cache is unchanged"
     patch '.items |= (if any(.[]; .number == $n) then . else . + [{number: $n, title: (if $title == "" then null else $title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: $url}] end)' \
       --argjson n "$n" --arg title "$title" --arg url "$url"
   else
-    value=${args[2]}
-    gh project item-edit 6 --owner wstein --url "$url" --field "$field" --value "$value" >/dev/null ||
+    case $mode in
+    move) field=Status key=status value=${args[2]} ;;
+    ready) field=Status key=status value="Ready to push" ;;
+    session) field=Session key=session value=${args[2]} ;;
+    priority) field=Priority key=priority value=${args[2]} ;;
+    esac
+    ids=$(field_ids "$field" "$value") || die "could not find the $field field or the option \"$value\" on the board; the cache is unchanged"
+    fid=${ids%% *} oid=${ids#* }
+    info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){projectItems(first:10){nodes{id project{id}}}}}}' -F n="$n") ||
+      die "GitHub refused the lookup; the cache is unchanged"
+    item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
+    [ -n "$item" ] || die "issue #$n is not on the board (use: board-snapshot.sh add $n); the cache is unchanged"
+    gh api graphql -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
+      -f p="$project" -f i="$item" -f f="$fid" -f o="$oid" >/dev/null ||
       die "GitHub refused the write; the cache is unchanged"
     patch '.items |= map(if .number == $n then .[$k] = $v else . end)' \
       --argjson n "$n" --arg k "$key" --arg v "$value"
