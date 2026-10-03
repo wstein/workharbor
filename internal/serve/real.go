@@ -395,7 +395,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			return out, err
 		}),
 		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
-		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: logf,
+		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: redactedLogf(rd, logf),
 		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {
 			return AgentSpecFor(held, mode)
 		},
@@ -701,4 +701,11 @@ func ntfyNotifier(c *config.Config) notify.Notifier {
 		return nil
 	}
 	return notify.Ntfy{Server: n.Server, Secrets: fileSecrets{notify.SecretTopic: n.TopicFile, notify.SecretToken: n.TokenFile}, BaseURL: publicBase(c)}
+}
+
+// redactedLogf masks the supervisor's known secrets in every line it logs.
+func redactedLogf(rd *redact.Redactor, logf func(string, ...any)) func(string, ...any) {
+	return func(format string, args ...any) {
+		logf("%s", rd.String(fmt.Sprintf(format, args...)))
+	}
 }

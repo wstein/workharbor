@@ -90,6 +90,39 @@ type Deps struct {
 	// Ready, if set, is called with the address the web UI listens on and the API's
 	// socket, once both are bound.
 	Ready func(web, api net.Addr)
+
+	// reconcile replaces the service's Reconcile in tests.
+	reconcile func(context.Context) (service.Report, error)
+}
+
+// reconcileErrors logs the per-task errors of a reconcile pass (Report.Errors).
+// A pass that reports the same errors as the one before logs nothing, so a stuck
+// task does not fill the log every pass; a changed set is logged again, and a
+// cleared one says so. logf is the redacting logger, so a secret in an error text
+// never reaches the log. Only the reconcile loop calls it, from one goroutine at
+// a time (the start pass finishes before the loop starts).
+type reconcileErrors struct {
+	logf func(string, ...any)
+	prev string
+}
+
+func (r *reconcileErrors) note(errs []error) {
+	msgs := make([]string, len(errs))
+	for i, e := range errs {
+		msgs[i] = e.Error()
+	}
+	key := strings.Join(msgs, "\n")
+	if key == r.prev {
+		return
+	}
+	r.prev = key
+	if len(msgs) == 0 {
+		r.logf("reconcile: the earlier task errors have cleared")
+		return
+	}
+	for _, m := range msgs {
+		r.logf("reconcile: %s", m)
+	}
 }
 
 // NewID returns a random ID with a short prefix.
@@ -249,13 +282,19 @@ func Run(ctx context.Context, d Deps) error {
 		_ = apiLn.Close()
 		return err
 	}
-	rep, err := svc.Reconcile(ctx)
+	reconcile := svc.Reconcile
+	if d.reconcile != nil {
+		reconcile = d.reconcile
+	}
+	errLog := &reconcileErrors{logf: logf}
+	rep, err := reconcile(ctx)
 	if err != nil {
 		_ = ln.Close()
 		_ = apiLn.Close()
 		return fmt.Errorf("reconcile at start: %w", err)
 	}
 	logf("reconciled: %d interrupted, %d resumed, %d failed", len(rep.Interrupted), len(rep.Resumed), len(rep.Failed))
+	errLog.note(rep.Errors)
 	if d.Ready != nil {
 		d.Ready(ln.Addr(), apiLn.Addr())
 	}
@@ -276,9 +315,12 @@ func Run(ctx context.Context, d Deps) error {
 			case <-loopCtx.Done():
 				return
 			case <-t.C:
-				if _, err := svc.Reconcile(loopCtx); err != nil && loopCtx.Err() == nil {
+				rep, err := reconcile(loopCtx)
+				if err != nil && loopCtx.Err() == nil {
 					logf("reconcile: %v", err)
+					continue
 				}
+				errLog.note(rep.Errors)
 			}
 		}
 	}()

@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/forge/forgetest"
+	"github.com/wstein/workharbor/internal/redact"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 	"github.com/wstein/workharbor/internal/service"
@@ -514,5 +518,68 @@ func TestServiceConfigCarriesTheBoardTheRevokerAndTheThrottledNotifier(t *testin
 	}
 	if _, ok := scfg.Notifier.(*recordingNotifier); ok {
 		t.Error("the notifier is not behind the throttle")
+	}
+}
+
+// A task error the reconciler reports is logged at start and on each pass, once
+// while it stays the same, and again when it changes or clears.
+func TestRunLogsTheReconcilersTaskErrors(t *testing.T) {
+	d, _ := newDeps(t)
+	var mu sync.Mutex
+	var lines []string
+	d.Logf = func(f string, a ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		lines = append(lines, fmt.Sprintf(f, a...))
+	}
+	var calls atomic.Int32
+	d.reconcile = func(context.Context) (service.Report, error) {
+		switch n := calls.Add(1); {
+		case n <= 3:
+			return service.Report{Errors: []error{errors.New("task t1: environment did not start")}}, nil
+		case n <= 5:
+			return service.Report{Errors: []error{errors.New("task t1: readiness timed out")}}, nil
+		}
+		return service.Report{}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, d) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for calls.Load() < 8 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	count := func(sub string) (n int) {
+		for _, l := range lines {
+			if strings.Contains(l, sub) {
+				n++
+			}
+		}
+		return n
+	}
+	if n := count("environment did not start"); n != 1 {
+		t.Errorf("the repeated error was logged %d times, want 1", n)
+	}
+	if n := count("readiness timed out"); n != 1 {
+		t.Errorf("the changed error was logged %d times, want 1", n)
+	}
+	if n := count("have cleared"); n != 1 {
+		t.Errorf("the clearing was logged %d times, want 1", n)
+	}
+}
+
+func TestRedactedLogfMasksSecrets(t *testing.T) {
+	rd := redact.New()
+	if !rd.Add("s3cr3t-token-value-xyz") {
+		t.Fatal("secret not registered")
+	}
+	var got string
+	redactedLogf(rd, func(f string, a ...any) { got = fmt.Sprintf(f, a...) })("task %s: %v", "t1", errors.New("auth s3cr3t-token-value-xyz failed"))
+	if strings.Contains(got, "s3cr3t") || !strings.Contains(got, "task t1") {
+		t.Errorf("log line = %q", got)
 	}
 }
