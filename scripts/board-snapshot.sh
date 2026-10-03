@@ -175,7 +175,7 @@ budget_note() {
       fi
   } 2>/dev/null || true
   if [ "$lim" -gt 0 ] && [ $((rem * 5)) -lt "$lim" ]; then
-    when=$(printf '%s' "$reset" | jq -r 'try (fromdateiso8601 | strflocaltime("%H:%M")) catch .' 2>/dev/null || echo "$reset")
+    when=$(jq -rn --arg r "$reset" '$r | try (fromdateiso8601 | strflocaltime("%H:%M")) catch $r' 2>/dev/null || echo "$reset")
     echo "board-snapshot: warning: GitHub GraphQL budget is low: $rem of $lim left, resets at $when" >&2
   fi
 }
@@ -389,8 +389,8 @@ esac
 
 if [ "$mode" = budget ]; then
   [ -f "$budget_log" ] || { echo "no refresh logged yet"; exit 0; }
-  jq -sr --argjson now "$(date +%s)" '
-    [.[] | select(type == "object" and (.at | numbers) and .at >= $now - 86400)] as $r
+  jq -Rnr --argjson now "$(date +%s)" '
+    [inputs | fromjson? | select(type == "object" and (.at | numbers) and .at >= $now - 86400)] as $r
     | if ($r | length) == 0 then "no refresh logged in the last 24 hours"
       else "refreshes: \($r | length), total cost: \($r | map(.cost) | add), lowest remaining: \($r | map(.remaining) | min) of \($r[-1].limit)" end' "$budget_log"
   exit 0

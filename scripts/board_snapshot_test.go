@@ -777,7 +777,7 @@ func TestBoardSnapshotBudgetLogAndCommand(t *testing.T) {
 		t.Fatalf("%d log lines, want 2: %s", n, data)
 	}
 	// An old line outside the 24 hours does not count.
-	old := `{"at":1,"cost":99,"remaining":1,"limit":5000}` + "\n"
+	old := `{"at":1,"cost":99,"remaining":1,"limit":5000}` + "\ngarbage{{\n"
 	if err := os.WriteFile(logf, append([]byte(old), data...), 0o600); err != nil { //nolint:gosec // a test path
 		t.Fatal(err)
 	}
@@ -793,8 +793,8 @@ func TestBoardSnapshotWarnsFromQueryRemaining(t *testing.T) {
 	b := newBoard(t)
 	// rate_limit lags and says plenty; the query's own value says 10 %.
 	b.pages(t, map[string]string{"first": rateLimitPage(1, 500)})
-	_, se, err := b.run(t)
-	if err != nil || !strings.Contains(se, "500 of 5000") {
+	_, se, err := b.runEnv(t, []string{"TZ=UTC"})
+	if err != nil || !strings.Contains(se, "500 of 5000") || !strings.Contains(se, "resets at 12:00") {
 		t.Fatalf("err %v, stderr %q; want the warning from the query's value", err, se)
 	}
 }
