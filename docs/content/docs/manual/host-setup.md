@@ -121,7 +121,7 @@ container list --all                                     # answers without an er
 
 ### Over SSH
 
-Over SSH, use the `whr` CLI, which is a client of the API: `whr status`, `whr logs` and `whr doctor`; never run `container` directly. `container` commands and `whr setup` need `whr`'s desktop session, because Apple Container's services live in that user's GUI launchd domain and an SSH login is in another one, where `container system status` fails with `XPC connection error: Connection invalid` even while the services run {{< status unverified >}} (upstream apple/container#205; to be measured in #155). Over SSH, `whr doctor` therefore reports the checks that call `container` as `not_verified`; run them in the desktop session (Screen Sharing).
+Over SSH, use the `whr` CLI, which is a client of the API: `whr ls`, `whr show <task>`, `whr service status`, `whr logs` and `whr doctor`; never run `container` directly. `container` commands and `whr setup` need `whr`'s desktop session, because Apple Container's services live in that user's GUI launchd domain and an SSH login is in another one, where `container system status` fails with `XPC connection error: Connection invalid` even while the services run {{< status unverified >}} (upstream apple/container#205; to be measured in #155). Over SSH, `whr doctor` therefore reports the checks that call `container` as `not_verified`; run them in the desktop session (Screen Sharing).
 
 ## 7. Reach it from your phone
 
@@ -157,7 +157,7 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 
 - macOS firewall on, in stealth mode: *System Settings → Network → Firewall*.
 - **Every guest container can reach the Mac's services that listen on all interfaces**, even from an isolated network (issue #69). Turn off what you do not need in *System Settings → General → Sharing* (File Sharing, Screen Sharing, AirPlay Receiver, Media Sharing).
-- Remote Login (SSH) only for your administrator account (*Allow access for*), with **keys only**: set `PasswordAuthentication no` and `KbdInteractiveAuthentication no` in a file under `/etc/ssh/sshd_config.d/`. Otherwise an agent could guess passwords. Keep it until workharbor's short-lived SSH certificates exist (issue #32).
+- Remote Login (SSH) only for your administrator account (*Allow access for*), with **keys only**: set `PasswordAuthentication no` and `KbdInteractiveAuthentication no` in a file under `/etc/ssh/sshd_config.d/`. Otherwise an agent could guess passwords. The short-lived SSH certificates of workharbor are for the console only; they do not replace this, and SSH to the host stays key-only.
 - A `pf` rule that blocks the container subnets (`192.168.64.0/24` for the default network, and the `--internal` networks') from the Mac's own addresses closes this for every service; it is {{< status unverified >}} and comes with issue #69.
 - Screen Sharing over the VPN works once a user is logged in; it does not reach the FileVault unlock screen (step 3). It is how you reach `whr`'s desktop session from afar (step 2); if you keep it on, allow it only for your administrator and `whr`, and it stays reachable from guests until the `pf` rule above exists.
 - **Headless is fine.** After setup the Mac runs without a display, keyboard or mouse, and you reach it over SSH and Screen Sharing. Without a display attached, Screen Sharing may offer only a low resolution; an HDMI dummy plug fixes that ({{< status unverified >}} on macOS 26). Keep a display and keyboard at hand for the FileVault unlock after a power cut (step 3).

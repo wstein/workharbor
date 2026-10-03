@@ -49,7 +49,7 @@ The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the
 
 ```bash
 whr serve                      # the supervisor: JSON API, web app, reconciler
-whr run <issue-url>
+whr run <issue-url> --agent <workspace>/<role>
 whr ls
 whr logs <task> -f
 whr say <task> "use the existing retry helper"

@@ -50,12 +50,13 @@ Pausing supersedes the questions and approvals the run raised. No agent can paus
 ## Look at the work, and tidy up
 
 ```text
+whr show <task>                 # the review card: diff stat, CI, open Decisions and usage
 whr open <workspace>[/<role>]   # the supervisor's own copy of the agent's branch, for your editor; prints its path
 whr purge <task> [--yes]        # deletes the stored transcript; audit entries, usage and Decisions stay
 whr usage [--by task|run|repo|agent|model|day|month|all] [--repo owner/name] [--since 7d] [--until <time>] [--task #42]
 ```
 
-`purge` is refused while the run is running (pause it first) and, without `--yes`, says what goes and asks. `usage` totals what the agents reported; on a subscription the usage windows are the number that matters, and no cost is invented.
+`purge` is refused while the run is running (pause it first) and, without `--yes`, says what goes and asks. `usage` totals what the agents reported; on a subscription the usage windows are the number that matters, and no cost is invented. The web app's dashboard shows the same usage and, on a subscription, the usage windows with their limits {{< status unverified >}} (#172; not yet seen on a real run).
 
 ## In an emergency
 
