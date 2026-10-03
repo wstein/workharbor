@@ -175,9 +175,27 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if err := s.waitReady(ctx, env.ID); err != nil {
 		return err
 	}
+	// Starting an agent is serialised per run with Resume and an answer that
+	// resumes (design 4.1, one live agent per run). The wait above can be long, so
+	// the lock is taken only now, and the run is read again: a human may have
+	// resumed it meanwhile, and the path that loses the race changes nothing.
+	unlock := s.lockRun(run)
+	defer unlock()
+	agg, err = s.store.LoadTask(ctx, task)
+	if err != nil {
+		return err
+	}
+	r, ok = agg.Run(run)
+	if !ok || (r.State != domain.RunInterrupted && r.State != domain.RunPaused) || s.attached(run) ||
+		s.rebuilding(r.WorkspaceID) || agg.ResumeBlocked(run) != nil {
+		return nil
+	}
 	// The database says starting before the agent is launched (DB-first). The
 	// slot is taken first, so this run is not taken for a lost one meanwhile.
-	sl := s.begin(run)
+	sl, err := s.begin(run)
+	if err != nil {
+		return nil // lost the race for the slot: the other path owns the run
+	}
 	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		if err := a.ObserveEnv(env.ID, domain.EnvRunning); err != nil {
 			return err

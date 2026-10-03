@@ -73,7 +73,11 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 		}
 		// Before the change is saved, so the reconciler does not see a starting run
 		// with no session and take it for lost.
-		sl = s.begin(r.ID)
+		b, berr := s.begin(r.ID)
+		if berr != nil {
+			return domain.NewConflict(domain.RuleTransition, "run %s is already running", r.ID)
+		}
+		sl = b
 		return nil
 	})
 	if err != nil {

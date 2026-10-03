@@ -166,7 +166,7 @@ func (r *rig) live() {
 	r.agent.Block()
 	sess, err := r.agent.Resume(bg, spec(), r.session)
 	must(r.t, err)
-	r.svc.attach("t1", "r1", r.svc.begin("r1"), sess)
+	r.svc.attach("t1", "r1", mustBegin(r.t, r.svc), sess)
 }
 
 func (r *rig) load() *domain.TaskAggregate {
@@ -627,8 +627,9 @@ func TestAttemptsAreCountedAndUsedUp(t *testing.T) {
 func TestAnOldSessionDoesNotRemoveANewerEntry(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
-	old := r.svc.begin("r1")
-	fresh := r.svc.begin("r1") // a relaunch during a pass
+	old := mustBegin(t, r.svc)
+	r.svc.end("r1", old)
+	fresh := mustBegin(t, r.svc) // a relaunch during a pass
 	r.svc.end("r1", old)
 	if !r.svc.attached("r1") {
 		t.Fatal("the old session's cleanup removed the new entry")
@@ -702,7 +703,7 @@ func TestSessionAttachedDuringShutdownIsStopped(t *testing.T) {
 	sess, err := r.agent.Start(bg, spec())
 	must(t, err)
 	r.svc.Shutdown() // no sessions yet: returns at once, and the service is closing
-	sl := r.svc.begin("r1")
+	sl := mustBegin(t, r.svc)
 	r.svc.attach("t1", "r1", sl, sess)
 
 	done := make(chan agent.Result, 1)

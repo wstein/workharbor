@@ -340,13 +340,23 @@ func (s *Service) notify(ctx context.Context, events []domain.Event) {
 	}
 }
 
-// begin marks a run's launch as in progress.
-func (s *Service) begin(run domain.ID) *slot {
-	sl := &slot{}
+// errRunAttached is the refusal of a path that would start an agent for a run
+// that already has a session, or a launch in progress (design 4.1, one live
+// agent per run).
+var errRunAttached = errors.New("the run already has a live agent")
+
+// begin marks a run's launch as in progress. It never replaces an occupied
+// slot: a run has at most one live agent, so a second launch is refused with
+// errRunAttached and changes nothing.
+func (s *Service) begin(run domain.ID) (*slot, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[run]; ok {
+		return nil, fmt.Errorf("run %s: %w", run, errRunAttached)
+	}
+	sl := &slot{}
 	s.sessions[run] = sl
-	s.mu.Unlock()
-	return sl
+	return sl, nil
 }
 
 // end removes a run's entry, but only if it is still this one: a relaunch
@@ -469,7 +479,14 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	resumes := r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && row.RunID != ""
 	var sl *slot
 	if resumes {
-		sl = s.begin(row.RunID) // the run is about to start: it is not lost
+		// One live agent per run (design 4.1): the answer holds the run's lock
+		// like Resume and recovery, and is refused while an agent is attached.
+		unlock := s.lockRun(row.RunID)
+		defer unlock()
+		var berr error
+		if sl, berr = s.begin(row.RunID); berr != nil { // the run is about to start: it is not lost
+			return domain.NewConflict(domain.RuleTransition, "run %s is already running", row.RunID)
+		}
 	}
 	d, answered, err := s.store.RespondDecision(ctx, id, r)
 	s.publish(answered)

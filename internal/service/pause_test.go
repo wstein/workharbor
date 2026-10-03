@@ -230,7 +230,7 @@ func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := newRig(t)
-			sl := r.svc.begin("r1") // the launch is in progress: the run is running, no session yet
+			sl := mustBegin(t, r.svc) // the launch is in progress: the run is running, no session yet
 			if err := stop(r); err != nil {
 				t.Fatal(err)
 			}

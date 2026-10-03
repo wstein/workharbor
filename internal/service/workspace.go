@@ -529,7 +529,10 @@ func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws d
 		return err
 	}
 	task := agg.Task().ID
-	sl := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
+	sl, err := w.svc.begin(run) // taken before the run is visible, so the reconciler does not take it for lost
+	if err != nil {
+		return err
+	}
 	saved, err := w.saveStartingRun(ctx, ws, agg)
 	if err != nil {
 		w.svc.end(run, sl)
