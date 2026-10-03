@@ -4,7 +4,7 @@ description: "Whether Claude Code, Codex CLI and Antigravity publish linux-arm64
 weight: 14
 ---
 
-> Source: `spike/musl-cli` at `3672938` (a local branch until it is pushed; link it then), with `probe.sh` and its output `results.txt`. Tracks [#152](https://github.com/wstein/workharbor/issues/152). Probed on 3 October 2026, without any account or credential.
+> Source: [`spike/musl-cli`](https://github.com/wstein/workharbor/tree/spike/musl-cli/spikes/musl-cli) at `3672938`, with `probe.sh` and its output `results.txt`. Tracks [#152](https://github.com/wstein/workharbor/issues/152). Probed on 3 October 2026, without any account or credential.
 
 ## Summary
 

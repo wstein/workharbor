@@ -4,7 +4,7 @@ description: "Whether common devcontainer features can be fetched from ghcr.io a
 weight: 10
 ---
 
-> Source: `spike/devcontainer-features` at `33196f7`, with `run.sh`, the second run's `results.txt` and `RESULTS.md` (the first run's timings). A local branch until it is pushed. Tracks [#108](https://github.com/wstein/workharbor/issues/108). Recorded on 2 October 2026.
+> Source: [`spike/devcontainer-features`](https://github.com/wstein/workharbor/tree/spike/devcontainer-features/spikes/devcontainer-features) at `33196f7`, with `run.sh`, the second run's `results.txt` and `RESULTS.md` (the first run's timings). Tracks [#108](https://github.com/wstein/workharbor/issues/108). Recorded on 2 October 2026.
 
 Measured on the Mac mini with Apple `container` 1.5.0. The script fetches the `node` (1.7.1) and `python` (1.8.0) features from `ghcr.io/devcontainers/features` as OCI artifacts with an anonymous pull token (no account, no login), checks each blob against its digest, and builds `FROM <base>`, `COPY` the feature, `RUN ./install.sh` as root with the options as upper-case environment variables and `_REMOTE_USER=root`, the way the devcontainer CLI's generated Dockerfile does. The bases are the Fedora and Ubuntu 24.04 images pinned in `internal/baseimage`.
 

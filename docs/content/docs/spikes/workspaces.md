@@ -4,7 +4,7 @@ description: "Streaming a git bundle out of a running environment, what one agen
 weight: 8
 ---
 
-> Source: `spike/workspaces` at `2931104` (a local branch until it is pushed), with the scripts, the unedited `*-results.txt` and `RESULTS.md` under `spikes/workspaces/`. Tracks [#89](https://github.com/wstein/workharbor/issues/89). Recorded on 1 October 2026. **Partial:** several agents on one sign-in and the external SSD are not measured.
+> Source: [`spike/workspaces`](https://github.com/wstein/workharbor/tree/spike/workspaces/spikes/workspaces) at `2931104`, with the scripts, the unedited `*-results.txt` and `RESULTS.md` under `spikes/workspaces/`. Tracks [#89](https://github.com/wstein/workharbor/issues/89). Recorded on 1 October 2026. **Partial:** several agents on one sign-in and the external SSD are not measured.
 
 Measured on a 16 GiB development Mac (not the Mac mini) with Apple `container` 1.5.0 and `golang:1.27.1-trixie` (it has git) as the environment image. The figures are one run each.
 

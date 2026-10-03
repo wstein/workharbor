@@ -4,7 +4,7 @@ description: "A real supervisor on Apple Container 1.5.0 up to the agent's first
 weight: 9
 ---
 
-> Source: `spike/serve-integration` (a local branch until it is pushed), with `run.sh`, its helpers, the unedited output and `RESULTS.md` under `spikes/serve-integration/`. Groundwork for [#28](https://github.com/wstein/workharbor/issues/28), tracks [#27](https://github.com/wstein/workharbor/issues/27). Recorded on 1 October 2026 on a 16 GiB development Mac, not the Mac mini.
+> Source: [`spike/serve-integration`](https://github.com/wstein/workharbor/tree/spike/serve-integration/spikes/serve-integration) at `e5188a5`, with `run.sh`, its helpers, the unedited output and `RESULTS.md` under `spikes/serve-integration/`. Groundwork for [#28](https://github.com/wstein/workharbor/issues/28), tracks [#27](https://github.com/wstein/workharbor/issues/27). Recorded on 1 October 2026 on a 16 GiB development Mac, not the Mac mini.
 
 `whr serve` was run for real against Apple Container 1.5.0, with the pinned Claude Code from the tool store, a stand-in for the GitHub API and a local repository as the workspace's source. Everything up to the agent's first request ran without a login.
 
