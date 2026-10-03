@@ -8,8 +8,11 @@ set -e
 unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
 zero=0000000000000000000000000000000000000000
 # `command make` skips an exported shell function named make (bash imports one
-# from BASH_FUNC_make%% even as sh). A make earlier on PATH is out of scope:
-# the pusher controls their own machine, and the same hole exists for go and git.
+# from BASH_FUNC_make%% even as sh); it is a speed bump, not a wall. Exported
+# shell functions are out of scope as a class (BASH_FUNC_command%% or
+# BASH_FUNC_read%% replace `command` and `read` themselves, and sh cannot close
+# that), like a make earlier on PATH and --no-verify: the hooks guard the
+# pusher's own machine against accidents, and CI scans too (#190).
 while read -r ref local_sha _ remote_sha || [ -n "$ref" ]; do # a last line with no newline still counts
   case "$local_sha:$remote_sha" in
     "":* | *:"")

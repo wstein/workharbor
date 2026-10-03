@@ -5,5 +5,8 @@ set -e
 # MAKEFLAGS, MAKEFILES and friends can turn a recipe off (GITLEAKS_FOUND=0,
 # -n, -i, a replaced SHELL).
 unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
-# `command` skips an exported shell function named make.
+# `command` skips an exported shell function named make: a speed bump, not a
+# wall. Exported shell functions are out of scope as a class (they can replace
+# `command` itself), like PATH and --no-verify: the hooks guard the committer's
+# own machine against accidents, and CI scans too (#190).
 command make secrets-staged fmt-check lint editorconfig

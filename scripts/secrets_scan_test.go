@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,9 +177,18 @@ func TestPrePushBlocksWhatItCannotScan(t *testing.T) {
 
 // TestHooksIgnoreAnExportedMakeFunction: bash imports BASH_FUNC_make%% even
 // when it runs as sh, and the function would stand in for make. Both hooks call
-// `command make`.
+// `command make`, a speed bump only: exported shell functions are out of scope
+// as a class (BASH_FUNC_command%% and BASH_FUNC_read%% still bypass the hooks,
+// and sh cannot close that), like PATH and --no-verify (#190). The test is
+// skipped where /bin/sh imports no functions (dash, on Linux CI), because there
+// it could not fail and a pass would claim nothing.
 func TestHooksIgnoreAnExportedMakeFunction(t *testing.T) {
 	t.Parallel()
+	probe := exec.CommandContext(t.Context(), "/bin/sh", "-c", "probe_fn")
+	probe.Env = []string{"BASH_FUNC_probe_fn%%=() { :; }", "PATH=/usr/bin:/bin"}
+	if probe.Run() != nil {
+		t.Skip("/bin/sh imports no exported shell functions here, so the test cannot fail")
+	}
 	const fn = "'BASH_FUNC_make%%=() { exit 0; }'"
 	for _, h := range []struct{ name, script, finding string }{
 		{"pre-push", pushOf("env "+fn, zero), "holds a secret"},
