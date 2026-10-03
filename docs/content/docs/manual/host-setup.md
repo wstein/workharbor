@@ -195,7 +195,7 @@ Each secret file must be `0600`, owned by you, absolute, a regular file with one
 - `token_file` is optional.
 - A notification links to the task, so `public_url` (or `board.public_url`) must be set to an `https` URL, as in step 13.
 
-`whr serve` refuses to start when any of this is wrong, and says which key. Then install the [ntfy](https://ntfy.sh) app and subscribe to that topic on your server. A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7. Pushes are limited per task: an identical message (same task, kind and decision) sent within an hour is dropped, and a task sends at most 5 pushes an hour. What is dropped is still in the inbox. That the configuration is validated and the throttle works is tested; delivery to a real ntfy server and the app on a phone have not been measured ({{< status unverified >}}).
+`whr serve` refuses to start when any of this is wrong, and says which key. Then install the [ntfy](https://ntfy.sh) app and subscribe to that topic on your server. A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7. Pushes are limited per task: an identical message (same task, kind, decision and run) sent within an hour is dropped, and a task sends at most 5 pushes an hour. What is dropped is still in the inbox. That the configuration is validated and the throttle works is tested; delivery to a real ntfy server and the app on a phone have not been measured ({{< status unverified >}}).
 
 ## 11. The GitHub App
 
