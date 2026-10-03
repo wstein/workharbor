@@ -103,10 +103,6 @@ func (s *Service) Limits(ctx context.Context) ([]ProviderLimits, error) {
 	return []ProviderLimits{p}, nil
 }
 
-// maxLimitWarned bounds the window keys of limitWarned: window names come from
-// the agent. The balance key is outside the cap.
-const maxLimitWarned = 64
-
 // limitWarnCooldown is the least time between two pushes for one key, so a
 // reading that alternates around the threshold cannot push on every low turn.
 // A quota window lasts hours (five hours at the shortest), so an hour keeps
@@ -122,10 +118,24 @@ type limitWarn struct {
 
 func resetPassed(resetsAt, now time.Time) bool { return !resetsAt.IsZero() && now.After(resetsAt) }
 
+// limitKey maps a window name to one of at most three keys (with the balance
+// key, four in all): the two known windows get their own, every other name the
+// agent invents shares window/other, so the map cannot grow and a flood of
+// made-up names cannot evict a real window's cooldown.
+func limitKey(name string) string {
+	switch name {
+	case agent.WindowFiveHour, agent.WindowSevenDay:
+		return "window/" + name
+	}
+	return "window/other"
+}
+
 // warnLowLimits pushes when a reported window or balance turns low: the same
 // signal the dashboard shows. A key warns again only after a reading below the
-// threshold and once limitWarnCooldown has passed since its last push. It runs
-// after a usage report was recorded and only looks at what that report carried.
+// threshold and once limitWarnCooldown has passed since its last push; the low
+// state is recorded only when a push happens, so a window that stays low
+// through the cooldown warns once it passes. It runs after a usage report was
+// recorded and only looks at what that report carried.
 func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 	if s.cfg.Notifier == nil {
 		return
@@ -134,9 +144,8 @@ func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 	now := s.clock.Now()
 	limit := float64(s.cfg.LowLimits.windowPercent()) / 100
 	for _, w := range u.Windows {
-		// The key is the window name alone: the reset time is the agent's
-		// own report and must not mint new keys.
-		low["window/"+w.Name] = w.Utilization >= limit && !resetPassed(w.ResetsAt, now)
+		k := limitKey(w.Name)
+		low[k] = low[k] || (w.Utilization >= limit && !resetPassed(w.ResetsAt, now))
 	}
 	if b := u.Balance; b != nil {
 		low["balance"] = s.cfg.LowLimits.BalanceMicroUSD > 0 && b.RemainingMicroUSD <= s.cfg.LowLimits.BalanceMicroUSD
@@ -145,35 +154,13 @@ func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 	if s.limitWarned == nil {
 		s.limitWarned = map[string]limitWarn{}
 	}
-	windows := 0
-	for k := range s.limitWarned {
-		if k != "balance" {
-			windows++
-		}
-	}
 	fresh := false
 	for k, isLow := range low {
-		e, known := s.limitWarned[k]
-		if !known && k != "balance" && windows >= maxLimitWarned {
-			// At the cap: forget a window this report does not mention.
-			for old := range s.limitWarned {
-				if _, inReport := low[old]; old != "balance" && !inReport {
-					delete(s.limitWarned, old)
-					windows--
-					break
-				}
-			}
-			if windows >= maxLimitWarned {
-				continue
-			}
-		}
-		if !known && k != "balance" {
-			windows++
-		}
-		wasLow := e.low
-		e.low = isLow
-		if isLow && !wasLow && (e.at.IsZero() || now.Sub(e.at) >= limitWarnCooldown) {
-			e.at, fresh = now, true
+		e := s.limitWarned[k]
+		if !isLow {
+			e.low = false
+		} else if !e.low && (e.at.IsZero() || now.Sub(e.at) >= limitWarnCooldown) {
+			e.low, e.at, fresh = true, now, true
 		}
 		s.limitWarned[k] = e
 	}

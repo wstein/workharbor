@@ -125,17 +125,18 @@ func TestLowWindowPushesAreKeyedByNameAndBounded(t *testing.T) {
 	if got := n.kinds(); len(got) != 2 {
 		t.Errorf("notifications = %v, want a second after recovery", got)
 	}
+	before := len(n.kinds())
 	for i := 0; i < 500; i++ {
 		r.report(10+i, win("w"+strconv.Itoa(i), 0.99, later))
+	}
+	if got := len(n.kinds()); got > before+1 {
+		t.Errorf("%d pushes for 500 made-up window names, want at most one per cooldown", got-before)
 	}
 	r.svc.mu.Lock()
 	size := len(r.svc.limitWarned)
 	r.svc.mu.Unlock()
-	if size > maxLimitWarned {
-		t.Errorf("limitWarned has %d keys, want at most %d", size, maxLimitWarned)
-	}
-	if got := n.kinds(); len(got) > 500+2 {
-		t.Errorf("%d pushes for 500 window names", len(got))
+	if size > 4 {
+		t.Errorf("limitWarned has %d keys, want at most 4", size)
 	}
 }
 
@@ -161,7 +162,7 @@ func TestAWindowFloodDoesNotSilenceARealWarning(t *testing.T) {
 	}
 	r.svc.mu.Lock()
 	defer r.svc.mu.Unlock()
-	if len(r.svc.limitWarned) > maxLimitWarned+1 {
+	if len(r.svc.limitWarned) > 4 {
 		t.Errorf("limitWarned has %d keys", len(r.svc.limitWarned))
 	}
 }
@@ -187,6 +188,17 @@ func TestAnAlternatingReadingWarnsOncePerCooldown(t *testing.T) {
 	r.report(11, win(0.95))
 	if got := len(n.kinds()); got != 2 {
 		t.Errorf("pushes = %d, want a second after the cooldown", got)
+	}
+	// Reset, low again inside the cooldown (no push), still low after it.
+	r.report(12, win(0.10))
+	r.report(13, win(0.95))
+	if got := len(n.kinds()); got != 2 {
+		t.Fatalf("pushes = %d, want none inside the second cooldown", got)
+	}
+	r.clock.now = r.clock.now.Add(limitWarnCooldown + time.Minute)
+	r.report(14, win(0.95))
+	if got := len(n.kinds()); got != 3 {
+		t.Errorf("pushes = %d, want a warning once the cooldown passes while still low", got)
 	}
 }
 
