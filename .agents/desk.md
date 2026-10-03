@@ -25,6 +25,20 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
   sections and dependencies, added to the board with a `Priority` and a lane
   when the lane is obvious; otherwise leave the lane to `wh/design`. Labels
   as in AGENTS.md, GitHub rate limit.
+- **Post a local review or report as a comment.** When you file an issue from
+  a review or report held in a local file (GitHub's REST API cannot attach
+  files, so a bare path is lost to everyone else):
+  1. Scan the file for secrets and personal data first, because the repository
+      is public: `go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir --no-banner
+      --redact --config .gitleaks.toml <file>` (the version in the `Makefile`),
+      and read it for names, addresses and paths of the human's machine. Never
+      print a match; on a finding, stop and tell Werner.
+  2. Summarise in the issue body; do not paste the text there.
+  3. Post the full text as one issue comment inside a collapsed
+      `<details>` block, and name the source file.
+  4. A file over about 60 KB (the comment limit is 65,536 characters) is split
+      across comments, or committed through `wh/docs` instead.
+  5. A screenshot cannot be posted by REST: ask Werner to drag it into the issue.
 - **Route.** A rule question (§3, §4.1, §4.2, §6, §7, the threat model), a
   priority change or a conflict between lanes goes to `wh/design` with Werner's
   words and your summary. A request to start or queue work goes to `wh/dispatch`
