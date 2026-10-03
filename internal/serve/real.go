@@ -703,9 +703,34 @@ func ntfyNotifier(c *config.Config) notify.Notifier {
 	return notify.Ntfy{Server: n.Server, Secrets: fileSecrets{notify.SecretTopic: n.TopicFile, notify.SecretToken: n.TokenFile}, BaseURL: publicBase(c)}
 }
 
-// redactedLogf masks the supervisor's known secrets in every line it logs.
+// redactedLogf masks the supervisor's known secrets in every line it logs and
+// escapes control characters, so text an agent produced (in an error) can
+// neither forge a log line nor drive the terminal.
 func redactedLogf(rd *redact.Redactor, logf func(string, ...any)) func(string, ...any) {
 	return func(format string, args ...any) {
-		logf("%s", rd.String(fmt.Sprintf(format, args...)))
+		logf("%s", escapeControl(rd.String(fmt.Sprintf(format, args...))))
 	}
+}
+
+// escapeControl replaces every C0 control character (tab excepted), DEL and
+// every C1 control character with a visible escape such as \n, \x1b or \u009b.
+func escapeControl(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\t':
+			b.WriteRune(r)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		case r >= 0x80 && r <= 0x9f:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
