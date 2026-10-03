@@ -21,7 +21,7 @@ The command-line tool is **`whr`**.
 - **A supervisor with a dashboard, not an IDE.** Tasks, runs, workspaces and environments are separate objects you watch and steer from the dashboard (web, phone) or the CLI; attaching or detaching an editor never interrupts the agent.
 - **Workspaces with named agents.** A workspace is a folder with its own isolated environment; each named agent (`<workspace>/<role>`) works on its own branch there. A console environment gives you a shell next to them, without logging in to the host.
 - **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from your phone, the web app or the CLI.
-- **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each workspace in its own lightweight VM, reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. The agents of one workspace share that VM; put agents that must not touch each other in separate workspaces. Other runtimes follow through adapters.
+- **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each workspace gets its own environment (a lightweight VM), reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. The agents of one workspace share that environment; put agents that must not touch each other in separate workspaces. Other runtimes follow through adapters.
 - **Your agent, your login, within its terms.** Claude Code first, with your own subscription or an API key. You sign in inside each environment; `whr` never handles a subscription login, and only you start runs ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
 - **Approval boundaries are policy.** Agents commit inside their environment; the host never runs git there. An agent's commits leave as a git bundle, are checked on the host against a supervisor-owned mirror of the repository, and are pushed only after you approve the exact commit ("Ready to push?"). Merge, tag, release and deploy stay with you, enforced by the forge adapter, not by prompts.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
@@ -34,7 +34,7 @@ Each failure below has an answer in the design. Release 1 is still being built, 
 - **No isolation.** An agent runs with your host's files and network. Here each workspace has its own environment, and its agents reach the internet only through an allowlist proxy ([isolated by default](#concept)).
 - **Secrets are within reach.** Long-lived tokens end up where an agent can read them. Here forge credentials are short-lived and per run, and `whr` never handles a subscription login ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
 - **No way to follow or stop a run.** Here runs, decisions and events are visible in the dashboard and the CLI, and you can steer or stop a run from either (`whr logs`, `whr say`, [daily use](docs/content/docs/manual/daily-use.md)).
-- **One login shared by many agents.** Here each environment has its own sign-in, and only you start runs ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
+- **One login shared by many agents.** Here the agents of one workspace share that workspace's sign-in (you sign in once per environment), and only you start runs; several sessions on one sign-in is an open question, D42 and #82 ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
 
 ## What you need
 

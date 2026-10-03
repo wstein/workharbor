@@ -40,7 +40,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Isolated by default"
-    subtitle="Apple Container on an Apple-silicon Mac mini comes first: each workspace in its own lightweight VM (its agents share it), out to the internet only through an allowlist proxy, with short-lived, per-run forge credentials."
+    subtitle="Apple Container on an Apple-silicon Mac mini comes first: each workspace's environment, a lightweight VM that its agents share, out to the internet only through an allowlist proxy, with short-lived, per-run forge credentials."
     icon="shield-check"
   >}}
   {{< hextra/feature-card
@@ -68,4 +68,4 @@ Each failure has an answer in the design. Release 1 is still being built: these 
 - **No isolation.** Here each workspace has its own environment, and its agents reach the internet only through an allowlist proxy. See [the design](docs/design/).
 - **Secrets are within reach.** Here forge credentials are short-lived and per run, and `whr` never handles a subscription login. See [vendor terms](docs/manual/vendor-terms.md).
 - **No way to follow or stop a run.** Here runs and decisions show in the dashboard and the CLI, where you can steer or stop them. See [daily use](docs/manual/daily-use.md).
-- **One login shared by many agents.** Here each environment has its own sign-in, and only you start runs. See [vendor terms](docs/manual/vendor-terms.md).
+- **One login shared by many agents.** Here the agents of one workspace share that workspace's sign-in (you sign in once per environment), and only you start runs. Several sessions on one sign-in: {{< status open >}} (D42, #82). See [vendor terms](docs/manual/vendor-terms.md).
