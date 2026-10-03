@@ -52,7 +52,7 @@ if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exi
 case "$*" in
 *addProjectV2ItemById*) echo '{"data":{}}'; exit 0 ;;
 *updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
-*projectItems*) if [ -n "$FAKE_NOITEM" ]; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
+*projectItems*) if [ -n "$FAKE_NOITEM" ] || case "$*" in *"n=99"*) true ;; *) false ;; esac; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
 *"fields(first"*) echo '{"data":{"node":{"fields":{"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
 *"items(first"*)
 	cur=first
@@ -487,6 +487,13 @@ func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
 		{"priority", "12", "P1\nP2"},
 		{"priority", "x", "P1"},
 		{"add", "12 13"},
+		{"add", "12", "x"},
+		{"ready", "12", "13", "Done"},
+		{"move", "12", "13", "Done"},
+		{"move", "12", "13", "Merged"},
+		{"move", "12", "x", "Todo"},
+		{"session", "12", "13", "wh/nobody"},
+		{"priority", "12", "0", "P1"},
 		{"add", "$(id)"},
 		{"add", ""},
 		{"add"},
@@ -688,5 +695,52 @@ func TestBoardSnapshotFailingPageKeepsOldFile(t *testing.T) {
 	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
 	if string(after) != string(before) {
 		t.Fatal("a failed page changed the file")
+	}
+}
+
+func TestBoardSnapshotSeveralIssues(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"move", "10", "20", "30", "Blocked"},
+		{"session", "10", "20", "Werner"},
+		{"priority", "10", "20", "P3"},
+		{"ready", "10", "20", "20"},
+	} {
+		if _, se, err := b.run(t, args...); err != nil {
+			t.Fatalf("%v: %v %s", args, err, se)
+		}
+	}
+	if got := b.card(t, "10"); !strings.HasPrefix(got, "#10\tReady to push\tWerner\tP3\t") {
+		t.Fatalf("card 10 = %q", got)
+	}
+	if got := b.card(t, "30"); !strings.HasPrefix(got, "#30\tBlocked\t") {
+		t.Fatalf("card 30 = %q", got)
+	}
+	if _, se, err := b.run(t, "add", "77", "78"); err != nil {
+		t.Fatalf("add: %v %s", err, se)
+	}
+	if got := b.card(t, "78"); !strings.HasPrefix(got, "#78\t") {
+		t.Fatalf("card 78 = %q", got)
+	}
+}
+
+func TestBoardSnapshotSeveralIssuesPartialFailure(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	_, se, err := b.run(t, "move", "10", "99", "20", "Blocked")
+	if err == nil || !strings.Contains(se, "#99") {
+		t.Fatalf("err %v, stderr %q; want exit 1 naming #99", err, se)
+	}
+	for _, n := range []string{"10", "20"} {
+		if got := b.card(t, n); !strings.Contains(got, "\tBlocked\t") {
+			t.Errorf("card %s = %q, want Blocked despite the failure on #99", n, got)
+		}
 	}
 }

@@ -4,12 +4,17 @@
 #   board-snapshot.sh [--refresh]            print the snapshot JSON
 #   board-snapshot.sh queue <lane> [--refresh]  the lane's Todo cards, P1 first, then by issue number
 #   board-snapshot.sh card <number> [--refresh] one card: number, status, session, priority, title
-#   board-snapshot.sh move <number> <status>   set a card's Status
-#   board-snapshot.sh session <number> <lane>  set a card's Session
-#   board-snapshot.sh priority <number> <P1|P2|P3>  set a card's Priority
-#   board-snapshot.sh add <number>             add an issue to the board
+#   board-snapshot.sh move <number>... <status>   set each card's Status
+#   board-snapshot.sh session <number>... <lane>  set each card's Session
+#   board-snapshot.sh priority <number>... <P1|P2|P3>  set each card's Priority
+#   board-snapshot.sh add <number>...             add each issue to the board
 #
-#   board-snapshot.sh ready <number>           set Ready to push (wh/review, or wh/dispatch for it)
+#   board-snapshot.sh ready <number>...           set Ready to push (wh/review, or wh/dispatch for it)
+#
+# Every write mode takes several issues (at most 50) in one call: one
+# permission prompt, one value for all, one cache patch for the ones that
+# succeeded. A failure on one issue is reported on stderr, the rest still run,
+# and the exit status is 1 if any failed. Input is validated before any gh call.
 #
 # move sets only Todo, In progress, Blocked and In review: Ready to push
 # (wh/review) and Done (closing the issue, the human) are refused before any gh
@@ -77,29 +82,42 @@ card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
   ;;
 move | session | priority | add | ready)
-  case ${args[1]:-} in '' | *[!0-9]* | 0*) die "usage: board-snapshot.sh $mode <number> ..." ;; esac
-  [ ${#args[1]} -le 9 ] || die "the issue number is too long"
+  # move, session and priority end with one value shared by every issue; add
+  # and ready take only issue numbers. All input is checked before any gh call.
+  nums=("${args[@]:1}")
+  value=""
+  case $mode in
+  move | session | priority)
+    [ ${#nums[@]} -ge 2 ] || die "usage: board-snapshot.sh $mode <number> [<number> ...] <value>"
+    value=${nums[${#nums[@]} - 1]}
+    unset 'nums[${#nums[@]}-1]'
+    ;;
+  esac
+  [ ${#nums[@]} -ge 1 ] || die "usage: board-snapshot.sh $mode <number> [<number> ...]"
+  [ ${#nums[@]} -le 50 ] || die "at most 50 issues in one call"
+  for n in "${nums[@]}"; do
+    case $n in '' | *[!0-9]* | 0*) die "usage: board-snapshot.sh $mode <number> [<number> ...]${value:+ <value>}: \"$n\" is not an issue number" ;; esac
+    [ ${#n} -le 9 ] || die "the issue number is too long"
+  done
   case $mode in
   move)
-    case ${args[2]:-} in
+    case $value in
     "Todo" | "In progress" | "Blocked" | "In review") ;;
     "Ready to push" | "Done")
-      die "move does not set \"${args[2]}\": Ready to push is set by board-snapshot.sh ready <number> (wh/review, or wh/dispatch on its behalf for the reviewed sha) and Done by closing the issue or by the human" ;;
+      die "move does not set \"$value\": Ready to push is set by board-snapshot.sh ready <number> ... (wh/review, or wh/dispatch on its behalf for the reviewed sha) and Done by closing the issue or by the human" ;;
     *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;
   session)
-    case ${args[2]:-} in
+    case $value in
     "wh/design" | "wh/dispatch" | "wh/platform" | "wh/runtime" | "wh/review" | "wh/verify" | "wh/docs" | "wh/spikes" | "wh/desk" | "Werner") ;;
     *) die "lane must be one of: wh/design, wh/dispatch, wh/platform, wh/runtime, wh/review, wh/verify, wh/docs, wh/spikes, wh/desk, Werner" ;;
     esac
     ;;
   priority)
-    case ${args[2]:-} in P1 | P2 | P3) ;; *) die "priority must be one of: P1, P2, P3" ;; esac
+    case $value in P1 | P2 | P3) ;; *) die "priority must be one of: P1, P2, P3" ;; esac
     ;;
-  add | ready) [ -z "${args[2]:-}" ] || die "usage: board-snapshot.sh $mode <number>" ;;
   esac
-  [ "$mode" = add ] || [ "$mode" = ready ] || [ ${#args[@]} -eq 3 ] || die "usage: board-snapshot.sh $mode <number> <value>"
   ;;
 *) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready)" ;;
 esac
@@ -281,39 +299,54 @@ patch() {
 
 case $mode in
 move | session | priority | add | ready)
-  n=${args[1]}
-  url=https://github.com/wstein/workharbor/issues/$n
   rate_warn
-  if [ "$mode" = add ]; then
-    # Two calls: the issue's node ID and title, then addProjectV2ItemById.
-    info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){id title}}}' -F n="$n") ||
-      die "GitHub refused the add; the cache is unchanged"
-    cid=$(printf '%s' "$info" | jq -r '.data.repository.issue.id // empty')
-    title=$(printf '%s' "$info" | jq -r '.data.repository.issue.title // empty')
-    [ -n "$cid" ] || die "issue #$n not found; the cache is unchanged"
-    gh api graphql -f query='mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}' -f p="$project" -f c="$cid" >/dev/null ||
-      die "GitHub refused the add; the cache is unchanged"
-    patch '.items |= (if any(.[]; .number == $n) then . else . + [{number: $n, title: (if $title == "" then null else $title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: $url}] end)' \
-      --argjson n "$n" --arg title "$title" --arg url "$url"
-  else
+  failed=0 done_nums=() done_json="[]"
+  if [ "$mode" != add ]; then
     case $mode in
-    move) field=Status key=status value=${args[2]} ;;
+    move) field=Status key=status ;;
     ready) field=Status key=status value="Ready to push" ;;
-    session) field=Session key=session value=${args[2]} ;;
-    priority) field=Priority key=priority value=${args[2]} ;;
+    session) field=Session key=session ;;
+    priority) field=Priority key=priority ;;
     esac
     ids=$(field_ids "$field" "$value") || die "could not find the $field field or the option \"$value\" on the board; the cache is unchanged"
     fid=${ids%% *} oid=${ids#* }
-    info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){projectItems(first:10){nodes{id project{id}}}}}}' -F n="$n") ||
-      die "GitHub refused the lookup; the cache is unchanged"
-    item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
-    [ -n "$item" ] || die "issue #$n is not on the board (use: board-snapshot.sh add $n); the cache is unchanged"
-    gh api graphql -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
-      -f p="$project" -f i="$item" -f f="$fid" -f o="$oid" >/dev/null ||
-      die "GitHub refused the write; the cache is unchanged"
-    patch '.items |= map(if .number == $n then .[$k] = $v else . end)' \
-      --argjson n "$n" --arg k "$key" --arg v "$value"
   fi
+  seen=" "
+  for n in "${nums[@]}"; do
+    case $seen in *" $n "*) continue ;; esac
+    seen="$seen$n "
+    if [ "$mode" = add ]; then
+      # Two calls: the issue's node ID and title, then addProjectV2ItemById.
+      info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){id title}}}' -F n="$n") || {
+        echo "board-snapshot: #$n: GitHub refused the add" >&2; failed=1; continue; }
+      cid=$(printf '%s' "$info" | jq -r '.data.repository.issue.id // empty')
+      title=$(printf '%s' "$info" | jq -r '.data.repository.issue.title // empty')
+      [ -n "$cid" ] || { echo "board-snapshot: #$n: issue not found" >&2; failed=1; continue; }
+      gh api graphql -f query='mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}' -f p="$project" -f c="$cid" >/dev/null || {
+        echo "board-snapshot: #$n: GitHub refused the add" >&2; failed=1; continue; }
+      done_json=$(printf '%s' "$done_json" | jq -c --argjson n "$n" --arg t "$title" '. + [{n: $n, title: $t}]')
+    else
+      info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){projectItems(first:10){nodes{id project{id}}}}}}' -F n="$n") || {
+        echo "board-snapshot: #$n: GitHub refused the lookup" >&2; failed=1; continue; }
+      item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
+      [ -n "$item" ] || { echo "board-snapshot: #$n: not on the board (use: board-snapshot.sh add $n)" >&2; failed=1; continue; }
+      gh api graphql -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
+        -f p="$project" -f i="$item" -f f="$fid" -f o="$oid" >/dev/null || {
+        echo "board-snapshot: #$n: GitHub refused the write" >&2; failed=1; continue; }
+      done_nums+=("$n")
+    fi
+  done
+  # One cache patch for every issue that succeeded.
+  if [ "$mode" = add ]; then
+    [ "$done_json" = "[]" ] ||
+      patch '.items |= (reduce $adds[] as $a (.; if any(.[]; .number == $a.n) then . else . + [{number: $a.n, title: (if $a.title == "" then null else $a.title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: ("https://github.com/wstein/workharbor/issues/" + ($a.n | tostring))}] end))' \
+        --argjson adds "$done_json"
+  elif [ ${#done_nums[@]} -gt 0 ]; then
+    nj=$(printf '%s\n' "${done_nums[@]}" | jq -sc 'map(tonumber)')
+    patch '.items |= map(if (.number as $x | $ns | index($x)) != null then .[$k] = $v else . end)' \
+      --argjson ns "$nj" --arg k "$key" --arg v "$value"
+  fi
+  [ "$failed" = 0 ] || die "some issues failed (the cache holds only the ones that succeeded)"
   exit 0
   ;;
 esac
