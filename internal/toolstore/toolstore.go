@@ -51,7 +51,13 @@ type Pin struct {
 	Version  string `json:"version"`
 	Platform string `json:"platform"`
 	BaseURL  string `json:"base_url"` // <base>/<version>/<platform>/<name> and <base>/<version>/manifest.json
-	SHA256   string `json:"sha256"`
+	SHA256   string `json:"sha256"`   // the tool as stored; for an archive format, the extracted file
+	// Format names how the vendor releases the tool; empty is Claude Code's
+	// (a binary and a SHA-256 manifest). FormatAntigravity adds ArchiveURL and
+	// SHA512 (of the archive) and reads BaseURL as the manifest directory.
+	Format     string `json:"format,omitempty"`
+	ArchiveURL string `json:"archive_url,omitempty"`
+	SHA512     string `json:"sha512,omitempty"`
 }
 
 // Pins returns the pinned tools.
@@ -185,6 +191,13 @@ func (s *Store) Download(ctx context.Context, p Pin) (Entry, error) {
 	}
 	if !hashRe.MatchString(p.SHA256) {
 		return Entry{}, fmt.Errorf("%w: the pin has no SHA-256", ErrChecksum)
+	}
+	switch p.Format {
+	case "":
+	case FormatAntigravity:
+		return s.downloadAntigravity(ctx, p)
+	default:
+		return Entry{}, fmt.Errorf("%w: unknown pin format %q", ErrBadName, p.Format)
 	}
 	base := strings.TrimRight(p.BaseURL, "/")
 	if err := s.checkScheme(base); err != nil {

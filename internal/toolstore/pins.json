@@ -13,6 +13,26 @@
       "platform": "linux-arm64-musl",
       "base_url": "https://downloads.claude.ai/claude-code-releases",
       "sha256": "31efc4136bc678575f4c6730e248d34f89dbfea0468be1c5d012af199cd62ee8"
+    },
+    {
+      "name": "antigravity",
+      "version": "1.2.16",
+      "platform": "linux-arm64",
+      "base_url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+      "sha256": "d0c06173f4ab2d6da7c17ba8d52a688234f30a79a7f65e25ace15863a295695f",
+      "format": "antigravity",
+      "archive_url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.16-5594158052802560/linux-arm/cli_linux_arm64.tar.gz",
+      "sha512": "d17d8044736d31e24ce7c4cb3b75faef3ce5102ecaad31aef95785c0f3c13fa0615d7b11fa411eb73b848489adf9d411178446f3148e30353a2048cd3e731971"
+    },
+    {
+      "name": "antigravity",
+      "version": "1.2.16",
+      "platform": "linux-arm64-musl",
+      "base_url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+      "sha256": "335f7ca3b3a421e1de3f196c32fc6a73296cd32de0dd1df101ebcd07f12fe08e",
+      "format": "antigravity",
+      "archive_url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.16-5594158052802560/linux-arm-musl/cli_linux_arm64_musl.tar.gz",
+      "sha512": "3f5ef952365b58c358ed79e0bb61768b17afdfd8fd00ccfd39b06f50789c8c0069890cf88583e0edfa194c1ddd9640211f02a8daac58a41f9bd73bac786e414c"
     }
   ]
 }

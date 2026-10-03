@@ -34,7 +34,7 @@ Documented only, from the sources named; none was run.
 ## What is missing for a decision
 
 1. A run on Apple Container: Alpine (pinned by digest), each CLI's `--version` from a tool-store mount, then `agenttest`'s conformance suite for the Claude adapter; labelled temporary containers only, no sign-in. Needs a host with the container service running (`wh/verify`).
-2. What remains in the tool store: Claude Code's `linux-arm64-musl` build is pinned since #162 (`platformRe` accepts the `-musl` suffix, `whr tools build -platform linux-arm64-musl` makes a `-musl` profile), but the Codex and Antigravity pins need verifiers (a sigstore bundle on a tarball, a sha512 in another manifest; #164), and none is weakened to fit. Selecting the build by the base's libc waits for an Alpine agent base; an environment on a glibc base, Fedora or Ubuntu, keeps the glibc profile. The run on Alpine is #161.
+2. What remains in the tool store: Claude Code's `linux-arm64-musl` build is pinned since #162 (`platformRe` accepts the `-musl` suffix, `whr tools build -platform linux-arm64-musl` makes a `-musl` profile), and Antigravity's glibc and musl builds are pinned since #164 (its sha512 manifest checked against the pin and the archive, then a safe extraction; the manifest host is undocumented, so the pin carries the archive URL and a change fails the download). The Codex pins still wait on a verifier for the sigstore bundle on the tarball, which needs a library for the Fulcio chain and the Rekor proof (#164), and nothing is weakened to fit. Selecting the build by the base's libc waits for an Alpine agent base; an environment on a glibc base, Fedora or Ubuntu, keeps the glibc profile. The run on Alpine is #161.
 
 ## Proposal for D43
 
