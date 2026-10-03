@@ -41,6 +41,7 @@ while read -r ref local_sha _ remote_sha || [ -n "$ref" ]; do # a last line with
     range="$local_sha --not --remotes"
   fi
   # The recipe says which it is: a finding (gitleaks exit 42) or a scan that
-  # could not run (a missing go, a failed install, any other exit). Both block the push.
-  command make -s secrets-range RANGE="$range" >&2 || exit 1
+  # could not run (a missing go, a failed install, any other exit). Both block
+  # the push. TIP lets it read an annotated tag's own message too.
+  command make -s secrets-range RANGE="$range" TIP="$local_sha" >&2 || exit 1
 done

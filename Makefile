@@ -181,6 +181,7 @@ check-ci: docs check-hooks check-generated
 		--remap 'https://github\.com/wstein/workharbor/(?:blob|tree)/main/([^?#]*)(?:[?#].*)? file://$(CURDIR)/$$1' \
 		'*.md' '.github/*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
+	@m=$$(mktemp) && trap 'rm -f "$$m"' EXIT && scripts/messages.sh "" HEAD >"$$m" && go run $(GITLEAKS) stdin --no-banner --redact --config .gitleaks.toml <"$$m"
 	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 # The web UI's templates (internal/web/*.templ, D8) are compiled to Go by templ,
@@ -237,8 +238,9 @@ land:
 	echo "land: main is now $$(git rev-parse --short main)"; \
 	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 
-# Scan the commits of a git log range for secrets: the pre-push hook runs it
-# with the range about to be pushed. Exit 42 is a finding, 0 is clean, and
+# Scan the commits of a git log range for secrets, their changes and their
+# messages, and the message of the annotated tag TIP (gitleaks git reads patches
+# only, #196): the pre-push hook runs it with the range about to be pushed. Exit 42 is a finding, 0 is clean, and
 # anything else (a failed install, gitleaks' own exit 1) is a scan that could not run.
 secrets-range:
 	@test -n "$(RANGE)" || { echo "secrets-range needs RANGE" >&2; exit 2; }
@@ -246,10 +248,12 @@ secrets-range:
 	@d=$$(mktemp -d) || { echo "the secret scan could not run (no temporary directory), so nothing was checked and the push is blocked" >&2; exit 1; }; \
 	trap 'rm -rf "$$d"' EXIT; trap 'exit 1' HUP INT TERM; \
 	GOBIN="$$d" go install $(GITLEAKS) >&2 || { echo "the secret scan could not run (gitleaks did not install), so nothing was checked and the push is blocked: put go on the PATH of the tool that pushes and let it fetch gitleaks (or push from the terminal), then push again" >&2; exit 1; }; \
+	scripts/messages.sh "$(TIP)" $(RANGE) >"$$d/messages" || { echo "the secret scan could not run (git cannot read the commit and tag messages of $(RANGE)), so nothing was checked and the push is blocked" >&2; exit 1; }; \
 	"$$d/gitleaks" git --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml --log-opts="$(RANGE)" . >&2; rc=$$?; \
-	if [ $$rc -eq 0 ]; then exit 0; \
-	elif [ $$rc -eq $(GITLEAKS_FOUND) ]; then echo "a commit in $(RANGE) holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2; \
-	else echo "the secret scan could not run (exit $$rc), so nothing was checked and the push is blocked: check the output above, then push again" >&2; fi; \
+	"$$d/gitleaks" stdin --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml <"$$d/messages" >&2; rcm=$$?; \
+	if [ $$rc -eq 0 ] && [ $$rcm -eq 0 ]; then exit 0; \
+	elif [ $$rc -eq $(GITLEAKS_FOUND) ] || [ $$rcm -eq $(GITLEAKS_FOUND) ]; then echo "a commit or tag message, or a change, in $(RANGE) holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2; \
+	else echo "the secret scan could not run (exit $$rc and $$rcm), so nothing was checked and the push is blocked: check the output above, then push again" >&2; fi; \
 	exit 1
 
 # Scan what is staged for secrets: the pre-commit hook runs it.

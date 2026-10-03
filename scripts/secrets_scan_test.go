@@ -22,7 +22,17 @@ if [ "$1" != install ]; then echo "fake go: unexpected $*" >&2; exit 99; fi
 if [ "$FAKE_SCAN_RC" = term ]; then
 	printf '#!/bin/sh\nkill -TERM $PPID\nsleep 2\nexit 0\n' >"$GOBIN/gitleaks"
 else
-	printf '#!/bin/sh\necho "$@" >&2\nexit %s\n' "$FAKE_SCAN_RC" >"$GOBIN/gitleaks"
+	# the stdin scan (commit and tag messages) copies what it reads to
+	# $FAKE_STDIN_OUT and exits $FAKE_STDIN_RC, or $FAKE_SCAN_RC when that is unset
+	cat >"$GOBIN/gitleaks" <<'STUB'
+#!/bin/sh
+echo "$@" >&2
+if [ "$1" = stdin ]; then
+	[ -n "$FAKE_STDIN_OUT" ] && cat >"$FAKE_STDIN_OUT"
+	exit "${FAKE_STDIN_RC:-$FAKE_SCAN_RC}"
+fi
+exit "$FAKE_SCAN_RC"
+STUB
 fi
 chmod +x "$GOBIN/gitleaks"
 `
@@ -278,6 +288,56 @@ func TestSecretScansRemoveTheirTempDirOnTerm(t *testing.T) {
 			left, err := os.ReadDir(tmp)
 			if err != nil || len(left) != 0 {
 				t.Errorf("temp dir left behind: %v (%v)", left, err)
+			}
+		})
+	}
+}
+
+// messageObjects is a shell prefix that writes a commit whose message and an
+// annotated tag whose message hold FAKEKEY (a made-up string, no real secret)
+// into a scratch object directory beside the repository's own, with no ref, and
+// sets $c and $tag. The stub scanner decides what counts as a secret.
+const messageObjects = `o=$(mktemp -d) && GIT_OBJECT_DIRECTORY=$o && export GIT_OBJECT_DIRECTORY && ` +
+	`GIT_ALTERNATE_OBJECT_DIRECTORIES=$(cd "$(git rev-parse --git-common-dir)" && pwd)/objects && export GIT_ALTERNATE_OBJECT_DIRECTORIES && ` +
+	`c=$(git commit-tree HEAD^{tree} -p HEAD -m "add thing: FAKEKEY") && ` +
+	`tag=$(printf 'object %s\ntype commit\ntag v1\ntagger t <t@example.com> 1 +0000\n\nrelease FAKEKEY\n' "$c" | git mktag) && `
+
+// TestPrePushScansMessages: gitleaks git reads patches only, so a secret in a
+// commit message or an annotated tag's message needs its own scan. The stub
+// scanner finds a secret only when the text it reads on stdin holds FAKEKEY;
+// the patch scan reports clean. Both must block with the finding message, a
+// clean message must pass, and a stdin scan that cannot run must say so (#196).
+func TestPrePushScansMessages(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, tip, remote, stdinRC string
+		ok, found                  bool
+	}{
+		{"commit message, new branch", "$c", zero, "42", false, true},
+		{"commit message, known remote", "$c", "$(git rev-parse HEAD)", "42", false, true},
+		{"tag message, new tag", "$tag", zero, "42", false, true},
+		{"tag message, known remote", "$tag", "$(git rev-parse HEAD)", "42", false, true},
+		{"clean messages", "$tag", zero, "0", true, false},
+		{"stdin scan cannot run", "$tag", zero, "1", false, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out := filepath.Join(t.TempDir(), "stdin")
+			script := messageObjects + "export FAKE_STDIN_RC=" + c.stdinRC + " FAKE_STDIN_OUT=" + out + "; " +
+				"echo \"refs/heads/x " + c.tip + " refs/heads/x " + c.remote + "\" | .githooks/pre-push"
+			got, err := scan(t, false, "0", script)
+			if (err == nil) != c.ok {
+				t.Fatalf("err = %v, want ok=%v\n%s", err, c.ok, got)
+			}
+			if has := strings.Contains(got, "holds a secret"); has != c.found {
+				t.Errorf("says finding = %v, want %v:\n%s", has, c.found, got)
+			}
+			if !c.ok && !c.found && !strings.Contains(got, "could not run") {
+				t.Errorf("want \"could not run\":\n%s", got)
+			}
+			read, _ := os.ReadFile(out) //nolint:gosec // a test temp file
+			if !strings.Contains(string(read), "FAKEKEY") {
+				t.Errorf("the message scan did not read FAKEKEY:\n%s", read)
 			}
 		})
 	}
