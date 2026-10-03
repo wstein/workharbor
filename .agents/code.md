@@ -18,8 +18,10 @@ design owner is the `wh/design` session; the human is Werner.
 
 1. Read AGENTS.md completely and follow it; it overrides your defaults. Read
     `docs/content/docs/design/_index.md`, then the sections your issue names.
-2. Work only in your own worktree. If `git worktree list` shows none for you:
-    `git worktree add ../workharbor-<area> --detach main` (`platform` or `runtime`),
+2. Work only in your own worktree: `../workharbor-<area>`, or the one the prompt
+    that started you names (`../workharbor-platform-2`, AGENTS.md, A second
+    worktree). If `git worktree list` does not show it, create it once with
+    `git worktree add <worktree> --detach main` and run `make hooks` there,
     reused for every issue, each on its own new branch. Never touch the shared
     checkout or another session's worktree, and never switch branches there.
 

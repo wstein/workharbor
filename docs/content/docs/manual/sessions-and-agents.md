@@ -36,13 +36,13 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 ## Setup steps
 
 1. Run `make hooks` in every clone and worktree.
-2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`.
+2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
 3. Open `/wh-desk` and `/wh-dispatch` and check their models.
 4. Allow subagent starts without a prompt in the dispatch session only. Leave the board writes (`scripts/board-snapshot.sh move`) asking each time.
 
 ## Rules of thumb
 
-- At most 2 code workers (issue subagents that edit) run at the same time, each in its own lane's worktree, and only one editing subagent per worktree.
+- At most 2 code workers (issue subagents that edit) run at the same time, each in its own worktree (two may both be `wh/platform`, in `../workharbor-platform` and `../workharbor-platform-2`, when their issues touch no file in common), and only one editing subagent per worktree.
 - Keep the Opus session short and end it after each decision.
 - Do not hand running agents to a new session.
 
