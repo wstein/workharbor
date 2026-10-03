@@ -14,7 +14,7 @@ func TestTheEnvironmentIsMinimalAndNeverTheHumans(t *testing.T) {
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "x")
 	env := Env("/tmp/home-x", "A=1")
 	joined := strings.Join(env, "\n")
-	for _, want := range []string{"HOME=/tmp/home-x", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_COUNT=1\nGIT_CONFIG_KEY_0=user.useConfigOnly\nGIT_CONFIG_VALUE_0=true", "SSH_AUTH_SOCK=\n", "A=1"} {
+	for _, want := range []string{"HOME=/tmp/home-x", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_KEY_0=user.useConfigOnly\nGIT_CONFIG_VALUE_0=true", "SSH_AUTH_SOCK=\n", "A=1"} {
 		if !strings.Contains(joined+"\n", want) {
 			t.Errorf("the environment lacks %q:\n%s", want, joined)
 		}
@@ -39,5 +39,18 @@ func TestGitSeesNoCredentialHelper(t *testing.T) {
 	}
 	if cmd := Git(context.Background(), "", t.TempDir(), nil, "status"); !filepath.IsAbs(strings.TrimPrefix(cmd.Env[1], "HOME=")) {
 		t.Errorf("no private home: %v", cmd.Env)
+	}
+}
+
+// A caller's own GIT_CONFIG_COUNT pairs must not replace the useConfigOnly guard.
+func TestCallerConfigPairsKeepTheGuard(t *testing.T) {
+	env := Env(t.TempDir(), "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=")
+	for key, want := range map[string]string{"user.useConfigOnly": "true", "credential.helper": ""} {
+		cmd := Git(context.Background(), t.TempDir(), t.TempDir(), nil, "config", "--get", key)
+		cmd.Env = env
+		out, err := cmd.Output()
+		if err != nil || strings.TrimSpace(string(out)) != want {
+			t.Errorf("git config --get %s = %q, %v; want %q", key, out, err, want)
+		}
 	}
 }

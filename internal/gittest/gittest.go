@@ -11,11 +11,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // Env is the whole environment of a git or ssh-keygen process: a minimal list,
 // not os.Environ() with overrides. home is the HOME it sees, which must not be
 // the human's; extra are added last (an author identity, for example).
+//
+// git reads GIT_CONFIG_COUNT and its KEY_n/VALUE_n as one list, and a later
+// duplicate replaces an earlier one, so a raw GIT_CONFIG_COUNT in extra would
+// silently drop the user.useConfigOnly guard. Env therefore composes: the guard
+// is entry 0 and the caller's own pairs follow it, renumbered.
 func Env(home string, extra ...string) []string {
 	env := []string{
 		"PATH=" + os.Getenv("PATH"),
@@ -28,14 +35,53 @@ func Env(home string, extra ...string) []string {
 		// never guess an identity from the login name and hostname: a Mac derives
 		// one, a CI runner does not, so a test that forgot its identity passed here
 		// and failed there (#198); now it fails everywhere
-		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=true",
 		"GIT_TERMINAL_PROMPT=0",
 		"GIT_ASKPASS=/usr/bin/true",
 		"SSH_ASKPASS=/usr/bin/true",
 		"SSH_AUTH_SOCK=",
 		"LC_ALL=C",
 	}
-	return append(env, extra...)
+	pairs := []string{"user.useConfigOnly", "true"}
+	var rest []string
+	extraPairs, ok := configPairs(extra, &rest)
+	if !ok { // a garbled count: pass it through untouched, git itself rejects it
+		return append(append(env, "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=true"), extra...)
+	}
+	pairs = append(pairs, extraPairs...)
+	env = append(env, "GIT_CONFIG_COUNT="+strconv.Itoa(len(pairs)/2))
+	for i := 0; i < len(pairs); i += 2 {
+		n := strconv.Itoa(i / 2)
+		env = append(env, "GIT_CONFIG_KEY_"+n+"="+pairs[i], "GIT_CONFIG_VALUE_"+n+"="+pairs[i+1])
+	}
+	return append(env, rest...)
+}
+
+// configPairs takes the GIT_CONFIG_COUNT/KEY_n/VALUE_n variables out of extra,
+// returning their key and value pairs in order and the other variables in rest.
+// ok is false when the count is not a number.
+func configPairs(extra []string, rest *[]string) (pairs []string, ok bool) {
+	vars := map[string]string{}
+	count := 0
+	for _, kv := range extra {
+		name, val, _ := strings.Cut(kv, "=")
+		switch {
+		case name == "GIT_CONFIG_COUNT":
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 {
+				return nil, false
+			}
+			count = n
+		case strings.HasPrefix(name, "GIT_CONFIG_KEY_"), strings.HasPrefix(name, "GIT_CONFIG_VALUE_"):
+			vars[name] = val
+		default:
+			*rest = append(*rest, kv)
+		}
+	}
+	for i := 0; i < count; i++ {
+		n := strconv.Itoa(i)
+		pairs = append(pairs, vars["GIT_CONFIG_KEY_"+n], vars["GIT_CONFIG_VALUE_"+n])
+	}
+	return pairs, true
 }
 
 // Identity is an author and committer for commits a test makes.
