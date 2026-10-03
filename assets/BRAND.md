@@ -12,7 +12,8 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
 - **Horizontal lockup** (any wide place): the bare teal anchor, no tile, then the
   wordmark. The README banner, the social preview and the docs navbar are the
   exception and use the tile lockup (next section). A lockup never appears in a
-  square place.
+  square place, and a tile never appears in a lockup: the two forms are not
+  mixed. The exceptions are listed in the next section.
 
 ## Exception: the README banner and the social preview
 
