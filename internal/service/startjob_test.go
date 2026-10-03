@@ -173,7 +173,7 @@ func TestAtMostOneStartPerRun(t *testing.T) {
 		t.Fatalf("jobs %p %p: a second start of the run must return the running one", first, second)
 	}
 	close(release)
-	<-first.done
+	waitFor(t, first.done, "the first start to end")
 	if calls.Load() != 1 {
 		t.Errorf("the start ran %d times", calls.Load())
 	}
@@ -195,7 +195,7 @@ func TestShutdownCancelsARunningStart(t *testing.T) {
 		ended.Store(true)
 		return ctx.Err()
 	})
-	<-started
+	waitFor(t, started, "the start to begin")
 	r.svc.Shutdown()
 	if !ended.Load() {
 		t.Error("Shutdown returned before the start ended")
