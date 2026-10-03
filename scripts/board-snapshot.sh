@@ -84,7 +84,7 @@ move | session | priority | add | ready)
     case ${args[2]:-} in
     "Todo" | "In progress" | "Blocked" | "In review") ;;
     "Ready to push" | "Done")
-      die "move does not set \"${args[2]}\": Ready to push is set only by wh/review (board-snapshot.sh ready <number>) and Done by closing the issue or by the human" ;;
+      die "move does not set \"${args[2]}\": Ready to push is set by board-snapshot.sh ready <number> (wh/review, or wh/dispatch on its behalf for the reviewed sha) and Done by closing the issue or by the human" ;;
     *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;
