@@ -1,7 +1,0 @@
-Verdict: PASS
-Resume Mechanism: agy --conversation <id> or agy --continue
-Interactive Multi-turn Stream: agy --input-format stream-json --output-format stream-json
-Measured Turn 1 Tokens: input=20454, output=153, thinking=121, total=20607
-Measured Turn 2 Tokens: input=4512, output=127, thinking=126, cache_read=16303, total=4639
-Context Preservation: Verified (prompt cache read hit of 16,303 tokens on turn 2)
-Conversation ID Stability: Same UUID maintained across resume

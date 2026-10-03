@@ -4,7 +4,7 @@ description: "Subscription sign-in inside an Apple Container environment behind 
 weight: 10
 ---
 
-> Source: [`spikes/agent-signin/`](https://github.com/wstein/workharbor/tree/main/spikes/agent-signin) on `main`, added in `de923e4`, with scripts, measurement harness, and raw results next to `RESULTS.md`. Tracks [#82](https://github.com/wstein/workharbor/issues/82). Measured on 1 October 2026.
+> Source: [`spikes/agent-signin/`](https://github.com/wstein/workharbor/tree/de923e4551ca1d7e76898bde2c2a17fca5bf6ee2/spikes/agent-signin) at commit `de923e4`, with scripts, measurement harness, and raw results next to `RESULTS.md`. The commit is in `main`'s history; the files left `main`'s tree in issue #194, and the spike has no `spike/agent-signin` branch. Tracks [#82](https://github.com/wstein/workharbor/issues/82). Measured on 1 October 2026.
 
 D40 establishes that `whr` never handles or stores a subscription credential: the human signs in inside the environment through the vendor's own flow, and the CLI keeps the login on that environment's agent-home volume (D16); only an API key may be configured on the supervisor's side.
 
