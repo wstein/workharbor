@@ -44,8 +44,8 @@ type counters struct{ tokens, cost int64 }
 func total(rows []store.UsageRow) counters {
 	var c counters
 	for _, r := range rows {
-		c.tokens += r.Tokens.Input + r.Tokens.Output + r.Tokens.CacheRead + r.Tokens.CacheWrite
-		c.cost += r.ReportedMicroUSD
+		c.tokens = domain.SatAdd(c.tokens, r.Tokens.Input, r.Tokens.Output, r.Tokens.CacheRead, r.Tokens.CacheWrite)
+		c.cost = domain.SatAdd(c.cost, r.ReportedMicroUSD)
 	}
 	return c
 }

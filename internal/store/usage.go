@@ -316,21 +316,21 @@ func (s *Store) UsageBuckets(ctx context.Context, f UsageFilter, loc *time.Locat
 		if noTokens {
 			r.TurnsWithoutToken++
 		} else {
-			r.Tokens.Input += in
-			r.Tokens.Output += out
-			r.Tokens.CacheRead += cr
-			r.Tokens.CacheWrite += cw
+			r.Tokens.Input = domain.SatAdd(r.Tokens.Input, in)
+			r.Tokens.Output = domain.SatAdd(r.Tokens.Output, out)
+			r.Tokens.CacheRead = domain.SatAdd(r.Tokens.CacheRead, cr)
+			r.Tokens.CacheWrite = domain.SatAdd(r.Tokens.CacheWrite, cw)
 		}
 		switch {
 		case noCost:
 			r.TurnsWithoutCost++
 		case source == "reported":
-			r.ReportedMicroUSD += micro
+			r.ReportedMicroUSD = domain.SatAdd(r.ReportedMicroUSD, micro)
 		case source == "estimated":
-			r.EstimatedMicroUSD += micro
+			r.EstimatedMicroUSD = domain.SatAdd(r.EstimatedMicroUSD, micro)
 		}
-		r.APIMillis += api
-		r.WallMillis += wall
+		r.APIMillis = domain.SatAdd(r.APIMillis, api)
+		r.WallMillis = domain.SatAdd(r.WallMillis, wall)
 		if run != "" {
 			runs[k][run] = true
 		}

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 )
 
@@ -106,4 +107,20 @@ func NewUsageEvent(task ID, u UsageRecorded, at time.Time) (Event, error) {
 		return Event{}, err
 	}
 	return Event{TaskID: task, Kind: EventUsage, Tier: TierAudit, Payload: payload, At: at}, nil
+}
+
+// SatAdd adds usage amounts and saturates at the int64 limits instead of
+// wrapping, so a total never turns negative (design §5.7).
+func SatAdd(vs ...int64) int64 {
+	var sum int64
+	for _, v := range vs {
+		switch {
+		case v > 0 && sum > math.MaxInt64-v:
+			return math.MaxInt64
+		case v < 0 && sum < math.MinInt64-v:
+			return math.MinInt64
+		}
+		sum += v
+	}
+	return sum
 }

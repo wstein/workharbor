@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"os"
@@ -391,4 +392,27 @@ func TestEveryRecordedEventKindIsKnownOrIgnored(t *testing.T) {
 			t.Errorf("%s: outcome %+v", name, res)
 		}
 	}
+}
+
+func TestAbsurdUsageFromTheAgentIsDropped(t *testing.T) {
+	head := bytes.Split(fixture(t, "finish"), []byte("\n"))
+	var stream []byte
+	for _, l := range head[:4] {
+		stream = append(stream, append(l, '\n')...)
+	}
+	stream = append(stream, []byte(`{"type":"result","subtype":"success","is_error":false,"result":"x","session_id":"s","total_cost_usd":9e18,"duration_ms":9000000000000000000,"usage":{"input_tokens":9000000000000000000,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}`+"\n")...)
+	events, _ := parseAll(t, stream, false)
+	for _, e := range events {
+		if e.Kind != agent.EventUsage {
+			continue
+		}
+		if err := e.Usage.Validate(); err != nil {
+			t.Fatalf("the adapter emitted an invalid payload: %v", err)
+		}
+		if e.Usage.Tokens != nil || e.Usage.Cost != nil || e.Usage.WallMillis != 0 {
+			t.Errorf("absurd figures were kept: %+v", e.Usage)
+		}
+		return
+	}
+	t.Fatal("no usage event")
 }

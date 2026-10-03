@@ -345,16 +345,17 @@ func (p *parser) finish(ev rawEvent) []agent.Event {
 		return nil // nothing to report usage on
 	}
 	u := agent.Usage{Model: p.model, Windows: append([]agent.UsageWindow(nil), p.windows...)}
-	if ev.TotalCost != nil && *ev.TotalCost >= 0 {
+	if ev.TotalCost != nil && *ev.TotalCost >= 0 && *ev.TotalCost*1e6 <= float64(agent.MaxMicroUSDPerTurn) {
 		u.Cost = &agent.Cost{MicroUSD: int64(math.Round(*ev.TotalCost * 1e6)), Source: agent.CostReported}
 	}
-	if t := ev.Usage; t != nil && t.InputTokens >= 0 && t.OutputTokens >= 0 && t.CacheReadTokens >= 0 && t.CacheWriteTokens >= 0 {
+	if t := ev.Usage; t != nil && t.InputTokens >= 0 && t.OutputTokens >= 0 && t.CacheReadTokens >= 0 && t.CacheWriteTokens >= 0 &&
+		t.InputTokens <= agent.MaxTokensPerTurn && t.OutputTokens <= agent.MaxTokensPerTurn && t.CacheReadTokens <= agent.MaxTokensPerTurn && t.CacheWriteTokens <= agent.MaxTokensPerTurn {
 		u.Tokens = &agent.TokenCounts{Input: t.InputTokens, Output: t.OutputTokens, CacheRead: t.CacheReadTokens, CacheWrite: t.CacheWriteTokens}
 	}
-	if ev.DurationMS > 0 {
+	if ev.DurationMS > 0 && ev.DurationMS <= agent.MaxMillisPerTurn {
 		u.WallMillis = ev.DurationMS
 	}
-	if ev.DurationAPIMS > 0 {
+	if ev.DurationAPIMS > 0 && ev.DurationAPIMS <= agent.MaxMillisPerTurn {
 		u.APIMillis = ev.DurationAPIMS
 	}
 	e := p.event(agent.EventUsage)

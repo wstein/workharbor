@@ -92,7 +92,7 @@ type UsageRow struct {
 
 // cacheShare is cache_read over every input token (fresh, cache read and cache write).
 func cacheShare(t domain.UsageTokens) *float64 {
-	total := t.Input + t.CacheRead + t.CacheWrite
+	total := domain.SatAdd(t.Input, t.CacheRead, t.CacheWrite)
 	if total <= 0 {
 		return nil
 	}
@@ -192,7 +192,7 @@ func FormatUsageLine(rep UsageReport) string {
 	subscription := false
 	for _, r := range rep.Rows {
 		turns += r.Turns
-		in += r.Tokens.Input + r.Tokens.CacheRead + r.Tokens.CacheWrite
+		in = domain.SatAdd(in, r.Tokens.Input, r.Tokens.CacheRead, r.Tokens.CacheWrite)
 		out += r.Tokens.Output
 		unknown += r.TurnsWithoutCost
 		reported += r.ReportedMicroUSD

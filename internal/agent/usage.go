@@ -67,6 +67,18 @@ type Usage struct {
 	WallMillis int64 `json:"wall_ms,omitempty"`
 }
 
+// Bounds on what an agent may report for one turn. Usage rows are audit
+// entries and never purged, and SQLite SUM raises "integer overflow" past
+// int64, which would break every report and the budget check for good. At
+// 1e11 per count (100 billion tokens, $100,000, about three years of
+// milliseconds, all far beyond a real turn) a column of 9e7 maximal turns
+// still sums below the int64 limit.
+const (
+	MaxTokensPerTurn   int64 = 1e11
+	MaxMicroUSDPerTurn int64 = 1e11
+	MaxMillisPerTurn   int64 = 1e11
+)
+
 // ErrBadUsage reports a usage payload that cannot be recorded.
 var ErrBadUsage = errors.New("usage payload is not well formed")
 
@@ -80,7 +92,13 @@ func (u Usage) Validate() error {
 	if t := u.Tokens; t != nil && (t.Input < 0 || t.Output < 0 || t.CacheRead < 0 || t.CacheWrite < 0) {
 		return fmt.Errorf("%w: a token count is negative", ErrBadUsage)
 	}
+	if t := u.Tokens; t != nil && (t.Input > MaxTokensPerTurn || t.Output > MaxTokensPerTurn || t.CacheRead > MaxTokensPerTurn || t.CacheWrite > MaxTokensPerTurn) {
+		return fmt.Errorf("%w: a token count is above %d", ErrBadUsage, MaxTokensPerTurn)
+	}
 	if u.Cost != nil {
+		if u.Cost.MicroUSD > MaxMicroUSDPerTurn {
+			return fmt.Errorf("%w: a cost above %d micro-USD", ErrBadUsage, MaxMicroUSDPerTurn)
+		}
 		if u.Cost.MicroUSD < 0 {
 			return fmt.Errorf("%w: a negative cost", ErrBadUsage)
 		}
@@ -90,6 +108,9 @@ func (u Usage) Validate() error {
 	}
 	if u.APIMillis < 0 || u.WallMillis < 0 {
 		return fmt.Errorf("%w: a negative duration", ErrBadUsage)
+	}
+	if u.APIMillis > MaxMillisPerTurn || u.WallMillis > MaxMillisPerTurn {
+		return fmt.Errorf("%w: a duration above %d ms", ErrBadUsage, MaxMillisPerTurn)
 	}
 	if u.Balance != nil && u.Balance.RemainingMicroUSD < 0 {
 		return fmt.Errorf("%w: a negative balance", ErrBadUsage)

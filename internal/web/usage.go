@@ -41,7 +41,7 @@ var usageSorts = map[string]func(a, b service.UsageRow) bool{
 }
 
 func rowTokens(r service.UsageRow) int64 {
-	return r.Tokens.Input + r.Tokens.Output + r.Tokens.CacheRead + r.Tokens.CacheWrite
+	return domain.SatAdd(r.Tokens.Input, r.Tokens.Output, r.Tokens.CacheRead, r.Tokens.CacheWrite)
 }
 
 func share(r service.UsageRow) float64 {
