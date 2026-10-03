@@ -144,6 +144,19 @@ func TestToolProfile(t *testing.T) {
 	if _, err := toolProfile(c); err == nil || !strings.Contains(err.Error(), "set tool_profile") {
 		t.Errorf("two profiles = %v", err)
 	}
+	// A glibc and a musl build side by side: the glibc one (Fedora, Ubuntu).
+	if err := os.MkdirAll(filepath.Join(root, "profiles", "claude-1.0-musl"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, "profiles", "claude-2.0")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := toolProfile(c); err != nil || got != "claude-1.0" {
+		t.Errorf("glibc and musl = %q, %v", got, err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "profiles", "claude-2.0"), 0o750); err != nil {
+		t.Fatal(err)
+	}
 	c.ToolProfile = "claude-2.0"
 	if got, err := toolProfile(c); err != nil || got != "claude-2.0" {
 		t.Errorf("configured = %q, %v", got, err)

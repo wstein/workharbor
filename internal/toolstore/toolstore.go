@@ -90,6 +90,8 @@ const (
 )
 
 // GuestPlatform is the pin platform of the build for a base with this libc.
+// It has no caller yet: serve.toolProfile always takes the glibc build because
+// baseimage has no Alpine base; the first caller comes with one (#161).
 func GuestPlatform(l Libc) string {
 	if l == Musl {
 		return "linux-arm64-musl"
