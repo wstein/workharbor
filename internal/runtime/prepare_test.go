@@ -371,3 +371,89 @@ func TestPreparedSpecSharesNothingWithItsInputOrItsCallers(t *testing.T) {
 		})
 	}
 }
+
+// fillSpecValue sets every field below v to a non-zero value, with one entry in
+// each map and slice and a pointer to a filled value, so a field added to Spec
+// later is covered without editing the test.
+func fillSpecValue(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString("x")
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v.SetUint(1)
+	case reflect.Float32, reflect.Float64:
+		v.SetFloat(1)
+	case reflect.Struct:
+		for i := range v.NumField() {
+			fillSpecValue(v.Field(i))
+		}
+	case reflect.Pointer:
+		v.Set(reflect.New(v.Type().Elem()))
+		fillSpecValue(v.Elem())
+	case reflect.Slice:
+		v.Set(reflect.MakeSlice(v.Type(), 1, 1))
+		fillSpecValue(v.Index(0))
+	case reflect.Map:
+		v.Set(reflect.MakeMap(v.Type()))
+		k, e := reflect.New(v.Type().Key()).Elem(), reflect.New(v.Type().Elem()).Elem()
+		fillSpecValue(k)
+		fillSpecValue(e)
+		v.SetMapIndex(k, e)
+	default:
+		panic("fillSpecValue: unsupported kind " + v.Kind().String() + " in Spec; teach the test")
+	}
+}
+
+// aliases lists the paths at which a and b share a map, slice or pointer.
+func aliases(path string, a, b reflect.Value) []string {
+	var out []string
+	switch a.Kind() {
+	case reflect.Struct:
+		for i := range a.NumField() {
+			out = append(out, aliases(path+"."+a.Type().Field(i).Name, a.Field(i), b.Field(i))...)
+		}
+	case reflect.Pointer:
+		if a.IsNil() || b.IsNil() {
+			return nil
+		}
+		if a.Pointer() == b.Pointer() {
+			return []string{path}
+		}
+		out = aliases(path+"*", a.Elem(), b.Elem())
+	case reflect.Slice:
+		if a.Len() > 0 && b.Len() > 0 && a.Pointer() == b.Pointer() {
+			return []string{path}
+		}
+		for i := 0; i < a.Len() && i < b.Len(); i++ {
+			out = append(out, aliases(path+"[]", a.Index(i), b.Index(i))...)
+		}
+	case reflect.Map:
+		if !a.IsNil() && !b.IsNil() && a.Pointer() == b.Pointer() {
+			return []string{path}
+		}
+	}
+	return out
+}
+
+// A map, slice or pointer added to Spec (or to a type inside it) and forgotten
+// in clone is shared again (issue #243): fill every field by reflection, then
+// require that neither the clone nor what Spec returns aliases the input.
+func TestSpecCloneAliasesNothing(t *testing.T) {
+	var in Spec
+	fillSpecValue(reflect.ValueOf(&in).Elem())
+	check := func(name string, got Spec) {
+		t.Helper()
+		for _, path := range aliases("Spec", reflect.ValueOf(in), reflect.ValueOf(got)) {
+			t.Errorf("%s shares %s with its input", name, path)
+		}
+		if !reflect.DeepEqual(in, got) {
+			t.Errorf("%s differs from its input:\n got %+v\nwant %+v", name, got, in)
+		}
+	}
+	check("clone", in.clone())
+	check("PreparedSpec.Spec", PreparedSpec{spec: in, ok: true}.Spec())
+}

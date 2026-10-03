@@ -39,8 +39,10 @@ type PreparedSpec struct {
 func (p PreparedSpec) Spec() Spec { return p.spec.clone() }
 
 // clone returns a copy that shares no map, slice or pointer with s, so a later
-// change to either cannot reach the other. Every mutable field is listed here;
-// the test TestPreparedSpecIsolated fails when a new one is shared.
+// change to either cannot reach the other. Every mutable field is listed here.
+// TestSpecCloneAliasesNothing walks Spec by reflection and fails when a map,
+// slice or pointer field, however nested, is forgotten; the field-by-field
+// TestPreparedSpecSharesNothingWithItsInputOrItsCallers checks the behaviour.
 func (s Spec) clone() Spec {
 	out := s
 	out.Labels = cloneMap(s.Labels)
