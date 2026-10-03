@@ -495,3 +495,24 @@ func TestAddNotifierThrottlesOnlyWhenOneIsGiven(t *testing.T) {
 		t.Fatal("the notifier is not wrapped in the throttle")
 	}
 }
+
+// Run's service configuration carries the board, the revoker and the throttled
+// notifier (#183): each of the three calls could be deleted unseen otherwise.
+func TestServiceConfigCarriesTheBoardTheRevokerAndTheThrottledNotifier(t *testing.T) {
+	rec := &recordingNotifier{}
+	f := &revokingForge{Fake: forgetest.NewFake()}
+	cfg := &config.Config{Board: &config.Board{Owner: "acme", Number: 3}}
+	scfg := serviceConfig(Deps{Config: cfg, Forge: f, Notifier: rec}, nil)
+	if scfg.Board == nil {
+		t.Error("no board")
+	}
+	if scfg.RevokeTokens == nil {
+		t.Error("no revoker")
+	}
+	if scfg.Notifier == nil {
+		t.Fatal("no notifier")
+	}
+	if _, ok := scfg.Notifier.(*recordingNotifier); ok {
+		t.Error("the notifier is not behind the throttle")
+	}
+}

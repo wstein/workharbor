@@ -114,18 +114,7 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
-	scfg := service.Config{
-		Owner:             d.Owner,
-		PostCreateTimeout: d.Config.Environment.PostCreate(),
-		Budgets:           Budgets(d.Config.Budgets),
-		LowLimits:         service.LowLimits{WindowPercent: d.Config.Limits.WarnPercent, BalanceMicroUSD: int64(math.Round(d.Config.Limits.LowBalanceUSD * 1e6))},
-		Spec:              d.AgentSpec,
-		NewID:             NewID,
-		OnError:           func(err error) { logf("background error: %v", err) },
-	}
-	addBoard(&scfg, d)
-	addNotifier(&scfg, d)
-	addRevoker(&scfg, d)
+	scfg := serviceConfig(d, logf)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
 	held, err := applyWorkflows(ctx, d, logf)
@@ -317,6 +306,24 @@ func Run(ctx context.Context, d Deps) error {
 		return nil
 	}
 	return err
+}
+
+// serviceConfig is the service's configuration for d: the budgets and limits,
+// then the board, the throttled notifier and the revoker.
+func serviceConfig(d Deps, logf func(string, ...any)) service.Config {
+	scfg := service.Config{
+		Owner:             d.Owner,
+		PostCreateTimeout: d.Config.Environment.PostCreate(),
+		Budgets:           Budgets(d.Config.Budgets),
+		LowLimits:         service.LowLimits{WindowPercent: d.Config.Limits.WarnPercent, BalanceMicroUSD: int64(math.Round(d.Config.Limits.LowBalanceUSD * 1e6))},
+		Spec:              d.AgentSpec,
+		NewID:             NewID,
+		OnError:           func(err error) { logf("background error: %v", err) },
+	}
+	addBoard(&scfg, d)
+	addNotifier(&scfg, d)
+	addRevoker(&scfg, d)
+	return scfg
 }
 
 // NewNotifier puts next behind one shared per-task Throttle, so every kind of

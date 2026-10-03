@@ -575,3 +575,68 @@ func TestNtfyNotifierFollowsTheConfig(t *testing.T) {
 		t.Fatalf("notifier = %T, want notify.Ntfy", n)
 	}
 }
+
+// Build wires the ntfy notifier into the Deps from the ntfy block (#183): deleting
+// the line would leave every other test green. A fake container CLI on PATH, a
+// configured image and a throwaway key let Build run without a runtime.
+func TestBuildSetsTheNotifierFromTheNtfyBlock(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "container"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil { //nolint:gosec // a stand-in CLI
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	prefix := t.TempDir()
+	proxy := filepath.Join(prefix, "libexec", "whr", "whr-proxy-linux-arm64")
+	for _, d := range []string{filepath.Join(prefix, "bin"), filepath.Dir(proxy)} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(proxy, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
+		t.Fatal(err)
+	}
+	exe := filepath.Join(prefix, "bin", "whr")
+	if err := os.WriteFile(exe, []byte("x"), 0o700); err != nil { //nolint:gosec // a stand-in binary
+		t.Fatal(err)
+	}
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "app.pem")
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "api.token")
+	if err := os.WriteFile(tokenFile, []byte("whr-test-token-"+strings.Repeat("x", 20)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &config.Config{
+		APITokenFile:      tokenFile,
+		AgentAllowedTools: []string{"Read"},
+		Roots:             config.Roots{ToolStore: t.TempDir()},
+		Environment:       config.Environment{Image: "whr.invalid/whr-base/fedora:abc123abc123"},
+		GitHub:            config.GitHub{AppID: 1, KeyFile: keyFile},
+		Repositories:      []config.Repository{{Name: "acme/app"}},
+	}
+	for _, d := range []string{"profiles/p/bin", "store"} {
+		if err := os.MkdirAll(filepath.Join(c.Roots.ToolStore, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	build := func() Deps {
+		d, closeFn, err := Build(c, exe, t.TempDir(), nil)
+		if err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		t.Cleanup(closeFn)
+		return d
+	}
+	if d := build(); d.Notifier != nil {
+		t.Error("a notifier without an ntfy block")
+	}
+	c.Ntfy = &config.Ntfy{Server: "https://ntfy.example"}
+	if d := build(); d.Notifier == nil {
+		t.Error("Build dropped the notifier of the ntfy block")
+	}
+}
