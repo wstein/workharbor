@@ -247,6 +247,9 @@ func (f *fake) CreateWorkspace(_ context.Context, req service.CreateRequest) (do
 	if req.Name == "taken" {
 		return domain.Workspace{}, domain.Agent{}, domain.NewConflict("exists", "a workspace named %q already exists", req.Name)
 	}
+	if req.Integration == "" {
+		req.Integration = "main" // the service's default is the publication target
+	}
 	return domain.Workspace{ID: "w9", Name: req.Name, Path: req.Path, Repo: req.Repo, Integration: req.Integration, EnvID: "e9"},
 		domain.Agent{ID: "a9", WorkspaceID: "w9", Role: req.Role, Branch: "agent/" + req.Role}, nil
 }
@@ -887,14 +890,14 @@ func TestTheBackendIsComplete(t *testing.T) {
 	}
 }
 
-func TestCreateWorkspaceDefaultsTheIntegrationBranchAndPassesTheSource(t *testing.T) {
+func TestCreateWorkspaceLeavesTheBranchToTheServiceAndPassesTheSource(t *testing.T) {
 	r := newRig(t)
 	status, _, body := r.do("POST", "/v1/workspaces", `{"name":"w","path":"/p","repo":"a/b","role":"docs","source":"/src"}`)
 	if status != 201 {
 		t.Fatalf("%d %s", status, body)
 	}
 	got := r.be.created[0]
-	if got.Integration != "main" || got.Source != "/src" || got.Role != "docs" || got.Path != "/p" {
+	if got.Integration != "" || got.Source != "/src" || got.Role != "docs" || got.Path != "/p" {
 		t.Errorf("request = %+v", got)
 	}
 	// An idempotency key makes a retry safe: the workspace is made once.

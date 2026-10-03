@@ -150,6 +150,8 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		},
 		Prepare: r.rt.Prepare,
 		NewID:   func() domain.ID { return r.id("x") },
+		// The rig's repositories publish into main (issue #208).
+		Branch: func(string) string { return "main" },
 	})
 	return r
 }
@@ -933,3 +935,60 @@ func TestWithoutABuildVolumeRemovingAnAgentRunsNothing(t *testing.T) {
 		t.Errorf("a removal ran without a build volume:\n%s", r.logs(w.EnvID))
 	}
 }
+
+func TestCreateDefaultsTheBranchToThePublicationTarget(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		workflow, branch, want string
+		fake                   string
+	}{
+		"integration without a branch": {workflow: "integration", want: "develop"},
+		"integration with a branch":    {workflow: "integration", branch: "main", want: "main"},
+		"published reads the default":  {workflow: "published", want: "main"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newWsRig(t)
+			r.ws.cfg.Workflow = func(string) string { return tc.workflow }
+			r.ws.cfg.Branch = func(string) string { return tc.branch }
+			got, err := r.ws.integrationFor(bg, "a/b", "")
+			if err != nil || got != tc.want {
+				t.Errorf("integrationFor = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCreateRefusesABranchThatIsNotThePublicationTarget(t *testing.T) {
+	t.Parallel()
+	r := newWsRig(t)
+	r.ws.cfg.Workflow = func(string) string { return "integration" }
+	r.ws.cfg.Branch = func(string) string { return "develop" }
+	_, _, err := r.ws.Create(bg, CreateRequest{Name: "w", Path: r.folder("w"), Repo: "a/b", Integration: "main", Source: r.forge, Role: "docs"})
+	var inv *domain.InvalidError
+	if !errors.As(err, &inv) || !strings.Contains(err.Error(), `"main"`) || !strings.Contains(err.Error(), `"develop"`) {
+		t.Fatalf("err = %v, want a refusal naming main and develop", err)
+	}
+	if list, _ := r.store.Workspaces(bg); len(list) != 0 {
+		t.Errorf("workspaces left behind: %+v", list)
+	}
+}
+
+func TestIntegrationForFailsClosedWithoutATarget(t *testing.T) {
+	t.Parallel()
+	r := newWsRig(t)
+	r.ws.cfg.Workflow = func(string) string { return "prototype" }
+	r.ws.cfg.Branch = func(string) string { return "" }
+	if got, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
+		t.Errorf("a prototype without a branch got %q", got)
+	}
+	r.ws.cfg.Workflow = func(string) string { return "published" }
+	r.issues.DefaultBranch = ""
+	r.ws.cfg.Issues = noDefaultBranch{}
+	if got, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
+		t.Errorf("a forge that cannot name the default branch got %q", got)
+	}
+}
+
+// noDefaultBranch is an IssueSource that is not a forge.DefaultBrancher.
+type noDefaultBranch struct{ IssueSource }

@@ -67,7 +67,10 @@ func newWsAdd(s *state) *cobra.Command {
 			if key == "" {
 				key = newKey()
 			}
-			body := map[string]string{"name": args[0], "path": path, "repo": repo, "role": role, "integration": branch}
+			body := map[string]string{"name": args[0], "path": path, "repo": repo, "role": role}
+			if branch != "" {
+				body["integration"] = branch
+			}
 			if from != "" {
 				body["source"] = from
 			}
@@ -93,7 +96,7 @@ func newWsAdd(s *state) *cobra.Command {
 	cmd.Flags().StringVar(&repo, "repo", "", "the repository, owner/name")
 	cmd.Flags().StringVar(&role, "role", "", "the first agent's role")
 	cmd.Flags().StringVar(&from, "from", "", "seed the clone from this repository path or https URL (default: the forge)")
-	cmd.Flags().StringVar(&branch, "branch", "main", "the integration branch the agents rebase onto: main or develop")
+	cmd.Flags().StringVar(&branch, "branch", "", "the branch the agents rebase onto (default: the repository's publication target; any other is refused)")
 	cmd.Flags().StringVar(&instructions, "instructions", "", "standing instructions for the first agent")
 	cmd.Flags().StringVar(&key, "idempotency-key", "", "reuse a key to make a retry safe (default: a new one)")
 	return cmd

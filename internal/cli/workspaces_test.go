@@ -25,11 +25,23 @@ func TestWsAddSendsTheRequestAndExplainsTheWait(t *testing.T) {
 	req := s.requests("POST /v1/workspaces")[0]
 	var b map[string]string
 	_ = json.Unmarshal([]byte(req.body), &b)
-	if b["name"] != "docs-ws" || b["path"] != "/Users/h/ws/docs" || b["repo"] != "wstein/workharbor" || b["role"] != "docs" || b["source"] != "/Users/h/src/repo" || b["integration"] != "main" || b["instructions"] != "docs only" {
+	if b["name"] != "docs-ws" || b["path"] != "/Users/h/ws/docs" || b["repo"] != "wstein/workharbor" || b["role"] != "docs" || b["source"] != "/Users/h/src/repo" || b["instructions"] != "docs only" {
 		t.Errorf("body = %v", b)
+	}
+	if _, set := b["integration"]; set {
+		t.Errorf("without --branch the request names a branch: %v", b)
 	}
 	if req.header.Get("Idempotency-Key") == "" {
 		t.Error("no idempotency key")
+	}
+	s.reply("POST /v1/workspaces", 201, ok(`{"id":"w9","name":"x","repo":"a/b","integration":"develop","path":"/p","agents":[]}`))
+	if code, _, _ := s.runCLI("", "ws", "add", "x", "--path", "/p", "--repo", "a/b", "--role", "docs", "--branch", "develop"); code != 0 {
+		t.Fatalf("--branch: exit %d", code)
+	}
+	var b2 map[string]string
+	_ = json.Unmarshal([]byte(s.requests("POST /v1/workspaces")[1].body), &b2)
+	if b2["integration"] != "develop" {
+		t.Errorf("--branch develop sent %v", b2)
 	}
 	for name, args := range map[string][]string{
 		"no path": {"ws", "add", "x", "--repo", "a/b", "--role", "docs"},
@@ -41,7 +53,7 @@ func TestWsAddSendsTheRequestAndExplainsTheWait(t *testing.T) {
 			t.Errorf("%s: exit %d, want usage", name, code)
 		}
 	}
-	if n := len(s.requests("POST /v1/workspaces")); n != 1 {
+	if n := len(s.requests("POST /v1/workspaces")); n != 2 { // the successful add and the --branch add
 		t.Errorf("a usage error sent a request: %d requests", n)
 	}
 }

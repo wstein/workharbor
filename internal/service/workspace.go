@@ -108,10 +108,12 @@ func NewWorkspaces(s *Service, cfg WorkspaceConfig) *Workspaces { return &Worksp
 
 // CreateRequest describes a workspace and its first agent.
 type CreateRequest struct {
-	Name        string
-	Path        string // an empty folder below a workspace root
-	Repo        string // owner/name
-	Integration string // main or develop
+	Name string
+	Path string // an empty folder below a workspace root
+	Repo string // owner/name
+	// Integration is the branch the agents rebase onto. Empty means the
+	// repository's publication target; a different one is refused (issue #208).
+	Integration string
 	// Source is where the agent clone is seeded from: an absolute path of the
 	// human's repository or an https URL. Empty means the forge's URL of Repo.
 	// The source's .git is read by `git clone` and never mounted.
@@ -131,7 +133,11 @@ func (w *Workspaces) Create(ctx context.Context, req CreateRequest) (domain.Work
 	if err != nil {
 		return domain.Workspace{}, domain.Agent{}, &domain.InvalidError{Msg: err.Error()}
 	}
-	ws, wev, err := domain.NewWorkspace(w.cfg.NewID(), req.Name, path, req.Repo, req.Integration, now)
+	integration, err := w.integrationFor(ctx, req.Repo, req.Integration)
+	if err != nil {
+		return domain.Workspace{}, domain.Agent{}, err
+	}
+	ws, wev, err := domain.NewWorkspace(w.cfg.NewID(), req.Name, path, req.Repo, integration, now)
 	if err != nil {
 		return domain.Workspace{}, domain.Agent{}, err
 	}
@@ -997,6 +1003,40 @@ func (w *Workspaces) Remove(ctx context.Context, workspace string) error {
 		}
 	}
 	return w.svc.store.RemoveWorkspace(ctx, ws, domain.RemovedWorkspaceEvent(ws, w.svc.clock.Now()))
+}
+
+// integrationFor returns the branch a new workspace rebases onto: the
+// repository's publication target (the integration branch of the configuration,
+// develop for integration when none is set, the forge's default branch read now
+// for published), so the workspace and its tasks' commits meet on one branch. A
+// requested branch that differs is refused, naming both; a target that cannot
+// be determined refuses too, and no name is guessed (issue #208).
+func (w *Workspaces) integrationFor(ctx context.Context, repo, requested string) (string, error) {
+	preset, err := policy.ParsePreset(w.workflowOf(repo))
+	if err != nil {
+		return "", &domain.InvalidError{Msg: fmt.Sprintf("the workflow of %s is not known: %v", repo, err)}
+	}
+	var target string
+	switch {
+	case preset.ToDefaultBranch():
+		db, ok := w.cfg.Issues.(forge.DefaultBrancher)
+		if !ok {
+			return "", &domain.InvalidError{Msg: fmt.Sprintf("%s is published, and the forge adapter cannot name its default branch, so the workspace's branch is not known", repo)}
+		}
+		if target, err = db.DefaultBranchName(ctx, repo); err != nil || target == "" {
+			return "", &domain.InvalidError{Msg: fmt.Sprintf("the default branch of %s could not be read, so the workspace's branch is not known: %v", repo, err)}
+		}
+	case w.branchOf(repo) != "":
+		target = w.branchOf(repo)
+	case preset == policy.Integration:
+		target = "develop"
+	default:
+		return "", &domain.InvalidError{Msg: fmt.Sprintf("%s has no integration branch in the configuration, so the workspace's branch is not known", repo)}
+	}
+	if requested != "" && requested != target {
+		return "", &domain.InvalidError{Msg: fmt.Sprintf("the branch %q is not the publication target of %s, which is %q: leave --branch out or set integration_branch in the configuration", requested, repo, target)}
+	}
+	return target, nil
 }
 
 // branchOf is the integration branch a task started now would keep.

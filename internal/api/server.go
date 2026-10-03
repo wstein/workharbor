@@ -743,7 +743,7 @@ type createWorkspaceBody struct {
 	Name         string `json:"name"`
 	Path         string `json:"path"`
 	Repo         string `json:"repo"`
-	Integration  string `json:"integration,omitempty"` // default main
+	Integration  string `json:"integration,omitempty"` // default: the repository's publication target
 	Source       string `json:"source,omitempty"`      // a path or an https URL; default the forge's URL of repo
 	Role         string `json:"role"`
 	Instructions string `json:"instructions,omitempty"`
@@ -759,9 +759,6 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, err)
 		return
-	}
-	if b.Integration == "" {
-		b.Integration = "main"
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
 		ws, ag, err := s.be.CreateWorkspace(r.Context(), service.CreateRequest{
