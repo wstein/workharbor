@@ -7,7 +7,11 @@ toc: true
 
 A draft of the commands that exist today; they were checked against `whr --help` of a build from `main`, not run. **Every command on this page is provisional, and none of them has been run against a release yet** ({{< status unverified >}}): the text follows the commands' own `--help` and the design, and `wh/docs` will check it against `v0.1.0` (issue #65). Prepare the host first ([Prepare the Mac mini](host-setup.md)) and install `whr` ([Install, upgrade and release](install-upgrade-release.md)).
 
-Every command takes `--config <file>` (default `$WHR_CONFIG`, then `~/.config/whr/config.json`) and `--json`, which prints the API's envelope instead of text. Stdout is data and stderr is for you, so `whr preview open ... | pbcopy` copies only the link.
+The commands that talk to the supervisor take `--config <file>` (default `$WHR_CONFIG`, then `~/.config/whr/config.json`) and `--json`, which prints the API's envelope instead of text. Stdout is data and stderr is for you, so `whr preview open ... | pbcopy` copies only the link. Four commands differ:
+
+- `whr version` and `whr tools build` parse their own arguments and take neither `--config` nor the envelope. `whr version --json` prints the version, the commit and whether the tree was dirty as plain JSON, not the envelope; `whr tools build` takes `-store`, `-shim`, `-platform`, `-tools` and `-pins` (see its usage line).
+- `whr serve` takes `--config` but runs until stopped, so `--json` has nothing to print.
+- `whr ssh --config` is a different flag: it prints a `~/.ssh/config` block (below) and does not name a configuration file.
 
 ## Check first: `whr doctor`
 
