@@ -72,7 +72,7 @@ func TestAMalformedConfigCountPanics(t *testing.T) {
 		}
 	}
 	for _, count := range []string{"0", "1", "2"} {
-		extra := []string{"GIT_CONFIG_COUNT=" + count, "GIT_CONFIG_KEY_0=a.b", "GIT_CONFIG_VALUE_0=1", "GIT_CONFIG_KEY_1=c.d", "GIT_CONFIG_VALUE_1=2"}
+		extra := []string{"GIT_CONFIG_COUNT=" + count, "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=", "GIT_CONFIG_KEY_1=CREDENTIAL.HELPER", "GIT_CONFIG_VALUE_1="}
 		if panics(extra...) {
 			t.Errorf("GIT_CONFIG_COUNT=%s panicked", count)
 			continue
@@ -101,8 +101,16 @@ func TestCallersCannotWeakenTheIsolation(t *testing.T) {
 		{"GIT_TERMINAL_PROMPT=1"},
 		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=false"},
 		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=osxkeychain"},
-		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_VALUE_0=x"}, // a count without its key
-		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=a.b"}, // a count without its value
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_VALUE_0=x"},               // a count without its key
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper"}, // a count without its value
+		// any other key can load a file or run a program: only credential.helper="" passes
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0=/tmp/planted"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=includeIf.gitdir:/.path", "GIT_CONFIG_VALUE_0=/tmp/planted"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=INCLUDE.PATH", "GIT_CONFIG_VALUE_0=/tmp/planted"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.sshCommand", "GIT_CONFIG_VALUE_0=x"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_VALUE_0=/x"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=alias.x", "GIT_CONFIG_VALUE_0=!sh"},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.https://h.helper", "GIT_CONFIG_VALUE_0="},
 		{"NOEQUALS"},
 	} {
 		if !panics(extra...) {

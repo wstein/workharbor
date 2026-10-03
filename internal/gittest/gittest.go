@@ -19,16 +19,28 @@ import (
 // not os.Environ() with overrides. home is the HOME it sees, which must not be
 // the human's; extra are added last (an author identity, for example).
 //
-// extra cannot weaken the isolation, so Env panics (this is a test helper: a
-// wrong call must fail loudly, never run git unguarded) when extra
+// Env panics (this is a test helper: a wrong call must fail loudly, never run
+// git unguarded) when extra
 //   - sets HOME, XDG_CONFIG_HOME, GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM,
 //     GIT_CONFIG_PARAMETERS, GIT_TERMINAL_PROMPT, GIT_ASKPASS, SSH_ASKPASS or
 //     SSH_AUTH_SOCK, or a GIT_CONFIG_GLOBAL outside home;
 //   - has a GIT_CONFIG_COUNT that strconv.Atoi rejects or that is negative
 //     (git accepts "" and " 1", so it cannot be left to reject them), or a
 //     count without its KEY_n or VALUE_n;
-//   - sets user.useConfigOnly, or a credential.* key to a value other than "";
+//   - passes a config pair (GIT_CONFIG_KEY_n/VALUE_n) other than
+//     credential.helper with an empty value, user.name or user.email (keys
+//     compared case-insensitively). That is an allowlist: any other key can
+//     load a file (include.path, includeIf.*.path) or run a program
+//     (core.sshCommand, core.hooksPath, alias.*, filter.*, ...), and these are
+//     the only pairs callers need (the helper switched off, an identity);
 //   - has an entry without "=".
+//
+// Not enforced: environment variables other than those listed. A caller may
+// still pass GIT_SSH_COMMAND, GIT_EXTERNAL_DIFF, GIT_PAGER, GIT_EDITOR, PATH,
+// LD_PRELOAD and the like (the console tests pass EDITOR and VISUAL), and a
+// GIT_CONFIG_GLOBAL inside home may name a file that itself holds any
+// configuration, includes included. Env guards the human's keychain and
+// identity, not against a test that sets out to run a program.
 //
 // git reads GIT_CONFIG_COUNT and its KEY_n/VALUE_n as one list, and a later
 // duplicate replaces an earlier one, so a raw GIT_CONFIG_COUNT in extra would
@@ -109,9 +121,15 @@ func configPairs(home string, extra []string) (pairs, rest []string) {
 		if !hasKey || !hasVal || key == "" {
 			panic("gittest: GIT_CONFIG_COUNT counts entry " + n + " but its KEY or VALUE is missing")
 		}
-		lower := strings.ToLower(key)
-		if lower == "user.useconfigonly" || (strings.HasPrefix(lower, "credential.") && val != "") {
-			panic("gittest: a caller may not set " + key + " to " + strconv.Quote(val))
+		// an allowlist, not a denylist: see Env
+		switch strings.ToLower(key) {
+		case "user.name", "user.email":
+		case "credential.helper":
+			if val != "" {
+				panic("gittest: a caller may only pass credential.helper with an empty value, got " + strconv.Quote(val))
+			}
+		default:
+			panic("gittest: a caller may not pass the config key " + key + " (only credential.helper=\"\", user.name, user.email)")
 		}
 		pairs = append(pairs, key, val)
 	}
