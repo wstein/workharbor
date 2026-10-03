@@ -13,9 +13,9 @@ How to set up the sessions and subagents that build workharbor itself. This is a
 | --- | --- | --- |
 | `wh/desk` | Sonnet | Always on. Your point of contact: status, discussion, filing and routing ([`desk.md`](https://github.com/wstein/workharbor/blob/main/.agents/desk.md)). |
 | `wh/dispatch` | Sonnet | Always on. Pulls cards, starts the lane agents and the reviews, lands, moves cards and hands over ([`dispatch.md`](https://github.com/wstein/workharbor/blob/main/.agents/dispatch.md)) {{< status unverified >}}. |
-| `wh/design` | Opus | Only while a decision is waiting. It decides in the issues, writes a resume note and ends ([`design.md`](https://github.com/wstein/workharbor/blob/main/.agents/design.md)). |
+| `wh/design` | Opus | Optional. You can open an Opus `wh/design` session yourself while a decision is waiting; it decides in the issues, writes a resume note and ends ([`design.md`](https://github.com/wstein/workharbor/blob/main/.agents/design.md)). Normally `wh/dispatch` starts the `wh-design` subagent instead (below). |
 
-Everything else is a subagent that `wh/dispatch` starts, not a session of its own. Open `/wh-desk` and `/wh-dispatch` in two terminals and check the model in each. Ask `wh/desk` for status, not `wh/dispatch`.
+The lane agents, the reviewers and the helpers are subagents that `wh/dispatch` starts, not sessions of their own. Open `/wh-desk` and `/wh-dispatch` in two terminals and check the model in each. Ask `wh/desk` for status, not `wh/dispatch`.
 
 ## Subagents and their models
 
@@ -25,9 +25,12 @@ Every subagent's model is pinned in `.claude/agents/` and never inherited from t
 | --- | --- | --- |
 | `wh-platform`, `wh-runtime`, `wh-docs`, `wh-verify` | Sonnet | One issue for that lane, in the lane's worktree. |
 | `wh-worker` | Sonnet | One research batch, read-only on the repository. |
+| `wh-design` | Opus | The decisions waiting in the issues, and nothing else. Only `wh/dispatch` starts it, in one batch when decisions wait and at most once an hour unless a P1 is blocked. |
 | `wh-reviewer` | Opus | Review of code and the rule sections. |
 | `wh-docs-reviewer` | Sonnet | Review of documentation outside the rule sections only. |
 | `wh-helper` | Haiku | A quick, bounded lookup or mechanical edit; changes no git state. |
+
+A decision that loosens a Hard rule or a security control, changes release scope or order, costs money, publishes or sets product direction is not made by the subagent: it goes to you first, through `wh/desk` ([`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md), Models).
 
 ## The review gate
 
@@ -38,7 +41,21 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 1. Run `make hooks` in every clone and worktree.
 2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
 3. Open `/wh-desk` and `/wh-dispatch` and check their models.
-4. Allow subagent starts without a prompt in the dispatch session only. Leave the board writes (`scripts/board-snapshot.sh move`) asking each time.
+4. Allow subagent starts without a prompt in the dispatch session only. Leave the board writes (`scripts/board-snapshot.sh move`, `ready`, `session`, `priority`, `add`) asking each time.
+
+## The project board
+
+The sessions share one GitHub token, and a board query is the expensive call, so they read and write the board only through `scripts/board-snapshot.sh` (needs `bash`, `jq` and a logged-in `gh`; it holds no token). Never run `gh project item-list` or `gh project item-edit` yourself. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit, Who sets which status); the script's header comment lists every mode.
+
+```text
+scripts/board-snapshot.sh                     # the snapshot JSON, cached for 5 minutes
+scripts/board-snapshot.sh queue wh/platform   # the lane's Todo cards, P1 first, then by issue number
+scripts/board-snapshot.sh card 132            # one card
+scripts/board-snapshot.sh --refresh           # force a query
+scripts/board-snapshot.sh budget              # refreshes, their cost and the lowest GraphQL budget left, last 24 hours; no gh call (#186)
+```
+
+Every write (`move`, `session`, `priority`, `add`, `ready`) asks for permission each time. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is set only by `wh/review` after its review comment, or by `wh/dispatch` on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
 
 ## Rules of thumb
 
@@ -48,4 +65,4 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 
 ## Why
 
-A long session pays for its whole history on every turn. Measured on 3 October 2026: Opus cost $25.38 of $35.69, and about 80 % of its tokens were the `wh/design` session re-reading its own history (54M of 67.4M cache reads over 209 requests) {{< status verified >}}. So the long-lived sessions run on Sonnet, Opus is used where it pays (decisions and reviews) and ends quickly, and each issue runs in a fresh subagent whose context is discarded when it returns. The cap of 2 code workers also spares the one GitHub token every session shares ([rate limit](https://github.com/wstein/workharbor/blob/main/AGENTS.md)).
+A long session pays for its whole history on every turn. Measured on 3 October 2026 (Werner's usage report, recorded in [#167](https://github.com/wstein/workharbor/issues/167)): Opus cost $25.38 of $35.69, and about 80 % of its tokens were the `wh/design` session re-reading its own history (54M of 67.4M cache reads over 209 requests) {{< status verified >}}. So the long-lived sessions run on Sonnet, Opus is used where it pays (decisions and reviews) and ends quickly, and each issue runs in a fresh subagent whose context is discarded when it returns. The cap of 2 code workers also spares the one GitHub token every session shares ([rate limit](https://github.com/wstein/workharbor/blob/main/AGENTS.md)).
