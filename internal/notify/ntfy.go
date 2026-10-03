@@ -37,10 +37,13 @@ func ValidTopic(topic string) bool {
 	return len(topic) >= MinTopicLength && !strings.ContainsAny(topic, "/?# \t\r\n")
 }
 
-// ValidServer reports whether server is an https URL or a loopback one.
+// ValidServer reports whether server is an https URL or a loopback one, with
+// no username, password, query or fragment: the server is a plain origin (and
+// an optional path), so a credential in it cannot reach `whr doctor`'s output
+// or a log line. The token goes in the token file.
 func ValidServer(server string) bool {
 	u, err := url.Parse(server)
-	if err != nil || u.Hostname() == "" {
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(server, "#") {
 		return false
 	}
 	return u.Scheme == "https" || (u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost"))

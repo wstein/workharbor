@@ -615,7 +615,7 @@ func (c *Config) Validate() error {
 	}
 	if n := c.Ntfy; n != nil {
 		if n.Server != "" && !notify.ValidServer(n.Server) {
-			add("ntfy.server: must be an https URL (or a loopback one)")
+			add("ntfy.server: must be an https URL (or a loopback one) without a username, password, query or fragment")
 		}
 		if origin, _ := c.PublicOrigin(); origin == "" {
 			add("ntfy: a push links to the task, so public_url (or board.public_url) must be an https URL")

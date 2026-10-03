@@ -232,3 +232,22 @@ func TestLink(t *testing.T) {
 		t.Errorf("Link = %q", got)
 	}
 }
+
+func TestValidServerIsAPlainOrigin(t *testing.T) {
+	for server, want := range map[string]bool{
+		"https://ntfy.sh":                true,
+		"https://ntfy.example.com/sub":   true,
+		"http://127.0.0.1:8080":          true,
+		"http://ntfy.example":            false,
+		"https://user@ntfy.example":      false,
+		"https://user:pw@ntfy.example":   false,
+		"https://ntfy.example?token=abc": false,
+		"https://ntfy.example/?":         false,
+		"https://ntfy.example/#frag":     false,
+		"https://ntfy.example#":          false,
+	} {
+		if got := ValidServer(server); got != want {
+			t.Errorf("ValidServer(%q) = %v, want %v", server, got, want)
+		}
+	}
+}

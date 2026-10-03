@@ -150,7 +150,8 @@ func TestAHealthyHostPassesAndStillSaysWhatIsNotVerified(t *testing.T) {
 			t.Errorf("%s = %s, want ok", name, got[name])
 		}
 	}
-	// what nothing measured is never reported as passed
+	// what nothing measured is never reported as passed; notifications is
+	// not_verified here only because the rig configures no ntfy block
 	for _, name := range []string{"forge-limits", "egress", "reboot", "capacity", "notifications"} {
 		if got[name] != NotVerified {
 			t.Errorf("%s = %s, want not_verified", name, got[name])
@@ -332,5 +333,12 @@ func TestNotificationsAreConfiguredOnlyWhenAnNtfyBlockValidates(t *testing.T) {
 	r.write(t)
 	if got := statuses(run(r.deps()))["notifications"]; got != OK {
 		t.Errorf("with a valid block: %s, want ok", got)
+	}
+	r.cfg.Ntfy = &config.Ntfy{Server: "https://ntfy.example.com/x/y", TopicFile: topic}
+	r.write(t)
+	for _, res := range run(r.deps()) {
+		if res.Check == "notifications" && !strings.Contains(res.Detail, "ntfy: https://ntfy.example.com,") {
+			t.Errorf("detail %q, want only scheme and host", res.Detail)
+		}
 	}
 }

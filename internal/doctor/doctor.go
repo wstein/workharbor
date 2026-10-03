@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -274,7 +275,11 @@ func Checks(d Deps) []Check {
 			if server == "" {
 				server = "https://ntfy.sh"
 			}
-			return OK, "ntfy: " + server + ", topic and token files are private and valid; no test push is sent (§9.5)"
+			host := server
+			if u, err := url.Parse(server); err == nil && u.Host != "" {
+				host = u.Scheme + "://" + u.Host // never a path, query or credential
+			}
+			return OK, "ntfy: " + host + ", topic and token files are private and valid; no test push is sent (§9.5)"
 		})},
 	}))
 }

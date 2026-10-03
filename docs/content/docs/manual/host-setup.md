@@ -190,7 +190,7 @@ Each secret file must be `0600`, owned by you, absolute, a regular file with one
 }
 ```
 
-- `server` is optional and defaults to `https://ntfy.sh`. It must be an `https` URL, or `http` on `127.0.0.1` or `localhost` for a server on the same host.
+- `server` is optional and defaults to `https://ntfy.sh`. It must be an `https` URL, or `http` on `127.0.0.1` or `localhost` for a server on the same host, and it carries no username, password, query or fragment (keep the token in the token file).
 - `topic_file` is required. The topic in it needs at least 20 characters and no `/`, `?`, `#` or whitespace (surrounding whitespace is trimmed).
 - `token_file` is optional.
 - A notification links to the task, so `public_url` (or `board.public_url`) must be set to an `https` URL, as in step 13.
