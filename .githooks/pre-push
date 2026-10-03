@@ -11,7 +11,7 @@ while read -r _ local_sha _ remote_sha; do
   else
     range="$remote_sha..$local_sha"
   fi
-  # The recipe says which it is: a finding (gitleaks exit 1) or a scan that
-  # could not run (a missing go, any other exit). Both block the push.
+  # The recipe says which it is: a finding (gitleaks exit 42) or a scan that
+  # could not run (a missing go, a failed install, any other exit). Both block the push.
   make -s secrets-range RANGE="$range" >&2 || exit 1
 done

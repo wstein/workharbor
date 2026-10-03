@@ -1,45 +1,87 @@
 package scripts
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor/internal/gittest"
 )
 
-// secretsRange runs the pre-push hook from the repository root with gitleaks
-// replaced by a stub command, so no real scan and no real secret is involved.
-func secretsRange(t *testing.T, stub string) (string, error) {
+// fakeGo is a go that builds no scanner: `go install` writes a
+// stub scanner that exits with $FAKE_SCAN_RC (or fails when $FAKE_BUILD=fail),
+// and any other subcommand fails. No real gitleaks and no real secret is
+// involved, and the environment cannot switch the scan off: the recipes only
+// ever call `go install` and the binary it made.
+const fakeGo = `#!/bin/sh
+if [ "$1" != install ]; then echo "fake go: unexpected $*" >&2; exit 99; fi
+[ "$FAKE_BUILD" = fail ] && { echo "fake go: install failed (offline)" >&2; exit 1; }
+[ -d "$GOBIN" ] || exit 98
+printf '#!/bin/sh\necho "$@" >&2\nexit %s\n' "$FAKE_SCAN_RC" >"$GOBIN/gitleaks"
+chmod +x "$GOBIN/gitleaks"
+`
+
+// scan runs a shell command from the repository root with the fake go first
+// on PATH.
+func scan(t *testing.T, buildFails bool, rc, script string) (string, error) {
 	t.Helper()
-	env := append(gittest.Env(t.TempDir()), "GITLEAKS_RUN="+stub)
-	return bash(t, env, "cd .. && echo 'refs/heads/x 1111111111111111111111111111111111111111 refs/heads/x 0000000000000000000000000000000000000000' | .githooks/pre-push")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(fakeGo), 0o700); err != nil { //nolint:gosec // a test stub
+		t.Fatal(err)
+	}
+	env := append(gittest.Env(t.TempDir()), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SCAN_RC="+rc)
+	if buildFails {
+		env = append(env, "FAKE_BUILD=fail")
+	}
+	return bash(t, env, "cd .. && "+script)
 }
 
-func TestPrePushTellsFindingFromMissingTool(t *testing.T) {
+const (
+	prePush   = "echo 'refs/heads/x 1111111111111111111111111111111111111111 refs/heads/x 0000000000000000000000000000000000000000' | .githooks/pre-push"
+	preCommit = "make -s secrets-staged"
+)
+
+// TestSecretScansTellFindingFromScanThatCouldNotRun covers the pre-push
+// (secrets-range) and pre-commit (secrets-staged) recipes: exit 42 is a
+// finding, 0 is clean, and anything else, a failed build and gitleaks' own
+// exit 1 on a fatal error included, is a scan that could not run. All but
+// clean block.
+func TestSecretScansTellFindingFromScanThatCouldNotRun(t *testing.T) {
 	t.Parallel()
-	for _, c := range []struct {
-		name, stub string
-		ok         bool
-		want       string
-		notWant    string
-	}{
-		{"clean", "true", true, "", ""},
-		{"leak", "sh -c 'exit 1' --", false, "holds a secret", "could not run"},
-		{"missing binary", "whtmp-no-such-gitleaks", false, "could not run", "holds a secret"},
-		{"other exit", "sh -c 'exit 3' --", false, "could not run", "holds a secret"},
+	for _, hook := range []struct{ name, script, finding string }{
+		{"pre-push", prePush, "holds a secret"},
+		{"pre-commit", preCommit, "a secret is staged"},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			out, err := secretsRange(t, c.stub)
-			if (err == nil) != c.ok {
-				t.Fatalf("err = %v, want ok=%v\n%s", err, c.ok, out)
-			}
-			if c.want != "" && !strings.Contains(out, c.want) || c.notWant != "" && strings.Contains(out, c.notWant) {
-				t.Errorf("want %q, not %q:\n%s", c.want, c.notWant, out)
-			}
-			if strings.Contains(out, "--no-verify") {
-				t.Errorf("must never suggest --no-verify:\n%s", out)
-			}
-		})
+		for _, c := range []struct {
+			name       string
+			buildFails bool
+			rc         string
+			ok, found  bool
+		}{
+			{"clean", false, "0", true, false},
+			{"finding", false, "42", false, true},
+			{"gitleaks fatal error", false, "1", false, false},
+			{"other exit", false, "3", false, false},
+			{"killed", false, "137", false, false},
+			{"install failed", true, "0", false, false},
+		} {
+			t.Run(hook.name+"/"+c.name, func(t *testing.T) {
+				t.Parallel()
+				out, err := scan(t, c.buildFails, c.rc, hook.script)
+				if (err == nil) != c.ok {
+					t.Fatalf("err = %v, want ok=%v\n%s", err, c.ok, out)
+				}
+				if got := strings.Contains(out, hook.finding); got != c.found {
+					t.Errorf("says finding = %v, want %v:\n%s", got, c.found, out)
+				}
+				if !c.ok && !c.found && !strings.Contains(out, "could not run") {
+					t.Errorf("want \"could not run\":\n%s", out)
+				}
+				if strings.Contains(out, "--no-verify") {
+					t.Errorf("must never suggest --no-verify:\n%s", out)
+				}
+			})
+		}
 	}
 }

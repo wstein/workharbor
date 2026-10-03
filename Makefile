@@ -4,8 +4,11 @@ GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 HUGO := go run -tags extended github.com/gohugoio/hugo@v0.167.0
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
-# The command that runs gitleaks; a test overrides it with a stub.
-GITLEAKS_RUN ?= go run $(GITLEAKS)
+# The secret scans go install gitleaks first (a failed install means the scan could not
+# run) and run the binary with this exit code for a finding: `go run` turns every
+# non-zero exit into 1, and gitleaks itself exits 1 on any fatal error. Nothing
+# in the environment replaces the scanner; a test puts a fake go on the PATH.
+GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
@@ -235,20 +238,26 @@ land:
 	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 
 # Scan the commits of a git log range for secrets: the pre-push hook runs it
-# with the range about to be pushed.
+# with the range about to be pushed. Exit 42 is a finding, 0 is clean, and
+# anything else (a failed install, gitleaks' own exit 1) is a scan that could not run.
 secrets-range:
 	@test -n "$(RANGE)" || { echo "secrets-range needs RANGE" >&2; exit 2; }
-	@$(GITLEAKS_RUN) git --no-banner --redact --config .gitleaks.toml --log-opts="$(RANGE)" . >&2; rc=$$?; \
+	@d=$$(mktemp -d) || { echo "the secret scan could not run (no temporary directory), so nothing was checked and the push is blocked" >&2; exit 1; }; \
+	trap 'rm -rf "$$d"' EXIT; \
+	GOBIN="$$d" go install $(GITLEAKS) >&2 || { echo "the secret scan could not run (gitleaks did not install), so nothing was checked and the push is blocked: put go on the PATH of the tool that pushes and let it fetch gitleaks (or push from the terminal), then push again" >&2; exit 1; }; \
+	"$$d/gitleaks" git --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml --log-opts="$(RANGE)" . >&2; rc=$$?; \
 	if [ $$rc -eq 0 ]; then exit 0; \
-	elif [ $$rc -eq 1 ]; then echo "a commit in $(RANGE) holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2; \
-	else echo "the secret scan could not run (exit $$rc), so nothing was checked and the push is blocked: put go on the PATH of the tool that pushes (or push from the terminal), then push again" >&2; fi; \
+	elif [ $$rc -eq $(GITLEAKS_FOUND) ]; then echo "a commit in $(RANGE) holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2; \
+	else echo "the secret scan could not run (exit $$rc), so nothing was checked and the push is blocked: check the output above, then push again" >&2; fi; \
 	exit 1
 
 # Scan what is staged for secrets: the pre-commit hook runs it.
 secrets-staged:
-	@$(GITLEAKS_RUN) git --pre-commit --staged --no-banner --redact --config .gitleaks.toml . >/dev/null 2>&1; rc=$$?; \
+	@d=$$(mktemp -d) || { echo "the secret scan could not run (no temporary directory), so nothing was checked and the commit is blocked" >&2; exit 1; }; \
+	trap 'rm -rf "$$d"' EXIT; \
+	GOBIN="$$d" go install $(GITLEAKS) >&2 || { echo "the secret scan could not run (gitleaks did not install), so nothing was checked and the commit is blocked: put go on the PATH of the tool that commits and let it fetch gitleaks (or commit from the terminal), then commit again" >&2; exit 1; }; \
+	"$$d/gitleaks" git --pre-commit --staged --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml . >"$$d/out" 2>&1; rc=$$?; \
 	if [ $$rc -eq 0 ]; then exit 0; \
-	elif [ $$rc -eq 1 ]; then echo "a secret is staged: unstage it, revoke it if it is real, and read it from a 0600 env file instead (AGENTS.md, Secrets)" >&2; \
-	$(GITLEAKS_RUN) git --pre-commit --staged --no-banner --redact --config .gitleaks.toml . >&2; \
-	else echo "the secret scan could not run (exit $$rc), so nothing was checked and the commit is blocked: put go on the PATH of the tool that commits (or commit from the terminal), then commit again" >&2; fi; \
+	elif [ $$rc -eq $(GITLEAKS_FOUND) ]; then echo "a secret is staged: unstage it, revoke it if it is real, and read it from a 0600 env file instead (AGENTS.md, Secrets)" >&2; cat "$$d/out" >&2; \
+	else echo "the secret scan could not run (exit $$rc), so nothing was checked and the commit is blocked: check the output below, then commit again" >&2; cat "$$d/out" >&2; fi; \
 	exit 1
