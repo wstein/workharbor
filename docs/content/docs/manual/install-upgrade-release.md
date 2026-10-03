@@ -71,15 +71,40 @@ The formula installs `whr`, the guest binaries in `libexec/whr` and the shell co
 
 The formula has `depends_on arch: :arm64`, so on an Intel Mac Homebrew stops with its own message about the unsupported architecture ({{< status unverified >}}: read from the formula, not run). Release 1 supports Apple silicon only.
 
-## Upgrade
+## Back up, upgrade and restore
 
-1. Read the release notes and the upgrade notes below.
-2. Back up the state directory (the database and the configuration, see Backups in [Prepare the Mac mini](host-setup.md)).
-3. Install the new version as the administrator (`make install-release` or `brew upgrade whr`).
-4. Restart the supervisor: `whr service uninstall` then `whr service install` rewrites the plist for the new binary path; if the path did not change, `launchctl kickstart` of the job is enough. {{< status unverified >}}
-5. Run `whr doctor`, then `whr version`.
+One procedure serves all three: stop, copy or replace, start. Run it as the `whr` user, from its desktop session ([Prepare the Mac mini](host-setup.md), step 2). The paths below are the defaults; where the configuration sets `state_dir` or other roots, use those.
 
-The database migrates on the first start of a new version. There is no downgrade: keep the backup of step 2. Versions are `0.x` until the API, the adapter contract and the migrations are stable, so read every upgrade note.
+### What to copy
+
+| What | Where | Rule |
+| --- | --- | --- |
+| Configuration directory | `~/.config/whr` (the configuration file) | A plain copy. It also holds secret files by default (below). |
+| State directory | `~/.local/state/whr`, or `state_dir` | Holds the database `workharbor.db` **with** `workharbor.db-wal` and `workharbor.db-shm`. The database runs in WAL mode, so a copy of `workharbor.db` alone, or of any of the three taken while `whr serve` runs, can be inconsistent. Copy all three with `whr serve` stopped. The audit log is stored with the database; whether a separate audit file exists is {{< status unverified >}}. `api.sock` in the same directory is a socket: skip it. |
+| Secret files | Every file the configuration names: `api_token_file`, `github.key_file`, `agent_api_key_env_file`, `console.ssh_ca_key_file`, the `ntfy` files | **Only into an encrypted backup** (a FileVault volume or an encrypted disk image). They may live outside `~/.config/whr`, so read the paths from the configuration. Keep mode `0600` when you restore them. |
+| Workspace folders | Every folder below `roots.workspaces` | Unpushed agent work lives only here, so back them up if you care about it. They are plain checkouts. |
+| Not copied | The agent-home volumes and container images | **Exclude them from every backup.** An agent-home volume holds the agents' sessions and the subscription logins (D40); no `whr` command copies one, and you should not either ([design §7.3](../design/security.md)). Images are rebuilt. |
+
+### The procedure
+
+1. **Stop the supervisor.** `whr service uninstall` unloads the job (the logs stay); if you run `whr serve` by hand, stop that. Check that no `whr serve` process is left. Agents stop with it, and runs resume after the start ({{< status unverified >}}).
+2. **Back up** every path in the table, to an encrypted destination for the secret files. Time Machine is fine if the volumes are excluded and the supervisor is stopped while it copies; a snapshot taken while it runs is only consistent if it covers the database and its two WAL files at one instant ({{< status unverified >}}).
+3. **Upgrade (skip for a plain backup).** Read the release notes and the upgrade notes below, then install the new version as the administrator (`make install-release` or `brew upgrade whr`).
+4. **Restore (skip unless restoring).** With the supervisor still stopped, put back the configuration directory, the state directory (the database file with its `-wal` and `-shm` files, together from one backup, or none of the three), the secret files at the paths the configuration names, and the workspace folders. Remove stale `-wal` and `-shm` files that do not belong to the restored database.
+5. **Start the supervisor.** `whr service install` writes the plist for the current binary; the database migrates on the first start of a new version.
+6. **Check.** `whr doctor`, then `whr version`.
+
+### What a restore loses
+
+The agent-home volumes are not in the backup, so a restore on the same Mac keeps the volumes that still exist, and a restore on another Mac or after the volumes were removed has none. Then:
+
+- **Agent logins are gone.** Sign in again inside each environment, through the vendor's own flow (D40); `whr` never stored the login.
+- **Sessions are gone.** A run whose session cannot be resumed ends `failed` and waits on a Decision, as any failed run does ([design §4.1](../design/domain.md)). Start a new run from the workspace; what the agent had pushed or left in the workspace folder is still there.
+- **Runs and tasks come back as the database recorded them** at the time of the backup, so a run that finished later is unknown to the restored supervisor.
+
+The restore itself, and what resumes afterwards, has not been rehearsed on the real setup: {{< status unverified >}}.
+
+The database migrates on the first start of a new version. There is no downgrade: keep the backup from the procedure above. Versions are `0.x` until the API, the adapter contract and the migrations are stable, so read every upgrade note.
 
 ### Upgrade note: the integration branch is part of the workflow policy (migration 0016)
 

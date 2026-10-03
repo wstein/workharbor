@@ -167,8 +167,8 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 
 ## 9. Backups
 
-- Back up the `whr` user's workharbor state: the database, configuration and audit log (Time Machine or another backup).
-- Exclude container volumes and images: they are rebuilt, and volumes grow sparsely (issue #54).
+- Follow the one procedure in [Back up, upgrade and restore](install-upgrade-release.md#back-up-upgrade-and-restore): it names the configuration directory (`~/.config/whr`), the state directory (the database with its `-wal` and `-shm` files), the secret files (encrypted backup only) and the workspace folders, and says to stop `whr serve` first.
+- **Exclude the container volumes and images** from Time Machine and every other backup. The agent-home volumes hold the agents' sessions and subscription logins, which no `whr` procedure copies (D40); a restore means signing in again. Images are rebuilt, and volumes grow sparsely (issue #54).
 
 ## 10. Phone notifications (optional)
 
