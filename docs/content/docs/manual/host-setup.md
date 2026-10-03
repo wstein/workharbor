@@ -285,7 +285,7 @@ The remaining steps run as the `whr` user: steps 2 and 3 from any `whr` shell, s
     ```json
     {
       "listen": "127.0.0.1:8787",
-      "repositories": [{ "name": "<owner>/<repository>" }],
+      "repositories": [{ "name": "<owner>/<repository>", "integration_branch": "develop" }],
       "roots": {
         "workspaces": ["/Volumes/<ssd>/workspaces"],
         "tool_store": "/Users/whr/tools"
@@ -295,6 +295,8 @@ The remaining steps run as the `whr` user: steps 2 and 3 from any `whr` shell, s
       "agent_allowed_tools": ["Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"]
     }
     ```
+
+    `integration_branch` is where approved commits go (the default workflow `integration` uses `develop` when it is not set, so the line only makes that visible); the branch must exist in the repository. A workspace rebases onto the same branch: `whr ws add` takes it from the configuration (for `published`, the default branch GitHub reports now) and refuses a `--branch` that differs, naming both, so a first workspace and its tasks meet on one branch.
 
     To mirror task state on a GitHub project board (provisional, issue #70, {{< status unverified >}} until it runs with the real App), add `"board": {"owner": "<organization>", "organization": true, "number": <project number>, "public_url": "https://<your-forwarded-name>"}`: the project needs a single-select `Status` field with the options `Needs you`, `In progress`, `Ready to push` and `Done`, and may have a `Session` field and a text field `Task` that holds the link. The App then needs the organization's Projects permission (`whr github app create --board` asks for it; `whr doctor` checks it).
     To sign in to the web UI and answer reviews from the phone with a passkey (provisional, issue #101, {{< status unverified >}} until it runs on a real phone), set `"public_url": "https://<your-forwarded-name>"`, restart, and run `whr passkey add phone` on the host: open the link it prints on the phone within 5 minutes. From then on the web UI signs in with the passkey only; `whr passkey ls` and `whr passkey rm <id>` manage them, and only on the host.

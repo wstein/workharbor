@@ -43,7 +43,7 @@ If a repository's workflow in the configuration (its preset or its integration b
 A workspace is a folder with an agent clone of one repository and its environment; an agent is a named role in it with its own worktree and branch `agent/<role>`.
 
 ```text
-whr ws add <name> --path <folder> --repo <owner/name> --role <role> [--from <path-or-url>] [--branch main|develop] [--instructions <text>]
+whr ws add <name> --path <folder> --repo <owner/name> --role <role> [--from <path-or-url>] [--branch <the publication target>] [--instructions <text>]
 whr ws ls
 whr ws rebuild <workspace>
 whr ws rm <name>
@@ -52,7 +52,7 @@ whr agent ls [workspace]
 whr agent rm <workspace>/<role>
 ```
 
-`ws add` seeds the clone and starts the environment, which takes a while. The folder must be empty and below a workspace root from the configuration. `ws rebuild` recreates the environment from the image the repository resolves to now (a new devcontainer commit, an allowed feature source or a bumped base image reaches a long-lived workspace only that way). It is refused while a run of the workspace is live; the folder, worktrees, branches and volumes stay. `ws rm` works only when the workspace has no agents, removes its environment and home volume, and leaves the folder. `agent rm` is refused while the agent has an unfinished task; its worktree and branch stay in the clone.
+`ws add` seeds the clone and starts the environment, which takes a while. The workspace's branch is the repository's publication target (its `integration_branch`, `develop` for `integration` when none is set, the forge's default branch for `published`); `--branch` is accepted only when it names that same branch, and the command says which two differ when it does not. The folder must be empty and below a workspace root from the configuration. `ws rebuild` recreates the environment from the image the repository resolves to now (a new devcontainer commit, an allowed feature source or a bumped base image reaches a long-lived workspace only that way). It is refused while a run of the workspace is live; the folder, worktrees, branches and volumes stay. `ws rm` works only when the workspace has no agents, removes its environment and home volume, and leaves the folder. `agent rm` is refused while the agent has an unfinished task; its worktree and branch stay in the clone.
 
 ## Passkeys (provisional)
 
