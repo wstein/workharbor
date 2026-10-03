@@ -100,3 +100,56 @@ func TestLimitsReadNoCredential(t *testing.T) {
 		}
 	}
 }
+
+// The push key is the window name: a moving resets_at or a flood of names does
+// not mint pushes without bound, and a recovered window may warn again.
+func TestLowWindowPushesAreKeyedByNameAndBounded(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	n := &recNotifier{}
+	r.svc.cfg.Notifier = n
+	r.svc.cfg.LowLimits = LowLimits{WindowPercent: 80}
+	win := func(name string, u float64, reset time.Time) *agent.Usage {
+		return &agent.Usage{Model: "m", Windows: []agent.UsageWindow{{Name: name, Utilization: u, ResetsAt: reset}}}
+	}
+	later := r.clock.now.Add(100 * time.Hour)
+	for i := 1; i <= 5; i++ { // resets_at moves every turn
+		r.report(i, win("five_hour", 0.95, later.Add(time.Duration(i)*time.Second)))
+	}
+	if got := n.kinds(); len(got) != 1 {
+		t.Fatalf("notifications = %v, want one", got)
+	}
+	r.report(6, win("five_hour", 0.1, later)) // recovered: the key is cleared
+	r.report(7, win("five_hour", 0.95, time.Time{}))
+	if got := n.kinds(); len(got) != 2 {
+		t.Errorf("notifications = %v, want a second after recovery", got)
+	}
+	for i := 0; i < 500; i++ {
+		r.report(10+i, win("w"+strconv.Itoa(i), 0.99, later))
+	}
+	r.svc.mu.Lock()
+	size := len(r.svc.limitWarned)
+	r.svc.mu.Unlock()
+	if size > maxLimitWarned {
+		t.Errorf("limitWarned has %d keys, want at most %d", size, maxLimitWarned)
+	}
+	if got := n.kinds(); len(got) > maxLimitWarned+1 {
+		t.Errorf("%d pushes for 500 window names", len(got))
+	}
+}
+
+// A reading whose own reset time has passed is shown but not called low.
+func TestAWindowIsNotLowAfterItsReset(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.svc.cfg.LowLimits = LowLimits{WindowPercent: 80}
+	r.report(1, &agent.Usage{Model: "m", Windows: []agent.UsageWindow{{Name: agent.WindowFiveHour, Utilization: 0.95, ResetsAt: r.clock.now.Add(time.Hour)}}})
+	if ps, _ := r.svc.Limits(bg); !ps[0].Low || !ps[0].Windows[0].Low {
+		t.Fatal("not low before the reset")
+	}
+	r.clock.now = r.clock.now.Add(2 * time.Hour)
+	ps, _ := r.svc.Limits(bg)
+	if ps[0].Low || ps[0].Windows[0].Low || ps[0].Windows[0].Used != 0.95 {
+		t.Errorf("after the reset = %+v, want the reading kept and not low", ps[0])
+	}
+}

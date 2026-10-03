@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/wstein/workharbor/internal/agent"
@@ -85,8 +84,11 @@ func (s *Service) Limits(ctx context.Context) ([]ProviderLimits, error) {
 		p.BudgetMicroUSD = s.cfg.Budgets.PerTask.MaxCostMicroUSD
 	}
 	limit := float64(s.cfg.LowLimits.windowPercent()) / 100
+	now := s.clock.Now()
 	for _, w := range windows {
-		lw := LimitWindow{Name: w.Name, Used: w.Utilization, ResetsAt: w.ResetsAt, At: w.At, Low: w.Utilization >= limit}
+		// A reading is shown as it was read (D40), but not called low once its
+		// own reset time has passed.
+		lw := LimitWindow{Name: w.Name, Used: w.Utilization, ResetsAt: w.ResetsAt, At: w.At, Low: w.Utilization >= limit && !resetPassed(w.ResetsAt, now)}
 		p.Low = p.Low || lw.Low
 		p.Windows = append(p.Windows, lw)
 	}
@@ -101,6 +103,11 @@ func (s *Service) Limits(ctx context.Context) ([]ProviderLimits, error) {
 	return []ProviderLimits{p}, nil
 }
 
+// maxLimitWarned bounds limitWarned: window names come from the agent.
+const maxLimitWarned = 64
+
+func resetPassed(resetsAt, now time.Time) bool { return !resetsAt.IsZero() && now.After(resetsAt) }
+
 // warnLowLimits notifies once per window reading period when a reported window
 // or balance is low: the same signal the dashboard shows. It runs after a usage
 // report was recorded and only looks at what that report carried.
@@ -108,11 +115,17 @@ func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 	if s.cfg.Notifier == nil {
 		return
 	}
-	var keys []string
+	var keys, recovered []string
+	now := s.clock.Now()
 	limit := float64(s.cfg.LowLimits.windowPercent()) / 100
 	for _, w := range u.Windows {
-		if w.Utilization >= limit {
-			keys = append(keys, fmt.Sprintf("window/%s/%d", w.Name, w.ResetsAt.Unix()))
+		// The key is the window name alone: the reset time is the agent's
+		// own report and must not mint new keys.
+		k := "window/" + w.Name
+		if w.Utilization >= limit && !resetPassed(w.ResetsAt, now) {
+			keys = append(keys, k)
+		} else {
+			recovered = append(recovered, k)
 		}
 	}
 	if b := u.Balance; b != nil && s.cfg.LowLimits.BalanceMicroUSD > 0 && b.RemainingMicroUSD <= s.cfg.LowLimits.BalanceMicroUSD {
@@ -123,8 +136,11 @@ func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 		s.limitWarned = map[string]bool{}
 	}
 	fresh := false
+	for _, k := range recovered {
+		delete(s.limitWarned, k)
+	}
 	for _, k := range keys {
-		if !s.limitWarned[k] {
+		if !s.limitWarned[k] && len(s.limitWarned) < maxLimitWarned {
 			s.limitWarned[k], fresh = true, true
 		}
 	}

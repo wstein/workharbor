@@ -417,3 +417,18 @@ func TestAccountIsDedicatedOrShared(t *testing.T) {
 		}
 	}
 }
+
+func TestLowBalanceIsBounded(t *testing.T) {
+	for _, v := range []float64{-1, MaxLowBalanceUSD * 2, 1e13} {
+		r := newRig(t)
+		r.cfg.Limits.LowBalanceUSD = v
+		if _, err := r.parse(t); !strings.Contains(problems(err), "limits.low_balance_usd") {
+			t.Errorf("%v accepted: %v", v, err)
+		}
+	}
+	r := newRig(t)
+	r.cfg.Limits.LowBalanceUSD = MaxLowBalanceUSD
+	if _, err := r.parse(t); err != nil {
+		t.Errorf("the cap itself: %v", err)
+	}
+}

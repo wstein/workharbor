@@ -453,8 +453,8 @@ func (c *Config) Validate() error {
 	if p := c.Limits.WarnPercent; p != 0 && (p < 1 || p > 99) {
 		add("limits.warn_percent: %d is not from 1 to 99", p)
 	}
-	if v := c.Limits.LowBalanceUSD; v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
-		add("limits.low_balance_usd: cannot be negative")
+	if v := c.Limits.LowBalanceUSD; v < 0 || v > MaxLowBalanceUSD || math.IsNaN(v) || math.IsInf(v, 0) {
+		add("limits.low_balance_usd: %v is not from 0 to %d", v, int64(MaxLowBalanceUSD))
 	}
 	if b := c.Environment.Base; b != "" && !baseimage.Distro(b).Valid() {
 		add("environment.base: %q is not a first-class base (want fedora or ubuntu)", b)
@@ -937,3 +937,7 @@ func checkAPIURL(raw string) string {
 }
 
 var boardOwnerRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}$`)
+
+// MaxLowBalanceUSD caps limits.low_balance_usd, far under what converts to
+// micro-USD in an int64.
+const MaxLowBalanceUSD = 1e9
