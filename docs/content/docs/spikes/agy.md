@@ -29,7 +29,7 @@ Measured on Apple silicon macOS host with Apple Container 1.5.0 (`fedora:latest`
 Reading of the Google Terms of Service, Generative AI Additional Terms, and Gemini API Additional Terms (as of 1 October 2026) {{< status unverified >}}:
 - **Consumer Sign-In**: Personal interactive use with an individual Google Account (including Google One AI Premium / Gemini Advanced subscriptions) is covered under standard consumer terms. Automated headless pipelines should use the Gemini API (with `GEMINI_API_KEY`) or Vertex AI rather than driving consumer account sessions.
 - **Agentic Confirmation Clause**: Under the Gemini API and Generative AI Additional Terms, developers using agentic services *"will not automatically bypass any requests for human confirmation"*. This aligns directly with workharbor's policy table and blocking Decisions (design §6).
-- **Seat Boundaries**: Under D40, each developer signs in to their own environment through Google's official OAuth flow. Workharbor does not collect, forward, or share user tokens.
+- **Seat Boundaries**: Under D40, each developer signs in to their own environment through Google's official OAuth flow. workharbor does not collect, forward, or share user tokens.
 
 ### 2. Auth Discovery & In-Environment Sign-In (D40)
 

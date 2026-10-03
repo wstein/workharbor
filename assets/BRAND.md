@@ -9,9 +9,10 @@ the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
   `favicon-*.png`, `apple-touch-icon.png`, the `android-chrome-*.png`,
   `logo.svg`/`logo.png`): the teal anchor on a rounded navy tile. Tile corner
   radius 22 % of the side; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. Every rounded tile, wherever it appears (the app icons, `logo.svg`, the banner, the social preview, the navbar logo), has a visible outline: 1.6 units in the 64-unit tile box (2.5 % of the side), colour `#2a4a7a`, drawn inside the tile's edge (#147). `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
-- **Horizontal lockup** (everything wide: the README banner, the social preview,
-  the docs navbar): the bare teal anchor, no tile, then the wordmark. A tile never
-  appears in a lockup, and a lockup never appears in a square place.
+- **Horizontal lockup** (any wide place): the bare teal anchor, no tile, then the
+  wordmark. The README banner, the social preview and the docs navbar are the
+  exception and use the tile lockup (next section). A lockup never appears in a
+  square place.
 
 ## Exception: the README banner and the social preview
 
