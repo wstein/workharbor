@@ -148,7 +148,17 @@ func newRig(t *testing.T, opts ...rigOption) *rig {
 		ReadyCmd: []string{"echo", "ready"},
 		OnError:  func(err error) { r.errs = append(r.errs, err) },
 	})
-	t.Cleanup(r.svc.Shutdown)
+	t.Cleanup(func() {
+		// Bounded: a session that is no longer in s.sessions (a bug under test
+		// orphaned it) is never stopped, and Shutdown would wait for it forever.
+		done := make(chan struct{})
+		go func() { r.svc.Shutdown(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("Shutdown did not return within 5s: an agent session is still running and no longer held by the service")
+		}
+	})
 	return r
 }
 
