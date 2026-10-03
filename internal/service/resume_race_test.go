@@ -152,7 +152,6 @@ func TestACrashBetweenTheStartingWriteAndTheAttachIsRecovered(t *testing.T) {
 	if len(rep.Interrupted) != 1 || len(rep.Resumed) != 1 || r.runState() != domain.RunRunning || !r.svc.attached("r1") {
 		t.Errorf("report %+v, run %s, attached %v", rep, r.runState(), r.svc.attached("r1"))
 	}
-	r.svc.Shutdown()
 }
 
 // The third path to starting, an answer that resumes (design 4.1): while a
