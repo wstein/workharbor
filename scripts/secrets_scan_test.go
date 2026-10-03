@@ -52,14 +52,14 @@ func scan(t *testing.T, buildFails bool, rc, script string) (string, error) {
 		t.Fatal(err)
 	}
 	// a git that fails the reads of scripts/messages.sh named in $FAKE_GIT_FAIL
-	// (cat-file-t, cat-file-read, for-each-ref) and is the real one otherwise
+	// (cat-file-t, cat-file-read, revlist, for-each-ref) and is the real one otherwise
 	realGit, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	stub := "#!/bin/sh\n" +
 		"case \"$FAKE_GIT_FAIL:$1:$2\" in\n" +
-		"cat-file-t:cat-file:-t | cat-file-read:cat-file:commit | cat-file-read:cat-file:tag | for-each-ref:for-each-ref:*) echo \"fake git: $* failed\" >&2; exit 1;; esac\n" +
+		"cat-file-t:cat-file:-t | cat-file-read:cat-file:commit | cat-file-read:cat-file:tag | revlist:rev-list:* | for-each-ref:for-each-ref:*) echo \"fake git: $* failed\" >&2; exit 1;; esac\n" +
 		"exec " + realGit + " \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(stub), 0o700); err != nil { //nolint:gosec // a test stub
 		t.Fatal(err)
@@ -368,6 +368,7 @@ func TestMessagesScriptFailsWithGit(t *testing.T) {
 		{"object type of the tip", "cat-file-t", `"$tag" HEAD`},
 		{"read of a tag", "cat-file-read", `"$tag" HEAD`},
 		{"read of a commit", "cat-file-read", `"" HEAD`},
+		{"listing of the commits", "revlist", `"" HEAD`},
 		{"listing of the tags", "for-each-ref", `"" --all`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -384,15 +385,47 @@ func TestMessagesScriptFailsWithGit(t *testing.T) {
 	}
 }
 
-// TestPrePushBlocksWhenMessagesCannotBeRead: a messages.sh that fails is a scan
-// that could not run, and the push is blocked with that message (#196).
+// TestPrePushBlocksWhenMessagesCannotBeRead: a messages.sh that fails, at the
+// read of an object or at the listing of the commits, is a scan that could not
+// run, and the push is blocked with that message (#196).
 func TestPrePushBlocksWhenMessagesCannotBeRead(t *testing.T) {
 	t.Parallel()
-	script := messageObjects(t.TempDir()) + "export FAKE_GIT_FAIL=cat-file-read; " +
-		"echo \"refs/heads/x $tag refs/heads/x " + zero + "\" | .githooks/pre-push"
-	got, err := scan(t, false, "0", script)
-	if err == nil || !strings.Contains(got, "could not run") {
-		t.Fatalf("want a block saying could not run, err = %v:\n%s", err, got)
+	for _, fail := range []string{"cat-file-read", "revlist"} {
+		t.Run(fail, func(t *testing.T) {
+			t.Parallel()
+			script := messageObjects(t.TempDir()) + "export FAKE_GIT_FAIL=" + fail + "; " +
+				"echo \"refs/heads/x $tag refs/heads/x " + zero + "\" | .githooks/pre-push"
+			got, err := scan(t, false, "0", script)
+			if err == nil || !strings.Contains(got, "could not run") {
+				t.Fatalf("want a block saying could not run, err = %v:\n%s", err, got)
+			}
+		})
+	}
+}
+
+// TestMessagesScriptReadsCommitHeaders: a header other than tree, parent, author
+// and committer carries text a push still sends: a merge of a signed tag copies
+// the tag's message into a mergetag header, and gpgsig holds a signature. The
+// objects are written by hand (hash-object --literally, no signing key), with
+// FAKEKEY, a made-up string, in each. Both must reach the scan.
+func TestMessagesScriptReadsCommitHeaders(t *testing.T) {
+	t.Parallel()
+	root, err := filepath.Abs("messages.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	script := `set -e; git init -q . &&
+tree=$(git mktree </dev/null) &&
+head() { printf 'tree %s\nauthor t <t@example.com> 1 +0000\ncommitter t <t@example.com> 1 +0000\n' "$tree"; }
+mt=$({ head; printf 'mergetag object %s\n type commit\n tag v1\n tagger t <t@example.com> 1 +0000\n \n release FAKEKEY\n\nMerge tag v1\n' "$tree"; } | git hash-object -t commit -w --literally --stdin) &&
+sig=$({ head; printf 'gpgsig -----BEGIN PGP SIGNATURE-----\n \n FAKEKEY\n -----END PGP SIGNATURE-----\n\nsigned\n'; } | git hash-object -t commit -w --literally --stdin) &&
+git update-ref refs/heads/mt "$mt" && git update-ref refs/heads/sig "$sig" &&
+'` + root + `' "" refs/heads/mt >mt.out && '` + root + `' "" refs/heads/sig >sig.out &&
+grep -q FAKEKEY mt.out && grep -q FAKEKEY sig.out`
+	got, err := bash(t, gittest.Env(t.TempDir()), "cd "+repo+" && "+script)
+	if err != nil {
+		t.Fatalf("a commit header hides FAKEKEY from the scan: %v\n%s", err, got)
 	}
 }
 

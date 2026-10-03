@@ -8,6 +8,8 @@
 # the caller must treat it as a scan that could not run: no git call here sits
 # in a pipeline (a pipe keeps only the last status under sh), each reads into a
 # file or a variable and is checked by set -e.
+# A commit is printed whole, headers included: a merge of a signed tag copies
+# the tag's message into a mergetag header.
 # The objects are read raw: a replace ref (refs/replace) must not hide the
 # original message that `git push` still sends, and %B would stop at a NUL byte
 # while the text after it still goes out.
@@ -33,7 +35,7 @@ tag_chain() { # the messages of a tag object and of the tags it points to
 git rev-list "$@" >"$d/commits"
 while read -r c; do
   git cat-file commit "$c" >"$d/obj"
-  sed '1,/^$/d' "$d/obj" # everything after the header, NUL bytes included
+  cat "$d/obj" # the whole object: mergetag and gpgsig headers go out with a push too
 done <"$d/commits"
 [ -z "$tip" ] || tag_chain "$tip"
 for a in "$@"; do
