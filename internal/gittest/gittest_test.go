@@ -10,16 +10,16 @@ import (
 
 func TestTheEnvironmentIsMinimalAndNeverTheHumans(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", "/tmp/agent.sock")
-	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_COUNT", "7")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "x")
 	env := Env("/tmp/home-x", "A=1")
 	joined := strings.Join(env, "\n")
-	for _, want := range []string{"HOME=/tmp/home-x", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "SSH_AUTH_SOCK=\n", "A=1"} {
+	for _, want := range []string{"HOME=/tmp/home-x", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_COUNT=1\nGIT_CONFIG_KEY_0=user.useConfigOnly\nGIT_CONFIG_VALUE_0=true", "SSH_AUTH_SOCK=\n", "A=1"} {
 		if !strings.Contains(joined+"\n", want) {
 			t.Errorf("the environment lacks %q:\n%s", want, joined)
 		}
 	}
-	for _, bad := range []string{"/tmp/agent.sock", "GIT_CONFIG_COUNT", "AWS_SECRET"} {
+	for _, bad := range []string{"/tmp/agent.sock", "GIT_CONFIG_COUNT=7", "AWS_SECRET"} {
 		if strings.Contains(joined, bad) {
 			t.Errorf("the human's environment leaked: %q", bad)
 		}

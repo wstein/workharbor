@@ -64,7 +64,7 @@ func scan(t *testing.T, buildFails bool, rc, script string) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(stub), 0o700); err != nil { //nolint:gosec // a test stub
 		t.Fatal(err)
 	}
-	env := append(gittest.Env(t.TempDir()), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SCAN_RC="+rc)
+	env := append(gittest.Env(t.TempDir(), gittest.Identity...), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SCAN_RC="+rc)
 	if buildFails {
 		env = append(env, "FAKE_BUILD=fail")
 	}

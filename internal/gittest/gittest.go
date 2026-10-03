@@ -25,6 +25,10 @@ func Env(home string, extra ...string) []string {
 		// Homebrew's osxkeychain helper was reached: point the system file nowhere too
 		"GIT_CONFIG_SYSTEM=" + os.DevNull,
 		"GIT_CONFIG_GLOBAL=" + os.DevNull,
+		// never guess an identity from the login name and hostname: a Mac derives
+		// one, a CI runner does not, so a test that forgot its identity passed here
+		// and failed there (#198); now it fails everywhere
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=true",
 		"GIT_TERMINAL_PROMPT=0",
 		"GIT_ASKPASS=/usr/bin/true",
 		"SSH_ASKPASS=/usr/bin/true",
