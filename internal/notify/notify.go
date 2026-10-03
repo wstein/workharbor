@@ -3,6 +3,10 @@
 // It leaves the host and may pass a public relay, and issue text is untrusted
 // input, so nothing else is ever put in it. The inbox stays the source of
 // truth; a push is best effort.
+//
+// Throttle sits in `whr serve` (serve.NewNotifier): Ntfy is wrapped in Throttled
+// with one shared Throttle, inside the Async queue, so every kind of push goes
+// through the per-task limit.
 package notify
 
 import (

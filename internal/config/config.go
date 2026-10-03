@@ -82,6 +82,15 @@ type Roots struct {
 	ToolStore  string   `json:"tool_store"` // the shared read-only tool store (§5.6)
 }
 
+// Ntfy names the ntfy server and the files holding its topic and token.
+type Ntfy struct {
+	// Server is the base URL, https://ntfy.sh by default.
+	Server string `json:"server,omitempty"`
+	// TopicFile holds the long random topic, TokenFile an optional access token.
+	TopicFile string `json:"topic_file"`
+	TokenFile string `json:"token_file,omitempty"`
+}
+
 // Board names a GitHub project board (Projects v2) the supervisor writes (D30).
 // Agents never write to it.
 type Board struct {
@@ -197,6 +206,10 @@ type Config struct {
 	// Board is the project board the supervisor keeps current with the state of
 	// its tasks (D30). Optional; it adds the board's permission to the App.
 	Board *Board `json:"board,omitempty"`
+	// Ntfy turns on push notifications (design §9.4). Optional: without it no
+	// push is sent and the inbox stays the source of truth. The topic and the
+	// token are secret files like the others, never values in this file.
+	Ntfy *Ntfy `json:"ntfy,omitempty"`
 	// Account says whether the account whr runs as is "dedicated" to it (the
 	// default) or "shared", the developer's own on a dual-use Mac (D49). It is
 	// the human's statement: nothing guesses it. `whr doctor` warns about a
@@ -598,6 +611,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Console.SSHCAKeyFile != "" {
 		secrets["console.ssh_ca_key_file"] = c.Console.SSHCAKeyFile
+	}
+	if n := c.Ntfy; n != nil {
+		secrets["ntfy.topic_file"] = n.TopicFile
+		if n.TokenFile != "" {
+			secrets["ntfy.token_file"] = n.TokenFile
+		}
 	}
 	for _, key := range sortedKeys(secrets) {
 		if msg := checkSecretFile(secrets[key]); msg != "" {

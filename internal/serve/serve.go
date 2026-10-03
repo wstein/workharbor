@@ -72,7 +72,10 @@ type Deps struct {
 	// the permission mode follows the workflow it really runs under.
 	AgentSpecFor func(*config.Config) func(domain.Task, domain.Run) agent.StartSpec
 	Clock        service.Clock
-	Logf         func(format string, args ...any)
+	// Notifier delivers a push (design §9.4); nil sends none. Run wraps it in the
+	// per-task throttle and the bounded queue.
+	Notifier notify.Notifier
+	Logf     func(format string, args ...any)
 	// ReconcileEvery is how often the reconciler compares the database with the
 	// runtime. Default 30 s.
 	ReconcileEvery time.Duration
@@ -121,6 +124,10 @@ func Run(ctx context.Context, d Deps) error {
 		OnError:           func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
+	if q := NewNotifier(d.Notifier, logf); q != nil {
+		defer q.Close()
+		scfg.Notifier = q
+	}
 	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
@@ -313,6 +320,20 @@ func Run(ctx context.Context, d Deps) error {
 		return nil
 	}
 	return err
+}
+
+// NewNotifier puts next behind one shared per-task Throttle and then the
+// bounded Async queue, so every kind of push is deduplicated and rate-limited
+// (design §9.4) and a slow relay never holds up the service. It returns nil
+// for a nil next: nothing is sent. Errors are logged without the topic or the
+// token, which the notifier never puts in one.
+func NewNotifier(next notify.Notifier, logf func(string, ...any)) *notify.Async {
+	if next == nil {
+		return nil
+	}
+	q := notify.NewAsync(notify.Throttled{Next: next, Throttle: &notify.Throttle{}}, 64, 15*time.Second)
+	q.OnError(func(err error) { logf("notification: %v", err) })
+	return q
 }
 
 // addBoard gives the service the project board of D30: the supervisor's own

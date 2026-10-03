@@ -21,6 +21,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/oci"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/redact"
@@ -378,7 +379,12 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			return Deps{}, nil, fmt.Errorf("console.ssh_ca_key_file: %w", err)
 		}
 	}
+	var notifier notify.Notifier
+	if n := c.Ntfy; n != nil {
+		notifier = notify.Ntfy{Server: n.Server, Secrets: fileSecrets{notify.SecretTopic: n.TopicFile, notify.SecretToken: n.TokenFile}, BaseURL: publicBase(c)}
+	}
 	return Deps{
+		Notifier:   notifier,
 		ConsoleSSH: consoleSSH,
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
@@ -665,4 +671,28 @@ func Environment(git *hostgit.Git, topics service.TopicsFunc, opt devcontainer.O
 		}
 		return re, nil
 	}
+}
+
+// fileSecrets is the credential service of the ntfy channel: each secret is a
+// file the operator named (0600, outside every root, checked by the
+// configuration). The value never reaches a log.
+type fileSecrets map[string]string
+
+// Get reads the named secret, or "" when no file is configured for it.
+func (f fileSecrets) Get(name string) (string, error) {
+	path := f[name]
+	if path == "" {
+		return "", nil
+	}
+	b, err := config.ReadSecret(path)
+	if err != nil {
+		return "", errors.New("the secret file cannot be read")
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// publicBase is the address a push's link opens.
+func publicBase(c *config.Config) string {
+	origin, _ := c.PublicOrigin()
+	return origin
 }
