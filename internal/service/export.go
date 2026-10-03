@@ -12,6 +12,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Errors of exporting an agent's branch.
@@ -107,7 +108,7 @@ func (p *Publisher) exportBranch(ctx context.Context, req Request, run domain.ID
 	}
 	base := strings.TrimSpace(out)
 	if code != 0 || !commitRe.MatchString(base) {
-		return fmt.Errorf("the merge base of %s and %s could not be found (exit %d): %s", ws.Integration, a.Branch, code, oneLine(out))
+		return fmt.Errorf("the merge base of %s and %s could not be found (exit %d): %s", ws.Integration, a.Branch, code, textsafe.Escape(oneLine(out)))
 	}
 	return p.streamBundle(ctx, ws, a, base)
 }

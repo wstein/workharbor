@@ -6,9 +6,12 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -288,5 +291,121 @@ func TestAHoldRefusesARunStartAndIsCounted(t *testing.T) {
 	r1()
 	if err := c.svc.checkEnvFree(bg, c.env, ""); err != nil {
 		t.Errorf("released: %v", err)
+	}
+}
+
+type failStopRuntime struct {
+	runtimeAdapter
+	err error
+}
+
+func (f failStopRuntime) Stop(context.Context, string) error { return f.err }
+
+func TestACheckThatPassesHasItsProcessGroupEnded(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	if _, err := c.pub.Prepare(bg, c.req); err != nil {
+		t.Fatal(err)
+	}
+	if c.reaps != 1 {
+		t.Errorf("%d reaps, want 1: a background process of a check that exited normally must be ended", c.reaps)
+	}
+}
+
+func TestAFailedStopAfterACheckForgetsTheStartMark(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	c.reapOK = false
+	var reported []error
+	c.svc.cfg.OnError = func(err error) { reported = append(reported, err) }
+	c.svc.rt = failStopRuntime{runtimeAdapter: c.svc.rt, err: errors.New("stop refused")}
+	c.svc.markEnvStarted(c.env)
+	_, _ = c.pub.Prepare(bg, c.req)
+	if got := c.envState(); got != domain.EnvRunning {
+		t.Errorf("the environment is %s: the stop failed", got)
+	}
+	if c.svc.envStarted(c.env) {
+		t.Error("the environment is still marked as started by this process: the next launch would skip the stop and start beside the surviving check")
+	}
+	if len(reported) == 0 {
+		t.Error("the failed stop is not reported")
+	}
+	if c.svc.freshMu.TryLock() {
+		c.svc.freshMu.Unlock()
+	} else {
+		t.Error("freshMu is still held")
+	}
+}
+
+func TestACheckSafeguardsUntrustedText(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	in := "a\u202eb\u2028c\u2029d\u2066e\u009bf\x1bg\th\ni"
+	if got, want := c.chk.untrusted(in), "abcdefg\th\ni"; got != want {
+		t.Errorf("untrusted = %q, want %q", got, want)
+	}
+}
+
+func TestTheGuestBaseErrorCarriesNoControlCharacters(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	fake := c.rt.Adapter.(*runtimetest.Fake)
+	prev := fake.OnExecReq
+	fake.OnExecReq = func(env string, req runtime.ExecRequest) ([]byte, string, int, bool) {
+		if len(req.Cmd) > 3 && req.Cmd[0] == "git" && req.Cmd[3] == "merge-base" {
+			return []byte("fatal: \x1b[31mbad\u202e path\n"), "", 128, true
+		}
+		return prev(env, req)
+	}
+	_, err := c.pub.Prepare(bg, c.req)
+	if err == nil || strings.ContainsAny(err.Error(), "\x1b\u202e") {
+		t.Errorf("err = %q", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), `\x1b`) {
+		t.Errorf("the escape is not visible: %v", err)
+	}
+}
+
+// The reap script, in the shells a guest has: dash (Debian, Ubuntu) and bash.
+func TestTheReapScriptEndsTheGroupInDashAndBash(t *testing.T) {
+	t.Parallel()
+	for _, shell := range []string{"dash", "bash", "sh"} {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+		t.Run(shell, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			d := filepath.Join(dir, "chk")
+			// The check: leader of its own group, leaves a background process, exits 0.
+			lead := exec.CommandContext(bg, path, "-c", `echo $$ > "$1.pid"; sleep 77 >/dev/null 2>&1 & echo $! > "$1.bg"; exit 0`, "x", d) //nolint:gosec // a test shell found by LookPath
+			lead.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			if err := lead.Run(); err != nil {
+				t.Fatal(err)
+			}
+			pidFile, err := os.ReadFile(d + ".bg") //nolint:gosec // a path in the test's temp dir
+			if err != nil {
+				t.Fatal(err)
+			}
+			pid, _ := strconv.Atoi(strings.TrimSpace(string(pidFile)))
+			if syscall.Kill(pid, 0) != nil {
+				t.Fatalf("the background process %d is not running", pid)
+			}
+			t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+			out, err := exec.CommandContext(bg, path, "-c", reapScript, "whr-check", d, dir).CombinedOutput() //nolint:gosec // a test shell found by LookPath
+			if err != nil {
+				t.Fatalf("reap: %v: %s", err, out)
+			}
+			for i := 0; i < 50 && syscall.Kill(pid, 0) == nil; i++ {
+				time.Sleep(20 * time.Millisecond)
+			}
+			if syscall.Kill(pid, 0) == nil {
+				t.Errorf("the background process %d survived the reap", pid)
+			}
+			if _, err := os.Stat(d + ".pid"); err == nil {
+				t.Error("the pid file is not removed")
+			}
+		})
 	}
 }

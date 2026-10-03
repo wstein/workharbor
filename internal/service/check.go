@@ -14,6 +14,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Defaults of the repository's check (D51).
@@ -84,7 +85,10 @@ func NewRepoChecker(s *Service, cfg CheckConfig) *RepoChecker { return &RepoChec
 // a run start there is refused with "environment busy", and so is a second
 // hold while another task's run owns it. The mark is made before the runs are
 // read, and a start reads it inside its own transaction after its own check,
-// so a start and a hold never both pass. Holds are counted, so the whole
+// so a start and a hold never both pass. That last step rests on the store's
+// single connection (store.Open: SetMaxOpenConns(1)): the hold's read of the
+// runs waits for a start's open transaction. A reader pool would break it, and
+// TestTheStoreKeepsOneConnection fails first. Holds are counted, so the whole
 // prepare may hold the environment around a check that holds it again.
 func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (release func(), err error) {
 	lease, err := s.leaseEnvironment(ws)
@@ -172,12 +176,13 @@ func (c *RepoChecker) Command(ctx context.Context, repo string) (string, error) 
 // agent's clone (git hooks off through the exec's environment), adds a check
 // worktree detached at the prepared commit under its own directory (no
 // agent's worktree), runs the check there with git's hardening lifted, and
-// removes the worktree and the directory on its way out. The pid file lets the
-// supervisor see afterwards whether the process group is gone.
+// removes the worktree and the directory on its way out. The pid file sits
+// beside the directory, not in it, so the removal leaves it for reapScript,
+// which ends the check's process group after every check.
 const checkScript = `
 d=$1; wt=$2; sha=$3; ref=$4; cmd=$5
 rm -rf "$d" && mkdir -m 700 "$d" || exit 125
-echo $$ > "$d/pid"
+echo $$ > "$d.pid"
 cleanup() {
 	git -C "$wt" worktree remove --force "$d/tree" >/dev/null 2>&1
 	git -C "$wt" worktree prune >/dev/null 2>&1
@@ -193,12 +198,26 @@ sh -c "$cmd"
 exit $?
 `
 
-// reapScript is the check's aftermath: exit 1 when the process the check left
-// is still there, else the leftovers are removed.
+// reapScript is the check's aftermath, run after every check: it kills what
+// the check left in its process group (a background process of a check that
+// exited normally included), exits 1 when a process is still there, else the
+// leftovers are removed. A process that starts a new session or group (setsid,
+// a double fork) escapes, as one does for an agent: accepted. "kill -0 -$p"
+// and "kill -KILL -$p" are the forms dash and bash both take.
 const reapScript = `
 d=$1; wt=$2
-p=$(cat "$d/pid" 2>/dev/null)
-if [ -n "$p" ] && { kill -0 -- "-$p" 2>/dev/null || kill -0 "$p" 2>/dev/null; }; then exit 1; fi
+p=$(cat "$d.pid" 2>/dev/null)
+case $p in ''|*[!0-9]*) p= ;; esac
+if [ -n "$p" ]; then
+	kill -KILL "-$p" 2>/dev/null
+	kill -KILL "$p" 2>/dev/null
+	for i in 1 2 3; do
+		kill -0 "-$p" 2>/dev/null || kill -0 "$p" 2>/dev/null || break
+		[ "$i" = 3 ] && exit 1
+		sleep 1
+	done
+fi
+rm -f "$d.pid"
 git -C "$wt" worktree remove --force "$d/tree" >/dev/null 2>&1
 git -C "$wt" worktree prune >/dev/null 2>&1
 rm -rf "$d"
@@ -208,11 +227,11 @@ exit 0
 // Check runs the repository's check on the prepared commit sha in the
 // environment of the task's agent, which is started first if it is stopped.
 // A check that ran and did not pass is a *CheckError; none configured is
-// ErrNoChecks. Cancelling ctx or the timeout ends the check: the exec is
-// cancelled, which the runtime's launcher turns into a signal to the check's
-// process group, and the process is looked for afterwards; one that is still
-// there stops the environment, because ending the exec client does not end the
-// guest process (spike #7, case 4).
+// ErrNoChecks. Cancelling ctx or the timeout cancels the exec, which the
+// runtime's launcher turns into a signal to the check's process group. After
+// every check, normal exit included, the group is killed and looked for; a
+// process still there stops the environment, because ending the exec client
+// does not end the guest process (spike #7, case 4).
 func (c *RepoChecker) Check(ctx context.Context, task domain.ID, sha string) error {
 	s := c.svc
 	if !commitRe.MatchString(sha) {
@@ -262,7 +281,7 @@ func (c *RepoChecker) Check(ctx context.Context, task domain.ID, sha string) err
 	if err != nil {
 		return err
 	}
-	return c.run(ctx, ws, a, sha, base, command)
+	return c.run(ctx, task, ws, a, sha, base, command)
 }
 
 // guestBase asks the guest for the commit the agent's branch left the
@@ -276,12 +295,12 @@ func (c *RepoChecker) guestBase(ctx context.Context, ws domain.Workspace, a doma
 	}
 	base := strings.TrimSpace(out)
 	if code != 0 || !commitRe.MatchString(base) {
-		return "", fmt.Errorf("the merge base of %s and %s could not be found (exit %d): %s", ws.Integration, a.Branch, code, oneLine(out))
+		return "", fmt.Errorf("the merge base of %s and %s could not be found (exit %d): %s", ws.Integration, a.Branch, code, textsafe.Escape(oneLine(out)))
 	}
 	return base, nil
 }
 
-func (c *RepoChecker) run(ctx context.Context, ws domain.Workspace, a domain.Agent, sha, base, command string) error {
+func (c *RepoChecker) run(ctx context.Context, task domain.ID, ws domain.Workspace, a domain.Agent, sha, base, command string) error {
 	s := c.svc
 	timeout := c.cfg.Timeout
 	if timeout <= 0 {
@@ -322,8 +341,9 @@ func (c *RepoChecker) run(ctx context.Context, ws domain.Workspace, a domain.Age
 	code, werr := st.Wait()
 	_ = pr.Close()
 
-	if rctx.Err() != nil { // the deadline or a cancel: the process may still run
-		c.end(ctx, env, dir, a.Worktree)
+	// Whatever the outcome, the check's process group is ended and looked for.
+	c.end(ctx, task, env, dir, a.Worktree)
+	if rctx.Err() != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -342,10 +362,13 @@ func (c *RepoChecker) run(ctx context.Context, ws domain.Workspace, a domain.Age
 	return nil
 }
 
-// end makes sure the check's process is gone after a timeout or a cancel, and
-// stops the environment if it is not (§4.1's fifth path): the leftovers of a
-// process that ended are removed from inside the guest.
-func (c *RepoChecker) end(ctx context.Context, env, dir, worktree string) {
+// end kills what the check left in its process group after every check, and
+// stops the environment if a process is still there (§4.1's fifth path, as
+// stopEnvForPause does): under freshMu, with the start mark forgotten on every
+// path, so that when the stop fails the next launch there stops and starts the
+// environment first. The leftovers of a process that ended are removed from
+// inside the guest.
+func (c *RepoChecker) end(ctx context.Context, task domain.ID, env, dir, worktree string) {
 	s := c.svc
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
@@ -355,21 +378,35 @@ func (c *RepoChecker) end(ctx context.Context, env, dir, worktree string) {
 	if err == nil && code == 0 {
 		return
 	}
-	if serr := s.rt.Stop(rctx, env); serr != nil && !errors.Is(serr, runtime.ErrNotFound) && s.cfg.OnError != nil {
-		s.cfg.OnError(fmt.Errorf("a check's process is still running in %s and the environment did not stop: %w", env, serr))
+	s.freshMu.Lock()
+	serr := s.rt.Stop(rctx, env)
+	if errors.Is(serr, runtime.ErrNotFound) {
+		serr = nil
+	}
+	s.forgetEnvStarted(domain.ID(env))
+	s.freshMu.Unlock()
+	if serr != nil {
+		if s.cfg.OnError != nil {
+			s.cfg.OnError(fmt.Errorf("a check's process is still running in %s and the environment did not stop: %w", env, serr))
+		}
+		return
+	}
+	if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(domain.ID(env), domain.EnvStopped) }); uerr != nil && s.cfg.OnError != nil {
+		s.cfg.OnError(fmt.Errorf("record the stopped environment %s: %w", env, uerr))
 	}
 }
 
 // untrusted makes output fit to store and show: secrets the supervisor knows
-// are redacted, invalid UTF-8 and every control character but a newline and a
-// tab are dropped, so nothing in it can move a terminal or pose as markup.
+// are redacted, invalid UTF-8, every control character but a newline and a
+// tab, the bidirectional controls and the line and paragraph separators (§7.1,
+// T20) are dropped, so nothing in it can move a terminal or pose as markup.
 func (c *RepoChecker) untrusted(s string) string {
 	s = string(c.svc.store.Redact([]byte(s)))
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r == '\n' || r == '\t':
 			return r
-		case r < 0x20, r == 0x7f, r >= 0x80 && r < 0xa0:
+		case textsafe.IsControl(r), textsafe.IsBidiOrSeparator(r):
 			return -1
 		}
 		return r

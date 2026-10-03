@@ -39,6 +39,15 @@ func TestOpenUsesWALAndForeignKeys(t *testing.T) {
 	}
 }
 
+// service.HoldEnvironment's guarantee that a hold and a run start never both
+// pass rests on this: a reader waits for a start's open transaction.
+func TestTheStoreKeepsOneConnection(t *testing.T) {
+	s := openTemp(t)
+	if n := s.db.Stats().MaxOpenConnections; n != 1 {
+		t.Errorf("MaxOpenConnections = %d, want 1: HoldEnvironment relies on it (check.go)", n)
+	}
+}
+
 func TestMigrationsAreAppliedOnceAndRecorded(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "workharbor.db")
 	ctx := context.Background()
