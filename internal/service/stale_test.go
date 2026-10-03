@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -448,5 +450,108 @@ func TestACancelWhoseStopFailsIsRetriedByTheReconciler(t *testing.T) {
 	must(t, func() error { _, e := r.svc.Reconcile(bg); return e }())
 	if c.stops.Load() != before+1 {
 		t.Error("a stopped environment was stopped again")
+	}
+}
+
+// failStartRuntime fails Start while fail is set.
+type failStartRuntime struct {
+	runtime.Adapter
+	fail atomic.Bool
+}
+
+func (f *failStartRuntime) Start(ctx context.Context, id string) error {
+	if f.fail.Load() {
+		return errors.New("start refused")
+	}
+	return f.Adapter.Start(ctx, id)
+}
+
+// A failed start takes the mark back only when this call set it: a mark set by
+// an earlier successful start stays, also under concurrent failing starts
+// (issue #221).
+func TestAFailedStartKeepsAMarkAnEarlierStartSet(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	f := &failStartRuntime{Adapter: r.rt.Adapter}
+	r.svc.rt = f
+
+	f.fail.Store(true)
+	if err := r.svc.startEnv(bg, string(r.env)); err == nil || r.svc.envStarted(r.env) {
+		t.Fatalf("a failed first start: err %v, marked %v; want the mark taken back", err, r.svc.envStarted(r.env))
+	}
+	f.fail.Store(false)
+	if err := r.svc.startEnv(bg, string(r.env)); err != nil {
+		t.Fatal(err)
+	}
+	f.fail.Store(true)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { _ = r.svc.startEnv(bg, string(r.env)) })
+	}
+	wg.Wait()
+	if !r.svc.envStarted(r.env) {
+		t.Error("a failed start forgot the mark an earlier start set")
+	}
+}
+
+// Two supervisors of one owner, each with its own store, share one runtime: the
+// sweep of each stops only the environments its own store records (issue #221).
+func TestTheSweepLeavesAnotherSupervisorsEnvironmentsAlone(t *testing.T) {
+	t.Parallel()
+	a := newRig(t) // service A: its store records a.env
+	stB, err := store.Open(bg, filepath.Join(t.TempDir(), "b.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stB.Close() })
+	// A second environment in A's runtime, recorded only in a second store.
+	prep, err := a.rt.Prepare(a.rt.NewSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := a.rt.Adapter.Provision(bg, prep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	must(t, a.rt.Adapter.Start(bg, other))
+	agg := domain.NewTaskAggregate(domain.Task{ID: "t9", Repo: "wstein/workharbor", Issue: "#9", State: domain.TaskRunning, CreatedAt: t0})
+	agg.AddEnvironment(domain.Environment{ID: domain.ID(other), Backend: "fake", State: domain.EnvRunning})
+	if _, err := stB.SaveTask(bg, agg); err != nil {
+		t.Fatal(err)
+	}
+	c := &countingRuntime{Adapter: a.rt.Adapter}
+	svcB := New(stB, c, a.agent, a.clock, Config{Owner: a.rt.Owner, ReadyCmd: []string{"echo", "ready"}})
+	t.Cleanup(svcB.Shutdown)
+
+	// B's sweep: a.env is not in B's store, so B must not stop it.
+	infos, err := c.List(bg, a.rt.Owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[domain.ID]runtime.Info{}
+	for _, in := range infos {
+		seen[domain.ID(in.ID)] = in
+	}
+	if errs := svcB.stopLeftoverEnvs(bg, seen); len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if c.stops.Load() != 1 {
+		t.Fatalf("B stopped %d environments, want 1 (its own)", c.stops.Load())
+	}
+	if in, err := a.rt.Adapter.Inspect(bg, string(a.env)); err != nil || in.State != domain.EnvRunning {
+		t.Errorf("A's environment: %v, %v; B must leave it running", in.State, err)
+	}
+	if in, err := a.rt.Adapter.Inspect(bg, other); err != nil || in.State != domain.EnvStopped {
+		t.Errorf("B's recorded environment: %v, %v; want stopped", in.State, err)
+	}
+	// A recorded environment this process did not start is stopped once per pass.
+	infos, _ = c.List(bg, a.rt.Owner)
+	seen = map[domain.ID]runtime.Info{}
+	for _, in := range infos {
+		seen[domain.ID(in.ID)] = in
+	}
+	svcB.stopLeftoverEnvs(bg, seen)
+	if c.stops.Load() != 1 {
+		t.Errorf("stops %d after a pass with nothing running of B's", c.stops.Load())
 	}
 }

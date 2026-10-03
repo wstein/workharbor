@@ -436,6 +436,26 @@ func (s *Store) ActiveTaskIDs(ctx context.Context) ([]domain.ID, error) {
 	return out, rows.Err()
 }
 
+// RecordedEnvironments returns the IDs of every environment any task of this
+// store records. An environment is recorded before any launch in it, so an
+// environment that is not here belongs to no run of this supervisor.
+func (s *Store) RecordedEnvironments(ctx context.Context) (map[domain.ID]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT id FROM environments`)
+	if err != nil {
+		return nil, fmt.Errorf("store: recorded environments: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[domain.ID]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("store: recorded environments: %w", err)
+		}
+		out[domain.ID(id)] = true
+	}
+	return out, rows.Err()
+}
+
 // OpenDecisions returns the open Decisions of a task, oldest first. After a
 // restart the reconciler supersedes those raised by a run (design §4.2).
 func (s *Store) OpenDecisions(ctx context.Context, task domain.ID) ([]*domain.Decision, error) {

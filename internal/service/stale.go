@@ -23,13 +23,17 @@ func (s *Service) envStarted(env domain.ID) bool {
 	return s.startedEnvs[env]
 }
 
-func (s *Service) markEnvStarted(env domain.ID) {
+// markEnvStarted marks the environment and reports whether this call set the
+// mark (it was not set before).
+func (s *Service) markEnvStarted(env domain.ID) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.startedEnvs == nil {
 		s.startedEnvs = map[domain.ID]bool{}
 	}
+	was := s.startedEnvs[env]
 	s.startedEnvs[env] = true
-	s.mu.Unlock()
+	return !was
 }
 
 func (s *Service) forgetEnvStarted(env domain.ID) {
@@ -40,11 +44,14 @@ func (s *Service) forgetEnvStarted(env domain.ID) {
 
 // startEnv starts an environment and remembers that this process did. The mark
 // is set before the start, so a reconciler pass cannot stop the environment
-// between the two; a failed start takes it back.
+// between the two; a failed start takes it back only when this call set it: a
+// mark set earlier, perhaps by a concurrent start that succeeded, stays.
 func (s *Service) startEnv(ctx context.Context, env string) error {
-	s.markEnvStarted(domain.ID(env))
+	set := s.markEnvStarted(domain.ID(env))
 	if err := s.rt.Start(ctx, env); err != nil {
-		s.forgetEnvStarted(domain.ID(env))
+		if set {
+			s.forgetEnvStarted(domain.ID(env))
+		}
 		return err
 	}
 	return nil
@@ -228,16 +235,22 @@ func (s *Service) startIfStopped(ctx context.Context, task, env domain.ID) error
 }
 
 // stopLeftoverEnvs is the first step of every reconciler pass (design 4.1, 5.3,
-// issue #221): it stops each running environment of the owner that this process
-// did not start, whatever runs it holds, the console's excepted: an agent an
+// issue #221): it stops each running environment of the owner that this
+// supervisor's store records and this process did not start (the owner label is
+// shared by every supervisor of the host, so an environment the store does not
+// record may be another supervisor's live one and is left alone), whatever runs it holds, the console's excepted: an agent an
 // earlier process left behind (a pause saved before a crash, a cancel whose stop
 // failed) ends with it. A paused run in it stays paused. The stopped
 // environments are recorded stopped in seen, so the pass observes them; one whose
 // stop failed stays running there and is tried again on the next pass.
 func (s *Service) stopLeftoverEnvs(ctx context.Context, seen map[domain.ID]runtime.Info) []error {
 	var errs []error
+	recorded, err := s.store.RecordedEnvironments(ctx)
+	if err != nil {
+		return []error{err}
+	}
 	for id, in := range seen {
-		if in.State != domain.EnvRunning || in.Labels[ConsoleLabel] == "1" || s.envStarted(id) {
+		if in.State != domain.EnvRunning || in.Labels[ConsoleLabel] == "1" || !recorded[id] || s.envStarted(id) {
 			continue
 		}
 		s.freshMu.Lock()
