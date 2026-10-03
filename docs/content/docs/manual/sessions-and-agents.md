@@ -5,7 +5,7 @@ weight: 4
 toc: true
 ---
 
-How to set up the sessions and subagents that build workharbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
+How to set up the sessions and subagents that build workharbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them, except the procedure detail that left `AGENTS.md` to keep it under the 24,000-byte cap of Antigravity's always-on rules (the last section; #233). A rule or prohibition always stays stated in `AGENTS.md` itself. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
 
 ## Sessions to keep open
 
@@ -66,3 +66,76 @@ Every write (`move`, `session`, `priority`, `add`, `ready`) asks for permission 
 ## Why
 
 A long session pays for its whole history on every turn. Measured on 3 October 2026 (Werner's usage report, recorded in [#167](https://github.com/wstein/workharbor/issues/167)): Opus cost $25.38 of $35.69, and about 80 % of its tokens were the `wh/design` session re-reading its own history (54M of 67.4M cache reads over 209 requests) {{< status verified >}}. So the long-lived sessions run on Sonnet, Opus is used where it pays (decisions and reviews) and ends quickly, and each issue runs in a fresh subagent whose context is discarded when it returns. The cap of 2 code workers also spares the one GitHub token every session shares ([rate limit](https://github.com/wstein/workharbor/blob/main/AGENTS.md)).
+
+## Procedure detail moved out of AGENTS.md
+
+`AGENTS.md` stays below 20,000 bytes (a test in `internal/docscheck` fails above 24,000: #233). What follows is procedure and reference that a session needs only when it does the step; every rule and prohibition is still stated in `AGENTS.md`.
+
+### Make targets
+
+```bash
+make build         # go build -o bin/whr ./cmd/whr
+make test          # go test ./...  (make test-short skips the slowest, for the inner loop)
+make race          # go test -race on the packages with goroutines of their own
+make fmt           # gofumpt + goimports (make fmt-check fails on unformatted sources)
+make lint          # golangci-lint (pinned; runs via go run)
+make check         # fmt-check, vet, lint, editorconfig, test, race: run before every commit
+make check-ci      # what CI runs beyond make check: docs build, typos, lychee, gitleaks, actionlint
+make commitlint    # check this branch's commits against the commit rules
+make land          # from your worktree: check, then fast-forward main
+make hooks         # enable hooks and the commit template (once per clone and worktree)
+make generate      # compile the web UI's templ templates (the generated files are committed)
+make docs          # build the Hugo site into _site (make docs-serve for live reload)
+make temp-ls       # list temporary containers, volumes, networks and images (LANE=<lane> to narrow)
+make temp-clean    # remove one lane's: LANE=<lane> is required
+```
+
+The `Makefile` also has `install`, `install-release`, `changelog` and `editorconfig`. `make check-ci` needs `typos` and `lychee` (`brew install typos-cli lychee`).
+
+### Lanes
+
+| Lane | Model | Does |
+| --- | --- | --- |
+| `wh/design` | Opus | decisions, the rule sections, ranking (`Priority`, `Session`) |
+| `wh/review` | Opus | independent review before every push; at least as strong as the author |
+| `wh/dispatch` | Sonnet | pulls cards, starts lane agents and reviews, lands, moves cards; answers no rule question |
+| `wh/platform` | Sonnet | service, API, CLI, web, forge, setup |
+| `wh/runtime` | Sonnet | runtime, environments, console, egress, tool store |
+| `wh/docs` | Sonnet | the manual and user-facing docs |
+| `wh/verify` | Sonnet | measurements on the real setup |
+| `wh/desk` | Sonnet | Werner's point of contact: status, discussion, filing and routing |
+| `wh/spikes` | Antigravity (Gemini) | spikes on new tools; results reviewed by `wh/review` |
+| helpers | Haiku | subagents, not lanes; never touch a security-relevant path |
+
+A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research, board hygiene, mechanical edits, small tests, checks. `wh-docs-reviewer` runs on Sonnet.
+
+### Commits
+
+```text
+feat(domain): add run interrupted state
+
+Why the change was made.
+
+Refs: #12
+Assisted-by: Claude Code:claude-sonnet-5-5
+```
+
+`Refs` and `Closes` also accept `owner/repo#12` and comma lists. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
+
+### Spike pages
+
+A spike page under `docs/content/docs/spikes/` links the spike branch once it is pushed and says "a local branch until it is pushed" before that. Spike files that reached `main` anyway are removed from its tree, and the page links them at the commit that added them, which stays in `main`'s history (#194).
+
+### Layout
+
+The design is in `docs/content/docs/design/` (start at `_index.md`; §3 `decisions.md`, §4 `domain.md`, §5 and §8 `architecture.md`, §6 and §7 `security.md`, §9 and §10 `interfaces.md`, §11 to §13 `roadmap.md`), the threat model in `threat-model.md`; also `glossary.md`, `spikes/` and `manual/`. `cmd/` holds `whr` (the single binary), `whr-proxy` (the egress proxy in the sidecar), `whr-shim` (the in-guest launcher, D25) and `commitlint`. Among the packages of `internal/`: `domain`, `policy`, `store`, `hostgit`, `service`, `api`, `cli`, `serve`, `web`, `config`, `toolstore`, `egress`, `devcontainer`; the adapter contracts in `runtime/`, `agent/`, `forge/` and `ci/` have fakes and conformance suites in `runtimetest/` and `agenttest/`.
+
+### Issues through REST
+
+`gh api repos/wstein/workharbor/issues/<n>` reads an issue, `.../issues/<n>/comments -f body=...` comments, `-X PATCH .../issues/<n> -f body=...` ticks criteria, and `-X POST .../issues` opens one, then `scripts/board-snapshot.sh add` puts it on the board. REST does not prompt for labels, so a new issue carries one type label (`bug`, `enhancement`, `documentation`, `ops`, `decision`, `spike`, `security`, ...) and an `area:` label where one fits, set on the create with `-f "labels[]=<name>"` once per label. Before stopping for a rate limit, `gh api rate_limit` costs no points; a secondary limit with points left is waited out once for a minute and retried once (#214). `--url` on a project command trips a secondary limit even with points left, which is why the board goes through the script.
+
+### Landing and worktrees
+
+`make land` refuses unless the shared checkout is on `main` and the branch is on top of `main`, runs `make check`, `make check-ci` and `make commitlint`, and fast-forwards `main` only if `main` did not move during the checks. It stops with a one-line repair when it finds a stale index in the shared checkout (#166). A 503 from github.com in the link check is not your content: wait and retry. Of two landers (the two worktrees of a lane), the one whose checks end second finds `main` moved and rebases and runs it again. `/wh-land` has the retries.
+
+Each lane's worktree is created once with `git worktree add <worktree> --detach main` and `make hooks` (the Setup steps above). After landing, switch the worktree to the next branch or `git switch --detach main` and delete the merged branch; if `git branch -d` refuses because `main` is ahead of `origin/main`, check `git merge-base --is-ancestor <branch> main` and use `-D`. In `wh/platform`'s second worktree, `workharbor.lane=wh/platform-2` keeps its temporary resources out of `make temp-clean LANE=wh/platform`.
