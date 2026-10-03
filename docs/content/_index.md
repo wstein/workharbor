@@ -40,7 +40,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Isolated by default"
-    subtitle="Apple Container on an Apple-silicon Mac mini comes first: each agent in its own lightweight VM, out to the internet only through an allowlist proxy, with short-lived, per-run forge credentials."
+    subtitle="Apple Container on an Apple-silicon Mac mini comes first: each workspace in its own lightweight VM (its agents share it), out to the internet only through an allowlist proxy, with short-lived, per-run forge credentials."
     icon="shield-check"
   >}}
   {{< hextra/feature-card
@@ -65,7 +65,7 @@ layout: hextra-home
 Each failure has an answer in the design. Release 1 is still being built: these are the intended behaviour, not a track record.
 
 - **Nothing stops a push.** Here an agent's commits go to the forge only after you approve the exact commit; merge, tag, release and deploy stay with you. See [security](docs/manual/security.md).
-- **No isolation.** Here each agent works in its own environment and reaches the internet only through an allowlist proxy. See [the design](docs/design/).
+- **No isolation.** Here each workspace has its own environment, and its agents reach the internet only through an allowlist proxy. See [the design](docs/design/).
 - **Secrets are within reach.** Here forge credentials are short-lived and per run, and `whr` never handles a subscription login. See [vendor terms](docs/manual/vendor-terms.md).
 - **No way to follow or stop a run.** Here runs and decisions show in the dashboard and the CLI, where you can steer or stop them. See [daily use](docs/manual/daily-use.md).
 - **One login shared by many agents.** Here each environment has its own sign-in, and only you start runs. See [vendor terms](docs/manual/vendor-terms.md).
