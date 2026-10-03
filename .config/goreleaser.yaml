@@ -80,9 +80,10 @@ sboms:
       - "whr_{{ .Version }}_sbom.cdx.json"
 
 # Release notes come from git-cliff (the workflow passes --release-notes), not
-# from GoReleaser's own changelog. The release is a draft: a human publishes it.
-changelog:
-  disable: true
+# from GoReleaser's own changelog. Do not set changelog.disable: it skips the
+# step that loads that file, and the release body ends up empty (#163). With
+# --release-notes set, GoReleaser generates no changelog of its own.
+# The release is a draft: a human publishes it.
 release:
   draft: true
   prerelease: auto
