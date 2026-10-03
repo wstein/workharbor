@@ -71,7 +71,7 @@ var errNotHere = errors.New("this runs only on a Mac")
 
 // desktopOnly is what a check that needs Apple Container says outside whr's
 // desktop session, where the container services do not answer (#156).
-const desktopOnly = "Apple Container answers only in whr's desktop session; run this check there (Screen Sharing), or use `whr status` over SSH"
+const desktopOnly = "Apple Container answers only in whr's desktop session; run this check there (Screen Sharing), or use `whr service status` or `whr ls` over SSH"
 
 // inDesktop asks launchd.CheckSession whether this is the Aqua session, before a
 // check runs any `container` command. When it is not, the check reports
