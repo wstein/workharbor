@@ -131,7 +131,8 @@ fmt:
 
 # Fail if any source is not formatted.
 fmt-check:
-	@diff="$$(go run $(GOLANGCI_LINT) fmt --diff)"; \
+	@diff="$$(go run $(GOLANGCI_LINT) fmt --diff 2>&1)"; rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "$$diff" >&2; echo "the formatter failed (exit $$rc), so nothing was checked" >&2; exit 1; fi; \
 	if [ -n "$$diff" ]; then echo "$$diff"; echo "run 'make fmt'"; exit 1; fi
 
 lint:
