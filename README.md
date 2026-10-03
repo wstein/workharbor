@@ -80,7 +80,7 @@ Go, a single static binary, SQLite, and a server-rendered web UI (`templ`, htmx,
 Building release 1, dogfood first: workharbor develops workharbor as soon as it can run one issue end to end (D34). The plan is tracked in GitHub milestones:
 
 1. [Dogfood](https://github.com/wstein/workharbor/milestone/5): the smallest set that runs a real workharbor issue through `whr`
-2. [M0 Decisions](https://github.com/wstein/workharbor/milestone/1): open design decisions and spike follow-ups
+2. [M0 Decisions](https://github.com/wstein/workharbor/milestone/1) (closed): the design decisions and spike follow-ups that came before release 1; new decisions are tracked in the issue that needs them
 3. [R1 Slice](https://github.com/wstein/workharbor/milestone/2): a CLI-only vertical slice, `whr run <issue-url>` to an opened pull request
 4. [R1 Complete](https://github.com/wstein/workharbor/milestone/3): the rest of release 1, including the web app for phone and tablet
 5. [Later](https://github.com/wstein/workharbor/milestone/4): medium and long term, such as API-key mode as a full peer (D41)
