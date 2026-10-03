@@ -69,6 +69,24 @@ func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
 
 var errNotHere = errors.New("this runs only on a Mac")
 
+// desktopOnly is what a check that needs Apple Container says outside whr's
+// desktop session, where the container services do not answer (#156).
+const desktopOnly = "Apple Container answers only in whr's desktop session; run this check there (Screen Sharing), or use `whr status` over SSH"
+
+// inDesktop asks launchd.CheckSession whether this is the Aqua session, before a
+// check runs any `container` command. When it is not, the check reports
+// not_verified and runs nothing.
+func (d Deps) inDesktop(ctx context.Context) (Status, string, bool) {
+	if d.Runner == nil || d.GOOS != "darwin" {
+		return NotVerified, "not checked: " + errNotHere.Error(), false
+	}
+	m := launchd.Manager{R: runnerAdapter{d.Runner}, UID: d.UID, GOOS: d.GOOS}
+	if err := m.CheckSession(ctx); err != nil {
+		return NotVerified, desktopOnly, false
+	}
+	return "", "", true
+}
+
 func notHere(err error) (Status, string, bool) {
 	if errors.Is(err, errNotHere) {
 		return NotVerified, "not checked: " + err.Error(), true
@@ -656,6 +674,9 @@ func userSteps(d Deps) []Check {
 		{
 			Name: "container-kernel", Phase: PhaseUser, Step: 4, Title: "the Linux kernel containers boot (manual step 6)",
 			Run: func(ctx context.Context) (Status, string) {
+				if st, msg, ok := d.inDesktop(ctx); !ok {
+					return st, msg
+				}
 				out, err := d.output(ctx, "container", "system", "status")
 				if err != nil {
 					if st, msg, ok := notHere(err); ok {
@@ -676,6 +697,9 @@ func userSteps(d Deps) []Check {
 		{
 			Name: "container-start", Phase: PhaseUser, Step: 4, Title: "the container system running (manual step 6)",
 			Run: func(ctx context.Context) (Status, string) {
+				if st, msg, ok := d.inDesktop(ctx); !ok {
+					return st, msg
+				}
 				out, err := d.output(ctx, "container", "system", "status")
 				if err != nil {
 					if st, msg, ok := notHere(err); ok {
@@ -688,11 +712,17 @@ func userSteps(d Deps) []Check {
 				}
 				return Fail, "the container system is not running"
 			},
-			Fix: &Fix{Cmds: []Cmd{{Argv: []string{"container", "system", "start", "--disable-kernel-install"}}}},
+			Fix: &Fix{
+				Cmds:  []Cmd{{Argv: []string{"container", "system", "start", "--disable-kernel-install"}}},
+				Guide: "Run this in whr's desktop session (Screen Sharing), not over SSH.",
+			},
 		},
 		{
 			Name: "standard-user-check", Phase: PhaseUser, Step: 4, Title: "containers answer for this standard user (manual steps 2 and 6)",
 			Run: func(ctx context.Context) (Status, string) {
+				if st, msg, ok := d.inDesktop(ctx); !ok {
+					return st, msg
+				}
 				if _, err := d.output(ctx, "container", "list", "--all"); err != nil {
 					if st, msg, ok := notHere(err); ok {
 						return st, msg

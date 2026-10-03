@@ -630,3 +630,47 @@ func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {
 		t.Errorf("the guide does not leave encryption to the human: %q", fix.Guide)
 	}
 }
+
+// recording is a scripted runner that remembers every command it was asked.
+type recording struct {
+	scripted
+	calls []string
+}
+
+func (r *recording) Output(ctx context.Context, argv ...string) ([]byte, error) {
+	r.calls = append(r.calls, strings.Join(argv, " "))
+	return r.scripted.Output(ctx, argv...)
+}
+
+// Outside the Aqua session (SSH) the container checks are not_verified and run
+// no container command; in Aqua they behave as before (#156).
+func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
+	names := []string{"container-kernel", "container-start", "standard-user-check"}
+	for _, session := range []string{"Background", "System"} {
+		r := &recording{scripted: scripted{"launchctl managername": session}}
+		st := steps(t, hostDeps(r))
+		for _, name := range names {
+			got, detail := status(st[name])
+			if got != NotVerified || !strings.Contains(detail, "whr's desktop session") || !strings.Contains(detail, "whr status") {
+				t.Errorf("%s over %s = %s %q", name, session, got, detail)
+			}
+		}
+		for _, c := range r.calls {
+			if strings.HasPrefix(c, "container") {
+				t.Errorf("ran %q outside Aqua", c)
+			}
+		}
+	}
+	r := &recording{scripted: scripted{
+		"launchctl managername":   "Aqua",
+		"container system status": "apiserver is running",
+		"container list --all":    "",
+		"launchctl print gui/501": "com.apple.container.apiserver",
+	}}
+	st := steps(t, hostDeps(r))
+	for _, name := range names {
+		if got, detail := status(st[name]); got != OK {
+			t.Errorf("%s in Aqua = %s %q", name, got, detail)
+		}
+	}
+}
