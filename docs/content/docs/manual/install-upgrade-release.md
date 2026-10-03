@@ -30,17 +30,24 @@ You need `gh` (`brew install gh`), signed in as a writer of the repository: a dr
 
 ### Verify a download yourself
 
-The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl`. Pin the workflow, not just the repository:
+The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
 
 ```bash
+tag=v0.1.0-alpha.1
+commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha)
 gh attestation verify <file> --repo wstein/workharbor \
-  --signer-workflow wstein/workharbor/.github/workflows/release.yml
+  --signer-workflow wstein/workharbor/.github/workflows/release.yml \
+  --source-ref refs/tags/$tag --source-digest "$commit" \
+  --deny-self-hosted-runners
 # offline, with the attached bundle:
-gh attestation verify <file> --repo wstein/workharbor --bundle whr_<tag>.intoto.jsonl \
-  --signer-workflow wstein/workharbor/.github/workflows/release.yml
+gh attestation verify <file> --repo wstein/workharbor --bundle whr_$tag.intoto.jsonl \
+  --signer-workflow wstein/workharbor/.github/workflows/release.yml \
+  --source-ref refs/tags/$tag --source-digest "$commit" \
+  --deny-self-hosted-runners
 ```
 
-Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-release` does both. The exact `gh` flags, the offline check with `--bundle` and whether OpenSSF Scorecard counts the attached bundle as a signature are {{< status unverified >}} until a real draft release has been checked (#180).
+
+Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-release` does both. The exact `gh` flags (`--source-ref`, `--source-digest`, `--deny-self-hosted-runners` included), the offline check with `--bundle` and whether OpenSSF Scorecard counts the attached bundle as a signature are {{< status unverified >}} until a real draft release has been checked (#180).
 
 Then, as `whr`, build the tool store with the guest launcher (the script prints the exact command):
 
