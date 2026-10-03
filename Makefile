@@ -224,7 +224,11 @@ land:
 	$(MAKE) -s check check-ci commitlint || exit 1; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then echo "land: the shared checkout left main during the checks: stop and tell the human" >&2; exit 1; fi; \
-	git -C "$$shared" merge -q --ff-only "$$branch" && echo "land: main is now $$(git rev-parse --short main)"
+	if [ -n "$$(git -C "$$shared" status --porcelain --untracked-files=no)" ] && git -C "$$shared" diff HEAD --quiet; then \
+		echo "land: the shared checkout's index is stale (the tree equals HEAD): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared status --short>" >&2; exit 1; fi; \
+	git -C "$$shared" merge -q --ff-only "$$branch" || exit 1; \
+	echo "land: main is now $$(git rev-parse --short main)"; \
+	git -C "$$shared" diff --cached --quiet HEAD || { echo "land: the shared checkout's index differs from HEAD after the merge: git -C $$shared reset -q -- <files>" >&2; exit 1; }
 
 # Scan the commits of a git log range for secrets: the pre-push hook runs it
 # with the range about to be pushed.
