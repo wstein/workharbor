@@ -123,6 +123,11 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		st, detail := s.Run(ctx)
 		fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
 		out := Outcome{Step: s.Name, Status: st, Detail: detail}
+		if st == doctor.Warn && !s.FixOnWarn || st == doctor.Skipped {
+			fmt.Fprintf(o.Err, "%s: %s\n", s.Name, oneLine(detail))
+			outs = append(outs, out)
+			continue
+		}
 		if st == doctor.OK {
 			fmt.Fprintf(o.Err, "%s: already done: %s\n", s.Name, oneLine(detail))
 			outs = append(outs, out)
@@ -264,14 +269,16 @@ var (
 	ErrNotInstalled = errors.New("whr is not an installed binary in an admin-owned prefix")
 )
 
-// GuardHost refuses `whr setup host` as root and as the whr user: the
-// administrator's part is not for the supervisor's account (D46).
-func GuardHost(user string, uid int, whrUser string) error {
+// GuardHost refuses `whr setup host` as root and as a standard whr user: the
+// administrator's part is not for a standard account, which cannot sudo anyway.
+// An administrator account that is the whr account may run it (D49, D46);
+// admin says whether the account running this is one.
+func GuardHost(user string, uid int, whrUser string, admin bool) error {
 	if uid == 0 {
 		return ErrRoot
 	}
-	if user == whrUser {
-		return fmt.Errorf("%w: %s is workharbor's own account, which must not change the host; run `whr setup host` as your administrator", ErrWrongUser, user)
+	if user == whrUser && !admin {
+		return fmt.Errorf("%w: %s is workharbor's own standard account, which must not change the host; run `whr setup host` as your administrator", ErrWrongUser, user)
 	}
 	return nil
 }

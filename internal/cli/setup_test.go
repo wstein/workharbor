@@ -127,11 +127,16 @@ func TestTheHostPartRefusesRootAndTheWhrUser(t *testing.T) {
 		t.Errorf("root: exit %d, stderr %q", code, errOut)
 	}
 	r.env.User, r.env.UID = "whr", 502
-	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "workharbor's own account") {
+	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "workharbor's own standard account") {
 		t.Errorf("the whr user: exit %d, stderr %q", code, errOut)
 	}
 	if len(r.host.ran) != 0 {
 		t.Errorf("a refused run ran %v", r.host.ran)
+	}
+	// an administrator whr account may run the host part (D49)
+	r.host.outputs["dseditgroup -o checkmember -m whr admin"] = "yes whr is a member of admin"
+	if code, _, errOut := r.run("setup", "host", "--dry-run"); code == exitcode.Usage && strings.Contains(errOut, "own standard account") {
+		t.Errorf("an administrator whr was refused: %q", errOut)
 	}
 }
 
@@ -295,5 +300,25 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	r.env.User, r.env.UID = "whr", 502
 	if _, out, _ := r.run("doctor"); strings.Contains(out, "this check describes the account") {
 		t.Errorf("as whr nothing is deferred: %q", out)
+	}
+}
+
+func TestSetupAsksOnceMoreWhenAnAdministratorIsReachableFromAfar(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(cfg, []byte(`{"public_url":"https://whr.example.ts.net"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := newSetupRig(t)
+	r.env.User, r.env.UID = "whr", 502
+	r.host.outputs["dseditgroup -o checkmember -m whr admin"] = "yes whr is a member of admin"
+	var out, errOut bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return "" }, Setup: r.env}
+	code := Execute(context.Background(), env, []string{"setup", "--config", cfg, "--prefix", filepath.Dir(filepath.Dir(r.exe))})
+	// the fake host answers no, so setup stops before any step
+	if code != exitcode.Usage || !strings.Contains(errOut.String(), "other devices") || !strings.Contains(errOut.String(), "stopped") {
+		t.Errorf("exit %d, stderr %q", code, errOut.String())
+	}
+	if len(r.host.ran) != 0 {
+		t.Errorf("a declined confirmation ran %v", r.host.ran)
 	}
 }

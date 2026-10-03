@@ -98,7 +98,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	}
 	st = steps(t, hostDeps(bad))
 	want := map[string]string{
-		"whr-user": "administrator", "power": "sleep is 10, want 0", "firewall": "stealth mode is off",
+		"power": "sleep is 10, want 0", "firewall": "stealth mode is off",
 		"filevault": "off", "brew-packages": "not installed: container, git, gh", "brew-pin": "not pinned",
 	}
 	for name, sub := range want {
@@ -106,6 +106,10 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 		if got != Fail || !strings.Contains(detail, sub) {
 			t.Errorf("%s = %s %q, want a failure that says %q", name, got, detail, sub)
 		}
+	}
+	// an administrator whr is a warning, not a failure (D49)
+	if got, detail := status(st["whr-user"]); got != Warn || !strings.Contains(detail, "administrator") {
+		t.Errorf("an administrator whr = %s %q", got, detail)
 	}
 	if got, detail := status(steps(t, hostDeps(scripted{}))["whr-user"]); got != Fail || !strings.Contains(detail, "no user") {
 		t.Errorf("a missing user = %s %q", got, detail)
@@ -296,13 +300,13 @@ func TestTheConfigurationIsWrittenInTwoStepsWithoutADropOfAnythingUnknown(t *tes
 	if got, _ := status(st["config-base"]); got != Fail {
 		t.Fatal("no config file yet")
 	}
-	if err := st["config-base"].Fix.Do(ctx, &answers{lines: []string{"not a repo", ""}}); err == nil {
+	if err := st["config-base"].Fix.Do(ctx, &answers{lines: []string{"not a repo", "", ""}}); err == nil {
 		t.Error("a bad repository name was written")
 	}
 	if _, err := os.Stat(d.ConfigPath); err == nil {
 		t.Fatal("a refused answer left a file")
 	}
-	must(st["config-base"].Fix.Do(ctx, &answers{lines: []string{"wstein/workharbor", ""}}))
+	must(st["config-base"].Fix.Do(ctx, &answers{lines: []string{"wstein/workharbor", "", ""}}))
 	fi, _ := os.Stat(d.ConfigPath)
 	if fi.Mode().Perm() != 0o600 {
 		t.Errorf("config mode %v", fi.Mode().Perm())
@@ -313,7 +317,7 @@ func TestTheConfigurationIsWrittenInTwoStepsWithoutADropOfAnythingUnknown(t *tes
 	if got, _ := status(steps(t, d)["config-github"]); got != Fail {
 		t.Error("the base file is not a whole configuration: config-github must still fail")
 	}
-	if err := st["config-base"].Fix.Do(ctx, &answers{lines: []string{"a/b", ""}}); err == nil {
+	if err := st["config-base"].Fix.Do(ctx, &answers{lines: []string{"a/b", "", ""}}); err == nil {
 		t.Error("an existing configuration was overwritten")
 	}
 
@@ -377,7 +381,7 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	for _, c := range Steps(all, PhaseUser) {
 		user = append(user, c.Name)
 	}
-	want := "config-dir api-token agent-key ssh-ca container-kernel container-start standard-user-check config-base github-app config-github tool-store service-install"
+	want := "config-dir api-token agent-key ssh-ca container-kernel container-start standard-user-check config-base github-app config-github tool-store service-install drop-admin"
 	if strings.Join(user, " ") != want {
 		t.Errorf("user steps %v\nwant %s", user, want)
 	}

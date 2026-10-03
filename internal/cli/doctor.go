@@ -16,7 +16,7 @@ import (
 
 // newDoctor is `whr doctor` (design §9.5, step 4 and the checks of the others).
 // It runs every check read-only (the shared ones, then the host and user steps
-// of `whr setup`), reports each as ok, fail, not verified or skipped, and names
+// of `whr setup`), reports each as ok, warn, fail, not verified or skipped, and names
 // the setup command that fixes a failing or not verified one; only fail is a
 // non-zero exit. It never fixes anything.
 func newDoctor(st *state) *cobra.Command {
@@ -45,7 +45,7 @@ func newDoctor(st *state) *cobra.Command {
 				FS:         runtime.OSFS{},
 				LookPath:   doctor.DefaultLookPath,
 				// Output only: the checks read the machine and nothing writes.
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, UID: env.UID, Whr: exe, Prefix: prefix,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
 				Probe: func(ctx context.Context) error {
 					c, err := st.api()
 					if err != nil {
@@ -94,17 +94,20 @@ func newDoctor(st *state) *cobra.Command {
 					fmt.Fprintf(st.env.Stderr, "%s: %s\n  → %s\n", r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
 				}
 			}
-			unknown := 0
+			unknown, warned := 0, 0
 			for _, r := range rs {
-				if r.Status == doctor.NotVerified {
+				switch r.Status {
+				case doctor.NotVerified:
 					unknown++
+				case doctor.Warn:
+					warned++
 				}
 			}
 			if doctor.Failed(rs) {
 				fmt.Fprintln(st.env.Stderr, "whr: some checks failed; fix them and run `whr doctor` again")
 				return quietError{}
 			}
-			fmt.Fprintf(st.env.Stderr, "ready, with %d checks not verified; first command: whr run <issue-url>\n", unknown)
+			fmt.Fprintf(st.env.Stderr, "ready, with %d checks not verified and %d warnings; first command: whr run <issue-url>\n", unknown, warned)
 			return nil
 		},
 	}

@@ -407,3 +407,13 @@ func TestPreviewPorts(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountIsDedicatedOrShared(t *testing.T) {
+	for acct, ok := range map[string]bool{"": true, "dedicated": true, "shared": true, "own": false, "Shared": false} {
+		r := newRig(t)
+		r.cfg.Account = acct
+		if _, err := r.parse(t); ok != (err == nil) {
+			t.Errorf("account %q: accepted=%v, want %v (%s)", acct, err == nil, ok, problems(err))
+		}
+	}
+}

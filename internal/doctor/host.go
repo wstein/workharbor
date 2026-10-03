@@ -124,17 +124,16 @@ func hostSteps(d Deps) []Check {
 		{
 			Name: "whr-user", Phase: PhaseHost, Step: 2, Title: "the standard user whr (manual step 2)",
 			Run: func(ctx context.Context) (Status, string) {
-				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+WhrUser, "UniqueID"); err != nil {
+				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
 					if st, msg, ok := notHere(err); ok {
 						return st, msg
 					}
-					return Fail, "there is no user " + WhrUser
+					return Fail, "there is no user " + d.account()
 				}
-				out, err := d.output(ctx, "dseditgroup", "-o", "checkmember", "-m", WhrUser, "admin")
-				if err == nil && strings.HasPrefix(strings.TrimSpace(out), "yes") {
-					return Fail, WhrUser + " is an administrator: workharbor's account must be a standard user"
+				if admin, _ := d.isAdmin(ctx); admin {
+					return Warn, d.account() + " is an administrator: allowed, but a dedicated standard user is the recommended account (D49; see the account check and the drop-admin step)"
 				}
-				return OK, WhrUser + " exists and is a standard user"
+				return OK, d.account() + " exists and is a standard user"
 			},
 			Fix: &Fix{
 				Cmds:  []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", WhrUser, "-fullName", "workharbor", "-password", "-"}}},
@@ -508,7 +507,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "prefix", Phase: PhaseHost, Step: 13, Title: "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)",
-			Run: func(context.Context) (Status, string) {
+			Run: func(ctx context.Context) (Status, string) {
 				fi, err := os.Stat(d.prefix())
 				if err != nil {
 					return Fail, d.prefix() + " does not exist"
@@ -521,7 +520,9 @@ func hostSteps(d Deps) []Check {
 					if err != nil {
 						continue // not installed yet
 					}
-					if own {
+					// an administrator account owns the prefix by D24's own words:
+					// the prefix is admin-owned (D49)
+					if admin, _ := d.isAdmin(ctx); own && !admin {
 						return Fail, p + " belongs to " + WhrUser + ", who could then replace the supervisor: it must belong to the administrator"
 					}
 					if fi, err := os.Lstat(p); err == nil && fi.Mode().Perm()&0o022 != 0 {
@@ -965,6 +966,7 @@ func userSteps(d Deps) []Check {
 			},
 			Fix: &Fix{Cmds: []Cmd{{Argv: []string{d.Whr, "service", "install", "--config", d.ConfigPath}}}},
 		},
+		dropAdmin(d),
 	}, userOrder)
 }
 
@@ -973,7 +975,7 @@ func userSteps(d Deps) []Check {
 // configuration that names it).
 var userOrder = []string{
 	"config-dir", "api-token", "agent-key", "ssh-ca", "container-kernel", "container-start", "standard-user-check",
-	"config-base", "github-app", "config-github", "tool-store", "service-install",
+	"config-base", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
 }
 
 // ordered returns the checks in the given order. A name with no check is a bug
@@ -1028,7 +1030,19 @@ func writeConfigBase(d Deps, p Prompter, tokenPath, envPath string) error {
 		ws = filepath.Join(d.Home, "workspaces")
 	}
 	store := filepath.Join(d.Home, "tools")
+	acct, err := p.Line("Is " + d.account() + " dedicated to workharbor, or your own account that you also work in (D49)? [dedicated/shared, default dedicated]")
+	if err != nil {
+		return err
+	}
+	acct = strings.ToLower(strings.TrimSpace(acct))
+	if acct == "" {
+		acct = config.AccountDedicated
+	}
+	if acct != config.AccountDedicated && acct != config.AccountShared {
+		return errors.New("that is not dedicated or shared; nothing was written")
+	}
 	m := map[string]any{
+		"account":             acct,
 		"listen":              "127.0.0.1:8787",
 		"repositories":        []map[string]any{{"name": strings.TrimSpace(repo)}},
 		"roots":               map[string]any{"workspaces": []string{strings.TrimSpace(ws)}, "tool_store": store},

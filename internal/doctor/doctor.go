@@ -22,7 +22,10 @@ const (
 	OK          Status = "ok"           // measured and fine
 	Fail        Status = "fail"         // measured and wrong
 	NotVerified Status = "not_verified" // no measurement exists, or it needs a live run
-	Skipped     Status = "skipped"      // the human left it out (--skip)
+	Skipped     Status = "skipped"      // the human left it out (--skip), or the step is not offered
+	// Warn is measured, working and weaker than recommended (D49). It is not a
+	// failure: the exit code ignores it.
+	Warn Status = "warn"
 )
 
 // Result is one line of the report.
@@ -48,6 +51,9 @@ type Check struct {
 	Step  int
 	Run   func(ctx context.Context) (Status, string)
 	Phase Phase
+	// FixOnWarn offers the fix on a warn too (drop-admin): for any other step a
+	// warn is accepted as it is.
+	FixOnWarn bool
 	// Optional steps are left alone by `whr setup` unless it is told to run them.
 	Optional bool
 	// Title says in a few words what the step is for.
@@ -86,6 +92,7 @@ type Deps struct {
 	Runner  Runner
 	GOOS    string
 	User    string // the account running this
+	Account string // the account workharbor runs as (--user); empty means WhrUser
 	UID     int
 	Whr     string // the running whr binary
 	Prefix  string // the admin-owned prefix whr is installed under, "/opt/whr" by default
@@ -130,6 +137,7 @@ func Checks(d Deps) []Check {
 			}
 			return OK, fmt.Sprintf("%s: %d repositories, listening on %s", d.ConfigPath, len(c.Repositories), c.Listen)
 		}},
+		{"account", 2, d.accountCheck()},
 		{"server", 1, func(ctx context.Context) (Status, string) {
 			if d.Probe == nil {
 				return NotVerified, "no client"
@@ -325,7 +333,7 @@ func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
 		}
 		st, detail := c.Run(ctx)
 		r := Result{Check: c.Name, Step: c.Step, Status: st, Detail: detail, Phase: c.Phase}
-		if st == Fail || st == NotVerified {
+		if st == Fail || st == NotVerified || (st == Warn && c.FixOnWarn) {
 			r.Fix = c.FixCommand(detail)
 		}
 		out = append(out, r)

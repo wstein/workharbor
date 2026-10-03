@@ -249,13 +249,19 @@ func TestSelectingStepsByOnlyFromAndOptional(t *testing.T) {
 }
 
 func TestTheGuards(t *testing.T) {
-	if err := GuardHost("root", 0, "whr"); !errors.Is(err, ErrRoot) {
+	if err := GuardHost("root", 0, "whr", true); !errors.Is(err, ErrRoot) {
 		t.Errorf("root = %v", err)
 	}
-	if err := GuardHost("whr", 502, "whr"); !errors.Is(err, ErrWrongUser) {
-		t.Errorf("the whr user on the host part = %v", err)
+	if err := GuardHost("whr", 502, "whr", false); !errors.Is(err, ErrWrongUser) {
+		t.Errorf("a standard whr user on the host part = %v", err)
 	}
-	if err := GuardHost("werner", 501, "whr"); err != nil {
+	if err := GuardHost("whr", 502, "whr", true); err != nil {
+		t.Errorf("an administrator whr user on the host part = %v", err)
+	}
+	if err := GuardHost("root", 0, "root", true); !errors.Is(err, ErrRoot) {
+		t.Errorf("root as the whr user = %v", err)
+	}
+	if err := GuardHost("werner", 501, "whr", true); err != nil {
 		t.Errorf("the administrator = %v", err)
 	}
 

@@ -117,6 +117,12 @@ type GitHub struct {
 	APIURL string `json:"api_url,omitempty"`
 }
 
+// The values of Config.Account (D49).
+const (
+	AccountDedicated = "dedicated"
+	AccountShared    = "shared"
+)
+
 // PublicOrigin returns whr's HTTPS origin (https://host[:port]) and its host name,
 // or empty strings when no public URL is configured. It uses public_url and then
 // board.public_url.
@@ -189,6 +195,11 @@ type Config struct {
 	// Board is the project board the supervisor keeps current with the state of
 	// its tasks (D30). Optional; it adds the board's permission to the App.
 	Board *Board `json:"board,omitempty"`
+	// Account says whether the account whr runs as is "dedicated" to it (the
+	// default) or "shared", the developer's own on a dual-use Mac (D49). It is
+	// the human's statement: nothing guesses it. `whr doctor` warns about a
+	// shared account and about an administrator.
+	Account string `json:"account,omitempty"`
 	// AgentPermissionMode is how the agent's permission prompts are handled:
 	// "dontAsk" (the default) never asks and runs only AgentAllowedTools, and
 	// "manual" routes every prompt to the human as an approval Decision over
@@ -541,6 +552,11 @@ func (c *Config) Validate() error {
 				add("board.public_url: %q must be an https address without a path", b.PublicURL)
 			}
 		}
+	}
+	switch c.Account {
+	case "", AccountDedicated, AccountShared:
+	default:
+		add("account: %q is not dedicated or shared", c.Account)
 	}
 	switch c.AgentPermissionMode {
 	case "", "dontAsk":

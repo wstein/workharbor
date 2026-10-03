@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -79,7 +80,7 @@ func newSetup(st *state) *cobra.Command {
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
 				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: doctor.DefaultLookPath,
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, UID: env.UID, Whr: exe, Prefix: prefix,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
 			})
 		}
 	)
@@ -99,7 +100,11 @@ func newSetup(st *state) *cobra.Command {
 		}
 		ctx := cmd.Context()
 		if phase == doctor.PhaseHost {
-			if err := setup.GuardHost(env.User, env.UID, whrUser); err != nil {
+			admin := false
+			if env.User == whrUser {
+				admin, _, _ = doctor.Membership(ctx, env.Host, env.User)
+			}
+			if err := setup.GuardHost(env.User, env.UID, whrUser, admin); err != nil {
 				return usageError{err.Error()}
 			}
 		} else {
@@ -123,6 +128,22 @@ func newSetup(st *state) *cobra.Command {
 			fmt.Fprintf(st.env.Stderr, "note (dry run): %v\n", err)
 		}
 		steps := doctorOn(env, configPath())
+		// D49: without separation and with remote access, one explicit y that
+		// names the risk. Doctor fails on it too; nothing is enforced.
+		for _, c := range steps {
+			if c.Name != "account" {
+				continue
+			}
+			if stt, detail := c.Run(ctx); stt == doctor.Fail && !dryRun {
+				fmt.Fprintf(st.env.Stderr, "account: %s\n", clean(strings.TrimSpace(detail)))
+				ok, err := env.Host.Confirm("Go on without a dedicated standard account, knowing this?")
+				if err != nil || !ok {
+					return usageError{"stopped: set up a dedicated standard account, or remove the remote access from the configuration"}
+				}
+			} else if stt == doctor.Fail {
+				fmt.Fprintf(st.env.Stderr, "note (dry run): account: %s\n", clean(strings.TrimSpace(detail)))
+			}
+		}
 		outs, err := setup.Run(ctx, steps, env.Host, setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Out: st.env.Stdout, Err: st.env.Stderr})
 		if err != nil {
 			return usageError{err.Error()}
