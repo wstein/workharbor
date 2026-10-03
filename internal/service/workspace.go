@@ -256,7 +256,7 @@ func (w *Workspaces) bringUp(ctx context.Context, prep runtime.PreparedSpec, kee
 	if err != nil {
 		return "", err
 	}
-	if err := w.svc.rt.Start(ctx, env); err != nil {
+	if err := w.svc.startEnv(ctx, env); err != nil {
 		bg := context.WithoutCancel(ctx)
 		_ = w.svc.rt.Delete(bg, env)
 		return "", fmt.Errorf("start environment %s: %w", env, err)
@@ -478,7 +478,7 @@ func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace)
 		return err
 	}
 	if info.State != domain.EnvRunning {
-		if err := w.svc.rt.Start(ctx, string(ws.EnvID)); err != nil {
+		if err := w.svc.startEnv(ctx, string(ws.EnvID)); err != nil {
 			return fmt.Errorf("start environment %s: %w", ws.EnvID, err)
 		}
 	}

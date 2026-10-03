@@ -73,7 +73,7 @@ func (w *Workspaces) Rebuild(ctx context.Context, workspace, actor string) (Rebu
 	}
 	restore := func(cause error) (RebuildResult, error) {
 		if oldErr == nil && wasRunning {
-			if err := w.svc.rt.Start(bg, old); err != nil {
+			if err := w.svc.startEnv(bg, old); err != nil {
 				return RebuildResult{}, fmt.Errorf("%w (and the old environment %s could not be started again: %w)", cause, old, err)
 			}
 		}

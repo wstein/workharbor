@@ -42,6 +42,15 @@ func (s *Service) Pause(ctx context.Context, task domain.ID) error {
 // the run and open the retry-or-cancel question, as the answer to a question
 // that resumes does. It returns the run.
 func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error) {
+	if agg, err := s.store.LoadTask(ctx, task); err == nil {
+		if r, ok := agg.LiveRun(); ok {
+			// An environment this process did not start is stopped and started
+			// first; a failed stop launches nothing (#216).
+			if err := s.freshenForResume(ctx, task, r.ID, false); err != nil {
+				return "", err
+			}
+		}
+	}
 	var run domain.ID
 	var sl *slot
 	var unlock func()

@@ -78,7 +78,7 @@ func (p *Publisher) exportBranch(ctx context.Context, req Request, run domain.ID
 		return err
 	}
 	if info.State != domain.EnvRunning { // exec needs it up; a stopped one is started
-		if err := p.svc.rt.Start(ctx, string(ws.EnvID)); err != nil {
+		if err := p.svc.startEnv(ctx, string(ws.EnvID)); err != nil {
 			return fmt.Errorf("start environment %s: %w", ws.EnvID, err)
 		}
 		if err := p.svc.waitReady(ctx, ws.EnvID); err != nil {

@@ -60,8 +60,9 @@ func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[domain.ID]runtime.Info, rep *Report) error {
 	// 1. Observe the environments and interrupt what they took with them.
 	var interrupted, expired []domain.ID
+	var lost []domain.ID // environments of the runs found without a session
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
-		interrupted, expired = nil, nil // the closure may run again after a lost compare-and-swap
+		interrupted, expired, lost = nil, nil, nil // the closure may run again after a lost compare-and-swap
 		for _, env := range a.Environments() {
 			if env.State == domain.EnvDeleted {
 				continue
@@ -92,6 +93,7 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 					return err
 				}
 				interrupted = append(interrupted, r.ID)
+				lost = append(lost, r.EnvID)
 			}
 		}
 		expired = a.ExpireDecisions(s.clock.Now())
@@ -102,6 +104,24 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 	}
 	rep.Interrupted = append(rep.Interrupted, interrupted...)
 	rep.Expired = append(rep.Expired, expired...)
+
+	// The agent of a lost run may still run in its environment: one this process
+	// did not start is stopped, which ends it and interrupts every live run in it
+	// (design 4.1, issue #216). A failed stop is tried again by the recovery below,
+	// which counts it.
+	seenEnv := map[domain.ID]bool{}
+	for _, env := range lost {
+		if seenEnv[env] || s.envStarted(env) {
+			continue
+		}
+		seenEnv[env] = true
+		s.freshMu.Lock()
+		serr := s.stopLeftover(ctx, task, env, true, rep)
+		s.freshMu.Unlock()
+		if serr != nil {
+			rep.Errors = append(rep.Errors, fmt.Errorf("task %s: %w", task, serr))
+		}
+	}
 
 	// 2. Bring back what should run: interrupted runs, and paused runs whose
 	// quota has reset.
@@ -168,10 +188,16 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 		return s.failRun(ctx, task, run, rep) // the agent never reported a session
 	}
 
-	if env.State != domain.EnvRunning {
-		if err := s.rt.Start(ctx, string(env.ID)); err != nil {
-			return fmt.Errorf("start environment %s: %w", env.ID, err)
+	// Only an environment this process started is relaunched in (issue #216): any
+	// other is stopped and started first.
+	if s.envStarted(env.ID) {
+		if env.State != domain.EnvRunning {
+			if err := s.startEnv(ctx, string(env.ID)); err != nil {
+				return fmt.Errorf("start environment %s: %w", env.ID, err)
+			}
 		}
+	} else if err := s.freshenRun(ctx, task, run, env.ID, rep); err != nil {
+		return err
 	}
 	if err := s.waitReady(ctx, env.ID); err != nil {
 		return err

@@ -589,6 +589,23 @@ func (a *TaskAggregate) RecordLaunchFailure(runID ID, limit int) (exhausted bool
 	return false, a.Interrupt(run.ID)
 }
 
+// RecordResumeFailure counts a failed attempt to bring an interrupted run back
+// that did not get as far as starting the agent (the environment it is in could
+// not be stopped, design 4.1, issue #216), and reports whether the attempts are
+// used up. The run stays interrupted; then the caller ends it with FailRun.
+func (a *TaskAggregate) RecordResumeFailure(runID ID, limit int) (exhausted bool, err error) {
+	run, err := a.run(runID)
+	if err != nil {
+		return false, err
+	}
+	if run.State != RunInterrupted {
+		return false, conflict(RuleTransition, "run %s: a failed resume is counted only for an interrupted run, not %s", run.ID, run.State)
+	}
+	run.ResumeAttempts++
+	a.record(EventRunAttempt, RunAttempt{RunID: run.ID, Attempts: run.ResumeAttempts})
+	return run.ResumeAttempts >= limit, nil
+}
+
 // SupersededOf returns the Decisions of a run that were superseded and not
 // raised again, for the resume briefing (design D27).
 func (a *TaskAggregate) SupersededOf(runID ID) []Decision {

@@ -120,7 +120,12 @@ type Service struct {
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
 	runLocks    map[domain.ID]*runLock // one resume of a run at a time
-	limitWarned map[string]limitWarn   // per key: last low-limit push and state
+	// startedEnvs are the environments this process started (issue #216): an agent
+	// is relaunched only in one of them. freshMu serialises the stop and start of
+	// one that is not, so each is stopped once per process.
+	startedEnvs map[domain.ID]bool
+	freshMu     sync.Mutex
+	limitWarned map[string]limitWarn // per key: last low-limit push and state
 	// egressSources is what each open egress request was asked about (its
 	// devcontainer.json digest), kept to store with the answer.
 	egressSources map[domain.ID]string
@@ -479,6 +484,11 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	resumes := r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && row.RunID != ""
 	var sl *slot
 	if resumes {
+		// An environment this process did not start is stopped and started first;
+		// a failed stop launches nothing and leaves the answer open (#216).
+		if err := s.freshenForResume(ctx, row.TaskID, row.RunID, true); err != nil {
+			return err
+		}
 		// One live agent per run (design 4.1): the answer holds the run's lock
 		// like Resume and recovery, and is refused while an agent is attached.
 		unlock := s.lockRun(row.RunID)
@@ -542,9 +552,14 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 // superseded and its agent session ends.
 func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 	var live domain.ID
+	var leftover domain.ID // the environment of a paused or interrupted run, which may hold its agent
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		live, leftover = "", ""
 		if r, ok := a.LiveRun(); ok {
 			live = r.ID
+			if r.State == domain.RunPaused || r.State == domain.RunInterrupted {
+				leftover = r.EnvID
+			}
 		}
 		return a.Cancel()
 	})
@@ -552,6 +567,13 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 		s.stopSession(live)
 		s.cancelStart(live)    // a postCreate or an agent start that is already running stops
 		s.dropEgressWait(live) // a run still waiting for its egress answers never starts
+		if leftover != "" {
+			// An agent an earlier process left behind in a run that is not live
+			// has no session to stop: stopping its environment reaches it (#216).
+			s.freshMu.Lock()
+			err = s.stopLeftover(ctx, task, leftover, false, nil)
+			s.freshMu.Unlock()
+		}
 	}
 	return err
 }
