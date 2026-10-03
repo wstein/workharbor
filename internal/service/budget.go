@@ -108,14 +108,27 @@ func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
 
 // exceed ends the task for a hard limit and stops the live session.
 func (s *Service) exceed(ctx context.Context, task, run domain.ID, b domain.BudgetBreach) {
-	err := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ExceedBudget(b) })
+	var env domain.ID
+	hold := &stopHold{s: s}
+	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		hold.set("")
+		env = ""
+		if r, ok := a.Run(run); ok && ownsAgent(r.State) {
+			env = r.EnvID
+			hold.set(env)
+		}
+		return a.ExceedBudget(b)
+	})
 	var conflict *domain.ConflictError
 	switch {
 	case err == nil:
-		s.stopSession(run)
+		// The environment is busy until the stop and its fallback have ended (#238).
+		s.report(s.stopAgent(ctx, task, run, env, "failed (a budget was reached)", "budget", false, hold.take()))
 	case errors.As(err, &conflict):
+		hold.drop()
 		// The task is already over, or in review: nothing to end.
 	default:
+		hold.drop()
 		s.report(fmt.Errorf("budget: %w", err))
 	}
 }

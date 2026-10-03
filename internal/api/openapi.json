@@ -3201,6 +3201,13 @@
             "type": "integer",
             "minimum": 0
           },
+          "agent_may_run": {
+            "type": "array",
+            "description": "Tasks whose agent stop and environment stop both failed: the agent may still run.",
+            "items": {
+              "type": "string"
+            }
+          },
           "problems": {
             "type": "array",
             "items": {

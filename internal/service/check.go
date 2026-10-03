@@ -126,7 +126,7 @@ func (s *Service) checkNotHeld(env domain.ID) error {
 	n := s.holds[env]
 	s.rebuildMu.Unlock()
 	if n > 0 {
-		return domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: a task's check is running in it", env)
+		return domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: a task's check or an agent stop is running in it", env)
 	}
 	return nil
 }

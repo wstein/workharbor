@@ -282,6 +282,14 @@ func (s *Service) stopLeftoverEnvs(ctx context.Context, seen map[domain.ID]runti
 // that it started the environment, so the next pass stops it and no launch there
 // skips the stop and start; the error says the agent may still run.
 func (s *Service) stopEnvForPause(ctx context.Context, task, env domain.ID, cause error) error {
+	return s.stopEnvAfterAgent(ctx, task, env, "paused", cause)
+}
+
+// stopEnvAfterAgent is the fallback of every failed agent stop (design 4.1, fifth
+// path): it stops the run's environment, forgets the start mark whether or not
+// that worked, and records the environment stopped. state names the task for the
+// error: "paused", "cancelled" and so on.
+func (s *Service) stopEnvAfterAgent(ctx context.Context, task, env domain.ID, state string, cause error) error {
 	s.freshMu.Lock()
 	err := s.rt.Stop(context.WithoutCancel(ctx), string(env))
 	if err != nil && errors.Is(err, runtime.ErrNotFound) {
@@ -290,7 +298,7 @@ func (s *Service) stopEnvForPause(ctx context.Context, task, env domain.ID, caus
 	s.forgetEnvStarted(env)
 	s.freshMu.Unlock()
 	if err != nil {
-		return fmt.Errorf("task %s is paused, but its agent may still run: stop the agent: %w; stop the environment %s: %w", task, cause, env, err)
+		return fmt.Errorf("task %s is %s, but its agent may still run: stop the agent: %w; stop the environment %s: %w", task, state, cause, env, err)
 	}
 	uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvStopped) })
 	return uerr

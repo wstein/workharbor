@@ -234,3 +234,25 @@ func (s *Store) TranscriptSize(ctx context.Context, task domain.ID) (events int,
 	}
 	return events, bytes, nil
 }
+
+// EventsOfKind returns a task's events of one kind, oldest first.
+func (s *Store) EventsOfKind(ctx context.Context, task domain.ID, kind domain.EventKind) ([]domain.Event, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT seq, task_id, kind, tier, payload, at FROM events
+		WHERE task_id = ? AND kind = ? ORDER BY seq`, string(task), string(kind))
+	if err != nil {
+		return nil, fmt.Errorf("store: events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []domain.Event
+	for rows.Next() {
+		var e domain.Event
+		var taskID, k, tier string
+		var at int64
+		if err := rows.Scan(&e.Seq, &taskID, &k, &tier, &e.Payload, &at); err != nil {
+			return nil, fmt.Errorf("store: events: %w", err)
+		}
+		e.TaskID, e.Kind, e.Tier, e.At = domain.ID(taskID), domain.EventKind(k), domain.Tier(tier), time.Unix(0, at).UTC()
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

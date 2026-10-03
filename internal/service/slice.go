@@ -221,6 +221,10 @@ type TaskView struct {
 	Open      []domain.Decision // the Decisions waiting for the human
 	Candidate *domain.ReviewCandidate
 	Agent     string // "<workspace>/<role>", empty for a task made before agents
+	// AgentMayRun lists the runs whose agent stop and environment stop failed
+	// where no human call waited (a suspension, a budget stop, kill-all): the
+	// agent may still run (design 4.1, issue #238).
+	AgentMayRun []domain.AgentMayRun
 }
 
 // Show returns a task with its runs, its open Decisions and its current
@@ -245,6 +249,9 @@ func (s *Service) Show(ctx context.Context, task domain.ID) (TaskView, error) {
 	}
 	if c, ok := agg.CurrentCandidate(); ok {
 		v.Candidate = &c
+	}
+	if v.AgentMayRun, err = s.agentNotices(ctx, task); err != nil {
+		return TaskView{}, err
 	}
 	return v, nil
 }

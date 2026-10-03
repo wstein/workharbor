@@ -218,6 +218,11 @@ func (s *Service) leaseEnvironment(ws domain.Workspace) (release func(), err err
 type slot struct {
 	sess          agent.Session
 	stopRequested bool
+	// after and release belong to a stop requested before the session was up
+	// (stopAgent): attach runs after when its stop fails, then releases the
+	// environment's busy mark; end releases it when the session never comes up.
+	after   func(error) error
+	release func()
 }
 
 // New returns a service.
@@ -376,7 +381,11 @@ func (s *Service) end(run domain.ID, sl *slot) {
 	if s.sessions[run] == sl {
 		delete(s.sessions, run)
 	}
+	release := sl.release
 	s.mu.Unlock()
+	if release != nil {
+		release()
+	}
 }
 
 // attached reports whether the service owns a session, or a launch in
@@ -403,7 +412,7 @@ func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 		return
 	}
 	sl.sess = sess
-	stopNow := sl.stopRequested
+	stopNow, after, release := sl.stopRequested, sl.after, sl.release
 	s.wg.Add(1) // under s.mu, so it happens before Shutdown sets closing or not at all
 	s.mu.Unlock()
 	go func() {
@@ -411,7 +420,13 @@ func (s *Service) attach(task, run domain.ID, sl *slot, sess agent.Session) {
 		defer s.end(run, sl)
 		ctx := context.Background()
 		if stopNow {
-			_ = sess.Stop(ctx) // asked to stop while it was starting
+			// Asked to stop while it was starting.
+			if serr := sess.Stop(ctx); serr != nil && after != nil {
+				s.report(after(serr))
+			}
+			if release != nil {
+				release()
+			}
 		}
 		for e := range sess.Events() {
 			switch e.Kind {
@@ -457,7 +472,12 @@ func (s *Service) suspend(ctx context.Context, task, run domain.ID, cause domain
 	}
 	// The run is paused, so the session's end is not taken for a loss.
 	if serr := s.stopSessionErr(run); serr != nil {
-		return s.stopEnvForPause(ctx, task, env, serr)
+		err := s.stopEnvForPause(ctx, task, env, serr)
+		if err != nil {
+			// No human call waits for this error: the task keeps it too.
+			err = errors.Join(err, s.recordAgentMayRun(ctx, task, run, env, "suspension", err))
+		}
+		return err
 	}
 	return nil
 }
@@ -533,12 +553,26 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 			return domain.NewConflict(domain.RuleTransition, "run %s is already running", row.RunID)
 		}
 	}
+	// An answer that cancels may save its run terminal: its environment counts as
+	// busy from before that until the agent stop and its fallback have ended (#238).
+	hold := &stopHold{s: s}
+	defer hold.drop() // a no-op once stopAgent has taken it
+	var cancelEnv domain.ID
+	if r.Option == domain.AnswerCancel && row.RunID != "" {
+		if agg, lerr := s.loadTask(ctx, row.TaskID); lerr == nil {
+			if run, ok := agg.Run(row.RunID); ok && ownsAgent(run.State) {
+				cancelEnv = run.EnvID
+				hold.set(cancelEnv)
+			}
+		}
+	}
 	d, answered, err := s.store.RespondDecision(ctx, id, r)
 	s.publish(answered)
 	if err == nil {
 		s.deliverApproval(d)
 	}
 	if err != nil {
+		hold.drop()
 		if sl != nil {
 			s.end(row.RunID, sl)
 		}
@@ -568,6 +602,8 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		}
 	}
 	switch {
+	case r.Option == domain.AnswerCancel && cancelEnv != "":
+		return s.stopAgent(ctx, row.TaskID, row.RunID, cancelEnv, "cancelled", "answer", true, hold.take())
 	case r.Option == domain.AnswerCancel:
 		s.stopSession(row.RunID)
 	case resumes:
@@ -584,38 +620,61 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 }
 
 // Cancel cancels a task: its live run is stopped, its Decisions are
-// superseded and its agent session ends.
+// superseded and its agent session ends. A failed stop of the agent stops its
+// environment instead (design 4.1, fifth path, issue #238); the environment counts
+// as busy from before the run is saved until that has ended.
 func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
-	var live domain.ID
+	return s.cancel(ctx, task, false)
+}
+
+// cancel is Cancel; agentStopped says kill-all has stopped the agent already.
+func (s *Service) cancel(ctx context.Context, task domain.ID, agentStopped bool) error {
+	var live, env domain.ID
 	var leftover domain.ID // the environment of a paused or interrupted run, which may hold its agent
+	hold := &stopHold{s: s}
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
-		live, leftover = "", ""
+		live, env, leftover = "", "", ""
+		hold.set("")
 		if r, ok := a.LiveRun(); ok {
 			live = r.ID
 			if r.State == domain.RunPaused || r.State == domain.RunInterrupted {
 				leftover = r.EnvID
 			}
+			if ownsAgent(r.State) && !agentStopped {
+				env = r.EnvID
+				hold.set(env)
+			}
 		}
 		return a.Cancel()
 	})
-	if err == nil {
+	if err != nil {
+		hold.drop()
+		return err
+	}
+	var serr error
+	switch {
+	case agentStopped:
+		hold.drop()
+	case env == "":
 		s.stopSession(live)
-		s.cancelStart(live)    // a postCreate or an agent start that is already running stops
-		s.dropEgressWait(live) // a run still waiting for its egress answers never starts
-		if leftover != "" {
-			// An agent an earlier process left behind in a run that is not live
-			// has no session to stop: stopping its environment reaches it (#216).
-			s.freshMu.Lock()
-			serr := s.stopLeftover(ctx, task, leftover, false, nil)
-			s.freshMu.Unlock()
-			if serr != nil {
-				// The cancel is saved; the environment is still running and not
-				// one this process started, so the reconciler's next pass stops it.
-				err = fmt.Errorf("task %s is cancelled, but its environment was not stopped (the next reconciler pass tries again): %w", task, serr)
-			}
+	default:
+		serr = s.stopAgent(ctx, task, live, env, "cancelled", "cancel", true, hold.take())
+	}
+	s.cancelStart(live)    // a postCreate or an agent start that is already running stops
+	s.dropEgressWait(live) // a run still waiting for its egress answers never starts
+	if leftover != "" {
+		// An agent an earlier process left behind in a run that is not live
+		// has no session to stop: stopping its environment reaches it (#216).
+		s.freshMu.Lock()
+		lerr := s.stopLeftover(ctx, task, leftover, false, nil)
+		s.freshMu.Unlock()
+		if lerr != nil {
+			// The cancel is saved; the environment is still running and not
+			// one this process started, so the reconciler's next pass stops it.
+			serr = errors.Join(serr, fmt.Errorf("task %s is cancelled, but its environment was not stopped (the next reconciler pass tries again): %w", task, lerr))
 		}
 	}
-	return err
+	return serr
 }
 
 // stopSession stops a run's agent. When the session is not up yet it records the

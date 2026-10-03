@@ -10,7 +10,10 @@ import (
 
 // KillReport says what a kill-all did.
 type KillReport struct {
-	Cancelled     []domain.ID `json:"cancelled"`
+	Cancelled []domain.ID `json:"cancelled"`
+	// AgentMayRun lists the tasks whose agent stop and environment stop both
+	// failed: the agent may still run (the task carries an event for it).
+	AgentMayRun   []domain.ID `json:"agent_may_run,omitempty"`
 	TokensRevoked int         `json:"tokens_revoked"`
 	Problems      []string    `json:"problems"`
 }
@@ -30,18 +33,30 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 		return rep, fmt.Errorf("kill-all: list the tasks: %w", err)
 	}
 	// Every session first: cancelling a task saves it, which is slower than a
-	// stop, and a run must not keep working while the others are saved.
+	// stop, and a run must not keep working while the others are saved. A failed
+	// agent stop stops the run's environment (design 4.1, fifth path, #238); the
+	// environment is busy until then, and a task whose environment stop failed too
+	// is reported, as an event on the task as well.
+	stopped := map[domain.ID]bool{}
 	for _, t := range tasks {
 		agg, err := s.store.LoadTask(ctx, t.ID)
 		if err != nil {
 			continue // reported by the cancel below
 		}
 		if r, ok := agg.LiveRun(); ok {
-			s.stopSession(r.ID)
+			if !ownsAgent(r.State) {
+				s.stopSession(r.ID)
+				continue
+			}
+			stopped[t.ID] = true
+			if err := s.stopAgent(ctx, t.ID, r.ID, r.EnvID, "cancelled", "kill-all", false, s.holdEnvBusy(r.EnvID)); err != nil {
+				rep.AgentMayRun = append(rep.AgentMayRun, t.ID)
+				rep.Problems = append(rep.Problems, fmt.Sprintf("stop the agent of task %s: %v", t.ID, err))
+			}
 		}
 	}
 	for _, t := range tasks {
-		if err := s.Cancel(ctx, t.ID); err != nil {
+		if err := s.cancel(ctx, t.ID, stopped[t.ID]); err != nil {
 			rep.Problems = append(rep.Problems, fmt.Sprintf("cancel task %s: %v", t.ID, err))
 			continue
 		}
