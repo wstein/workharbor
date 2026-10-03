@@ -26,8 +26,10 @@ $ARGUMENTS (empty: the current branch). Never push.
       shared checkout yourself, whatever git's message suggests.
     - `Rejected status code: 50x` from github.com in the link check: not your
       content; wait 60 seconds and run it again, at most 4 times, then report.
-    - Anything else (tests, lint, commitlint, secrets): stop, fix it in a new
-      commit or an amend of your own unpushed commit, and start again at 2.
+    - Anything else (tests, lint, commitlint, secrets): stop, fix it in the
+      working tree and fold it into the commit it belongs to with `git commit
+      --fixup <sha>` and `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`
+      (own unpushed commits only; AGENTS.md, Commits), and start again at 2.
       Never use `--no-verify`.
 4. Only after a successful land: `git switch --detach main`, then
     `git branch -d <branch>` (`-D` only after `git merge-base --is-ancestor

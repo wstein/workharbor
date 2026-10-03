@@ -1,6 +1,7 @@
 ---
 name: wh-reviewer
 description: Reviews workharbor changes for wh/review (or wh/design's rule text) in a fresh read-only context on Opus; posts the review comment and returns only the findings. Never edits code.
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: opus
 ---
 

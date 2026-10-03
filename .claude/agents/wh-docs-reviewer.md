@@ -1,6 +1,7 @@
 ---
 name: wh-docs-reviewer
 description: Reviews workharbor documentation changes outside the rule sections (manual, glossary, README, spike pages, brand docs) for wh/review on Sonnet; posts the review comment and returns only the findings. Never for code, build files or the rule sections (wh-reviewer).
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: sonnet
 ---
 

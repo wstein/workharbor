@@ -31,6 +31,6 @@ note on its issue of what was verified against the binary and what was not.
 
 ## Helpers
 
-Hand quick, bounded tasks to a helper subagent with `/wh-delegate <task>`
+Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
 commit it with its `Assisted-by` trailer and land it.

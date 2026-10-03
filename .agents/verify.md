@@ -35,6 +35,6 @@ reopened, and a message to `wh/design` with anything that changes a decision.
 
 ## Helpers
 
-Hand quick, bounded tasks to a helper subagent with `/wh-delegate <task>`
+Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
 commit it with its `Assisted-by` trailer and land it.
