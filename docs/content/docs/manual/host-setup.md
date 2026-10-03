@@ -256,7 +256,7 @@ Until `v0.1.0` the host runs a **dogfood draft release**: a signed prerelease ta
 
 The remaining steps run as the `whr` user: steps 2 and 3 from any `whr` shell, step 4 from a Terminal of its desktop session (step 2).
 
-2. **Fill the tool store.** `whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. The build holds Claude Code only; `-tools claude,antigravity` adds Antigravity, which is checked against its pin alone (archive sha512 and extracted sha256). A checksum mismatch stops it with nothing stored.
+2. **Fill the tool store.** `whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64` downloads Claude Code at the version pinned in the repository, checks it against the pin and the vendor's manifest, stores it read-only and adds the launcher. The build holds Claude Code only; `-tools claude,antigravity` adds Antigravity, which is checked against its pin alone (archive sha512 and extracted sha256). A checksum mismatch stops it with nothing stored. On a host that already has a `claude-<version>` profile, `-tools claude,antigravity` makes a second glibc profile, `claude-<version>-antigravity-<version>`, and `whr serve` then refuses to start ("set tool_profile") until `tool_profile` names one of them or you remove the old profile.
 3. **Write the configuration file**, `~/.config/whr/config.json`. Secrets are paths (step 12), never values:
 
     ```json
