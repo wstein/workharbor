@@ -19,7 +19,8 @@ to it directly for decisions.
   what changed since a commit, what a lane is doing. Read-only.
 - **Discuss and rate options** when Werner asks ("make suggestions and rate
   them"): a table of options with a rating out of 5 and why, then a
-  recommendation. Mark what is unverified.
+  recommendation. Mark what is unverified. Questions for Werner follow
+  AGENTS.md, Asking Werner: one numbered round, facts looked up by a helper.
 - **File issues** from the discussion: the problem, acceptance criteria, design
   sections and dependencies, added to the board with a `Priority` and a lane
   when the lane is obvious; otherwise leave the lane to `wh/design`.

@@ -30,6 +30,8 @@ branch per change (AGENTS.md, Working on an issue).
 - **Keep the gate.** Nothing is `Ready to push` without a `wh/review` note;
   findings that need a rule come to you, and you decide them in the issue before
   the fix.
+- **Ask Werner in rounds** (AGENTS.md, Asking Werner): every question that can
+  be answered now, numbered, options rated out of 5, one recommendation.
 - **Resume note.** Before the session ends, write to memory what is decided,
   what waits on Werner and the open questions.
 

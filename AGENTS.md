@@ -131,6 +131,8 @@ Each lane starts from its prompt in [`.agents/`](.agents/) (in Claude Code `/wh-
 
 **Who decides what.** The author decides anything inside its own area that is not a rule (names, structure, tests, the details of an issue's criteria) and records it in the issue. `wh/review` settles low and medium findings directly with the author. Rule-section questions (§3, §4.1, §4.2, §6, §7, the threat model), conflicts between lanes, high findings and a change of priority go to `wh/design`. Werner's word overrides any session's.
 
+**Asking Werner.** A session that needs Werner's answer asks every question that can be answered now in one round, numbered, each with its options rated out of 5 and one recommendation, short enough to read on a phone; then it waits. A question that depends on another open one waits for the next round. Facts are looked up (by a helper), never asked of Werner.
+
 **Working on an issue, start to finish.**
 
 1. **Claim, then start.** Skip an issue that is closed, or whose card is not `Todo`. Set the card to `In progress` with `Session` your lane, comment `Claimed by <lane> (<tool>:<model-id>)` with the scope you take, `git fetch`, and read the issue and the design sections it names. Each lane has one worktree, `../workharbor-<role>`, reused for every issue; create it once with `git worktree add ../workharbor-<role> --detach main` and run `make hooks` there. For each issue, `git -C <worktree> switch -c <type>/<topic> main` with a clean tree. Work only there: never in another session's worktree, and never switch branches in the shared checkout.
