@@ -134,10 +134,10 @@ fmt:
 fmt-check:
 	@d=$$(mktemp -d) || { echo "the format check could not run (no temporary directory), so nothing was checked" >&2; exit 1; }; \
 	trap 'rm -rf "$$d"' EXIT; trap 'exit 1' HUP INT TERM; \
-	GOBIN="$$d" go install $(GOLANGCI_LINT) >&2 || { echo "the format check could not run (the formatter did not install), so nothing was checked" >&2; exit 1; }; \
-	"$$d/golangci-lint" fmt --diff >"$$d/out" 2>"$$d/err"; rc=$$?; \
-	if [ -s "$$d/out" ]; then cat "$$d/out"; echo "run 'make fmt'" >&2; exit 1; fi; \
-	if [ $$rc -ne 0 ]; then cat "$$d/err" >&2; echo "the formatter failed (exit $$rc), so nothing was checked" >&2; exit 1; fi
+	go run $(GOLANGCI_LINT) fmt --diff >"$$d/out" 2>"$$d/err"; rc=$$?; \
+	grep -Ev '^(exit status [0-9]+|go: (downloading|finding|extracting) .*)$$' "$$d/err" >"$$d/real"; \
+	if [ -s "$$d/out" ]; then cat "$$d/out"; [ -s "$$d/real" ] && { cat "$$d/real" >&2; echo "the formatter also failed, so the diff above may be partial" >&2; }; echo "run 'make fmt'" >&2; exit 1; fi; \
+	if [ $$rc -ne 0 ]; then cat "$$d/real" >&2; echo "the formatter failed (exit $$rc), so nothing was checked" >&2; exit 1; fi
 
 lint:
 	go run $(GOLANGCI_LINT) run --config .config/golangci.yml
