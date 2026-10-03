@@ -744,3 +744,57 @@ func TestBoardSnapshotSeveralIssuesPartialFailure(t *testing.T) {
 		}
 	}
 }
+
+func rateLimitPage(cost, remaining int) string {
+	return `{"data":{"rateLimit":{"cost":` + strconv.Itoa(cost) + `,"remaining":` + strconv.Itoa(remaining) +
+		`,"limit":5000,"resetAt":"2026-10-03T12:00:00Z"},"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":` + fakeNodes + `}}}}`
+}
+
+func TestBoardSnapshotBudgetLogAndCommand(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if out, _, err := b.run(t, "budget"); err != nil || !strings.Contains(out, "no refresh") {
+		t.Fatalf("budget with no log: %v %q", err, out)
+	}
+	b.pages(t, map[string]string{"first": rateLimitPage(2, 4000)})
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	b.pages(t, map[string]string{"first": rateLimitPage(3, 3500)})
+	if _, _, err := b.run(t, "--refresh"); err != nil {
+		t.Fatal(err)
+	}
+	logf := filepath.Join(filepath.Dir(b.snap), "board-budget.log")
+	st, err := os.Stat(logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o600 {
+		t.Fatalf("log mode %v, want 0600", st.Mode().Perm())
+	}
+	data, _ := os.ReadFile(logf) //nolint:gosec // a test path
+	if n := len(strings.Split(strings.TrimSpace(string(data)), "\n")); n != 2 {
+		t.Fatalf("%d log lines, want 2: %s", n, data)
+	}
+	// An old line outside the 24 hours does not count.
+	old := `{"at":1,"cost":99,"remaining":1,"limit":5000}` + "\n"
+	if err := os.WriteFile(logf, append([]byte(old), data...), 0o600); err != nil { //nolint:gosec // a test path
+		t.Fatal(err)
+	}
+	out, _, err := b.run(t, "budget")
+	if err != nil || !strings.Contains(out, "refreshes: 2") || !strings.Contains(out, "total cost: 5") ||
+		!strings.Contains(out, "lowest remaining: 3500 of 5000") {
+		t.Fatalf("budget: %v %q", err, out)
+	}
+}
+
+func TestBoardSnapshotWarnsFromQueryRemaining(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	// rate_limit lags and says plenty; the query's own value says 10 %.
+	b.pages(t, map[string]string{"first": rateLimitPage(1, 500)})
+	_, se, err := b.run(t)
+	if err != nil || !strings.Contains(se, "500 of 5000") {
+		t.Fatalf("err %v, stderr %q; want the warning from the query's value", err, se)
+	}
+}

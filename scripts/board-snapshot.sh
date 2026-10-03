@@ -8,6 +8,7 @@
 #   board-snapshot.sh session <number>... <lane>  set each card's Session
 #   board-snapshot.sh priority <number>... <P1|P2|P3>  set each card's Priority
 #   board-snapshot.sh add <number>...             add each issue to the board
+#   board-snapshot.sh budget                      lowest remaining and total cost, last 24 hours (no gh call)
 #
 #   board-snapshot.sh ready <number>...           set Ready to push (wh/review, or wh/dispatch for it)
 #
@@ -34,8 +35,14 @@
 # With no cache, or a stale one, the write still happens and the cache is left
 # alone. Values are checked against fixed lists before any gh call.
 #
-# Before any call to GitHub the script reads `gh api rate_limit` (free: it does
-# not count) and warns on stderr when the GraphQL budget is under 20 % (#165).
+# The board query asks for rateLimit { cost remaining limit resetAt } too (no
+# extra points) and each refresh appends one JSON line (at, cost, remaining,
+# limit) to board-budget.log next to the snapshot (0600, no tokens; trimmed to
+# its last 1000 lines past 2000); `budget` reads it (#186). The 20 % warning on
+# stderr (#165) uses the query's own remaining value, which is current;
+# `gh api rate_limit` (free, but it lags the GraphQL counter) is only the
+# fallback when a query fails or returns no rateLimit, and the source for
+# writes, whose mutations carry no rateLimit.
 #
 # The snapshot is {"fetched_at": <unix>, "items": [...]} in one file outside the
 # repository. While it is younger than WHR_BOARD_MAX_AGE seconds (default 300)
@@ -119,7 +126,8 @@ move | session | priority | add | ready)
     ;;
   esac
   ;;
-*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready)" ;;
+budget) ;;
+*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready, budget)" ;;
 esac
 
 dir=$(dirname "$file")
@@ -145,6 +153,29 @@ rate_warn() {
   [ "$lim" -gt 0 ] || return 0
   if [ $((rem * 5)) -lt "$lim" ]; then
     when=$(date -r "$rst" +%H:%M 2>/dev/null || date -d "@$rst" +%H:%M 2>/dev/null || echo "$rst")
+    echo "board-snapshot: warning: GitHub GraphQL budget is low: $rem of $lim left, resets at $when" >&2
+  fi
+}
+
+budget_log=$dir/board-budget.log
+
+# budget_note logs one line per refresh ($1 cost summed over the pages, $2 the
+# last remaining, $3 limit) and warns under 20 % from that value. A failure to
+# log never fails the refresh.
+budget_note() {
+  local rem=$2 lim=$3 reset=$4 when
+  case $1 in '' | *[!0-9]*) return 1 ;; esac
+  case $2 in '' | *[!0-9]*) return 1 ;; esac
+  case $3 in '' | *[!0-9]*) return 1 ;; esac
+  {
+    touch "$budget_log" && chmod 600 "$budget_log" &&
+      printf '{"at":%s,"cost":%s,"remaining":%s,"limit":%s}\n' "$(date +%s)" "$1" "$2" "$3" >>"$budget_log" &&
+      if [ "$(wc -l <"$budget_log")" -gt 2000 ]; then
+        tail -n 1000 "$budget_log" >"$budget_log.tmp" && chmod 600 "$budget_log.tmp" && mv "$budget_log.tmp" "$budget_log"
+      fi
+  } 2>/dev/null || true
+  if [ "$lim" -gt 0 ] && [ $((rem * 5)) -lt "$lim" ]; then
+    when=$(printf '%s' "$reset" | jq -r 'try (fromdateiso8601 | strflocaltime("%H:%M")) catch .' 2>/dev/null || echo "$reset")
     echo "board-snapshot: warning: GitHub GraphQL budget is low: $rem of $lim left, resets at $when" >&2
   fi
 }
@@ -179,25 +210,29 @@ field_ids() {
 }
 
 # items_query asks only for what the snapshot holds, 100 items a page (#165).
-items_query='query($p:ID!,$after:String){node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url labels(first:20){nodes{name}}} ... on PullRequest{number title url labels(first:20){nodes{name}}} ... on DraftIssue{title}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
+items_query='query($p:ID!,$after:String){rateLimit{cost remaining limit resetAt} node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url labels(first:20){nodes{name}}} ... on PullRequest{number title url labels(first:20){nodes{name}}} ... on DraftIssue{title}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
 
 # query reads every page of the board with first:100 and an after: cursor and
 # rewrites the snapshot only when all pages came back; one failed page leaves
 # the old file alone and fails the query.
 query() {
-  local out cursor="" more=true tmp pages
-  rate_warn
+  local out cursor="" more=true tmp pages cost=0 rem="" lim="" reset="" c
   pages=$(mktemp "$dir/.board.XXXXXX")
   while [ "$more" = true ]; do
     if [ -n "$cursor" ]; then
-      out=$(gh api graphql -f query="$items_query" -f p="$project" -f after="$cursor") || { rm -f "$pages"; return 1; }
+      out=$(gh api graphql -f query="$items_query" -f p="$project" -f after="$cursor") || { rm -f "$pages"; rate_warn; return 1; }
     else
-      out=$(gh api graphql -f query="$items_query" -f p="$project") || { rm -f "$pages"; return 1; }
+      out=$(gh api graphql -f query="$items_query" -f p="$project") || { rm -f "$pages"; rate_warn; return 1; }
     fi
     if ! printf '%s' "$out" | jq -e '.data.node.items.nodes | arrays' >/dev/null 2>&1; then
       rm -f "$pages"
       return 1
     fi
+    c=$(printf '%s' "$out" | jq -r '.data.rateLimit.cost // empty' 2>/dev/null || true)
+    case $c in '' | *[!0-9]*) ;; *) cost=$((cost + c)) ;; esac
+    rem=$(printf '%s' "$out" | jq -r '.data.rateLimit.remaining // empty' 2>/dev/null || true)
+    lim=$(printf '%s' "$out" | jq -r '.data.rateLimit.limit // empty' 2>/dev/null || true)
+    reset=$(printf '%s' "$out" | jq -r '.data.rateLimit.resetAt // empty' 2>/dev/null || true)
     printf '%s' "$out" | jq -c '.data.node.items.nodes[]' >>"$pages" || { rm -f "$pages"; return 1; }
     more=$(printf '%s' "$out" | jq -r '.data.node.items.pageInfo.hasNextPage // false')
     cursor=$(printf '%s' "$out" | jq -r '.data.node.items.pageInfo.endCursor // empty')
@@ -226,6 +261,7 @@ query() {
   rm -f "$pages"
   chmod 600 "$tmp"
   mv "$tmp" "$file"
+  budget_note "$cost" "$rem" "$lim" "$reset" || rate_warn
 }
 
 # lock_takeover removes a stale lock. Only the holder of $lock.takeover (a
@@ -350,6 +386,15 @@ move | session | priority | add | ready)
   exit 0
   ;;
 esac
+
+if [ "$mode" = budget ]; then
+  [ -f "$budget_log" ] || { echo "no refresh logged yet"; exit 0; }
+  jq -sr --argjson now "$(date +%s)" '
+    [.[] | select(type == "object" and (.at | numbers) and .at >= $now - 86400)] as $r
+    | if ($r | length) == 0 then "no refresh logged in the last 24 hours"
+      else "refreshes: \($r | length), total cost: \($r | map(.cost) | add), lowest remaining: \($r | map(.remaining) | min) of \($r[-1].limit)" end' "$budget_log"
+  exit 0
+fi
 
 if [ "$refresh" = 1 ] || ! fresh; then
   started=$(date +%s)
