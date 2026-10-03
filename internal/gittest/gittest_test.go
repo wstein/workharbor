@@ -122,3 +122,35 @@ func TestCallersCannotWeakenTheIsolation(t *testing.T) {
 		t.Error("a global file inside home, an identity and an empty helper must be allowed")
 	}
 }
+
+// A name that repeats would silently replace the earlier value in git.
+func TestARepeatedConfigNamePanics(t *testing.T) {
+	for _, extra := range [][]string{
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0="},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_KEY_0=user.name", "GIT_CONFIG_VALUE_0="},
+		{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.name", "GIT_CONFIG_VALUE_0=a", "GIT_CONFIG_VALUE_0=b"},
+	} {
+		if !panics(extra...) {
+			t.Errorf("%v did not panic", extra)
+		}
+	}
+}
+
+// A HOME that is the human's, or contains it, would let a test touch their files.
+func TestTheHumansHomeIsRefused(t *testing.T) {
+	human, err := os.UserHomeDir()
+	if err != nil || human == "" {
+		t.Skip("no home directory")
+	}
+	for _, home := range []string{human, filepath.Dir(human), "/"} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("Env(%q) did not panic", home)
+				}
+			}()
+			Env(home, "GIT_CONFIG_GLOBAL="+filepath.Join(home, ".gitconfig"))
+		}()
+	}
+	Env(t.TempDir()) // a temporary directory stays allowed
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,11 +60,22 @@ func newGitBox(t *testing.T) *gitBox {
 // AGENTS.md), plus what these tests need: the test's own global configuration,
 // an identity, no credential helper, and the wrapper's settings.
 func (b *gitBox) env(extra ...string) []string {
-	return gittest.Env(b.home, append(append([]string{
-		"TMPDIR=" + os.TempDir(), "TERM=xterm", "GIT_CONFIG_GLOBAL=" + filepath.Join(b.home, ".gitconfig"),
-		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=",
-		"WHR_REAL_GIT=" + b.git, "VISUAL=true", "EDITOR=true",
-	}, gittest.Identity...), extra...)...)
+	return b.envWithConfig(nil, extra...)
+}
+
+// envWithConfig is env plus config pairs ({key, value}, ...) the test
+// adds to the box's own credential.helper reset, numbered after it.
+func (b *gitBox) envWithConfig(pairs [][2]string, extra ...string) []string {
+	cfg := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(1+len(pairs)), "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0="}
+	for i, kv := range pairs {
+		n := strconv.Itoa(1 + i)
+		cfg = append(cfg, "GIT_CONFIG_KEY_"+n+"="+kv[0], "GIT_CONFIG_VALUE_"+n+"="+kv[1])
+	}
+	all := []string{"TMPDIR=" + os.TempDir(), "TERM=xterm", "GIT_CONFIG_GLOBAL=" + filepath.Join(b.home, ".gitconfig")}
+	all = append(all, cfg...)
+	all = append(all, "WHR_REAL_GIT="+b.git, "VISUAL=true", "EDITOR=true")
+	all = append(all, gittest.Identity...)
+	return gittest.Env(b.home, append(all, extra...)...)
 }
 
 func (b *gitBox) run(bin string, args ...string) (string, error) {
@@ -324,7 +336,7 @@ func TestTheCallersOwnOverridesAreKept(t *testing.T) {
 	b := newGitBox(t)
 	cmd := exec.Command(b.wrapper, "config", "--get", "user.name") //nolint:gosec,noctx // the test's wrapper
 	cmd.Dir = b.repo
-	cmd.Env = b.env("GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.name", "GIT_CONFIG_VALUE_0=from the caller")
+	cmd.Env = b.envWithConfig([][2]string{{"user.name", "from the caller"}})
 	out, err := cmd.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) != "from the caller" {
 		t.Errorf("user.name = %q, %v", out, err)

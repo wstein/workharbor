@@ -35,6 +35,10 @@ import (
 //     the only pairs callers need (the helper switched off, an identity);
 //   - has an entry without "=".
 //
+// Env also panics when home is the human's home directory (os.UserHomeDir) or
+// one of its ancestors, and when a COUNT, KEY_n or VALUE_n name repeats in
+// extra (git would let the later value replace the earlier one).
+//
 // Not enforced: environment variables other than those listed. A caller may
 // still pass GIT_SSH_COMMAND, GIT_EXTERNAL_DIFF, GIT_PAGER, GIT_EDITOR, PATH,
 // LD_PRELOAD and the like (the console tests pass EDITOR and VISUAL), and a
@@ -47,6 +51,7 @@ import (
 // silently drop the user.useConfigOnly guard. Env therefore composes: the guard
 // is entry 0 and the caller's own pairs follow it, renumbered.
 func Env(home string, extra ...string) []string {
+	refuseHumansHome(home)
 	env := []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + home,
@@ -82,16 +87,48 @@ var reserved = map[string]bool{
 	"SSH_ASKPASS": true, "SSH_AUTH_SOCK": true,
 }
 
+// refuseHumansHome panics when home is the human's home directory or contains
+// it, because a test's HOME there would read and write the human's own files.
+func refuseHumansHome(home string) {
+	human, err := os.UserHomeDir()
+	if err != nil || human == "" {
+		return
+	}
+	for _, h := range []string{human, evalOr(human)} {
+		for _, c := range []string{home, evalOr(home)} {
+			rel, err := filepath.Rel(c, h)
+			if err == nil && filepath.IsAbs(c) == filepath.IsAbs(h) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				panic("gittest: home " + home + " is the human's home or above it")
+			}
+		}
+	}
+}
+
+// evalOr resolves symlinks in p, or returns it cleaned when that fails.
+func evalOr(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return filepath.Clean(p)
+}
+
 // configPairs takes the GIT_CONFIG_COUNT/KEY_n/VALUE_n variables out of extra,
 // returning their key and value pairs in order and the other variables in rest.
 // It panics on anything that could weaken the isolation (see Env).
 func configPairs(home string, extra []string) (pairs, rest []string) {
 	vars := map[string]string{}
+	seen := map[string]bool{}
 	count := 0
 	for _, kv := range extra {
 		name, val, ok := strings.Cut(kv, "=")
 		if !ok {
 			panic("gittest: environment entry without \"=\": " + kv)
+		}
+		if name == "GIT_CONFIG_COUNT" || strings.HasPrefix(name, "GIT_CONFIG_KEY_") || strings.HasPrefix(name, "GIT_CONFIG_VALUE_") {
+			if seen[name] {
+				panic("gittest: " + name + " is given twice; a later one would replace the earlier")
+			}
+			seen[name] = true
 		}
 		switch {
 		case name == "GIT_CONFIG_COUNT":
