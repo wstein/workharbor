@@ -142,7 +142,16 @@ func TestTheHumansHomeIsRefused(t *testing.T) {
 	if err != nil || human == "" {
 		t.Skip("no home directory")
 	}
-	for _, home := range []string{human, filepath.Dir(human), "/"} {
+	homes := []string{human, filepath.Dir(human), "/", "relative/home", ".", "../../../../.."}
+	// a case variant names the same directory on a case-insensitive filesystem
+	if hi, err := os.Stat(human); err == nil {
+		for _, v := range []string{strings.ToUpper(human), strings.ToLower(human)} {
+			if vi, err := os.Stat(v); v != human && err == nil && os.SameFile(hi, vi) {
+				homes = append(homes, v)
+			}
+		}
+	}
+	for _, home := range homes {
 		func() {
 			defer func() {
 				if recover() == nil {
@@ -153,4 +162,26 @@ func TestTheHumansHomeIsRefused(t *testing.T) {
 		}()
 	}
 	Env(t.TempDir()) // a temporary directory stays allowed
+}
+
+// The case-variant row only runs where the filesystem ignores case.
+func TestACaseVariantOfTheHumansHomeIsRefused(t *testing.T) {
+	human, err := os.UserHomeDir()
+	if err != nil || human == "" {
+		t.Skip("no home directory")
+	}
+	hi, err := os.Stat(human)
+	if err != nil {
+		t.Skip("home not readable")
+	}
+	v := strings.ToUpper(human)
+	if vi, err := os.Stat(v); v == human || err != nil || !os.SameFile(hi, vi) {
+		t.Skip("case-sensitive filesystem")
+	}
+	defer func() {
+		if recover() == nil {
+			t.Errorf("Env(%q) did not panic", v)
+		}
+	}()
+	Env(v)
 }

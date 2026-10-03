@@ -87,29 +87,31 @@ var reserved = map[string]bool{
 	"SSH_ASKPASS": true, "SSH_AUTH_SOCK": true,
 }
 
-// refuseHumansHome panics when home is the human's home directory or contains
-// it, because a test's HOME there would read and write the human's own files.
+// refuseHumansHome panics when home is not absolute, or is the human's home
+// directory or one of its parents, because a test's HOME there would read and
+// write the human's own files. It compares by file identity (os.SameFile), not
+// by path string, so a case variant on a case-insensitive filesystem, a
+// symlink and a firmlink are caught too.
 func refuseHumansHome(home string) {
+	if !filepath.IsAbs(home) {
+		panic("gittest: home " + strconv.Quote(home) + " is not an absolute path")
+	}
+	hi, err := os.Stat(home)
+	if err != nil {
+		return // a directory that does not exist is not the human's home
+	}
 	human, err := os.UserHomeDir()
 	if err != nil || human == "" {
 		return
 	}
-	for _, h := range []string{human, evalOr(human)} {
-		for _, c := range []string{home, evalOr(home)} {
-			rel, err := filepath.Rel(c, h)
-			if err == nil && filepath.IsAbs(c) == filepath.IsAbs(h) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				panic("gittest: home " + home + " is the human's home or above it")
-			}
+	for d := human; ; d = filepath.Dir(d) {
+		if di, err := os.Stat(d); err == nil && os.SameFile(hi, di) {
+			panic("gittest: home " + home + " is the human's home or above it")
+		}
+		if d == filepath.Dir(d) {
+			return
 		}
 	}
-}
-
-// evalOr resolves symlinks in p, or returns it cleaned when that fails.
-func evalOr(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return filepath.Clean(p)
 }
 
 // configPairs takes the GIT_CONFIG_COUNT/KEY_n/VALUE_n variables out of extra,
