@@ -24,7 +24,7 @@ rule and no code.
   met and unmet, what is unverified.
 - **Start the review once per push**, narrow per fix commit: `wh-reviewer` (Opus)
   for code and the rule sections, `wh-docs-reviewer` (Sonnet) for documentation
-  outside the rule sections. Only `wh/review` sets `Ready to push`.
+  outside the rule sections. That subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` with no open findings is the review note, and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.
 - **Land and move cards.** `/wh-land` with safe retries; `In progress`, `Blocked`
   and `In review` through the script. On a GraphQL rate-limit error, skip the
   move and say so.
