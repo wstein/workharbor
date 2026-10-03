@@ -22,7 +22,7 @@ layout: hextra-home
 
 <div class="hx:mb-6">
 {{< hextra/hero-button text="Read the design" link="docs/design/" >}}
-{{< hextra/hero-button text="Set it up" link="docs/manual/" style="background: transparent; border: 1px solid currentColor;" >}}
+{{< hextra/hero-button text="Set it up" link="docs/manual/" style="background: transparent; border: 1px solid currentColor; color: var(--whr-hero-secondary);" >}}
 </div>
 
 <div class="hx:mt-6"></div>

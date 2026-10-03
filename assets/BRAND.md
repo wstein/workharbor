@@ -53,8 +53,8 @@ Navy `#0b2545` background with white text and teal `#5eead4`; on a light
 background, navy `#0b2545` text and deep teal `#0f766e`. No gradient other than
 the banner's existing one, no other colours.
 
-The docs site derives a few tints from the dark page navy `#0c1b33` (Hextra's
-dark background) and does not use them in any asset: `#08142a` (dark footer,
+The docs site derives a few tints from the dark page navy `#0c1b33` (the docs
+`--hx-color-dark`) and does not use them in any asset: `#08142a` (dark footer,
 darker than the page), `#0f2342` (dark home cards, lighter) and `#1e3a5f` (their
 border); and, for light mode, `#eef2f7` (footer) and `#f9fafb` (cards), cool
 greys of the same hue. They live in `docs/assets/css/custom.css`.
