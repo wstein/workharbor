@@ -22,7 +22,7 @@ func commitOf(ctx context.Context, r Runner, ref string) (string, error) {
 	if err := checkRef(ref); err != nil {
 		return "", err
 	}
-	out, err := r.Run(ctx, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
+	out, err := r.RunCapped(ctx, maxRevParseBytes, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
 	if err != nil {
 		return "", fmt.Errorf("devcontainer: resolve %s: %w", ref, err)
 	}
@@ -367,7 +367,7 @@ var lockfiles = map[string][]string{
 }
 
 func lockfileHosts(ctx context.Context, r Runner, sha string) ([]string, error) {
-	root, err := lsTree(ctx, r, sha, "", false)
+	root, err := lsTree(ctx, r, sha, "", false, int64(DefaultLimits.Files)*maxEntryBytes)
 	if err != nil {
 		return nil, err
 	}

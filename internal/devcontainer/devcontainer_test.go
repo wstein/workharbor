@@ -99,7 +99,7 @@ type fakeGit struct {
 	calls  [][]string
 }
 
-func (g *fakeGit) Run(_ context.Context, args ...string) ([]byte, error) {
+func (g *fakeGit) RunCapped(_ context.Context, limit int64, args ...string) ([]byte, error) {
 	g.calls = append(g.calls, args)
 	if g.broken {
 		return nil, errors.New("fatal: not a git repository")
@@ -142,9 +142,16 @@ func (g *fakeGit) Run(_ context.Context, args ...string) ([]byte, error) {
 			out = append(out, mode+" blob "+key+"\t"+p+"\x00"...)
 		}
 		return out, nil
-	case "cat-file": // cat-file blob <oid>
+	case "cat-file": // cat-file blob <oid> | cat-file -s <oid>
 		if v, ok := g.files[args[2]]; ok {
-			return []byte(v), nil
+			out := []byte(v)
+			if args[1] == "-s" {
+				out = []byte(strconv.Itoa(len(v)) + "\n")
+			}
+			if int64(len(out)) > limit {
+				return nil, errors.New("output over the cap")
+			}
+			return out, nil
 		}
 	}
 	return nil, errors.New("not found")

@@ -38,9 +38,13 @@ func (g *gitRepo) git(args ...string) {
 	}
 }
 
-func (g *gitRepo) Run(ctx context.Context, args ...string) ([]byte, error) {
+func (g *gitRepo) RunCapped(ctx context.Context, limit int64, args ...string) ([]byte, error) {
 	cmd := gittest.Git(ctx, "", g.dir, nil, args...)
-	return cmd.Output()
+	out, err := cmd.Output()
+	if int64(len(out)) > limit {
+		return nil, errors.New("output over the cap")
+	}
+	return out, err
 }
 
 func (g *gitRepo) write(name, content string, mode os.FileMode) {

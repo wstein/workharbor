@@ -8,12 +8,24 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 // maxFileBytes is the largest toolchain or Dockerfile the reader takes into
 // memory.
 const maxFileBytes = 1 << 20
+
+// Caps on what git may print for the small reads: a commit id, one blob size,
+// the listing of one path. A listing of a whole tree is capped by the file limit.
+const (
+	maxRevParseBytes = 4 << 10
+	maxSizeBytes     = 64
+	maxPathListBytes = 64 << 10
+	// maxEntryBytes is what one ls-tree entry may take on average: a tree whose
+	// listing is longer than the file limit allows is refused, not buffered.
+	maxEntryBytes = 512
+)
 
 // ErrNotFound is returned when a wanted file is not in the tree.
 var ErrNotFound = errors.New("devcontainer: not in the repository")
@@ -34,7 +46,8 @@ func (e entry) regular() bool { return e.Mode == "100644" || e.Mode == "100755" 
 
 // lsTree lists a path of the tree of ref (the whole tree when p is empty),
 // recursively or not. A path that is not there lists nothing.
-func lsTree(ctx context.Context, r Runner, ref, p string, recursive bool) ([]entry, error) {
+// The listing is read with a cap of limit bytes; one over it is an error.
+func lsTree(ctx context.Context, r Runner, ref, p string, recursive bool, limit int64) ([]entry, error) {
 	args := []string{"ls-tree", "-z", "--full-tree"}
 	if recursive {
 		args = append(args, "-r")
@@ -43,7 +56,7 @@ func lsTree(ctx context.Context, r Runner, ref, p string, recursive bool) ([]ent
 	if p != "" {
 		args = append(args, "--", p)
 	}
-	out, err := r.Run(ctx, args...)
+	out, err := r.RunCapped(ctx, limit, args...)
 	if err != nil {
 		return nil, fmt.Errorf("devcontainer: list %q at %s: %w", p, ref, err)
 	}
@@ -67,7 +80,7 @@ func lsTree(ctx context.Context, r Runner, ref, p string, recursive bool) ([]ent
 // in the repository could name anything on the host), or is larger than
 // maxFileBytes.
 func file(ctx context.Context, r Runner, ref, p string) ([]byte, error) {
-	list, err := lsTree(ctx, r, ref, p, false)
+	list, err := lsTree(ctx, r, ref, p, false, maxPathListBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -77,14 +90,31 @@ func file(ctx context.Context, r Runner, ref, p string) ([]byte, error) {
 	if !list[0].regular() {
 		return nil, fmt.Errorf("%w: %s at %s is not a regular file (mode %s)", ErrRefused, p, ref, list[0].Mode)
 	}
-	data, err := r.Run(ctx, "cat-file", "blob", list[0].OID)
+	size, err := blobSize(ctx, r, list[0].OID)
+	if err != nil {
+		return nil, fmt.Errorf("devcontainer: size of %s at %s: %w", p, ref, err)
+	}
+	if size > maxFileBytes {
+		return nil, fmt.Errorf("%w: %s is larger than %d bytes", ErrRefused, p, maxFileBytes)
+	}
+	data, err := r.RunCapped(ctx, size, "cat-file", "blob", list[0].OID)
 	if err != nil {
 		return nil, fmt.Errorf("devcontainer: read %s at %s: %w", p, ref, err)
 	}
-	if len(data) > maxFileBytes {
-		return nil, fmt.Errorf("%w: %s is larger than %d bytes", ErrRefused, p, maxFileBytes)
-	}
 	return data, nil
+}
+
+// blobSize asks git for the size of a blob without reading its content.
+func blobSize(ctx context.Context, r Runner, oid string) (int64, error) {
+	out, err := r.RunCapped(ctx, maxSizeBytes, "cat-file", "-s", oid)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("unexpected blob size %q", out)
+	}
+	return n, nil
 }
 
 // Limits bound what Export writes, so a repository cannot fill the disk.
@@ -123,9 +153,19 @@ func Export(ctx context.Context, r Runner, ref, dir, dest string, lim Limits) (E
 	if dir == "." {
 		pathspec = ""
 	}
-	list, err := lsTree(ctx, r, ref, pathspec, true)
+	list, err := lsTree(ctx, r, ref, pathspec, true, max(int64(lim.Files)+1, 1<<11)*maxEntryBytes)
 	if err != nil {
 		return Exported{}, err
+	}
+	// Refuse a tree over the file limit before the first blob is read.
+	nfiles := 0
+	for _, e := range list {
+		if e.Type == "blob" && e.regular() {
+			nfiles++
+		}
+	}
+	if nfiles > lim.Files {
+		return Exported{}, fmt.Errorf("%w: the context has more than %d files", ErrRefused, lim.Files)
 	}
 	if err := os.MkdirAll(dest, 0o700); err != nil {
 		return Exported{}, err
@@ -146,13 +186,18 @@ func Export(ctx context.Context, r Runner, ref, dir, dest string, lim Limits) (E
 		if res.Files++; res.Files > lim.Files {
 			return res, fmt.Errorf("%w: the context has more than %d files", ErrRefused, lim.Files)
 		}
-		data, err := r.Run(ctx, "cat-file", "blob", e.OID)
+		size, err := blobSize(ctx, r, e.OID)
+		if err != nil {
+			return res, fmt.Errorf("devcontainer: size of %s: %w", e.Path, err)
+		}
+		if size > lim.Bytes-res.Bytes {
+			return res, fmt.Errorf("%w: the context is larger than %d bytes", ErrRefused, lim.Bytes)
+		}
+		data, err := r.RunCapped(ctx, size, "cat-file", "blob", e.OID)
 		if err != nil {
 			return res, fmt.Errorf("devcontainer: read %s: %w", e.Path, err)
 		}
-		if res.Bytes += int64(len(data)); res.Bytes > lim.Bytes {
-			return res, fmt.Errorf("%w: the context is larger than %d bytes", ErrRefused, lim.Bytes)
-		}
+		res.Bytes += int64(len(data))
 		target := filepath.Join(dest, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return res, err

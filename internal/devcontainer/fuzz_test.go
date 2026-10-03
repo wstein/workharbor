@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -91,14 +92,22 @@ func FuzzParse(f *testing.F) {
 // treeRunner answers git with a fixed ls-tree output and blob.
 type treeRunner struct{ ls, blob []byte }
 
-func (r treeRunner) Run(_ context.Context, args ...string) ([]byte, error) {
-	switch args[0] {
-	case "ls-tree":
-		return r.ls, nil
-	case "cat-file":
-		return r.blob, nil
+func (r treeRunner) RunCapped(_ context.Context, limit int64, args ...string) ([]byte, error) {
+	var out []byte
+	switch {
+	case args[0] == "ls-tree":
+		out = r.ls
+	case args[0] == "cat-file" && args[1] == "-s":
+		out = []byte(strconv.Itoa(len(r.blob)) + "\n")
+	case args[0] == "cat-file":
+		out = r.blob
+	default:
+		return nil, errors.New("unexpected git command")
 	}
-	return nil, errors.New("unexpected git command")
+	if int64(len(out)) > limit {
+		return nil, errors.New("output over the cap")
+	}
+	return out, nil
 }
 
 // FuzzExport hands Export an ls-tree listing and blobs a hostile repository could
@@ -138,7 +147,7 @@ func FuzzExport(f *testing.F) {
 		// the single-file reader: a blob only for one regular file at exactly p
 		data, err := file(context.Background(), r, "main", p)
 		if err == nil {
-			list, lerr := lsTree(context.Background(), r, "main", p, false)
+			list, lerr := lsTree(context.Background(), r, "main", p, false, maxPathListBytes)
 			if lerr != nil || len(list) != 1 || list[0].Path != p || !list[0].regular() {
 				t.Fatalf("file(%q) returned data without exactly one regular entry at that path: %+v", p, list)
 			}

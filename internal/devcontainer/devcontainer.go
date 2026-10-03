@@ -481,9 +481,12 @@ func customizations(v json.RawMessage, notes []string) ([]string, Hints, []strin
 	return egress, hints, notes
 }
 
-// Runner runs git on the repository, as hostgit.Repo does.
+// Runner runs git on the repository, as hostgit.Repo does. RunCapped returns at
+// most limit bytes of standard output and an error, never a truncation, when git
+// writes more: the repository is hostile input (design §7.4), so no read here
+// is unbounded.
 type Runner interface {
-	Run(ctx context.Context, args ...string) ([]byte, error)
+	RunCapped(ctx context.Context, limit int64, args ...string) ([]byte, error)
 }
 
 // ErrBadRef is returned for a ref that could be read as an option or a path.
