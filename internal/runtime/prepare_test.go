@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -299,5 +300,74 @@ func TestPrepareAcceptsAWildcardEntryAndRefusesOtherStars(t *testing.T) {
 		if err := try(bad); !errors.Is(err, ErrInvalidSpec) {
 			t.Errorf("%q: err = %v, want ErrInvalidSpec", bad, err)
 		}
+	}
+}
+
+// A checked spec must not change after the check (issue #243): the caller's
+// maps and slices, and the ones Spec returns, are copies. Each mutation below
+// reaches one mutable field of the original, then of a returned copy.
+func TestPreparedSpecSharesNothingWithItsInputOrItsCallers(t *testing.T) {
+	r := newPrepRig(t)
+	objects := filepath.Join(r.cache, "repo.git", "objects")
+	build := func() Spec {
+		spec := goodSpec()
+		spec.Labels = map[string]string{"task": "t1"}
+		spec.Env = map[string]string{"FOO": "bar"}
+		spec.Tmpfs = []string{"/tmp"}
+		spec.Mounts = []Mount{{Kind: MountVolume, Source: "task1-data", Target: "/data"}}
+		spec.Alternates = []string{objects}
+		spec.Egress = &Egress{
+			Image: "proxy:1", Proxy: filepath.Join(r.home, "bin", "proxy"),
+			Allow: []string{"example.com"}, DenyPrefixes: []string{"2001:db8::/32"},
+		}
+		return spec
+	}
+	preparedFresh := func(t *testing.T, r prepRig, build func() Spec) Spec {
+		t.Helper()
+		p, err := Prepare(r.opts, build())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Spec()
+	}
+	mutations := []struct {
+		name string
+		do   func(s *Spec)
+	}{
+		{"Labels", func(s *Spec) { s.Labels["task"] = "evil"; s.Labels["new"] = "x" }},
+		{"Env", func(s *Spec) { s.Env["FOO"] = "evil"; s.Env["NEW"] = "x" }},
+		{"CapDrop", func(s *Spec) { s.CapDrop[0] = "NONE" }},
+		{"Tmpfs", func(s *Spec) { s.Tmpfs[0] = "/evil" }},
+		{"Mounts", func(s *Spec) { s.Mounts[0].Target = "/evil" }},
+		{"Alternates", func(s *Spec) { s.Alternates[0] = "/evil" }},
+		{"Egress.Allow", func(s *Spec) { s.Egress.Allow[0] = "evil.example" }},
+		{"Egress.DenyPrefixes", func(s *Spec) { s.Egress.DenyPrefixes[0] = "::/16" }},
+		{"Egress", func(s *Spec) { s.Egress.Image = "evil"; s.Egress.Proxy = "/evil" }},
+	}
+	for _, m := range mutations {
+		t.Run("original "+m.name, func(t *testing.T) {
+			spec := build()
+			p, err := Prepare(r.opts, spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := preparedFresh(t, r, build) // built apart, so it shares nothing with spec
+			m.do(&spec)
+			if got := p.Spec(); !reflect.DeepEqual(got, want) {
+				t.Errorf("changing the input's %s changed the checked spec:\n got %+v\nwant %+v", m.name, got, want)
+			}
+		})
+		t.Run("returned "+m.name, func(t *testing.T) {
+			p, err := Prepare(r.opts, build())
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := preparedFresh(t, r, build)
+			returned := p.Spec()
+			m.do(&returned)
+			if got := p.Spec(); !reflect.DeepEqual(got, want) {
+				t.Errorf("changing the returned %s changed the checked spec:\n got %+v\nwant %+v", m.name, got, want)
+			}
+		})
 	}
 }

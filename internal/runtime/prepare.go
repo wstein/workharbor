@@ -36,19 +36,44 @@ type PreparedSpec struct {
 // Spec returns a copy of the checked spec, with every bind mount at its
 // resolved path and the cache objects as read-only mounts. An adapter mounts
 // exactly these.
-func (p PreparedSpec) Spec() Spec {
-	s := p.spec
-	s.Mounts = append([]Mount(nil), p.spec.Mounts...)
-	s.CapDrop = append([]string(nil), p.spec.CapDrop...)
-	s.Tmpfs = append([]string(nil), p.spec.Tmpfs...)
-	s.Alternates = append([]string(nil), p.spec.Alternates...)
-	if p.spec.Egress != nil {
-		e := *p.spec.Egress
-		e.Allow = append([]string(nil), e.Allow...)
-		e.DenyPrefixes = append([]string(nil), e.DenyPrefixes...)
-		s.Egress = &e
+func (p PreparedSpec) Spec() Spec { return p.spec.clone() }
+
+// clone returns a copy that shares no map, slice or pointer with s, so a later
+// change to either cannot reach the other. Every mutable field is listed here;
+// the test TestPreparedSpecIsolated fails when a new one is shared.
+func (s Spec) clone() Spec {
+	out := s
+	out.Labels = cloneMap(s.Labels)
+	out.Env = cloneMap(s.Env)
+	out.CapDrop = cloneSlice(s.CapDrop)
+	out.Tmpfs = cloneSlice(s.Tmpfs)
+	out.Mounts = cloneSlice(s.Mounts)
+	out.Alternates = cloneSlice(s.Alternates)
+	if s.Egress != nil {
+		e := *s.Egress
+		e.Allow = cloneSlice(e.Allow)
+		e.DenyPrefixes = cloneSlice(e.DenyPrefixes)
+		out.Egress = &e
 	}
-	return s
+	return out
+}
+
+func cloneMap(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneSlice[T any](s []T) []T {
+	if s == nil {
+		return nil
+	}
+	return append([]T{}, s...)
 }
 
 // Prepared reports whether the spec came from Prepare.
@@ -80,7 +105,7 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 		return PreparedSpec{}, &SpecError{Problems: problems}
 	}
 
-	out := spec
+	out := spec.clone() // the checked spec shares nothing with the caller's
 	out.Mounts = nil
 	out.Alternates = nil
 	for _, m := range spec.Mounts {
@@ -135,9 +160,7 @@ func Prepare(opts PrepareOptions, spec Spec) (PreparedSpec, error) {
 		} else if !unsplittable(resolved) {
 			add("the egress proxy binary %q resolves to %q, which holds ':'", e.Proxy, resolved)
 		} else {
-			e2 := *e
-			e2.Proxy = resolved
-			out.Egress = &e2
+			out.Egress.Proxy = resolved // out.Egress is already a copy
 		}
 		for _, h := range e.Allow {
 			if !validAllowEntry(h) {
