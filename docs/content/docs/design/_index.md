@@ -57,7 +57,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | Access | VPN, temporary SSH, VS Code / JetBrains via SSH; code-server optional and later |
 | Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: GitHub, D15) |
 | CI | Drone medium/long term, behind an adapter |
-| Auth | OAuth for the five forges (release 1: a GitHub App installation, D15) |
+| Auth | OAuth for the five forges (release 1: a static access token and passkeys, §9.5, D45; the forge through a GitHub App, D15) |
 
 ## 14. Review log
 
