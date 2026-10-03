@@ -127,4 +127,4 @@ The product is **workharbor**, lowercase, in prose, code, paths, URLs and packag
 
 ## Marking claims
 
-The docs mark how firm a claim is: {{< status verified >}} measured on the target setup, {{< status unverified >}} taken from documentation or the original sources, {{< status decided >}} settled in the decision table, {{< status open >}} not decided yet. Measured results are on the [spike pages](spikes/_index.md).
+The docs mark how firm a claim is: {{< status verified >}} measured on the target setup, {{< status unverified >}} not measured (taken from documentation or the original sources, or not checked at all), {{< status decided >}} settled in the decision table, {{< status open >}} not decided yet. Measured results are on the [spike pages](spikes/_index.md).
