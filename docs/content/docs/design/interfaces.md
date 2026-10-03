@@ -16,7 +16,7 @@ whr serve                                  # the supervisor: JSON API, web UI, r
 whr login --server <url>
 whr run <issue-url> [--agent <ws>/<role>] # create + start on a named agent (D42); the core demo
 whr ls [--json]
-whr show <task>                            # review card: diff stat, tests, CI for current SHA, agent notes, open decisions
+whr show <task>                            # review card: diff stat, CI for current SHA, open decisions, usage line (tests and agent notes: not available yet)
 whr logs <task> -f
 whr watch                                  # live event stream
 whr say <task> "msg"                       # or -f guidance.md, or - for stdin

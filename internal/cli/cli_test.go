@@ -744,3 +744,26 @@ func TestUsageByAgentAndModelShowsCacheAndKeepsEstimatesApart(t *testing.T) {
 		t.Errorf("queries sent = %v", sent)
 	}
 }
+
+func TestShowPrintsTheReviewCardAndTheUsageLine(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	body := `{"id":"t-aaa111","repo":"wstein/workharbor","issue":"#7","state":"awaiting_review","runs":[],` +
+		`"open_decisions":[{"id":"d-1","task_id":"t-aaa111","kind":"review","subject":"Review abc123"}],` +
+		`"candidate":{"branch":"agent/docs","sha":"abc123","ci":"passed","pushed":false,"files":3,"added":40,"removed":7},` +
+		`"usage_line":"usage: 3 turns"}`
+	s.reply("GET /v1/tasks/t-aaa111", 200, ok(body))
+	code, out, errOut := s.runCLI("", "show", "t-aaa111")
+	if code != 0 || errOut != "" {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+	for _, want := range []string{"3 file(s), +40 -7", "CI:       passed (for abc123)", "Usage:    usage: 3 turns", "Tests:    not available", "d-1  review  Review abc123"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out)
+		}
+	}
+	code, out, _ = s.runCLI("", "--json", "show", "t-aaa111")
+	if code != 0 || !strings.Contains(out, `"usage_line":"usage: 3 turns"`) {
+		t.Errorf("--json must print the envelope unchanged: %d %s", code, out)
+	}
+}
