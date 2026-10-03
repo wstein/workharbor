@@ -189,7 +189,8 @@ func TestPrePushBlocksWhatItCannotScan(t *testing.T) {
 // when it runs as sh, and the function would stand in for make. Both hooks call
 // `command make`, a speed bump only: exported shell functions are out of scope
 // as a class (BASH_FUNC_command%% and BASH_FUNC_read%% still bypass the hooks,
-// and sh cannot close that), like PATH and --no-verify (#190). The test is
+// and `command` cannot stop that; a guard could, but would close one lever
+// among many), like PATH, --no-verify and core.hooksPath (#190). The test is
 // skipped where /bin/sh imports no functions (dash, on Linux CI), because there
 // it could not fail and a pass would claim nothing.
 func TestHooksIgnoreAnExportedMakeFunction(t *testing.T) {
