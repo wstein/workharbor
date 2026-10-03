@@ -26,11 +26,20 @@ $ARGUMENTS (empty: the current branch). Never push.
       shared checkout yourself, whatever git's message suggests.
     - `Rejected status code: 50x` from github.com in the link check: not your
       content; wait 60 seconds and run it again, at most 4 times, then report.
-    - Anything else (tests, lint, commitlint, secrets): stop, fix it in the
-      working tree and fold it into the commit it belongs to with `git commit
-      --fixup=reword:<sha>` (a plain `--fixup` cannot change a message) and `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`
-      (own unpushed commits only; AGENTS.md, Commits), and start again at 2.
-      Never use `--no-verify`.
+    - Anything else (tests, lint, commitlint, secrets): stop, fix it and fold
+      the fix into the commit it belongs to (own unpushed commits only;
+      AGENTS.md, Commits), then start again at 2. Never use `--no-verify`.
+      - A failure in the content (tests, lint, secrets, build): stage the fix
+        and run `git commit --fixup <sha>`.
+      - A failure of the commit message only (a subject over 72 characters, a
+        missing trailer): `--fixup=reword:<sha>` ignores staged changes and
+        opens an editor, which an agent session does not have. Write the
+        corrected message to a file and give git an editor that keeps the
+        first line (the `amend!` marker autosquash matches on) and replaces
+        the rest:
+        `GIT_EDITOR="sh -c 'head -n1 \"\$1\" > \"\$1.n\"; echo >> \"\$1.n\"; cat <msgfile> >> \"\$1.n\"; mv \"\$1.n\" \"\$1\"' --" git commit --fixup=reword:<sha>`
+      - Then `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`. Never
+        touch the keychain or the global git configuration.
 4. Only after a successful land: `git switch --detach main`, then
     `git branch -d <branch>` (`-D` only after `git merge-base --is-ancestor
     <branch> main` confirms it is in).
