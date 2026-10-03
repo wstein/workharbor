@@ -157,17 +157,27 @@ func (e notFoundError) Error() string { return e.msg }
 func (notFoundError) ExitCode() int   { return exitcode.NotFound }
 
 // clean replaces control characters, which text from agents, issues and the
-// forge could use to move the cursor or rewrite the terminal, with '?'.
+// forge could use to move the cursor or rewrite the terminal, and the Unicode
+// bidirectional controls and line separators that reorder or hide text (Trojan
+// Source), with '?'.
 func clean(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r == '\t' || r == ' ' {
 			return ' '
 		}
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || isBidiOrSeparator(r) {
 			return '?'
 		}
 		return r
 	}, s)
+}
+
+func isBidiOrSeparator(r rune) bool {
+	switch {
+	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+		return true
+	}
+	return r == 0x200e || r == 0x200f || r == 0x061c || r == 0x2028 || r == 0x2029
 }
 
 // needsHumanError is a command that did what it could and now waits for a human.
