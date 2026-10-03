@@ -5,7 +5,7 @@ weight: 4
 toc: true
 ---
 
-How to set up the sessions and subagents that build workharbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them, except the procedure detail that left `AGENTS.md` to keep it under the 24,000-byte cap of Antigravity's always-on rules (the last section; #233). A rule or prohibition always stays stated in `AGENTS.md` itself. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
+How to set up the sessions and subagents that build workharbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them, except the procedure detail that left `AGENTS.md` to keep it under the 24,000-byte cap of Antigravity's always-on rules {{< status unverified >}} (the last section; #233). A rule or prohibition always stays stated in `AGENTS.md` itself. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
 
 ## Sessions to keep open
 
@@ -94,20 +94,7 @@ The `Makefile` also has `install`, `install-release`, `changelog` and `editorcon
 
 ### Lanes
 
-| Lane | Model | Does |
-| --- | --- | --- |
-| `wh/design` | Opus | decisions, the rule sections, ranking (`Priority`, `Session`) |
-| `wh/review` | Opus | independent review before every push; at least as strong as the author |
-| `wh/dispatch` | Sonnet | pulls cards, starts lane agents and reviews, lands, moves cards; answers no rule question |
-| `wh/platform` | Sonnet | service, API, CLI, web, forge, setup |
-| `wh/runtime` | Sonnet | runtime, environments, console, egress, tool store |
-| `wh/docs` | Sonnet | the manual and user-facing docs |
-| `wh/verify` | Sonnet | measurements on the real setup |
-| `wh/desk` | Sonnet | Werner's point of contact: status, discussion, filing and routing |
-| `wh/spikes` | Antigravity (Gemini) | spikes on new tools; results reviewed by `wh/review` |
-| helpers | Haiku | subagents, not lanes; never touch a security-relevant path |
-
-A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research, board hygiene, mechanical edits, small tests, checks. `wh-docs-reviewer` runs on Sonnet.
+The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research, board hygiene, mechanical edits, small tests, checks. It is not a lane and never touches a security-relevant path.
 
 ### Commits
 
