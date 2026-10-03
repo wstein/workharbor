@@ -672,7 +672,7 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		st := steps(t, hostDeps(r))
 		for _, name := range names {
 			got, detail := status(st[name])
-			if got != NotVerified || !strings.Contains(detail, "whr's desktop session") || !strings.Contains(detail, "whr service status") || !strings.Contains(detail, "whr ls") {
+			if got != NotVerified || !strings.Contains(detail, "whr's desktop session") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
 				t.Errorf("%s over %s = %s %q", name, session, got, detail)
 			}
 		}
