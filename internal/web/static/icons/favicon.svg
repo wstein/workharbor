@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-labelledby="t">
   <title id="t">workharbor</title>
-  <rect width="64" height="64" rx="14" fill="#0b2545"/>
-  <g fill="none" stroke="#5eead4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="32" cy="14" r="5"/>
-    <path d="M32 19V51"/>
-    <path d="M23 28H41"/>
-    <path d="M14 37Q14 52 32 52Q50 52 50 37"/>
-    <path d="M9 41L14 36L19 41"/>
-    <path d="M45 41L50 36L55 41"/>
+  <rect x="0.8" y="0.8" width="62.4" height="62.4" rx="13.28" fill="#0b2545" stroke="#2a4a7a" stroke-width="1.6"/>
+  <g transform="translate(1.498 2.928) scale(0.95319)">
+<g fill="none" stroke="#5eead4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="32" cy="14" r="5"/><path d="M32 19V51"/><path d="M23 28H41"/><path d="M14 37Q14 52 32 52Q50 52 50 37"/><path d="M9 41L14 36L19 41"/><path d="M45 41L50 36L55 41"/></g>
   </g>
 </svg>
