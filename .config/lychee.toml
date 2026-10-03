@@ -18,4 +18,9 @@ exclude = [
   '^https://help\.openai\.com/',
   # Google's developer site answers datacenter IPs with 500 (CI, 1 October 2026); it loads from a browser.
   '^https://ai\.google\.dev/',
+  # The README badges. img.shields.io resets connections from the CI runner (run
+  # 37144033503, "Connection reset by peer", on the license badge); retries do not help.
+  # Tradeoff: a badge is decoration, not content, and a dead one shows as a broken
+  # image in the README, so CI no longer catches it.
+  '^https://img\.shields\.io/',
 ]
