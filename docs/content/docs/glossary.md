@@ -11,20 +11,32 @@ The words workharbor uses for its objects and modes. Each entry gives the short 
 Task
 : One piece of work, usually from a forge issue: its instructions, Decisions, progress, results and pull request link. It ends completed, cancelled or failed. States in [§4.1](design/domain.md#41-state-machines).
 
+: Avoid: ticket, job, card (a card is only the project-board entry). The forge's own item is an issue.
+
 Topic
 : One line of work on one branch. Since D42 a topic is a named agent's branch, `agent/<role>`, in its worktree of a workspace ([§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+
+: Avoid: feature branch, branch name as a noun for the line of work.
 
 Workspace
 : A folder on the host or an external SSD that the human creates: its own agent clone, one worktree per named agent, the integration branch (`main` or `develop`), tool configuration and caches. It is mounted into one environment, outlives tasks and runs, and never contains the human's own repository (D42, [§4](design/domain.md#4-domain-model)).
 
+: Avoid: project, sandbox, checkout (a checkout is one worktree), and environment for the folder.
+
 Agent
 : A named role in a workspace, such as `docs` or `runtime`: its worktree and branch `agent/<role>`, instructions, permission profile and session. Tasks are assigned to an agent; several agents run in one environment at once (D42).
+
+: Avoid: lane, session and bot for the role. A lane is a name for a coding session of this project's own team, and a session is one conversation of an agent; neither is a workspace object.
 
 Run
 : One execution of an agent in an environment. A paused or interrupted run is relaunched from the agent's session; a stopped or failed run is never reused, so a retry or rework starts a new run on the same workspace and topic ([§4.1](design/domain.md#41-state-machines)).
 
+: Avoid: job, attempt, and task for one execution. A task is the work, a run is one try at it.
+
 Environment (`env`)
 : The container or VM a run executes in. It can be stopped or recreated without losing the workspace, which lives on the host ([§4.4](design/domain.md#44-persistence-semantics), [§5.1](design/architecture.md#51-runtime-adapter)).
+
+: Avoid: container (it is only one kind), VM, sandbox, and workspace for the place a run executes.
 
 Event
 : An append-only record of an instruction, observation, Decision or action. Events feed the UI and are the audit trail ([§5.4](design/architecture.md#54-events-idempotency-and-retention)).
@@ -34,8 +46,12 @@ Event
 Decision
 : A question, approval or review request raised to the developer, open until answered. A Decision that blocks a run pauses it; an approval fails closed on timeout ([§4.2](design/domain.md#42-decision-object)).
 
+: Avoid: prompt, question, approval request for the object, and a lowercase decision.
+
 ReviewCandidate
 : One prepared revision of a topic: the branch, the pinned commit SHA, then the pull request and the CI results for that SHA. It is created when cleanup pins the SHA, before the push ([§4](design/domain.md#4-domain-model), [§4.5](design/domain.md#45-topics-checkouts-and-cleanup-before-push)).
+
+: Avoid: PR (the pull request is created from it), patch, review request.
 
 "Ready to push?"
 : The review Decision for a ReviewCandidate. Approval is tied to its commit SHA; only then does the supervisor push and open the pull request. Agents never push (D18).
@@ -80,6 +96,8 @@ Editor copy
 Tool store
 : A content-addressed, read-only directory on the host that holds the agent CLIs and the supervisor's helpers, verified against pinned checksums and mounted into every environment. A profile picks a set of versions ([§5.6](design/architecture.md#56-tool-store), D19).
 
+: Avoid: toolbox, tool cache, image for the agent CLIs.
+
 `whr-shim`
 : A small launcher in the tool store. It runs agent and command processes in their own process group, so the host can cancel a whole process tree inside the guest (D25).
 
@@ -98,8 +116,14 @@ Preview
 Console
 : An environment without an agent for the human's shell work: zsh or fish and the usual tools, the workspaces mounted read-only by default, no credentials. `whr console` and SSH land there, so only the admin logs in to the host (D43).
 
+: Avoid: shell, terminal, and agent for it: it has no agent.
+
 Owner label
 : The `workharbor.owner` label on everything a supervisor instance creates. An adapter lists, starts, stops and deletes only what carries its own owner ([§5.1](design/architecture.md#51-runtime-adapter)).
+
+## Names
+
+The product is **workharbor**, lowercase, in prose, code, paths, URLs and packages; the command is `whr`. Only the wordmark (the logo, the banner and the social preview) sets it as WorkHarbor. Avoid Workharbor, Work Harbor and WorkHarbor in text, alt text and titles.
 
 ## Marking claims
 
