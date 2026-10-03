@@ -45,7 +45,10 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
       block, and name the source file. Put the text in a fenced code block
       inside the `<details>`, with a fence longer than any run of backticks in
       the text: bare Markdown there is live (`@name` notifies, `#N` links back
-      to other issues, a stray `</details>` breaks the block).
+      to other issues, a stray `</details>` breaks the block). Leave a blank
+      line after `</summary>`, put the fence on its own lines, and leave a
+      blank line before `</details>`; without the blank lines the fence is
+      raw HTML and the text inside stays live.
   4. A file over about 60 KB (the comment limit is 65,536 characters) is split
       across comments, or committed through `wh/docs` instead.
   5. A screenshot cannot be posted by REST: ask Werner to drag it into the issue.
