@@ -1,0 +1,15 @@
+claude stable=2.1.285
+claude platforms: ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-arm64-musl', 'linux-x64', 'linux-x64-musl', 'win32-arm64', 'win32-x64']
+{'binary': 'claude', 'checksum': '31efc4136bc678575f4c6730e248d34f89dbfea0468be1c5d012af199cd62ee8', 'size': 232077120}
+/tmp/claude.head: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-musl-aarch64.so.1, missing section headers at 232076992
+agy linux_arm64 http=200
+agy linux_arm64_musl http=200
+agy linux_amd64_musl http=200
+{
+  "version": "1.2.16",
+  "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.16-5594158052802560/linux-arm-musl/cli_linux_arm64_musl.tar.gz",
+  "sha512": "3f5ef952365b58c358ed79e0bb61768b17afdfd8fd00ccfd39b06f50789c8c0069890cf88583e0edfa194c1ddd9640211f02a8daac58a41f9bd73bac786e414c"
+}
+codex latest=rust-v0.160.0
+/tmp/codex-aarch64-unknown-linux-musl: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, stripped
+apiserver is not running and not registered with launchd
