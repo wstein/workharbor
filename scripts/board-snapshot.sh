@@ -160,27 +160,52 @@ field_ids() {
   case $r in *" "?*) printf '%s\n' "$r" ;; *) return 1 ;; esac
 }
 
+# items_query asks only for what the snapshot holds, 100 items a page (#165).
+items_query='query($p:ID!,$after:String){node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url labels(first:20){nodes{name}}} ... on PullRequest{number title url labels(first:20){nodes{name}}} ... on DraftIssue{title}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
+
+# query reads every page of the board with first:100 and an after: cursor and
+# rewrites the snapshot only when all pages came back; one failed page leaves
+# the old file alone and fails the query.
 query() {
-  local out tmp
+  local out cursor="" more=true tmp pages
   rate_warn
-  out=$(gh project item-list 6 --owner wstein --format json --limit 300) || return 1
+  pages=$(mktemp "$dir/.board.XXXXXX")
+  while [ "$more" = true ]; do
+    if [ -n "$cursor" ]; then
+      out=$(gh api graphql -f query="$items_query" -f p="$project" -f after="$cursor") || { rm -f "$pages"; return 1; }
+    else
+      out=$(gh api graphql -f query="$items_query" -f p="$project") || { rm -f "$pages"; return 1; }
+    fi
+    if ! printf '%s' "$out" | jq -e '.data.node.items.nodes | arrays' >/dev/null 2>&1; then
+      rm -f "$pages"
+      return 1
+    fi
+    printf '%s' "$out" | jq -c '.data.node.items.nodes[]' >>"$pages" || { rm -f "$pages"; return 1; }
+    more=$(printf '%s' "$out" | jq -r '.data.node.items.pageInfo.hasNextPage // false')
+    cursor=$(printf '%s' "$out" | jq -r '.data.node.items.pageInfo.endCursor // empty')
+    if [ "$more" = true ] && [ -z "$cursor" ]; then
+      rm -f "$pages"
+      return 1
+    fi
+  done
   tmp=$(mktemp "$dir/.board.XXXXXX")
-  if ! printf '%s' "$out" | jq --argjson now "$(date +%s)" '{
+  if ! jq -s --argjson now "$(date +%s)" '{
     fetched_at: $now,
-    items: [.items[] | {
+    items: [.[] | {
       number: .content.number,
-      title: (.title // .content.title),
-      status: .status,
-      session: .session,
-      priority: .priority,
-      labels: (.labels // []),
-      type: .content.type,
+      title: .content.title,
+      status: .status.name,
+      session: .session.name,
+      priority: .priority.name,
+      labels: [.content.labels.nodes[]?.name],
+      type: .content.__typename,
       url: .content.url
     }]
-  }' >"$tmp"; then
-    rm -f "$tmp"
+  }' "$pages" >"$tmp"; then
+    rm -f "$tmp" "$pages"
     return 1
   fi
+  rm -f "$pages"
   chmod 600 "$tmp"
   mv "$tmp" "$file"
 }

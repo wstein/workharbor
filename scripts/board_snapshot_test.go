@@ -12,13 +12,20 @@ import (
 	"time"
 )
 
-const fakeBoard = `{"items":[
-{"title":"b","status":"Todo","session":"wh/platform","priority":"P2","labels":["x"],"content":{"number":20,"type":"Issue","url":"https://example/20"}},
-{"title":"a","status":"Todo","session":"wh/platform","priority":"P1","content":{"number":30,"type":"Issue","url":"https://example/30"}},
-{"title":"c","status":"Todo","session":"wh/platform","priority":"P2","content":{"number":10,"type":"Issue","url":"https://example/10"}},
-{"title":"d","status":"In progress","session":"wh/platform","priority":"P1","content":{"number":40,"type":"Issue","url":"https://example/40"}},
-{"title":"e","status":"Todo","session":"wh/runtime","priority":"P1","content":{"number":50,"type":"Issue","url":"https://example/50"}}
-],"totalCount":5}`
+const fakeNodes = `[
+{"content":{"__typename":"Issue","number":20,"title":"b","url":"https://example/20","labels":{"nodes":[{"name":"x"}]}},"status":{"name":"Todo"},"session":{"name":"wh/platform"},"priority":{"name":"P2"}},
+{"content":{"__typename":"Issue","number":30,"title":"a","url":"https://example/30"},"status":{"name":"Todo"},"session":{"name":"wh/platform"},"priority":{"name":"P1"}},
+{"content":{"__typename":"Issue","number":10,"title":"c","url":"https://example/10"},"status":{"name":"Todo"},"session":{"name":"wh/platform"},"priority":{"name":"P2"}},
+{"content":{"__typename":"Issue","number":40,"title":"d","url":"https://example/40"},"status":{"name":"In progress"},"session":{"name":"wh/platform"},"priority":{"name":"P1"}},
+{"content":{"__typename":"Issue","number":50,"title":"e","url":"https://example/50"},"status":{"name":"Todo"},"session":{"name":"wh/runtime"},"priority":{"name":"P1"}}
+]`
+
+func page(nodes string, next string) string {
+	if next == "" {
+		return `{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":` + nodes + `}}}}`
+	}
+	return `{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":"` + next + `"},"nodes":` + nodes + `}}}}`
+}
 
 type board struct {
 	bin, snap, log string
@@ -32,10 +39,7 @@ func newBoard(t *testing.T) board {
 	b := board{bin: t.TempDir()}
 	b.snap = filepath.Join(t.TempDir(), "cache", "board.json")
 	b.log = filepath.Join(b.bin, "gh.log")
-	data := filepath.Join(b.bin, "board.json")
-	if err := os.WriteFile(data, []byte(fakeBoard), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	b.pages(t, map[string]string{"first": page(fakeNodes, "")})
 	gh := `#!/bin/sh
 if [ "$1 $2" = "api rate_limit" ]; then
 	echo "rate_limit" >> "` + b.bin + `/rate.log"
@@ -50,14 +54,33 @@ case "$*" in
 *updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
 *projectItems*) if [ -n "$FAKE_NOITEM" ]; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
 *"fields(first"*) echo '{"data":{"node":{"fields":{"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
+*"items(first"*)
+	cur=first
+	for a in "$@"; do case "$a" in after=*) cur=${a#after=} ;; esac; done
+	if [ "$FAKE_FAIL_PAGE" = "$cur" ]; then echo "GraphQL: secondary rate limit" >&2; exit 1; fi
+	cat "` + b.bin + `/pages/$cur.json"; exit 0 ;;
 *"issue(number"*) echo '{"data":{"repository":{"issue":{"id":"I_77","title":"A new title"}}}}'; exit 0 ;;
 esac
-cat "` + data + `"
+echo '{}'
 `
 	if err := os.WriteFile(filepath.Join(b.bin, "gh"), []byte(gh), 0o755); err != nil { //nolint:gosec // a test fake
 		t.Fatal(err)
 	}
 	return b
+}
+
+// pages writes the fake board's pages, named by the cursor that fetches them.
+func (b board) pages(t *testing.T, p map[string]string) {
+	t.Helper()
+	dir := filepath.Join(b.bin, "pages")
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // a test dir
+		t.Fatal(err)
+	}
+	for name, body := range p {
+		if err := os.WriteFile(filepath.Join(dir, name+".json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func (b board) run(t *testing.T, args ...string) (string, string, error) {
@@ -615,5 +638,55 @@ func TestBoardSnapshotWarnsUnder20Percent(t *testing.T) {
 		if strings.Contains(l, "rate_limit") {
 			t.Fatalf("rate_limit logged as a counted call: %q", l)
 		}
+	}
+}
+
+func TestBoardSnapshotPagination(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	one := func(n int) string {
+		return `[{"content":{"__typename":"Issue","number":` + strconv.Itoa(n) + `,"title":"t","url":"u"},"status":{"name":"Todo"},"session":{"name":"wh/platform"},"priority":{"name":"P1"}}]`
+	}
+	b.pages(t, map[string]string{"first": page(one(1), "c1"), "c1": page(one(2), "c2"), "c2": page(one(3), "")})
+	out, se, err := b.run(t)
+	if err != nil || se != "" {
+		t.Fatalf("err %v, stderr %q", err, se)
+	}
+	var s struct {
+		Items []struct {
+			Number int
+			Type   string
+			Status string
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(out), &s); err != nil || len(s.Items) != 3 || s.Items[2].Number != 3 || s.Items[0].Type != "Issue" || s.Items[0].Status != "Todo" {
+		t.Fatalf("snapshot = %s (%v)", out, err)
+	}
+	if b.calls(t) != 3 {
+		t.Fatalf("calls = %d, want 3 pages", b.calls(t))
+	}
+	for _, l := range b.lines(t) {
+		if strings.Contains(l, "item-list") {
+			t.Fatalf("the board read still uses item-list: %q", l)
+		}
+	}
+}
+
+func TestBoardSnapshotFailingPageKeepsOldFile(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	b.age(t, 400)
+	before, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	b.pages(t, map[string]string{"first": page(fakeNodes, "c1"), "c1": page(fakeNodes, "")})
+	out, se, err := b.runEnv(t, []string{"FAKE_FAIL_PAGE=c1"})
+	if err != nil || !strings.Contains(se, "stale") || out != string(before) {
+		t.Fatalf("err %v, stderr %q, old snapshot kept = %v", err, se, out == string(before))
+	}
+	after, _ := os.ReadFile(b.snap) //nolint:gosec // a test path
+	if string(after) != string(before) {
+		t.Fatal("a failed page changed the file")
 	}
 }
