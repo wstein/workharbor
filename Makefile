@@ -38,9 +38,10 @@ PREFIX ?= $(HOME)/.local
 INSTALL_GO = GOWORK=off GOFLAGS= go
 
 check-clean:
-	@if [ -n "$$(git status --porcelain)" ]; then \
+	@s=$$(git status --porcelain) || { echo "could not read the git status, so the tree is not known to be clean" >&2; exit 1; }; \
+	if [ -n "$$s" ]; then \
 		echo "refusing to install from a dirty tree: commit or stash first, so that whr runs committed code" >&2; \
-		git status --short >&2; exit 1; \
+		echo "$$s" >&2; exit 1; \
 	fi
 
 check-main:
@@ -131,9 +132,12 @@ fmt:
 
 # Fail if any source is not formatted.
 fmt-check:
-	@diff="$$(go run $(GOLANGCI_LINT) fmt --diff 2>&1)"; rc=$$?; \
-	if [ $$rc -ne 0 ]; then echo "$$diff" >&2; echo "the formatter failed (exit $$rc), so nothing was checked" >&2; exit 1; fi; \
-	if [ -n "$$diff" ]; then echo "$$diff"; echo "run 'make fmt'"; exit 1; fi
+	@d=$$(mktemp -d) || { echo "the format check could not run (no temporary directory), so nothing was checked" >&2; exit 1; }; \
+	trap 'rm -rf "$$d"' EXIT; trap 'exit 1' HUP INT TERM; \
+	GOBIN="$$d" go install $(GOLANGCI_LINT) >&2 || { echo "the format check could not run (the formatter did not install), so nothing was checked" >&2; exit 1; }; \
+	"$$d/golangci-lint" fmt --diff >"$$d/out" 2>"$$d/err"; rc=$$?; \
+	if [ -s "$$d/out" ]; then cat "$$d/out"; echo "run 'make fmt'" >&2; exit 1; fi; \
+	if [ $$rc -ne 0 ]; then cat "$$d/err" >&2; echo "the formatter failed (exit $$rc), so nothing was checked" >&2; exit 1; fi
 
 lint:
 	go run $(GOLANGCI_LINT) run --config .config/golangci.yml
