@@ -9,12 +9,12 @@
 #   board-snapshot.sh priority <number> <P1|P2|P3>  set a card's Priority
 #   board-snapshot.sh add <number>             add an issue to the board
 #
-#   board-snapshot.sh ready <number>           set Ready to push (wh/review only)
+#   board-snapshot.sh ready <number>           set Ready to push (wh/review, or wh/dispatch for it)
 #
 # move sets only Todo, In progress, Blocked and In review: Ready to push
 # (wh/review) and Done (closing the issue, the human) are refused before any gh
 # call. `ready` sets Ready to push and is for wh/review only (the review gate,
-# AGENTS.md); nobody else runs it. Done is set by the human or by closing the issue.
+# AGENTS.md), or wh/dispatch on its behalf for the reviewed sha. Done is set by the human or by closing the issue.
 #
 # Writes use the item-ID route, never `gh project item-edit --url`, whose
 # project-wide item lookup trips GitHub's secondary rate limit (#165): one call

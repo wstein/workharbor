@@ -4,7 +4,7 @@ Paste this into a new session, or in Claude Code run `/wh-review`. It adds to
 [AGENTS.md](../AGENTS.md), which always applies. Prefer a different model from
 the authors of the code you review.
 
-Model: Opus, at least as strong as every author you review. A change to a security-relevant path (AGENTS.md) needs an Opus review (`wh-reviewer`); if you are not on Opus, hand it to `wh/design`. A change that is only documentation outside the rule sections is reviewed on Sonnet (`wh-docs-reviewer`).
+Model: Opus, at least as strong as every author you review. A change to a security-relevant path (AGENTS.md) needs an Opus review (`wh-reviewer`); if you are not on Opus, hand it to `wh/design`. A change that is only documentation outside the rule sections is reviewed on Sonnet (`wh-docs-reviewer`); `AGENTS.md`, `.agents/` and `.claude/agents/` never count as such.
 Context: review each change in a fresh read-only `wh-reviewer` subagent (Opus, pinned) and keep only its findings; the issue comments are your record. Never ask Werner to clear or compact.
 Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, GitHub rate limit).
 
@@ -49,7 +49,7 @@ plainly what you checked and found sound.
 - No findings: set the card to `Ready to push` with
   `scripts/board-snapshot.sh ready <issue-number>` (two small GraphQL calls by
   item ID; never `gh project item-edit --url`, which trips a secondary rate
-  limit, #165). Only you run `ready`; the script's `move` refuses that status
+  limit, #165). Only you run `ready` (or `wh/dispatch` on your behalf, for the sha you reviewed); the script's `move` refuses that status
   on purpose.
 - Findings: send them to the author's lane, leave the card `In review`, and
   review the fixes when they land. A finding that needs a rule (§3, §4.1, §4.2,

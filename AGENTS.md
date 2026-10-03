@@ -35,10 +35,10 @@ The `Makefile` lists the rest (`install`, `install-release`, `changelog`, `edito
 
 ## Conventions
 
-- Web UI: server-rendered Go with `templ`, htmx and SSE, embedded in the binary (D8). No Node toolchain, no SPA framework, no CSS framework. HTML handlers stay thin and call the same service layer as the JSON API.
+- Web UI: server-rendered Go with `templ`, htmx and SSE, embedded in the binary (D8). No Node toolchain, no SPA framework, no CSS framework. HTML handlers stay thin and call the same service layer as the JSON API; never duplicate business logic in a handler.
 - Go, standard library first. Add a dependency only when it is clearly justified, and say why in the commit message.
 - Add table-driven or small focused tests next to the code for domain logic and policy.
-- Adapters depend on `domain`, never the reverse.
+- Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
 - GitHub Actions: pin each to a full commit SHA with its version in a comment (`uses: owner/action@<sha> # vX.Y.Z`), keep job-level least-privilege `permissions`, never use `pull_request_target`, and pass event data to scripts through `env`, not `${{ }}` in `run`. Dependabot and Renovate commits are exempt from the subject length and `Signed-off-by` rules.
@@ -70,7 +70,7 @@ Refs: #12
 Assisted-by: Claude Code:claude-sonnet-5-5
 ```
 
-**Commit frequency.** One commit per finished change, not per attempt: iterate in the working tree and commit once the result is final. A file and what is generated from it (an SVG and its PNG, a source and its lockfile) go in the same commit, with the link fixes the change caused; unrelated changes go in separate commits. Correct your own unpushed commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way; only Werner force-pushes (he lifts the `main` ruleset for it). The repository allows only rebase merges, so every commit lands on `main` as written.
+**Commit frequency.** One commit per finished change, not per attempt: iterate in the working tree and commit once the result is final. A file and what is generated from it (an SVG and its PNG, a source and its lockfile) go in the same commit, with the link fixes the change caused; unrelated changes go in separate commits. Correct your own unpushed commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way; only Werner force-pushes (he lifts the `main` ruleset for it). From the beta on, never rewrite pushed commits unless asked. The repository allows only rebase merges, so every commit lands on `main` as written.
 
 | Trailer | Rule |
 | --- | --- |
@@ -109,7 +109,7 @@ Each lane starts from its prompt in [`.agents/`](.agents/) (in Claude Code `/wh-
 
 **Models.** A subagent's model is always set explicitly through its pinned type in `.claude/agents/`, never inherited (#158): an issue runs as its lane's agent (`wh-platform`, `wh-runtime`, `wh-docs`, `wh-verify`; Sonnet), research as `wh-worker` (Sonnet), a review as `wh-reviewer` (Opus), or `wh-docs-reviewer` (Sonnet) for documentation outside the rule sections only, a helper as `wh-helper` (Haiku). Another tool passes the same model by hand.
 
-**Security-relevant paths.** Everything that runs or builds the supervisor counts, unless it is listed as an exception: every package under `internal/` and `cmd/`, the dependency and build files (`go.mod`, `go.sum`, `docs/go.mod`, `Makefile`, `.github/` (its `renovate.json` included), `.githooks/`, `.gitleaks.toml`, `.claude/settings.json`, `scripts/`, the `Containerfile`s and `.devcontainer/`), `AGENTS.md`, `.agents/` and `.claude/agents/`, and the rule sections of the design and the threat model. The exceptions, which a Sonnet review may clear: `internal/exitcode`, `internal/version`, `internal/docscheck`, and documentation outside the rule sections. A change to a security-relevant path is reviewed by an Opus session (`wh/review`, or `wh/design` when the reviewer is not on Opus) before it is `Ready to push`; a helper never edits one. When in doubt, it counts.
+**Security-relevant paths.** Everything that runs or builds the supervisor counts, unless it is listed as an exception: every package under `internal/` and `cmd/`, the dependency and build files (`go.mod`, `go.sum`, `docs/go.mod`, `Makefile`, `.github/` (its `renovate.json` included), `.githooks/`, `.gitleaks.toml`, `.claude/settings.json`, `scripts/`, the `Containerfile`s and `.devcontainer/`), `AGENTS.md`, `.agents/` and `.claude/agents/`, and the rule sections of the design and the threat model. The exceptions, which a Sonnet review may clear: `internal/exitcode`, `internal/version`, `internal/docscheck`, and documentation outside the rule sections (never `AGENTS.md`, `.agents/` or `.claude/agents/`, though they are Markdown). A change to a security-relevant path is reviewed by an Opus session (`wh/review`, or `wh/design` when the reviewer is not on Opus) before it is `Ready to push`; a helper never edits one. When in doubt, it counts.
 
 **Context and cost.** A long-lived session pays for its whole history on every turn (about 80 % of this project's cost is cache reads, #167). So:
 
@@ -119,7 +119,7 @@ Each lane starts from its prompt in [`.agents/`](.agents/) (in Claude Code `/wh-
 - **Lookups go to a helper.** Paste conclusions, not raw output, into messages and comments; refer to commits, files and issues by name.
 - **Idle lanes stop.** A lane whose queue is empty says so once (to `wh/dispatch`, or `wh/desk` when none runs) and waits; Werner closes idle sessions. Opus sessions stay short: `wh/design` decides the waiting questions, writes a resume note and ends its own session.
 
-**GitHub rate limit.** Every session shares Werner's one GitHub token (GraphQL: 5000 points an hour), and the board is the expensive part.
+**GitHub rate limit.** Every session shares Werner's one GitHub token (GraphQL: 5000 points an hour), and the board is the expensive part. Every lane reads only its own issue and moves only its own card.
 
 - The board is read and written only through `scripts/board-snapshot.sh` (#132): `queue <lane>` for a lane's next cards, `card <n>` for one card, no argument for the whole snapshot (cached 5 minutes; `--refresh` only after moving your own card), and `move <n> <status>` to move a card by item ID. Its writes (`move`, `ready`, `session`, `priority`, `add`) always ask for permission. Never run `gh project item-list` or `gh project item-edit` directly (`--url` trips a secondary limit even with points left), and never ask another session for board status.
 - Issues go through REST, which has its own budget (#165): `gh api repos/wstein/workharbor/issues/<n>` (with `--jq` for the fields you need) to read, `.../issues/<n>/comments -f body=...` to comment, `-X PATCH .../issues/<n> -f body=...` to tick criteria, `-X POST .../issues` to open one, then `scripts/board-snapshot.sh add` to put it on the board. `gh issue view/comment/edit/create` go through GraphQL and are not used.
