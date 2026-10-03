@@ -645,7 +645,7 @@ func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
 	if agg.Task().Workflow != "published" {
 		t.Errorf("the task's preset is %q, want the published it started under", agg.Task().Workflow)
 	}
-	if got := effectivePreset(agg.Task().Workflow, policy.Prototype); got != policy.Published {
+	if got, err := effectivePreset(agg.Task().Workflow, policy.Prototype); err != nil || got != policy.Published {
 		t.Errorf("a published task under a prototype configuration publishes as %s", got)
 	}
 	// a repository with nothing configured gets the default
@@ -667,10 +667,20 @@ func TestTheEffectivePresetIsTheStricterOfTheTaskAndTheRepository(t *testing.T) 
 		{"integration", policy.Prototype, policy.Integration},
 		{"", policy.Prototype, policy.Prototype},
 		{"", "", policy.Integration},
-		{"nonsense", policy.Published, policy.Published},
 	} {
-		if got := effectivePreset(c.task, c.repo); got != c.want {
-			t.Errorf("task %q repo %q = %s, want %s", c.task, c.repo, got, c.want)
+		if got, err := effectivePreset(c.task, c.repo); err != nil || got != c.want {
+			t.Errorf("task %q repo %q = %s, %v, want %s", c.task, c.repo, got, err, c.want)
+		}
+	}
+}
+
+// A stored task preset that cannot be parsed is an error, whatever the
+// repository's preset (§6, #236).
+func TestAnUnparsableTaskPresetIsAnError(t *testing.T) {
+	t.Parallel()
+	for _, repo := range []policy.Preset{"", policy.Prototype, policy.Published} {
+		if got, err := effectivePreset("nonsense", repo); err == nil {
+			t.Errorf("repo %q: an unparsable task preset gave %s, want an error", repo, got)
 		}
 	}
 }

@@ -179,7 +179,10 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 	// The guard decides with the run's context: an untrusted input asks where the
 	// table would let an action run on its own. The supervisor does not know
 	// whether the repository is private, so it assumes it is (design §7.1).
-	preset := effectivePreset(agg.Task().Workflow, p.cfg.Workflow)
+	preset, err := effectivePreset(agg.Task().Workflow, p.cfg.Workflow)
+	if err != nil {
+		return forge.PullRequest{}, err
+	}
 	branch := p.branchOf(agg.Task())
 	guard := p.cfg.Guard.WithTable(preset.Table()).For(policy.Context{UntrustedInput: agg.Task().Untrusted, PrivateData: true, Egress: true})
 	if err := guard.Push(ctx, p.cfg.ForgeRepo, cand.Branch, ap); err != nil {
@@ -230,20 +233,27 @@ func (p *Publisher) Publish(ctx context.Context, task, decision domain.ID, title
 // from when it started, and the repository's current one, so a looser preset never
 // applies to a run already started and a stricter one applies at once (D47, §6).
 // Without a task preset the repository's is used, and without either the default.
-func effectivePreset(task string, repo policy.Preset) policy.Preset {
+// A stored task preset that cannot be parsed is an error, never "no preset" and
+// never the strictest one: the publish fails closed and nothing is pushed (§6,
+// issue #236).
+func effectivePreset(task string, repo policy.Preset) (policy.Preset, error) {
 	own := policy.Preset("")
-	if p, err := policy.ParsePreset(task); err == nil && task != "" {
+	if task != "" {
+		p, err := policy.ParsePreset(task)
+		if err != nil {
+			return "", fmt.Errorf("the task's stored preset cannot be read: %w", err)
+		}
 		own = p
 	}
 	switch {
 	case own == "" && repo == "":
-		return policy.DefaultPreset
+		return policy.DefaultPreset, nil
 	case own == "":
-		return repo
+		return repo, nil
 	case repo == "":
-		return own
+		return own, nil
 	}
-	return policy.Stricter(own, repo)
+	return policy.Stricter(own, repo), nil
 }
 
 // branchOf is the integration branch a task publishes to: the one it started

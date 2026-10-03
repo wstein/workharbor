@@ -492,3 +492,32 @@ func TestATaskPublishesToItsOwnBranchUnderTheStricterPreset(t *testing.T) {
 		t.Errorf("integration task: %v %v", err, s.forge.Calls)
 	}
 }
+
+// A task whose stored preset cannot be parsed fails the publish closed: nothing
+// is pushed, and neither the repository's preset nor the strictest applies
+// (§6, #236).
+func TestATaskWithAnUnparsablePresetFailsThePublishClosed(t *testing.T) {
+	t.Parallel()
+	for _, repo := range []policy.Preset{policy.Prototype, policy.Published, policy.Integration} {
+		p, _ := approvedUnder(t, repo, "develop", withTask(func(tk *domain.Task) { tk.Workflow = "removed-preset" }))
+		if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err == nil {
+			t.Fatalf("repo %s: the publish succeeded with an unparsable task preset", repo)
+		}
+		if p.remoteHas() || len(p.forge.FastForwards) != 0 || hasCall(p.forge, "OpenPR") || hasCall(p.forge, "Push") {
+			t.Errorf("repo %s: something was sent: %v, moves %v", repo, p.forge.Calls, p.forge.FastForwards)
+		}
+	}
+}
+
+// An empty stored preset is a task from before presets, not a corrupt value: it
+// still means "no preset" and publishes under the repository's (§6, #236).
+func TestATaskWithAnEmptyPresetStillPublishesUnderTheRepositoryPreset(t *testing.T) {
+	t.Parallel()
+	p, _ := approvedUnder(t, policy.Published, "", withTask(func(tk *domain.Task) { tk.Workflow = "" }))
+	if _, err := p.pub.Publish(bg, "t1", "review-1", "t", "b"); err != nil {
+		t.Fatalf("an empty task preset failed the publish: %v", err)
+	}
+	if !hasCall(p.forge, "OpenPR") {
+		t.Errorf("the repository's published preset did not apply: %v", p.forge.Calls)
+	}
+}
