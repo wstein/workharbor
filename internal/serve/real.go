@@ -30,6 +30,7 @@ import (
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
+	"github.com/wstein/workharbor/internal/textsafe"
 	"github.com/wstein/workharbor/internal/toolstore"
 )
 
@@ -713,7 +714,7 @@ func redactedLogf(rd *redact.Redactor, logf func(string, ...any)) func(string, .
 }
 
 // escapeControl replaces every C0 control character (tab excepted), DEL and
-// every C1 control character with a visible escape such as \n, \x1b or \u009b.
+// every C1 control character, bidirectional control and line separator with a visible escape such as \n, \x1b or \u009b.
 func escapeControl(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -726,7 +727,7 @@ func escapeControl(s string) string {
 			b.WriteString(`\r`)
 		case r < 0x20 || r == 0x7f:
 			fmt.Fprintf(&b, `\x%02x`, r)
-		case r >= 0x80 && r <= 0x9f:
+		case r >= 0x80 && r <= 0x9f, textsafe.IsBidiOrSeparator(r):
 			fmt.Fprintf(&b, `\u%04x`, r)
 		default:
 			b.WriteRune(r)

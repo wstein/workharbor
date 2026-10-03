@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Env is everything a command touches outside its arguments, so tests run
@@ -165,19 +166,11 @@ func clean(s string) string {
 		if r == '\t' || r == ' ' {
 			return ' '
 		}
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || isBidiOrSeparator(r) {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || textsafe.IsBidiOrSeparator(r) {
 			return '?'
 		}
 		return r
 	}, s)
-}
-
-func isBidiOrSeparator(r rune) bool {
-	switch {
-	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
-		return true
-	}
-	return r == 0x200e || r == 0x200f || r == 0x061c || r == 0x2028 || r == 0x2029
 }
 
 // needsHumanError is a command that did what it could and now waits for a human.

@@ -624,11 +624,11 @@ func TestRunDoesNotRecordAPassCutShortByShutdown(t *testing.T) {
 func TestRedactedLogfEscapesControlCharacters(t *testing.T) {
 	var got string
 	redactedLogf(redact.New(), func(f string, a ...any) { got = fmt.Sprintf(f, a...) })(
-		"task %s: %v", "t1", errors.New("boom\n2026-01-01 forged line\r\x1b[2J\u009b31m\tend\x7f"))
-	if strings.ContainsAny(got, "\n\r\x1b\x7f\u009b") {
+		"task %s: %v", "t1", errors.New("boom\n2026-01-01 forged line\r\x1b[2J\u009b31m\tend\x7f\u202e\u2066\u200f\u061c\u2028\u2029"))
+	if strings.ContainsAny(got, "\n\r\x1b\x7f\u009b\u202e\u2066\u200f\u061c\u2028\u2029") {
 		t.Errorf("log line has a raw control character: %q", got)
 	}
-	for _, want := range []string{`boom\n2026`, `\r\x1b[2J`, `\u009b31m`, "\tend", `\x7f`} {
+	for _, want := range []string{`boom\n2026`, `\r\x1b[2J`, `\u009b31m`, "\tend", `\x7f`, `\u202e`, `\u2066`, `\u200f`, `\u061c`, `\u2028`, `\u2029`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log line %q lacks %q", got, want)
 		}
