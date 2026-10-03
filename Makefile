@@ -90,10 +90,10 @@ test-short:
 # The race detector, on the packages that run goroutines of their own: the
 # service (starts, sessions, the reconciler), the API (streams), the store, the
 # runtime adapters, the agent adapters and approval broker, the egress proxy,
-# `whr serve` and the in-guest shim. About a minute.
+# the preview listeners, `whr serve` and the in-guest shim. About a minute.
 race:
 	go test -race ./internal/service ./internal/api ./internal/store ./internal/runtime/... \
-		./internal/agent/... ./internal/egress ./internal/serve ./cmd/whr-shim
+		./internal/agent/... ./internal/egress ./internal/preview ./internal/serve ./cmd/whr-shim
 
 # Native Go fuzz targets for every parser of untrusted input (issue #110): each runs
 # for FUZZTIME (go's -fuzztime). A crash writes its input under the package's
