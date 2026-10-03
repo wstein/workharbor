@@ -656,7 +656,11 @@ func (w *Workspaces) gateEgress(ctx context.Context, task, run domain.ID, ws dom
 	if err != nil {
 		return false, err // fail closed: old answers are not trusted on a preset not known
 	}
-	published := policy.Preset(agg.Task().Workflow) == policy.Published
+	preset, err := taskPreset(agg.Task())
+	if err != nil {
+		return false, err // fail closed: an unreadable preset is not "not published" (§6, #256)
+	}
+	published := preset == policy.Published
 	pending, err := w.svc.PendingEgress(ctx, ws.Repo, env.Environment, published)
 	if err != nil {
 		return false, err
@@ -753,6 +757,9 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 	}
 	if err := w.applyEgress(ctx, ws); err != nil {
 		return w.abortStart(ctx, task, run, sl, fmt.Errorf("apply the egress allowlist: %w", err))
+	}
+	if err := taskPresetReadable(agg.Task()); err != nil {
+		return w.abortStart(ctx, task, run, sl, err)
 	}
 	spec := w.svc.cfg.Spec(agg.Task(), r)
 	w.svc.fillApprover(&spec, task, run)

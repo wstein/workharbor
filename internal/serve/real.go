@@ -128,7 +128,13 @@ func modeFor(c *config.Config, repo, taskWorkflow string) agent.PermissionMode {
 	if c.AgentPermissionMode != "" {
 		return agent.PermissionMode(c.AgentPermissionMode)
 	}
-	if p, err := policy.ParsePreset(taskWorkflow); err == nil && taskWorkflow != "" {
+	if taskWorkflow != "" {
+		p, err := policy.ParsePreset(taskWorkflow)
+		if err != nil {
+			// The service refuses such a run before this is asked; if it is asked
+			// anyway the answer is the strictest, never the repository's (§6, #256).
+			return agent.PermissionMode(policy.Published.AgentMode())
+		}
 		return agent.PermissionMode(p.AgentMode())
 	}
 	for _, r := range c.Repositories {

@@ -317,6 +317,21 @@ func TestTheAgentModeFollowsTheWorkflow(t *testing.T) {
 	}
 }
 
+// A task preset that cannot be parsed never falls back to the repository's: the
+// service refuses such a run, and if the mode is asked anyway it is the strictest
+// (§6, #256). An empty one is a task from before presets and follows the repository.
+func TestAnUnparsableTaskPresetNeverFallsBackToTheRepositoryMode(t *testing.T) {
+	c := &config.Config{Repositories: []config.Repository{{Name: "a/proto", Workflow: "prototype"}}}
+	spec := AgentSpecFor(c, agent.AuthSubscription)(domain.Task{Repo: "a/proto", Workflow: "removed-preset"}, domain.Run{})
+	if spec.PermissionMode != agent.PermissionManual {
+		t.Errorf("an unparsable task preset: %s, want manual", spec.PermissionMode)
+	}
+	spec = AgentSpecFor(c, agent.AuthSubscription)(domain.Task{Repo: "a/proto"}, domain.Run{})
+	if spec.PermissionMode != agent.PermissionDontAsk {
+		t.Errorf("an empty task preset: %s, want the repository's dontAsk", spec.PermissionMode)
+	}
+}
+
 func TestTheConsoleSpecIsHardenedReadOnlyByDefaultAndHasNoSecrets(t *testing.T) {
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

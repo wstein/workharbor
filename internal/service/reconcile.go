@@ -8,6 +8,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -273,6 +274,11 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 		s.end(run, sl)
 		return &domain.NotFoundError{Kind: "run", ID: string(run)}
 	}
+	if err := taskPresetReadable(agg.Task()); err != nil {
+		// refused, not started: it counts as an attempt, so it does not loop (§6, #256)
+		s.end(run, sl)
+		return s.recordLaunchFailure(ctx, task, run, err)
+	}
 	spec := s.cfg.Spec(agg.Task(), r)
 	s.fillApprover(&spec, task, run)
 	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
@@ -290,18 +296,7 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 		if errors.Is(err, agent.ErrNoSession) {
 			return err
 		}
-		var exhausted bool
-		if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error {
-			var rerr error
-			exhausted, rerr = a.RecordLaunchFailure(run, s.cfg.MaxAttempts)
-			return rerr
-		}); uerr != nil {
-			return errors.Join(err, uerr)
-		}
-		if exhausted {
-			return errors.Join(err, errAttemptsUsedUp)
-		}
-		return err
+		return s.recordLaunchFailure(ctx, task, run, err)
 	}
 	if err := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.MarkRunning(run) }); err != nil {
 		_ = sess.Stop(ctx)
@@ -310,6 +305,44 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 	}
 	s.attach(task, run, sl, sess)
 	return nil
+}
+
+// recordLaunchFailure counts a failed launch attempt of a run and returns cause,
+// joined with errAttemptsUsedUp when the attempts are used up.
+func (s *Service) recordLaunchFailure(ctx context.Context, task, run domain.ID, cause error) error {
+	var exhausted bool
+	if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		var rerr error
+		exhausted, rerr = a.RecordLaunchFailure(run, s.cfg.MaxAttempts)
+		return rerr
+	}); uerr != nil {
+		return errors.Join(cause, uerr)
+	}
+	if exhausted {
+		return errors.Join(cause, errAttemptsUsedUp)
+	}
+	return cause
+}
+
+// taskPresetReadable is nil when the task's stored preset can be read: empty
+// (a task from before presets were recorded) or a known one. An unreadable one
+// is an error, so the run is refused and nothing falls back to the repository's
+// preset or the default (§6, issues #236, #256).
+func taskPresetReadable(t domain.Task) error {
+	_, err := taskPreset(t)
+	return err
+}
+
+// taskPreset is the preset a task started under, "" for none.
+func taskPreset(t domain.Task) (policy.Preset, error) {
+	if t.Workflow == "" {
+		return "", nil
+	}
+	p, err := policy.ParsePreset(t.Workflow)
+	if err != nil {
+		return "", fmt.Errorf("the task's stored preset cannot be read, so the run is not started: %w", err)
+	}
+	return p, nil
 }
 
 // failRun ends a run that cannot be resumed and opens the retry-or-cancel
