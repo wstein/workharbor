@@ -331,7 +331,7 @@ func TestTheCallersOwnOverridesAreKept(t *testing.T) {
 	}
 	cmd = exec.Command(b.wrapper, "config", "--get", "core.hooksPath") //nolint:gosec,noctx // the test's wrapper
 	cmd.Dir = b.repo
-	cmd.Env = b.env("GIT_CONFIG_COUNT=bogus")
+	cmd.Env = append(b.env(), "GIT_CONFIG_COUNT=bogus") // after gittest.Env, which refuses a garbled count: this is the wrapper's own test
 	if out, err := cmd.CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "/dev/null" {
 		t.Errorf("a garbled GIT_CONFIG_COUNT must not switch the protection off: %q, %v", out, err)
 	}
