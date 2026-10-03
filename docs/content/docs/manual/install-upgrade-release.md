@@ -46,6 +46,10 @@ brew install wstein/tap/whr
 
 The formula installs `whr`, the guest binaries in `libexec/whr` and the shell completions. The formula route is {{< status unverified >}} until #62 installs it. The host's Homebrew packages are pinned and not upgraded unasked (`HOMEBREW_NO_AUTO_UPDATE=1`, see [Prepare the Mac mini](host-setup.md)); upgrade `whr` on purpose.
 
+`brew upgrade whr` is not blocked by `HOMEBREW_NO_INSTALL_UPGRADE`: Homebrew's manual says that variable only stops `brew install` from upgrading an installed formula. `brew pin` does hold a formula through `brew upgrade`, so if `whr` was pinned, run `brew unpin whr` first and pin it again afterwards (the manual page of `brew`; not run against a `whr` formula, {{< status unverified >}}).
+
+The formula has `depends_on arch: :arm64`, so on an Intel Mac Homebrew stops with its own message about the unsupported architecture ({{< status unverified >}}: read from the formula, not run). Release 1 supports Apple silicon only.
+
 ## Upgrade
 
 1. Read the release notes and the upgrade notes below.
@@ -73,5 +77,13 @@ Only a human tags, signs and publishes (D24, §6); an agent never does.
 2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: `whr`, the guest binaries, `checksums.txt`, an SBOM and a build-provenance attestation.
 3. Check the draft: install it on your own prefix with `make install-release VERSION=vX.Y.Z`, which verifies the checksums and the attestation, and read the notes.
 4. Publish it. For a release (not a prerelease) the `tap` workflow renders the formula and pushes it to `wstein/homebrew-tap`; a prerelease never updates the tap.
+
+### Set up the tap once (the maintainer)
+
+The `tap` workflow pushes the formula with a deploy key, which issue #62 installs. {{< status unverified >}} until #62 is done, and the details below come from `.github/workflows/tap.yml`, not from a run:
+
+- The private half is the secret `TAP_DEPLOY_KEY` in the `homebrew-tap` environment of `wstein/workharbor`, so only that workflow job can read it.
+- The public half is a deploy key with write access on `wstein/homebrew-tap` and on no other repository.
+- To rotate it, generate a new key pair, add the new public key to `wstein/homebrew-tap`, replace the secret, run the workflow once, then delete the old deploy key. Never put the private key in a file in the repository or in a chat.
 
 `make release-snapshot` builds the artifacts locally into `dist/` without publishing, to test the pipeline.
