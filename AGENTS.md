@@ -118,7 +118,7 @@ Push only when the human asks for it in the session; never push on your own init
 
 **Naming.** A lane is named by its outcome, what it delivers (`wh/design`, `wh/platform`, `wh/runtime`, `wh/review`, `wh/verify`, `wh/docs`, `wh/spikes`), as `whr` names agents by responsibility (D42); its prompt in `.agents/` names the role (lead, coding worker, reviewer, verifier, technical writer). A helper is not a lane: it is a subagent a lane uses for one task, with no card, branch or board entry. A coding session starts from [`.agents/code.md`](.agents/code.md) (in Claude Code: `/wh-code <area> [#issue]`).
 
-**Models.** Each lane runs on a fixed model; the review is at least as strong as the author.
+**Models.** Each lane runs on a fixed model; the review is at least as strong as the author. A subagent's model is always set explicitly, never inherited from the session that starts it (#158): an issue or research subagent of a Sonnet lane runs as `wh-worker` (Sonnet), a review as `wh-reviewer` (Opus), a helper as `wh-helper` (Haiku), all pinned in `.claude/agents/`; another tool passes the same model by hand.
 
 | Lane | Model | Note |
 | --- | --- | --- |
