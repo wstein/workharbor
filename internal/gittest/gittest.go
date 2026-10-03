@@ -16,8 +16,9 @@ import (
 )
 
 // Env is the whole environment of a git or ssh-keygen process: a minimal list,
-// not os.Environ() with overrides. home is the HOME it sees, which must not be
-// the human's; extra are added last (an author identity, for example).
+// not os.Environ() with overrides. home is the HOME it sees, which must be
+// absolute and must not be the human's; extra are added last (an author
+// identity, for example).
 //
 // Env panics (this is a test helper: a wrong call must fail loudly, never run
 // git unguarded) when extra

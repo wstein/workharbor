@@ -142,7 +142,7 @@ func TestTheHumansHomeIsRefused(t *testing.T) {
 	if err != nil || human == "" {
 		t.Skip("no home directory")
 	}
-	homes := []string{human, filepath.Dir(human), "/", "relative/home", ".", "../../../../.."}
+	homes := []string{human, filepath.Dir(human), "/"}
 	// a case variant names the same directory on a case-insensitive filesystem
 	if hi, err := os.Stat(human); err == nil {
 		for _, v := range []string{strings.ToUpper(human), strings.ToLower(human)} {
@@ -162,6 +162,23 @@ func TestTheHumansHomeIsRefused(t *testing.T) {
 		}()
 	}
 	Env(t.TempDir()) // a temporary directory stays allowed
+}
+
+// A relative HOME is refused by the absolute-path rule itself: the call passes
+// no extra variable, and the panic message must name the rule, so another
+// panic cannot satisfy the row.
+func TestARelativeHomeIsRefused(t *testing.T) {
+	for _, home := range []string{"relative/home", ".", "../../../../.."} {
+		func() {
+			defer func() {
+				msg, _ := recover().(string)
+				if !strings.Contains(msg, "is not an absolute path") {
+					t.Errorf("Env(%q) panic = %q, want the absolute-path rule", home, msg)
+				}
+			}()
+			Env(home)
+		}()
+	}
 }
 
 // The case-variant row only runs where the filesystem ignores case.
