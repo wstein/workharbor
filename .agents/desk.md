@@ -29,13 +29,23 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
   a review or report held in a local file (GitHub's REST API cannot attach
   files, so a bare path is lost to everyone else):
   1. Scan the file for secrets and personal data first, because the repository
-      is public: `go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir --no-banner
-      --redact --config .gitleaks.toml <file>` (the version in the `Makefile`),
-      and read it for names, addresses and paths of the human's machine. Never
-      print a match; on a finding, stop and tell Werner.
+      is public. Check first that the file exists and is a regular file, not a
+      symlink (`gitleaks dir` skips a symlink without `--follow-symlinks`, and
+      a missing path scans nothing and still exits 0). From the repository
+      root (the config path is relative), run `go run $(GITLEAKS) dir
+      --no-banner --redact --config .gitleaks.toml <file>`, where `GITLEAKS` is
+      the pinned module and version in the `Makefile` (copy it from there, do
+      not type a version). The scan counts only when gitleaks exits 0, prints
+      `no leaks found` and reports more than 0 bytes scanned. Anything else is
+      a stop (exit 1 is both a finding and a fatal error): post nothing and
+      tell Werner. Also read the file for names, addresses and paths of the
+      human's machine. Never print a match.
   2. Summarise in the issue body; do not paste the text there.
-  3. Post the full text as one issue comment inside a collapsed
-      `<details>` block, and name the source file.
+  3. Post the full text as one issue comment inside a collapsed `<details>`
+      block, and name the source file. Put the text in a fenced code block
+      inside the `<details>`, with a fence longer than any run of backticks in
+      the text: bare Markdown there is live (`@name` notifies, `#N` links back
+      to other issues, a stray `</details>` breaks the block).
   4. A file over about 60 KB (the comment limit is 65,536 characters) is split
       across comments, or committed through `wh/docs` instead.
   5. A screenshot cannot be posted by REST: ask Werner to drag it into the issue.
