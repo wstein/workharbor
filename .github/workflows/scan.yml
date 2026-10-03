@@ -25,9 +25,15 @@ jobs:
       - name: Scan the history for secrets
         run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --no-banner --redact --config .gitleaks.toml .
       # gitleaks git reads patches only: the messages of commits and annotated tags
-      # go to it on stdin (bash runs this with pipefail, so a failed git fails it).
+      # go to it on stdin. They go through a file, not a pipe, so a failed git
+      # fails the step instead of feeding gitleaks an empty input (as in make check-ci).
       - name: Scan commit and tag messages for secrets
-        run: scripts/messages.sh "" --all | go run github.com/zricethezav/gitleaks/v8@v8.30.1 stdin --no-banner --redact --config .gitleaks.toml
+        run: |
+          set -eu
+          m=$(mktemp)
+          trap 'rm -f "$m"' EXIT
+          scripts/messages.sh "" --all >"$m"
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 stdin --no-banner --redact --config .gitleaks.toml <"$m"
 
   docs-vulnerabilities:
     runs-on: ubuntu-latest
