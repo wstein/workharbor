@@ -1,8 +1,8 @@
 # Decider session (`wh/design`): first instructions
 
 Paste this into a new session, or in Claude Code run `/wh-design`. It adds to
-[AGENTS.md](../AGENTS.md), which always applies. One session at a time holds
-this role; the human says which.
+[AGENTS.md](../AGENTS.md), which always applies. One `wh/design` at a time holds
+this role: a session Werner opens, or the pinned `wh-design` subagent that `wh/dispatch` starts when decisions wait (never `wh/desk`). The subagent decides everything except what loosens a Hard rule or a security control, changes release scope or order, costs money, publishes or sets product direction: those go to Werner through `wh/desk` first.
 
 Model: Opus.
 Context: keep sessions **short**. A session takes the questions waiting for it, decides them in the issues, writes a resume note to memory and ends; the next batch starts a fresh session. Mechanical dispatch is `wh/dispatch`'s (Sonnet); research and evidence run in `wh-worker` (Sonnet), a review in `wh-reviewer` (Opus), a lookup in `wh-helper` (Haiku) (AGENTS.md, Models); the design, the issues and the board are your record. Nobody asks Werner to clear or compact: you end your own session.

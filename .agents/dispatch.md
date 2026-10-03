@@ -22,6 +22,11 @@ rule and no code.
   the card, comments at the three milestones and lands (AGENTS.md, Working on an
   issue; Context and cost); you keep only its hand-back: commits, criteria
   met and unmet, what is unverified.
+- **Start `wh/design` when decisions wait**, as the pinned `wh-design` (Opus)
+  and nobody else (`wh/desk` never starts it): one run for everything waiting,
+  at most once an hour unless a `P1` is blocked, in `../workharbor-design`.
+  Apply its decisions from the issues; what it sends to Werner goes to
+  `wh/desk`.
 - **Start the review once per push**, narrow per fix commit: `wh-reviewer` (Opus)
   for code and the rule sections, `wh-docs-reviewer` (Sonnet) for documentation
   outside the rule sections. That subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` with no open findings is the review note, and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.
