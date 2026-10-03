@@ -17,10 +17,10 @@ $ARGUMENTS (empty: the current branch). Never push.
 3. Note `git rev-parse main`, run `make land` and read its last lines:
     - `land: main is now <sha>`: done; go to 4.
     - `main moved during the checks` or `is not on top of main`:
-      `git rebase main`, then run `make land` again.
+      `git rebase main`, then start again at 3 (noting `main` anew).
     - `Not possible to fast-forward` or an `index.lock` error from the merge:
       if `main` differs from the sha you noted, another lander won the race:
-      `git rebase main` and run `make land` again. If `main` did not move,
+      `git rebase main` and start again at 3 (noting `main` anew). If `main` did not move,
       stop and report to the human: a stale lock in the shared checkout is
       theirs to clear. Never remove `index.lock` (or anything else) in the
       shared checkout yourself, whatever git's message suggests.
