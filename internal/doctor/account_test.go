@@ -20,6 +20,15 @@ const (
 // accountDeps writes a configuration with the given keys and returns deps over it.
 func accountDeps(t *testing.T, r scripted, extra map[string]any) Deps {
 	t.Helper()
+	// the host's remote logins are off and werner exists, unless a test says otherwise
+	for _, k := range []string{"launchctl print system/com.openssh.sshd", "launchctl print system/com.apple.screensharing"} {
+		if _, ok := r[k]; !ok {
+			r[k] = "ERR:Could not find service in domain for system"
+		}
+	}
+	if _, ok := r["dscl . -read /Users/werner UniqueID"]; !ok {
+		r["dscl . -read /Users/werner UniqueID"] = "UniqueID: 501"
+	}
 	m := map[string]any{
 		"listen": "127.0.0.1:8787", "api_token_file": "/x/token",
 		"repositories": []map[string]any{{"name": "a/b"}},
@@ -189,5 +198,65 @@ func TestPrefixFixArgv(t *testing.T) {
 	d.User = "boss"
 	if got := strings.Join(d.prefixInstallArgv(), " "); got != "install -d -o boss -g admin -m 755 /opt/whr" {
 		t.Errorf("other account: %s", got)
+	}
+}
+
+func TestAccountReviewFindings157(t *testing.T) {
+	acct := func(r scripted, extra map[string]any) (Status, string) {
+		return status(steps(t, accountDeps(t, r, extra))["account"])
+	}
+	// an unreadable launchctl answer is not "off": no warn, but not verified
+	got, detail := acct(scripted{adminKey: isAdmin, "launchctl print system/com.openssh.sshd": "ERR:operation not permitted"}, nil)
+	if got != NotVerified {
+		t.Errorf("unreadable launchctl: %s %q", got, detail)
+	}
+	// a remote login that is on still fails whatever else is unreadable
+	got, _ = acct(scripted{adminKey: isAdmin, "launchctl print system/com.openssh.sshd": "ERR:boom", "launchctl print system/com.apple.screensharing": "service = x"}, nil)
+	if got != Fail {
+		t.Errorf("screen sharing on: %s", got)
+	}
+	// any account value but absent or "dedicated" is shared; drop-admin is never offered
+	for _, v := range []any{"Shared", "shared ", true, "dedicatd", 1} {
+		extra := map[string]any{"account": v}
+		if got, _ := acct(scripted{adminKey: notAdmin}, extra); got != Warn {
+			t.Errorf("account %v: %s, want warn (shared)", v, got)
+		}
+		got, detail := status(steps(t, accountDeps(t, scripted{adminKey: isAdmin, groupKey: oneOtherAd}, extra))["drop-admin"])
+		if got != Skipped {
+			t.Errorf("drop-admin on account %v: %s %q", v, got, detail)
+		}
+	}
+	if got, _ := acct(scripted{adminKey: notAdmin}, map[string]any{"account": "dedicated"}); got != OK {
+		t.Errorf("dedicated: %s", got)
+	}
+	// group names that are no account do not count as another administrator
+	stale := scripted{
+		adminKey: isAdmin, groupKey: "GroupMembership: root ghost root2 whr\n",
+		"dscl . -read /Users/ghost UniqueID": "ERR:eDSRecordNotFound", "dscl . -read /Users/root2 UniqueID": "UniqueID: 0",
+	}
+	if got, detail := status(steps(t, accountDeps(t, stale, nil))["drop-admin"]); got != Skipped {
+		t.Errorf("stale names: %s %q", got, detail)
+	}
+	if cmds, err := steps(t, accountDeps(t, stale, nil))["drop-admin"].Fix.Build(t.Context(), nil); err == nil || cmds != nil {
+		t.Errorf("stale names built %v", cmds)
+	}
+}
+
+func TestWhrUserIsNotVerifiedWhenTheAdminStatusIsUnreadable(t *testing.T) {
+	d := hostDeps(scripted{"dscl . -read /Users/whr UniqueID": "UniqueID: 502"})
+	if got, detail := status(steps(t, d)["whr-user"]); got != NotVerified {
+		t.Errorf("%s %q", got, detail)
+	}
+}
+
+func TestMediaAnalysisCacheIsReadAsTheConfiguredAccount(t *testing.T) {
+	d := hostDeps(scripted{"ps -axo user=,pcpu=,time=,comm=": "x 0.0 0:00 /bin/ls"})
+	d.Account, d.User = "bob", "bob"
+	if _, detail := status(steps(t, d)["media-analysis"]); strings.Contains(detail, "not read from here") {
+		t.Errorf("%q", detail)
+	}
+	d.User = "bob2"
+	if _, detail := status(steps(t, d)["media-analysis"]); !strings.Contains(detail, "as bob") {
+		t.Errorf("%q", detail)
 	}
 }

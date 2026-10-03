@@ -60,9 +60,17 @@ func (d Deps) otherAdmins(ctx context.Context) ([]string, error) {
 	}
 	var others []string
 	for _, m := range strings.Fields(rest) {
-		if m != "root" && m != d.account() {
-			others = append(others, m)
+		if m == "root" || m == d.account() {
+			continue
 		}
+		// a stale name in the group is no way back into the Mac: only an
+		// existing, non-root account counts
+		id, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+m, "UniqueID")
+		f := strings.Fields(id)
+		if err != nil || len(f) < 2 || f[0] != "UniqueID:" || f[1] == "0" {
+			continue
+		}
+		others = append(others, m)
 	}
 	return others, nil
 }
@@ -84,7 +92,11 @@ func (d Deps) accountConfig() (accountView, error) {
 	// D29) or the console's SSH authority (`whr ssh`); the tailscale step cannot
 	// be read and does not count
 	remote := str(m, "public_url") != "" || str(sub("board"), "public_url") != "" || str(sub("console"), "ssh_ca_key_file") != ""
-	return accountView{shared: str(m, "account") == config.AccountShared, remote: remote}, nil
+	// only an absent key or exactly "dedicated" is dedicated; any other value
+	// (a typo, another case, a wrong type) is read as shared, the safe side
+	acct, present := m["account"]
+	dedicated := !present || acct == config.AccountDedicated
+	return accountView{shared: !dedicated, remote: remote}, nil
 }
 
 // accountCheck is the shared `account` check (D49): the account whr runs as is
@@ -94,15 +106,27 @@ func (d Deps) accountConfig() (accountView, error) {
 // (sshd) and Screen Sharing, read from launchd's system domain. A job that
 // launchctl cannot print counts as off, so an unreadable answer never makes
 // the check fail; the labels and that reading are unverified on macOS 26.
-func (d Deps) hostRemote(ctx context.Context) []string {
-	var on []string
+func (d Deps) hostRemote(ctx context.Context) (on []string, unknown bool) {
 	for label, name := range map[string]string{"com.openssh.sshd": "Remote Login", "com.apple.screensharing": "Screen Sharing"} {
-		if out, err := d.output(ctx, "launchctl", "print", "system/"+label); err == nil && strings.TrimSpace(out) != "" {
+		out, err := d.output(ctx, "launchctl", "print", "system/"+label)
+		switch {
+		case err == nil && strings.TrimSpace(out) != "":
 			on = append(on, name)
+		case err == nil || isNotLoaded(out+" "+err.Error()):
+		default:
+			unknown = true
 		}
 	}
 	sort.Strings(on)
-	return on
+	return on, unknown
+}
+
+// isNotLoaded recognises launchctl's answer for a job that is not loaded
+// ("Could not find service", exit 113; the wording is unverified on macOS 26).
+// Any other failure is an unreadable answer, never "off".
+func isNotLoaded(text string) bool {
+	t := strings.ToLower(text)
+	return strings.Contains(t, "could not find service") || strings.Contains(t, "not found")
 }
 
 func (d Deps) accountCheck() func(context.Context) (Status, string) {
@@ -143,7 +167,8 @@ func (d Deps) accountCheck() func(context.Context) (Status, string) {
 		}
 		gives = append(gives, "the account can replace the whr binary in the prefix")
 		gave := " It gives up that " + strings.Join(gives, " and that ") + "."
-		if on := d.hostRemote(ctx); c.remote || len(on) > 0 {
+		on, unknownRemote := d.hostRemote(ctx)
+		if c.remote || len(on) > 0 {
 			via := "whr is configured to be reached from other devices (public_url or the console's SSH)"
 			if len(on) > 0 {
 				via = "the Mac's " + strings.Join(on, " and ") + " is on"
@@ -152,6 +177,9 @@ func (d Deps) accountCheck() func(context.Context) (Status, string) {
 				}
 			}
 			return Fail, desc + ", and " + via + ": an agent's escape or a stolen token would reach the host." + gave + " Use a dedicated standard account (D49)"
+		}
+		if unknownRemote {
+			return NotVerified, desc + "; launchctl did not say whether Remote Login or Screen Sharing is on (its answer is unverified on macOS 26), so the grade, warn or fail, is not known"
 		}
 		hint := ""
 		if admin && !shared {

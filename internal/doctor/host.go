@@ -130,7 +130,11 @@ func hostSteps(d Deps) []Check {
 					}
 					return Fail, "there is no user " + d.account()
 				}
-				if admin, _ := d.isAdmin(ctx); admin {
+				admin, known := d.isAdmin(ctx)
+				if !known {
+					return NotVerified, d.account() + " exists; dseditgroup did not say whether it is an administrator"
+				}
+				if admin {
 					return Warn, d.account() + " is an administrator: allowed, but a dedicated standard user is the recommended account (D49; see the account check and the drop-admin step)"
 				}
 				return OK, d.account() + " exists and is a standard user"
@@ -259,8 +263,8 @@ func hostSteps(d Deps) []Check {
 					return NotVerified, "ps did not answer: " + oneLine(err.Error())
 				}
 				// The cache is the whr user's; only that account can read it.
-				cache := "its cache is not read from here (run whr doctor as " + WhrUser + ")"
-				if d.User == WhrUser {
+				cache := "its cache is not read from here (run whr doctor as " + d.account() + ")"
+				if d.User == d.account() {
 					cache = "its cache is not known"
 					if kb, err := d.output(ctx, "du", "-sk", filepath.Join(d.Home, "Library", "Caches", "com.apple.mediaanalysisd")); err == nil {
 						if f := strings.Fields(kb); len(f) > 0 {
