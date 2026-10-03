@@ -120,6 +120,7 @@ func TestLowWindowPushesAreKeyedByNameAndBounded(t *testing.T) {
 		t.Fatalf("notifications = %v, want one", got)
 	}
 	r.report(6, win("five_hour", 0.1, later)) // recovered: the key is cleared
+	r.clock.now = r.clock.now.Add(limitWarnCooldown + time.Minute)
 	r.report(7, win("five_hour", 0.95, time.Time{}))
 	if got := n.kinds(); len(got) != 2 {
 		t.Errorf("notifications = %v, want a second after recovery", got)
@@ -133,8 +134,59 @@ func TestLowWindowPushesAreKeyedByNameAndBounded(t *testing.T) {
 	if size > maxLimitWarned {
 		t.Errorf("limitWarned has %d keys, want at most %d", size, maxLimitWarned)
 	}
-	if got := n.kinds(); len(got) > maxLimitWarned+1 {
+	if got := n.kinds(); len(got) > 500+2 {
 		t.Errorf("%d pushes for 500 window names", len(got))
+	}
+}
+
+// A flood of made-up window names does not silence a real window or balance.
+func TestAWindowFloodDoesNotSilenceARealWarning(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	n := &recNotifier{}
+	r.svc.cfg.Notifier = n
+	r.svc.cfg.LowLimits = LowLimits{WindowPercent: 80, BalanceMicroUSD: 1_000_000}
+	later := r.clock.now.Add(100 * time.Hour)
+	for i := 0; i < 200; i++ {
+		r.report(i+1, &agent.Usage{Model: "m", Windows: []agent.UsageWindow{{Name: "w" + strconv.Itoa(i), Utilization: 0.99, ResetsAt: later}}})
+	}
+	before := len(n.kinds())
+	r.report(1000, &agent.Usage{Model: "m", Windows: []agent.UsageWindow{{Name: agent.WindowFiveHour, Utilization: 0.95, ResetsAt: later}}})
+	if got := len(n.kinds()); got != before+1 {
+		t.Errorf("pushes %d -> %d, want the real five_hour window to warn", before, got)
+	}
+	r.report(1001, &agent.Usage{Model: "m", Balance: &agent.Balance{RemainingMicroUSD: 1}})
+	if got := len(n.kinds()); got != before+2 {
+		t.Errorf("pushes = %d, want the balance to warn", got)
+	}
+	r.svc.mu.Lock()
+	defer r.svc.mu.Unlock()
+	if len(r.svc.limitWarned) > maxLimitWarned+1 {
+		t.Errorf("limitWarned has %d keys", len(r.svc.limitWarned))
+	}
+}
+
+// A reading that alternates around the threshold pushes once per cooldown.
+func TestAnAlternatingReadingWarnsOncePerCooldown(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	n := &recNotifier{}
+	r.svc.cfg.Notifier = n
+	r.svc.cfg.LowLimits = LowLimits{WindowPercent: 80}
+	win := func(u float64) *agent.Usage {
+		return &agent.Usage{Model: "m", Windows: []agent.UsageWindow{{Name: agent.WindowFiveHour, Utilization: u}}}
+	}
+	for i, u := range []float64{0.95, 0.10, 0.95, 0.10, 0.95} {
+		r.report(i+1, win(u))
+	}
+	if got := len(n.kinds()); got != 1 {
+		t.Fatalf("pushes = %d, want 1 inside the cooldown", got)
+	}
+	r.clock.now = r.clock.now.Add(limitWarnCooldown + time.Minute)
+	r.report(10, win(0.10))
+	r.report(11, win(0.95))
+	if got := len(n.kinds()); got != 2 {
+		t.Errorf("pushes = %d, want a second after the cooldown", got)
 	}
 }
 

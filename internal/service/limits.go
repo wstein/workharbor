@@ -103,50 +103,79 @@ func (s *Service) Limits(ctx context.Context) ([]ProviderLimits, error) {
 	return []ProviderLimits{p}, nil
 }
 
-// maxLimitWarned bounds limitWarned: window names come from the agent.
+// maxLimitWarned bounds the window keys of limitWarned: window names come from
+// the agent. The balance key is outside the cap.
 const maxLimitWarned = 64
+
+// limitWarnCooldown is the least time between two pushes for one key, so a
+// reading that alternates around the threshold cannot push on every low turn.
+// A quota window lasts hours (five hours at the shortest), so an hour keeps
+// the warning timely after a real recovery without chattering.
+const limitWarnCooldown = time.Hour
+
+// limitWarn is what one key last did: when it last pushed and whether its
+// latest reading was low.
+type limitWarn struct {
+	at  time.Time
+	low bool
+}
 
 func resetPassed(resetsAt, now time.Time) bool { return !resetsAt.IsZero() && now.After(resetsAt) }
 
-// warnLowLimits notifies once per window reading period when a reported window
-// or balance is low: the same signal the dashboard shows. It runs after a usage
-// report was recorded and only looks at what that report carried.
+// warnLowLimits pushes when a reported window or balance turns low: the same
+// signal the dashboard shows. A key warns again only after a reading below the
+// threshold and once limitWarnCooldown has passed since its last push. It runs
+// after a usage report was recorded and only looks at what that report carried.
 func (s *Service) warnLowLimits(task domain.ID, u *agent.Usage) {
 	if s.cfg.Notifier == nil {
 		return
 	}
-	var keys, recovered []string
+	low := map[string]bool{} // key -> low in this report
 	now := s.clock.Now()
 	limit := float64(s.cfg.LowLimits.windowPercent()) / 100
 	for _, w := range u.Windows {
 		// The key is the window name alone: the reset time is the agent's
 		// own report and must not mint new keys.
-		k := "window/" + w.Name
-		if w.Utilization >= limit && !resetPassed(w.ResetsAt, now) {
-			keys = append(keys, k)
-		} else {
-			recovered = append(recovered, k)
-		}
+		low["window/"+w.Name] = w.Utilization >= limit && !resetPassed(w.ResetsAt, now)
 	}
-	if b := u.Balance; b != nil && s.cfg.LowLimits.BalanceMicroUSD > 0 && b.RemainingMicroUSD <= s.cfg.LowLimits.BalanceMicroUSD {
-		keys = append(keys, "balance")
+	if b := u.Balance; b != nil {
+		low["balance"] = s.cfg.LowLimits.BalanceMicroUSD > 0 && b.RemainingMicroUSD <= s.cfg.LowLimits.BalanceMicroUSD
 	}
 	s.mu.Lock()
 	if s.limitWarned == nil {
-		s.limitWarned = map[string]bool{}
+		s.limitWarned = map[string]limitWarn{}
 	}
-	fresh := false
-	for _, k := range recovered {
-		delete(s.limitWarned, k)
-	}
-	for _, k := range keys {
-		if !s.limitWarned[k] && len(s.limitWarned) < maxLimitWarned {
-			s.limitWarned[k], fresh = true, true
+	windows := 0
+	for k := range s.limitWarned {
+		if k != "balance" {
+			windows++
 		}
 	}
-	// A balance that recovered may warn again.
-	if u.Balance != nil && (s.cfg.LowLimits.BalanceMicroUSD <= 0 || u.Balance.RemainingMicroUSD > s.cfg.LowLimits.BalanceMicroUSD) {
-		delete(s.limitWarned, "balance")
+	fresh := false
+	for k, isLow := range low {
+		e, known := s.limitWarned[k]
+		if !known && k != "balance" && windows >= maxLimitWarned {
+			// At the cap: forget a window this report does not mention.
+			for old := range s.limitWarned {
+				if _, inReport := low[old]; old != "balance" && !inReport {
+					delete(s.limitWarned, old)
+					windows--
+					break
+				}
+			}
+			if windows >= maxLimitWarned {
+				continue
+			}
+		}
+		if !known && k != "balance" {
+			windows++
+		}
+		wasLow := e.low
+		e.low = isLow
+		if isLow && !wasLow && (e.at.IsZero() || now.Sub(e.at) >= limitWarnCooldown) {
+			e.at, fresh = now, true
+		}
+		s.limitWarned[k] = e
 	}
 	s.mu.Unlock()
 	if fresh {

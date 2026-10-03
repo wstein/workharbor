@@ -120,7 +120,7 @@ type Service struct {
 	// answered (design §4.2), by run.
 	egressWaits map[domain.ID]*egressWait
 	runLocks    map[domain.ID]*runLock // one resume of a run at a time
-	limitWarned map[string]bool        // low-limit readings already notified
+	limitWarned map[string]limitWarn   // per key: last low-limit push and state
 	// egressSources is what each open egress request was asked about (its
 	// devcontainer.json digest), kept to store with the answer.
 	egressSources map[domain.ID]string
