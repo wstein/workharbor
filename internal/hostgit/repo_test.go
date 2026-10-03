@@ -79,3 +79,23 @@ func importBranch(t *testing.T, r *Repo, checkout, branch string) {
 		t.Fatal(err)
 	}
 }
+
+// A capped run fails with ErrOutputTooLarge when git prints more than the cap,
+// and returns the output whole when it fits: never a truncation.
+func TestRunCappedRefusesOutputOverTheCap(t *testing.T) {
+	t.Parallel()
+	r := newSupervised(t, newGit(t))
+	ctx := context.Background()
+	full, err := r.Run(ctx, "config", "--list")
+	if err != nil || len(full) < 20 {
+		t.Fatalf("config --list = %q, %v", full, err)
+	}
+	got, err := r.RunCapped(ctx, int64(len(full)), "config", "--list")
+	if err != nil || string(got) != string(full) {
+		t.Errorf("a read at exactly the cap = %q, %v", got, err)
+	}
+	got, err = r.RunCapped(ctx, int64(len(full))-1, "config", "--list")
+	if !errors.Is(err, ErrOutputTooLarge) || got != nil {
+		t.Errorf("a read over the cap = %q, %v, want ErrOutputTooLarge and no data", got, err)
+	}
+}

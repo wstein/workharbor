@@ -215,6 +215,45 @@ func (g *Git) run(ctx context.Context, dir string, fileTransport bool, extraEnv 
 	return stdout.Bytes(), nil
 }
 
+// ErrOutputTooLarge is returned by a capped run whose standard output is longer
+// than the cap. The output is never truncated: a read over the cap is an error.
+var ErrOutputTooLarge = errors.New("hostgit: git output is larger than the cap")
+
+// capWriter collects at most limit bytes and fails on the next one, which
+// closes the pipe and ends git.
+type capWriter struct {
+	buf   bytes.Buffer
+	limit int64
+	over  bool
+}
+
+func (w *capWriter) Write(p []byte) (int, error) {
+	if int64(w.buf.Len())+int64(len(p)) > w.limit {
+		w.over = true
+		return 0, ErrOutputTooLarge
+	}
+	return w.buf.Write(p)
+}
+
+// runCapped is run with a bound on standard output: git is stopped as soon as
+// it has written more than limit bytes, and the result is ErrOutputTooLarge, so
+// a hostile repository cannot make the supervisor allocate past the cap.
+func (g *Git) runCapped(ctx context.Context, dir string, limit int64, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := g.command(ctx, dir, false, nil, args...)
+	out := &capWriter{limit: limit}
+	var stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = out, &stderr
+	if err := cmd.Run(); err != nil {
+		if out.over {
+			return nil, fmt.Errorf("git %s: %w (%d bytes)", strings.Join(args, " "), ErrOutputTooLarge, limit)
+		}
+		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return out.buf.Bytes(), nil
+}
+
 func checkDir(path string) error {
 	if !filepath.IsAbs(path) {
 		return fmt.Errorf("%w: %q", ErrBadPath, path)

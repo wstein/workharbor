@@ -60,6 +60,13 @@ func (r *Repo) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return r.g.run(ctx, r.path, false, nil, args...)
 }
 
+// RunCapped is Run with at most limit bytes of standard output. Output over the
+// cap is ErrOutputTooLarge, never a truncation; use it wherever the output
+// depends on repository content an agent could have written.
+func (r *Repo) RunCapped(ctx context.Context, limit int64, args ...string) ([]byte, error) {
+	return r.g.runCapped(ctx, r.path, limit, args...)
+}
+
 func dirOf(path string) string {
 	i := strings.LastIndex(path, "/")
 	if i <= 0 {
