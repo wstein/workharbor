@@ -32,13 +32,13 @@ rule and no code.
 - **Start the review once per push**, narrow per fix commit: `wh-reviewer` (Opus)
   for code and the rule sections, `wh-docs-reviewer` (Sonnet) for documentation
   outside the rule sections. That subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` with no open findings is the review note, and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.
-- **Land and move cards.** `/wh-land` with safe retries; `In progress`, `Blocked`
+- **Land and move cards.** `make land` with safe retries (in Claude Code, `/wh-land`); `In progress`, `Blocked`
   and `In review` through the script. On a GraphQL rate-limit error, skip the
   move and say so.
 - **Route up.** A rule question (§3, §4.1, §4.2, §6, §7, the threat model), a high
   finding or a conflict between lanes goes to `wh/design` as one short message
   with the issue numbers; apply its decision from the issue.
-- **Hand over** to `wh/desk`: the commits ready to push (`/wh-handover`), what is
+- **Hand over** to `wh/desk`: the commits ready to push (in Claude Code, `/wh-handover`), what is
   blocked, what is unverified.
 
 ## What you do not do

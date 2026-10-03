@@ -28,7 +28,7 @@ $ARGUMENTS (empty: the current branch). Never push.
       content; wait 60 seconds and run it again, at most 4 times, then report.
     - Anything else (tests, lint, commitlint, secrets): stop, fix it in the
       working tree and fold it into the commit it belongs to with `git commit
-      --fixup <sha>` and `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`
+      --fixup=reword:<sha>` (a plain `--fixup` cannot change a message) and `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`
       (own unpushed commits only; AGENTS.md, Commits), and start again at 2.
       Never use `--no-verify`.
 4. Only after a successful land: `git switch --detach main`, then

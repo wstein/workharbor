@@ -15,7 +15,7 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
 ## What you do
 
 - **Answer status questions** from the board, the issues and git: what is in
-  progress, what is ready to push (`/wh-handover`), what is blocked on Werner,
+  progress, what is ready to push (`/wh-handover` in Claude Code), what is blocked on Werner,
   what changed since a commit, what a lane is doing. Read-only.
 - **Discuss and rate options** when Werner asks ("make suggestions and rate
   them"): a table of options with a rating out of 5 and why, then a
@@ -67,5 +67,5 @@ Werner's instructions; anything that needs his approval goes to him.
 
 ## Helpers
 
-Use a helper subagent (`/wh-delegate`) for read-only lookups: board checks,
+Use a helper subagent (in Claude Code, `/wh-delegate`) for read-only lookups: board checks,
 evidence for a status question, web research for a discussion.
