@@ -266,7 +266,16 @@ func Checks(d Deps) []Check {
 		{"reboot", 4, notVerified("an agent session surviving a reboot is unverified (design §12)")},
 		{"capacity", 4, notVerified("room for 4 concurrent environments (§8) is not measured")},
 		{"lane-agents", 5, laneAgentsCheck(d)},
-		{"notifications", 5, notVerified("no notification channel is configured yet")},
+		{"notifications", 5, needCfg(func(c *config.Config) (Status, string) {
+			if c.Ntfy == nil {
+				return NotVerified, "no notification channel is configured: set an ntfy block to get pushes (design §9.5)"
+			}
+			server := c.Ntfy.Server
+			if server == "" {
+				server = "https://ntfy.sh"
+			}
+			return OK, "ntfy: " + server + ", topic and token files are private and valid; no test push is sent (§9.5)"
+		})},
 	}))
 }
 

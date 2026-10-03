@@ -316,3 +316,21 @@ func forgeBoardDetail(rs []Result) string {
 	}
 	return ""
 }
+
+func TestNotificationsAreConfiguredOnlyWhenAnNtfyBlockValidates(t *testing.T) {
+	r := newRig(t)
+	r.write(t)
+	if got := statuses(run(r.deps()))["notifications"]; got != NotVerified {
+		t.Errorf("without a block: %s, want not_verified", got)
+	}
+	topic := filepath.Join(r.dir, "secrets", "ntfy.topic")
+	if err := os.WriteFile(topic, []byte("a-long-random-topic-0123456789abcdef\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.PublicURL = "https://whr.example.com"
+	r.cfg.Ntfy = &config.Ntfy{TopicFile: topic}
+	r.write(t)
+	if got := statuses(run(r.deps()))["notifications"]; got != OK {
+		t.Errorf("with a valid block: %s, want ok", got)
+	}
+}
