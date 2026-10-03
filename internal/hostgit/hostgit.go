@@ -4,11 +4,16 @@
 // the host the moment plain git touches them, and no list of -c overrides can
 // name every key that does.
 //
-// So the package works in two ways. FetchBranch copies one branch out of an
-// agent's checkout into a bare repository the supervisor owns, and everything
-// that changes history (cleanup, signing, push) runs only there, on a Repo.
-// An Untrusted handle on the agent's checkout runs only read-only plumbing.
-// Every command starts from an empty environment and a floor of overrides.
+// So the host never runs git in a checkout an agent can write (D42). The
+// package runs git only in repositories the supervisor owns: the bare mirror
+// of a workspace (Repo) and the cache of a forge repository (Cache). An agent's
+// commits arrive as a git bundle, which is untrusted data: ImportBundle fetches
+// it through a scratch repository and keeps only a branch that arrived whole,
+// and CheckTree and CheckCommits bound what a tree may hold. Everything that
+// changes history (Prepare, Push) runs only on the mirror. SeedAgentClone is the
+// one time the host runs git in a workspace's clone, before it exists for the
+// agent. Every command starts from an empty environment and a floor of
+// overrides (Env, Config).
 package hostgit
 
 import (
@@ -160,7 +165,7 @@ func (g *Git) envFor(fileTransport bool, extra ...string) []string {
 // the editor, credential helpers, signing, submodule recursion) and every
 // transport, except the file transport when fileTransport is set. The list is
 // a floor, not a fence: it cannot name filter or textconv drivers, which is
-// why an agent's tree only ever sees read-only plumbing.
+// why the host never runs git in a tree an agent can write.
 func (g *Git) Config(fileTransport bool) []string {
 	file := "never"
 	if fileTransport {

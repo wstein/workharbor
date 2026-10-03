@@ -25,7 +25,7 @@ var autoRunFiles = []string{
 
 // EditorCopy gives the developer's editor a copy of a topic that the agent
 // never touched (design §4.5, threat model T15). It clones this supervisor-owned
-// repository, which FetchBranch filled from the stopped environment, into dest:
+// repository, which ImportBundle filled from the stopped environment, into dest:
 // an empty template, no hooks, none of the agent's config, no alternates. A
 // later call refreshes the copy with a fast-forward only, so the developer's
 // edits are never overwritten (ErrCopyDiverged). dest must lie outside the
