@@ -6,6 +6,13 @@
       "platform": "linux-arm64",
       "base_url": "https://downloads.claude.ai/claude-code-releases",
       "sha256": "24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d"
+    },
+    {
+      "name": "claude",
+      "version": "2.1.285",
+      "platform": "linux-arm64-musl",
+      "base_url": "https://downloads.claude.ai/claude-code-releases",
+      "sha256": "31efc4136bc678575f4c6730e248d34f89dbfea0468be1c5d012af199cd62ee8"
     }
   ]
 }

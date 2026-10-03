@@ -199,6 +199,12 @@ func toolProfile(c *config.Config) (string, error) {
 		}
 	}
 	sort.Strings(names)
+	if len(names) > 1 {
+		// Fedora and Ubuntu are glibc bases (D43): take the glibc build.
+		if n, ok := toolstore.ProfileFor(names, toolstore.Glibc); ok {
+			return n, nil
+		}
+	}
 	if len(names) != 1 {
 		return "", fmt.Errorf("the tool store has %d profiles %v: set tool_profile", len(names), names)
 	}

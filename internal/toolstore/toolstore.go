@@ -79,6 +79,50 @@ func parsePins(raw []byte) ([]Pin, error) {
 	return f.Tools, nil
 }
 
+// Libc names the C library of an environment's base, which decides the build
+// of a tool that links against it (D43, #162).
+type Libc string
+
+// The two libcs a guest base has.
+const (
+	Glibc Libc = "glibc" // Fedora, Ubuntu: the first-class bases
+	Musl  Libc = "musl"  // Alpine: non-default until #161 passes
+)
+
+// GuestPlatform is the pin platform of the build for a base with this libc.
+func GuestPlatform(l Libc) string {
+	if l == Musl {
+		return "linux-arm64-musl"
+	}
+	return "linux-arm64"
+}
+
+// ProfileName is the name of the profile made for a pin: the tool and its
+// version, with "-musl" for a musl build so it cannot replace the glibc one.
+func ProfileName(p Pin) string {
+	n := p.Name + "-" + p.Version
+	if strings.HasSuffix(p.Platform, "-musl") {
+		n += "-musl"
+	}
+	return n
+}
+
+// ProfileFor picks, from profile names, the one built for the libc of the
+// environment's base: a name ending in "-musl" is a musl build, any other a
+// glibc one. It returns false unless exactly one fits.
+func ProfileFor(names []string, l Libc) (string, bool) {
+	var hit []string
+	for _, n := range names {
+		if strings.HasSuffix(n, "-musl") == (l == Musl) {
+			hit = append(hit, n)
+		}
+	}
+	if len(hit) != 1 {
+		return "", false
+	}
+	return hit[0], true
+}
+
 // Entry is a tool in the store.
 type Entry struct {
 	Name, Version, Platform string
@@ -102,7 +146,7 @@ type Store struct {
 var (
 	nameRe     = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
 	versionRe  = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_-]{0,40}$`)
-	platformRe = regexp.MustCompile(`^[a-z0-9]+-[a-z0-9_]+$`)
+	platformRe = regexp.MustCompile(`^[a-z0-9]+-[a-z0-9_]+(-musl)?$`)
 	hashRe     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 

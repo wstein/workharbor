@@ -34,7 +34,7 @@ Documented only, from the sources named; none was run.
 ## What is missing for a decision
 
 1. A run on Apple Container: Alpine (pinned by digest), each CLI's `--version` from a tool-store mount, then `agenttest`'s conformance suite for the Claude adapter; labelled temporary containers only, no sign-in. Needs a host with the container service running (`wh/verify`).
-2. The tool store cannot yet pin musl builds next to the glibc ones. `pins.json` holds only Claude Code, and the platform name `linux-arm64-musl` has two hyphens, which `platformRe` in `internal/toolstore` rejects. Codex and Antigravity have no pins and their archives and checksums (sha512 from a different manifest, tarballs) differ from Claude's. So criterion 2 of #152 is left open.
+2. The tool store pins Claude Code's `linux-arm64-musl` build next to the glibc one (#162; `platformRe` accepts the `-musl` suffix, `whr tools build -platform linux-arm64-musl` makes a `-musl` profile, and an environment on a glibc base, Fedora or Ubuntu, takes the glibc profile). Codex and Antigravity have no pins yet: their verification (a sigstore bundle on a tarball, a sha512 in another manifest) needs verifiers the store does not have, and none is weakened to fit.
 
 ## Proposal for D43
 

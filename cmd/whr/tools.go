@@ -25,14 +25,14 @@ var toolsClient *http.Client
 
 func runTools(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "build" {
-		fmt.Fprintln(stderr, "usage: whr tools build -store <dir> [-shim <whr-shim linux-arm64 binary>] [-platform linux-arm64]")
+		fmt.Fprintln(stderr, "usage: whr tools build -store <dir> [-shim <whr-shim linux-arm64 binary>] [-platform linux-arm64|linux-arm64-musl]")
 		return exitcode.Usage
 	}
 	fs := flag.NewFlagSet("tools build", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dir := fs.String("store", "", "the tool store directory (roots.tool_store)")
 	shim := fs.String("shim", "", "the whr-shim binary for the platform, built from this commit")
-	platform := fs.String("platform", "linux-arm64", "the guest platform")
+	platform := fs.String("platform", "linux-arm64", "the guest platform: linux-arm64 for a glibc base, linux-arm64-musl for Alpine")
 	pinsFile := fs.String("pins", "", "a pins file instead of the built-in pins")
 	if err := fs.Parse(args[1:]); err != nil {
 		return exitcode.Usage
@@ -66,7 +66,7 @@ func runTools(args []string, stdout, stderr io.Writer) int {
 			return exitcode.Error
 		}
 		entries = append(entries, e)
-		profile = p.Name + "-" + p.Version
+		profile = toolstore.ProfileName(p)
 	}
 	if len(entries) == 0 {
 		fmt.Fprintf(stderr, "whr tools build: no pinned tool for %s\n", *platform)

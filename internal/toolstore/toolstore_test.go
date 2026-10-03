@@ -728,3 +728,78 @@ func TestVerifyRefusesALinkedStoreOrProfilesDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestMuslPlatform(t *testing.T) {
+	for _, ok := range []string{"linux-arm64", "linux-arm64-musl", "linux-amd64-musl"} {
+		if err := checkNames("tool", "1.0", ok); err != nil {
+			t.Errorf("%s refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"linux-arm64-glibc", "linux-arm64-musl-x", "linux-musl-arm64-", "-musl"} {
+		if err := checkNames("tool", "1.0", bad); err == nil {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+}
+
+func TestMuslDownloadIsVerifiedLikeGlibc(t *testing.T) {
+	bin := []byte("musl build")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rel/1.2.3/manifest.json", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"platforms":{"linux-arm64-musl":{"checksum":%q}}}`, sum(bin))
+	})
+	mux.HandleFunc("/rel/1.2.3/linux-arm64-musl/tool", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(bin) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	s := newStore(t)
+	p := Pin{Name: "tool", Version: "1.2.3", Platform: "linux-arm64-musl", BaseURL: srv.URL + "/rel", SHA256: sum(bin)}
+	e, err := s.Download(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := sum(bin)[:8] + "-tool-1.2.3-linux-arm64-musl"; filepath.Base(e.Dir) != want {
+		t.Errorf("dir %s, want %s", e.Dir, want)
+	}
+	p.SHA256 = sum([]byte("other"))
+	if _, err := s.Download(context.Background(), p); !errors.Is(err, ErrChecksum) {
+		t.Errorf("a wrong pin: %v", err)
+	}
+}
+
+func TestBuiltInPinsHaveBothBuilds(t *testing.T) {
+	pins, err := Pins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, p := range pins {
+		got[p.Name+" "+p.Platform] = true
+		if err := checkNames(p.Name, p.Version, p.Platform); err != nil || !hashRe.MatchString(p.SHA256) {
+			t.Errorf("pin %v is not well formed: %v", p, err)
+		}
+	}
+	for _, k := range []string{"claude linux-arm64", "claude linux-arm64-musl"} {
+		if !got[k] {
+			t.Errorf("no pin %q", k)
+		}
+	}
+}
+
+func TestBuildPickedByLibc(t *testing.T) {
+	if GuestPlatform(Glibc) != "linux-arm64" || GuestPlatform(Musl) != "linux-arm64-musl" {
+		t.Error("platform by libc")
+	}
+	if n := ProfileName(Pin{Name: "claude", Version: "1", Platform: "linux-arm64-musl"}); n != "claude-1-musl" {
+		t.Error(n)
+	}
+	names := []string{"claude-1", "claude-1-musl"}
+	if n, ok := ProfileFor(names, Glibc); !ok || n != "claude-1" {
+		t.Errorf("glibc: %q %v", n, ok)
+	}
+	if n, ok := ProfileFor(names, Musl); !ok || n != "claude-1-musl" {
+		t.Errorf("musl: %q %v", n, ok)
+	}
+	if _, ok := ProfileFor([]string{"claude-1"}, Musl); ok {
+		t.Error("a glibc-only store has no musl profile")
+	}
+}
