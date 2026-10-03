@@ -18,3 +18,4 @@ extend-exclude = [
 [default.extend-words]
 cose = "cose" # the COSE key format of WebAuthn
 COSE = "COSE"
+intoto = "intoto" # the in-toto attestation file name (.intoto.jsonl)
