@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ func laneRepo(t *testing.T) (repo, home string) {
 			t.Fatal(err)
 		}
 	}
-	for _, a := range laneAgents {
+	for _, a := range []string{"wh-worker", "wh-reviewer", "wh-docs-reviewer", "wh-helper", "wh-platform"} {
 		if err := os.WriteFile(filepath.Join(repo, ".claude", "agents", a+".md"), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -43,7 +44,7 @@ func TestLaneAgentsWarnWhenARuleIsMissing(t *testing.T) {
 func TestLaneAgentsAreOKWithRulesAcrossFilesOrABareAgentRule(t *testing.T) {
 	repo, home := laneRepo(t)
 	writeSettings(t, filepath.Join(repo, ".claude", "settings.local.json"), `{"permissions":{"allow":["Agent(wh-worker)","Agent(wh-reviewer)"]}}`)
-	writeSettings(t, filepath.Join(home, ".claude", "settings.json"), `{"permissions":{"allow":["Agent(wh-docs-reviewer)","Agent(wh-helper)"]}}`)
+	writeSettings(t, filepath.Join(home, ".claude", "settings.json"), `{"permissions":{"allow":["Agent(wh-docs-reviewer)","Agent(wh-helper)","Agent(wh-platform)"]}}`)
 	if st, d := laneAgentsCheck(Deps{RepoDir: repo, Home: home})(nil); st != OK {
 		t.Errorf("rules across files: %s: %s", st, d)
 	}
@@ -66,5 +67,33 @@ func TestLaneAgentsNameAnUnreadableFileAndNeverFail(t *testing.T) {
 func TestLaneAgentsNeedACheckoutWithLaneAgents(t *testing.T) {
 	if st, _ := laneAgentsCheck(Deps{RepoDir: t.TempDir()})(nil); st != OK {
 		t.Errorf("status = %s", st)
+	}
+}
+
+func TestLaneAgentsAreFoundByGlob(t *testing.T) {
+	repo, _ := laneRepo(t)
+	if got := laneAgents(repo); len(got) != 5 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestLaneAgentsTreatAFIFOAsUnreadable(t *testing.T) {
+	repo, home := laneRepo(t)
+	if err := syscall.Mkfifo(filepath.Join(home, ".claude", "settings.json"), 0o600); err != nil {
+		t.Skip(err)
+	}
+	st, detail := laneAgentsCheck(Deps{RepoDir: repo, Home: home})(nil)
+	if st != Warn || !strings.Contains(detail, "could not read") {
+		t.Errorf("got %s: %s", st, detail)
+	}
+}
+
+func TestLaneAgentsTreatAnOversizedFileAsUnreadable(t *testing.T) {
+	repo, home := laneRepo(t)
+	big := `{"permissions":{"allow":["Agent"]},"x":"` + strings.Repeat("a", maxSettingsSize) + `"}`
+	writeSettings(t, filepath.Join(home, ".claude", "settings.json"), big)
+	st, detail := laneAgentsCheck(Deps{RepoDir: repo, Home: home})(nil)
+	if st != Warn || !strings.Contains(detail, "could not read") {
+		t.Errorf("got %s: %s", st, detail)
 	}
 }

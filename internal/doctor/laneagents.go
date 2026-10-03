@@ -4,14 +4,51 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// laneAgents are the subagents a workharbor lane starts (.claude/agents/).
-var laneAgents = []string{"wh-worker", "wh-reviewer", "wh-docs-reviewer", "wh-helper"}
+// maxSettingsSize bounds what the check reads from a settings or pointer file.
+const maxSettingsSize = 1 << 20
+
+// readRegular reads a regular file of at most maxSettingsSize bytes; a FIFO, a
+// symlink, a device or a larger file is an error, never a blocked read.
+func readRegular(path string) ([]byte, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	f, err := os.Open(path) //nolint:gosec // a fixed name under the checkout or home, checked regular above
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, maxSettingsSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxSettingsSize {
+		return nil, errors.New("file too large")
+	}
+	return b, nil
+}
+
+// laneAgents are the subagents a workharbor lane starts: the wh-*.md files of
+// .claude/agents/, so a new agent is covered without a code change.
+func laneAgents(repo string) []string {
+	files, _ := filepath.Glob(filepath.Join(repo, ".claude", "agents", "wh-*.md"))
+	var names []string
+	for _, f := range files {
+		names = append(names, strings.TrimSuffix(filepath.Base(f), ".md"))
+	}
+	return names
+}
 
 // laneAgentsCheck is a dogfood-phase check (D34, issue #160): Claude Code asks
 // before it starts a subagent unless a permission rule allows it, and those
@@ -25,12 +62,7 @@ func laneAgentsCheck(d Deps) func(context.Context) (Status, string) {
 		if d.RepoDir == "" {
 			return OK, "not run inside a checkout; nothing to check"
 		}
-		var agents []string
-		for _, a := range laneAgents {
-			if _, err := os.Stat(filepath.Join(d.RepoDir, ".claude", "agents", a+".md")); err == nil {
-				agents = append(agents, a)
-			}
-		}
+		agents := laneAgents(d.RepoDir)
 		if len(agents) == 0 {
 			return OK, "this is not a workharbor checkout with lane agents; nothing to check"
 		}
@@ -86,7 +118,7 @@ func ruleList(agents []string) string {
 // allowRules reads permissions.allow of a settings file and nothing else; a
 // file that does not exist has none.
 func allowRules(path string) ([]string, error) {
-	b, err := os.ReadFile(path) //nolint:gosec // a settings file at a fixed name under the checkout or home
+	b, err := readRegular(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -107,7 +139,7 @@ func allowRules(path string) ([]string, error) {
 // mainRoot is the main checkout of a worktree: Claude Code saves settings.local.json
 // there (its permissions page). A plain checkout is its own root.
 func mainRoot(dir string) string {
-	b, err := os.ReadFile(filepath.Join(dir, ".git")) //nolint:gosec // the worktree pointer of the checkout
+	b, err := readRegular(filepath.Join(dir, ".git"))
 	if err != nil {
 		return dir
 	}
