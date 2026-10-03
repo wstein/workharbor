@@ -145,6 +145,11 @@ func TestPrototypeAlsoExpectsTheDefaultBranchToAcceptNoUpdateFromTheApp(t *testi
 		})}, NotVerified, "only the App and you may write"},
 		{"the bypass list is not shown", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) { i.BypassKnown, i.Bypass = false, nil })}, NotVerified, "whether the App bypasses ruleset 4"},
 		{"the ruleset names the branch, not ~DEFAULT_BRANCH", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) { i.RefInclude = []string{"refs/heads/main"} })}, Fail, "targets ~DEFAULT_BRANCH"},
+		{"~ALL follows the default", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) { i.RefInclude = []string{"~ALL"} })}, NotVerified, "default branch main: a ruleset on ~DEFAULT_BRANCH restricts"},
+		{"~DEFAULT_BRANCH with an exclude", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) { i.RefExclude = []string{"refs/heads/trunk"} })}, NotVerified, "ruleset 4 excludes refs/heads/trunk"},
+		{"~ALL with an exclude", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) {
+			i.RefInclude, i.RefExclude = []string{"~ALL"}, []string{"refs/heads/trunk"}
+		})}, NotVerified, "may not follow a change of default"},
 		{"the conditions are not shown", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, info: with(func(i *github.RulesetInfo) { i.TargetKnown, i.RefInclude = false, nil })}, NotVerified, "~DEFAULT_BRANCH (its conditions are not shown"},
 		{"the ruleset cannot be read at all", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}}, NotVerified, "not shown to this App"},
 		{"the ruleset read errors", &rules{byBranch: map[string][]github.BranchRule{"main": {rule("update", 4, ``)}}, infoErr: errors.New("boom")}, NotVerified, "ruleset 4 could not be read: boom"},

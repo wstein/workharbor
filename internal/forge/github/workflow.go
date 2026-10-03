@@ -71,6 +71,7 @@ type RulesetInfo struct {
 	Bypass      []BypassActor
 	TargetKnown bool
 	RefInclude  []string // conditions.ref_name.include, e.g. "~DEFAULT_BRANCH"
+	RefExclude  []string // conditions.ref_name.exclude
 }
 
 // Ruleset reads one ruleset. A refusal (403, 404) is an answer with nothing known,
@@ -81,6 +82,7 @@ func (c *Client) Ruleset(ctx context.Context, repo string, rulesetID int64) (Rul
 		Conditions   *struct {
 			RefName *struct {
 				Include []string `json:"include"`
+				Exclude []string `json:"exclude"`
 			} `json:"ref_name"`
 		} `json:"conditions"`
 	}
@@ -97,7 +99,7 @@ func (c *Client) Ruleset(ctx context.Context, repo string, rulesetID int64) (Rul
 		info.BypassKnown, info.Bypass = true, *rs.BypassActors
 	}
 	if rs.Conditions != nil && rs.Conditions.RefName != nil {
-		info.TargetKnown, info.RefInclude = true, rs.Conditions.RefName.Include
+		info.TargetKnown, info.RefInclude, info.RefExclude = true, rs.Conditions.RefName.Include, rs.Conditions.RefName.Exclude
 	}
 	return info, nil
 }

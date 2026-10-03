@@ -159,6 +159,7 @@ func evaluateDefault(ctx context.Context, src RuleSource, repo, def string, appI
 	}
 	var failed, unknown []string
 	targets, unknownTarget := false, false
+	var excluded []string
 	for _, id := range ids {
 		info, err := src.Ruleset(ctx, repo, id)
 		if err != nil {
@@ -180,13 +181,22 @@ func evaluateDefault(ctx context.Context, src RuleSource, repo, def string, appI
 		case !info.TargetKnown:
 			unknownTarget = true
 		case slices.Contains(info.RefInclude, "~DEFAULT_BRANCH") || slices.Contains(info.RefInclude, "~ALL"):
-			targets = true
+			// A non-empty exclude could name a branch that later becomes the default,
+			// and nobody can know which: it does not count as following the default.
+			if len(info.RefExclude) > 0 {
+				excluded = append(excluded, fmt.Sprintf("ruleset %d excludes %s", id, strings.Join(info.RefExclude, ", ")))
+			} else {
+				targets = true
+			}
 		}
 	}
 	if !targets {
+		if len(excluded) > 0 {
+			unknown = append(unknown, strings.Join(excluded, ", ")+", so it may not follow a change of default")
+		}
 		if unknownTarget {
 			unknown = append(unknown, "whether the ruleset targets ~DEFAULT_BRANCH (its conditions are not shown to this App)")
-		} else {
+		} else if len(excluded) == 0 {
 			failed = append(failed, "no such ruleset targets ~DEFAULT_BRANCH, so it would not follow a change of default")
 		}
 	}

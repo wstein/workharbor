@@ -780,11 +780,11 @@ func TestBranchRulesAndBypassActorsAreReadAndRefusalsAreUnreadable(t *testing.T)
 	f.handlers["GET /repos/wstein/workharbor/rulesets/8"] = func(w http.ResponseWriter, _ *http.Request) {
 		jsonReply(w, 200, map[string]any{
 			"bypass_actors": []map[string]any{{"actor_id": 77, "actor_type": "Integration"}},
-			"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"~DEFAULT_BRANCH"}}},
+			"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"~DEFAULT_BRANCH"}, "exclude": []string{"refs/heads/trunk"}}},
 		})
 	}
 	c := f.client(t, nil)
-	if info, err := c.Ruleset(bg, "wstein/workharbor", 8); err != nil || !info.BypassKnown || len(info.Bypass) != 1 || info.Bypass[0].ActorType != "Integration" || info.Bypass[0].ActorID != 77 || !info.TargetKnown || len(info.RefInclude) != 1 || info.RefInclude[0] != "~DEFAULT_BRANCH" {
+	if info, err := c.Ruleset(bg, "wstein/workharbor", 8); err != nil || !info.BypassKnown || len(info.Bypass) != 1 || info.Bypass[0].ActorType != "Integration" || info.Bypass[0].ActorID != 77 || !info.TargetKnown || len(info.RefInclude) != 1 || info.RefInclude[0] != "~DEFAULT_BRANCH" || len(info.RefExclude) != 1 || info.RefExclude[0] != "refs/heads/trunk" {
 		t.Errorf("ruleset 8 = %+v, %v", info, err)
 	}
 	if info, err := c.Ruleset(bg, "wstein/workharbor", 6); err != nil || info.BypassKnown || info.TargetKnown {
