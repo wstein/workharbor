@@ -4,16 +4,27 @@
 // the host the moment plain git touches them, and no list of -c overrides can
 // name every key that does.
 //
-// So the host never runs git in a checkout an agent can write (D42). The
-// package runs git only in repositories the supervisor owns: the bare mirror
-// of a workspace (Repo) and the cache of a forge repository (Cache). An agent's
-// commits arrive as a git bundle, which is untrusted data: ImportBundle fetches
-// it through a scratch repository and keeps only a branch that arrived whole,
-// and CheckTree and CheckCommits bound what a tree may hold. Everything that
-// changes history (Prepare, Push) runs only on the mirror. SeedAgentClone is the
-// one time the host runs git in a workspace's clone, before it exists for the
-// agent. Every command starts from an empty environment and a floor of
-// overrides (Env, Config).
+// So the host never runs git in a checkout an agent can write (D42). It runs
+// git only in places the supervisor owns, and the split between them is the
+// trust boundary:
+//
+//   - Cache is the forge mirror, one bare repository per forge repository. It
+//     is fed only from the forge, never from a workspace, and supplies the
+//     target branch and the history for a merge base.
+//   - Repo is the supervisor's own bare repository, one per forge repository
+//     (not per workspace). It receives the agent's commits, which arrive as a
+//     git bundle and are untrusted data: ImportBundle fetches the bundle
+//     through a scratch repository that borrows this repository's objects and
+//     keeps only a branch that arrived whole, and CheckTree and CheckCommits
+//     bound what a tree may hold. Everything that changes history (Prepare,
+//     Push) runs only here.
+//   - EditorCopy clones a Repo into a supervisor-owned directory outside the
+//     workspace root, for the developer's editor: the third place host git
+//     runs, and never on the agent's checkout.
+//
+// SeedAgentClone is the one time the host runs git in a workspace's clone,
+// before it exists for the agent. Every command starts from an empty
+// environment and a floor of overrides (Env, Config).
 package hostgit
 
 import (

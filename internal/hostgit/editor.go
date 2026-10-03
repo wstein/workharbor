@@ -25,11 +25,12 @@ var autoRunFiles = []string{
 
 // EditorCopy gives the developer's editor a copy of a topic that the agent
 // never touched (design §4.5, threat model T15). It clones this supervisor-owned
-// repository, which ImportBundle filled from the stopped environment, into dest:
-// an empty template, no hooks, none of the agent's config, no alternates. A
-// later call refreshes the copy with a fast-forward only, so the developer's
-// edits are never overwritten (ErrCopyDiverged). dest must lie outside the
-// workspace root, so an agent's checkout cannot be handed out by mistake.
+// repository, which ImportBundle filled from the environment's export (the
+// environment may keep running), into dest: an empty template, no hooks, none
+// of the agent's config, no alternates. A later call refreshes the copy with a
+// fast-forward only, so the developer's edits are never overwritten
+// (ErrCopyDiverged). dest must lie outside the workspace root, so an agent's
+// checkout cannot be handed out by mistake.
 // It returns the files in the copy that an editor may act on by itself, for the
 // UI to warn about before the folder is trusted.
 func (r *Repo) EditorCopy(ctx context.Context, dest, branch string) ([]string, error) {
