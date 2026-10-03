@@ -313,6 +313,8 @@ func TestRepositoriesRunUnderAWorkflow(t *testing.T) {
 		"unknown":               {Name: "a/b", Workflow: "yolo"},
 		"wrong case":            {Name: "a/b", Workflow: "Published"},
 		"an agent branch":       {Name: "a/b", IntegrationBranch: "agent/x"},
+		"a case variant":        {Name: "a/b", IntegrationBranch: "Agent/x"},
+		"a bare agent":          {Name: "a/b", IntegrationBranch: "AGENT"},
 		"a bad branch":          {Name: "a/b", IntegrationBranch: "a..b"},
 		"published with branch": {Name: "a/b", Workflow: "published", IntegrationBranch: "develop"},
 		"a prototype without an integration branch": {Name: "a/b", Workflow: "prototype"},

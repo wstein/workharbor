@@ -24,6 +24,8 @@ func TestNewWorkspace(t *testing.T) {
 		{"repo without owner", "w", "/ws", "workharbor", "main", ""},
 		{"repo with a flag", "w", "/ws", "-x/y", "main", ""},
 		{"agent namespace", "w", "/ws", "a/b", "agent/x", ""},
+		{"agent namespace in any case", "w", "/ws", "a/b", "Agent/x", ""},
+		{"bare agent", "w", "/ws", "a/b", "agent", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

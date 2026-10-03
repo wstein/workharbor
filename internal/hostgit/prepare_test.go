@@ -362,3 +362,17 @@ func TestNumstatReadsFilesLinesAndBinaries(t *testing.T) {
 		t.Errorf("numstat of nothing = %d %d %d", f, a, r)
 	}
 }
+
+// A topic with no commit after its target is an error, never a revision with no
+// commits offered for review.
+func TestPrepareRefusesATopicWithNoNewCommit(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p := newPrep(t)
+	mustGit(t, p.env, p.repo.Path(), "branch", "agent/empty", "refs/heads/main")
+	spec := p.spec()
+	spec.Topic = "agent/empty"
+	if got, err := p.repo.Prepare(ctx, spec); !errors.Is(err, ErrNoCommits) {
+		t.Fatalf("Prepare = %+v, %v, want ErrNoCommits", got, err)
+	}
+}

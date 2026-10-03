@@ -22,6 +22,7 @@ var (
 	// ErrHistoryRewritten: the agent rewrote commits it had already handed in, so
 	// a follow-up round cannot tell which of its commits are new.
 	ErrHistoryRewritten = errors.New("the agent rewrote commits that were already prepared")
+	ErrNoCommits        = errors.New("the topic has no commit after its target: nothing to publish")
 	ErrNothingNew       = errors.New("the topic has no commits after the pushed revision")
 )
 
@@ -185,6 +186,9 @@ func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) 
 	list, err := r.g.run(ctx, dir, false, nil, "rev-list", "--reverse", base+".."+tip)
 	if err != nil {
 		return Prepared{}, err
+	}
+	if len(strings.Fields(string(list))) == 0 {
+		return Prepared{}, fmt.Errorf("%w: %s", ErrNoCommits, spec.Topic)
 	}
 	out := Prepared{SHA: tip, Commits: strings.Fields(string(list)), Source: oldTip}
 	if stat, err := r.g.run(ctx, dir, false, nil, "diff-tree", "-r", "--numstat", "-z", "--no-renames", base, tip); err == nil {

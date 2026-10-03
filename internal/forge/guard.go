@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/policy"
 )
 
@@ -114,7 +115,9 @@ func (g *Guard) approve(ctx context.Context, a policy.Action, ap Approval) error
 	return nil
 }
 
-// agentBranch reports whether a branch is one the agent may publish.
+// agentBranch reports whether a branch is one the agent may publish: exactly
+// the lowercase "agent/" the supervisor builds, so a case variant such as
+// "Agent/x" (the same file on a case-insensitive repository) is refused.
 func agentBranch(branch string) bool {
 	return strings.HasPrefix(branch, "agent/") && !strings.Contains(branch, "..")
 }
@@ -169,7 +172,7 @@ func (g *Guard) WithTable(t policy.Table) *Guard {
 // target checks a branch approved commits go to: a real branch name that is not
 // an agent branch, so an agent can never be both writer and target.
 func target(branch string) error {
-	if branch == "" || strings.HasPrefix(branch, "agent/") || strings.Contains(branch, "..") || strings.HasPrefix(branch, "-") {
+	if branch == "" || domain.InAgentNamespace(branch) || strings.Contains(branch, "..") || strings.HasPrefix(branch, "-") {
 		return fmt.Errorf("%w: %q", ErrTarget, branch)
 	}
 	return nil

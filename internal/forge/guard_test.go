@@ -53,7 +53,7 @@ func TestPushNeedsAnApprovalForTheExactCommit(t *testing.T) {
 
 func TestOnlyAgentBranchesArePushed(t *testing.T) {
 	g, f := newGuard(policy.Default())
-	for _, b := range []string{"main", "release/1", "feature/x", "", "agent", "agent/../main"} {
+	for _, b := range []string{"main", "release/1", "feature/x", "", "agent", "agent/../main", "Agent/x", "AGENT/main", "aGeNt/x"} {
 		if err := g.Push(bg, "r", b, forge.Approval{DecisionID: "d1", SHA: "aaa111"}); !errors.Is(err, forge.ErrBranch) {
 			t.Errorf("Push(%q) = %v, want ErrBranch", b, err)
 		}
@@ -386,5 +386,22 @@ func TestWithTableNeverLoosensTheConfiguredTable(t *testing.T) {
 	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
 	if err := g.WithTable(policy.Prototype.Table()).FastForward(bg, "wstein/workharbor", "agent/topic", "develop", forge.Approval{DecisionID: "d1", SHA: "aaa111"}); err != nil {
 		t.Errorf("a prototype fast-forward under the default table: %v", err)
+	}
+}
+
+// An agent branch and its case variants are one file on a case-insensitive
+// repository, so no fast-forward target is in the agents' namespace in any case.
+func TestFastForwardRefusesTheAgentNamespaceInAnyCase(t *testing.T) {
+	g, f := newGuard(policy.Prototype.Table())
+	ap := forge.Approval{DecisionID: "d1", SHA: "aaa111"}
+	f.DefaultBranch = "main"
+	f.Branches["wstein/workharbor:agent/topic"] = "aaa111"
+	for _, b := range []string{"agent/x", "Agent/x", "AGENT/main", "aGeNt/x", "agent", "Agent"} {
+		if err := g.FastForward(bg, "wstein/workharbor", "agent/topic", b, ap); !errors.Is(err, forge.ErrTarget) {
+			t.Errorf("FastForward to %q = %v, want ErrTarget", b, err)
+		}
+	}
+	if len(f.FastForwards) != 0 {
+		t.Fatalf("moved: %v", f.FastForwards)
 	}
 }
