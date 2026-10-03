@@ -121,7 +121,7 @@ container list --all                                     # answers without an er
 
 ### Over SSH
 
-Over SSH, use the `whr` CLI, which is a client of the API: `whr ls`, `whr show <task>`, `whr service status`, `whr logs` and `whr doctor`; never run `container` directly. `container` commands and `whr setup` need `whr`'s desktop session, because Apple Container's services live in that user's GUI launchd domain and an SSH login is in another one, where `container system status` fails with `XPC connection error: Connection invalid` even while the services run {{< status unverified >}} (upstream apple/container#205; to be measured in #155). Over SSH, `whr doctor` therefore reports the checks that call `container` as `not_verified`; run them in the desktop session (Screen Sharing).
+Over SSH, use the `whr` CLI, which is a client of the API: `whr ls`, `whr show <task>`, `whr logs` and `whr doctor`; never run `container` directly. `whr service status` and `whr service install` refuse over SSH (they check that the shell is in the graphical login session): run them in the desktop session (Screen Sharing). `container` commands and `whr setup` need `whr`'s desktop session, because Apple Container's services live in that user's GUI launchd domain and an SSH login is in another one, where `container system status` fails with `XPC connection error: Connection invalid` even while the services run {{< status unverified >}} (upstream apple/container#205; to be measured in #155). Over SSH, `whr doctor` therefore reports the checks that call `container` as `not_verified`; run them in the desktop session (Screen Sharing).
 
 ## 7. Reach it from your phone
 
