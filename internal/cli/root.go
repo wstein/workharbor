@@ -166,7 +166,7 @@ func clean(s string) string {
 		if r == '\t' || r == ' ' {
 			return ' '
 		}
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || textsafe.IsBidiOrSeparator(r) {
+		if textsafe.IsControl(r) || r < 0x20 || textsafe.IsBidiOrSeparator(r) {
 			return '?'
 		}
 		return r

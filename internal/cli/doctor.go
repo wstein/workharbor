@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -86,7 +85,7 @@ func newDoctor(st *state) *cobra.Command {
 				}
 			}
 			if st.asJSON {
-				if err := json.NewEncoder(st.env.Stdout).Encode(map[string]any{"schema_version": 1, "ok": !doctor.Failed(rs), "checks": rs}); err != nil {
+				if err := encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": !doctor.Failed(rs), "checks": rs}); err != nil {
 					return err
 				}
 			} else {

@@ -359,6 +359,35 @@ func TestAnUnreachableServerIsAnErrorWithAHint(t *testing.T) {
 	}
 }
 
+func TestEventsAndJSONOutputAreInert(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	// Raw DEL, C1 CSI and a bidi override in event data and kind, as an agent could write them.
+	body := `{"seq":1,"task_id":"t-aaa111","kind":"x\u001b[2J","tier":"audit","at":"2026-10-01T09:00:00Z","data":{"m":"a` + "\u009b31m\u202eb\u007f" + `"}}`
+	s.h["GET /v1/tasks/t-aaa111/log"] = func(w http.ResponseWriter, r *http.Request, _ string) {
+		if r.URL.Query().Get("since") != "0" {
+			_, _ = io.WriteString(w, ok("[]"))
+			return
+		}
+		_, _ = io.WriteString(w, ok("["+body+"]"))
+	}
+	bad := "\x1b\x7f\u009b\u202e"
+	code, out, errOut := s.runCLI("", "logs", "t-aaa")
+	if code != 0 || strings.ContainsAny(out, bad) || !strings.Contains(out, "a?31m?b?") {
+		t.Errorf("human events are not inert: %d %q %q", code, out, errOut)
+	}
+	_, out, _ = s.runCLI("", "logs", "t-aaa", "--json")
+	var ev map[string]any
+	if strings.ContainsAny(out, bad) || json.Unmarshal([]byte(out), &ev) != nil || ev["kind"] != "x\x1b[2J" {
+		t.Errorf("JSON events are not inert or not valid: %q", out)
+	}
+	s.reply("GET /v1/inbox", 200, ok(`[{"id":"d1","task_id":"t1","kind":"question","subject":"s`+"\u009b\u202e"+`\u001b]0;x\u0007","options":[]}]`))
+	_, out, _ = s.runCLI("", "inbox", "--json")
+	if strings.ContainsAny(out, bad) || !json.Valid([]byte(out)) {
+		t.Errorf("--json envelope is not inert: %q", out)
+	}
+}
+
 func TestLogsDumpsPagesAndFollowsWithReconnect(t *testing.T) {
 	s := newStub(t)
 	withTasks(s)

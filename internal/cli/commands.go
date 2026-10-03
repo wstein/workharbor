@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 func newKey() string {
@@ -32,10 +34,21 @@ func newKey() string {
 // the command builds otherwise. Both go to stdout, and only they do.
 func (s *state) emit(raw []byte, text func(w io.Writer) error) error {
 	if s.asJSON {
-		_, err := s.env.Stdout.Write(raw)
+		_, err := s.env.Stdout.Write(textsafe.EscapeJSON(raw))
 		return err
 	}
 	return text(s.env.Stdout)
+}
+
+// encodeJSON writes v as one JSON line to w, with the characters that would
+// reach a terminal raw (DEL, C1, bidirectional controls) as \u escapes.
+func encodeJSON(w io.Writer, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(append(textsafe.EscapeJSON(b), '\n'))
+	return err
 }
 
 func table(w io.Writer, header []string, rows [][]string) error {
@@ -514,7 +527,7 @@ func (s *state) printEvent(e eventRow) error {
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(s.env.Stdout, "%s\n", b)
+		_, err = fmt.Fprintf(s.env.Stdout, "%s\n", textsafe.EscapeJSON(b))
 		return err
 	}
 	var data bytes.Buffer
@@ -525,7 +538,7 @@ func (s *state) printEvent(e eventRow) error {
 	if e.Seq != 0 {
 		seq = strconv.FormatInt(e.Seq, 10)
 	}
-	_, err := fmt.Fprintf(s.env.Stdout, "%s\t%s\t%s\t%s\n", seq, e.At.UTC().Format(time.RFC3339), clean(e.Kind), data.String())
+	_, err := fmt.Fprintf(s.env.Stdout, "%s\t%s\t%s\t%s\n", seq, e.At.UTC().Format(time.RFC3339), clean(e.Kind), clean(data.String()))
 	return err
 }
 

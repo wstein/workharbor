@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -134,7 +133,7 @@ func newService(st *state) *cobra.Command {
 				return err
 			}
 			if st.asJSON {
-				return json.NewEncoder(st.env.Stdout).Encode(map[string]any{"schema_version": 1, "ok": true, "data": res})
+				return encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": true, "data": res})
 			}
 			fmt.Fprintf(st.env.Stdout, "installed\t%t\nloaded\t%t\n", res.Installed, res.Loaded)
 			if res.Loaded {

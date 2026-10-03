@@ -116,7 +116,7 @@ func newSetup(st *state) *cobra.Command {
 				if !dryRun {
 					return usageError{err.Error()}
 				}
-				fmt.Fprintf(st.env.Stderr, "note (dry run): %v\n", err)
+				fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 			}
 		}
 		if exe, err := env.Executable(); err != nil {
@@ -125,7 +125,7 @@ func newSetup(st *state) *cobra.Command {
 			if !dryRun {
 				return usageError{err.Error()}
 			}
-			fmt.Fprintf(st.env.Stderr, "note (dry run): %v\n", err)
+			fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 		}
 		steps := doctorOn(env, configPath())
 		// D49: without separation and with remote access, one explicit y that

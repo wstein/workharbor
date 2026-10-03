@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -116,7 +115,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 			}()
 
 			start, exp := setup.StartURL()
-			fmt.Fprintf(st.env.Stderr, "Open this link (valid until %s, once):\n  %s\nThen press Continue to GitHub and confirm. Waiting for GitHub to send you back...\n", exp.Local().Format("15:04"), start)
+			fmt.Fprintf(st.env.Stderr, "Open this link (valid until %s, once):\n  %s\nThen press Continue to GitHub and confirm. Waiting for GitHub to send you back...\n", exp.Local().Format("15:04"), clean(start))
 
 			wctx, cancel := context.WithDeadline(cmd.Context(), exp)
 			defer cancel()
@@ -128,11 +127,11 @@ It listens on the configuration's "listen" address while it waits, so stop
 				return err
 			}
 			if st.asJSON {
-				return json.NewEncoder(st.env.Stdout).Encode(map[string]any{"schema_version": 1, "ok": true, "data": res})
+				return encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": true, "data": res})
 			}
 			fmt.Fprintf(st.env.Stdout, "app_id\t%d\nkey_file\t%s\ninstall_url\t%s\n", res.AppID, clean(res.KeyFile), clean(res.InstallURL))
 			fmt.Fprintf(st.env.Stderr, "\nAdd this to the configuration (whr does not edit it):\n\n    \"github\": {\"app_id\": %d, \"key_file\": %q}\n\n", res.AppID, res.KeyFile)
-			fmt.Fprintf(st.env.Stderr, "Then install the App on your selected repositories: %s\n", res.InstallURL)
+			fmt.Fprintf(st.env.Stderr, "Then install the App on your selected repositories: %s\n", clean(res.InstallURL))
 			fmt.Fprintln(st.env.Stderr, "Check that the main branch's ruleset does not list the App as a bypass actor (D15).")
 			fmt.Fprintln(st.env.Stderr, "Run whr doctor afterwards: it checks the installation and its permissions.")
 			return nil
