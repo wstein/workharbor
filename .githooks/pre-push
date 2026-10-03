@@ -11,8 +11,7 @@ while read -r _ local_sha _ remote_sha; do
   else
     range="$remote_sha..$local_sha"
   fi
-  if ! make -s secrets-range RANGE="$range" >&2; then
-    echo "pre-push: a commit about to be pushed holds a secret: revoke it, remove it from the history, then push (AGENTS.md, Secrets)" >&2
-    exit 1
-  fi
+  # The recipe says which it is: a finding (gitleaks exit 1) or a scan that
+  # could not run (a missing go, any other exit). Both block the push.
+  make -s secrets-range RANGE="$range" >&2 || exit 1
 done
