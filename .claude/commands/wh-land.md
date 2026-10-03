@@ -14,12 +14,16 @@ $ARGUMENTS (empty: the current branch). Never push.
     worktree of your lane landed first: AGENTS.md, A second worktree), resolve
     it and run the tests; any other conflict: stop and report, and do not
     resolve someone else's code by guessing.
-3. Run `make land` and read its last lines:
+3. Note `git rev-parse main`, run `make land` and read its last lines:
     - `land: main is now <sha>`: done; go to 4.
-    - `main moved during the checks`, `is not on top of main`, `Not possible
-      to fast-forward` or an `index.lock` error from the merge (another lander
-      won the race):
+    - `main moved during the checks` or `is not on top of main`:
       `git rebase main`, then run `make land` again.
+    - `Not possible to fast-forward` or an `index.lock` error from the merge:
+      if `main` differs from the sha you noted, another lander won the race:
+      `git rebase main` and run `make land` again. If `main` did not move,
+      stop and report to the human: a stale lock in the shared checkout is
+      theirs to clear. Never remove `index.lock` (or anything else) in the
+      shared checkout yourself, whatever git's message suggests.
     - `Rejected status code: 50x` from github.com in the link check: not your
       content; wait 60 seconds and run it again, at most 4 times, then report.
     - Anything else (tests, lint, commitlint, secrets): stop, fix it in a new
