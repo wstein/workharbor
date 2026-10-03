@@ -624,8 +624,9 @@ func TestBuildSetsTheNotifierFromTheNtfyBlock(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	t.Setenv("TMPDIR", t.TempDir())
 	build := func() Deps {
-		d, closeFn, err := Build(c, exe, t.TempDir(), nil)
+		d, closeFn, err := Build(c, exe, t.TempDir(), t.Logf)
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
