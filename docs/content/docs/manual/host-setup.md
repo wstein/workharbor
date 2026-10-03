@@ -172,7 +172,29 @@ A VPN interface like Tailscale's, without a third party, but you forward a UDP p
 
 ## 10. Phone notifications (optional)
 
-Install the [ntfy](https://ntfy.sh) app and subscribe to the topic workharbor generates during onboarding ([design §9.4](../design/interfaces.md#94-notifications)). A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7.
+workharbor does not create the topic: you do, as the `whr` user, and tell the configuration where it is ([design §9.4](../design/interfaces.md#94-notifications)). On ntfy.sh the topic is the only thing that keeps your channel private, so make it long and random:
+
+```sh
+umask 077
+openssl rand -hex 16 > ~/.config/whr/ntfy.topic     # 32 characters
+```
+
+Each secret file must be `0600`, owned by you, absolute, a regular file with one link, not empty, and outside every workspace and root workharbor trusts. An optional token file (for a server that needs an access token) follows the same rules. Add the block to the configuration (step 13):
+
+```json
+"ntfy": {
+  "server": "https://ntfy.sh",
+  "topic_file": "/Users/whr/.config/whr/ntfy.topic",
+  "token_file": "/Users/whr/.config/whr/ntfy.token"
+}
+```
+
+- `server` is optional and defaults to `https://ntfy.sh`. It must be an `https` URL, or `http` on `127.0.0.1` or `localhost` for a server on the same host.
+- `topic_file` is required. The topic in it needs at least 20 characters and no `/`, `?`, `#` or whitespace (surrounding whitespace is trimmed).
+- `token_file` is optional.
+- A notification links to the task, so `public_url` (or `board.public_url`) must be set to an `https` URL, as in step 13.
+
+`whr serve` refuses to start when any of this is wrong, and says which key. Then install the [ntfy](https://ntfy.sh) app and subscribe to that topic on your server. A notification carries only a task ID, an event kind and a link; the link needs the VPN from step 7. Pushes are limited per task, so a burst of one kind of event reaches the phone only a few times. That the configuration is validated and the throttle works is tested; delivery to a real ntfy server and the app on a phone have not been measured ({{< status unverified >}}).
 
 ## 11. The GitHub App
 
