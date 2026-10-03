@@ -90,8 +90,8 @@ move | session | priority | add | ready)
     ;;
   session)
     case ${args[2]:-} in
-    "wh/design" | "wh/platform" | "wh/runtime" | "wh/review" | "wh/verify" | "wh/docs" | "wh/spikes" | "wh/desk" | "Werner") ;;
-    *) die "lane must be one of: wh/design, wh/platform, wh/runtime, wh/review, wh/verify, wh/docs, wh/spikes, wh/desk, Werner" ;;
+    "wh/design" | "wh/dispatch" | "wh/platform" | "wh/runtime" | "wh/review" | "wh/verify" | "wh/docs" | "wh/spikes" | "wh/desk" | "Werner") ;;
+    *) die "lane must be one of: wh/design, wh/dispatch, wh/platform, wh/runtime, wh/review, wh/verify, wh/docs, wh/spikes, wh/desk, Werner" ;;
     esac
     ;;
   priority)
