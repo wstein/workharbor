@@ -56,8 +56,20 @@ func (f *Fake) Exec(ctx context.Context, id string, req runtime.ExecRequest) (ru
 			return
 		}
 		f.logLine(id, strings.Join(req.Cmd, " "))
-		if f.OnExec != nil {
-			if out, errText, code, ok := f.OnExec(id, req.Cmd); ok {
+		handler := f.OnExec
+		if f.OnExecReq != nil {
+			handler = func(id string, _ []string) ([]byte, string, int, bool) {
+				if out, errText, code, ok := f.OnExecReq(id, req); ok {
+					return out, errText, code, true
+				}
+				if f.OnExec != nil {
+					return f.OnExec(id, req.Cmd)
+				}
+				return nil, "", 0, false
+			}
+		}
+		if handler != nil {
+			if out, errText, code, ok := handler(id, req.Cmd); ok {
 				for len(out) > 0 {
 					n := min(len(out), 32<<10)
 					send(runtime.Stdout, string(out[:n]))

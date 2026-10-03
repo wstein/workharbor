@@ -538,6 +538,9 @@ func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, a
 		if err := domain.CheckEnvironmentFree(ws.EnvID, owning); err != nil {
 			return err
 		}
+		if err := w.svc.checkNotHeld(ws.EnvID); err != nil { // read after the run check: see HoldEnvironment
+			return err
+		}
 		saved, err = tx.SaveTask(ctx, agg)
 		return err
 	})

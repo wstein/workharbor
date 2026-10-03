@@ -50,6 +50,10 @@ type Fake struct {
 	// fake's own commands.
 	OnExec func(env string, cmd []string) (stdout []byte, stderr string, code int, handled bool)
 
+	// OnExecReq is OnExec with the whole request, so a test can read the
+	// request's stdin or see its environment. It is asked first.
+	OnExecReq func(env string, req runtime.ExecRequest) (stdout []byte, stderr string, code int, handled bool)
+
 	owner string
 	fsys  runtime.FS
 	home  string

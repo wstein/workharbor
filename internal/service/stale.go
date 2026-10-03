@@ -199,6 +199,14 @@ func (s *Service) restartLeftover(ctx context.Context, env domain.ID) error {
 // owns env. A resume passes its own run; a new run's start passes none. The check
 // of a new run's save is repeated inside its transaction.
 func (s *Service) checkEnvFree(ctx context.Context, env, run domain.ID) error {
+	if err := s.checkNotHeld(env); err != nil {
+		return err
+	}
+	return s.checkNoOwningRun(ctx, env, run)
+}
+
+// checkNoOwningRun is checkEnvFree without the hold of a check.
+func (s *Service) checkNoOwningRun(ctx context.Context, env, run domain.ID) error {
 	owning, err := s.store.UnfinishedRuns(ctx, env)
 	if err != nil {
 		return err

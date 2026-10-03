@@ -144,6 +144,9 @@ type Service struct {
 	// leases counts the operations that are starting or using a workspace's
 	// environment (see leaseEnvironment), also under rebuildMu.
 	leases map[domain.ID]int
+	// holds counts the holders of an environment's busy mark (HoldEnvironment),
+	// under rebuildMu.
+	holds map[domain.ID]int
 }
 
 // rebuilding reports whether the workspace's environment is being replaced.
