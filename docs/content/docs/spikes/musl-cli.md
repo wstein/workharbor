@@ -39,3 +39,10 @@ Documented only, from the sources named; none was run.
 ## Proposal for D43
 
 Keep "Alpine follows later" and replace its reason: musl builds of all three CLIs are published (Claude Code dynamic against musl, Codex and Antigravity static) and the store already pins Claude Code's, so what remains is the verifiers for the Codex and Antigravity pins (#164), the build choice by the base's libc once an Alpine agent base exists, and the run on Alpine (#161). Make Alpine first-class for agent environments once that run passes and the store pins all three.
+
+## Updating a pin
+
+`whr tools build` trusts the pins in `internal/toolstore/pins.json` and nothing fetched at run time for Antigravity: the vendor's manifest names only the latest release, so reading it would break a pinned build the day a newer one appears. The provenance is checked once, when a pin is written or updated, by a person or CI, never by `whr`.
+
+- **Antigravity.** Run `scripts/antigravity-pin-check.sh` (curl and jq, https only, no credential). It compares the manifest's version, archive URL and sha512 with each pin; a difference means a newer release to re-pin. Hash the archive and the extracted file yourself for the new pin.
+- **Codex.** Pin the release asset's sha256 in the same file (run-time check: the pin). When writing the pin, verify the release's sigstore bundle against the repository's workflow identity and the GitHub Actions OIDC issuer with an external, version-pinned verifier (`cosign verify-blob-attestation --bundle` or `gh attestation verify`), and record the verified identity in the commit message. {{< status unverified >}} No Codex pin exists yet: `cosign` was not installed on the host and `gh attestation verify` needs a `gh auth` login, which the project forbids for agents.
