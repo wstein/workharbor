@@ -58,7 +58,8 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	}
 	req.Input, req.Truncated = capInput(req.Input)
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	parent := ctx
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	type answer struct {
 		a   Approval
@@ -71,16 +72,31 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	}()
 	select {
 	case r := <-ch:
+		// select picks at random when the answer and the done context are both
+		// ready, and a cancel reaches the derived context a moment after the
+		// caller's: an answer is honoured only while both are still live.
+		if parent.Err() != nil {
+			return ctxDenial(parent)
+		}
+		if ctx.Err() != nil {
+			return ctxDenial(ctx)
+		}
 		if r.err != nil {
 			return Approval{Reason: "approval failed: denied"}
 		}
 		return r.a
 	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return Approval{Reason: "no answer in time: denied"}
-		}
-		return Approval{Reason: "cancelled: denied"} // the session was stopped
+		return ctxDenial(ctx)
 	}
+}
+
+// ctxDenial is the denial for a done context, saying whether time ran out or
+// the session was stopped.
+func ctxDenial(ctx context.Context) Approval {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return Approval{Reason: "no answer in time: denied"}
+	}
+	return Approval{Reason: "cancelled: denied"} // the session was stopped
 }
 
 // capInput keeps at most domain.MaxDecisionInput characters and says whether

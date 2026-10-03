@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,14 +97,41 @@ func TestAskFailsClosed(t *testing.T) {
 		t.Errorf("Ask waited %v for an approver that ignored the timeout", time.Since(start))
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	// The session is stopped while the approver answers allow: the answer is
+	// ready before Ask's own context has seen the cancel (it reaches that a
+	// moment later, through the parent's Done), so an Ask that only selects
+	// honours the answer. The race is real, so 200 runs: an unfixed Ask passes
+	// them all only with a vanishing chance.
+	for i := 0; i < 200; i++ {
+		parent := newStopCtx()
+		stopThenAllow := approver(func(context.Context, ApprovalRequest) (Approval, error) {
+			parent.stop()
+			return Approval{Allow: true}, nil
+		})
+		if got := Ask(parent, stopThenAllow, time.Second, ApprovalRequest{}); got.Allow || got.Reason == "" {
+			t.Fatalf("run %d: an approval given after the cancel must deny with a reason, got %+v", i, got)
+		}
+	}
+	// A context cancelled before the call, an approver that waits for it.
 	block := approver(func(ctx context.Context, _ ApprovalRequest) (Approval, error) {
 		<-ctx.Done()
 		return Approval{Allow: true}, nil
 	})
-	if got := Ask(ctx, block, time.Second, ApprovalRequest{}); got.Allow {
-		t.Errorf("a cancelled context must deny, got %+v", got)
+	for i := 0; i < 200; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if got := Ask(ctx, block, time.Second, ApprovalRequest{}); got.Allow || got.Reason == "" {
+			t.Fatalf("run %d: a cancelled context must deny with a reason, got %+v", i, got)
+		}
+		if got := Ask(context.Background(), block, time.Millisecond, ApprovalRequest{}); got.Allow || got.Reason == "" {
+			t.Fatalf("run %d: a timeout must deny with a reason, got %+v", i, got)
+		}
+	}
+	// An answer with a live context is still honoured.
+	if got := Ask(context.Background(), approver(func(context.Context, ApprovalRequest) (Approval, error) {
+		return Approval{Allow: true}, nil
+	}), time.Second, ApprovalRequest{}); !got.Allow {
+		t.Errorf("an answer with a live context must be honoured, got %+v", got)
 	}
 	if got := Ask(context.Background(), nil, time.Second, ApprovalRequest{}); got.Allow || got.Reason == "" {
 		t.Errorf("no approver must deny with a reason, got %+v", got)
@@ -153,5 +181,27 @@ func TestCheckSpec(t *testing.T) {
 		if err := tc.caps.CheckSpec(tc.spec); !errors.Is(err, tc.want) {
 			t.Errorf("%s: CheckSpec = %v, want %v", tc.name, err, tc.want)
 		}
+	}
+}
+
+// stopCtx is a context that is not a stdlib one, so a context derived from it
+// learns of the cancel through a goroutine, a moment after stop returns.
+type stopCtx struct {
+	once sync.Once
+	done chan struct{}
+}
+
+func newStopCtx() *stopCtx { return &stopCtx{done: make(chan struct{})} }
+
+func (c *stopCtx) stop()                       { c.once.Do(func() { close(c.done) }) }
+func (c *stopCtx) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *stopCtx) Done() <-chan struct{}       { return c.done }
+func (c *stopCtx) Value(any) any               { return nil }
+func (c *stopCtx) Err() error {
+	select {
+	case <-c.done:
+		return context.Canceled
+	default:
+		return nil
 	}
 }
