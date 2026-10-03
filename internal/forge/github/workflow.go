@@ -55,6 +55,53 @@ func (c *Client) BypassActors(ctx context.Context, repo string, rulesetID int64)
 	return len(*rs.BypassActors), true, nil
 }
 
+// BypassActor is one entry of a ruleset's bypass list. ActorType is GitHub's
+// ("Integration" for a GitHub App, "RepositoryRole", "Team", "OrganizationAdmin").
+type BypassActor struct {
+	ActorID   int64  `json:"actor_id"`
+	ActorType string `json:"actor_type"`
+}
+
+// RulesetInfo is what GitHub shows an App of one ruleset (GET
+// /repos/{repo}/rulesets/{id}). Each part is known only when GitHub showed it:
+// without administration access the bypass list is usually left out, and whether
+// the conditions are shown to such an App is unverified (issue #217).
+type RulesetInfo struct {
+	BypassKnown bool
+	Bypass      []BypassActor
+	TargetKnown bool
+	RefInclude  []string // conditions.ref_name.include, e.g. "~DEFAULT_BRANCH"
+}
+
+// Ruleset reads one ruleset. A refusal (403, 404) is an answer with nothing known,
+// not an error; the caller never takes unknown for a pass.
+func (c *Client) Ruleset(ctx context.Context, repo string, rulesetID int64) (RulesetInfo, error) {
+	var rs struct {
+		BypassActors *[]BypassActor `json:"bypass_actors"`
+		Conditions   *struct {
+			RefName *struct {
+				Include []string `json:"include"`
+			} `json:"ref_name"`
+		} `json:"conditions"`
+	}
+	err := c.call(ctx, repo, http.MethodGet, "/repos/"+repo+"/rulesets/"+strconv.FormatInt(rulesetID, 10), nil, &rs)
+	var ae *APIError
+	if errors.As(err, &ae) && (ae.Status == http.StatusForbidden || ae.Status == http.StatusNotFound) {
+		return RulesetInfo{}, nil
+	}
+	if err != nil {
+		return RulesetInfo{}, err
+	}
+	var info RulesetInfo
+	if rs.BypassActors != nil {
+		info.BypassKnown, info.Bypass = true, *rs.BypassActors
+	}
+	if rs.Conditions != nil && rs.Conditions.RefName != nil {
+		info.TargetKnown, info.RefInclude = true, rs.Conditions.RefName.Include
+	}
+	return info, nil
+}
+
 // DefaultBranchName is the default branch, read from GitHub on every call (no cache, design §6).
 func (c *Client) DefaultBranchName(ctx context.Context, repo string) (string, error) {
 	return c.defaultBranch(ctx, repo)

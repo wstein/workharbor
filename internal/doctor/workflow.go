@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/wstein/workharbor/internal/config"
@@ -17,6 +18,7 @@ type RuleSource interface {
 	BranchRules(ctx context.Context, repo, branch string) ([]github.BranchRule, error)
 	BypassActors(ctx context.Context, repo string, rulesetID int64) (n int, known bool, err error)
 	DefaultBranchName(ctx context.Context, repo string) (string, error)
+	Ruleset(ctx context.Context, repo string, rulesetID int64) (github.RulesetInfo, error)
 }
 
 // workflowCheck reads the rulesets of the branches each repository's preset writes
@@ -45,6 +47,13 @@ func workflowCheck(ctx context.Context, cfg *config.Config, src RuleSource) (Sta
 			continue
 		}
 		st, msg := evaluate(ctx, src, r.Name, preset, branch)
+		if preset == policy.Prototype {
+			// the one preset that fast-forwards: the default branch must accept no
+			// direct update from the App (#217), read from the forge now (def)
+			dst, dmsg := evaluateDefault(ctx, src, r.Name, def, cfg.GitHub.AppID)
+			msg += "; default branch " + def + ": " + dmsg
+			st = worse(st, dst)
+		}
 		note(st, r.Name+" ("+string(preset)+", "+branch+"): "+msg)
 	}
 	return worst, strings.Join(parts, "; ")
@@ -113,6 +122,81 @@ func evaluate(ctx context.Context, src RuleSource, repo string, preset policy.Pr
 		return NotVerified, "the rules are as expected; not verified: " + strings.Join(unknown, ", ")
 	}
 	return OK, "the ruleset is as the workflow expects"
+}
+
+func worse(a, b Status) Status {
+	if a == Fail || b == Fail {
+		return Fail
+	}
+	if a == NotVerified || b == NotVerified {
+		return NotVerified
+	}
+	return OK
+}
+
+// evaluateDefault checks that the default branch accepts no direct update from the
+// App: an active ruleset with an update or pull_request rule applies to it, that
+// ruleset targets ~DEFAULT_BRANCH (so it follows a change of default), and the App
+// is not among its bypass actors. Anything it cannot read is not verified, never ok.
+func evaluateDefault(ctx context.Context, src RuleSource, repo, def string, appID int64) (Status, string) {
+	rules, err := src.BranchRules(ctx, repo, def)
+	switch {
+	case errors.Is(err, github.ErrRulesUnreadable):
+		return NotVerified, "the rules cannot be read with this App, so the ruleset is not verified"
+	case err != nil:
+		return NotVerified, "GitHub could not be asked: " + oneLine(err.Error())
+	}
+	var ids []int64
+	seen := map[int64]bool{}
+	for _, rule := range rules {
+		if (rule.Type == "update" || rule.Type == "pull_request") && !seen[rule.RulesetID] {
+			seen[rule.RulesetID] = true
+			ids = append(ids, rule.RulesetID)
+		}
+	}
+	if len(ids) == 0 {
+		return Fail, "no ruleset restricts updates or requires a pull request, so the App could fast-forward it"
+	}
+	var failed, unknown []string
+	targets, unknownTarget := false, false
+	for _, id := range ids {
+		info, err := src.Ruleset(ctx, repo, id)
+		if err != nil {
+			unknown = append(unknown, fmt.Sprintf("ruleset %d could not be read: %s", id, oneLine(err.Error())))
+			unknownTarget = true
+			continue
+		}
+		switch {
+		case !info.BypassKnown:
+			unknown = append(unknown, fmt.Sprintf("whether the App bypasses ruleset %d (the bypass list is not shown to this App)", id))
+		default:
+			for _, a := range info.Bypass {
+				if a.ActorType == "Integration" && a.ActorID == appID {
+					failed = append(failed, fmt.Sprintf("the App is a bypass actor of ruleset %d", id))
+				}
+			}
+		}
+		switch {
+		case !info.TargetKnown:
+			unknownTarget = true
+		case slices.Contains(info.RefInclude, "~DEFAULT_BRANCH") || slices.Contains(info.RefInclude, "~ALL"):
+			targets = true
+		}
+	}
+	if !targets {
+		if unknownTarget {
+			unknown = append(unknown, "whether the ruleset targets ~DEFAULT_BRANCH (its conditions are not shown to this App)")
+		} else {
+			failed = append(failed, "no such ruleset targets ~DEFAULT_BRANCH, so it would not follow a change of default")
+		}
+	}
+	if len(failed) > 0 {
+		return Fail, strings.Join(failed, ", ")
+	}
+	if len(unknown) > 0 {
+		return NotVerified, "a ruleset restricts updates; not verified: " + strings.Join(unknown, ", ")
+	}
+	return OK, "a ruleset on ~DEFAULT_BRANCH restricts updates or requires a pull request, and the App does not bypass it"
 }
 
 func reviews(r github.BranchRule) int {

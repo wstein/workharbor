@@ -777,7 +777,22 @@ func TestBranchRulesAndBypassActorsAreReadAndRefusalsAreUnreadable(t *testing.T)
 	f.handlers["GET /repos/wstein/workharbor/rules/branches/main"] = func(w http.ResponseWriter, _ *http.Request) {
 		jsonReply(w, 403, map[string]string{"message": "Resource not accessible by integration"})
 	}
+	f.handlers["GET /repos/wstein/workharbor/rulesets/8"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]any{
+			"bypass_actors": []map[string]any{{"actor_id": 77, "actor_type": "Integration"}},
+			"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"~DEFAULT_BRANCH"}}},
+		})
+	}
 	c := f.client(t, nil)
+	if info, err := c.Ruleset(bg, "wstein/workharbor", 8); err != nil || !info.BypassKnown || len(info.Bypass) != 1 || info.Bypass[0].ActorType != "Integration" || info.Bypass[0].ActorID != 77 || !info.TargetKnown || len(info.RefInclude) != 1 || info.RefInclude[0] != "~DEFAULT_BRANCH" {
+		t.Errorf("ruleset 8 = %+v, %v", info, err)
+	}
+	if info, err := c.Ruleset(bg, "wstein/workharbor", 6); err != nil || info.BypassKnown || info.TargetKnown {
+		t.Errorf("a ruleset showing nothing = %+v, %v", info, err)
+	}
+	if info, err := c.Ruleset(bg, "wstein/workharbor", 7); err != nil || info.BypassKnown || info.TargetKnown {
+		t.Errorf("a refused ruleset = %+v, %v", info, err)
+	}
 	rules, err := c.BranchRules(bg, "wstein/workharbor", "develop")
 	if err != nil || len(rules) != 2 || rules[0].Type != "pull_request" || rules[0].RulesetID != 5 || !strings.Contains(string(rules[0].Parameters), "required_approving_review_count") {
 		t.Fatalf("%+v, %v", rules, err)
