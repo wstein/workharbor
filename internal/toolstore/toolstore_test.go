@@ -792,6 +792,10 @@ func TestBuildPickedByLibc(t *testing.T) {
 	if n := ProfileName(Pin{Name: "claude", Version: "1", Platform: "linux-arm64-musl"}); n != "claude-1-musl" {
 		t.Error(n)
 	}
+	two := ProfileName(Pin{Name: "claude", Version: "1", Platform: "linux-arm64"}, Pin{Name: "antigravity", Version: "2", Platform: "linux-arm64"})
+	if two != "claude-1-antigravity-2" {
+		t.Error(two)
+	}
 	names := []string{"claude-1", "claude-1-musl"}
 	if n, ok := ProfileFor(names, Glibc); !ok || n != "claude-1" {
 		t.Errorf("glibc: %q %v", n, ok)

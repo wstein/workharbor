@@ -54,7 +54,8 @@ type Pin struct {
 	SHA256   string `json:"sha256"`   // the tool as stored; for an archive format, the extracted file
 	// Format names how the vendor releases the tool; empty is Claude Code's
 	// (a binary and a SHA-256 manifest). FormatAntigravity adds ArchiveURL and
-	// SHA512 (of the archive) and reads BaseURL as the manifest directory.
+	// SHA512 (of the archive); BaseURL is then the manifest directory, which only
+	// the pin-update script reads.
 	Format     string `json:"format,omitempty"`
 	ArchiveURL string `json:"archive_url,omitempty"`
 	SHA512     string `json:"sha512,omitempty"`
@@ -105,11 +106,19 @@ func GuestPlatform(l Libc) string {
 	return "linux-arm64"
 }
 
-// ProfileName is the name of the profile made for a pin: the tool and its
-// version, with "-musl" for a musl build so it cannot replace the glibc one.
-func ProfileName(p Pin) string {
-	n := p.Name + "-" + p.Version
-	if strings.HasSuffix(p.Platform, "-musl") {
+// ProfileName is the name of the profile made for the pins of one build: each
+// tool and its version in the order given, joined by "-", with "-musl" last for
+// a musl build so it cannot replace the glibc one. A build of Claude Code alone
+// is claude-<version>.
+func ProfileName(pins ...Pin) string {
+	var parts []string
+	musl := false
+	for _, p := range pins {
+		parts = append(parts, p.Name+"-"+p.Version)
+		musl = musl || strings.HasSuffix(p.Platform, "-musl")
+	}
+	n := strings.Join(parts, "-")
+	if musl {
 		n += "-musl"
 	}
 	return n

@@ -55,11 +55,12 @@ func sum512(b []byte) string { h := sha512.Sum512(b); return hex.EncodeToString(
 
 // agy is a fake Antigravity release host: a manifest and an archive.
 type agy struct {
-	srv      *httptest.Server
-	archive  []byte
-	claimed  string // the manifest's sha512
-	version  string
-	archHits int
+	srv          *httptest.Server
+	archive      []byte
+	claimed      string // the manifest's sha512
+	version      string
+	archHits     int
+	manifestHits int
 }
 
 func newAgy(t *testing.T, archive []byte) *agy {
@@ -67,6 +68,7 @@ func newAgy(t *testing.T, archive []byte) *agy {
 	a := &agy{archive: archive, claimed: sum512(archive), version: "1.2.3"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/manifests/linux_arm64_musl.json", func(w http.ResponseWriter, _ *http.Request) {
+		a.manifestHits++
 		fmt.Fprintf(w, `{"version":%q,"url":%q,"sha512":%q}`, a.version, a.srv.URL+"/dl/cli.tar.gz", a.claimed)
 	})
 	mux.HandleFunc("/dl/cli.tar.gz", func(w http.ResponseWriter, _ *http.Request) {
@@ -98,17 +100,28 @@ func TestAntigravityDownloadIsVerifiedAndStored(t *testing.T) {
 	}
 }
 
+// The vendor manifest names only the latest release: a build never reads it,
+// so a newer version there cannot break the pinned one.
+func TestAntigravityBuildIgnoresTheManifest(t *testing.T) {
+	tool := []byte("agy binary")
+	a := newAgy(t, makeTarGz(t, tarEntry{name: "antigravity", body: tool}))
+	a.version, a.claimed = "9.9.9", sum512([]byte("newer"))
+	if _, err := newStore(t).Download(bg, a.pin(tool)); err != nil {
+		t.Fatal(err)
+	}
+	if a.manifestHits != 0 {
+		t.Errorf("the build fetched the manifest %d times", a.manifestHits)
+	}
+}
+
 func TestAntigravityMismatchesStoreNothing(t *testing.T) {
 	tool := []byte("agy binary")
 	good := makeTarGz(t, tarEntry{name: "antigravity", body: tool})
 	other := makeTarGz(t, tarEntry{name: "antigravity", body: []byte("evil")})
 	for name, mutate := range map[string]func(a *agy, p *Pin){
-		"manifest sha512 differs from the pin": func(a *agy, _ *Pin) { a.claimed = sum512(other) },
-		"manifest version differs":             func(a *agy, _ *Pin) { a.version = "9.9.9" },
-		"archive differs from both":            func(a *agy, _ *Pin) { a.archive = other },
-		"pin sha256 of the tool differs":       func(_ *agy, p *Pin) { p.SHA256 = sum([]byte("else")) },
-		"pin has no sha512":                    func(_ *agy, p *Pin) { p.SHA512 = "" },
-		"pin archive url differs":              func(_ *agy, p *Pin) { p.ArchiveURL += "x" },
+		"archive differs from both":      func(a *agy, _ *Pin) { a.archive = other },
+		"pin sha256 of the tool differs": func(_ *agy, p *Pin) { p.SHA256 = sum([]byte("else")) },
+		"pin has no sha512":              func(_ *agy, p *Pin) { p.SHA512 = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := newAgy(t, good)
