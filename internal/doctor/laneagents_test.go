@@ -97,3 +97,38 @@ func TestLaneAgentsTreatAnOversizedFileAsUnreadable(t *testing.T) {
 		t.Errorf("got %s: %s", st, detail)
 	}
 }
+
+func TestLaneAgentsIgnoreNamesThatDoNotMatch(t *testing.T) {
+	repo, _ := laneRepo(t)
+	writeSettings(t, filepath.Join(repo, ".claude", "agents", `wh-x"),"Agent.md`), "x")
+	writeSettings(t, filepath.Join(repo, ".claude", "agents", "wh-Upper.md"), "x")
+	if got := laneAgents(repo); len(got) != 5 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestLaneAgentsReadASymlinkToARegularFileButNotToAFIFO(t *testing.T) {
+	repo, home := laneRepo(t)
+	target := filepath.Join(t.TempDir(), "real.json")
+	writeSettings(t, target, `{"permissions":{"allow":["Agent"]}}`)
+	link := filepath.Join(home, ".claude", "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skip(err)
+	}
+	if st, detail := laneAgentsCheck(Deps{RepoDir: repo, Home: home})(nil); st != OK || strings.Contains(detail, "could not read") {
+		t.Errorf("symlink to a file: got %s: %s", st, detail)
+	}
+	fifo := filepath.Join(t.TempDir(), "fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skip(err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(fifo, link); err != nil {
+		t.Skip(err)
+	}
+	if st, detail := laneAgentsCheck(Deps{RepoDir: repo, Home: home})(nil); st != Warn || !strings.Contains(detail, "could not read") {
+		t.Errorf("symlink to a FIFO: got %s: %s", st, detail)
+	}
+}

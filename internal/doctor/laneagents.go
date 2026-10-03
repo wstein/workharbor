@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -15,9 +16,9 @@ import (
 const maxSettingsSize = 1 << 20
 
 // readRegular reads a regular file of at most maxSettingsSize bytes; a FIFO, a
-// symlink, a device or a larger file is an error, never a blocked read.
+// device (also behind a symlink) or a larger file is an error, never a blocked read.
 func readRegular(path string) ([]byte, error) {
-	fi, err := os.Lstat(path)
+	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +40,19 @@ func readRegular(path string) ([]byte, error) {
 	return b, nil
 }
 
+// laneAgentName is what a lane agent's file name must look like; others are
+// ignored, so a crafted name never ends up inside a suggested rule.
+var laneAgentName = regexp.MustCompile(`^wh-[a-z0-9-]+$`)
+
 // laneAgents are the subagents a workharbor lane starts: the wh-*.md files of
 // .claude/agents/, so a new agent is covered without a code change.
 func laneAgents(repo string) []string {
 	files, _ := filepath.Glob(filepath.Join(repo, ".claude", "agents", "wh-*.md"))
 	var names []string
 	for _, f := range files {
-		names = append(names, strings.TrimSuffix(filepath.Base(f), ".md"))
+		if n := strings.TrimSuffix(filepath.Base(f), ".md"); laneAgentName.MatchString(n) {
+			names = append(names, n)
+		}
 	}
 	return names
 }
