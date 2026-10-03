@@ -21,7 +21,7 @@ Logical components live in one Go binary on the Mac; boundaries are package inte
 | CI adapter | Interface only in release 1 |
 | Credential service | Encrypted store (macOS Keychain holds the master key); issues per-run credentials |
 
-Host worker and credential service are package boundaries on one host. Keep the contract remote-capable so a remote worker can be added later, without building inter-process auth now.
+Host worker and credential service are package boundaries on one host. Until the encrypted store exists, release 1's credential service is a set of secret files (`0600`, owned by the supervisor's user, one link, outside every root, read with `config.ReadSecret`, never logged): the GitHub App key, the SSH authority, the ntfy topic and token, and the `api-key` file (issue #177). Keep the contract remote-capable so a remote worker can be added later, without building inter-process auth now.
 
 ### 5.1 Runtime adapter
 
