@@ -242,8 +242,9 @@ land:
 # anything else (a failed install, gitleaks' own exit 1) is a scan that could not run.
 secrets-range:
 	@test -n "$(RANGE)" || { echo "secrets-range needs RANGE" >&2; exit 2; }
+	@git rev-list $(RANGE) >/dev/null 2>&1 || { echo "the secret scan could not run (git cannot read the range $(RANGE): fetch the remote first), so nothing was checked and the push is blocked" >&2; exit 1; }
 	@d=$$(mktemp -d) || { echo "the secret scan could not run (no temporary directory), so nothing was checked and the push is blocked" >&2; exit 1; }; \
-	trap 'rm -rf "$$d"' EXIT; \
+	trap 'rm -rf "$$d"' EXIT; trap 'exit 1' HUP INT TERM; \
 	GOBIN="$$d" go install $(GITLEAKS) >&2 || { echo "the secret scan could not run (gitleaks did not install), so nothing was checked and the push is blocked: put go on the PATH of the tool that pushes and let it fetch gitleaks (or push from the terminal), then push again" >&2; exit 1; }; \
 	"$$d/gitleaks" git --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml --log-opts="$(RANGE)" . >&2; rc=$$?; \
 	if [ $$rc -eq 0 ]; then exit 0; \
@@ -254,7 +255,7 @@ secrets-range:
 # Scan what is staged for secrets: the pre-commit hook runs it.
 secrets-staged:
 	@d=$$(mktemp -d) || { echo "the secret scan could not run (no temporary directory), so nothing was checked and the commit is blocked" >&2; exit 1; }; \
-	trap 'rm -rf "$$d"' EXIT; \
+	trap 'rm -rf "$$d"' EXIT; trap 'exit 1' HUP INT TERM; \
 	GOBIN="$$d" go install $(GITLEAKS) >&2 || { echo "the secret scan could not run (gitleaks did not install), so nothing was checked and the commit is blocked: put go on the PATH of the tool that commits and let it fetch gitleaks (or commit from the terminal), then commit again" >&2; exit 1; }; \
 	"$$d/gitleaks" git --pre-commit --staged --no-banner --redact --exit-code $(GITLEAKS_FOUND) --config .gitleaks.toml . >"$$d/out" 2>&1; rc=$$?; \
 	if [ $$rc -eq 0 ]; then exit 0; \
