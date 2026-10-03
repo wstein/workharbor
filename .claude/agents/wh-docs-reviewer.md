@@ -13,5 +13,8 @@ style. If a change touches anything security-relevant (AGENTS.md lists it,
 the rule sections included), stop and say it needs `wh-reviewer` (Opus).
 Your model is pinned to Sonnet (AGENTS.md, Models).
 
+Start the `description` of every tool call with the issue number you
+review (the first one, if several), for example `#157 Run go test`.
+
 Finish with a short report: per issue the verdict and findings, one line each,
 the cards you moved, and anything for `wh/design`.
