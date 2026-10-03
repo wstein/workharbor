@@ -135,7 +135,7 @@ func (s *Service) freshenRun(ctx context.Context, task, run, env domain.ID, rep 
 // would not resume anyway. An answer that resumes passes answering, because the
 // question it closes is the one that blocks the resume now.
 func (s *Service) freshenForResume(ctx context.Context, task, run domain.ID, answering bool) error {
-	agg, err := s.store.LoadTask(ctx, task)
+	agg, err := s.loadTask(ctx, task)
 	if err != nil {
 		return err
 	}
@@ -194,4 +194,30 @@ func (s *Service) checkEnvFree(ctx context.Context, env, run domain.ID) error {
 		}
 	}
 	return domain.CheckEnvironmentFree(env, others)
+}
+
+// retryPendingStops tries again the stop of every environment of a cancelled run
+// whose stop failed; one that stops, or that this process started meanwhile, is
+// dropped. A failure stays pending for the next pass.
+func (s *Service) retryPendingStops(ctx context.Context) []error {
+	s.mu.Lock()
+	pending := make(map[domain.ID]domain.ID, len(s.pendingStops))
+	for env, task := range s.pendingStops {
+		pending[env] = task
+	}
+	s.mu.Unlock()
+	var errs []error
+	for env, task := range pending {
+		s.freshMu.Lock()
+		err := s.stopLeftover(ctx, task, env, false, nil)
+		s.freshMu.Unlock()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("task %s: %w", task, err))
+			continue
+		}
+		s.mu.Lock()
+		delete(s.pendingStops, env)
+		s.mu.Unlock()
+	}
+	return errs
 }

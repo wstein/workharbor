@@ -42,13 +42,16 @@ func (s *Service) Pause(ctx context.Context, task domain.ID) error {
 // the run and open the retry-or-cancel question, as the answer to a question
 // that resumes does. It returns the run.
 func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error) {
-	if agg, err := s.store.LoadTask(ctx, task); err == nil {
-		if r, ok := agg.LiveRun(); ok {
-			// An environment this process did not start is stopped and started
-			// first; a failed stop launches nothing (#216).
-			if err := s.freshenForResume(ctx, task, r.ID, false); err != nil {
-				return "", err
-			}
+	// A failed read stops the resume: the gate must not fail open (#216).
+	agg, err := s.loadTask(ctx, task)
+	if err != nil {
+		return "", err
+	}
+	if r, ok := agg.LiveRun(); ok {
+		// An environment this process did not start is stopped and started
+		// first; a failed stop launches nothing (#216).
+		if err := s.freshenForResume(ctx, task, r.ID, false); err != nil {
+			return "", err
 		}
 	}
 	var run domain.ID
@@ -59,7 +62,7 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 			unlock()
 		}
 	}()
-	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+	err = s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		// The slot of an earlier attempt of this same call (the change is tried
 		// again after a stale write) must not make the run look attached.
 		if sl != nil {

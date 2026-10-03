@@ -125,6 +125,11 @@ type Service struct {
 	// one that is not, so each is stopped once per process.
 	startedEnvs map[domain.ID]bool
 	freshMu     sync.Mutex
+	// pendingStops are the environments (to their task) of cancelled runs whose
+	// stop failed: each reconciler pass tries the stop again until it succeeds.
+	pendingStops map[domain.ID]domain.ID
+	// loadTask reads a task for the resume gate; a test replaces it to fail a read.
+	loadTask    func(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error)
 	limitWarned map[string]limitWarn // per key: last low-limit push and state
 	// egressSources is what each open egress request was asked about (its
 	// devcontainer.json digest), kept to store with the answer.
@@ -232,7 +237,7 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 	if cfg.ReadyInterval <= 0 {
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
-	s := &Service{store: st, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
+	s := &Service{store: st, loadTask: st.LoadTask, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
 	if cfg.Notifier != nil {
 		// A slow relay must never hold up a reconcile pass or a session
 		// handler: messages go through a bounded queue (design §9.4).
@@ -493,11 +498,14 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		// like Resume and recovery, and is refused while an agent is attached.
 		unlock := s.lockRun(row.RunID)
 		defer unlock()
-		if agg, lerr := s.store.LoadTask(ctx, row.TaskID); lerr == nil {
-			if r, ok := agg.Run(row.RunID); ok {
-				if err := s.checkEnvFree(ctx, r.EnvID, r.ID); err != nil {
-					return err
-				}
+		// A failed read stops the answer: the gate must not fail open.
+		agg, lerr := s.loadTask(ctx, row.TaskID)
+		if lerr != nil {
+			return lerr
+		}
+		if r, ok := agg.Run(row.RunID); ok {
+			if err := s.checkEnvFree(ctx, r.EnvID, r.ID); err != nil {
+				return err
 			}
 		}
 		var berr error
@@ -578,8 +586,18 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 			// An agent an earlier process left behind in a run that is not live
 			// has no session to stop: stopping its environment reaches it (#216).
 			s.freshMu.Lock()
-			err = s.stopLeftover(ctx, task, leftover, false, nil)
+			serr := s.stopLeftover(ctx, task, leftover, false, nil)
 			s.freshMu.Unlock()
+			if serr != nil {
+				// The cancel is saved; the reconciler tries the stop again.
+				s.mu.Lock()
+				if s.pendingStops == nil {
+					s.pendingStops = map[domain.ID]domain.ID{}
+				}
+				s.pendingStops[leftover] = task
+				s.mu.Unlock()
+				err = fmt.Errorf("task %s is cancelled, but its environment was not stopped (the next reconciler pass tries again): %w", task, serr)
+			}
 		}
 	}
 	return err

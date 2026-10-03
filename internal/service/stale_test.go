@@ -367,3 +367,86 @@ func TestRecoveryRefusesWhileAnotherRunOwnsTheEnvironment(t *testing.T) {
 		t.Errorf("run %s, stops %d", run.State, c.stops.Load())
 	}
 }
+
+// A failed read at the resume gate fails the resume and the answer: nothing is
+// stopped, started or launched on a state this process could not read (#216).
+func TestAFailedReadAtTheResumeGateLaunchesNothing(t *testing.T) {
+	t.Parallel()
+	boom := errors.New("read failed")
+	failFirst := func(r *rig) {
+		orig := r.svc.loadTask
+		n := 0
+		r.svc.loadTask = func(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error) {
+			if n++; n == 1 {
+				return nil, boom
+			}
+			return orig(ctx, id)
+		}
+	}
+	r := newRig(t)
+	r.pauseStored()
+	c := r.counting()
+	failFirst(r)
+	launched := len(r.agent.Specs)
+	if _, err := r.svc.Resume(bg, "t1"); !errors.Is(err, boom) {
+		t.Fatalf("resume: %v", err)
+	}
+	if r.runState() != domain.RunPaused || len(r.agent.Specs) != launched || c.stops.Load() != 0 || c.starts.Load() != 0 {
+		t.Errorf("run %s, stops %d, starts %d", r.runState(), c.stops.Load(), c.starts.Load())
+	}
+
+	r2 := newRig(t)
+	a := r2.load()
+	_, err := a.SuspendRun("r1", domain.CauseAuthExpired, time.Time{}, "auth1", r2.clock.now)
+	must(t, err)
+	_, err = r2.store.SaveTask(bg, a)
+	must(t, err)
+	c2 := r2.counting()
+	r2.svc.markEnvStarted(r2.env) // freshenForResume loads once and returns early
+	n := 0
+	orig := r2.svc.loadTask
+	r2.svc.loadTask = func(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error) {
+		if n++; n == 2 { // the gate's own read, after freshenForResume's
+			return nil, boom
+		}
+		return orig(ctx, id)
+	}
+	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r2.clock.now}
+	if err := r2.svc.AnswerDecision(bg, "auth1", ans); !errors.Is(err, boom) {
+		t.Fatalf("answer: %v", err)
+	}
+	if d, _ := r2.load().Decision("auth1"); d.Status != domain.DecisionOpen || r2.runState() != domain.RunPaused || c2.starts.Load() != 0 {
+		t.Errorf("decision %s, run %s", d.Status, r2.runState())
+	}
+}
+
+// A cancel whose stop fails is saved, says so, and is retried by the next
+// reconciler pass until the stop works.
+func TestACancelWhoseStopFailsIsRetriedByTheReconciler(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.pauseStored()
+	c := r.counting()
+	c.stopErr = errors.New("stop refused")
+	err := r.svc.Cancel(bg, "t1")
+	if err == nil || !strings.Contains(err.Error(), "is cancelled") || !errors.Is(err, errStopFailed) {
+		t.Fatalf("cancel: %v", err)
+	}
+	if r.load().Task().State != domain.TaskCancelled {
+		t.Fatalf("task is %s", r.load().Task().State)
+	}
+	if rep, _ := r.svc.Reconcile(bg); len(rep.Errors) == 0 {
+		t.Error("a failing retry reported nothing")
+	}
+	c.stopErr = nil
+	before := c.stops.Load()
+	rep, rerr := r.svc.Reconcile(bg)
+	must(t, rerr)
+	if len(rep.Errors) != 0 || c.stops.Load() != before+1 || r.envState() != domain.EnvStopped {
+		t.Errorf("errors %v, stops %d, env %s", rep.Errors, c.stops.Load()-before, r.envState())
+	}
+	must(t, func() error { _, e := r.svc.Reconcile(bg); return e }())
+	if c.stops.Load() != before+1 {
+		t.Error("a stopped environment was stopped again")
+	}
+}
