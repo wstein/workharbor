@@ -9,14 +9,14 @@ workharbor runs the agent CLIs you already use: Claude Code with a Claude subscr
 
 ## What the vendors say
 
-**Anthropic** ([Claude Code, legal and compliance](https://code.claude.com/docs/en/legal-and-compliance), read 1 October 2026), in short:
+**Anthropic** ([Claude Code, legal and compliance](https://code.claude.com/docs/en/legal-and-compliance), read 1 October 2026) {{< status unverified >}}, in short:
 
 - Signing in with a Claude account (Free, Pro, Max, Team or Enterprise) serves ordinary use of Claude Code and Anthropic's own apps, and the advertised limits assume ordinary, individual use.
 - A developer may not collect, store or pass on Claude.ai credentials or session tokens, and the sign-in itself has to go through Anthropic's own flow.
 - You may sign in to the unmodified Claude Code binary with your own subscription, also where a platform hosts Claude Code.
 - Products that build on Claude should use an API key.
 
-**OpenAI** ([Codex authentication](https://developers.openai.com/codex/auth), [Codex with a ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)): signing in to Codex with ChatGPT uses your plan's included usage and the ChatGPT terms; an API key is recommended for automated use such as CI/CD.
+**OpenAI** ([Codex authentication](https://developers.openai.com/codex/auth), [Codex with a ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan), read 3 October 2026) {{< status unverified >}}: signing in to Codex with ChatGPT uses your plan's included usage and the ChatGPT terms; an API key is recommended for automated use such as CI/CD.
 
 **Google Antigravity and Gemini API** ([Google Terms of Service](https://policies.google.com/terms), [Generative AI Additional Terms](https://policies.google.com/terms/generative-ai), [Gemini API Additional Terms](https://ai.google.dev/gemini-api/terms), read 1 October 2026) {{< status unverified >}}, in short:
 
