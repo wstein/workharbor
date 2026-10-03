@@ -62,29 +62,4 @@ whr usage [--by task|run|repo|agent|model|day|month|all] [--repo owner/name] [--
 
 `whr kill-all` stops every run, cancels every unfinished task and revokes the forge tokens the supervisor holds. It cannot revoke the agent's own credentials, which stay with you. Without `--yes` it asks you to type `kill-all`.
 
-## Reading the project board from the agent lanes
-
-The sessions that build workharbor share one GitHub token, and a board query is the expensive call. `scripts/board-snapshot.sh` (needs `bash`, `jq` and a logged-in `gh`; it holds no token and writes none) is the one way they read the board:
-
-```text
-scripts/board-snapshot.sh                  # the snapshot JSON: {"fetched_at": <unix>, "items": [...]}
-scripts/board-snapshot.sh queue wh/platform   # the lane's Todo cards, P1 first, then by issue number
-scripts/board-snapshot.sh card 132         # one card: status, session, priority, title
-scripts/board-snapshot.sh --refresh        # force a query
-```
-
-The snapshot is one file, `${XDG_CACHE_HOME:-$HOME/.cache}/workharbor/board.json` (`WHR_BOARD_SNAPSHOT` overrides the absolute path), in a `0700` directory with mode `0600`, outside the repository and never committed. While it is younger than 5 minutes (`WHR_BOARD_MAX_AGE`, in seconds) the script prints it and makes no GitHub call. Past that, one caller takes a lock and makes one query; lanes asking at the same moment wait and share the result. No timer and no daemon run: nothing is queried while nobody asks. If the query fails (rate limit), the script keeps the old file, prints it, says `stale` on stderr and exits 0; with no file at all it exits 1.
-
-Writes go through the same script, so the cache stays right without a query:
-
-```bash
-scripts/board-snapshot.sh move 132 "In review"      # Status
-scripts/board-snapshot.sh move 132 140 141 "In review"  # several issues at once
-scripts/board-snapshot.sh session 132 wh/review     # Session
-scripts/board-snapshot.sh priority 132 P2           # Priority
-scripts/board-snapshot.sh add 140                   # put an issue on the board
-```
-
-Each writes by item ID, never through `gh project item-edit --url`, whose project-wide lookup trips a secondary rate limit (#165): one query finds the issue's project item, one `updateProjectV2ItemFieldValue` mutation sets the field (`add` looks up the issue's node ID, then runs `addProjectV2ItemById`), so each issue costs at most two small GraphQL calls and there is no retry. The field and option IDs are cached in `board-fields.json` next to the snapshot and fetched once when missing. Before any call to GitHub the script reads `gh api rate_limit` (free) and warns on stderr when the GraphQL budget is under 20 %, naming the reset time. Only the cards GitHub accepted are patched into the cache, all at once after the last issue, under the same lock, so two lanes writing at once both end up in it; `fetched_at` does not change, because a write does not make old data fresh. A write that GitHub refuses for one issue (rate limit, issue not on the board) is reported on stderr with its number, the other issues still run, only the ones that succeeded are patched into the cache, and the run exits 1 if any failed. With no cache, or a stale one, the write still happens and no cache is created or patched. A call takes at most 50 issues; each number must be digits with no leading zero, and the status, lane and priority must be one of the values the script accepts (`Todo`, `In progress`, `Blocked`, `In review`; the lanes of the project board paragraph in `AGENTS.md`; `P1`, `P2`, `P3`), checked before any call. `move` does not set `Ready to push` or `Done` and refuses them before any call: `Ready to push` is set only by `wh/review` (after its review comment; `wh/dispatch` may set it on its behalf for the reviewed sha), and `Done` by closing the issue or by the human; `Ready to push` through `scripts/board-snapshot.sh ready <number>...`, which only `wh/review` runs (or `wh/dispatch` on its behalf, for the reviewed sha). Comments still go straight to GitHub.
-
-The limit: a card moved by hand in the browser or by another tool is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
+The board script (`scripts/board-snapshot.sh`) belongs to the workflow that builds workharbor, not to running agents with `whr`; it is described in [Sessions and agents](sessions-and-agents.md#the-project-board).
