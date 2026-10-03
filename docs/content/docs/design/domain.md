@@ -94,6 +94,7 @@ Task, run and environment each get their own small FSM with explicit legal trans
     - **`stopped`** is a normal end: the agent finished, or the run was cancelled. **`failed`** is an agent crash, a failed start or a failed resume.
     - **Into `interrupted`:** the reconciler (§5.3) marks a `starting`, `running` or `paused` run `interrupted` when its process or environment is gone: a supervisor or host restart, or a lost environment. Nothing else sets it, and a pending approval is raised again on resume (§4.2).
     - **Out of `interrupted`:** `starting` when the reconciler resumes the agent from its session in a running environment (§4.3); `stopped` when the task is cancelled; `failed` when resuming is impossible or its attempts are used up.
+    - **One live agent per run** (issues #201, #202). Every path that moves a run to `starting`, the human's resume and the reconciler's recovery alike, holds that run's lock, reads the run again after taking it, and refuses when an agent session is already attached to it; it never replaces a session that is attached. A path that loses this race leaves the live session as it is and changes nothing else. So cancel and pause always reach the agent that runs, and the reconciler never takes a live agent for a lost one.
     - **Terminal runs are never reused.** A retry or rework starts a new run on the same workspace and topic (§4.1 task rules).
 - **Environment** (issue #15):
 
