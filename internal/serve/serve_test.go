@@ -480,3 +480,18 @@ func TestAHeldRepositoryRunsInTheModeOfItsRecordedWorkflow(t *testing.T) {
 		t.Errorf("needsAllowlist: held %v, file %v", needsAllowlist(held), needsAllowlist(file))
 	}
 }
+
+func TestAddNotifierThrottlesOnlyWhenOneIsGiven(t *testing.T) {
+	var scfg service.Config
+	addNotifier(&scfg, Deps{})
+	if scfg.Notifier != nil {
+		t.Fatal("a notifier without one in Deps")
+	}
+	addNotifier(&scfg, Deps{Notifier: &recordingNotifier{}})
+	if scfg.Notifier == nil {
+		t.Fatal("no notifier assigned")
+	}
+	if _, ok := scfg.Notifier.(*recordingNotifier); ok {
+		t.Fatal("the notifier is not wrapped in the throttle")
+	}
+}

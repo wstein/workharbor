@@ -379,12 +379,8 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			return Deps{}, nil, fmt.Errorf("console.ssh_ca_key_file: %w", err)
 		}
 	}
-	var notifier notify.Notifier
-	if n := c.Ntfy; n != nil {
-		notifier = notify.Ntfy{Server: n.Server, Secrets: fileSecrets{notify.SecretTopic: n.TopicFile, notify.SecretToken: n.TokenFile}, BaseURL: publicBase(c)}
-	}
 	return Deps{
-		Notifier:   notifier,
+		Notifier:   ntfyNotifier(c),
 		ConsoleSSH: consoleSSH,
 		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: gh, Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
@@ -695,4 +691,14 @@ func (f fileSecrets) Get(name string) (string, error) {
 func publicBase(c *config.Config) string {
 	origin, _ := c.PublicOrigin()
 	return origin
+}
+
+// ntfyNotifier is the ntfy notifier the configuration asks for, or nil without
+// an ntfy block.
+func ntfyNotifier(c *config.Config) notify.Notifier {
+	n := c.Ntfy
+	if n == nil {
+		return nil
+	}
+	return notify.Ntfy{Server: n.Server, Secrets: fileSecrets{notify.SecretTopic: n.TopicFile, notify.SecretToken: n.TokenFile}, BaseURL: publicBase(c)}
 }

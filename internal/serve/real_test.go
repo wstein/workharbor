@@ -565,3 +565,13 @@ func TestNewNotifierThrottlesABurstPerTask(t *testing.T) {
 		t.Errorf("another task was throttled: n=%d err=%v", rec.n, err)
 	}
 }
+
+func TestNtfyNotifierFollowsTheConfig(t *testing.T) {
+	if n := ntfyNotifier(&config.Config{}); n != nil {
+		t.Fatalf("notifier without an ntfy block: %v", n)
+	}
+	n := ntfyNotifier(&config.Config{Ntfy: &config.Ntfy{Server: "https://ntfy.example"}})
+	if _, ok := n.(notify.Ntfy); !ok {
+		t.Fatalf("notifier = %T, want notify.Ntfy", n)
+	}
+}

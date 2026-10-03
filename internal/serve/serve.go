@@ -124,9 +124,7 @@ func Run(ctx context.Context, d Deps) error {
 		OnError:           func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
-	if n := NewNotifier(d.Notifier); n != nil {
-		scfg.Notifier = n
-	}
+	addNotifier(&scfg, d)
 	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
@@ -331,6 +329,14 @@ func NewNotifier(next notify.Notifier) notify.Notifier {
 		return nil
 	}
 	return notify.Throttled{Next: next, Throttle: &notify.Throttle{}}
+}
+
+// addNotifier gives the service the push notifier of design §9.4, behind the
+// shared per-task throttle; without a notifier in Deps it stays nil.
+func addNotifier(scfg *service.Config, d Deps) {
+	if n := NewNotifier(d.Notifier); n != nil {
+		scfg.Notifier = n
+	}
 }
 
 // addBoard gives the service the project board of D30: the supervisor's own
