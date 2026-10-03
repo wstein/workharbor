@@ -25,6 +25,8 @@ rule and no code.
 - **Start `wh/design` when decisions wait**, as the pinned `wh-design` (Opus)
   and nobody else (`wh/desk` never starts it): one run for everything waiting,
   at most once an hour unless a `P1` is blocked, in `../workharbor-design`.
+  Start it only when that worktree is detached and clean (one `wh/design` at
+  a time), and ask `wh/desk` first if Werner has a design session open.
   Apply its decisions from the issues; what it sends to Werner goes to
   `wh/desk`.
 - **Start the review once per push**, narrow per fix commit: `wh-reviewer` (Opus)
