@@ -4,7 +4,7 @@ description: "Running Google Antigravity (agy) in an Apple Container environment
 weight: 9
 ---
 
-> Source: [`spikes/agy/`](https://github.com/wstein/workharbor/tree/main/spikes/agy) on `main`, added in `2ba00767aa705c6981d21a4aab45c4cc78bcd013`, with scripts, measurement harness, and raw results next to `RESULTS.md`. Tracks [#84](https://github.com/wstein/workharbor/issues/84). Measured on 1 October 2026.
+> Source: [`spikes/agy/`](https://github.com/wstein/workharbor/tree/main/spikes/agy) on `main`, added in `2ba00767aa705c6981d21a4aab45c4cc78bcd013`, with scripts, measurement harness, and raw results next to `RESULTS.md`. The spike branch [`spike/agy`](https://github.com/wstein/workharbor/tree/spike/agy) is on origin at `44fe408b40ee22d35cf6960741863a5697deb316`. Tracks [#84](https://github.com/wstein/workharbor/issues/84). Measured on 1 October 2026.
 
 Measured on Apple silicon macOS host with Apple Container 1.5.0 (`fedora:latest` linux-arm64 guest), Antigravity 1.2.14 (linux-arm64), `whr-shim` (static linux-arm64), and `whr-proxy` (egress allowlist proxy sidecar).
 
