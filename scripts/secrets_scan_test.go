@@ -138,6 +138,62 @@ func TestPrePushRanges(t *testing.T) {
 	}
 }
 
+// TestPrePushBlocksWhatItCannotScan: a ref to a blob or a tree holds no commit
+// for gitleaks to read, an unknown sha is unreadable, and a malformed or blank
+// line is not a ref at all. Each blocks, says so, and runs no scan (the stub
+// would report clean).
+func TestPrePushBlocksWhatItCannotScan(t *testing.T) {
+	t.Parallel()
+	line := func(l string) string { return "printf '%s' \"" + l + "\" | .githooks/pre-push" }
+	for _, c := range []struct{ name, script string }{
+		{"blob", line("refs/tags/b $(git rev-parse HEAD:go.mod) refs/tags/b " + zero + "\n")},
+		{"tree", line("refs/tags/t $(git rev-parse HEAD^{tree}) refs/tags/t " + zero + "\n")},
+		{"unknown local sha", line("refs/heads/x " + unknown + " refs/heads/x " + zero + "\n")},
+		{"blank line", line("\n")},
+		{"one field", line("refs/heads/x\n")},
+		{"no remote sha", line("refs/heads/x $(git rev-parse HEAD)\n")},
+		{"no final newline, one field", line("refs/heads/x")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := scan(t, false, "0", c.script)
+			if err == nil || !strings.Contains(out, "could not run") {
+				t.Fatalf("want a block saying could not run, err = %v:\n%s", err, out)
+			}
+			if strings.Contains(out, "--no-verify") {
+				t.Errorf("must never suggest --no-verify:\n%s", out)
+			}
+		})
+	}
+	t.Run("no final newline, valid ref still scans", func(t *testing.T) {
+		t.Parallel()
+		out, err := scan(t, false, "42", line("refs/heads/x $(git rev-parse HEAD) refs/heads/x "+zero))
+		if err == nil || !strings.Contains(out, "holds a secret") {
+			t.Fatalf("a finding must block, err = %v:\n%s", err, out)
+		}
+	})
+}
+
+// TestHooksIgnoreAnExportedMakeFunction: bash imports BASH_FUNC_make%% even
+// when it runs as sh, and the function would stand in for make. Both hooks call
+// `command make`.
+func TestHooksIgnoreAnExportedMakeFunction(t *testing.T) {
+	t.Parallel()
+	const fn = "'BASH_FUNC_make%%=() { exit 0; }'"
+	for _, h := range []struct{ name, script, finding string }{
+		{"pre-push", pushOf("env "+fn, zero), "holds a secret"},
+		{"pre-commit", "env " + fn + " .githooks/pre-commit", "a secret is staged"},
+	} {
+		t.Run(h.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := scan(t, false, "42", h.script)
+			if err == nil || !strings.Contains(out, h.finding) {
+				t.Fatalf("a finding must block, err = %v:\n%s", err, out)
+			}
+		})
+	}
+}
+
 // TestSecretsRangeBlocksAnUnreadableRange: when git cannot resolve the range,
 // gitleaks would report a clean scan, so the recipe blocks first.
 func TestSecretsRangeBlocksAnUnreadableRange(t *testing.T) {

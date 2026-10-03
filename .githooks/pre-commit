@@ -5,4 +5,5 @@ set -e
 # MAKEFLAGS, MAKEFILES and friends can turn a recipe off (GITLEAKS_FOUND=0,
 # -n, -i, a replaced SHELL).
 unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
-make secrets-staged fmt-check lint editorconfig
+# `command` skips an exported shell function named make.
+command make secrets-staged fmt-check lint editorconfig

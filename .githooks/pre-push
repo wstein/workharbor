@@ -7,8 +7,23 @@ set -e
 # -n, -i, a replaced SHELL).
 unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
 zero=0000000000000000000000000000000000000000
-while read -r _ local_sha _ remote_sha; do
+# `command make` skips an exported shell function named make (bash imports one
+# from BASH_FUNC_make%% even as sh). A make earlier on PATH is out of scope:
+# the pusher controls their own machine, and the same hole exists for go and git.
+while read -r ref local_sha _ remote_sha || [ -n "$ref" ]; do # a last line with no newline still counts
+  case "$local_sha:$remote_sha" in
+    "":* | *:"")
+      echo "the secret scan could not run (git sent a malformed ref line), so nothing was checked and the push is blocked" >&2
+      exit 1
+      ;;
+  esac
   [ "$local_sha" = "$zero" ] && continue # a branch being deleted carries no commit
+  # A ref to a blob or a tree holds no commit for gitleaks to read, so it would
+  # pass unscanned: block it. An annotated tag peels to its commit.
+  if ! git cat-file -e "$local_sha^{commit}" 2>/dev/null; then
+    echo "the secret scan could not run ($local_sha is not a commit: a ref to a blob or a tree), so nothing was checked and the push is blocked" >&2
+    exit 1
+  fi
   if [ "$remote_sha" = "$zero" ]; then
     range="$local_sha --not --remotes" # a new branch: what no remote has yet
   elif git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
@@ -24,5 +39,5 @@ while read -r _ local_sha _ remote_sha; do
   fi
   # The recipe says which it is: a finding (gitleaks exit 42) or a scan that
   # could not run (a missing go, a failed install, any other exit). Both block the push.
-  make -s secrets-range RANGE="$range" >&2 || exit 1
+  command make -s secrets-range RANGE="$range" >&2 || exit 1
 done
