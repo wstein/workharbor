@@ -110,6 +110,8 @@ func (s *stub) runCLI(stdin string, args ...string) (code int, stdout, stderr st
 	env := Env{
 		Stdin: strings.NewReader(stdin), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return "" },
 		NewClient: func(string) (*Client, error) { return NewClientFor(s.ts.URL, tok), nil },
+		// a host that reads nothing: no test looks at the machine it runs on
+		Setup: SetupEnv{Host: &setupHost{outputs: map[string]string{}}, User: "whr", UID: 502, GOOS: "linux"},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

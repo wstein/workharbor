@@ -15,10 +15,16 @@ import (
 )
 
 // newDoctor is `whr doctor` (design §9.5, step 4 and the checks of the others).
-// It reports each check as ok, fail, not verified or skipped; only fail is a
-// non-zero exit.
+// It runs every check read-only (the shared ones, then the host and user steps
+// of `whr setup`), reports each as ok, fail, not verified or skipped, and names
+// the setup command that fixes a failing or not verified one; only fail is a
+// non-zero exit. It never fixes anything.
 func newDoctor(st *state) *cobra.Command {
-	var skip []string
+	var (
+		skip    []string
+		whrUser string
+		prefix  string
+	)
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "check the configuration, the host and the supervisor; say what is not verified",
@@ -28,11 +34,18 @@ func newDoctor(st *state) *cobra.Command {
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
 			}
-			checks := doctor.Shared(doctor.Checks(doctor.Deps{
+			env, err := st.env.Setup.resolve(st)
+			if err != nil {
+				return err
+			}
+			exe, _ := env.Executable()
+			checks := doctor.Checks(doctor.Deps{
 				ConfigPath: path,
 				Home:       st.env.Getenv("HOME"),
 				FS:         runtime.OSFS{},
 				LookPath:   doctor.DefaultLookPath,
+				// Output only: the checks read the machine and nothing writes.
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, UID: env.UID, Whr: exe, Prefix: prefix,
 				Probe: func(ctx context.Context) error {
 					c, err := st.api()
 					if err != nil {
@@ -41,7 +54,17 @@ func newDoctor(st *state) *cobra.Command {
 					_, _, err = c.Do(ctx, "GET", "/v1/tasks?active=true", nil, "")
 					return err
 				},
-			}))
+			})
+			other := env.User != whrUser
+			if other { // the user phase describes whr's account, not this one
+				for i, c := range checks {
+					if c.Phase == doctor.PhaseUser {
+						checks[i].Run = func(context.Context) (doctor.Status, string) {
+							return doctor.NotVerified, fmt.Sprintf("this check describes the account %s runs as: run `whr doctor` as %s", whrUser, whrUser)
+						}
+					}
+				}
+			}
 			names := map[string]bool{}
 			for _, c := range checks {
 				names[c.Name] = true
@@ -54,12 +77,22 @@ func newDoctor(st *state) *cobra.Command {
 				skipped[n] = true
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
+			for i, r := range rs {
+				if other && r.Fix != "" && r.Phase != doctor.PhaseHost {
+					rs[i].Fix += " (run as " + whrUser + ")"
+				}
+			}
 			if st.asJSON {
 				if err := json.NewEncoder(st.env.Stdout).Encode(map[string]any{"schema_version": 1, "ok": !doctor.Failed(rs), "checks": rs}); err != nil {
 					return err
 				}
 			} else {
 				printDoctor(st.env.Stdout, rs)
+			}
+			for _, r := range rs {
+				if r.Fix != "" {
+					fmt.Fprintf(st.env.Stderr, "%s: %s\n  → %s\n", r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
+				}
 			}
 			unknown := 0
 			for _, r := range rs {
@@ -76,8 +109,14 @@ func newDoctor(st *state) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
+	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
+	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the admin-owned prefix whr is installed under")
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-		return []string{"config", "server", "forge-key", "forge-app", "forge-board", "forge-workflow", "forge-limits", "agent-login", "runtime", "mounts", "egress", "reboot", "capacity", "notifications"}, cobra.ShellCompDirectiveNoFileComp
+		var names []string
+		for _, c := range doctor.Checks(doctor.Deps{}) {
+			names = append(names, c.Name)
+		}
+		return names, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
 }
@@ -90,6 +129,6 @@ func (quietError) ExitCode() int { return exitcode.Error }
 
 func printDoctor(w io.Writer, rs []doctor.Result) {
 	for _, r := range rs {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", r.Status, r.Check, clean(strings.TrimSpace(r.Detail)))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Status, r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
 	}
 }

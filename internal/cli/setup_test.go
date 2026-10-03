@@ -17,12 +17,14 @@ import (
 // setupHost is a Host that runs nothing: every command is recorded.
 type setupHost struct {
 	outputs map[string]string
+	read    []string
 	ran     []string
 	opened  []string
 	asked   int
 }
 
 func (h *setupHost) Output(_ context.Context, argv ...string) ([]byte, error) {
+	h.read = append(h.read, strings.Join(argv, " "))
 	if out, ok := h.outputs[strings.Join(argv, " ")]; ok {
 		return []byte(out), nil
 	}
@@ -225,5 +227,73 @@ func TestTheStepsCompleteInTheShell(t *testing.T) {
 	out = r.runBare("__complete", "setup", "--from", "")
 	if !strings.Contains(out, "config-base") || strings.Contains(out, "firewall") {
 		t.Errorf("--from of the user part:\n%s", out)
+	}
+}
+
+func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
+	r := newSetupRig(t)
+	code, out, errOut := r.run("doctor")
+	if code != exitcode.Error {
+		t.Errorf("exit %d, want %d (the configuration is missing)", code, exitcode.Error)
+	}
+	lines := map[string][]string{}
+	var order []string
+	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		f := strings.Split(l, "\t")
+		if len(f) != 4 {
+			t.Fatalf("want four tab-separated columns: %q", l)
+		}
+		lines[f[1]] = f
+		order = append(order, f[1])
+	}
+	for _, name := range []string{"config", "power", "firewall", "container-start", "config-base", "service-install", "egress"} {
+		if lines[name] == nil {
+			t.Errorf("no line for %s: %q", name, out)
+		}
+	}
+	idx := func(n string) int {
+		for i, o := range order {
+			if o == n {
+				return i
+			}
+		}
+		return -1
+	}
+	if idx("power") >= idx("config-dir") || idx("config-dir") >= idx("service-install") {
+		t.Errorf("host steps, then user steps, in the wizard's order: %v", order)
+	}
+	if got := lines["power"][3]; got != "whr setup host --only power" {
+		t.Errorf("power fix %q", got)
+	}
+	// run as werner, not whr: the user phase says so, and says to run as whr
+	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "run `whr doctor` as whr") || f[3] != "whr setup --only config-base (run as whr)" {
+		t.Errorf("config-base: %q", f)
+	}
+	if f := lines["config"]; f[0] != "fail" || !strings.Contains(f[3], "whr setup") {
+		t.Errorf("config: %q", f)
+	}
+	if f := lines["egress"]; f[3] != "" {
+		t.Errorf("a check no step fixes names no command: %q", f)
+	}
+	if !strings.Contains(errOut, "→ whr setup host --only power") {
+		t.Errorf("stderr lacks the fix: %q", errOut)
+	}
+	// read-only: nothing ran, nothing opened, nobody asked, no sudo among the reads
+	if len(r.host.ran) != 0 || len(r.host.opened) != 0 || r.host.asked != 0 {
+		t.Errorf("doctor ran %v, opened %v, asked %d", r.host.ran, r.host.opened, r.host.asked)
+	}
+	for _, c := range r.host.read {
+		if strings.HasPrefix(c, "sudo") {
+			t.Errorf("doctor read through sudo: %q", c)
+		}
+	}
+	// --skip works on a step's name too
+	if _, out, _ := r.run("doctor", "--skip", "power"); !strings.Contains(out, "skipped\tpower\t") {
+		t.Errorf("--skip power: %q", out)
+	}
+	// as whr, the user phase is checked for real
+	r.env.User, r.env.UID = "whr", 502
+	if _, out, _ := r.run("doctor"); strings.Contains(out, "this check describes the account") {
+		t.Errorf("as whr nothing is deferred: %q", out)
 	}
 }

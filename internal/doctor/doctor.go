@@ -31,6 +31,12 @@ type Result struct {
 	Step   int    `json:"step"` // the onboarding step of §9.5
 	Status Status `json:"status"`
 	Detail string `json:"detail"`
+	// Phase is "host" or "user" for a setup step and empty for a shared check.
+	Phase Phase `json:"phase,omitempty"`
+	// Fix is the setup command that fixes a failing or not verified check, for
+	// example "whr setup host --only power"; empty when passing or when no setup
+	// step fixes it. `whr doctor` only names it, it never runs it.
+	Fix string `json:"fix,omitempty"`
 }
 
 // Check is one named check. Its Run may assume nothing about the others. A
@@ -108,7 +114,7 @@ func Checks(d Deps) []Check {
 		return func(context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
-				return Fail, "needs a valid configuration (see the config check)"
+				return Fail, needsConfig + " (see the config check)"
 			}
 			return run(c)
 		}
@@ -146,7 +152,7 @@ func Checks(d Deps) []Check {
 		{"forge-app", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
-				return Fail, "needs a valid configuration (see the config check)"
+				return Fail, needsConfig + " (see the config check)"
 			}
 			mk := d.GitHub
 			if mk == nil {
@@ -180,7 +186,7 @@ func Checks(d Deps) []Check {
 		{"forge-board", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
-				return Fail, "needs a valid configuration (see the config check)"
+				return Fail, needsConfig + " (see the config check)"
 			}
 			if c.Board == nil {
 				return OK, "no project board is configured"
@@ -211,7 +217,7 @@ func Checks(d Deps) []Check {
 		{"forge-workflow", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
-				return Fail, "needs a valid configuration (see the config check)"
+				return Fail, needsConfig + " (see the config check)"
 			}
 			mk := d.GitHub
 			if mk == nil {
@@ -253,8 +259,7 @@ func Checks(d Deps) []Check {
 	}))
 }
 
-// Shared returns the checks `whr doctor` runs by itself: the ones that are no
-// setup step of one account. The steps of the two phases are for `whr setup`.
+// Shared returns the checks that are no setup step of one account.
 func Shared(checks []Check) []Check {
 	var out []Check
 	for _, c := range checks {
@@ -263,6 +268,40 @@ func Shared(checks []Check) []Check {
 		}
 	}
 	return out
+}
+
+// sharedFixes names the setup step that fixes a shared check, where one does.
+var sharedFixes = map[string]string{
+	"config":    "whr setup --only config-base",
+	"server":    "whr setup --only service-install",
+	"forge-key": "whr setup --only github-app",
+	"runtime":   "whr setup host --only brew-packages",
+}
+
+// needsConfig is what a shared check says when the configuration is unusable.
+const needsConfig = "needs a valid configuration"
+
+// FixCommand returns the setup command that fixes this check, or "" when none
+// does. A step with a fix names `whr setup host --only <id>` or `whr setup
+// --only <id>`; a shared check that cannot run without the configuration points
+// at `whr setup`. It only names the command.
+func (c Check) FixCommand(detail string) string {
+	switch c.Phase {
+	case PhaseHost:
+		if c.Fix != nil {
+			return "whr setup host --only " + c.Name
+		}
+	case PhaseUser:
+		if c.Fix != nil {
+			return "whr setup --only " + c.Name
+		}
+	default:
+		if strings.HasPrefix(detail, needsConfig) {
+			return "whr setup"
+		}
+		return sharedFixes[c.Name]
+	}
+	return ""
 }
 
 // Steps returns the checks of one phase, in the order the wizard runs them.
@@ -281,11 +320,15 @@ func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
 	out := make([]Result, 0, len(checks))
 	for _, c := range checks {
 		if skip[c.Name] {
-			out = append(out, Result{c.Name, c.Step, Skipped, "skipped on request"})
+			out = append(out, Result{Check: c.Name, Step: c.Step, Status: Skipped, Detail: "skipped on request", Phase: c.Phase})
 			continue
 		}
 		st, detail := c.Run(ctx)
-		out = append(out, Result{c.Name, c.Step, st, detail})
+		r := Result{Check: c.Name, Step: c.Step, Status: st, Detail: detail, Phase: c.Phase}
+		if st == Fail || st == NotVerified {
+			r.Fix = c.FixCommand(detail)
+		}
+		out = append(out, r)
 	}
 	return out
 }
