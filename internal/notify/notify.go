@@ -104,9 +104,9 @@ func FromEvents(events []domain.Event) []Message {
 }
 
 // Throttle deduplicates and rate-limits per task, so a stalled run does not
-// notify repeatedly. A message equal to one sent within Window (same task, kind
-// and Decision) is dropped, and a task gets at most MaxPerWindow messages in a
-// Window. What is dropped is still in the inbox.
+// notify repeatedly. A message equal to one sent within Window (the whole
+// Message: task, kind, Decision and run) is dropped, and a task gets at most
+// MaxPerWindow messages in a Window. What is dropped is still in the inbox.
 type Throttle struct {
 	Window       time.Duration // default 1 hour
 	MaxPerWindow int           // default 5
