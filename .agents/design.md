@@ -22,7 +22,8 @@ branch per change (AGENTS.md, Working on an issue).
 
 - **Decide.** Turn questions from the lanes, the human and review findings into
   decision rows and rule text; reserve the D-row in an issue first, open the
-  implementation issue in the same step, and cite spike evidence.
+  implementation issue in the same step (labelled as in AGENTS.md, GitHub
+  rate limit), and cite spike evidence.
 - **Rank.** Keep `Priority` and `Session` current on the board so `wh/dispatch`
   and each lane pull the next issue; step in only for a rule to decide first or
   lanes that would collide. You read the board through

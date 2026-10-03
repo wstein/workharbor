@@ -23,7 +23,8 @@ to it directly for decisions.
   AGENTS.md, Asking Werner: one numbered round, facts looked up by a helper.
 - **File issues** from the discussion: the problem, acceptance criteria, design
   sections and dependencies, added to the board with a `Priority` and a lane
-  when the lane is obvious; otherwise leave the lane to `wh/design`.
+  when the lane is obvious; otherwise leave the lane to `wh/design`. Labels
+  as in AGENTS.md, GitHub rate limit.
 - **Route.** A rule question (§3, §4.1, §4.2, §6, §7, the threat model), a
   priority change or a conflict between lanes goes to `wh/design` with Werner's
   words and your summary. A request to start or queue work goes to `wh/dispatch`

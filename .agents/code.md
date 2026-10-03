@@ -32,6 +32,7 @@ design owner is the `wh/design` session; the human is Werner.
 - Design first, then code. You may describe what you built in the design; you
   never write the rule sections (§3 decisions, §4.1 and §4.2, §6, §7, the threat
   model). Propose rule text in the issue and send it to the design owner.
+  An issue you open carries labels as in AGENTS.md (GitHub rate limit).
 - Commits: atomic Conventional Commits with `Refs: #N` (`Closes: #N` on the
   last) and `Assisted-by: <tool>:<model-id>`. Never `Signed-off-by`, never
   `--no-verify`. Squash your own fixups before landing:
