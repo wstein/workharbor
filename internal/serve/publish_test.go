@@ -53,3 +53,16 @@ func TestPublishBaseWiresTheKeyTheLinterAndTheCheckFromTheConfiguration(t *testi
 		t.Error("no checker")
 	}
 }
+
+func TestTheHostLintersRefuseAnUnsquashedCommit(t *testing.T) {
+	t.Parallel()
+	for _, linter := range []string{config.CommitLintWorkharbor, config.CommitLintConventional} {
+		lint := LintFor(linter, "Bot <bot@example.test>")
+		if got := lint("fixup! feat: a"); len(got) == 0 {
+			t.Errorf("%s accepts a fixup! commit", linter)
+		}
+		if got := lint("feat: a"); linter == config.CommitLintConventional && len(got) != 0 {
+			t.Errorf("%s: %v", linter, got)
+		}
+	}
+}

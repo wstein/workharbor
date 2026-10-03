@@ -106,3 +106,18 @@ func TestConventionalChecksOnlyTheSubjectShape(t *testing.T) {
 		}
 	}
 }
+
+func TestConventionalIsFinalAndRefusesAnUnsquashedCommit(t *testing.T) {
+	t.Parallel()
+	for _, subject := range []string{"fixup! feat: a", "squash! feat: a", "amend! feat: a"} {
+		got := Conventional(subject)
+		if len(got) != 1 || !strings.Contains(got[0], "autosquash") {
+			t.Errorf("%q: %v", subject, got)
+		}
+	}
+	for _, subject := range []string{"Merge branch 'x'", "Revert \"feat: a\""} {
+		if got := Conventional(subject); len(got) != 0 {
+			t.Errorf("%q: %v", subject, got)
+		}
+	}
+}

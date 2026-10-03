@@ -16,11 +16,12 @@ import (
 // LintFor returns the host's commit message linter a repository's commit_lint
 // names (D51): the Conventional Commits subject check, or this repository's own
 // rules. author is the committer's "Name <email>", which the rules need for the
-// sign-off of a bot. A repository's own linter is its code and runs only inside
+// sign-off of a bot. Both refuse a fixup!, squash! or amend! commit: a prepared
+// commit is about to be pushed. A repository's own linter is its code and runs only inside
 // its check.
 func LintFor(linter, author string) func(string) []string {
 	if linter == config.CommitLintWorkharbor {
-		return func(m string) []string { return commitlint.Lint(m, commitlint.Options{Author: author}) }
+		return func(m string) []string { return commitlint.Lint(m, commitlint.Options{Author: author, Final: true}) }
 	}
 	return commitlint.Conventional
 }
