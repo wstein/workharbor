@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,8 +40,10 @@ func newDoctor(st *state) *cobra.Command {
 				return err
 			}
 			exe, _ := env.Executable()
+			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
 				ConfigPath: path,
+				RepoDir:    repoDir,
 				Home:       st.env.Getenv("HOME"),
 				FS:         runtime.OSFS{},
 				LookPath:   doctor.DefaultLookPath,

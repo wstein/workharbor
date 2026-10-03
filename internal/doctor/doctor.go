@@ -80,8 +80,10 @@ func base(in []basic) []Check {
 type Deps struct {
 	ConfigPath string
 	Home       string
-	FS         runtime.FS
-	LookPath   func(string) (string, error)
+	// RepoDir is the checkout `whr doctor` runs in; empty skips the lane-agents check.
+	RepoDir  string
+	FS       runtime.FS
+	LookPath func(string) (string, error)
 	// GitHub builds the App's client from the configuration; nil uses
 	// NewGitHub. Tests point it at a fake.
 	GitHub func(*config.Config) (*github.Client, error)
@@ -263,6 +265,7 @@ func Checks(d Deps) []Check {
 		{"egress", 4, notVerified("default-deny egress needs a live environment; run the Apple Container live suite (-tags applecontainer)")},
 		{"reboot", 4, notVerified("an agent session surviving a reboot is unverified (design §12)")},
 		{"capacity", 4, notVerified("room for 4 concurrent environments (§8) is not measured")},
+		{"lane-agents", 5, laneAgentsCheck(d)},
 		{"notifications", 5, notVerified("no notification channel is configured yet")},
 	}))
 }
