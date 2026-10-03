@@ -505,25 +505,37 @@ func onDisk(dir, mount string) (string, string) {
 
 func TestMediaAnalysisFailsOnlyOnMeasuredCPU(t *testing.T) {
 	d := hostDeps(nil)
+	d.User = WhrUser
 	cache := "du -sk /Users/whr/Library/Caches/com.apple.mediaanalysisd"
 	check := func(r scripted) (Status, string) {
 		d.Runner = r
 		return status(steps(t, d)["media-analysis"])
 	}
-	const ps = "ps -axo pcpu=,time=,comm="
-	if st, detail := check(scripted{ps: " 12.0 1:02.03 /usr/sbin/cfprefsd\n", cache: "2048\tx"}); st != OK || !strings.Contains(detail, "not running") || !strings.Contains(detail, "2 MiB") {
+	const ps = "ps -axo user=,pcpu=,time=,comm="
+	const bin = "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+	if st, detail := check(scripted{ps: " root 12.0 1:02.03 /usr/sbin/cfprefsd\n", cache: "2048\tx"}); st != OK || !strings.Contains(detail, "not running") || !strings.Contains(detail, "2 MiB") {
 		t.Errorf("no process: %s %q", st, detail)
 	}
-	if st, detail := check(scripted{ps: " 3.0 0:10.00 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd\n"}); st != OK || !strings.Contains(detail, "3%") {
+	if st, detail := check(scripted{ps: " whr 3.0 0:10.00 " + bin + "\n"}); st != OK || !strings.Contains(detail, "3%") {
 		t.Errorf("idle: %s %q", st, detail)
 	}
-	if st, detail := check(scripted{ps: " 222.0 21:35:00 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd\n", cache: "9437184\tx"}); st != Fail || !strings.Contains(detail, "222%") || !strings.Contains(detail, "21:35:00") || !strings.Contains(detail, "9216 MiB") {
+	if st, detail := check(scripted{ps: " whr 222.0 21:35:00 " + bin + "\n", cache: "9437184\tx"}); st != Fail || !strings.Contains(detail, "222%") || !strings.Contains(detail, "21:35:00") || !strings.Contains(detail, "9216 MiB") {
 		t.Errorf("busy: %s %q", st, detail)
 	}
+	// an idle instance of another account listed first does not hide a busy one
+	if st, detail := check(scripted{ps: " werner 1.0 0:01.00 " + bin + "\n whr 222.0 21:35:00 " + bin + "\n"}); st != Fail || !strings.Contains(detail, "of whr") {
+		t.Errorf("two instances: %s %q", st, detail)
+	}
+	// run as another account, the whr user's cache is not read
+	d.User = "werner"
+	if st, detail := check(scripted{ps: " whr 3.0 0:10.00 " + bin + "\n", cache: "2048\tx"}); st != OK || strings.Contains(detail, "2 MiB") || !strings.Contains(detail, "run whr doctor as whr") {
+		t.Errorf("another account: %s %q", st, detail)
+	}
+	d.User = WhrUser
 	if st, _ := check(scripted{}); st != NotVerified {
 		t.Errorf("ps that does not answer: %s", st)
 	}
-	if st, _ := check(scripted{ps: " x 1:00 mediaanalysisd\n"}); st != NotVerified {
+	if st, _ := check(scripted{ps: " whr x 1:00 mediaanalysisd\n"}); st != NotVerified {
 		t.Errorf("unreadable ps: %s", st)
 	}
 	fix := steps(t, d)["media-analysis"].Fix
@@ -549,6 +561,11 @@ func TestSpotlightIsOffOnWorkspaceVolumes(t *testing.T) {
 	}
 	if st, _ := check(scripted{ka: va}); st != NotVerified {
 		t.Errorf("mdutil that does not answer: %s", st)
+	}
+	for _, out := range []string{"", "Error: unknown indexing state.\n", "/Volumes/ssd:\n\tNo index.\n"} {
+		if st, _ := check(scripted{ka: va, "mdutil -s /Volumes/ssd": out}); st != NotVerified {
+			t.Errorf("unrecognised mdutil output %q: %s", out, st)
+		}
 	}
 	ki, vi := onDisk(a, "/System/Volumes/Data")
 	if st, detail := check(scripted{ki: vi}); st != NotVerified || !strings.Contains(detail, "internal disk") {

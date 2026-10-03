@@ -252,35 +252,56 @@ func hostSteps(d Deps) []Check {
 		{
 			Name: "media-analysis", Phase: PhaseHost, Step: 4, Title: "Apple's media analysis is not eating the CPU (manual step 4, headless Mac)",
 			Run: func(ctx context.Context) (Status, string) {
-				out, err := d.output(ctx, "ps", "-axo", "pcpu=,time=,comm=")
+				out, err := d.output(ctx, "ps", "-axo", "user=,pcpu=,time=,comm=")
 				if err != nil {
 					if st, msg, ok := notHere(err); ok {
 						return st, msg
 					}
 					return NotVerified, "ps did not answer: " + oneLine(err.Error())
 				}
-				cache := "its cache is not known"
-				if kb, err := d.output(ctx, "du", "-sk", filepath.Join(d.Home, "Library", "Caches", "com.apple.mediaanalysisd")); err == nil {
-					if f := strings.Fields(kb); len(f) > 0 {
-						if n, err := strconv.ParseInt(f[0], 10, 64); err == nil {
-							cache = "its cache is " + strconv.FormatInt(n/1024, 10) + " MiB"
+				// The cache is the whr user's; only that account can read it.
+				cache := "its cache is not read from here (run whr doctor as " + WhrUser + ")"
+				if d.User == WhrUser {
+					cache = "its cache is not known"
+					if kb, err := d.output(ctx, "du", "-sk", filepath.Join(d.Home, "Library", "Caches", "com.apple.mediaanalysisd")); err == nil {
+						if f := strings.Fields(kb); len(f) > 0 {
+							if n, err := strconv.ParseInt(f[0], 10, 64); err == nil {
+								cache = "its cache is " + strconv.FormatInt(n/1024, 10) + " MiB"
+							}
 						}
 					}
 				}
+				// Every account's instance counts: the busiest one decides.
+				found, bad := false, false
+				var top float64
+				var topUser, topTime string
 				for _, l := range strings.Split(out, "\n") {
 					f := strings.Fields(l)
-					if len(f) < 3 || filepath.Base(strings.Join(f[2:], " ")) != "mediaanalysisd" {
+					if len(f) < 4 || filepath.Base(strings.Join(f[3:], " ")) != "mediaanalysisd" {
 						continue
 					}
-					cpu, err := strconv.ParseFloat(f[0], 64)
+					cpu, err := strconv.ParseFloat(f[1], 64)
 					if err != nil {
-						return NotVerified, "ps's answer for mediaanalysisd could not be read"
+						bad = true
+						continue
 					}
-					detail := fmt.Sprintf("mediaanalysisd uses %.0f%% CPU, has used %s of CPU time, %s", cpu, f[1], cache)
-					if cpu >= MediaAnalysisMaxCPU {
+					if !found || cpu > top {
+						top, topUser, topTime = cpu, f[0], f[2]
+					}
+					found = true
+				}
+				if found {
+					detail := fmt.Sprintf("mediaanalysisd of %s uses %.0f%% CPU, has used %s of CPU time, %s", topUser, top, topTime, cache)
+					if top >= MediaAnalysisMaxCPU {
 						return Fail, detail + fmt.Sprintf(" (limit %.0f%%)", MediaAnalysisMaxCPU)
 					}
+					if bad {
+						return NotVerified, "ps's answer for another mediaanalysisd could not be read; " + detail
+					}
 					return OK, detail
+				}
+				if bad {
+					return NotVerified, "ps's answer for mediaanalysisd could not be read"
 				}
 				return OK, "mediaanalysisd is not running; " + cache
 			},
@@ -303,18 +324,25 @@ func hostSteps(d Deps) []Check {
 				if len(vols) == 0 {
 					return NotVerified, "the workspace roots are on the internal disk: Spotlight's privacy list cannot be read, so add them there yourself"
 				}
-				var on []string
+				var on, unknown []string
 				for _, v := range vols {
 					out, err := d.output(ctx, "mdutil", "-s", v)
 					if err != nil {
 						return NotVerified, "mdutil did not answer for " + v + ": " + oneLine(err.Error())
 					}
-					if strings.Contains(strings.ToLower(out), "indexing enabled") {
+					switch lo := strings.ToLower(out); {
+					case strings.Contains(lo, "indexing enabled"):
 						on = append(on, v)
+					case strings.Contains(lo, "indexing disabled"):
+					default:
+						unknown = append(unknown, v)
 					}
 				}
 				if len(on) > 0 {
 					return Fail, "Spotlight indexes " + strings.Join(on, ", ")
+				}
+				if len(unknown) > 0 {
+					return NotVerified, "mdutil's answer for " + strings.Join(unknown, ", ") + " is not one this check knows (its format is unverified on macOS 26)"
 				}
 				return OK, "Spotlight indexing is off on every workspace volume (mdutil's output format is unverified on macOS 26)"
 			},
