@@ -133,12 +133,18 @@ func (w *Workspaces) Create(ctx context.Context, req CreateRequest) (domain.Work
 	if err != nil {
 		return domain.Workspace{}, domain.Agent{}, &domain.InvalidError{Msg: err.Error()}
 	}
-	integration, err := w.integrationFor(ctx, req.Repo, req.Integration)
+	integration, branchFrom, err := w.integrationFor(ctx, req.Repo, req.Integration)
 	if err != nil {
 		return domain.Workspace{}, domain.Agent{}, err
 	}
 	ws, wev, err := domain.NewWorkspace(w.cfg.NewID(), req.Name, path, req.Repo, integration, now)
 	if err != nil {
+		// The branch is the last check of NewWorkspace, so this refusal is about
+		// the name: say where the name came from, which the human can change.
+		var inv *domain.InvalidError
+		if errors.As(err, &inv) && strings.HasPrefix(inv.Msg, "integration branch") {
+			err = &domain.InvalidError{Msg: inv.Msg + " (taken from " + branchFrom + "; relaxing the names is #229)"}
+		}
 		return domain.Workspace{}, domain.Agent{}, err
 	}
 	ag, aev, err := domain.NewAgent(w.cfg.NewID(), ws.ID, req.Role, req.Instructions, req.Profile, now)
@@ -1010,33 +1016,39 @@ func (w *Workspaces) Remove(ctx context.Context, workspace string) error {
 // develop for integration when none is set, the forge's default branch read now
 // for published), so the workspace and its tasks' commits meet on one branch. A
 // requested branch that differs is refused, naming both; a target that cannot
-// be determined refuses too, and no name is guessed (issue #208).
-func (w *Workspaces) integrationFor(ctx context.Context, repo, requested string) (string, error) {
+// be determined refuses too, and no name is guessed (issue #208). The second
+// result names where the target came from, for a refusal of the name.
+func (w *Workspaces) integrationFor(ctx context.Context, repo, requested string) (string, string, error) {
 	preset, err := policy.ParsePreset(w.workflowOf(repo))
 	if err != nil {
-		return "", &domain.InvalidError{Msg: fmt.Sprintf("the workflow of %s is not known: %v", repo, err)}
+		return "", "", &domain.InvalidError{Msg: fmt.Sprintf("the workflow of %s is not known: %v", repo, err)}
 	}
-	var target string
+	var target, source string
 	switch {
 	case preset.ToDefaultBranch():
 		db, ok := w.cfg.Issues.(forge.DefaultBrancher)
 		if !ok {
-			return "", &domain.InvalidError{Msg: fmt.Sprintf("%s is published, and the forge adapter cannot name its default branch, so the workspace's branch is not known", repo)}
+			return "", "", &domain.InvalidError{Msg: fmt.Sprintf("%s is published, and the forge adapter cannot name its default branch, so the workspace's branch is not known", repo)}
 		}
-		if target, err = db.DefaultBranchName(ctx, repo); err != nil || target == "" {
-			return "", &domain.InvalidError{Msg: fmt.Sprintf("the default branch of %s could not be read, so the workspace's branch is not known: %v", repo, err)}
+		target, err = db.DefaultBranchName(ctx, repo)
+		switch {
+		case err != nil:
+			return "", "", &domain.InvalidError{Msg: fmt.Sprintf("the default branch of %s could not be read, so the workspace's branch is not known: %v", repo, err)}
+		case target == "":
+			return "", "", &domain.InvalidError{Msg: fmt.Sprintf("the forge reported no default branch for %s, so the workspace's branch is not known", repo)}
 		}
+		source = "the forge's default branch of " + repo
 	case w.branchOf(repo) != "":
-		target = w.branchOf(repo)
+		target, source = w.branchOf(repo), "integration_branch in the configuration"
 	case preset == policy.Integration:
-		target = "develop"
+		target, source = "develop", "the integration preset's default"
 	default:
-		return "", &domain.InvalidError{Msg: fmt.Sprintf("%s has no integration branch in the configuration, so the workspace's branch is not known", repo)}
+		return "", "", &domain.InvalidError{Msg: fmt.Sprintf("%s has no integration branch in the configuration, so the workspace's branch is not known", repo)}
 	}
 	if requested != "" && requested != target {
-		return "", &domain.InvalidError{Msg: fmt.Sprintf("the branch %q is not the publication target of %s, which is %q: leave --branch out or set integration_branch in the configuration", requested, repo, target)}
+		return "", "", &domain.InvalidError{Msg: fmt.Sprintf("the branch %q is not the publication target of %s, which is %q: leave --branch out or set integration_branch in the configuration", requested, repo, target)}
 	}
-	return target, nil
+	return target, source, nil
 }
 
 // branchOf is the integration branch a task started now would keep.

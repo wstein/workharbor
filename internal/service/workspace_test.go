@@ -951,7 +951,7 @@ func TestCreateDefaultsTheBranchToThePublicationTarget(t *testing.T) {
 			r := newWsRig(t)
 			r.ws.cfg.Workflow = func(string) string { return tc.workflow }
 			r.ws.cfg.Branch = func(string) string { return tc.branch }
-			got, err := r.ws.integrationFor(bg, "a/b", "")
+			got, _, err := r.ws.integrationFor(bg, "a/b", "")
 			if err != nil || got != tc.want {
 				t.Errorf("integrationFor = %q, %v; want %q", got, err, tc.want)
 			}
@@ -979,16 +979,47 @@ func TestIntegrationForFailsClosedWithoutATarget(t *testing.T) {
 	r := newWsRig(t)
 	r.ws.cfg.Workflow = func(string) string { return "prototype" }
 	r.ws.cfg.Branch = func(string) string { return "" }
-	if got, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
+	if got, _, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
 		t.Errorf("a prototype without a branch got %q", got)
 	}
 	r.ws.cfg.Workflow = func(string) string { return "published" }
-	r.issues.DefaultBranch = ""
 	r.ws.cfg.Issues = noDefaultBranch{}
-	if got, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
+	if got, _, err := r.ws.integrationFor(bg, "a/b", ""); err == nil {
 		t.Errorf("a forge that cannot name the default branch got %q", got)
 	}
+	r.ws.cfg.Issues = failingDefault{}
+	_, _, err := r.ws.integrationFor(bg, "a/b", "")
+	if err == nil || !strings.Contains(err.Error(), "no route to host") {
+		t.Errorf("a failed read: err = %v, want the cause", err)
+	}
+	r.ws.cfg.Issues = emptyDefault{}
+	_, _, err = r.ws.integrationFor(bg, "a/b", "")
+	if err == nil || strings.Contains(err.Error(), "<nil>") || !strings.Contains(err.Error(), "no default branch") {
+		t.Errorf("an empty name: err = %v, want a message without <nil>", err)
+	}
 }
+
+func TestCreateNamesWhereAnUnacceptableBranchCameFrom(t *testing.T) {
+	t.Parallel()
+	r := newWsRig(t)
+	r.ws.cfg.Workflow = func(string) string { return "published" }
+	r.issues.DefaultBranch = "trunk"
+	_, _, err := r.ws.Create(bg, CreateRequest{Name: "w", Path: r.folder("w"), Repo: "a/b", Source: r.forge, Role: "docs"})
+	if err == nil || !strings.Contains(err.Error(), `"trunk"`) || !strings.Contains(err.Error(), "default branch of a/b") {
+		t.Fatalf("err = %v, want the forge named as the source", err)
+	}
+	r.ws.cfg.Workflow = func(string) string { return "prototype" }
+	r.ws.cfg.Branch = func(string) string { return "staging" }
+	_, _, err = r.ws.Create(bg, CreateRequest{Name: "w", Path: r.folder("w2"), Repo: "a/b", Source: r.forge, Role: "docs"})
+	if err == nil || !strings.Contains(err.Error(), "integration_branch in the configuration") {
+		t.Fatalf("err = %v, want the configuration named as the source", err)
+	}
+}
+
+// emptyDefault is a forge that answers no error and no name.
+type emptyDefault struct{ IssueSource }
+
+func (emptyDefault) DefaultBranchName(context.Context, string) (string, error) { return "", nil }
 
 // noDefaultBranch is an IssueSource that is not a forge.DefaultBrancher.
 type noDefaultBranch struct{ IssueSource }
