@@ -37,7 +37,9 @@ params:
   description: "Self-hosted supervisor for AI coding agents: isolated workspaces and your approval for every push."
   theme:
     default: dark
-    displayToggle: true
+    # The navbar menu item above is the one theme toggle; true would add a
+    # second one to the footer and the mobile sidebar.
+    displayToggle: false
   navbar:
     displayTitle: false
     displayLogo: true

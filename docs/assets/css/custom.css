@@ -15,6 +15,15 @@
   --hx-color-dark: #0c1b33;
 }
 
+/* Footer: Hextra paints it neutral-900 (near black) in dark mode, off the navy page. */
+.hextra-footer {
+  background-color: #eef2f7;
+}
+
+.dark .hextra-footer {
+  background-color: #08142a;
+}
+
 /* Hero button: the dark-mode teal is too light for white text. */
 .dark a[class*="bg-primary-600"] {
   color: #ffffff;
@@ -90,3 +99,63 @@ main :not(pre) > code {
 .dark .whr-status-unverified { color: #fcd34d; }
 .dark .whr-status-decided { color: #93c5fd; }
 .dark .whr-status-open { color: #d1d5db; }
+
+/*
+ * Home page prose (the "What goes wrong" section): hextra-home renders the
+ * markdown body in a flex column without the .content typography, so it was
+ * unstyled and could outgrow a phone. Stretch to the column, wrap long words,
+ * and show the list as cards like the feature grid above it.
+ */
+#content > div > :is(h2, p, ul) {
+  align-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+#content > div > h2 {
+  margin-top: 3rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 2rem;
+}
+
+#content > div > p {
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+#content > div > ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#content > div > ul > li {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background-color: #f9fafb;
+  line-height: 1.6;
+}
+
+.dark #content > div > ul > li {
+  border-color: #1e3a5f;
+  background-color: #0f2342;
+}
+
+#content > div > :is(p, ul) a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  #content > div > ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
