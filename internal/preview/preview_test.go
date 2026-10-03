@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -580,5 +582,27 @@ func TestAPreviewEndsWithTheLastSessionThatOpenedIt(t *testing.T) {
 	r.m.CloseOwner("sess-c", "its session ended")
 	if got := r.m.List(); len(got) != 1 || got[0].ID != h.ID {
 		t.Errorf("a host-opened preview was closed by a session: %+v", got)
+	}
+}
+
+// List is empty only once the listener is closed: a caller that sees no preview
+// and dials must be refused, with no wait in between.
+func TestListIsEmptyOnlyAfterTheListenerIsClosed(t *testing.T) {
+	r := newRig(t)
+	for i := 0; i < 200; i++ {
+		p := r.open()
+		addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(p.Listen))
+		go r.m.Close(p.ID, "test")
+		deadline := time.Now().Add(5 * time.Second)
+		for len(r.m.List()) != 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("the preview never left List")
+			}
+			runtime.Gosched()
+		}
+		if c, err := (&net.Dialer{Timeout: time.Second}).DialContext(bg, "tcp", addr); err == nil {
+			_ = c.Close()
+			t.Fatalf("round %d: List was empty but the listener still accepted", i)
+		}
 	}
 }

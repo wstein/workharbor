@@ -117,6 +117,11 @@ type live struct {
 	ln        net.Listener
 	srv       *http.Server
 	cancel    context.CancelFunc
+	// closing is set, under Manager.mu, by the Close that ends it; done is closed
+	// once its listener is. A closing preview is still listed (so List is empty
+	// only after the listener is closed) but serves, grants and is reused by no one.
+	closing bool
+	done    chan struct{}
 }
 
 // New returns a Manager.
@@ -157,7 +162,7 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int, owner st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, p := range m.previews {
-		if p.Env == env && p.Port == port {
+		if p.Env == env && p.Port == port && !p.closing {
 			p.own(owner)
 			return p.Preview, false, nil
 		}
@@ -169,7 +174,7 @@ func (m *Manager) Open(ctx context.Context, task, env string, port int, owner st
 	now := m.cfg.Now()
 	p := &live{
 		Preview: Preview{ID: "pv-" + randomHex(6), Task: task, Env: env, Port: port, Listen: ln.Addr().(*net.TCPAddr).Port, Opened: now, Expires: now.Add(m.cfg.MaxAge)},
-		cookie:  randomHex(32), grants: map[[32]byte]time.Time{}, ln: ln, owners: map[string]bool{},
+		cookie:  randomHex(32), grants: map[[32]byte]time.Time{}, ln: ln, owners: map[string]bool{}, done: make(chan struct{}),
 	}
 	p.own(owner)
 	ctx2, cancel := context.WithCancel(context.Background())
@@ -246,7 +251,7 @@ func (m *Manager) Grant(id string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.previews[id]
-	if !ok {
+	if !ok || p.closing {
 		return "", ErrNotFound
 	}
 	now := m.cfg.Now()
@@ -295,13 +300,27 @@ func (m *Manager) List() []Preview {
 func (m *Manager) Close(id, reason string) {
 	m.mu.Lock()
 	p, ok := m.previews[id]
-	delete(m.previews, id)
-	m.mu.Unlock()
 	if !ok {
+		m.mu.Unlock()
 		return
 	}
+	if p.closing {
+		m.mu.Unlock()
+		<-p.done // another Close is at it: return when the listener is closed
+		return
+	}
+	p.closing = true
+	m.mu.Unlock()
 	p.cancel()
+	// The listener is closed before the preview leaves the list. Close it here too:
+	// when Serve has not yet registered it, Server.Close misses it and Serve closes
+	// it only later.
 	_ = p.srv.Close()
+	_ = p.ln.Close()
+	m.mu.Lock()
+	delete(m.previews, id)
+	m.mu.Unlock()
+	close(p.done)
 	if m.cfg.OnClosed != nil {
 		m.cfg.OnClosed(p.Preview, reason)
 	}
@@ -378,7 +397,7 @@ func (m *Manager) alive(id string) (*live, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.previews[id]
-	return p, ok
+	return p, ok && !p.closing
 }
 
 // hostOK refuses a request that was not made to the preview's own name: the
