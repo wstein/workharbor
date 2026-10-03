@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
@@ -296,17 +297,31 @@ func (s *Service) failRun(ctx context.Context, task, run domain.ID, rep *Report)
 	return err
 }
 
+// readyOnce runs the readiness command once and collects its output, both
+// under a context that ends after left (what remains of ReadyTimeout), so a
+// command that never ends cannot outlive the deadline or the caller's wait.
+func (s *Service) readyOnce(ctx context.Context, env domain.ID, left time.Duration) bool {
+	if left <= 0 {
+		left = time.Nanosecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, left)
+	defer cancel()
+	st, err := s.rt.Exec(ctx, string(env), runtime.ExecRequest{Cmd: s.cfg.ReadyCmd})
+	if err != nil {
+		return false
+	}
+	_, _, code, werr := runtime.Collect(st)
+	return werr == nil && code == 0
+}
+
 // waitReady polls exec until the environment answers, as the recovery loop
 // needs (spike #2: about 100 ms after a start), bounded by ReadyTimeout on the
 // injected clock.
 func (s *Service) waitReady(ctx context.Context, env domain.ID) error {
 	deadline := s.clock.Now().Add(s.cfg.ReadyTimeout)
 	for {
-		st, err := s.rt.Exec(ctx, string(env), runtime.ExecRequest{Cmd: s.cfg.ReadyCmd})
-		if err == nil {
-			if _, _, code, werr := runtime.Collect(st); werr == nil && code == 0 {
-				return nil
-			}
+		if s.readyOnce(ctx, env, deadline.Sub(s.clock.Now())) {
+			return nil
 		}
 		if !s.clock.Now().Before(deadline) {
 			return fmt.Errorf("environment %s did not answer exec within %s", env, s.cfg.ReadyTimeout)

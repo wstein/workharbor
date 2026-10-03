@@ -727,3 +727,40 @@ func TestSessionAttachedDuringShutdownIsStopped(t *testing.T) {
 		t.Error("the late session is still registered")
 	}
 }
+
+// The readiness command runs under what is left of ReadyTimeout, not under the
+// caller's context: one that never ends returns at the readiness deadline.
+func TestReadyTimeoutBoundsACommandThatNeverEnds(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.svc.clock = SystemClock{}
+	r.svc.cfg.ReadyTimeout = 50 * time.Millisecond
+	r.svc.cfg.ReadyInterval = 5 * time.Millisecond
+	r.svc.cfg.ReadyCmd = []string{"sleep"}
+	ctx, cancel := context.WithTimeout(bg, 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	err := r.svc.waitReady(ctx, r.env)
+	took := time.Since(start)
+	if err == nil || ctx.Err() != nil {
+		t.Fatalf("err = %v, ctx = %v; want the readiness error before the caller's deadline", err, ctx.Err())
+	}
+	if took > 2*time.Second {
+		t.Errorf("took %s, want about the 50ms readiness deadline", took)
+	}
+}
+
+// Repeated failing commands still end at the deadline.
+func TestReadyTimeoutEndsRepeatedFailures(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.svc.cfg.ReadyCmd = []string{"exit", "1"}
+	r.svc.cfg.ReadyTimeout = time.Second
+	if err := r.svc.waitReady(bg, r.env); err == nil {
+		t.Fatal("want an error")
+	}
+	if r.clock.slept < time.Second {
+		t.Errorf("slept %s, want the timeout to run on the injected clock", r.clock.slept)
+	}
+}
