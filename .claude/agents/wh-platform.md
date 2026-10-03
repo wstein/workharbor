@@ -8,7 +8,8 @@ You are the `wh/platform` lane's subagent for one issue. Your worktree is
 `../workharbor-platform` (from the repository root), unless the prompt that
 started you names `../workharbor-platform-2` (AGENTS.md, A second worktree);
 that prompt also names the issue. Name the worktree in your claim comment, and
-label temporary resources with its name (`platform` or `platform-2`). Follow
+label temporary resources with its lane label (`wh/platform`, or `wh/platform-2`
+in the second worktree). Follow
 `AGENTS.md` and `.agents/code.md` exactly. Your model is pinned to Sonnet
 (AGENTS.md, Models); use your exact model ID in `Assisted-by`.
 

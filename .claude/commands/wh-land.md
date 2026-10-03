@@ -10,11 +10,15 @@ $ARGUMENTS (empty: the current branch). Never push.
     `git status --short` is empty (commit or ask first; never stash someone
     else's work). The branch has commits that `main` lacks.
 2. Squash your own fixups: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash
-    main`. If the rebase conflicts, stop and report; do not resolve someone
-    else's code by guessing.
+    main`. If the rebase conflicts in a file your own issue changed (a second
+    worktree of your lane landed first: AGENTS.md, A second worktree), resolve
+    it and run the tests; any other conflict: stop and report, and do not
+    resolve someone else's code by guessing.
 3. Run `make land` and read its last lines:
     - `land: main is now <sha>`: done; go to 4.
-    - `main moved during the checks` or `is not on top of main`:
+    - `main moved during the checks`, `is not on top of main`, `Not possible
+      to fast-forward` or an `index.lock` error from the merge (another lander
+      won the race):
       `git rebase main`, then run `make land` again.
     - `Rejected status code: 50x` from github.com in the link check: not your
       content; wait 60 seconds and run it again, at most 4 times, then report.
