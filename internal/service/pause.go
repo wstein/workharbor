@@ -77,6 +77,9 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 			return domain.NewConflict(domain.RuleTransition, "run %s is already running", r.ID)
 		}
 		run = r.ID
+		if err := s.checkEnvFree(ctx, r.EnvID, r.ID); err != nil {
+			return err
+		}
 		if err := a.Resume(r.ID); err != nil {
 			return err
 		}

@@ -248,6 +248,12 @@ func (tx *Tx) LiveRuns(ctx context.Context, env domain.ID) ([]domain.Run, error)
 	return liveRuns(ctx, tx.tx, env)
 }
 
+// UnfinishedRuns is Store.UnfinishedRuns inside a transaction: the runs that
+// own the environment, for the check of one active run per environment.
+func (tx *Tx) UnfinishedRuns(ctx context.Context, env domain.ID) ([]domain.Run, error) {
+	return runsIn(ctx, tx.tx, env, `'starting', 'running', 'paused', 'interrupted'`)
+}
+
 // UnfinishedRuns lists the runs of an environment that are not over: the live
 // ones and the interrupted ones, which the reconciler resumes there.
 func (s *Store) UnfinishedRuns(ctx context.Context, env domain.ID) ([]domain.Run, error) {

@@ -155,12 +155,20 @@ func (r Run) Live() bool {
 	return r.State == RunStarting || r.State == RunRunning || r.State == RunPaused
 }
 
+// Owns reports whether a run owns its environment: it is live or interrupted.
+// An interrupted run is resumed in its environment, so it still holds it (design
+// §4.1, "One active run per environment counts interrupted", issue #216).
+func (r Run) Owns() bool {
+	return r.Live() || r.State == RunInterrupted
+}
+
 // CheckEnvironmentFree is the rule of one active run per environment (design
-// §4.3): runs are every run in that environment, of any task. It returns the
-// conflict env-busy naming the run in the way, or nil.
+// §4.1, §4.3): runs are every run in that environment, of any task, and an
+// interrupted run counts. It returns the conflict env-busy naming the run in the
+// way, or nil.
 func CheckEnvironmentFree(env ID, runs []Run) error {
 	for _, r := range runs {
-		if r.EnvID == env && r.Live() {
+		if r.EnvID == env && r.Owns() {
 			return conflict(RuleEnvBusy, "environment %s is busy: run %s of agent %q is %s; several agents at once are not supported yet", env, r.ID, r.AgentID, r.State)
 		}
 	}

@@ -84,9 +84,6 @@ Building release 1, dogfood first: workharbor develops workharbor as soon as it 
 3. [R1 Slice](https://github.com/wstein/workharbor/milestone/2): a CLI-only vertical slice, `whr run <issue-url>` to an opened pull request
 4. [R1 Complete](https://github.com/wstein/workharbor/milestone/3): the rest of release 1, including the web app for phone and tablet
 5. [Later](https://github.com/wstein/workharbor/milestone/4): medium and long term, such as API-key mode as a full peer (D41)
-6. [Alpine agent environments](https://github.com/wstein/workharbor/milestone/6): musl builds of the agent CLIs and toolchains
-7. [Security hygiene](https://github.com/wstein/workharbor/milestone/7): OpenSSF Scorecard findings, such as vulnerabilities, code scanning and signed releases
-8. [Lane workflow](https://github.com/wstein/workharbor/milestone/8): how the lanes run
 
 See [all milestones](https://github.com/wstein/workharbor/milestones), [open issues](https://github.com/wstein/workharbor/issues) and the [delivery plan](docs/content/docs/design/roadmap.md#13-delivery) in the design.
 

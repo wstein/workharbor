@@ -146,6 +146,9 @@ func (s *Service) freshenForResume(ctx context.Context, task, run domain.ID, ans
 	if env, ok := agg.Environment(r.EnvID); !ok || env.State == domain.EnvDeleted || s.rebuilding(r.WorkspaceID) {
 		return nil
 	}
+	if err := s.checkEnvFree(ctx, r.EnvID, run); err != nil {
+		return err
+	}
 	if s.envStarted(r.EnvID) {
 		return nil
 	}
@@ -154,4 +157,41 @@ func (s *Service) freshenForResume(ctx context.Context, task, run domain.ID, ans
 		return err
 	}
 	return s.waitReady(ctx, r.EnvID)
+}
+
+// restartLeftover stops an environment this process did not start and starts it,
+// for a new run's start, which has no task to record the stop in (a run that
+// owned the environment would have refused the start before this). A failed stop
+// is errStopFailed.
+func (s *Service) restartLeftover(ctx context.Context, env domain.ID) error {
+	s.freshMu.Lock()
+	defer s.freshMu.Unlock()
+	if s.envStarted(env) {
+		return nil
+	}
+	if err := s.stopLeftover(ctx, "", env, false, nil); err != nil {
+		return err
+	}
+	if err := s.startEnv(ctx, string(env)); err != nil {
+		return fmt.Errorf("start environment %s: %w", env, err)
+	}
+	return nil
+}
+
+// checkEnvFree is the rule of one active run per environment across tasks, with
+// an interrupted run counted (design 4.1): it refuses when a run other than run
+// owns env. A resume passes its own run; a new run's start passes none. The check
+// of a new run's save is repeated inside its transaction.
+func (s *Service) checkEnvFree(ctx context.Context, env, run domain.ID) error {
+	owning, err := s.store.UnfinishedRuns(ctx, env)
+	if err != nil {
+		return err
+	}
+	others := owning[:0:0]
+	for _, r := range owning {
+		if r.ID != run {
+			others = append(others, r)
+		}
+	}
+	return domain.CheckEnvironmentFree(env, others)
 }

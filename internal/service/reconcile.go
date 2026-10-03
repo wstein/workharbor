@@ -188,6 +188,11 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 		return s.failRun(ctx, task, run, rep) // the agent never reported a session
 	}
 
+	// An interrupted run counts for its environment: another run that owns it
+	// (a new task started there, say) keeps this one from resuming (issue #216).
+	if err := s.checkEnvFree(ctx, env.ID, run); err != nil {
+		return err
+	}
 	// Only an environment this process started is relaunched in (issue #216): any
 	// other is stopped and started first.
 	if s.envStarted(env.ID) {
@@ -216,6 +221,9 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if !ok || (r.State != domain.RunInterrupted && r.State != domain.RunPaused) || s.attached(run) ||
 		s.rebuilding(r.WorkspaceID) || agg.ResumeBlocked(run) != nil {
 		return nil
+	}
+	if err := s.checkEnvFree(ctx, env.ID, run); err != nil {
+		return err // a run started in the environment during the wait above
 	}
 	// The database says starting before the agent is launched (DB-first). The
 	// slot is taken first, so this run is not taken for a lost one meanwhile.

@@ -493,6 +493,13 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		// like Resume and recovery, and is refused while an agent is attached.
 		unlock := s.lockRun(row.RunID)
 		defer unlock()
+		if agg, lerr := s.store.LoadTask(ctx, row.TaskID); lerr == nil {
+			if r, ok := agg.Run(row.RunID); ok {
+				if err := s.checkEnvFree(ctx, r.EnvID, r.ID); err != nil {
+					return err
+				}
+			}
+		}
 		var berr error
 		if sl, berr = s.begin(row.RunID); berr != nil { // the run is about to start: it is not lost
 			return domain.NewConflict(domain.RuleTransition, "run %s is already running", row.RunID)

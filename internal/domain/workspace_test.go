@@ -74,7 +74,7 @@ func TestCheckEnvironmentFree(t *testing.T) {
 	if err := CheckEnvironmentFree("e1", runs); err != nil {
 		t.Errorf("finished runs hold nothing: %v", err)
 	}
-	for _, state := range []RunState{RunStarting, RunRunning, RunPaused} {
+	for _, state := range []RunState{RunStarting, RunRunning, RunPaused, RunInterrupted} {
 		held := append(append([]Run{}, runs...), Run{ID: "r4", EnvID: "e1", AgentID: "a2", State: state})
 		var c *ConflictError
 		if err := CheckEnvironmentFree("e1", held); !errors.As(err, &c) || c.Rule != RuleEnvBusy {
@@ -84,9 +84,9 @@ func TestCheckEnvironmentFree(t *testing.T) {
 	if err := CheckEnvironmentFree("e3", runs); err != nil {
 		t.Errorf("another environment is free: %v", err)
 	}
-	// an interrupted run is being recovered, not holding: it is not live
-	if err := CheckEnvironmentFree("e1", []Run{{ID: "r5", EnvID: "e1", State: RunInterrupted}}); err != nil {
-		t.Errorf("interrupted: %v", err)
+	// an interrupted run still owns its environment: it is resumed there (#216)
+	if (Run{State: RunInterrupted}).Live() || !(Run{State: RunInterrupted}).Owns() {
+		t.Error("an interrupted run is not live but owns its environment")
 	}
 }
 

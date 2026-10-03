@@ -466,13 +466,26 @@ func (w *Workspaces) agentAndWorkspace(ctx context.Context, agentID domain.ID) (
 }
 
 // ensureEnvironment starts the workspace's environment if it is not running and
-// waits until exec answers.
+// waits until exec answers. It is the first step of every new run's start, so an
+// environment this process did not start is stopped and started again first (an
+// agent an earlier process left behind may still run in it; design §4.1, "No
+// surviving agent before a relaunch", issue #216), after the check that no run
+// owns it. A failed stop fails the start and nothing is launched.
 func (w *Workspaces) ensureEnvironment(ctx context.Context, ws domain.Workspace) error {
 	release, err := w.svc.leaseEnvironment(ws)
 	if err != nil {
 		return err
 	}
 	defer release()
+	if !w.svc.envStarted(ws.EnvID) {
+		if err := w.svc.checkEnvFree(ctx, ws.EnvID, ""); err != nil {
+			return err
+		}
+		if err := w.svc.restartLeftover(ctx, ws.EnvID); err != nil {
+			return err
+		}
+		return w.svc.waitReady(ctx, ws.EnvID)
+	}
 	info, err := w.svc.rt.Inspect(ctx, string(ws.EnvID))
 	if err != nil {
 		return err
@@ -506,11 +519,11 @@ func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, a
 	}
 	var saved []domain.Event
 	err = w.svc.store.Update(ctx, func(tx *store.Tx) error {
-		live, err := tx.LiveRuns(ctx, ws.EnvID)
+		owning, err := tx.UnfinishedRuns(ctx, ws.EnvID)
 		if err != nil {
 			return err
 		}
-		if err := domain.CheckEnvironmentFree(ws.EnvID, live); err != nil {
+		if err := domain.CheckEnvironmentFree(ws.EnvID, owning); err != nil {
 			return err
 		}
 		saved, err = tx.SaveTask(ctx, agg)
