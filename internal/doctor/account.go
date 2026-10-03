@@ -99,20 +99,18 @@ func (d Deps) accountConfig() (accountView, error) {
 	return accountView{shared: !dedicated, remote: remote}, nil
 }
 
-// accountCheck is the shared `account` check (D49): the account whr runs as is
-// a dedicated standard user (ok), or an administrator or the developer's own
-// (warn, and fail when whr is also reachable from another device).
 // hostRemote lists the host's own remote logins that are on: Remote Login
-// (sshd) and Screen Sharing, read from launchd's system domain. A job that
-// launchctl cannot print counts as off, so an unreadable answer never makes
-// the check fail; the labels and that reading are unverified on macOS 26.
+// (sshd) and Screen Sharing, read from launchd's system domain. Only a job that
+// launchctl says it could not find counts as off; any other failure, and an
+// empty answer, is unknown (never off). The labels and that reading are
+// unverified on macOS 26.
 func (d Deps) hostRemote(ctx context.Context) (on []string, unknown bool) {
 	for label, name := range map[string]string{"com.openssh.sshd": "Remote Login", "com.apple.screensharing": "Screen Sharing"} {
 		out, err := d.output(ctx, "launchctl", "print", "system/"+label)
 		switch {
 		case err == nil && strings.TrimSpace(out) != "":
 			on = append(on, name)
-		case err == nil || isNotLoaded(out+" "+err.Error()):
+		case err != nil && isNotLoaded(out+" "+err.Error()):
 		default:
 			unknown = true
 		}
@@ -126,9 +124,12 @@ func (d Deps) hostRemote(ctx context.Context) (on []string, unknown bool) {
 // Any other failure is an unreadable answer, never "off".
 func isNotLoaded(text string) bool {
 	t := strings.ToLower(text)
-	return strings.Contains(t, "could not find service") || strings.Contains(t, "not found")
+	return strings.Contains(t, "could not find service")
 }
 
+// accountCheck is the shared `account` check (D49): the account whr runs as is
+// a dedicated standard user (ok), or an administrator or the developer's own
+// (warn, and fail when whr is also reachable from another device).
 func (d Deps) accountCheck() func(context.Context) (Status, string) {
 	return func(ctx context.Context) (Status, string) {
 		if d.Runner == nil || d.GOOS != "darwin" {

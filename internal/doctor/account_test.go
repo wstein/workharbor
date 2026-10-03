@@ -210,6 +210,13 @@ func TestAccountReviewFindings157(t *testing.T) {
 	if got != NotVerified {
 		t.Errorf("unreadable launchctl: %s %q", got, detail)
 	}
+	// a missing launchctl binary and an empty exit-0 answer are unknown, not off
+	for _, ans := range []string{`ERR:exec: "launchctl": executable file not found in $PATH`, ""} {
+		got, detail = acct(scripted{adminKey: isAdmin, "launchctl print system/com.openssh.sshd": ans}, nil)
+		if got != NotVerified {
+			t.Errorf("launchctl answer %q: %s %q, want not_verified", ans, got, detail)
+		}
+	}
 	// a remote login that is on still fails whatever else is unreadable
 	got, _ = acct(scripted{adminKey: isAdmin, "launchctl print system/com.openssh.sshd": "ERR:boom", "launchctl print system/com.apple.screensharing": "service = x"}, nil)
 	if got != Fail {
