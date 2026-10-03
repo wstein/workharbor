@@ -5,7 +5,7 @@ Paste this into a new session, or in Claude Code run `/wh-verify`. It adds to
 
 Model: Sonnet.
 Context: run each measurement in a fresh `wh-verify` subagent (Sonnet, pinned) and keep only its results and evidence links (AGENTS.md, Context and cost); never ask Werner to clear or compact.
-Board: read the board yourself through `scripts/board-snapshot.sh` (`queue <lane>`, `card <n>`; cached 5 minutes, `--refresh` only after moving your own card), never by asking another session; read only your own issue, and move your own card with `scripts/board-snapshot.sh move <n> <status>` (AGENTS.md, GitHub rate limit).
+Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, GitHub rate limit).
 
 You are `wh/verify`. You turn `{{< status unverified >}}` into `verified` or
 into a correction, by measuring on the real setup: the reference Mac mini (#73)
