@@ -507,7 +507,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "prefix", Phase: PhaseHost, Step: 13, Title: "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)",
-			Run: func(ctx context.Context) (Status, string) {
+			Run: func(context.Context) (Status, string) {
 				fi, err := os.Stat(d.prefix())
 				if err != nil {
 					return Fail, d.prefix() + " does not exist"
@@ -516,14 +516,15 @@ func hostSteps(d Deps) []Check {
 					return Fail, d.prefix() + " is not a directory only its owner can write"
 				}
 				for _, p := range []string{d.prefix(), filepath.Join(d.prefix(), "bin"), filepath.Join(d.prefix(), "bin", "whr")} {
-					own, err := ownedByWhr(p)
+					own, err := ownedBy(p, d.account())
 					if err != nil {
 						continue // not installed yet
 					}
-					// an administrator account owns the prefix by D24's own words:
-					// the prefix is admin-owned (D49)
-					if admin, _ := d.isAdmin(ctx); own && !admin {
-						return Fail, p + " belongs to " + WhrUser + ", who could then replace the supervisor: it must belong to the administrator"
+					// never the configured account, administrator or not: it could
+					// replace its own supervisor, and D24 would not come back after
+					// drop-admin (D49)
+					if own {
+						return Fail, p + " belongs to " + d.account() + ", the account the supervisor runs as, which could then replace its own supervisor: it must belong to root or another administrator"
 					}
 					if fi, err := os.Lstat(p); err == nil && fi.Mode().Perm()&0o022 != 0 {
 						return Fail, p + " can be written by others than its owner"
@@ -532,7 +533,7 @@ func hostSteps(d Deps) []Check {
 				return OK, d.prefix() + " exists and only the administrator writes it"
 			},
 			Fix: &Fix{
-				Cmds:  []Cmd{{Sudo: true, Argv: []string{"install", "-d", "-o", d.User, "-g", "admin", "-m", "755", d.prefix()}}},
+				Cmds:  []Cmd{{Sudo: true, Argv: d.prefixInstallArgv()}},
 				Guide: "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13).",
 			},
 		},
@@ -633,10 +634,20 @@ func privateDir(dir string) error {
 	return nil
 }
 
-// ownedByWhr reports whether a path belongs to the workharbor user, who must
-// never own what runs the supervisor (D24).
-func ownedByWhr(path string) (bool, error) {
-	u, err := user.Lookup(WhrUser)
+// prefixInstallArgv creates the prefix. When the account running setup is the
+// configured account (an administrator whr, D49) it must not own the prefix, so
+// root does; otherwise the running administrator does.
+func (d Deps) prefixInstallArgv() []string {
+	if d.User == d.account() {
+		return []string{"install", "-d", "-o", "root", "-g", "wheel", "-m", "755", d.prefix()}
+	}
+	return []string{"install", "-d", "-o", d.User, "-g", "admin", "-m", "755", d.prefix()}
+}
+
+// ownedBy reports whether a path belongs to the named account, which must
+// never own what runs the supervisor (D24, D49).
+func ownedBy(path, name string) (bool, error) {
+	u, err := user.Lookup(name)
 	if err != nil {
 		return false, nil // no such user yet: nothing it could own
 	}

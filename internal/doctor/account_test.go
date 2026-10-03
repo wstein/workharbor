@@ -3,6 +3,7 @@ package doctor
 import (
 	"encoding/json"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -158,12 +159,35 @@ func TestDropAdminRunsOneDseditgroupAndSudoK(t *testing.T) {
 	}
 }
 
-func TestAnAdministratorWhrMayOwnThePrefix(t *testing.T) {
-	// the prefix check skips the owner test for an administrator account (D49);
-	// here only that the check still runs and a standard whr is unchanged
+func TestPrefixIsNeverOwnedByTheConfiguredAccount(t *testing.T) {
+	me, err := user.Current()
+	if err != nil {
+		t.Skip(err)
+	}
+	// an administrator configured account owning the prefix fails
 	d := hostDeps(scripted{adminKey: isAdmin})
 	d.Prefix = t.TempDir()
+	d.Account = me.Username
+	got, detail := status(steps(t, d)["prefix"])
+	if got != Fail || !strings.Contains(detail, "replace its own supervisor") {
+		t.Errorf("own prefix = %s %q", got, detail)
+	}
+	// another administrator owning it is fine
+	d.Account = "whr-no-such-account"
 	if got, detail := status(steps(t, d)["prefix"]); got != OK {
-		t.Errorf("prefix = %s %q", got, detail)
+		t.Errorf("other owner = %s %q", got, detail)
+	}
+}
+
+func TestPrefixFixArgv(t *testing.T) {
+	d := hostDeps(scripted{})
+	d.Prefix = "/opt/whr"
+	d.User, d.Account = "whr", "whr"
+	if got := strings.Join(d.prefixInstallArgv(), " "); got != "install -d -o root -g wheel -m 755 /opt/whr" {
+		t.Errorf("same account: %s", got)
+	}
+	d.User = "boss"
+	if got := strings.Join(d.prefixInstallArgv(), " "); got != "install -d -o boss -g admin -m 755 /opt/whr" {
+		t.Errorf("other account: %s", got)
 	}
 }
