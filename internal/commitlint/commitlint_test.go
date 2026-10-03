@@ -86,3 +86,23 @@ func TestAFixupMustBeSquashedBeforeItLands(t *testing.T) {
 		}
 	}
 }
+
+func TestConventionalChecksOnlyTheSubjectShape(t *testing.T) {
+	t.Parallel()
+	for msg, ok := range map[string]bool{
+		"feat(x): add a thing":                    true,
+		"fix: a bug\n\nbody":                      true,
+		strings.Repeat("a", 90):                   false,
+		"feat(x): " + strings.Repeat("long ", 30): true, // no length rule, no trailer rule
+		"feat(x): add a thing\nno blank line":     false,
+		"Add a thing":                             false,
+		"":                                        false,
+		"Merge branch 'x'":                        true,
+		"feat(x): s\n\nSigned-off-by: A <a@example.test>\n":     true,
+		"feat(x): without the issue trailer feat requires\n\nb": true,
+	} {
+		if got := len(Conventional(msg)) == 0; got != ok {
+			t.Errorf("%q: accepted=%v, want %v (%v)", msg, got, ok, Conventional(msg))
+		}
+	}
+}

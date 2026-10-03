@@ -1,0 +1,28 @@
+package commitlint
+
+import "strings"
+
+// Conventional checks only what Conventional Commits asks of a message: a
+// `type(scope): summary` subject with a type of the specification's common
+// set, and a blank line before any body. It is the host's default linter for a
+// repository (D51); Lint adds this repository's own rules (the length, the
+// trailers) and is the `workharbor` choice.
+func Conventional(msg string) []string {
+	lines := clean(msg)
+	if len(lines) == 0 {
+		return []string{"empty commit message"}
+	}
+	for _, p := range exemptPrefixes {
+		if strings.HasPrefix(lines[0], p) {
+			return nil
+		}
+	}
+	var problems []string
+	if !subjectRe.MatchString(lines[0]) {
+		problems = append(problems, "subject must follow Conventional Commits, e.g. 'feat(domain): add run state'")
+	}
+	if len(lines) > 1 && lines[1] != "" {
+		problems = append(problems, "leave a blank line after the subject")
+	}
+	return problems
+}
