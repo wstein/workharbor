@@ -9,7 +9,7 @@ toc: true
 
 | Status | What | Where |
 | --- | --- | --- |
-| Decided | D1 to D48 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
+| Decided | D1 to D49 | §3; open decisions in the [M0 milestone](https://github.com/wstein/workharbor/milestone/1) |
 | Implemented | The domain (state machines, Decisions, the aggregate and its guards), the policy table, the SQLite store with redaction at ingest, the service layer and reconciler, hostgit (checkout checks, the repository cache, prepare and push, the editor copy), the runtime and agent contracts with their conformance suites, the Apple Container adapter with the egress proxy sidecar (ports 443 and 80, public addresses only, exec environment through a `0600` env file), the tool store (https only, size cap), the config file (secrets outside every root, an API key only, D40) and `make install` (from a commit on `origin/main`), push after approval with follow-up rounds as fast-forwards, the Claude Code adapter (`dontAsk` with an allowlist, or `manual` with host approvals over the stdio control channel), ntfy notifications, `whr version`, the `whr-shim` launcher, and the design-drift test; `whr serve` with the JSON API on a host-only socket, the CLI (D37), the web UI with passkey sign-in and step-up, previews and the usage dashboard, workspaces with named agents and the bundle export, the console with SSH certificates, workflow presets (D47), the setup wizard (D46), the launchd job, the board mirror, devcontainer environments with egress requests, release installs from drafts and the Homebrew tap workflow, and fuzz tests of the untrusted-input parsers | Packages under `internal/` and `cmd/`; what remains for the first dogfood run is the [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5), the rest of release 1 the [R1 Slice](https://github.com/wstein/workharbor/milestone/2) and [R1 Complete](https://github.com/wstein/workharbor/milestone/3) milestones |
 | Spiked | Agent contract (Claude Code, Codex CLI, Antigravity); Apple Container; host cancel with `whr-shim`; approvals over stdio; planted Claude Code config; host reachability; bind mount against volume, and a volume over a bind mount | Issues #1, #2, #10, #7, #68, #69, #40 and #80; the [spike pages](../spikes/_index.md); results in §4.2, §4.4, §5.1 to §5.3, §5.6, §7 |
 | Open spikes | Signing in to the agent inside an environment (D40); what guests reach on the host with `pf` rules | Issues #82, #69 |
@@ -57,7 +57,7 @@ The central concept is an **agent task supervisor with managed workspaces**, not
 | Access | VPN, temporary SSH, VS Code / JetBrains via SSH; code-server optional and later |
 | Forges | Gitea, Forgejo, Codeberg, GitLab, GitHub (release 1: GitHub, D15) |
 | CI | Drone medium/long term, behind an adapter |
-| Auth | OAuth for the five forges (release 1: static token) |
+| Auth | OAuth for the five forges (release 1: a GitHub App installation, D15) |
 
 ## 14. Review log
 
