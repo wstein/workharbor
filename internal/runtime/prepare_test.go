@@ -435,8 +435,30 @@ func aliases(path string, a, b reflect.Value) []string {
 		if !a.IsNil() && !b.IsNil() && a.Pointer() == b.Pointer() {
 			return []string{path}
 		}
+		for _, k := range a.MapKeys() {
+			bv := b.MapIndex(k)
+			if !bv.IsValid() {
+				continue
+			}
+			out = append(out, aliases(path+"[key]", a.MapIndex(k), bv)...)
+		}
 	}
 	return out
+}
+
+// A map of slices whose clone makes a new map but reuses the value slices must
+// be caught: aliases looks inside map values.
+func TestAliasesWalksMapValues(t *testing.T) {
+	type scratch struct{ M map[string][]string }
+	in := scratch{M: map[string][]string{"k": {"v"}}}
+	shared := scratch{M: map[string][]string{"k": in.M["k"]}}
+	deep := scratch{M: map[string][]string{"k": {"v"}}}
+	if got := aliases("S", reflect.ValueOf(in), reflect.ValueOf(shared)); len(got) != 1 {
+		t.Errorf("map reusing a value slice: got %v, want one alias", got)
+	}
+	if got := aliases("S", reflect.ValueOf(in), reflect.ValueOf(deep)); len(got) != 0 {
+		t.Errorf("deep copy: got %v, want none", got)
+	}
 }
 
 // A map, slice or pointer added to Spec (or to a type inside it) and forgotten
