@@ -46,7 +46,8 @@ keychain, credentials, `sudo`, launchd or real containers; `go test` is fine.
 
 One comment on the issue: `Reviewed by wh/review at <sha>` and either "no
 findings" or the findings, each with `file:line`, a concrete failure scenario
-and a severity (high, medium, low). Only real, high-confidence findings; say
+and a severity (high, medium, low). A criterion unmet or ticked but not met,
+without the author's reason in the issue, is a finding. Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
 - No findings: set the card to `Ready to push` with
