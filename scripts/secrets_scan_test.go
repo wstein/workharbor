@@ -51,6 +51,19 @@ func scan(t *testing.T, buildFails bool, rc, script string) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "mktemp"), []byte(mk), 0o700); err != nil { //nolint:gosec // a test stub
 		t.Fatal(err)
 	}
+	// a git that fails the reads of scripts/messages.sh named in $FAKE_GIT_FAIL
+	// (cat-file-t, cat-file-read, for-each-ref) and is the real one otherwise
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub := "#!/bin/sh\n" +
+		"case \"$FAKE_GIT_FAIL:$1:$2\" in\n" +
+		"cat-file-t:cat-file:-t | cat-file-read:cat-file:commit | cat-file-read:cat-file:tag | for-each-ref:for-each-ref:*) echo \"fake git: $* failed\" >&2; exit 1;; esac\n" +
+		"exec " + realGit + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(stub), 0o700); err != nil { //nolint:gosec // a test stub
+		t.Fatal(err)
+	}
 	env := append(gittest.Env(t.TempDir()), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SCAN_RC="+rc)
 	if buildFails {
 		env = append(env, "FAKE_BUILD=fail")
@@ -298,10 +311,12 @@ func TestSecretScansRemoveTheirTempDirOnTerm(t *testing.T) {
 // annotated tag whose message hold FAKEKEY (a made-up string, no real secret)
 // into a scratch object directory beside the repository's own, with no ref, and
 // sets $c and $tag. The stub scanner decides what counts as a secret.
-const messageObjects = `o=$(mktemp -d) && GIT_OBJECT_DIRECTORY=$o && export GIT_OBJECT_DIRECTORY && ` +
-	`GIT_ALTERNATE_OBJECT_DIRECTORIES=$(cd "$(git rev-parse --git-common-dir)" && pwd)/objects && export GIT_ALTERNATE_OBJECT_DIRECTORIES && ` +
-	`c=$(git commit-tree HEAD^{tree} -p HEAD -m "add thing: FAKEKEY") && ` +
-	`tag=$(printf 'object %s\ntype commit\ntag v1\ntagger t <t@example.com> 1 +0000\n\nrelease FAKEKEY\n' "$c" | git mktag) && `
+func messageObjects(o string) string {
+	return `o=` + o + ` && GIT_OBJECT_DIRECTORY=$o && export GIT_OBJECT_DIRECTORY && ` +
+		`GIT_ALTERNATE_OBJECT_DIRECTORIES=$(cd "$(git rev-parse --git-common-dir)" && pwd)/objects && export GIT_ALTERNATE_OBJECT_DIRECTORIES && ` +
+		`c=$(git commit-tree HEAD^{tree} -p HEAD -m "add thing: FAKEKEY") && ` +
+		`tag=$(printf 'object %s\ntype commit\ntag v1\ntagger t <t@example.com> 1 +0000\n\nrelease FAKEKEY\n' "$c" | git mktag) && `
+}
 
 // TestPrePushScansMessages: gitleaks git reads patches only, so a secret in a
 // commit message or an annotated tag's message needs its own scan. The stub
@@ -324,7 +339,7 @@ func TestPrePushScansMessages(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			out := filepath.Join(t.TempDir(), "stdin")
-			script := messageObjects + "export FAKE_STDIN_RC=" + c.stdinRC + " FAKE_STDIN_OUT=" + out + "; " +
+			script := messageObjects(t.TempDir()) + "export FAKE_STDIN_RC=" + c.stdinRC + " FAKE_STDIN_OUT=" + out + "; " +
 				"echo \"refs/heads/x " + c.tip + " refs/heads/x " + c.remote + "\" | .githooks/pre-push"
 			got, err := scan(t, false, "0", script)
 			if (err == nil) != c.ok {
@@ -341,5 +356,73 @@ func TestPrePushScansMessages(t *testing.T) {
 				t.Errorf("the message scan did not read FAKEKEY:\n%s", read)
 			}
 		})
+	}
+}
+
+// TestMessagesScriptFailsWithGit: every failure of git in scripts/messages.sh
+// fails the script, so that a scan fed by it cannot pass on an empty input.
+// The stub git fails at each read in turn.
+func TestMessagesScriptFailsWithGit(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, fail, args string }{
+		{"object type of the tip", "cat-file-t", `"$tag" HEAD`},
+		{"read of a tag", "cat-file-read", `"$tag" HEAD`},
+		{"read of a commit", "cat-file-read", `"" HEAD`},
+		{"listing of the tags", "for-each-ref", `"" --all`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			script := messageObjects(t.TempDir()) + "scripts/messages.sh " + c.args + " >/dev/null"
+			if got, err := scan(t, false, "0", script); err != nil {
+				t.Fatalf("without the failure: %v\n%s", err, got)
+			}
+			got, err := scan(t, false, "0", "export FAKE_GIT_FAIL="+c.fail+"; "+script)
+			if err == nil || !strings.Contains(got, "fake git") {
+				t.Errorf("want a failure of the script, err = %v:\n%s", err, got)
+			}
+		})
+	}
+}
+
+// TestPrePushBlocksWhenMessagesCannotBeRead: a messages.sh that fails is a scan
+// that could not run, and the push is blocked with that message (#196).
+func TestPrePushBlocksWhenMessagesCannotBeRead(t *testing.T) {
+	t.Parallel()
+	script := messageObjects(t.TempDir()) + "export FAKE_GIT_FAIL=cat-file-read; " +
+		"echo \"refs/heads/x $tag refs/heads/x " + zero + "\" | .githooks/pre-push"
+	got, err := scan(t, false, "0", script)
+	if err == nil || !strings.Contains(got, "could not run") {
+		t.Fatalf("want a block saying could not run, err = %v:\n%s", err, got)
+	}
+}
+
+// TestMessagesScriptReadsRawObjects: a NUL byte must not hide the text after it
+// (%B stops there), and a replace ref must not hide the original message that a
+// push still sends. FAKEKEY is a made-up string, no real secret.
+func TestMessagesScriptReadsRawObjects(t *testing.T) {
+	t.Parallel()
+	root, err := filepath.Abs("messages.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	script := `set -e; git init -q . && git config user.email t@example.com && git config user.name t &&
+tree=$(git mktree </dev/null) &&
+raw() { printf 'tree %s\nauthor t <t@example.com> 1 +0000\ncommitter t <t@example.com> 1 +0000\n\n' "$tree"; }
+nul=$({ raw; printf 'subject\n\nbefore\0FAKEKEY\n'; } | git hash-object -t commit -w --literally --stdin) &&
+secret=$({ raw; printf 'an innocent subject FAKEKEY\n'; } | git hash-object -t commit -w --stdin) &&
+clean=$({ raw; printf 'clean\n'; } | git hash-object -t commit -w --stdin) &&
+git replace "$secret" "$clean" &&
+git update-ref refs/heads/nul "$nul" && git update-ref refs/heads/rep "$secret" &&
+echo "log: $(git log --format=%B refs/heads/rep)" &&
+echo "nul: $(git log --format=%B refs/heads/nul | tr '\0' ' ' | grep -c FAKEKEY || true)" &&
+'` + root + `' "" refs/heads/nul | tr '\0' '\n' >nul.out &&
+'` + root + `' "" refs/heads/rep >rep.out; grep -q FAKEKEY nul.out && grep -q FAKEKEY rep.out`
+	got, err := bash(t, gittest.Env(t.TempDir()), "cd "+repo+" && "+script)
+	if err != nil {
+		t.Fatalf("a message hides FAKEKEY from the scan: %v\n%s", err, got)
+	}
+	if strings.Contains(got, "log: an innocent subject FAKEKEY") {
+		t.Errorf("git log shows the original message despite the replace ref: the test shows nothing:\n%s", got)
 	}
 }
