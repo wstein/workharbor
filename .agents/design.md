@@ -1,4 +1,4 @@
-# Design owner and lead session (`wh/design`): first instructions
+# Decider session (`wh/design`): first instructions
 
 Paste this into a new session, or in Claude Code run `/wh-design`. It adds to
 [AGENTS.md](../AGENTS.md), which always applies. One session at a time holds
