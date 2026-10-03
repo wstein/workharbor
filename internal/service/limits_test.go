@@ -101,7 +101,8 @@ func TestLimitsReadNoCredential(t *testing.T) {
 	}
 }
 
-// The push key is the window name: a moving resets_at or a flood of names does
+// The push key is the window name for the two known windows (any other name
+// shares one key): a moving resets_at or a flood of names does
 // not mint pushes without bound, and a recovered window may warn again.
 func TestLowWindowPushesAreKeyedByNameAndBounded(t *testing.T) {
 	t.Parallel()

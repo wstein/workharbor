@@ -109,8 +109,9 @@ func (s *Service) Limits(ctx context.Context) ([]ProviderLimits, error) {
 // the warning timely after a real recovery without chattering.
 const limitWarnCooldown = time.Hour
 
-// limitWarn is what one key last did: when it last pushed and whether its
-// latest reading was low.
+// limitWarn is what one key last did: when it last pushed and whether
+// it is armed off: low is true once a push happened and no reading below the
+// threshold has been seen since.
 type limitWarn struct {
 	at  time.Time
 	low bool
@@ -121,7 +122,8 @@ func resetPassed(resetsAt, now time.Time) bool { return !resetsAt.IsZero() && no
 // limitKey maps a window name to one of at most three keys (with the balance
 // key, four in all): the two known windows get their own, every other name the
 // agent invents shares window/other, so the map cannot grow and a flood of
-// made-up names cannot evict a real window's cooldown.
+// made-up names cannot evict a real window's cooldown. A new well-known window
+// needs its own case here, or it shares window/other.
 func limitKey(name string) string {
 	switch name {
 	case agent.WindowFiveHour, agent.WindowSevenDay:
