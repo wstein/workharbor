@@ -82,7 +82,7 @@ func (f *fake) Show(_ context.Context, id domain.ID) (service.TaskView, error) {
 		Task:      domain.Task{ID: "t2", Repo: "wstein/workharbor", Issue: "#2", State: domain.TaskAwaitingGuidance, AgentID: "a1", CreatedAt: t0},
 		Runs:      []domain.Run{{ID: "r1", AgentID: "a1", EnvID: "e1", State: domain.RunRunning, SessionID: "sess-1"}},
 		Open:      []domain.Decision{{ID: "d1", TaskID: "t2", RunID: "r1", Kind: domain.DecisionQuestion, Blocking: true, Subject: "Which file?", Input: "a.go\nb.go", Options: []string{"a", "b"}, Status: domain.DecisionOpen}},
-		Candidate: &domain.ReviewCandidate{Branch: "agent/docs", SHA: "abc123", CI: domain.CIPending},
+		Candidate: &domain.ReviewCandidate{Branch: "agent/docs", SHA: "abc123", CI: domain.CIPending, Files: 3, Added: 40, Removed: 7},
 	}, nil
 }
 

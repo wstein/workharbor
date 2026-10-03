@@ -2773,6 +2773,16 @@
           },
           "pushed": {
             "type": "boolean"
+          },
+          "files": {
+            "type": "integer",
+            "description": "files the revision changes; 0 when not measured"
+          },
+          "added": {
+            "type": "integer"
+          },
+          "removed": {
+            "type": "integer"
           }
         }
       },
@@ -2861,6 +2871,10 @@
               },
               "candidate": {
                 "$ref": "#/components/schemas/Candidate"
+              },
+              "usage_line": {
+                "type": "string",
+                "description": "the task's usage line (design 5.7); absent when it has no usage"
               }
             }
           }

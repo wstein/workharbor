@@ -410,7 +410,12 @@ func (s *Server) showTask(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	writeOK(w, http.StatusOK, taskOf(v))
+	out := taskOf(v)
+	// The usage line is part of the card; a failure to read it leaves it out.
+	if rep, uerr := s.be.Usage(r.Context(), service.UsageQuery{TaskID: id, Group: store.GroupTask}); uerr == nil {
+		out.UsageLine = service.FormatUsageLine(rep)
+	}
+	writeOK(w, http.StatusOK, out)
 }
 
 func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {

@@ -78,6 +78,10 @@ type candidateView struct {
 	PRURL  string `json:"pr_url,omitempty"`
 	CI     string `json:"ci,omitempty"`
 	Pushed bool   `json:"pushed"`
+	// The diff stat of the revision; zero when it was not measured.
+	Files   int64 `json:"files"`
+	Added   int64 `json:"added"`
+	Removed int64 `json:"removed"`
 }
 
 type taskView struct {
@@ -85,6 +89,8 @@ type taskView struct {
 	Runs      []runView      `json:"runs"`
 	Open      []decisionView `json:"open_decisions"`
 	Candidate *candidateView `json:"candidate,omitempty"`
+	// UsageLine is service.FormatUsageLine for the task, empty when it has no usage.
+	UsageLine string `json:"usage_line,omitempty"`
 }
 
 func taskOf(v service.TaskView) taskView {
@@ -102,7 +108,7 @@ func taskOf(v service.TaskView) taskView {
 		out.Open = append(out.Open, decisionOf(d))
 	}
 	if c := v.Candidate; c != nil {
-		out.Candidate = &candidateView{Branch: c.Branch, SHA: c.SHA, PRURL: c.PRURL, CI: string(c.CI), Pushed: c.Pushed}
+		out.Candidate = &candidateView{Branch: c.Branch, SHA: c.SHA, PRURL: c.PRURL, CI: string(c.CI), Pushed: c.Pushed, Files: c.Files, Added: c.Added, Removed: c.Removed}
 	}
 	return out
 }

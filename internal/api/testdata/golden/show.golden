@@ -38,8 +38,12 @@ HTTP OK (200)
       "branch": "agent/docs",
       "sha": "abc123",
       "ci": "pending",
-      "pushed": false
-    }
+      "pushed": false,
+      "files": 3,
+      "added": 40,
+      "removed": 7
+    },
+    "usage_line": "usage: five-hour 42%; 3 turns, 43.8k in, 194 out; $0.0058 reported, notional (subscription)"
   }
 }
 
