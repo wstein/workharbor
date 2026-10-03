@@ -32,12 +32,21 @@ func (s *Service) markEnvStarted(env domain.ID) {
 	s.mu.Unlock()
 }
 
-// startEnv starts an environment and remembers that this process did.
+func (s *Service) forgetEnvStarted(env domain.ID) {
+	s.mu.Lock()
+	delete(s.startedEnvs, env)
+	s.mu.Unlock()
+}
+
+// startEnv starts an environment and remembers that this process did. The mark
+// is set before the start, so a reconciler pass cannot stop the environment
+// between the two; a failed start takes it back.
 func (s *Service) startEnv(ctx context.Context, env string) error {
+	s.markEnvStarted(domain.ID(env))
 	if err := s.rt.Start(ctx, env); err != nil {
+		s.forgetEnvStarted(domain.ID(env))
 		return err
 	}
-	s.markEnvStarted(domain.ID(env))
 	return nil
 }
 
@@ -150,7 +159,7 @@ func (s *Service) freshenForResume(ctx context.Context, task, run domain.ID, ans
 		return err
 	}
 	if s.envStarted(r.EnvID) {
-		return nil
+		return s.startIfStopped(ctx, task, r.EnvID)
 	}
 	var rep Report
 	if err := s.freshenRun(ctx, task, run, r.EnvID, &rep); err != nil {
@@ -196,28 +205,72 @@ func (s *Service) checkEnvFree(ctx context.Context, env, run domain.ID) error {
 	return domain.CheckEnvironmentFree(env, others)
 }
 
-// retryPendingStops tries again the stop of every environment of a cancelled run
-// whose stop failed; one that stops, or that this process started meanwhile, is
-// dropped. A failure stays pending for the next pass.
-func (s *Service) retryPendingStops(ctx context.Context) []error {
-	s.mu.Lock()
-	pending := make(map[domain.ID]domain.ID, len(s.pendingStops))
-	for env, task := range s.pendingStops {
-		pending[env] = task
+// startIfStopped starts an environment this process started once but that is
+// stopped now (a pause that stopped it, an observed stop), and records it
+// running: a resume of a paused run needs it running (design 4.1, issue #221).
+func (s *Service) startIfStopped(ctx context.Context, task, env domain.ID) error {
+	s.freshMu.Lock()
+	defer s.freshMu.Unlock()
+	info, err := s.rt.Inspect(ctx, string(env))
+	if err != nil {
+		return fmt.Errorf("inspect environment %s: %w", env, err)
 	}
-	s.mu.Unlock()
+	if info.State == domain.EnvRunning {
+		return nil
+	}
+	if err := s.startEnv(ctx, string(env)); err != nil {
+		return fmt.Errorf("start environment %s: %w", env, err)
+	}
+	if err := s.waitReady(ctx, env); err != nil {
+		return err
+	}
+	return s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvRunning) })
+}
+
+// stopLeftoverEnvs is the first step of every reconciler pass (design 4.1, 5.3,
+// issue #221): it stops each running environment of the owner that this process
+// did not start, whatever runs it holds, the console's excepted: an agent an
+// earlier process left behind (a pause saved before a crash, a cancel whose stop
+// failed) ends with it. A paused run in it stays paused. The stopped
+// environments are recorded stopped in seen, so the pass observes them; one whose
+// stop failed stays running there and is tried again on the next pass.
+func (s *Service) stopLeftoverEnvs(ctx context.Context, seen map[domain.ID]runtime.Info) []error {
 	var errs []error
-	for env, task := range pending {
-		s.freshMu.Lock()
-		err := s.stopLeftover(ctx, task, env, false, nil)
-		s.freshMu.Unlock()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("task %s: %w", task, err))
+	for id, in := range seen {
+		if in.State != domain.EnvRunning || in.Labels[ConsoleLabel] == "1" || s.envStarted(id) {
 			continue
 		}
-		s.mu.Lock()
-		delete(s.pendingStops, env)
-		s.mu.Unlock()
+		s.freshMu.Lock()
+		err := s.stopLeftover(ctx, "", id, false, nil)
+		started := s.envStarted(id)
+		s.freshMu.Unlock()
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !started {
+			in.State = domain.EnvStopped
+			seen[id] = in
+		}
 	}
 	return errs
+}
+
+// stopEnvForPause ends the agent of a paused run whose own stop failed by
+// stopping its environment (design 4.1). When that fails too, the process forgets
+// that it started the environment, so the next pass stops it and no launch there
+// skips the stop and start; the error says the agent may still run.
+func (s *Service) stopEnvForPause(ctx context.Context, task, env domain.ID, cause error) error {
+	s.freshMu.Lock()
+	err := s.rt.Stop(context.WithoutCancel(ctx), string(env))
+	if err != nil && errors.Is(err, runtime.ErrNotFound) {
+		err = nil
+	}
+	s.forgetEnvStarted(env)
+	s.freshMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("task %s is paused, but its agent may still run: stop the agent: %w; stop the environment %s: %w", task, cause, env, err)
+	}
+	uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvStopped) })
+	return uerr
 }

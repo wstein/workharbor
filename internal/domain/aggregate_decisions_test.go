@@ -356,6 +356,25 @@ func TestObserveEnvInterruptsTheRunsInIt(t *testing.T) {
 	wantConflict(t, a.ObserveEnv("e1", EnvProvisioning), RuleTransition)
 }
 
+// A hard-paused run has no agent process to lose: a stopped or gone environment
+// leaves it paused, with its open login or quota question (design 4.1, #221).
+func TestObserveEnvLeavesAPausedRunPaused(t *testing.T) {
+	for _, state := range []EnvState{EnvStopped, EnvDeleted} {
+		a := runningTask(t)
+		_, err := a.SuspendRun("r1", CauseQuotaExhausted, time.Time{}, "q1", time.Unix(1000, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := a.ObserveEnv("e1", state); err != nil {
+			t.Fatal(err)
+		}
+		d, _ := a.Decision("q1")
+		if a.runs[0].State != RunPaused || d.Status != DecisionOpen {
+			t.Errorf("env %s: run %s, question %s", state, a.runs[0].State, d.Status)
+		}
+	}
+}
+
 func TestObserveEnvGone(t *testing.T) {
 	a := runningTask(t)
 	if err := a.ObserveEnv("e1", EnvDeleted); err != nil {

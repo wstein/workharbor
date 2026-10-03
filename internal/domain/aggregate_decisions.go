@@ -439,9 +439,11 @@ func (a *TaskAggregate) Interrupt(runID ID) error {
 
 // ObserveEnv records what the runtime reports about an environment. It is a
 // fact, so it does not go through the guard that stops a deliberate
-// StopEnvironment under a live run; instead every live run in an environment
-// seen stopped or gone is interrupted first. An observation that changes
-// nothing records nothing.
+// StopEnvironment under a live run; instead every starting or running run in an
+// environment seen stopped or gone is interrupted first. A paused run stays
+// paused (design 4.1, issues #201 and #221): its agent was stopped by the pause,
+// so there is no process to lose, and the human's resume starts the environment
+// again. An observation that changes nothing records nothing.
 func (a *TaskAggregate) ObserveEnv(envID ID, state EnvState) error {
 	env, err := a.env(envID)
 	if err != nil {
@@ -460,7 +462,7 @@ func (a *TaskAggregate) ObserveEnv(envID ID, state EnvState) error {
 	}
 	if state != EnvRunning {
 		for _, run := range a.runs {
-			if run.EnvID == envID && !run.State.Terminal() && run.State != RunInterrupted {
+			if run.EnvID == envID && (run.State == RunStarting || run.State == RunRunning) {
 				if err := a.Interrupt(run.ID); err != nil {
 					return err
 				}

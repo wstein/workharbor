@@ -177,6 +177,7 @@ func (r *rig) live() {
 	sess, err := r.agent.Resume(bg, spec(), r.session)
 	must(r.t, err)
 	r.svc.attach("t1", "r1", mustBegin(r.t, r.svc), sess)
+	r.svc.markEnvStarted(r.env) // an attached agent was launched by this process
 }
 
 func (r *rig) load() *domain.TaskAggregate {

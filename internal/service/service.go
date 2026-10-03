@@ -125,9 +125,6 @@ type Service struct {
 	// one that is not, so each is stopped once per process.
 	startedEnvs map[domain.ID]bool
 	freshMu     sync.Mutex
-	// pendingStops are the environments (to their task) of cancelled runs whose
-	// stop failed: each reconciler pass tries the stop again until it succeeds.
-	pendingStops map[domain.ID]domain.ID
 	// loadTask reads a task for the resume gate; a test replaces it to fail a read.
 	loadTask    func(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error)
 	limitWarned map[string]limitWarn // per key: last low-limit push and state
@@ -589,13 +586,8 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 			serr := s.stopLeftover(ctx, task, leftover, false, nil)
 			s.freshMu.Unlock()
 			if serr != nil {
-				// The cancel is saved; the reconciler tries the stop again.
-				s.mu.Lock()
-				if s.pendingStops == nil {
-					s.pendingStops = map[domain.ID]domain.ID{}
-				}
-				s.pendingStops[leftover] = task
-				s.mu.Unlock()
+				// The cancel is saved; the environment is still running and not
+				// one this process started, so the reconciler's next pass stops it.
 				err = fmt.Errorf("task %s is cancelled, but its environment was not stopped (the next reconciler pass tries again): %w", task, serr)
 			}
 		}
@@ -605,12 +597,15 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 
 // stopSession stops a run's agent. When the session is not up yet it records the
 // request on the run's slot, and attach stops the session as soon as it exists.
-func (s *Service) stopSession(run domain.ID) {
+func (s *Service) stopSession(run domain.ID) { _ = s.stopSessionErr(run) }
+
+// stopSessionErr is stopSession that reports a failed stop.
+func (s *Service) stopSessionErr(run domain.ID) error {
 	s.mu.Lock()
 	sl := s.sessions[run]
 	if sl == nil {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	sess := sl.sess
 	if sess == nil {
@@ -618,8 +613,9 @@ func (s *Service) stopSession(run domain.ID) {
 	}
 	s.mu.Unlock()
 	if sess != nil {
-		_ = sess.Stop(context.Background())
+		return sess.Stop(context.Background())
 	}
+	return nil
 }
 
 // agentEnv is the environment the supervisor adds for an agent process: the

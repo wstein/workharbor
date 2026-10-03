@@ -39,6 +39,9 @@ func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 	for _, in := range infos {
 		seen[domain.ID(in.ID)] = in
 	}
+	// Stop what an earlier process left running before anything is observed, so
+	// the pass sees those environments stopped (design 5.3, issue #221).
+	rep.Errors = append(rep.Errors, s.stopLeftoverEnvs(ctx, seen)...)
 	tasks, err := s.store.ActiveTaskIDs(ctx)
 	if err != nil {
 		return rep, err
@@ -51,7 +54,6 @@ func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 			rep.Errors = append(rep.Errors, fmt.Errorf("task %s: %w", id, err))
 		}
 	}
-	rep.Errors = append(rep.Errors, s.retryPendingStops(ctx)...)
 	// A run that waited for egress requests starts once none is open, also when
 	// the last one expired instead of being answered.
 	rep.Errors = append(rep.Errors, s.continueAllEgress(ctx)...)

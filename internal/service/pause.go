@@ -17,13 +17,13 @@ import (
 // environment keeps running, so the human can look at or edit the workspace. The
 // agent's own session stays, and Resume continues from it.
 func (s *Service) Pause(ctx context.Context, task domain.ID) error {
-	var run domain.ID
+	var run, env domain.ID
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		r, ok := a.LiveRun()
 		if !ok {
 			return domain.NewConflict(domain.RuleTransition, "task %s has no run to pause", task)
 		}
-		run = r.ID
+		run, env = r.ID, r.EnvID
 		return a.Pause(r.ID)
 	})
 	if err != nil {
@@ -31,7 +31,11 @@ func (s *Service) Pause(ctx context.Context, task domain.ID) error {
 	}
 	// The run is already paused, so the session's end is not taken for a loss
 	// (finish leaves a paused run alone).
-	s.stopSession(run)
+	// A failed stop of the agent stops its environment instead, which ends every
+	// process in it (design 4.1, issue #221).
+	if serr := s.stopSessionErr(run); serr != nil {
+		return s.stopEnvForPause(ctx, task, env, serr)
+	}
 	return nil
 }
 
