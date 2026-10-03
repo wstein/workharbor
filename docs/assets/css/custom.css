@@ -104,16 +104,17 @@ main :not(pre) > code {
  * Home page prose (the "What goes wrong" section): hextra-home renders the
  * markdown body in a flex column without the .content typography, so it was
  * unstyled and could outgrow a phone. Stretch to the column, wrap long words,
- * and show the list as cards like the feature grid above it.
+ * and show the list as cards like the feature grid above it. Scoped to the
+ * home wrapper (it alone has hx:items-start; docs pages use div.content).
  */
-#content > div > :is(h2, p, ul) {
+#content > div[class~="hx:items-start"] > :is(h2, p, ul) {
   align-self: stretch;
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
 }
 
-#content > div > h2 {
+#content > div[class~="hx:items-start"] > h2 {
   margin-top: 3rem;
   margin-bottom: 0.75rem;
   font-size: 1.5rem;
@@ -122,12 +123,12 @@ main :not(pre) > code {
   line-height: 2rem;
 }
 
-#content > div > p {
+#content > div[class~="hx:items-start"] > p {
   margin-bottom: 1rem;
   line-height: 1.75;
 }
 
-#content > div > ul {
+#content > div[class~="hx:items-start"] > ul {
   display: grid;
   gap: 0.75rem;
   margin: 0;
@@ -135,7 +136,7 @@ main :not(pre) > code {
   list-style: none;
 }
 
-#content > div > ul > li {
+#content > div[class~="hx:items-start"] > ul > li {
   min-width: 0;
   padding: 1rem;
   border: 1px solid #e5e7eb;
@@ -144,18 +145,18 @@ main :not(pre) > code {
   line-height: 1.6;
 }
 
-.dark #content > div > ul > li {
+.dark #content > div[class~="hx:items-start"] > ul > li {
   border-color: #1e3a5f;
   background-color: #0f2342;
 }
 
-#content > div > :is(p, ul) a {
+#content > div[class~="hx:items-start"] > :is(p, ul) a {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 @media (min-width: 768px) {
-  #content > div > ul {
+  #content > div[class~="hx:items-start"] > ul {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
