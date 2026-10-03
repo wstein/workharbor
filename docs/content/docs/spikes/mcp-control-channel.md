@@ -30,8 +30,8 @@ A.1 to A.3 are the gate: if they fail, A.4 to A.7 are not run.
 
 ## Setup
 
-Two whtmp-labelled containers on an `--internal` network: the egress probe proxy sidecar and the agent container with Claude Code 2.1.288 (linux-arm64, sha256 checked against the signed manifest). Werner signs in inside the agent container (D40); no token is written to a file. The driver plays the supervisor and logs every wire line.
+The run will use two whtmp-labelled containers on an `--internal` network: the egress probe proxy sidecar and the agent container with Claude Code 2.1.288 (linux-arm64, sha256 to be checked against the signed manifest). Werner will sign in inside the agent container (D40); no token will be written to a file. The driver will play the supervisor and log every wire line.
 
 ## Since the plan
 
-The 2.1.288 binary contains the strings `sdkMcpServers`, `mcp_message`, `mcp_set_servers` and `mcp_status`, so the control protocol has a surface for this. That shows the names exist, not that headless mode behaves as #129 needs {{< status unverified >}}.
+The strings `sdkMcpServers`, `mcp_message`, `mcp_set_servers` and `mcp_status` were observed in the 2.1.288 binary during preparation; how (command, binary sha256) was not recorded, so the finding is an observation, not a measurement. If they are there, the control protocol has a surface for this; that shows the names exist, not that headless mode behaves as #129 needs {{< status unverified >}}.
