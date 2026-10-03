@@ -17,6 +17,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/toolstore"
 )
@@ -504,5 +505,63 @@ func TestTheUserOfAnEnvironmentIsFixedSoAKeptVolumeMeetsTheSameUID(t *testing.T)
 		if got := opts.For(domain.Workspace{ID: id}).User; got != "1000:1000" {
 			t.Errorf("the user of workspace %s's environment = %q, want 1000:1000", id, got)
 		}
+	}
+}
+
+func TestFileSecretsGet(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := filepath.Join(dir, "topic")
+	if err := os.WriteFile(good, []byte("  the-topic-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loose := filepath.Join(dir, "loose")
+	if err := os.WriteFile(loose, []byte("the-secret-content"), 0o644); err != nil { //nolint:gosec // a deliberately loose file
+		t.Fatal(err)
+	}
+	s := fileSecrets{"a": good, "b": loose, "c": filepath.Join(dir, "missing")}
+	if v, err := s.Get("a"); err != nil || v != "the-topic-value" {
+		t.Errorf("Get(a) = %q, %v", v, err)
+	}
+	if v, err := s.Get("unset"); err != nil || v != "" {
+		t.Errorf("Get(unset) = %q, %v", v, err)
+	}
+	for _, name := range []string{"b", "c"} {
+		_, err := s.Get(name)
+		if err == nil {
+			t.Fatalf("Get(%s) read an unusable file", name)
+		}
+		for _, leak := range []string{dir, "the-secret-content"} {
+			if strings.Contains(err.Error(), leak) {
+				t.Errorf("Get(%s) error %q leaks %q", name, err, leak)
+			}
+		}
+	}
+}
+
+type recordingNotifier struct{ n int }
+
+func (r *recordingNotifier) Notify(context.Context, notify.Message) error { r.n++; return nil }
+
+func TestNewNotifierThrottlesABurstPerTask(t *testing.T) {
+	if NewNotifier(nil) != nil {
+		t.Fatal("a nil notifier must stay nil")
+	}
+	rec := &recordingNotifier{}
+	n := NewNotifier(rec)
+	for i := 0; i < 50; i++ {
+		// Distinct decisions, so only the per-task rate limit can hold them back.
+		m := notify.Message{TaskID: "task-1", Kind: notify.KindQuestion, DecisionID: domain.ID(fmt.Sprintf("d%d", i))}
+		if err := n.Notify(context.Background(), m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if rec.n != 5 {
+		t.Errorf("a burst for one task delivered %d pushes, want at most 5", rec.n)
+	}
+	if err := n.Notify(context.Background(), notify.Message{TaskID: "task-2", Kind: notify.KindQuestion}); err != nil || rec.n != 6 {
+		t.Errorf("another task was throttled: n=%d err=%v", rec.n, err)
 	}
 }

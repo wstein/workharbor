@@ -5,8 +5,8 @@
 // truth; a push is best effort.
 //
 // Throttle sits in `whr serve` (serve.NewNotifier): Ntfy is wrapped in Throttled
-// with one shared Throttle, inside the Async queue, so every kind of push goes
-// through the per-task limit.
+// with one shared Throttle, and service.New puts its Async queue in front, so
+// every kind of push goes through the per-task limit.
 package notify
 
 import (

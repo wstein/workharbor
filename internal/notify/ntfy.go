@@ -28,6 +28,24 @@ const (
 // that keeps a public ntfy.sh channel private, so it must be long and random.
 const MinTopicLength = 20
 
+// DefaultServer is the ntfy server used when none is configured.
+const DefaultServer = "https://ntfy.sh"
+
+// ValidTopic reports whether topic is long enough and free of characters that
+// would change the request's path.
+func ValidTopic(topic string) bool {
+	return len(topic) >= MinTopicLength && !strings.ContainsAny(topic, "/?# \t\r\n")
+}
+
+// ValidServer reports whether server is an https URL or a loopback one.
+func ValidServer(server string) bool {
+	u, err := url.Parse(server)
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost"))
+}
+
 // NewTopic returns a long random topic for `whr doctor` to store in the
 // credential service.
 func NewTopic() (string, error) {
@@ -54,15 +72,14 @@ func (n Ntfy) Notify(ctx context.Context, m Message) error {
 	if err != nil || topic == "" {
 		return errors.New("ntfy: no topic in the credential service")
 	}
-	if len(topic) < MinTopicLength || strings.ContainsAny(topic, "/?# \t\n") {
+	if !ValidTopic(topic) {
 		return errors.New("ntfy: the topic is too short or has characters that are not allowed")
 	}
 	server := strings.TrimRight(n.Server, "/")
 	if server == "" {
-		server = "https://ntfy.sh"
+		server = DefaultServer
 	}
-	u, err := url.Parse(server)
-	if err != nil || (u.Scheme != "https" && u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") {
+	if !ValidServer(server) {
 		return errors.New("ntfy: the server must be an https URL")
 	}
 	body := fmt.Sprintf("%s: task %s", m.Kind, m.TaskID)

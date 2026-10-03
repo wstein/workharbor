@@ -26,6 +26,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/baseimage"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/policy"
 )
 
@@ -613,6 +614,12 @@ func (c *Config) Validate() error {
 		secrets["console.ssh_ca_key_file"] = c.Console.SSHCAKeyFile
 	}
 	if n := c.Ntfy; n != nil {
+		if n.Server != "" && !notify.ValidServer(n.Server) {
+			add("ntfy.server: must be an https URL (or a loopback one)")
+		}
+		if origin, _ := c.PublicOrigin(); origin == "" {
+			add("ntfy: a push links to the task, so public_url (or board.public_url) must be an https URL")
+		}
 		secrets["ntfy.topic_file"] = n.TopicFile
 		if n.TokenFile != "" {
 			secrets["ntfy.token_file"] = n.TokenFile
@@ -621,6 +628,10 @@ func (c *Config) Validate() error {
 	for _, key := range sortedKeys(secrets) {
 		if msg := checkSecretFile(secrets[key]); msg != "" {
 			add("%s: %s", key, msg)
+		} else if key == "ntfy.topic_file" {
+			if b, err := ReadSecret(secrets[key]); err == nil && !notify.ValidTopic(strings.TrimSpace(string(b))) {
+				add("%s: the topic must be at least %d characters, without / ? # or whitespace", key, notify.MinTopicLength)
+			}
 		} else if key == "agent_api_key_env_file" {
 			if _, err := c.AgentAPIKey(); err != nil {
 				add("%s: %s", key, strings.TrimPrefix(err.Error(), "config: "+key+": "))

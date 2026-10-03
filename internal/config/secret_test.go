@@ -123,3 +123,62 @@ func TestTheAPIKeyFileIsOptional(t *testing.T) {
 		t.Errorf("AgentAPIKey without a file = %q, %v", env, err)
 	}
 }
+
+func TestNtfyConfigIsValidated(t *testing.T) {
+	long := "whr-abcdefghijklmnopqrstuvwxyz"
+	topic := func(r *rig, content string, mode os.FileMode) string {
+		p := filepath.Join(r.dir, "secrets", "ntfy.topic")
+		if err := os.WriteFile(p, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cases := []struct {
+		name  string
+		setup func(r *rig)
+		want  string // "" means valid
+	}{
+		{"valid", func(r *rig) { r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, long, 0o600)} }, ""},
+		{"missing topic file", func(r *rig) { r.cfg.Ntfy = &Ntfy{TopicFile: filepath.Join(r.dir, "secrets", "none")} }, "ntfy.topic_file"},
+		{"0644 topic file", func(r *rig) { r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, long, 0o644)} }, "ntfy.topic_file"},
+		{"symlinked topic file", func(r *rig) {
+			link := filepath.Join(r.dir, "secrets", "link")
+			if err := os.Symlink(topic(r, long, 0o600), link); err != nil {
+				t.Skip(err)
+			}
+			r.cfg.Ntfy = &Ntfy{TopicFile: link}
+		}, "ntfy.topic_file"},
+		{"topic file in a root", func(r *rig) {
+			p := filepath.Join(r.dir, "workspaces", "topic")
+			if err := os.WriteFile(p, []byte(long), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			r.cfg.Ntfy = &Ntfy{TopicFile: p}
+		}, "inside a workspace root"},
+		{"bad token file", func(r *rig) {
+			r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, long, 0o600), TokenFile: filepath.Join(r.dir, "none")}
+		}, "ntfy.token_file"},
+		{"short topic", func(r *rig) { r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, "short", 0o600)} }, "the topic must be"},
+		{"topic with a slash", func(r *rig) { r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, long+"/x", 0o600)} }, "the topic must be"},
+		{"http server", func(r *rig) { r.cfg.Ntfy = &Ntfy{Server: "http://ntfy.example", TopicFile: topic(r, long, 0o600)} }, "ntfy.server"},
+		{"loopback server", func(r *rig) { r.cfg.Ntfy = &Ntfy{Server: "http://127.0.0.1:8080", TopicFile: topic(r, long, 0o600)} }, ""},
+		{"no public url", func(r *rig) {
+			r.cfg.PublicURL = ""
+			r.cfg.Ntfy = &Ntfy{TopicFile: topic(r, long, 0o600)}
+		}, "public_url"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t)
+			r.cfg.PublicURL = "https://whr.example"
+			tc.setup(r)
+			_, err := r.parse(t)
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("a valid ntfy block was refused: %v", err)
+			case tc.want != "" && (err == nil || !strings.Contains(problems(err), tc.want)):
+				t.Fatalf("want a problem with %q, got %v", tc.want, err)
+			}
+		})
+	}
+}

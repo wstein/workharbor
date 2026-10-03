@@ -124,9 +124,8 @@ func Run(ctx context.Context, d Deps) error {
 		OnError:           func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
-	if q := NewNotifier(d.Notifier, logf); q != nil {
-		defer q.Close()
-		scfg.Notifier = q
+	if n := NewNotifier(d.Notifier); n != nil {
+		scfg.Notifier = n
 	}
 	addRevoker(&scfg, d)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
@@ -322,18 +321,16 @@ func Run(ctx context.Context, d Deps) error {
 	return err
 }
 
-// NewNotifier puts next behind one shared per-task Throttle and then the
-// bounded Async queue, so every kind of push is deduplicated and rate-limited
-// (design §9.4) and a slow relay never holds up the service. It returns nil
-// for a nil next: nothing is sent. Errors are logged without the topic or the
-// token, which the notifier never puts in one.
-func NewNotifier(next notify.Notifier, logf func(string, ...any)) *notify.Async {
+// NewNotifier puts next behind one shared per-task Throttle, so every kind of
+// push is deduplicated and rate-limited (design §9.4). The service puts the
+// result behind its own bounded queue (service.New), which also reports
+// delivery errors, so no second queue is added here. It returns nil for a nil
+// next: nothing is sent.
+func NewNotifier(next notify.Notifier) notify.Notifier {
 	if next == nil {
 		return nil
 	}
-	q := notify.NewAsync(notify.Throttled{Next: next, Throttle: &notify.Throttle{}}, 64, 15*time.Second)
-	q.OnError(func(err error) { logf("notification: %v", err) })
-	return q
+	return notify.Throttled{Next: next, Throttle: &notify.Throttle{}}
 }
 
 // addBoard gives the service the project board of D30: the supervisor's own
