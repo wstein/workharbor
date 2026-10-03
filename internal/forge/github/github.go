@@ -111,9 +111,8 @@ type Client struct {
 	base *url.URL
 
 	mu      sync.Mutex
-	tokens  map[string]token  // by repository
-	bases   map[string]string // default branch by repository
-	install map[string]int64  // installation ID by repository
+	tokens  map[string]token // by repository
+	install map[string]int64 // installation ID by repository
 	board   boardCache
 }
 
@@ -169,7 +168,7 @@ func New(cfg Config) (*Client, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Client{cfg: cfg, base: base, tokens: map[string]token{}, bases: map[string]string{}, install: map[string]int64{}}, nil
+	return &Client{cfg: cfg, base: base, tokens: map[string]token{}, install: map[string]int64{}}, nil
 }
 
 // ParsePrivateKey reads an RSA private key in PEM, PKCS#1 or PKCS#8. The error
@@ -485,14 +484,11 @@ func (c *Client) BranchSHA(ctx context.Context, repo, branch string) (string, er
 	return v.Object.SHA, nil
 }
 
+// defaultBranch asks GitHub for the repository's default branch every time:
+// there is no cache, since the human can change it at any moment and the D47
+// guard and the D38 environment source decide by it (design §6). One call of
+// GET /repos/{repo} per read; an unanswered one is an error.
 func (c *Client) defaultBranch(ctx context.Context, repo string) (string, error) {
-	key := strings.ToLower(repo)
-	c.mu.Lock()
-	b, ok := c.bases[key]
-	c.mu.Unlock()
-	if ok {
-		return b, nil
-	}
 	var v struct {
 		DefaultBranch string `json:"default_branch"`
 	}
@@ -502,9 +498,6 @@ func (c *Client) defaultBranch(ctx context.Context, repo string) (string, error)
 	if v.DefaultBranch == "" {
 		return "", errors.New("github: the repository answer has no default branch")
 	}
-	c.mu.Lock()
-	c.bases[key] = v.DefaultBranch
-	c.mu.Unlock()
 	return v.DefaultBranch, nil
 }
 

@@ -798,3 +798,72 @@ func TestBranchRulesAndBypassActorsAreReadAndRefusalsAreUnreadable(t *testing.T)
 		t.Error("a bad branch accepted")
 	}
 }
+
+// The default branch is read from GitHub each time (design §6): a default that
+// changed between two operations is seen by the second, so the D47 guard refuses
+// a fast-forward to it and sends no PATCH, and the D38 environment source asks
+// for the new one.
+func TestTheDefaultBranchIsReadFreshSoAChangeIsSeenAndTheGuardRefusesIt(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	def := "main"
+	f.handlers["GET /repos/wstein/workharbor"] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]string{"default_branch": def})
+	}
+	patch := "PATCH /repos/wstein/workharbor/git/refs/heads/develop"
+	f.handlers[patch] = func(w http.ResponseWriter, _ *http.Request) {
+		jsonReply(w, 200, map[string]string{"ref": "refs/heads/develop"})
+	}
+	f.handlers["GET /repos/wstein/workharbor/git/ref/heads/agent/x"] = func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"object":{"sha":"`+strings.Repeat("a", 40)+`"}}`)
+	}
+	c := f.client(t, nil)
+	sha := strings.Repeat("a", 40)
+	ap := forge.Approval{DecisionID: "d1", SHA: sha}
+	g := forge.NewGuard(c, nil, policy.Default(), approvedOnly{"d1", sha})
+
+	if got, err := c.DefaultBranchName(bg, "wstein/workharbor"); err != nil || got != "main" {
+		t.Fatalf("first read = %q, %v", got, err)
+	}
+	def = "develop" // the human changes the default on GitHub
+	if got, err := c.DefaultBranchName(bg, "wstein/workharbor"); err != nil || got != "develop" {
+		t.Fatalf("the change was not seen: %q, %v", got, err)
+	}
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/x", "develop", ap); !errors.Is(err, forge.ErrTarget) {
+		t.Fatalf("a fast-forward to the new default = %v, want ErrTarget", err)
+	}
+	if f.count(patch) != 0 {
+		t.Fatal("a PATCH reached the new default branch")
+	}
+}
+
+func TestAFailedDefaultBranchReadIsNotAnsweredFromAnEarlierOne(t *testing.T) {
+	now, _ := clock()
+	f := newFake(t, now)
+	fail := false
+	f.handlers["GET /repos/wstein/workharbor"] = func(w http.ResponseWriter, _ *http.Request) {
+		if fail {
+			jsonReply(w, 500, map[string]string{"message": "boom"})
+			return
+		}
+		jsonReply(w, 200, map[string]string{"default_branch": "main"})
+	}
+	patch := "PATCH /repos/wstein/workharbor/git/refs/heads/develop"
+	f.handlers[patch] = func(w http.ResponseWriter, _ *http.Request) { jsonReply(w, 200, map[string]string{"ref": "x"}) }
+	c := f.client(t, nil)
+	sha := strings.Repeat("a", 40)
+	g := forge.NewGuard(c, nil, policy.Default(), approvedOnly{"d1", sha})
+	if _, err := c.DefaultBranchName(bg, "wstein/workharbor"); err != nil {
+		t.Fatal(err)
+	}
+	fail = true
+	if _, err := c.DefaultBranchName(bg, "wstein/workharbor"); err == nil {
+		t.Error("an unanswered read was answered from the earlier one")
+	}
+	if err := g.FastForward(bg, "wstein/workharbor", "agent/x", "develop", forge.Approval{DecisionID: "d1", SHA: sha}); !errors.Is(err, forge.ErrTarget) {
+		t.Errorf("a failed read = %v, want ErrTarget", err)
+	}
+	if f.count(patch) != 0 {
+		t.Error("a PATCH was sent after a failed read")
+	}
+}

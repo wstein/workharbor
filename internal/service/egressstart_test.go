@@ -294,3 +294,41 @@ func TestNoEnvironmentIsReadWhenTheDefaultBranchIsUnknown(t *testing.T) {
 		t.Error("the refusal was not reported")
 	}
 }
+
+// A default branch that changed between two reads is read at its new name, and a
+// read that fails gives the zero environment with the failure reported (§6: the
+// default is asked of the forge each time, and an unanswered question fails closed).
+func TestTheEnvironmentFollowsADefaultBranchChangeAndFailsClosedOnAFailedRead(t *testing.T) {
+	t.Parallel()
+	r := newWsRig(t)
+	r.egress = true
+	w, _ := r.create("docs-ws")
+	var read []string
+	r.ws.cfg.Environment = func(_ context.Context, _, branch string) (RepoEnvironment, error) {
+		read = append(read, branch)
+		return RepoEnvironment{Commit: "c-" + branch}, nil
+	}
+	r.issues.DefaultBranch = "trunk"
+	if env, ok := r.ws.repoEnvironment(bg, w); !ok || env.Commit != "c-trunk" {
+		t.Fatalf("first read = %+v, %v", env, ok)
+	}
+	r.issues.DefaultBranch = "develop" // the human changed it on the forge
+	if env, ok := r.ws.repoEnvironment(bg, w); !ok || env.Commit != "c-develop" {
+		t.Fatalf("the changed default was not followed: %+v, %v (read %v)", env, ok, read)
+	}
+	r.ws.cfg.Issues = failingDefault{r.issues}
+	r.forget()
+	read = nil
+	if env, ok := r.ws.repoEnvironment(bg, w); ok || env.Commit != "" || len(read) != 0 {
+		t.Errorf("a failed read gave %+v, %v, read %v", env, ok, read)
+	}
+	if len(r.reported()) != 1 {
+		t.Errorf("the failure was not reported: %v", r.reported())
+	}
+}
+
+type failingDefault struct{ IssueSource }
+
+func (failingDefault) DefaultBranchName(context.Context, string) (string, error) {
+	return "", errors.New("no route to host")
+}

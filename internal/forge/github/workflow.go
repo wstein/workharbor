@@ -55,7 +55,7 @@ func (c *Client) BypassActors(ctx context.Context, repo string, rulesetID int64)
 	return len(*rs.BypassActors), true, nil
 }
 
-// DefaultBranchName is the repository's default branch.
+// DefaultBranchName is the default branch, read from GitHub on every call (no cache, design §6).
 func (c *Client) DefaultBranchName(ctx context.Context, repo string) (string, error) {
 	return c.defaultBranch(ctx, repo)
 }
