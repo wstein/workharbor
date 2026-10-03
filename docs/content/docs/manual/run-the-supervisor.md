@@ -7,11 +7,15 @@ toc: true
 
 A draft of the commands that exist today; they were checked against `whr --help` of a build from `main`, not run. **Every command on this page is provisional, and none of them has been run against a release yet** ({{< status unverified >}}): the text follows the commands' own `--help` and the design, and `wh/docs` will check it against `v0.1.0` (issue #65). Prepare the host first ([Prepare the Mac mini](host-setup.md)) and install `whr` ([Install, upgrade and release](install-upgrade-release.md)).
 
-The commands that talk to the supervisor take `--config <file>` (default `$WHR_CONFIG`, then `~/.config/whr/config.json`) and `--json`, which prints the API's envelope instead of text. Stdout is data and stderr is for you, so `whr preview open ... | pbcopy` copies only the link. Four commands differ:
+Every command accepts `--config <file>` (default `$WHR_CONFIG`, then `~/.config/whr/config.json`) and `--json` (they are persistent flags of `whr`), but only some of them do something with `--json`. Stdout is data and stderr is for you, so `whr preview open ... | pbcopy` copies only the link. The commands that go through the API (`ls`, `run`, `show`, `say`, `cancel`, `pause`, `resume`, `purge`, `inbox`, `approve`, `reject`, `answer`, `usage`, `kill-all`, `open`, `ws`, `agent`, `preview`, `passkey`, and `console --status` and `--close`) print the API's envelope with `--json` instead of text. These differ ({{< status unverified >}}: read from the code of a build from `main`, not run):
 
+- `whr logs --json` prints one JSON event per line, not an envelope.
+- `whr doctor --json` prints its own object (`schema_version`, `ok` and the `checks`), and `whr service status --json` and `whr github app create --json` print `schema_version`, `ok` and `data`.
 - `whr version` and `whr tools build` parse their own arguments and take neither `--config` nor the envelope. `whr version --json` prints the version, the commit and whether the tree was dirty as plain JSON, not the envelope; `whr tools build` takes `-store`, `-shim`, `-platform`, `-tools` and `-pins` (see its usage line).
 - `whr serve` takes `--config` but runs until stopped, so `--json` has nothing to print.
-- `whr ssh --config` is a different flag: it prints a `~/.ssh/config` block (below) and does not name a configuration file.
+- `whr ssh` prints no envelope in any mode and ignores `--json`. Its own `--config` is a different flag: it prints a `~/.ssh/config` block (below) and does not name a configuration file, so `whr ssh --proxy` and `--refresh` take the configuration file from `$WHR_CONFIG` only.
+- `whr console` without `--status` or `--close` opens an interactive shell and prints no envelope.
+- `whr setup`, `whr setup host` and `whr service uninstall` print no envelope. `whr service install` prints the path of the plist as plain text.
 
 ## Check first: `whr doctor`
 
