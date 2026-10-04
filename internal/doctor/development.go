@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"strings"
 
 	"github.com/wstein/workharbor/internal/config"
 )
@@ -83,9 +84,14 @@ func (d Deps) developmentKeyFix(prefix string) *Fix {
 		if err != nil {
 			return err
 		}
-		if d.Managed {
-			delete(m, config.DevelopmentPrefixKey)
-		} else {
+		// the JSON decoder matches key names without regard to case, so every spelling
+		// of the key is the key: "DEVELOPMENT_PREFIX" is read as it and goes with it
+		for k := range m {
+			if strings.EqualFold(k, config.DevelopmentPrefixKey) {
+				delete(m, k)
+			}
+		}
+		if !d.Managed {
 			if msg := config.CheckDevelopmentPrefix(prefix); msg != "" {
 				return errors.New(config.DevelopmentPrefixKey + " " + prefix + " " + msg)
 			}

@@ -223,3 +223,28 @@ func TestDevelopmentKeyFixRefusals(t *testing.T) {
 		t.Errorf("no file = %v", err)
 	}
 }
+
+// encoding/json matches key names without regard to case, so a hand-edited
+// "DEVELOPMENT_PREFIX" is the key: --managed removes every spelling, --dev leaves one.
+func TestDevelopmentKeyFixHandlesCaseVariants(t *testing.T) {
+	ctx := context.Background()
+	prefix := t.TempDir()
+	d := devConfig(t, 0o600, map[string]any{"DEVELOPMENT_PREFIX": prefix, "Development_Prefix": prefix, "listen": "127.0.0.1:8787"})
+	d.Managed = true
+	if err := steps(t, d)["development-key"].Fix.Do(ctx, &answers{confirm: true}); err != nil {
+		t.Fatal(err)
+	}
+	m := readKeys(t, d.ConfigPath)
+	if len(m) != 2 || m["listen"] != "127.0.0.1:8787" || m["unknown_future_key"] != "kept" {
+		t.Errorf("a case variant of the key is left: %v", m)
+	}
+
+	d = devConfig(t, 0o600, map[string]any{"DEVELOPMENT_PREFIX": "/elsewhere"})
+	d.Dev, d.Prefix = true, prefix
+	if err := steps(t, d)["development-key"].Fix.Do(ctx, &answers{confirm: true}); err != nil {
+		t.Fatal(err)
+	}
+	if m := readKeys(t, d.ConfigPath); len(m) != 3 || m["development_prefix"] != prefix {
+		t.Errorf("--dev left a second spelling: %v", m)
+	}
+}
