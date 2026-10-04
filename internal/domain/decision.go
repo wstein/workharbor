@@ -85,6 +85,15 @@ const (
 	// Decision's Feature field. Like an egress request it is asked before the agent
 	// starts, and its answer is kept per repository.
 	CauseFeatureSource DecisionCause = "feature_source"
+	// CausePrepareFailed is raised for a stopped run whose branch the supervisor
+	// refused to prepare for review: a failed check, a refused commit message, a
+	// cap, a rewritten history, no check configured, a forge error (D51, design
+	// §4.2).
+	CausePrepareFailed DecisionCause = "prepare_failed"
+	// CausePublishFailed is raised for a task in ready_for_review whose approved
+	// publish a retry cannot complete: a refusal of the Guard or the forge (D51,
+	// design §4.2). It belongs to no run.
+	CausePublishFailed DecisionCause = "publish_failed"
 )
 
 // AsksBeforeStart reports whether a Decision of this cause is asked of a run that is
@@ -247,7 +256,7 @@ func raise(spec NewDecision) (*Decision, error) {
 	case DecisionQuestion, DecisionApproval:
 		// A run raises its questions; the one hold before a run starts (an issue
 		// by an untrusted author) has none yet.
-		heldBeforeARun := spec.Kind == DecisionQuestion && (spec.Cause == CauseUntrustedInput || spec.Cause == CauseBoardQueue)
+		heldBeforeARun := spec.Kind == DecisionQuestion && (spec.Cause == CauseUntrustedInput || spec.Cause == CauseBoardQueue || spec.Cause == CausePublishFailed)
 		if spec.RunID == "" && !heldBeforeARun {
 			return nil, ErrDecisionRun
 		}
