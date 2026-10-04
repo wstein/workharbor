@@ -84,3 +84,23 @@ func TestTheShellNeedsAConfigurationAndAWorkspace(t *testing.T) {
 		t.Errorf("an unknown workspace: %v, want not found", err)
 	}
 }
+
+// The agent writes its home, so the shell must not read or write a file there:
+// no startup file, no ~/.inputrc (a planted binding could append a command to the
+// typed line), no history (review of #281, M1 and M2).
+func TestTheShellReadsAndWritesNoFileOfTheAgentsHome(t *testing.T) {
+	t.Parallel()
+	for _, want := range []string{
+		"exec bash --noprofile --norc -i",
+		"INPUTRC=/dev/null", "HISTFILE=/dev/null", "export INPUTRC HISTFILE",
+		"ENV=/dev/null; export ENV; exec sh -i",
+	} {
+		if !strings.Contains(shellScript, want) {
+			t.Errorf("shell script lacks %q: %s", want, shellScript)
+		}
+	}
+	// The variables are set before either shell starts, so the sh fallback has them too.
+	if i := strings.Index(shellScript, "exec bash"); strings.Index(shellScript, "export INPUTRC HISTFILE") > i {
+		t.Errorf("INPUTRC and HISTFILE are exported after bash starts: %s", shellScript)
+	}
+}

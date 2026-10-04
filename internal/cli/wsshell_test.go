@@ -133,3 +133,16 @@ func TestWsShellRefusesARuntimeItDoesNotKnow(t *testing.T) {
 		t.Errorf("exit %d, %d exec calls for an unknown runtime", code, len(calls))
 	}
 }
+
+func TestWsShellRefusesAUserOrDirThatLooksLikeAnOption(t *testing.T) {
+	for name, reply := range map[string]string{
+		"user": strings.Replace(shellReply, `"1000:1000"`, `"--privileged"`, 1),
+		"dir":  strings.Replace(shellReply, `"/home/agent"`, `"-v"`, 1),
+	} {
+		s := newStub(t)
+		s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(reply))
+		if code, calls, _, _ := wsShellRun(t, s, true, "docs-ws"); code == 0 || len(calls) != 0 {
+			t.Errorf("%s: exit %d, %d exec calls", name, code, len(calls))
+		}
+	}
+}

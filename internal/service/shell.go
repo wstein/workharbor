@@ -35,14 +35,21 @@ type ShellTarget struct {
 }
 
 // shellScript puts the agent's CLI first on PATH and starts an interactive shell
-// that reads no startup file: the agent's home is a volume the agent writes, so a
-// ~/.bashrc, ~/.profile or ENV file in it is the agent's, and would run in the
+// that reads none of the agent-writable files it would otherwise trust: the
+// agent's home is a volume the agent writes, so a ~/.bashrc, ~/.profile, ENV file
+// or ~/.inputrc in it is the agent's, and would run in, or rebind keys of, the
 // human's terminal beside the login (review of #281, M1). bash gets --noprofile
-// --norc, and sh gets ENV=/dev/null. HOME stays set for the CLI. The CLI's own
-// output still reaches the terminal as it is: whr has no part in the stream, so it
-// cannot filter it (an accepted risk for wh/design to name, #223). The directory
-// arrives as $1, so no path is spliced into the script.
-const shellScript = `PATH="$1:$PATH"; export PATH; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; fi; ENV=/dev/null; export ENV; exec sh -i`
+// --norc (no startup file) and INPUTRC=/dev/null (readline reads no ~/.inputrc,
+// where a planted binding could append a command to the typed line); editing stays
+// on, so pasting the login code works as in any terminal. sh gets ENV=/dev/null,
+// and has no readline. Both get HISTFILE=/dev/null, so what the human types is not
+// written to a history file in the home the next run's agent reads (M2). HOME stays
+// set for the CLI. The system-wide /etc/inputrc and /etc/bash.bashrc-style files
+// belong to the image, not the agent, and are not blocked. The CLI's own output
+// still reaches the terminal as it is: whr has no part in the stream, so it cannot
+// filter it (an accepted risk for wh/design to name, #223). The directory arrives
+// as $1, so no path is spliced into the script.
+const shellScript = `PATH="$1:$PATH"; export PATH; INPUTRC=/dev/null; HISTFILE=/dev/null; export INPUTRC HISTFILE; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; fi; ENV=/dev/null; export ENV; exec sh -i`
 
 // ShellTarget finds a workspace's environment, makes sure it is running and
 // returns what the human's terminal needs to open a shell in it as the agent's
