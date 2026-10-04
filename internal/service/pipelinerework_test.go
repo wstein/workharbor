@@ -90,7 +90,7 @@ func TestReworkKeepsThePipelineOffTheTaskUntilTheNewRunIsSaved(t *testing.T) {
 			// run's start goes through the restart and readiness path
 			run, err := r.ws.Answer(bg, r.question.ID, domainRework(r))
 			if err != nil || run == "" {
-				t.Fatalf("rework = %q, %v (errors %v)", run, err, r.bgErrs)
+				t.Fatalf("rework = %q, %v (errors %v)", run, err, r.reported())
 			}
 			r.mu.Lock()
 			probed, kicked, kerr := r.probed, r.kicked, r.kerr
