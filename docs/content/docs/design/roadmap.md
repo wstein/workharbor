@@ -78,19 +78,60 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 Built CLI first (D12): the slice is the core loop through `whr`; the web UI and the phone client come after it. The [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5) comes first: the subset that lets workharbor run its own issues (D34).
 
 - [ ] Apple Container backend, one host, native adapter
-- [ ] Built-in agent adapters for Claude Code (first) and Codex CLI (§5.2, §5.5), with observed progress and validated recovery
+- [ ] Built-in agent adapters for Claude Code (first, built) and Codex CLI (a target: not built, #35; §5.2, §5.5), with observed progress and validated recovery
 - [ ] Task/workspace/run/decision model with durable state, event log, reconciler
 - [ ] Workspaces with named agents (D42) in two steps: the dogfood slice runs one named agent per workspace, with its agent clone and the bundle export (#90, #91); several agents in one environment at once follow in R1 Complete (#94)
 - [ ] `whr` CLI (scripting contract, completion, `doctor`)
 - [ ] Web UI with inbox, live transcript, send-message, start task, pause/resume/cancel, transcript purge (§9.3, §5.4)
 - [ ] SSH access (certificates, `whr ssh --config`)
 - [ ] Policy table, per-run credentials, egress proxy, resource budgets, audit log, `whr kill-all`
-- [ ] Installable PWA as the phone client: web app manifest and a service worker for the app shell, so the remote-control UI (§9.3) installs to the Home Screen. Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and uses per-device revocable tokens
-- [ ] Single static-token login
+- [ ] Installable PWA as the phone client: web app manifest and a service worker for the app shell, so the remote-control UI (§9.3) installs to the Home Screen. Stays inside the server-rendered stack (D8), needs HTTPS on the VPN hostname, and signs in with a per-device revocable passkey (D45), not a token
+- [ ] Static-token login for the host, which also signs in to the web UI until the first passkey is enrolled (D45; see the matrix)
 - [ ] GitHub through a GitHub App installation (D15)
 - [ ] Runtime and forge adapters as interfaces with one implementation each
 
 **Explicitly out of release 1:** code-server, JetBrains validation, OAuth, editor launch and takeover in the UI, CI adapter, multi-host, scheduler beyond an admission counter.
+
+### Capability matrix: as built (issue #248)
+
+What the checklist above promises, and how far each item has come, as read from the code of `main` (the composition is `internal/serve/real.go` and `serve.go`) and from the named spikes. Four stages, each including the one before:
+
+- **Specified**: the design or a decision describes it.
+- **Implemented**: code and tests exist, mostly against fakes.
+- **Integrated**: `whr serve` composes it (`serve.Build`, `serve.Run`), so a running supervisor uses it.
+- **Measured**: a named spike or live test showed it working on Apple Container 1.5.0. The spikes ran on a development Mac, so no row is measured on the reference Mac mini until the slice demo (#28) runs.
+
+A target in the checklist above is a target, not a claim, until its row says *integrated*. The status shortcode says how far the evidence goes: `verified` for what a named spike or test measured, `unverified` for what is built but not measured, `decided` for what is only specified, `open` for what has no code or an open question.
+
+| Capability | Stage | Evidence and open ends |
+| --- | --- | --- |
+| Apple Container runtime adapter, whr-shim cancel, volumes and bind mounts | Measured | Spikes #2, #10, #40 and `builder-store`: {{< status verified >}}. Reached from the real stack in the [integration run](../spikes/serve-integration.md): {{< status verified >}} up to the agent's first request |
+| Egress proxy sidecar (`whr-proxy`) on an internal network | Measured | The integration run: the guest's direct request failed and the same one through the sidecar reached the allowlisted host ({{< status verified >}}). The host's global IPv6 prefixes are refused in tests only ({{< status unverified >}}, threat model T5) |
+| Claude Code agent adapter | Integrated | `claude.New` in `Build`. The integration run reached Claude's login prompt ({{< status verified >}}); a signed-in turn, resume and the quota stop wait for #82 and #36 ({{< status unverified >}}) |
+| Codex CLI agent adapter | Specified | §5.2 and spike #1 describe the degraded mode; no adapter exists, and `Build` has no Codex path. Issue #35 is open: {{< status open >}} |
+| Antigravity agent adapter | Specified | Medium term (§5.2, [spike](../spikes/agy.md)); no adapter: {{< status open >}} |
+| Task, workspace, run and Decision model, event log, reconciler | Integrated | `Run` reconciles at start and every 30 s; the integration run reconciled, stopped on SIGTERM and showed the inbox. Recovery of a real interrupted agent run is tested on fakes only ({{< status unverified >}}) |
+| Workspaces with named agents, agent clone, bundle export | Integrated | #90 and #91 (closed). Several agents in one environment at once is #94 (open): {{< status decided >}} |
+| Publish path: prepare, the check, per-SHA approval, signed commit, push (D51) | Integrated | `PublishFor` in `Run`, and off with a logged line when a pusher, committer or repository copy is missing. Not run against GitHub: {{< status unverified >}} until #28 |
+| GitHub App forge adapter behind the Guard, the policy table and workflow presets (D15, D47) | Integrated | `newGitHub`, `NewForgeAccess` and `NewIssueAccess`, which hand `serve` the narrow access, not the raw adapter (#247). Only a stand-in for the GitHub API was used; the real App waits for #73 and #27: {{< status unverified >}} |
+| Per-run credentials, resource budgets, audit log, `whr kill-all` | Integrated | #37 (closed): `service.AgentCredentials`, the budgets in the configuration, `store` audit entries, the `kill-all` command and API route. API-key mode with a key proxy is medium term (#83, D48): {{< status decided >}} |
+| JSON API on a host-only unix socket, API token | Integrated | `api.ListenSocket` and `api.Listen` in `Run` (D29). Loopback unreachable from guests: {{< status verified >}} (#69); the forwarder and `pf` rules are not measured ({{< status unverified >}}) |
+| Web UI: inbox, live transcript, send-message, start, pause, resume, cancel | Integrated | `web.Options` in `Run`, htmx and SSE. Not driven from a real phone: {{< status unverified >}} |
+| Web sign-in: the host token, then passkeys (D45) | Integrated | See the note below. Passkeys need `public_url`; without it the log says they are off. Untested on a real phone: {{< status unverified >}} |
+| Installable PWA shell | Integrated | `manifest.webmanifest`, `sw.js` and the offline page in `internal/web/static`, served by `web`. Installing to the Home Screen on iOS: {{< status unverified >}} |
+| Console and SSH access with short-lived certificates (D43, #32) | Integrated | `console.ssh_ca_key_file` loads the authority in `Build`; the console image is built by `ensureConsole`. The image build has a live test that skips without `container`; an SSH session on the host is {{< status unverified >}} |
+| Previews (D33, #72) | Implemented | `serve.Run` wires them when the configuration turns them on, but the Apple adapter does not implement `runtime.Previewer`, so opening one says the runtime cannot reach the port. Waits on #69's forwarding result: {{< status open >}} |
+| Devcontainer features and a repository's Dockerfile (D38) | Integrated | `Environment` in `Build`. The libraries are tested against a fake registry; the build itself is the spike's: {{< status unverified >}} end to end (§5.1) |
+| Notifications through ntfy (§9.4) | Integrated | `ntfyNotifier`. Web Push is medium term: {{< status decided >}} |
+| `whr doctor`, `whr setup`, completion, launchd install | Implemented | `internal/doctor`, `internal/setup`, `internal/launchd`; commands in `internal/cli`. Run on the reference host only with `--dry-run` by the lanes: {{< status unverified >}} |
+| Release pipeline and the install from a draft (D24) | Implemented | Not measured against a real draft release (T19, #180): {{< status unverified >}} |
+| Tool store: pinned agent CLIs, `whr-shim`, `whr-proxy` mounted read-only | Integrated | `checkToolStore` and `toolProfile` in `Build`, `SpecOptions`. Spike `musl-cli` measured the musl builds ({{< status verified >}}) |
+| CI adapter | Specified | An interface only (`internal/ci`, §10); Drone is medium term: {{< status open >}} |
+| Docker and Podman backends, remote hosts, Firecracker, Proxmox, vSphere, a Windows host | Specified | Medium and long term; no code: {{< status open >}} (#140) |
+
+**Web sign-in as composed.** The checklist items "Single static-token login" and "per-device revocable tokens" for the PWA are the plan that D45 replaced. `Run` builds token authentication (`web.NewTokenAuth`) always, and a passkey service only when `public_url` is set (`serve.go`, the passkey block). The host token signs in to the web UI until the first passkey is enrolled; then `OnFirstEnrolled` ends the sessions the token started, and from then on each phone or tablet signs in with its own passkey, which the administrator revokes per device (`OnRevoked` ends that passkey's sessions). Enrolment and revocation happen only from the host. There are no per-device tokens. The checklist items above say so.
+
+**Codex as built.** The release 1 checklist and §5.2 name Codex CLI as a built-in adapter. `Build` composes only the Claude Code adapter (`claude.New`); Codex is issue #35. D12 and the threat model's scope line, which are in rule sections, also name Codex as the second agent and are for `wh/design` to read as a target.
 
 ### Releases (D24)
 
