@@ -47,7 +47,7 @@ Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `t
 | Trailer | Rule |
 | --- | --- |
 | `Refs: #12`, `Closes: #12` (also `Fixes`, `Resolves`, `Related`) | **Required for `feat`, `fix`, `perf` and `refactor`**; optional for other types. Never in the subject. Never invent an issue number: open one first. |
-| `Assisted-by: <tool>:<model-id>` | When an AI tool wrote or substantially shaped the change, with the exact model ID you run as; one line per tool. Use this instead of `Co-authored-by` for AI. |
+| `Assisted-by: <tool>:<model-id>` | When an AI tool wrote or shaped the change, with the exact model ID you run as (`unknown` if your tool shows none: never guess); one line per tool. Not `Co-authored-by`. |
 | `Signed-off-by` | **Humans only.** Agents and bot identities never add it (Dependabot and Renovate excepted). |
 | `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` for an agent run. `Whr-Run` requires `Whr-Task`. |
 | `Changelog: skip`, `Changelog: highlight` | Optional, at most one; neither hides a breaking change. `CHANGELOG.md` is generated (`make changelog`); never edit it by hand. |
