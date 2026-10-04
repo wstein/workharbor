@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/wstein/workharbor/internal/agent"
@@ -90,7 +91,7 @@ func (s *Service) composeSkills(ctx context.Context, task domain.Task, run domai
 		if s.cfg.SkillBinding == nil {
 			return recorded, nil, errors.New("the agent adapter has no validated external text/model binding")
 		}
-		binding, err := s.cfg.SkillBinding(ctx, pkg.Manifest.Adapters)
+		binding, err := s.cfg.SkillBinding(ctx, slices.Clone(pkg.Manifest.Adapters))
 		if err != nil {
 			return recorded, nil, err
 		}
