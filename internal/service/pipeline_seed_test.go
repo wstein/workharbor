@@ -68,3 +68,59 @@ func TestSeedRetryIgnoresARefusalAsTheLastAttempt(t *testing.T) {
 		t.Fatalf("a refusal as the last event seeded: %+v", r)
 	}
 }
+
+// Transport faults keep a publish outstanding for DefaultPublishMaxAge from its
+// first failed attempt, not for ever: the next failure after that ends it with
+// publish_failed. A restart does not reset the clock (the first attempt's time
+// comes from the recorded events).
+func TestAFaultThatNeverClearsEndsThePublishAfterTheCap(t *testing.T) {
+	t.Parallel()
+	for _, restart := range []bool{false, true} {
+		t.Run(fmt.Sprintf("restart=%v", restart), func(t *testing.T) {
+			f := newFlowRig(t)
+			fp := &failingPusher{err: fmt.Errorf("push: %w", hostgit.ErrTransport), next: localPusher{repo: f.repo, remote: f.remote}}
+			f.pusher(fp)
+			f.reconcileNow()
+			d, _ := f.review()
+			must(t, f.approve(d))
+			f.svc.Wait()
+			start := f.clock.now
+
+			// Inside the cap the publish stays outstanding.
+			f.clock.now = start.Add(DefaultPublishMaxAge - time.Minute)
+			if restart {
+				restartedRetry(t, f, d.SHA)
+			}
+			f.reconcileNow()
+			if _, ok := f.question(domain.CausePublishFailed); ok {
+				t.Fatal("publish_failed before the cap")
+			}
+			calls := fp.calls
+			if calls < 2 {
+				t.Fatalf("no retry inside the cap: %d calls", calls)
+			}
+
+			// At the cap the next failure ends it.
+			f.clock.now = start.Add(DefaultPublishMaxAge + 10*time.Minute) // past the last backoff
+			if restart {
+				restartedRetry(t, f, d.SHA)
+			}
+			f.reconcileNow()
+			f.svc.Wait()
+			q, ok := f.question(domain.CausePublishFailed)
+			if !ok {
+				t.Fatalf("no publish_failed at the cap; errors %v", f.reported())
+			}
+			if q.SHA != d.SHA {
+				t.Errorf("question %+v", q)
+			}
+			// It stays ended.
+			n := fp.calls
+			f.clock.now = f.clock.now.Add(time.Hour)
+			f.reconcileNow()
+			if fp.calls != n {
+				t.Errorf("a pass under an open publish_failed pushed again")
+			}
+		})
+	}
+}

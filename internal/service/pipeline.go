@@ -23,6 +23,14 @@ const (
 	// it doubles with every failure up to DefaultPublishBackoffMax.
 	DefaultPublishBackoff    = 30 * time.Second
 	DefaultPublishBackoffMax = 15 * time.Minute
+	// DefaultPublishMaxAge is how long transport faults may keep one publish
+	// outstanding, counted from its first failed attempt. The cap is a time and
+	// not an attempt count so it does not depend on the backoff settings (with the
+	// defaults it is about 100 attempts). After it the publish ends with
+	// publish_failed, so a fault that never clears reaches the human. The first
+	// attempt's time comes from the recorded publish.attempt events, so a restart
+	// does not reset it.
+	DefaultPublishMaxAge = 24 * time.Hour
 )
 
 // PipelineConfig is what the publish pipeline needs of the host.
@@ -37,6 +45,9 @@ type PipelineConfig struct {
 	// transport fault; they default to DefaultPublishBackoff and
 	// DefaultPublishBackoffMax.
 	BackoffBase, BackoffMax time.Duration
+	// MaxAge caps how long transport faults keep a publish outstanding
+	// (DefaultPublishMaxAge).
+	MaxAge time.Duration
 }
 
 // Pipeline joins prepare, the "Ready to push?" Decision, the guarded push and
@@ -64,6 +75,7 @@ type Pipeline struct {
 type publishRetry struct {
 	sha      string
 	attempts int
+	first    time.Time // when the first attempt of this run of faults failed
 	next     time.Time
 }
 
@@ -73,6 +85,9 @@ type publishRetry struct {
 func NewPipeline(s *Service, w *Workspaces, cfg PipelineConfig) *Pipeline {
 	if cfg.BackoffBase <= 0 {
 		cfg.BackoffBase = DefaultPublishBackoff
+	}
+	if cfg.MaxAge <= 0 {
+		cfg.MaxAge = DefaultPublishMaxAge
 	}
 	if cfg.BackoffMax <= 0 {
 		cfg.BackoffMax = DefaultPublishBackoffMax
@@ -243,10 +258,17 @@ func (p *Pipeline) seedRetry(ctx context.Context, task domain.ID, sha string) er
 		return err
 	}
 	var last *domain.PublishAttempt
+	var first time.Time // of the unbroken run of transport faults that ends at last
 	for _, e := range evs {
 		var a domain.PublishAttempt
 		if json.Unmarshal(e.Payload, &a) == nil && a.SHA == sha {
 			last = &a
+			switch {
+			case !a.Transient:
+				first = time.Time{}
+			case first.IsZero():
+				first = e.At
+			}
 		}
 	}
 	if last == nil || !last.Transient {
@@ -255,7 +277,7 @@ func (p *Pipeline) seedRetry(ctx context.Context, task domain.ID, sha string) er
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if cur := p.retry[task]; cur == nil || cur.sha != sha {
-		p.retry[task] = &publishRetry{sha: sha, attempts: last.Attempt, next: last.RetryAt}
+		p.retry[task] = &publishRetry{sha: sha, attempts: last.Attempt, first: first, next: last.RetryAt}
 	}
 	return nil
 }
@@ -408,6 +430,16 @@ func (p *Pipeline) failPublish(ctx context.Context, task domain.ID, sha string, 
 			r = &publishRetry{sha: sha}
 			p.retry[task] = r
 		}
+		now := s.clock.Now()
+		if r.first.IsZero() {
+			r.first = now
+		}
+		if now.Sub(r.first) >= p.cfg.MaxAge {
+			// Out of time: end it like a refusal, below.
+			msg = s.untrustedInput(textsafe.Escape(oneLine(fmt.Sprintf("gave up after %s of transport faults: %v", p.cfg.MaxAge, cause))))
+			p.mu.Unlock()
+			return p.endPublish(ctx, task, sha, msg)
+		}
 		r.attempts++
 		wait := p.cfg.BackoffBase
 		for i := 1; i < r.attempts && wait < p.cfg.BackoffMax; i++ {
@@ -419,6 +451,12 @@ func (p *Pipeline) failPublish(ctx context.Context, task domain.ID, sha string, 
 		p.mu.Unlock()
 		return p.recordAttempt(ctx, task, attempt)
 	}
+	return p.endPublish(ctx, task, sha, msg)
+}
+
+// endPublish ends the outstanding publish with the question publish_failed.
+func (p *Pipeline) endPublish(ctx context.Context, task domain.ID, sha, msg string) error {
+	s := p.svc
 	var raised bool
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		raised = false
