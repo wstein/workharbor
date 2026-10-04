@@ -321,3 +321,43 @@ func TestACancelAnswerWithoutACauseDoesNotStopTheEnvironment(t *testing.T) {
 		t.Errorf("a hold was left on the environment: %v", err)
 	}
 }
+
+// The human's cancel of a run that is still starting returns before attach has
+// stopped the agent, so a failure there is an event on the task, not the serve
+// log alone.
+func TestAStopBeforeTheSessionIsUpWhoseEnvironmentStopFailsTooIsAnEvent(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.agent.Block()
+	sl := mustBegin(r.t, r.svc)
+	r.svc.markEnvStarted(r.env)
+	c := r.counting()
+	c.stopErr = errors.New("stop refused")
+	if err := r.svc.Cancel(bg, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := r.agent.Resume(bg, spec(), r.session)
+	must(t, err)
+	r.svc.attach("t1", "r1", sl, stopFailSession{sess, errors.New("exec client lost")})
+	r.svc.Wait()
+	if ev := r.mayRun(); len(ev) != 1 || ev[0].Path != "cancel" || ev[0].RunID != "r1" {
+		t.Errorf("events %+v", ev)
+	}
+}
+
+// A failed record after a good environment stop is no surviving agent: it is an
+// error, but not an agent-may-run one.
+func TestAFailedRecordAfterAGoodEnvironmentStopIsNotAnAgentMayRun(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	err := r.svc.stopEnvAfterAgent(bg, "t1", "no-such-env", "cancelled", errors.New("exec client lost"))
+	if err == nil || agentMayRun(err) {
+		t.Errorf("record failure: %v, mayRun %v; want a plain error", err, agentMayRun(err))
+	}
+	c := r.counting()
+	c.stopErr = errors.New("stop refused")
+	err = r.svc.stopEnvAfterAgent(bg, "t1", r.env, "cancelled", errors.New("exec client lost"))
+	if !agentMayRun(err) || !strings.Contains(err.Error(), "agent may still run") {
+		t.Errorf("failed runtime stop: %v; want an agent-may-run error", err)
+	}
+}

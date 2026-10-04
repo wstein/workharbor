@@ -12,7 +12,9 @@ import (
 type KillReport struct {
 	Cancelled []domain.ID `json:"cancelled"`
 	// AgentMayRun lists the tasks whose agent stop and environment stop both
-	// failed: the agent may still run (the task carries an event for it).
+	// failed: the agent may still run (the task carries an event for it). A run
+	// whose session was not up yet is stopped by attach after KillAll has returned:
+	// a failure there is only the event on the task.
 	AgentMayRun   []domain.ID `json:"agent_may_run,omitempty"`
 	TokensRevoked int         `json:"tokens_revoked"`
 	Problems      []string    `json:"problems"`
@@ -50,7 +52,9 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 			}
 			stopped[t.ID] = true
 			if err := s.stopAgent(ctx, t.ID, r.ID, r.EnvID, "cancelled", "kill-all", false, s.holdEnvBusy(r.EnvID)); err != nil {
-				rep.AgentMayRun = append(rep.AgentMayRun, t.ID)
+				if agentMayRun(err) {
+					rep.AgentMayRun = append(rep.AgentMayRun, t.ID)
+				}
 				rep.Problems = append(rep.Problems, fmt.Sprintf("stop the agent of task %s: %v", t.ID, err))
 			}
 		}

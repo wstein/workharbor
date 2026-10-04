@@ -476,7 +476,7 @@ func (s *Service) suspend(ctx context.Context, task, run domain.ID, cause domain
 	// The run is paused, so the session's end is not taken for a loss.
 	if serr := s.stopSessionErr(run); serr != nil {
 		err := s.stopEnvForPause(ctx, task, env, serr)
-		if err != nil {
+		if agentMayRun(err) {
 			// No human call waits for this error: the task keeps it too.
 			err = errors.Join(err, s.recordAgentMayRun(ctx, task, run, env, "suspension", err))
 		}

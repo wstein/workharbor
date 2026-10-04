@@ -298,8 +298,22 @@ func (s *Service) stopEnvAfterAgent(ctx context.Context, task, env domain.ID, st
 	s.forgetEnvStarted(env)
 	s.freshMu.Unlock()
 	if err != nil {
-		return fmt.Errorf("task %s is %s, but its agent may still run: stop the agent: %w; stop the environment %s: %w", task, state, cause, env, err)
+		return &mayRunError{fmt.Errorf("task %s is %s, but its agent may still run: stop the agent: %w; stop the environment %s: %w", task, state, cause, env, err)}
 	}
-	uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvStopped) })
-	return uerr
+	// A failed record is the store's trouble, not a surviving agent: the
+	// environment is stopped, so it is not a mayRunError.
+	return s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.ObserveEnv(env, domain.EnvStopped) })
+}
+
+// mayRunError marks the failure of a runtime stop after a failed agent stop: the
+// agent may still run. A failed bookkeeping record after a good environment stop
+// is a plain error, so an event or a kill-all entry means the agent may live.
+type mayRunError struct{ error }
+
+func (e *mayRunError) Unwrap() error { return e.error }
+
+// agentMayRun reports whether err holds a mayRunError.
+func agentMayRun(err error) bool {
+	var m *mayRunError
+	return errors.As(err, &m)
 }

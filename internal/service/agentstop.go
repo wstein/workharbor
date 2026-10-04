@@ -88,14 +88,15 @@ func ownsAgent(st domain.RunState) bool {
 // fallback have ended. A failed agent stop stops the environment instead (design
 // 4.1, fifth path): when that fails too, the run keeps its state, the process
 // forgets its start mark and the error says the agent may still run. When no human
-// call waits for the error (human false), it is also recorded as an event on the
-// task, with path as its path. A session that is not up yet is stopped by attach,
-// which then does the same; the hold goes with it.
+// call waits for the error (human false), or the stop is left to attach because
+// the session is not up yet (the call has returned by then), it is also recorded as
+// an event on the task, with path as its path. A session that is not up yet is
+// stopped by attach, which then does the same; the hold goes with it.
 func (s *Service) stopAgent(ctx context.Context, task, run, env domain.ID, state, path string, human bool, release func()) error {
 	ctx = context.WithoutCancel(ctx) // attach may run it after the call that asked has ended
-	notice := func(serr error) error {
+	notice := func(serr error, deferred bool) error {
 		err := s.stopEnvAfterAgent(ctx, task, env, state, serr)
-		if err != nil && !human {
+		if agentMayRun(err) && (!human || deferred) {
 			return errors.Join(err, s.recordAgentMayRun(ctx, task, run, env, path, err))
 		}
 		return err
@@ -109,7 +110,8 @@ func (s *Service) stopAgent(ctx context.Context, task, run, env domain.ID, state
 	}
 	if sl.sess == nil {
 		sl.stopRequested = true
-		sl.after, sl.release = notice, release
+		// No call waits for what attach finds, so it goes to the task as an event.
+		sl.after, sl.release = func(serr error) error { return notice(serr, true) }, release
 		s.mu.Unlock()
 		return nil
 	}
@@ -117,7 +119,7 @@ func (s *Service) stopAgent(ctx context.Context, task, run, env domain.ID, state
 	s.mu.Unlock()
 	defer release()
 	if serr := sess.Stop(context.Background()); serr != nil {
-		return notice(serr)
+		return notice(serr, false)
 	}
 	return nil
 }
