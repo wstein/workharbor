@@ -29,6 +29,7 @@ import (
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/apple"
 	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/skillset"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
 	"github.com/wstein/workharbor/internal/textsafe"
@@ -269,6 +270,18 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 // StateDir returns the directory of the database.
 func StateDir(c *config.Config, home string) string { return config.StateDirOf(c.StateDir, home) }
 
+func unavailableProjectInstructions(context.Context, domain.Task, domain.Run) (service.ProjectInstructions, error) {
+	return service.ProjectInstructions{}, fmt.Errorf("%w: reviewed immutable project policy input and operator review proof are not configured", agent.ErrUnsupported)
+}
+
+func unavailableSkillBinding(context.Context, []skillset.Binding) (skillset.Binding, error) {
+	return skillset.Binding{}, fmt.Errorf("%w: exact native CLI artifact/schema, model/effort tuple and isolated external loading are not measured", agent.ErrUnsupported)
+}
+
+func unavailableSkillPreparation(context.Context, domain.Run, service.SkillMount) error {
+	return fmt.Errorf("%w: selected external read-only mount capability and idle environment lifecycle integration are not established", agent.ErrUnsupported)
+}
+
 // Build makes the real dependencies of `whr serve` from the configuration:
 // the database, hostgit, the Apple Container runtime, the Claude Code adapter
 // and the spec factory. exe is the path of the running whr, which says where
@@ -392,9 +405,12 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 		}
 	}
 	return Deps{
-		Notifier:   ntfyNotifier(c),
-		ConsoleSSH: consoleSSH,
-		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: NewIssueAccess(gh), Forge: NewForgeAccess(gh), Git: git, Owner: Owner,
+		ProjectInstructions: unavailableProjectInstructions,
+		SkillBinding:        unavailableSkillBinding,
+		PrepareSkills:       unavailableSkillPreparation,
+		Notifier:            ntfyNotifier(c),
+		ConsoleSSH:          consoleSSH,
+		SocketPath:          config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: NewIssueAccess(gh), Forge: NewForgeAccess(gh), Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages, Features: &feature.Resolver{Client: oci.New(oci.Config{})}}, rt, Owner, filepath.Join(dir, "build"), func(ctx context.Context, repo string) (map[string]string, error) {
 			a, err := st.FeatureSources(ctx, repo)
