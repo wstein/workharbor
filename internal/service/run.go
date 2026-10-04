@@ -267,11 +267,15 @@ func (w *Workspaces) startHeld(ctx context.Context, d *domain.Decision) (domain.
 }
 
 // Answer records the human's answer to a Decision and does what follows from
-// it that needs a new run (design §5.3): `retry` of a failed run, and `rework`
-// of the rebase-conflict question, start a new run on the same agent. For a
-// rebase conflict the conflicting paths are passed on as untrusted notes.
-// `retry` of a rebase conflict only frees the task: the export is run again by
-// the caller. Everything else is Service.AnswerDecision.
+// it (design §4.5, §5.3). It is the one call every way of answering uses: the
+// JSON API, `whr approve` and the web UI after its passkey step-up (D45, D51).
+// The answer is recorded first. `retry` of a failed run, and `rework` of the
+// rebase-conflict, prepare_failed and publish_failed questions, start a new run
+// on the same agent, with the conflicting paths or the reason passed on as
+// untrusted notes. An allow of a review Decision starts the publish, and `retry`
+// of a rebase conflict, a refused prepare or a refused publish starts what it
+// asks for again; a deny publishes nothing. Nothing else calls Publish.
+// Everything else is Service.AnswerDecision.
 func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response) (newRun domain.ID, err error) {
 	d, err := w.svc.store.LoadDecision(ctx, id)
 	if err != nil {
@@ -289,8 +293,36 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	case d.Cause == domain.CauseRebaseConflict && r.Option == domain.AnswerRework:
 		run, err := w.NewRun(ctx, d.TaskID, "Your branch did not rebase onto the integration branch. Rebase it yourself and resolve the conflicts.", d.Input)
 		return run, w.askAgain(ctx, d, err)
+	case d.Cause == domain.CausePrepareFailed && r.Option == domain.AnswerRework:
+		run, err := w.NewRun(ctx, d.TaskID, "Your branch could not be prepared for review. The notes say why: fix that, commit it and finish.", reworkNotes(d.Input))
+		return run, w.askAgain(ctx, d, err)
+	case d.Cause == domain.CausePublishFailed && r.Option == domain.AnswerRework:
+		run, err := w.NewRun(ctx, d.TaskID, "The approved commit could not be published. The notes say why: fix that, commit it and finish.", reworkNotes(d.Input))
+		return run, w.askAgain(ctx, d, err)
 	}
+	w.continuePublishing(ctx, d, r)
 	return "", nil
+}
+
+// continuePublishing starts what an answer asks for in the publish path: the
+// publish after an allow of "Ready to push?", the prepare again after a retry of
+// a rebase conflict or a refused prepare, the publish again after a retry of a
+// refused publish. Whatever is due is decided from the stored task, not from the
+// answer, so a Decision that no longer applies starts nothing; and what cannot be
+// started now is repeated by the reconciler's next pass.
+func (w *Workspaces) continuePublishing(ctx context.Context, d *domain.Decision, r domain.Response) {
+	if w.pipe == nil {
+		return
+	}
+	allowed := d.Kind == domain.DecisionReview && r.Option == domain.AnswerAllow
+	retried := r.Option == domain.AnswerRetry &&
+		(d.Cause == domain.CauseRebaseConflict || d.Cause == domain.CausePrepareFailed || d.Cause == domain.CausePublishFailed)
+	if !allowed && !retried {
+		return
+	}
+	if _, err := w.pipe.Kick(ctx, d.TaskID); err != nil {
+		w.svc.report(fmt.Errorf("start the publish path of %s after the answer: %w", d.TaskID, err))
+	}
 }
 
 // askAgain keeps a task from being left running with no run and no question
@@ -316,6 +348,10 @@ func (w *Workspaces) askAgain(ctx context.Context, answered *domain.Decision, fa
 			_, err = a.RaiseRunFailedAgain(answered.RunID, w.cfg.NewID(), w.svc.clock.Now())
 		case domain.CauseRebaseConflict:
 			_, err = a.RaiseRebaseConflict(answered.RunID, w.cfg.NewID(), "the integration branch", splitLines(answered.Input), w.svc.clock.Now())
+		case domain.CausePrepareFailed:
+			_, err = a.RaisePrepareFailed(answered.RunID, w.cfg.NewID(), answered.Input, w.svc.clock.Now())
+		case domain.CausePublishFailed:
+			_, err = a.RaisePublishFailed(w.cfg.NewID(), answered.Input, w.svc.clock.Now())
 		}
 		return err
 	})

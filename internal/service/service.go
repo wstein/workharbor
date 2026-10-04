@@ -150,6 +150,13 @@ type Service struct {
 	// stopHolds counts the holders among holds that are an agent stop's
 	// (holdEnvBusy): a check's HoldEnvironment is refused while one is on.
 	stopHolds map[domain.ID]int
+
+	// pipe prepares a task when its run stops and publishes what is approved (D51);
+	// nil when this supervisor does not publish. bg is its context, cancelled by
+	// Shutdown so a prepare or a publish in progress ends.
+	pipe   *Pipeline
+	bg     context.Context
+	bgStop context.CancelFunc
 }
 
 // rebuilding reports whether the workspace's environment is being replaced.
@@ -246,6 +253,7 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
 	s := &Service{store: st, loadTask: st.LoadTask, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
+	s.bg, s.bgStop = context.WithCancel(context.Background())
 	if cfg.Notifier != nil {
 		// A slow relay must never hold up a reconcile pass or a session
 		// handler: messages go through a bounded queue (design §9.4).
@@ -263,6 +271,7 @@ func (s *Service) Wait() { s.wg.Wait() }
 // leaves a session resumable, so the next start of the supervisor reconciles it
 // from the database (design §5.3).
 func (s *Service) Shutdown() {
+	s.bgStop() // a prepare or a publish in progress ends; the reconciler repeats it
 	s.mu.Lock()
 	s.closing = true // from now on attach stops a session instead of adding it
 	for _, j := range s.starts {
@@ -488,13 +497,25 @@ func (s *Service) suspend(ctx context.Context, task, run domain.ID, cause domain
 // finish applies a session's result to its run, unless the run is no longer
 // the live one (a stop or a suspension got there first).
 func (s *Service) finish(ctx context.Context, task, run domain.ID, res agent.Result) error {
-	return s.update(ctx, task, func(a *domain.TaskAggregate) error {
+	// A run that stops because its agent finished is prepared next (D51): from the
+	// moment it is saved stopped until the prepare has pinned a revision or been
+	// refused, its environment counts as busy, so no run starts there and no other
+	// task's commits reach the export. The hold is taken before the save.
+	hold := &stopHold{s: s, plain: true}
+	defer hold.drop() // a no-op once the prepare has taken it
+	stopped := false
+	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		stopped = false
 		r, ok := a.Run(run)
 		if !ok || r.State.Terminal() || r.State == domain.RunPaused || r.State == domain.RunInterrupted {
 			return nil
 		}
 		switch res.Status {
 		case agent.ResultCompleted:
+			if s.pipe != nil {
+				hold.set(r.EnvID)
+			}
+			stopped = s.pipe != nil
 			return a.StopRun(run)
 		case agent.ResultStopped:
 			// A stop the human asked for (cancel) has ended the run already, so
@@ -513,6 +534,10 @@ func (s *Service) finish(ctx context.Context, task, run domain.ID, res agent.Res
 		}
 		return nil
 	})
+	if err == nil && stopped {
+		s.pipe.afterStop(task, hold.take())
+	}
+	return err
 }
 
 // AnswerDecision records a human's answer. An answer that resumes a run

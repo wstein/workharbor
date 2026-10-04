@@ -18,6 +18,8 @@ type Report struct {
 	Resumed     []domain.ID // runs relaunched from their session
 	Failed      []domain.ID // runs that could not be resumed and now wait on a Decision
 	Expired     []domain.ID // Decisions that passed their deadline
+	Prepared    []domain.ID // tasks whose prepare was started again (D51)
+	Published   []domain.ID // tasks whose approved publish was started (D51)
 	// Errors are per-task problems that did not stop the pass: an environment
 	// that never answered exec, a runtime call that failed. The run stays
 	// interrupted and the next pass tries again.
@@ -145,6 +147,18 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 	for _, run := range todo {
 		if err := s.recover(ctx, task, run, rep); err != nil && firstErr == nil {
 			firstErr = err
+		}
+	}
+	// 3. Complete what a restart interrupted on the way to a pull request: a
+	// stopped run nothing was prepared for, an approved commit not yet pushed (D51).
+	if s.pipe != nil {
+		switch started, err := s.pipe.Kick(ctx, task); {
+		case err != nil && firstErr == nil:
+			firstErr = err
+		case started == "prepare":
+			rep.Prepared = append(rep.Prepared, task)
+		case started == "publish":
+			rep.Published = append(rep.Published, task)
 		}
 	}
 	return firstErr

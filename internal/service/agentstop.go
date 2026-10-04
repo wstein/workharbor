@@ -14,16 +14,23 @@ import (
 // a budget stop or kill-all takes it before it saves its run terminal, so the
 // environment does not count as free while the agent stop and its fallback are
 // under way (design 4.1, fifth path; issue #238).
-func (s *Service) holdEnvBusy(env domain.ID) (release func()) {
+func (s *Service) holdEnvBusy(env domain.ID) (release func()) { return s.holdEnv(env, true) }
+
+// holdEnv is holdEnvBusy; stop says the hold is an agent stop's, which a check's
+// HoldEnvironment is refused beside. The hold of a run that stopped for a prepare
+// (D51) is not: the check inside that prepare takes its own, counted beside it.
+func (s *Service) holdEnv(env domain.ID, stop bool) (release func()) {
 	s.rebuildMu.Lock()
 	if s.holds == nil {
 		s.holds = map[domain.ID]int{}
 	}
 	s.holds[env]++
-	if s.stopHolds == nil {
-		s.stopHolds = map[domain.ID]int{}
+	if stop {
+		if s.stopHolds == nil {
+			s.stopHolds = map[domain.ID]int{}
+		}
+		s.stopHolds[env]++
 	}
-	s.stopHolds[env]++
 	s.rebuildMu.Unlock()
 	var once sync.Once
 	return func() {
@@ -32,8 +39,10 @@ func (s *Service) holdEnvBusy(env domain.ID) (release func()) {
 			if s.holds[env]--; s.holds[env] <= 0 {
 				delete(s.holds, env)
 			}
-			if s.stopHolds[env]--; s.stopHolds[env] <= 0 {
-				delete(s.stopHolds, env)
+			if stop {
+				if s.stopHolds[env]--; s.stopHolds[env] <= 0 {
+					delete(s.stopHolds, env)
+				}
 			}
 			s.rebuildMu.Unlock()
 		})
@@ -43,9 +52,10 @@ func (s *Service) holdEnvBusy(env domain.ID) (release func()) {
 // stopHold is a hold that a change function takes while it runs inside update,
 // which may call it more than once: set follows the env of the run it sees now.
 type stopHold struct {
-	s   *Service
-	env domain.ID
-	rel func()
+	s     *Service
+	env   domain.ID
+	rel   func()
+	plain bool // not an agent stop's hold: see holdEnv
 }
 
 // set holds env, or nothing when env is empty, and drops an earlier hold on another.
@@ -55,7 +65,7 @@ func (h *stopHold) set(env domain.ID) {
 	}
 	h.drop()
 	if env != "" {
-		h.env, h.rel = env, h.s.holdEnvBusy(env)
+		h.env, h.rel = env, h.s.holdEnv(env, !h.plain)
 	}
 }
 

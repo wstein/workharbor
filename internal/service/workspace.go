@@ -86,6 +86,8 @@ type WorkspaceConfig struct {
 type Workspaces struct {
 	svc *Service
 	cfg WorkspaceConfig
+	// pipe continues an answer into the publish path (D51); nil without one.
+	pipe *Pipeline
 
 	// mu orders a run's save and a rebuild's start (Rebuild; the registry of
 	// rebuilds is the service's): a run is not saved in a workspace being
