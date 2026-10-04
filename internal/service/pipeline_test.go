@@ -493,6 +493,45 @@ func TestATransportFaultKeepsThePublishOutstandingWithBackoff(t *testing.T) {
 	}
 }
 
+// A restart forgets the pipeline's memory, not the recorded attempts: the backoff
+// goes on from the last publish.attempt event, with the attempt counter.
+func TestTheBackoffSurvivesARestart(t *testing.T) {
+	t.Parallel()
+	f := newFlowRig(t)
+	fp := &failingPusher{err: fmt.Errorf("push: %w", hostgit.ErrTransport), next: localPusher{repo: f.repo, remote: f.remote}}
+	f.pusher(fp)
+	f.reconcileNow()
+	d, _ := f.review()
+	must(t, f.approve(d))
+	f.svc.Wait()
+	restart := func() {
+		f.pipe.mu.Lock()
+		f.pipe.retry = map[domain.ID]*publishRetry{}
+		f.pipe.mu.Unlock()
+	}
+	attempts := func() []domain.PublishAttempt {
+		v, err := f.svc.Show(bg, "t1")
+		must(t, err)
+		return v.PublishAttempts
+	}
+	if got := attempts(); len(got) != 1 || fp.calls != 1 {
+		t.Fatalf("attempts %+v, %d calls", got, fp.calls)
+	}
+	// Restarted inside the backoff: the first pass does not try at once.
+	restart()
+	if rep := f.reconcileNow(); len(rep.Published) != 0 || fp.calls != 1 {
+		t.Fatalf("a pass after a restart inside the backoff: %+v, %d calls", rep, fp.calls)
+	}
+	// Restarted after it: the attempt is the second, not the first again.
+	restart()
+	f.clock.now = f.clock.now.Add(time.Minute)
+	f.reconcileNow()
+	got := attempts()
+	if fp.calls != 2 || len(got) != 2 || got[1].Attempt != 2 || !got[1].RetryAt.Equal(f.clock.now.Add(2*time.Minute)) {
+		t.Fatalf("attempts after a restart: %+v, %d calls", got, fp.calls)
+	}
+}
+
 func TestARefusalEndsThePublishWithPublishFailed(t *testing.T) {
 	t.Parallel()
 	for name, cause := range map[string]error{

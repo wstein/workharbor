@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -58,8 +59,8 @@ type Pipeline struct {
 	retry     map[domain.ID]*publishRetry
 }
 
-// publishRetry is the backoff of one task's outstanding publish, in memory: a
-// restart forgets it and the first pass tries at once.
+// publishRetry is the backoff of one task's outstanding publish, in memory; a
+// restart restores it from the recorded publish.attempt events (seedRetry).
 type publishRetry struct {
 	sha      string
 	attempts int
@@ -204,8 +205,9 @@ func (p *Pipeline) Kick(ctx context.Context, task domain.ID) (started string, er
 		return "prepare", nil
 	}
 	if _, cand, ok := agg.OutstandingPublish(); ok {
-		if p.backingOff(task, cand.SHA) {
-			return "", nil
+		wait, err := p.backingOff(ctx, task, cand.SHA)
+		if err != nil || wait {
+			return "", err // unreadable records: not retried blind, the next pass tries again
 		}
 		if p.spawn(task, func(ctx context.Context) { p.publish(ctx, task) }) {
 			return "publish", nil
@@ -214,11 +216,48 @@ func (p *Pipeline) Kick(ctx context.Context, task domain.ID) (started string, er
 	return "", nil
 }
 
-func (p *Pipeline) backingOff(task domain.ID, sha string) bool {
+func (p *Pipeline) backingOff(ctx context.Context, task domain.ID, sha string) (bool, error) {
+	if err := p.seedRetry(ctx, task, sha); err != nil {
+		return false, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	r := p.retry[task]
-	return r != nil && r.sha == sha && p.svc.clock.Now().Before(r.next)
+	return r != nil && r.sha == sha && p.svc.clock.Now().Before(r.next), nil
+}
+
+// seedRetry restores the backoff of a task's publish from its recorded attempts
+// when this process does not know it (a restart): the latest recorded attempt
+// for the SHA, when it was a transport fault, gives the attempt count and the
+// time of the next try, so a supervisor that keeps restarting does not retry on
+// every start and the counter goes on instead of starting at 1 again.
+func (p *Pipeline) seedRetry(ctx context.Context, task domain.ID, sha string) error {
+	p.mu.Lock()
+	r := p.retry[task]
+	p.mu.Unlock()
+	if r != nil && r.sha == sha {
+		return nil
+	}
+	evs, err := p.svc.store.EventsOfKind(ctx, task, domain.EventPublishAttempt)
+	if err != nil {
+		return err
+	}
+	var last *domain.PublishAttempt
+	for _, e := range evs {
+		var a domain.PublishAttempt
+		if json.Unmarshal(e.Payload, &a) == nil && a.SHA == sha {
+			last = &a
+		}
+	}
+	if last == nil || !last.Transient {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if cur := p.retry[task]; cur == nil || cur.sha != sha {
+		p.retry[task] = &publishRetry{sha: sha, attempts: last.Attempt, next: last.RetryAt}
+	}
+	return nil
 }
 
 // prepare prepares the task's stopped run for review: the export, Prepare, the
@@ -354,6 +393,9 @@ func (p *Pipeline) failPublish(ctx context.Context, task domain.ID, sha string, 
 	s := p.svc
 	msg := s.untrustedInput(textsafe.Escape(oneLine(cause.Error())))
 	if Transient(cause) {
+		if err := p.seedRetry(ctx, task, sha); err != nil {
+			return err
+		}
 		p.mu.Lock()
 		r := p.retry[task]
 		if r == nil || r.sha != sha {
