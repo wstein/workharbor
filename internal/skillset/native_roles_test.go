@@ -172,6 +172,42 @@ func TestDecodeNativeManifest(t *testing.T) {
 	}
 }
 
+func TestNativeClientVersionSelection(t *testing.T) {
+	for _, test := range []struct {
+		version string
+		valid   bool
+	}{
+		{"*", false},
+		{">=1.2.3", false},
+		{"^1.2.3", false},
+		{"1.2.x", false},
+		{"1.2.3 || 2.0.0", false},
+		{"~1.2.3", false},
+		{"<2.0.0", false},
+		{"1.2.X", false},
+		{"1.2.3 - 2.0.0", false},
+		{"1.2.3,2.0.0", false},
+		{"1.2.3", true},
+		{"v1.2.3", true},
+		{"1.2.3-rc.1+build7", true},
+		{strings.Repeat("v", 128), true},
+	} {
+		t.Run(test.version, func(t *testing.T) {
+			data, pin := nativeFixture(t)
+			version, err := json.Marshal(test.version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := []byte(strings.Replace(string(data), `"version":"1.2.3"`, `"version":`+string(version), 1))
+			pin.ManifestSHA256 = Digest(changed)
+			_, err = DecodeNativeManifest(changed, pin)
+			if (err == nil) != test.valid {
+				t.Fatalf("version %q: error = %v, want valid = %v", test.version, err, test.valid)
+			}
+		})
+	}
+}
+
 func TestDecodeNativeManifestRefuses(t *testing.T) {
 	tests := []struct {
 		name string

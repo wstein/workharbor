@@ -149,6 +149,18 @@ func nativeValue(value string, limit int) bool {
 	return true
 }
 
+func nativeClientVersion(version string) bool {
+	if !nativeValue(version, 128) || strings.ContainsAny(version, "*<>=^~|,") || strings.ContainsFunc(version, unicode.IsSpace) {
+		return false
+	}
+	for _, component := range strings.Split(version, ".") {
+		if strings.EqualFold(component, "x") {
+			return false
+		}
+	}
+	return true
+}
+
 func nativeNames(names []string, limit int) bool {
 	if names == nil || len(names) > limit {
 		return false
@@ -181,7 +193,7 @@ func (m NativeManifest) Validate(pin Pin) error {
 	clients := map[string]bool{}
 	previous := ""
 	for _, client := range m.Clients {
-		if !nameRE.MatchString(client.Name) || client.Name <= previous || !nativeValue(client.Version, 128) {
+		if !nameRE.MatchString(client.Name) || client.Name <= previous || !nativeClientVersion(client.Version) {
 			return errors.New("invalid, duplicate or unsorted native skill client")
 		}
 		clients[client.Name] = true
