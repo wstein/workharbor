@@ -37,6 +37,9 @@ type CheckError struct {
 	TimedOut bool
 	Timeout  time.Duration
 	Output   string
+	// Receipt is the receipt the check left (its command, source and duration);
+	// nil until leaveReceipt has recorded it. Its output is untrusted like Output.
+	Receipt *domain.CheckReceipt
 }
 
 func (e *CheckError) Error() string {
@@ -326,6 +329,7 @@ func (c *RepoChecker) leaveReceipt(ctx context.Context, task domain.ID, sha, com
 	case runErr == nil:
 	case errors.As(runErr, &ce):
 		r.Code, r.TimedOut = ce.Code, ce.TimedOut
+		ce.Receipt = &r
 	default:
 		return
 	}

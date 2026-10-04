@@ -266,6 +266,18 @@ func (s *Service) Show(ctx context.Context, task domain.ID) (TaskView, error) {
 			return TaskView{}, err
 		}
 	}
+	// A check that failed belongs to a revision that was never pinned, so the
+	// current candidate has no receipt for it: with prepare_failed open, show the
+	// failed check's own receipt instead of the previous revision's or none.
+	if q, ok := agg.OpenCause(domain.CausePrepareFailed); ok {
+		rc, err := s.failedCheckReceipt(ctx, task, q)
+		if err != nil {
+			return TaskView{}, err
+		}
+		if rc != nil {
+			v.Check = rc
+		}
+	}
 	return v, nil
 }
 

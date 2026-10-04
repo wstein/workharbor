@@ -235,6 +235,14 @@ func TestARefusedPrepareRaisesPrepareFailedWithTheOutputAsData(t *testing.T) {
 	if strings.ContainsRune(q.Input, 0x1b) {
 		t.Errorf("a control character reached the question: %q", q.Input)
 	}
+	// The question names the check, where its command came from and how long it took.
+	if !strings.Contains(q.Input, "check make check (from ") || !strings.Contains(q.Input, "exit status 2 in ") {
+		t.Errorf("the receipt's command, source and duration are not in the question: %q", q.Input)
+	}
+	// whr show carries the failed check's receipt although no revision was pinned.
+	if v, err := f.svc.Show(bg, "t1"); err != nil || v.Check == nil || v.Check.Code != 2 || v.Check.Command != "make check" {
+		t.Errorf("show during prepare_failed: check %+v, %v", v.Check, err)
+	}
 	if f.load().Task().State != domain.TaskAwaitingGuidance {
 		t.Errorf("task = %s", f.load().Task().State)
 	}

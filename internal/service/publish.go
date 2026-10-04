@@ -159,8 +159,13 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 // line, then as much of the output's tail as the Decision keeps. The output is
 // untrusted data.
 func receiptInput(r domain.CheckReceipt) string {
+	return receiptInputWithin(r, domain.MaxDecisionInput)
+}
+
+// receiptInputWithin is receiptInput within a budget of characters.
+func receiptInputWithin(r domain.CheckReceipt, limit int) string {
 	line := r.Line()
-	budget := domain.MaxDecisionInput - utf8.RuneCountInString(line) - 1
+	budget := limit - utf8.RuneCountInString(line) - 1
 	if r.Output == "" || budget <= 0 {
 		return line
 	}

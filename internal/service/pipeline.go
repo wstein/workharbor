@@ -319,17 +319,23 @@ func (p *Pipeline) refusePrepare(ctx context.Context, task, run domain.ID, cause
 	})
 }
 
-// prepareFailedInput is the reason and the check's output tail as the input of
-// prepare_failed. The Decision keeps the first MaxDecisionInput characters, so the
-// tail of the output is cut to fit after the reason.
+// prepareFailedInput is the reason, the check's receipt line (its command, where
+// the command came from, the result and the duration) and the output's tail as
+// the input of prepare_failed. The Decision keeps the first MaxDecisionInput
+// characters, so the receipt and the tail are cut to fit after the reason.
 func prepareFailedInput(cause error) string {
 	reason := textsafe.Escape(oneLine(cause.Error()))
 	var ce *CheckError
-	if !errors.As(cause, &ce) || ce.Output == "" {
+	if !errors.As(cause, &ce) {
 		return reason
 	}
 	budget := domain.MaxDecisionInput - utf8.RuneCountInString(reason) - 2
-	if budget <= 0 {
+	switch {
+	case budget <= 0:
+		return reason
+	case ce.Receipt != nil:
+		return reason + "\n\n" + receiptInputWithin(*ce.Receipt, budget)
+	case ce.Output == "":
 		return reason
 	}
 	return reason + "\n\n" + tailRunes(ce.Output, budget)

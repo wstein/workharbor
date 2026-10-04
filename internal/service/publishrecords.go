@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/domain"
@@ -39,6 +40,26 @@ func (s *Service) checkReceipt(ctx context.Context, task domain.ID, sha string) 
 	for _, e := range evs {
 		var r domain.CheckReceipt
 		if json.Unmarshal(e.Payload, &r) == nil && r.SHA == sha {
+			rc := r
+			out = &rc
+		}
+	}
+	return out, nil
+}
+
+// failedCheckReceipt returns the latest receipt whose line is in the input of the
+// open prepare_failed question q: the receipt of the check that failed it, found
+// by what the question says, so an older check's receipt is never shown for a
+// refusal that was not the check's. Nil when the question is not about a check.
+func (s *Service) failedCheckReceipt(ctx context.Context, task domain.ID, q domain.Decision) (*domain.CheckReceipt, error) {
+	evs, err := s.store.EventsOfKind(ctx, task, domain.EventCheckReceipt)
+	if err != nil {
+		return nil, err
+	}
+	var out *domain.CheckReceipt
+	for _, e := range evs {
+		var r domain.CheckReceipt
+		if json.Unmarshal(e.Payload, &r) == nil && !r.Passed() && strings.Contains(q.Input, r.Line()) {
 			rc := r
 			out = &rc
 		}
