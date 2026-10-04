@@ -282,16 +282,28 @@ func (r *Repo) push(ctx context.Context, remote, branch, sha, token string) erro
 	return nil
 }
 
-// transportMarkers are what git prints when the network or the server failed and
-// not the request: DNS, connection and TLS faults, a dropped transfer, a server
-// error (HTTP 5xx) or a rate limit.
+// transportMarkers are what git prints only when the network or the server
+// failed and not the request: DNS, connection and TLS faults, a dropped
+// transfer, a server error (HTTP 5xx) or a rate limit.
 var transportMarkers = []string{
 	"could not resolve host", "connection refused", "connection timed out", "connection reset",
 	"operation timed out", "network is unreachable", "no route to host", "ssl connection",
-	"tls connection", "unexpected disconnect", "early eof", "remote end hung up", "rpc failed",
-	"the remote end hung up", "returned error: 500", "returned error: 502", "returned error: 503",
-	"returned error: 504", "returned error: 429", "rate limit", "http2 framing", "gnutls_handshake",
+	"tls connection", "unexpected disconnect", "returned error: 500", "returned error: 502",
+	"returned error: 503", "returned error: 504", "returned error: 429", "rate limit",
+	"http2 framing", "gnutls_handshake",
 }
+
+// weakTransportMarkers are what git also prints when the server refused the
+// request over HTTP: remote-curl's "RPC failed; HTTP 413 curl 22 ... returned
+// error: 413" is followed by "the remote end hung up unexpectedly". They count
+// as a transport fault only when the output names no HTTP 4xx refusal, so a pack
+// that is too large or a permission refused at the POST ends as a refusal and
+// is not retried for ever. Unknown output stays a refusal (fail closed).
+var weakTransportMarkers = []string{"rpc failed", "remote end hung up", "early eof"}
+
+// refusedOverHTTP matches an HTTP 4xx status git reports for a refused request,
+// 429 (a rate limit, a transport fault) excepted.
+var refusedOverHTTP = regexp.MustCompile(`(?:http\s+|returned error:\s*)4(?:[01][0-9]|2[0-8]|[3-9][0-9])\b`)
 
 // transportFault reports whether a failed push looks like a transport fault.
 func transportFault(ctx context.Context, err error) bool {
@@ -300,6 +312,14 @@ func transportFault(ctx context.Context, err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	for _, m := range transportMarkers {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	if refusedOverHTTP.MatchString(msg) {
+		return false
+	}
+	for _, m := range weakTransportMarkers {
 		if strings.Contains(msg, m) {
 			return true
 		}
