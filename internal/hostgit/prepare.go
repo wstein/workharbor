@@ -232,12 +232,19 @@ func (r *Repo) revParse(ctx context.Context, ref string) (string, error) {
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 
-// Push sends one agent branch to the remote at exactly the approved commit:
+// Push sends one agent branch to a local remote at exactly the approved commit:
 // "<sha>:refs/heads/<branch>", fast-forward only, never forced, no tags. Only
 // agent/* branches go, and the commit must be one this repository holds. The
-// remote is an absolute path or a plain https URL; credentials come with the
-// forge adapter, not from the host (design §4.5).
+// remote is an absolute path: an https remote needs a credential, which only
+// PushToken hands to git (design §4.5, §7.3).
 func (r *Repo) Push(ctx context.Context, remote, branch, sha string) error {
+	if strings.HasPrefix(remote, "https://") {
+		return fmt.Errorf("%w: %q needs a credential: use PushToken", ErrBadSource, remote)
+	}
+	return r.push(ctx, remote, branch, sha, "")
+}
+
+func (r *Repo) push(ctx context.Context, remote, branch, sha, token string) error {
 	if !strings.HasPrefix(branch, "agent/") || !validBranch(branch) {
 		return fmt.Errorf("%w: %q is not an agent branch", ErrBadBranch, branch)
 	}
@@ -251,12 +258,30 @@ func (r *Repo) Push(ctx context.Context, remote, branch, sha string) error {
 		return fmt.Errorf("%w: %s is not in this repository", ErrBadPath, sha)
 	}
 	env, pre := netArgs(remote)
+	if token != "" {
+		pre = append(pre, "-c", "credential.helper="+pipeHelper)
+	}
 	args := append(pre, "push", "--quiet", "--no-follow-tags", "--no-verify", "--", remote, sha+":refs/heads/"+branch)
-	if _, err := r.g.run(ctx, r.path, true, env, args...); err != nil {
+	if _, err := r.g.runToken(ctx, r.path, env, token, args...); err != nil {
 		if strings.Contains(err.Error(), "non-fast-forward") || strings.Contains(err.Error(), "rejected") {
 			return fmt.Errorf("%w: %v", ErrNotFastForward, err) //nolint:errorlint // the git output is the detail
 		}
 		return err
 	}
 	return nil
+}
+
+// PushToken is Push to an https remote with a per-push token (D51, §7.3). The
+// remote is built by the caller from the configured "owner/name", never read
+// from a repository. The token reaches git only through an inherited pipe (see
+// pipeHelper), never argv, the environment, the URL, a file or a log, and it is
+// removed from any error text.
+func (r *Repo) PushToken(ctx context.Context, remote, branch, sha, token string) error {
+	if !strings.HasPrefix(remote, "https://") {
+		return fmt.Errorf("%w: %q is not an https URL", ErrBadSource, remote)
+	}
+	if token == "" || strings.ContainsAny(token, "\n\r\x00 \t") {
+		return errors.New("hostgit: the push token is empty or not a plain token")
+	}
+	return r.push(ctx, remote, branch, sha, token)
 }
