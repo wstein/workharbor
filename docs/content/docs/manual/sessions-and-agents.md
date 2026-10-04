@@ -95,7 +95,7 @@ The `Makefile` also has `install`, `install-release`, `changelog` and `editorcon
 
 ### Lanes
 
-The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research and board hygiene go to the read-only `wh-helper`; mechanical edits, small tests and checks go to `wh-helper-edit`. It is not a lane, and neither type edits a security-relevant path.
+The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research and issue drafts go to the read-only `wh-helper`; mechanical edits, small tests and checks go to `wh-helper-edit`. Board hygiene (`/wh-board`) stays with the lane, because it runs `scripts/board-snapshot.sh`. A helper is not a lane, and neither type edits a security-relevant path.
 
 ### Commits
 

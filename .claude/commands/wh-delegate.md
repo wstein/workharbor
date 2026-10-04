@@ -6,10 +6,11 @@ argument-hint: "<task>"
 Delegate this to a helper subagent: $ARGUMENTS
 
 Only a task of the kinds in `.agents/helper.md` (find and report, web research,
-board hygiene, mechanical edits, small tests, checks); never a rule section,
-security-relevant code, a design choice or anything outward.
+issue drafts, mechanical edits, small tests, checks); never a security-relevant path
+(AGENTS.md lists them), a design choice or anything outward. Board hygiene
+(`/wh-board`) is not delegated: the lane runs it itself.
 
-1. Pick the type: a lookup (find and report, web research, board hygiene) goes to
+1. Pick the type: a lookup (find and report, web research, issue drafts) goes to
     `wh-helper`, which is read-only; a named edit, a small test or a check that
     runs a command goes to `wh-helper-edit`. Start it with one prompt: the task,
     the files it may change file by file (none for `wh-helper`), what "done"
