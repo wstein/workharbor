@@ -245,13 +245,13 @@ func TestNewIDIsRandomAndPrefixed(t *testing.T) {
 // the card links the task on whr's HTTPS name.
 func TestTheBoardIsWiredThroughTheGuard(t *testing.T) {
 	var scfg service.Config
-	addBoard(&scfg, Deps{Config: &config.Config{}, Forge: forgetest.NewFake()})
+	addBoard(&scfg, Deps{Config: &config.Config{}, Forge: NewForgeAccess(forgetest.NewFake())})
 	if scfg.Board != nil || scfg.BoardLink != nil {
 		t.Error("a board without configuration")
 	}
 	cfg := &config.Config{Board: &config.Board{Owner: "acme", Number: 3, PublicURL: "https://whr.example.test"}}
 	f := forgetest.NewFake()
-	addBoard(&scfg, Deps{Config: cfg, Forge: f})
+	addBoard(&scfg, Deps{Config: cfg, Forge: NewForgeAccess(f)})
 	if _, ok := scfg.Board.(*forge.Guard); !ok {
 		t.Fatalf("the board is %T, want the guard", scfg.Board)
 	}
@@ -280,12 +280,12 @@ func (f *revokingForge) RevokeTokens(context.Context) (int, error) { f.calls++; 
 
 func TestKillAllGetsTheForgesRevoker(t *testing.T) {
 	var scfg service.Config
-	addRevoker(&scfg, Deps{Forge: forgetest.NewFake()})
+	addRevoker(&scfg, Deps{Forge: NewForgeAccess(forgetest.NewFake())})
 	if scfg.RevokeTokens != nil {
 		t.Error("a forge that cannot revoke must not get a revoker")
 	}
 	f := &revokingForge{Fake: forgetest.NewFake()}
-	addRevoker(&scfg, Deps{Forge: f})
+	addRevoker(&scfg, Deps{Forge: NewForgeAccess(f)})
 	if scfg.RevokeTokens == nil {
 		t.Fatal("no revoker")
 	}
@@ -506,7 +506,7 @@ func TestServiceConfigCarriesTheBoardTheRevokerAndTheThrottledNotifier(t *testin
 	rec := &recordingNotifier{}
 	f := &revokingForge{Fake: forgetest.NewFake()}
 	cfg := &config.Config{Board: &config.Board{Owner: "acme", Number: 3}}
-	scfg := serviceConfig(Deps{Config: cfg, Forge: f, Notifier: rec}, nil)
+	scfg := serviceConfig(Deps{Config: cfg, Forge: NewForgeAccess(f), Notifier: rec}, nil)
 	if scfg.Board == nil {
 		t.Error("no board")
 	}

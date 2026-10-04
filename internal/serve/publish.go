@@ -9,9 +9,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/commitlint"
 	"github.com/wstein/workharbor/internal/config"
-	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
-	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/service"
 )
 
@@ -77,8 +75,8 @@ func PublishBase(d Deps, svc *service.Service, ws *service.Workspaces, repo, aut
 // the supervisor's own mirror of it (D38): never from a workspace.
 func defaultBranchSource(d Deps) func(ctx context.Context, repo string) (service.CheckSource, error) {
 	return func(ctx context.Context, repo string) (service.CheckSource, error) {
-		db, ok := d.Forge.(forge.DefaultBrancher)
-		if !ok {
+		db := d.Forge.DefaultBranch
+		if db == nil {
 			return service.CheckSource{}, errors.New("the forge cannot name a default branch")
 		}
 		branch, err := db.DefaultBranchName(ctx, repo)
@@ -109,7 +107,7 @@ func defaultBranchSource(d Deps) func(ctx context.Context, repo string) (service
 // returns nil when the host cannot publish: no repository copies, no pusher or
 // no committer.
 func PublishFor(d Deps, svc *service.Service, ws *service.Workspaces) func(ctx context.Context, repo string) (service.PublishConfig, error) {
-	if d.Topics == nil || d.NewPusher == nil || d.Committer == nil || d.Forge == nil || d.Config == nil {
+	if d.Topics == nil || d.NewPusher == nil || d.Committer == nil || d.Forge.Guard == nil || d.Config == nil {
 		return nil
 	}
 	var mu sync.Mutex
@@ -148,7 +146,7 @@ func PublishFor(d Deps, svc *service.Service, ws *service.Workspaces) func(ctx c
 		cfg.Prepare.Committer = id
 		// The table here only has to exist: the publisher chooses the table of the
 		// task's workflow for every push and pull request.
-		cfg.Guard = forge.NewGuard(d.Forge, d.NewPusher(cfg.Repo), policy.Default(), svc.VerifierFor())
+		cfg.Guard = d.Forge.Guard(d.NewPusher(cfg.Repo), svc.VerifierFor())
 		cfg.ForgeRepo, cfg.Workflow, cfg.Branch = r.Name, r.Preset(), workflowBranch(*r)
 		return cfg, nil
 	}

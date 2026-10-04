@@ -86,7 +86,7 @@ func TestPublishForWiresTheCommitterTheGuardAndTheWorkflow(t *testing.T) {
 		t.Error("publishing is on without a pusher, a committer, copies or a forge")
 	}
 	d.Topics = func(context.Context, string) (*hostgit.Repo, *hostgit.Cache, error) { return nil, nil, nil }
-	d.Forge = forgetest.NewFake()
+	d.Forge = NewForgeAccess(forgetest.NewFake())
 	pushers := 0
 	d.NewPusher = func(*hostgit.Repo) forge.Pusher { pushers++; return stubPusher{} }
 	reads := 0

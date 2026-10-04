@@ -23,7 +23,6 @@ import (
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/passkey"
-	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/sshca"
@@ -38,10 +37,10 @@ type Deps struct {
 	Store   *store.Store
 	Runtime runtime.Adapter
 	Agent   agent.Adapter
-	// Issues loads issues from the forge, and Forge is the whole adapter (the
-	// publisher takes it behind a forge.Guard).
+	// Issues loads issues from the forge, and Forge is the narrow access to the
+	// rest of it: guarded effects only (forge.go). The raw adapter stays in Build.
 	Issues service.IssueSource
-	Forge  forge.Adapter
+	Forge  ForgeAccess
 	Git    *hostgit.Git
 	// Owner is the owner label of every environment this supervisor makes.
 	Owner string
@@ -410,10 +409,10 @@ func addNotifier(scfg *service.Config, d Deps) {
 // guard's pusher and verifier are for the push flow, not for this.
 func addBoard(scfg *service.Config, d Deps) {
 	b := d.Config.Board
-	if b == nil || d.Forge == nil {
+	if b == nil || d.Forge.Guard == nil {
 		return
 	}
-	scfg.Board = forge.NewGuard(d.Forge, nil, policy.Default(), nil)
+	scfg.Board = d.Forge.Guard(nil, nil)
 	if b.PublicURL != "" {
 		scfg.BoardLink = func(task domain.ID) string { return notify.Link(b.PublicURL, notify.Message{TaskID: task}) }
 	}
@@ -431,10 +430,8 @@ func Budgets(b config.Budgets) service.Budgets {
 // addRevoker gives kill-all the forge's way to revoke the tokens it holds, when
 // the forge adapter has one (the GitHub App client does).
 func addRevoker(scfg *service.Config, d Deps) {
-	if r, ok := d.Forge.(interface {
-		RevokeTokens(context.Context) (int, error)
-	}); ok {
-		scfg.RevokeTokens = r.RevokeTokens
+	if d.Forge.RevokeTokens != nil {
+		scfg.RevokeTokens = d.Forge.RevokeTokens
 	}
 }
 
