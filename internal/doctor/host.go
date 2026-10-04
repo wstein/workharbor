@@ -69,6 +69,24 @@ func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
 
 var errNotHere = errors.New("this runs only on a Mac")
 
+// serviceContainerSystem is the service the container-start step brings up and
+// the steps after it need.
+const serviceContainerSystem = "container-system"
+
+// desktopSession names the session the container steps run in for the person
+// reading the guide: this one when the target account is the current user (for
+// example `--dev --user <you>`), else the target account's own.
+func (d Deps) desktopSession() string {
+	account := d.Account
+	if account == "" {
+		account = WhrUser
+	}
+	if d.User != "" && d.User == account {
+		return "this desktop session (Terminal on the Mac)"
+	}
+	return account + "'s own desktop session (Screen Sharing)"
+}
+
 // desktopOnly is what a check that needs Apple Container says outside whr's
 // desktop session, where the container services do not answer (#156).
 const desktopOnly = "Apple Container answers only in whr's desktop session; run this check there (Screen Sharing), or use `whr ls` or `whr show <task>` over SSH"
@@ -719,30 +737,7 @@ func userSteps(d Deps) []Check {
 	caPath := filepath.Join(dir, "ssh-ca")
 	return ordered([]Check{
 		{
-			Name: "container-kernel", Phase: PhaseUser, Step: 4, Title: "the Linux kernel containers boot (manual step 6)",
-			Run: func(ctx context.Context) (Status, string) {
-				if st, msg, ok := d.inDesktop(ctx); !ok {
-					return st, msg
-				}
-				out, err := d.output(ctx, "container", "system", "status")
-				if err != nil {
-					if st, msg, ok := notHere(err); ok {
-						return st, msg
-					}
-					return NotVerified, "whether the kernel is installed is not visible until the container system runs"
-				}
-				if strings.Contains(out, "running") {
-					return OK, "the container system runs, so a kernel is installed"
-				}
-				return NotVerified, "whether the kernel is installed is not visible until the container system runs"
-			},
-			Fix: &Fix{
-				Cmds:  []Cmd{{Argv: []string{"container", "system", "kernel", "set", "--recommended"}}},
-				Guide: "This must run in whr's own desktop session: the services live in that user's GUI launchd domain.",
-			},
-		},
-		{
-			Name: "container-start", Phase: PhaseUser, Step: 4, Title: "the container system running (manual step 6)",
+			Name: "container-start", Phase: PhaseUser, Step: 4, Provides: serviceContainerSystem, Title: "the container system running (manual step 6)",
 			Run: func(ctx context.Context) (Status, string) {
 				if st, msg, ok := d.inDesktop(ctx); !ok {
 					return st, msg
@@ -761,7 +756,38 @@ func userSteps(d Deps) []Check {
 			},
 			Fix: &Fix{
 				Cmds:  []Cmd{{Argv: []string{"container", "system", "start", "--disable-kernel-install"}}},
-				Guide: "Run this in whr's desktop session (Screen Sharing), not over SSH.",
+				Guide: "Run this in " + d.desktopSession() + ", not over SSH.",
+			},
+		},
+		{
+			Name: "container-kernel", Phase: PhaseUser, Step: 4, Title: "the Linux kernel containers boot (manual step 6)",
+			Needs: serviceContainerSystem,
+			Run: func(ctx context.Context) (Status, string) {
+				if st, msg, ok := d.inDesktop(ctx); !ok {
+					return st, msg
+				}
+				out, err := d.output(ctx, "container", "system", "status")
+				if err != nil {
+					if st, msg, ok := notHere(err); ok {
+						return st, msg
+					}
+					return NotVerified, "whether the kernel is installed is not visible until the container system runs (step container-start)"
+				}
+				if !strings.Contains(out, "running") {
+					return NotVerified, "whether the kernel is installed is not visible until the container system runs (step container-start)"
+				}
+				// Where `container system kernel set` puts a kernel is unverified
+				// (issue #73): the start fix skips the kernel install, so a running
+				// system says nothing about it.
+				ents, _ := os.ReadDir(filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels"))
+				if len(ents) == 0 {
+					return Fail, "no Linux kernel is installed: containers cannot boot without one"
+				}
+				return OK, "a Linux kernel is installed"
+			},
+			Fix: &Fix{
+				Cmds:  []Cmd{{Argv: []string{"container", "system", "kernel", "set", "--recommended"}}},
+				Guide: "This must run in " + d.desktopSession() + ": the services live in that user's GUI launchd domain.",
 			},
 		},
 		{
@@ -782,7 +808,7 @@ func userSteps(d Deps) []Check {
 				}
 				return OK, "the container services answer in gui/" + strconv.Itoa(d.UID)
 			},
-			Fix: &Fix{Guide: "Run `container system start --disable-kernel-install` in whr's desktop session, not over SSH or sudo. If it fails with a permission or bootstrap error for this standard user, note the message in issue #38."},
+			Fix: &Fix{Guide: "Run `container system start --disable-kernel-install` in " + d.desktopSession() + ", not over SSH or sudo. If it fails with a permission or bootstrap error for this standard user, note the message in issue #38."},
 		},
 
 		{
@@ -990,9 +1016,11 @@ func userSteps(d Deps) []Check {
 
 // userOrder is the order of `whr setup`: nothing needs a later step, so there is
 // no cycle (the base configuration comes before the App, which comes before the
-// configuration that names it).
+// configuration that names it; the container system starts before the kernel is
+// set, because `container system kernel set` needs the running system). A step
+// that needs a service says so with Needs, and a test holds the order to it.
 var userOrder = []string{
-	"config-dir", "api-token", "agent-key", "ssh-ca", "container-kernel", "container-start", "standard-user-check",
+	"config-dir", "api-token", "agent-key", "ssh-ca", "container-start", "container-kernel", "standard-user-check",
 	"config-base", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
 }
 

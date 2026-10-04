@@ -63,6 +63,11 @@ type Check struct {
 	// Title says in a few words what the step is for.
 	Title string
 	Fix   *Fix
+	// Needs names a service the step's check or fix cannot work without, and
+	// Provides one a successful fix of the step brings up. Setup refuses to run
+	// a fix whose service no earlier step provided and a test holds the order to
+	// it (#265).
+	Needs, Provides string
 }
 
 // basic is a check as the list below writes it; base fills in the rest.

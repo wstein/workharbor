@@ -326,3 +326,58 @@ func TestOnlyAnInstalledBinaryUnderAnAdminPrefixIsAccepted(t *testing.T) {
 		t.Errorf("a binary outside the prefix = %v", err)
 	}
 }
+
+// A fix that needs a service runs only after a step brought it up, and the kernel
+// step then runs against the started system (#265).
+func TestAFixRunsOnlyAfterTheServiceItNeedsIsUp(t *testing.T) {
+	var started, kernel bool
+	start := step("container-start", doctor.PhaseUser, &started, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"start"}}}})
+	start.Provides = "svc"
+	k := step("container-kernel", doctor.PhaseUser, &kernel, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"kernel"}}}})
+	k.Needs = "svc"
+
+	// the start fix works: the kernel fix runs afterwards
+	h := &fakeHost{answers: []string{"y", "y"}}
+	startOK := start
+	startOK.Fix = &doctor.Fix{Do: func(context.Context, doctor.Prompter) error { started = true; return nil }}
+	kOK := k
+	kOK.Fix = &doctor.Fix{Do: func(context.Context, doctor.Prompter) error { kernel = true; return nil }}
+	outs, _, _ := run(t, h, []doctor.Check{startOK, kOK}, Options{Phase: doctor.PhaseUser})
+	if !outs[0].Fixed || !outs[1].Fixed {
+		t.Errorf("both should be fixed: %+v", outs)
+	}
+
+	// the start fix does not bring the service up: the kernel fix is not run
+	started, kernel = false, false
+	h = &fakeHost{answers: []string{"y", "y"}}
+	outs, _, errOut := run(t, h, []doctor.Check{start, k}, Options{Phase: doctor.PhaseUser})
+	for _, c := range h.ran {
+		if c == "kernel" {
+			t.Errorf("the kernel fix ran without the system: %v", h.ran)
+		}
+	}
+	if !outs[1].Asked || !strings.Contains(errOut, "not run: it needs svc") {
+		t.Errorf("outs %+v err %q", outs, errOut)
+	}
+}
+
+func TestSummaryNamesWhatIsDoneWhatIsLeftAndTheNextCommand(t *testing.T) {
+	var b bytes.Buffer
+	Summary(&b, []Outcome{
+		{Step: "config-dir", Status: doctor.OK},
+		{Step: "container-start", Status: doctor.OK},
+		{Step: "container-kernel", Status: doctor.Fail},
+		{Step: "config-base", Status: doctor.NotVerified},
+	}, false)
+	got := b.String()
+	for _, want := range []string{"done: config-dir, container-start", "left: container-kernel (fail), config-base (not_verified)", "next: whr setup --from container-kernel", "no Linux kernel"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+	b.Reset()
+	Summary(&b, []Outcome{{Step: "config-dir", Status: doctor.OK}}, false)
+	if strings.Contains(b.String(), "next:") || !strings.Contains(b.String(), "left: none") {
+		t.Errorf("a finished run: %s", b.String())
+	}
+}

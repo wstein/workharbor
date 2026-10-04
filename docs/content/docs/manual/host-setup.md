@@ -107,17 +107,17 @@ Do **not** install Claude Code, Codex CLI or other agent CLIs on the host for wo
 
 ## 6. Apple Container
 
-**As `whr`, in a Terminal of its desktop session** (step 2), install the Linux kernel the containers boot once, then start the container system and check it:
+**As `whr`, in a Terminal of its desktop session** (step 2), start the container system, install the Linux kernel the containers boot once, and check it:
 
 ```bash
-container system kernel set --recommended
 container system start --disable-kernel-install
+container system kernel set --recommended
 container system status
 launchctl print gui/$(id -u) | grep com.apple.container   # the services run in this session
 container list --all                                     # answers without an error
 ```
 
-`--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed first; without a kernel no container starts. The last two lines are the standard-user check of step 2: if `container system start` or `container list` fails with a permission or bootstrap error, note the message in issue #38. After a restart the system does not start by itself; the workharbor LaunchAgent (step 13) runs `container system start --disable-kernel-install` in `whr`'s session before it starts the supervisor, which then resumes the agents.
+`--disable-kernel-install` skips the interactive kernel prompt, which is why the kernel is installed in its own step; `container system kernel set` needs the running system (it fails with `XPC connection error` before the start), and without a kernel no container starts. `whr setup` runs the steps in this order and says at its end when no kernel is installed. The last two lines are the standard-user check of step 2: if `container system start` or `container list` fails with a permission or bootstrap error, note the message in issue #38. After a restart the system does not start by itself; the workharbor LaunchAgent (step 13) runs `container system start --disable-kernel-install` in `whr`'s session before it starts the supervisor, which then resumes the agents.
 
 ### Over SSH
 

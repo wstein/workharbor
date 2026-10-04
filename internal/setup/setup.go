@@ -116,6 +116,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 	}
 	var outs []Outcome
 	sudoReady := false
+	provided := map[string]bool{} // services a step has brought up or found running
 	for _, s := range chosen {
 		if err := ctx.Err(); err != nil {
 			return outs, err
@@ -129,6 +130,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			continue
 		}
 		if st == doctor.OK {
+			if s.Provides != "" {
+				provided[s.Provides] = true
+			}
 			fmt.Fprintf(o.Err, "%s: already done: %s\n", s.Name, oneLine(detail))
 			outs = append(outs, out)
 			continue
@@ -140,6 +144,12 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		}
 		fmt.Fprintf(o.Err, "\n%s: %s\n  %s\n", s.Name, s.Title, oneLine(detail))
 		show(o.Err, s.Fix)
+		if s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs) {
+			fmt.Fprintf(o.Err, "  not run: it needs %s, which no step before it brought up\n", s.Needs)
+			out.Asked = true
+			outs = append(outs, out)
+			continue
+		}
 		if o.DryRun {
 			fmt.Fprintln(o.Err, "  (dry run: nothing is run)")
 			out.Asked = true
@@ -155,11 +165,82 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			st, detail = s.Run(ctx)
 			out.Status, out.Detail = st, detail
 			out.Fixed = st == doctor.OK
+			if out.Fixed && s.Provides != "" {
+				provided[s.Provides] = true
+			}
 			fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
 		}
 		outs = append(outs, out)
 	}
 	return outs, nil
+}
+
+// providedElsewhere reports whether a step that the run did not select provides
+// the service and its check passes: `--only container-kernel` runs against a
+// system that already runs.
+func providedElsewhere(ctx context.Context, steps, chosen []doctor.Check, service string) bool {
+	for _, c := range steps {
+		if c.Provides != service || contains(names(chosen), c.Name) {
+			continue
+		}
+		if st, _ := c.Run(ctx); st == doctor.OK {
+			return true
+		}
+	}
+	return false
+}
+
+func names(cs []doctor.Check) []string {
+	out := make([]string, len(cs))
+	for i, c := range cs {
+		out[i] = c.Name
+	}
+	return out
+}
+
+// Summary writes what a run did, in a few lines for the human: the steps that
+// are done, the ones that are left with why, and the command that goes on. A
+// step that is optional or was left alone by a warn counts as done only when it
+// passed. It writes nothing for an empty run.
+func Summary(w io.Writer, outs []Outcome, dryRun bool) {
+	var done, left []string
+	first := ""
+	for _, o := range outs {
+		switch o.Status {
+		case doctor.OK:
+			done = append(done, o.Step)
+		case doctor.Warn, doctor.Skipped:
+		default:
+			left = append(left, o.Step+" ("+string(o.Status)+")")
+			if first == "" {
+				first = o.Step
+			}
+		}
+	}
+	if len(outs) == 0 {
+		return
+	}
+	prefix := "summary"
+	if dryRun {
+		prefix = "summary (dry run: nothing was changed)"
+	}
+	fmt.Fprintf(w, "%s:\n  done: %s\n", prefix, listOrNone(done))
+	fmt.Fprintf(w, "  left: %s\n", listOrNone(left))
+	if first != "" {
+		fmt.Fprintf(w, "  next: whr setup --from %s\n", first)
+	}
+	for _, o := range outs {
+		if o.Step == "container-kernel" && o.Status != doctor.OK {
+			fmt.Fprintln(w, "  no Linux kernel is installed or verified: containers cannot boot until the container-kernel step passes")
+		}
+	}
+}
+
+func listOrNone(l []string) string {
+	if len(l) == 0 {
+		return "none"
+	}
+	return strings.Join(l, ", ")
 }
 
 // show prints a fix: what it does and the exact commands, as argument vectors

@@ -169,6 +169,7 @@ func newSetup(st *state) *cobra.Command {
 		if err != nil {
 			return usageError{err.Error()}
 		}
+		setup.Summary(st.env.Stderr, outs, dryRun)
 		for _, o := range outs {
 			if o.Status == doctor.Fail {
 				if dryRun {

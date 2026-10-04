@@ -381,7 +381,7 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	for _, c := range Steps(all, PhaseUser) {
 		user = append(user, c.Name)
 	}
-	want := "config-dir api-token agent-key ssh-ca container-kernel container-start standard-user-check config-base github-app config-github tool-store service-install drop-admin"
+	want := "config-dir api-token agent-key ssh-ca container-start container-kernel standard-user-check config-base github-app config-github tool-store service-install drop-admin"
 	if strings.Join(user, " ") != want {
 		t.Errorf("user steps %v\nwant %s", user, want)
 	}
@@ -688,10 +688,74 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		"container list --all":    "",
 		"launchctl print gui/501": "com.apple.container.apiserver",
 	}}
-	st := steps(t, hostDeps(r))
+	d := hostDeps(r)
+	d.Home = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels", "vmlinux"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st := steps(t, d)
 	for _, name := range names {
 		if got, detail := status(st[name]); got != OK {
 			t.Errorf("%s in Aqua = %s %q", name, got, detail)
 		}
+	}
+}
+
+// A running container system with no kernel is a failure the kernel step can fix;
+// a stopped one is not verifiable (#265).
+func TestKernelCheckSeesAMissingKernelOnceTheSystemRuns(t *testing.T) {
+	d := hostDeps(scripted{"launchctl managername": "Aqua", "container system status": "apiserver is running"})
+	d.Home = t.TempDir()
+	if got, detail := status(steps(t, d)["container-kernel"]); got != Fail || !strings.Contains(detail, "no Linux kernel") {
+		t.Errorf("running without a kernel = %s %q", got, detail)
+	}
+	d = hostDeps(scripted{"launchctl managername": "Aqua", "container system status": "ERR:XPC connection error"})
+	d.Home = t.TempDir()
+	if got, _ := status(steps(t, d)["container-kernel"]); got != NotVerified {
+		t.Errorf("stopped = %s", got)
+	}
+}
+
+// The guide names the session by who the target account is (#265).
+func TestDesktopGuideDependsOnTheTargetUser(t *testing.T) {
+	for _, c := range []struct{ user, account, want, not string }{
+		{"werner", "werner", "this desktop session", "Screen Sharing"},
+		{"werner", "", "whr's own desktop session (Screen Sharing)", "this desktop session"},
+		{"werner", "other", "other's own desktop session", "this desktop session"},
+		{"whr", "", "this desktop session", "Screen Sharing"},
+	} {
+		d := hostDeps(scripted{})
+		d.User, d.Account = c.user, c.account
+		st := steps(t, d)
+		for _, name := range []string{"container-kernel", "container-start", "standard-user-check"} {
+			g := st[name].Fix.Guide
+			if !strings.Contains(g, c.want) || strings.Contains(g, c.not) {
+				t.Errorf("%s as %s for %q: %q", name, c.user, c.account, g)
+			}
+		}
+	}
+}
+
+// A step whose fix needs a service must come after the step that starts it, so
+// the order cannot put container-kernel before container-start again (#265).
+func TestNoStepNeedsAServiceALaterStepStarts(t *testing.T) {
+	provided := map[string]bool{}
+	needed := 0
+	for _, c := range Steps(Checks(hostDeps(scripted{})), PhaseUser) {
+		if c.Needs != "" {
+			needed++
+			if !provided[c.Needs] {
+				t.Errorf("step %s needs %q, which no earlier step provides", c.Name, c.Needs)
+			}
+		}
+		if c.Provides != "" {
+			provided[c.Provides] = true
+		}
+	}
+	if needed == 0 {
+		t.Error("no step declares a need: the test checks nothing")
 	}
 }
