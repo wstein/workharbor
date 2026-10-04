@@ -25,7 +25,8 @@ Most commands accept `--config <file>` (default `$WHR_CONFIG`, then `~/.config/w
 For a source installation under `$HOME/.local`, use `whr doctor --dev` and
 `whr setup --dev --user <your-account>`. An explicit `--prefix` overrides the
 development default; use it consistently. See [development installation](install-upgrade-release.md)
-for the warning and service behavior.
+for the warning, the remembered `development_prefix` key (an explicit `whr setup --dev`
+writes it, `whr setup --managed` removes it) and the service behavior.
 
 ## First-time setup: `whr setup` (provisional)
 

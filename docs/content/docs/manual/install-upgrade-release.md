@@ -71,8 +71,8 @@ whr doctor --dev --user "$USER"
 or start a service. Remove `--only config-base` to run the other setup steps.
 `--dev` prints a warning: a supervisor in a user-writable prefix can be replaced
 by that user and lacks the managed installation's replacement protection.
-It adds no confirmation. The account and remote-access checks still apply,
-and running as root or from a Git working tree is still refused.
+The account and remote-access checks still apply, and running as root or from a
+Git working tree is still refused.
 
 An explicit `--prefix /absolute/path` takes precedence over `$HOME/.local`.
 Use the same prefix with `make install`, setup and doctor. Symlinks are resolved
@@ -86,12 +86,40 @@ prefix and the binary is still refused. Without `--dev`, setup retains the
 managed prefix list; `--prefix` alone selects a custom managed installation,
 whose ownership doctor checks separately.
 
-Development mode is selected per invocation, without a configuration key.
+Development mode is chosen by the flag `--dev` or by one key in the
+configuration, never by an environment variable (`WORKHARBOR_DEV` and the like
+change nothing). An explicit `whr setup --dev` remembers the choice: after you
+confirm a diff, it writes `development_prefix`, the absolute prefix, as a
+top-level key of `config.json`, and says so. From then on `whr setup`,
+`whr doctor` and `whr service install` read the key as `--dev --prefix <value>`
+and `whr serve` only logs a warning at start, so `--dev` need not be typed
+again; an explicit `--dev` or `--prefix` wins, and `--prefix` without `--dev` is
+a managed call that ignores the key. `whr doctor` reports `warn` on every run
+while the key is set, naming the key, the file and the way out. The key loosens
+nothing beyond `--dev`: every check of the prefix runs again on each read.
+
+The key is refused, as a configuration error (setup and doctor fail, `whr serve`
+does not start), when its value is not an absolute path or is a managed prefix
+(`/opt/whr`, `/opt/homebrew`, `/usr/local`), when `whr` itself runs from a
+managed prefix, or when the configuration file is not a regular file with one
+link, owned by you or root, closed to group and other writers, outside every
+workspace root and git working tree. The file is opened without following a
+link and checked on the open file. These checks guard against a mistake: the
+account can write its own configuration, so anything running as it can write
+the key too, and the workspace-root check reads its roots from the same file, so
+it catches a stray file, not a crafted one. What limits the key is that a
+managed installation refuses it.
+
+To leave development mode run `whr setup --managed` (`--only development-key`
+does just that step). It shows a diff, removes `development_prefix` after your
+`y`, keeps every other key, and then checks the managed prefix; it cannot be
+combined with `--dev`. Deleting the key by hand does the same. `--dry-run` writes
+nothing, and `whr doctor` and `whr serve` never write the key.
+
 When setup reaches `service-install`, it passes the chosen executable through
-`whr service install --whr <binary>`. Direct service installation already accepts
-an installed executable outside a Git working tree. The LaunchAgent retains
-that executable path, so stopping and starting it needs no development flag;
-run `whr doctor --dev` with the same prefix afterwards. The default production
+`whr service install --whr <binary>`, and `whr service install` with the key set
+requires that binary under `development_prefix`. The LaunchAgent retains that
+executable path, so stopping and starting it needs no development flag. The default production
 procedure remains the administrator-owned release installation above.
 
 
