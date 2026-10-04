@@ -266,7 +266,7 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 var (
 	ErrRoot         = errors.New("setup never runs as root: it runs each privileged command through sudo, one at a time, after showing it")
 	ErrWrongUser    = errors.New("this part runs as another user")
-	ErrNotInstalled = errors.New("whr is not an installed binary in an admin-owned prefix")
+	ErrNotInstalled = errors.New("whr is not an installed binary in an allowed prefix")
 )
 
 // GuardHost refuses `whr setup host` as root and as a standard whr user: the
@@ -301,7 +301,8 @@ func GuardUser(ctx context.Context, m launchd.Manager, user string, uid int, whr
 }
 
 // CheckInstalled refuses a whr that is not the installed one: it must lie in a
-// git working tree nowhere, and under one of the admin-owned prefixes (D24).
+// git working tree nowhere, and under one of the allowed prefixes. Ownership
+// is checked separately by doctor; development prefixes are explicitly selected.
 func CheckInstalled(path string, prefixes ...string) error {
 	if err := launchd.CheckBinary(path); err != nil {
 		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
