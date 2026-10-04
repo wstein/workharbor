@@ -44,7 +44,7 @@ func (s *state) workspaces(ctx context.Context) ([]workspaceRow, []byte, error) 
 func newWs(s *state) *cobra.Command {
 	ws := &cobra.Command{Use: "ws", Short: "Workspaces: folders with an agent clone and their environment (provisional)"}
 	group(ws)
-	ws.AddCommand(newWsAdd(s), newWsLs(s), newWsRm(s), newWsRebuild(s))
+	ws.AddCommand(newWsAdd(s), newWsLs(s), newWsRm(s), newWsRebuild(s), newWsShell(s))
 	return ws
 }
 
