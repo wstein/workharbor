@@ -499,3 +499,34 @@ func TestDoctorDevComparesThePrefixWithTheDirectoryServiceHome(t *testing.T) {
 		})
 	}
 }
+
+// A control or bidi character in `whr doctor --user` is refused at the flag, as
+// in `whr setup`, so no repair line carries it ("(run as <user>)"); a normal
+// user prints unchanged, in text and in --json (#280).
+func TestDoctorRefusesControlCharactersInUser(t *testing.T) {
+	for _, c := range []struct{ name, user string }{
+		{"newline", "w\nreboot"},
+		{"escape", "w\x1b[2J"},
+		{"bidi", "w\u202ex"},
+		{"tab", "w\tx"},
+	} {
+		for _, json := range []bool{false, true} {
+			t.Run(c.name, func(t *testing.T) {
+				r, home := devSetupRig(t)
+				args := []string{"doctor", "--dev", "--user", c.user}
+				if json {
+					args = append(args, "--json")
+				}
+				code, out, errOut := runDevSetup(t, r, home, args...)
+				if code != exitcode.Usage || !strings.Contains(errOut, "must not contain a control") || out != "" || strings.ContainsAny(out+errOut, "\x1b\u202e") {
+					t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+				}
+			})
+		}
+	}
+	r, home := devSetupRig(t)
+	_, _, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "whr")
+	if !strings.Contains(errOut, "(run as whr)") {
+		t.Fatalf("a normal user: stderr %q", errOut)
+	}
+}

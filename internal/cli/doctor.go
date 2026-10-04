@@ -31,6 +31,11 @@ func newDoctor(st *state) *cobra.Command {
 		Short: "check the configuration, the host and the supervisor; say what is not verified",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// the user is printed in each repair line, which a human may paste:
+			// refused here as `whr setup` does, not escaped on print (#280)
+			if err := plainFlag("--user", whrUser); err != nil {
+				return err
+			}
 			path := st.configPath
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
@@ -111,7 +116,7 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			for _, r := range rs {
 				if r.Fix != "" {
-					fmt.Fprintf(st.env.Stderr, "%s: %s\n  → %s\n", r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
+					fmt.Fprintf(st.env.Stderr, "%s: %s\n  → %s\n", r.Check, clean(strings.TrimSpace(r.Detail)), clean(r.Fix))
 				}
 			}
 			unknown, warned := 0, 0
@@ -153,7 +158,7 @@ func (quietError) ExitCode() int { return exitcode.Error }
 
 func printDoctor(w io.Writer, rs []doctor.Result) {
 	for _, r := range rs {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Status, r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Status, r.Check, clean(strings.TrimSpace(r.Detail)), clean(r.Fix))
 	}
 }
 
