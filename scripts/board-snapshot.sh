@@ -467,12 +467,15 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
   else
     schema_fetch || die "could not read complete schema metadata; no configuration changed"
   fi
-  desired=$(jq -cn --arg prefix "$lane_prefix" --arg roles "$roles" '{
+  desired=$(jq -cn --arg prefix "$lane_prefix" --arg roles "$roles" --argjson fields "$schema_fields" '{
     Status:["Todo","In progress","Blocked","In review","Ready to push","Done"],
     Priority:["P1","P2","P3"],
     Session:($roles | split(",") | map($prefix + "/" + .))
-  } | if $prefix == "wh" then .Session += ["Werner"] else . end')
-  printf '%s' "$schema_fields" | jq -e --argjson desired "$desired" '
+  } | if $prefix == "wh" or any($fields[]; .name == "Session" and any(.options[]?; .name == "Werner")) then .Session += ["Werner"] else . end')
+  normalized_fields=$(printf '%s' "$schema_fields" | jq -c --arg prefix "$lane_prefix" 'map(if .name == "Session" then
+    .options |= map(if (.name | startswith("wh/")) then .name = ($prefix + "/" + (.name | ltrimstr("wh/"))) else . end)
+    else . end)')
+  printf '%s' "$normalized_fields" | jq -e --argjson desired "$desired" '
     . as $fields | all(["Title","Assignees","Milestone","Status"][]; . as $name | [$fields[] | select(.name == $name)] | length == 1) and
     all(["Status","Priority","Session"][]; . as $name |
       [$fields[] | select(.name == $name)] as $matches | ($matches | length) <= 1 and
@@ -484,7 +487,9 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
   rm -f "$fields"
   for name in Status Priority Session; do
     current=$(printf '%s' "$schema_fields" | jq -c --arg name "$name" '[.[] | select(.name == $name)][0] // {}')
-    options=$(printf '%s' "$current" | jq -c --arg name "$name" --argjson desired "$desired" '. as $field | $desired[$name] | map(. as $option |
+    options=$(printf '%s' "$current" | jq -c --arg prefix "$lane_prefix" --arg name "$name" --argjson desired "$desired" '
+      (if $name == "Session" then .options |= ((. // []) | map(if (.name | startswith("wh/")) then .name = ($prefix + "/" + (.name | ltrimstr("wh/"))) else . end)) else . end)
+      | . as $field | $desired[$name] | map(. as $option |
       ([$field.options[]? | select(.name == $option)][0] // {name:$option,color:"GRAY",description:""}) | {name,color,description} + (if .id then {id} else {} end))')
     if [ "$(printf '%s' "$current" | jq -c '[.options[]?.name]')" = "$(printf '%s' "$desired" | jq -c --arg name "$name" '.[$name]')" ]; then continue; fi
     fid=$(printf '%s' "$current" | jq -r '.id // empty')

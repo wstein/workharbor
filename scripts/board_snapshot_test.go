@@ -322,6 +322,121 @@ func TestBoardSnapshotConfigureFieldsIndependentOfViews(t *testing.T) {
 	}
 }
 
+func sessionSchemaFixture(t *testing.T, options string) board {
+	t.Helper()
+	fixture := newSchemaBoard(t)
+	path := filepath.Join(fixture.bin, "schema.json")
+	data, err := os.ReadFile(path) //nolint:gosec // a test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	var sessionOptions []map[string]any
+	if err := json.Unmarshal([]byte(options), &sessionOptions); err != nil {
+		t.Fatal(err)
+	}
+	fields := state["fields"].([]any)
+	for _, field := range fields {
+		current := field.(map[string]any)
+		if current["name"] == "Status" {
+			statuses := []map[string]any{}
+			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Ready to push", "Done"} {
+				statuses = append(statuses, map[string]any{"id": "status-" + strconv.Itoa(index), "name": name, "color": "GRAY", "description": ""})
+			}
+			current["options"] = statuses
+		}
+	}
+	priorities := []map[string]any{}
+	for _, name := range []string{"P1", "P2", "P3"} {
+		priorities = append(priorities, map[string]any{"id": "priority-" + name, "name": name, "color": "GRAY", "description": ""})
+	}
+	state["fields"] = append(fields, map[string]any{"id": "F_session", "name": "Session", "dataType": "SINGLE_SELECT", "options": sessionOptions}, map[string]any{"id": "F_priority", "name": "Priority", "dataType": "SINGLE_SELECT", "options": priorities})
+	updated, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, updated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return fixture
+}
+
+func TestBoardSnapshotConfigureMigratesVerifiedSessionPrefix(t *testing.T) {
+	t.Parallel()
+	legacy := []map[string]any{}
+	for _, role := range []string{"design", "platform", "runtime", "review", "verify", "docs", "spikes"} {
+		legacy = append(legacy, map[string]any{"id": "legacy-" + role, "name": "wh/" + role, "color": "BLUE", "description": role})
+	}
+	legacy = append(legacy, map[string]any{"id": "legacy-human", "name": "Werner", "color": "GRAY", "description": "Human maintainer"})
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := sessionSchemaFixture(t, string(encoded))
+	env := append(schemaEnv(fixture), "WHR_BOARD_ROLES=desk,dispatch,design,review,platform,runtime,docs,verify,spikes")
+	for attempt := 0; attempt < 2; attempt++ {
+		stdout, stderr, err := fixture.runEnv(t, env, "configure-fields", "PVT_crewbook")
+		if err != nil {
+			t.Fatalf("migration: %v %s", err, stderr)
+		}
+		if !strings.Contains(stdout, `"cb/platform"`) || strings.Contains(stdout, `"wh/platform"`) || !strings.Contains(stdout, `"legacy-human"`) {
+			t.Fatalf("migration readback: %s", stdout)
+		}
+	}
+	mutations := 0
+	for _, call := range fixture.lines(t) {
+		var request struct {
+			Variables struct {
+				Input struct {
+					FieldID string
+					Options []struct{ ID, Name, Color, Description string } `json:"singleSelectOptions"`
+				}
+			}
+		}
+		if err := json.Unmarshal([]byte(call), &request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Variables.Input.FieldID != "F_session" {
+			t.Fatalf("migration changed another field: %s", call)
+		}
+		mutations++
+		options := request.Variables.Input.Options
+		if len(options) != 10 || options[0].Name != "cb/desk" || options[1].Name != "cb/dispatch" || options[9].ID != "legacy-human" || options[9].Name != "Werner" {
+			t.Fatalf("missing roles or human identity changed: %+v", options)
+		}
+		for _, option := range options[2:9] {
+			role := strings.TrimPrefix(option.Name, "cb/")
+			if option.ID != "legacy-"+role || option.Color != "BLUE" || option.Description != role {
+				t.Fatalf("existing option changed beyond its prefix: %+v", option)
+			}
+		}
+	}
+	if mutations != 1 {
+		t.Fatalf("Session mutations %d, want one on initial migration only", mutations)
+	}
+	before := fixture.calls(t)
+	if _, _, err := fixture.runEnv(t, env, "session", "7", "Werner"); err == nil || fixture.calls(t) != before {
+		t.Fatal("legacy human option weakened cb lane validation")
+	}
+}
+
+func TestBoardSnapshotConfigureRejectsAmbiguousOrUnknownSession(t *testing.T) {
+	t.Parallel()
+	for _, options := range []string{
+		`[{"id":"source","name":"wh/platform"},{"id":"target","name":"cb/platform"}]`,
+		`[{"id":"custom","name":"wh/custom"}]`,
+		`[{"id":"custom","name":"Some other session"}]`,
+	} {
+		fixture := sessionSchemaFixture(t, options)
+		if _, _, err := fixture.runEnv(t, schemaEnv(fixture), "configure-fields", "PVT_crewbook"); err == nil || fixture.calls(t) != 0 {
+			t.Fatalf("ambiguous/unknown options reached mutation: %s", options)
+		}
+	}
+}
+
 func newBoard(t *testing.T) board {
 	t.Helper()
 	if _, err := exec.LookPath("jq"); err != nil {
