@@ -49,6 +49,25 @@ func TestPrefixHoldsDir(t *testing.T) {
 		})
 	}
 
+	t.Run("home is a symlink, prefix is the real parent", func(t *testing.T) {
+		// The link lives outside Users, so only resolving it first reaches the
+		// real parent chain; walking the link's own parents never would.
+		linkDir := filepath.Join(root, "links")
+		if err := os.MkdirAll(linkDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		link := filepath.Join(linkDir, "home")
+		if err := os.Symlink(home, link); err != nil {
+			t.Skip("symlinks are unavailable:", err)
+		}
+		if !prefixHoldsDir(filepath.Dir(home), link) {
+			t.Fatal("a symlinked home was not held by its real parent")
+		}
+		if prefixHoldsDir(sibling, link) {
+			t.Fatal("a symlinked home was held by an unrelated prefix")
+		}
+	})
+
 	t.Run("upper-cased spelling", func(t *testing.T) {
 		if _, err := os.Stat(strings.ToUpper(home)); err != nil {
 			t.Skip("the volume is case-sensitive")
