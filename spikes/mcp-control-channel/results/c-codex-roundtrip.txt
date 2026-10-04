@@ -1,0 +1,22 @@
+OpenAI Codex v0.160.0
+--------
+workdir: /work/workharbor
+model: gpt-6.1-sol
+provider: openai
+approval: on-request
+sandbox: read-only
+reasoning effort: low
+reasoning summaries: none
+session id: 01a1087b-33f6-7010-916d-745fed47e1b7
+--------
+user
+Call the tool wh_ping with msg='hello-codex' and reply with its output
+codex
+I’ll find `wh_ping` and call it with `msg='hello-codex'`.
+mcp: wh/wh_ping started
+mcp: wh/wh_ping (completed)
+codex
+wh-pong: hello-codex
+tokens used
+8,506
+wh-pong: hello-codex

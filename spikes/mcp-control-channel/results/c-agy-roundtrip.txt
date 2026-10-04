@@ -1,0 +1,5 @@
+The `wh_ping` tool responded with:
+
+```
+wh-pong: hello-antigravity
+```
