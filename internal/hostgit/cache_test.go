@@ -6,8 +6,59 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
+
+func TestTargetNamespace(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		branch string
+		reject bool
+	}{
+		{"Agent/x", true},
+		{"AGENT/main", true},
+		{"agent", true},
+		{"agents/x", false},
+		{"release/agent", false},
+	} {
+		t.Run(tc.branch, func(t *testing.T) {
+			for _, operation := range []string{"fetch", "prepare"} {
+				t.Run(operation, func(t *testing.T) {
+					ctx := context.Background()
+					p := newPrep(t)
+					if tc.branch == "agent" {
+						mustGit(t, p.env, p.repo.Path(), "branch", "-m", p.topicBr, "topic")
+						p.topicBr = "topic"
+					}
+					mustGit(t, p.env, p.cache.Path(), "branch", tc.branch, "main")
+					if operation == "prepare" {
+						mustGit(t, p.env, p.repo.Path(), "branch", tc.branch, "main")
+					}
+					before := mustGit(t, p.env, p.repo.Path(), "show-ref")
+					var err error
+					if operation == "fetch" {
+						err = p.repo.FetchTarget(ctx, p.cache, tc.branch, 0)
+					} else {
+						spec := p.spec()
+						spec.Target = tc.branch
+						_, err = p.repo.Prepare(ctx, spec)
+					}
+					if tc.reject {
+						if !errors.Is(err, ErrBadBranch) || !strings.Contains(err.Error(), tc.branch) {
+							t.Errorf("%s(%q) = %v, want ErrBadBranch naming the target", operation, tc.branch, err)
+						}
+						if after := mustGit(t, p.env, p.repo.Path(), "show-ref"); after != before {
+							t.Errorf("%s(%q) changed refs: before %s, after %s", operation, tc.branch, before, after)
+						}
+					} else if err != nil {
+						t.Fatalf("%s(%q): %v", operation, tc.branch, err)
+					}
+				})
+			}
+		})
+	}
+}
 
 // forgeRepo is a stand-in for the forge: a plain repository with n commits on
 // main, built with plain git (the forge is not hostile; the checkouts are).

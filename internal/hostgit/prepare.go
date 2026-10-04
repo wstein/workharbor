@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/domain"
 )
 
 // Errors of preparing and pushing a topic.
@@ -97,7 +99,7 @@ func numstat(out []byte) (files, added, removed int64) {
 // was and nothing remains of the worktree. Commits already pushed must not be
 // passed in: a follow-up round after a push sets Onto and Upstream.
 func (r *Repo) Prepare(ctx context.Context, spec PrepareSpec) (Prepared, error) {
-	if !validBranch(spec.Target) || !validBranch(spec.Topic) {
+	if !validBranch(spec.Target) || domain.InAgentNamespace(spec.Target) || !validBranch(spec.Topic) {
 		return Prepared{}, fmt.Errorf("%w: %q or %q", ErrBadBranch, spec.Target, spec.Topic)
 	}
 	if spec.SigningKey == "" || !filepath.IsAbs(spec.SigningKey) {

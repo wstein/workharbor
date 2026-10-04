@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/domain"
 )
 
 // Errors of the repository cache and the topic clones.
@@ -259,7 +261,7 @@ func (r *Repo) FetchTarget(ctx context.Context, c *Cache, branch string, deepen 
 }
 
 func (r *Repo) fetchTarget(ctx context.Context, c *Cache, branch string, deepen int) error {
-	if !validBranch(branch) {
+	if !validBranch(branch) || domain.InAgentNamespace(branch) {
 		return fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
 	args := []string{"fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--update-shallow"}
