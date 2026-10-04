@@ -49,9 +49,13 @@ type Pipeline struct {
 	w   *Workspaces
 	cfg PipelineConfig
 
-	mu    sync.Mutex
-	busy  map[domain.ID]bool // tasks a prepare or a publish is running for
-	retry map[domain.ID]*publishRetry
+	mu   sync.Mutex
+	busy map[domain.ID]bool // tasks a prepare or a publish is running for
+	// reworking counts the answers of rework in progress per task: from the
+	// moment the answer is recorded until the new run is saved or the rework
+	// failed and is recorded. Kick leaves such a task alone.
+	reworking map[domain.ID]int
+	retry     map[domain.ID]*publishRetry
 }
 
 // publishRetry is the backoff of one task's outstanding publish, in memory: a
@@ -72,7 +76,7 @@ func NewPipeline(s *Service, w *Workspaces, cfg PipelineConfig) *Pipeline {
 	if cfg.BackoffMax <= 0 {
 		cfg.BackoffMax = DefaultPublishBackoffMax
 	}
-	p := &Pipeline{svc: s, w: w, cfg: cfg, busy: map[domain.ID]bool{}, retry: map[domain.ID]*publishRetry{}}
+	p := &Pipeline{svc: s, w: w, cfg: cfg, busy: map[domain.ID]bool{}, reworking: map[domain.ID]int{}, retry: map[domain.ID]*publishRetry{}}
 	s.pipe = p
 	if w != nil {
 		w.pipe = p
@@ -112,6 +116,35 @@ func (p *Pipeline) spawn(task domain.ID, fn func(ctx context.Context)) bool {
 	return true
 }
 
+// holdRework keeps Kick, and so the reconciler, off the task until the returned
+// release is called (more than once is harmless). An answer of rework takes it
+// before the answer is recorded: the recorded answer already makes the old run
+// look unprepared or the old approval look outstanding, and the new run is saved
+// only after its environment is up, so without it a pass in between would push
+// what the human chose to rework, or prepare the old run and make the new one
+// refused as busy.
+func (p *Pipeline) holdRework(task domain.ID) (release func()) {
+	p.mu.Lock()
+	p.reworking[task]++
+	p.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			if p.reworking[task]--; p.reworking[task] <= 0 {
+				delete(p.reworking, task)
+			}
+		})
+	}
+}
+
+func (p *Pipeline) reworkHeld(task domain.ID) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.reworking[task] > 0
+}
+
 // afterStop prepares the topic of a run that stopped because its agent finished.
 // The environment's busy mark was taken before the run was saved stopped and is
 // released when the prepare has pinned a revision or been refused; when nothing
@@ -135,6 +168,11 @@ func (p *Pipeline) Kick(ctx context.Context, task domain.ID) (started string, er
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
 		return "", err
+	}
+	// After the load: an answer takes its hold before it is recorded, so a state
+	// that shows the answer is always seen with the hold in place.
+	if p.reworkHeld(task) {
+		return "", nil
 	}
 	if run, ok := agg.PreparePending(); ok {
 		a, err := s.store.Agent(ctx, run.AgentID)

@@ -281,6 +281,13 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	if err != nil {
 		return "", err
 	}
+	if w.pipe != nil && r.Option == domain.AnswerRework &&
+		(d.Cause == domain.CauseRebaseConflict || d.Cause == domain.CausePrepareFailed || d.Cause == domain.CausePublishFailed) {
+		// The recorded answer must not let the reconciler publish the old approval or
+		// prepare the old run before the new run exists. Released on every return,
+		// a panic included.
+		defer w.pipe.holdRework(d.TaskID)()
+	}
 	if err := w.svc.AnswerDecision(ctx, id, r); err != nil {
 		return "", err
 	}
