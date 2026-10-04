@@ -20,7 +20,7 @@ runs, and stop if one does.
   `Session`, you follow them.
 - **Start the lane's agent** for one issue, only as the pinned type (#214: first read the card with `card <n>`, from the shared cache that every session's move through the script updates (no `--refresh`), start nothing on a card that is not `Todo`, and move it to `In progress` with its `Session` before the start, so the card names the one owner): `wh-platform`,
   `wh-runtime`, `wh-docs` or `wh-verify` (Sonnet), in the lane's worktree
-  (`../workharbor-<role>`; for a second `wh/platform` issue `../workharbor-platform-2`, named in the prompt, only when the two issues touch no file in common: AGENTS.md, A second worktree), one editing subagent per worktree at a time and at most 2 code workers (issue subagents that edit) at the same time, each in its own worktree: before a start, count the `In progress` cards whose claim names a worktree, over all lanes, and start none at 2. It claims
+  (`../workharbor-<role>`; for a second `wh/platform` issue `../workharbor-platform-2`, named in the prompt, only when the two issues touch no file in common: AGENTS.md, A second worktree), one editing subagent per worktree at a time and at most 2 code workers (issue subagents that edit) at the same time, each in its own worktree: before a start, count the `In progress` cards whose `Session` is `wh/platform`, `wh/runtime`, `wh/docs` or `wh/verify`, from the snapshot (no comment reads; a card counts from your move, before its claim), and start none at 2. It claims
   the card, comments at the three milestones and lands (AGENTS.md, Working on an
   issue; Context and cost); you keep only its hand-back: commits, criteria
   met and unmet, what is unverified.
