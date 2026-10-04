@@ -1,0 +1,5 @@
+Note: The Copilot CLI failure on 'wh' third-party MCP server occurs under an expired Copilot subscription.
+The CLI checks account entitlement and organization policy at startup and refuses external MCP servers when unentitled or policy-restricted:
+"! Third-party MCP servers are disabled by your organization's Copilot policy. Only built-in servers are available."
+"! 1 MCP server was blocked by policy: 'wh'"
+Error: Access denied by policy settings (Request ID: 3449:1F14:25AB5E2:2D6435E:6AC2AE7A)
