@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/devcontainer/feature"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/forge/github"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
@@ -402,6 +403,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			return out, err
 		}),
 		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
+		NewPusher: func(r *hostgit.Repo) forge.Pusher { return gh.NewPusher(r) }, Committer: gh.BotIdentity,
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: redactedLogf(rd, logf),
 		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {
 			return AgentSpecFor(held, mode)

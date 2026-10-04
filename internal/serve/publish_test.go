@@ -2,11 +2,15 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/service"
 )
 
 func TestPublishBaseWiresTheKeyTheLinterAndTheCheckFromTheConfiguration(t *testing.T) {
@@ -64,5 +68,60 @@ func TestTheHostLintersRefuseAnUnsquashedCommit(t *testing.T) {
 		if got := lint("feat: a"); linter == config.CommitLintConventional && len(got) != 0 {
 			t.Errorf("%s: %v", linter, got)
 		}
+	}
+}
+
+type stubPusher struct{}
+
+func (stubPusher) Push(context.Context, string, string, string) error { return nil }
+
+func TestPublishForWiresTheCommitterTheGuardAndTheWorkflow(t *testing.T) {
+	t.Parallel()
+	d, _ := newDeps(t)
+	d.Config = &config.Config{
+		BotSigningKeyFile: "/keys/bot",
+		Repositories:      []config.Repository{{Name: "o/r", Check: "make check", Workflow: "integration", IntegrationBranch: "develop"}},
+	}
+	if PublishFor(d, nil, nil) != nil {
+		t.Error("publishing is on without a pusher, a committer, copies or a forge")
+	}
+	d.Topics = func(context.Context, string) (*hostgit.Repo, *hostgit.Cache, error) { return nil, nil, nil }
+	d.Forge = forgetest.NewFake()
+	pushers := 0
+	d.NewPusher = func(*hostgit.Repo) forge.Pusher { pushers++; return stubPusher{} }
+	reads := 0
+	d.Committer = func(context.Context) (hostgit.Identity, error) {
+		reads++
+		return hostgit.Identity{Name: "app[bot]", Email: "1+app[bot]@users.noreply.github.com"}, nil
+	}
+	svc := service.New(d.Store, d.Runtime, d.Agent, nil, service.Config{})
+	t.Cleanup(svc.Shutdown)
+	publish := PublishFor(d, svc, nil)
+	if publish == nil {
+		t.Fatal("publishing is off with everything wired")
+	}
+	if _, err := publish(context.Background(), "o/other"); err == nil {
+		t.Error("a repository that is not configured was accepted")
+	}
+	cfg, err := publish(context.Background(), "O/R")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Prepare.Committer.Name != "app[bot]" || cfg.Prepare.Committer.Email != "1+app[bot]@users.noreply.github.com" || cfg.Prepare.SigningKey != "/keys/bot" {
+		t.Errorf("prepare = %+v", cfg.Prepare)
+	}
+	if cfg.Branch != "develop" || cfg.Workflow != "integration" {
+		t.Errorf("workflow %q, branch %q", cfg.Workflow, cfg.Branch)
+	}
+	if cfg.Guard == nil || cfg.ForgeRepo != "o/r" || cfg.Checks == nil || pushers != 1 {
+		t.Errorf("guard nil=%v, repo %q, checks nil=%v, %d pushers", cfg.Guard == nil, cfg.ForgeRepo, cfg.Checks == nil, pushers)
+	}
+	if _, err := publish(context.Background(), "o/r"); err != nil || reads != 1 {
+		t.Errorf("the identity was read %d times (%v): it is read once and kept", reads, err)
+	}
+	// a failed read of the App is an error, and is tried again
+	d.Committer = func(context.Context) (hostgit.Identity, error) { return hostgit.Identity{}, errors.New("no network") }
+	if _, err := PublishFor(d, svc, nil)(context.Background(), "o/r"); err == nil || !strings.Contains(err.Error(), "no network") {
+		t.Errorf("a failed identity read = %v", err)
 	}
 }

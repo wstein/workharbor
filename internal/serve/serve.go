@@ -50,6 +50,12 @@ type Deps struct {
 	// Topics and EditorDir make `whr open` work (optional).
 	Topics    service.TopicsFunc
 	EditorDir string
+	// NewPusher returns the forge's Pusher over a repository's supervisor copy
+	// (the GitHub adapter's, with its per-push scoped token, D51), and Committer
+	// reads the bot identity of the App (D15). Both are needed to publish: without
+	// them a stopped run is not prepared and nothing is pushed.
+	NewPusher func(repo *hostgit.Repo) forge.Pusher
+	Committer func(ctx context.Context) (hostgit.Identity, error)
 	Spec      func(domain.Workspace) runtime.Spec
 	Prepare   func(runtime.Spec) (runtime.PreparedSpec, error)
 	// ConsoleSpec returns the console's spec for the workspaces mounted
@@ -186,6 +192,13 @@ func Run(ctx context.Context, d Deps) error {
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues, BuildDir: GuestBuild,
 		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment, QueueStatus: queueStatus(d.Config),
 	})
+	// The publish path (D51): prepare when a run stops, publish on approval, and
+	// complete what a restart interrupted. Without a way to push, none of it runs.
+	if publish := PublishFor(d, svc, ws); publish != nil {
+		service.NewPipeline(svc, ws, service.PipelineConfig{Publish: publish})
+	} else {
+		logf("publishing is off: a stopped run is not prepared and nothing is pushed (no pusher, committer or repository copies)")
+	}
 	var consoles *service.Consoles
 	if d.ConsoleSpec != nil {
 		consoles = service.NewConsoles(svc, service.ConsoleConfig{Spec: d.ConsoleSpec, Prepare: d.Prepare, EnsureImage: d.ConsoleImage, Dir: d.ConsoleDir, SSH: d.ConsoleSSH})
