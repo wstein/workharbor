@@ -110,7 +110,7 @@ func TestARunThatFinishesIsPreparedAndAsksReadyToPush(t *testing.T) {
 
 	d, ok := f.review()
 	if !ok {
-		t.Fatalf("no review decision; task %s, errors %v", f.load().Task().State, f.errs)
+		t.Fatalf("no review decision; task %s, errors %v", f.load().Task().State, f.reported())
 	}
 	cand, _ := f.load().CurrentCandidate()
 	if d.SHA != cand.SHA || cand.RunID != "r2" || f.load().Task().State != domain.TaskReadyForReview {
@@ -154,7 +154,7 @@ func TestTheEnvironmentIsBusyFromTheStopUntilThePrepareEnds(t *testing.T) {
 	close(f.gate)
 	f.svc.Wait()
 	if _, ok := f.review(); !ok {
-		t.Fatalf("no review decision after the prepare; errors %v", f.errs)
+		t.Fatalf("no review decision after the prepare; errors %v", f.reported())
 	}
 	if err := f.svc.checkEnvFree(bg, f.env, ""); err != nil {
 		t.Errorf("a run start after the prepare: %v", err)
@@ -180,7 +180,7 @@ func TestTheEnvironmentIsBusyWhileASlowCheckRuns(t *testing.T) {
 	close(release)
 	f.svc.Wait()
 	if _, ok := f.review(); !ok {
-		t.Fatalf("no review decision; errors %v", f.errs)
+		t.Fatalf("no review decision; errors %v", f.reported())
 	}
 }
 
@@ -201,7 +201,7 @@ func TestTheReconcilerPreparesAStoppedRunNothingWasPreparedFor(t *testing.T) {
 	f := newFlowRig(t) // r1 stopped, no revision, no decision: a restart in the middle of a prepare
 	rep := f.reconcileNow()
 	if len(rep.Prepared) != 1 || rep.Prepared[0] != "t1" {
-		t.Fatalf("prepared = %v, errors %v / %v", rep.Prepared, rep.Errors, f.errs)
+		t.Fatalf("prepared = %v, errors %v / %v", rep.Prepared, rep.Errors, f.reported())
 	}
 	if _, ok := f.review(); !ok {
 		t.Fatalf("no review decision; task %s", f.load().Task().State)
@@ -224,7 +224,7 @@ func TestARefusedPrepareRaisesPrepareFailedWithTheOutputAsData(t *testing.T) {
 	}
 	q, ok := f.question(domain.CausePrepareFailed)
 	if !ok {
-		t.Fatalf("no prepare_failed question; errors %v", f.errs)
+		t.Fatalf("no prepare_failed question; errors %v", f.reported())
 	}
 	if q.RunID != "r1" || !q.Blocking || strings.Join(q.Options, ",") != "rework,retry,cancel" {
 		t.Errorf("question %+v", q)
@@ -262,7 +262,7 @@ func TestARefusedPrepareRaisesPrepareFailedWithTheOutputAsData(t *testing.T) {
 	}
 	f.svc.Wait()
 	if _, ok := f.review(); !ok {
-		t.Fatalf("retry did not prepare again: task %s, errors %v", f.load().Task().State, f.errs)
+		t.Fatalf("retry did not prepare again: task %s, errors %v", f.load().Task().State, f.reported())
 	}
 }
 
@@ -288,7 +288,7 @@ func TestEveryRefusedPrepareAsksTheQuestion(t *testing.T) {
 			f.reconcileNow()
 			q, ok := f.question(domain.CausePrepareFailed)
 			if !ok {
-				t.Fatalf("no prepare_failed question; errors %v", f.errs)
+				t.Fatalf("no prepare_failed question; errors %v", f.reported())
 			}
 			if q.Input == "" || len(f.load().Candidates()) != 0 {
 				t.Errorf("question %+v, candidates %v", q, f.load().Candidates())
@@ -303,7 +303,7 @@ func TestAnAllowPublishesAndADenyPublishesNothing(t *testing.T) {
 	f.reconcileNow()
 	d, ok := f.review()
 	if !ok {
-		t.Fatalf("no review; errors %v", f.errs)
+		t.Fatalf("no review; errors %v", f.reported())
 	}
 
 	// An allow for another commit is a denial and publishes nothing.
@@ -339,7 +339,7 @@ func TestAnAllowStartsThePublishAndTheAnswerIsRecordedFirst(t *testing.T) {
 
 	cand, _ := f.load().CurrentCandidate()
 	if !cand.Pushed || cand.PRURL == "" || len(f.forge.PRs) != 1 {
-		t.Fatalf("candidate %+v, %d PRs, errors %v", cand, len(f.forge.PRs), f.errs)
+		t.Fatalf("candidate %+v, %d PRs, errors %v", cand, len(f.forge.PRs), f.reported())
 	}
 	if got, _ := f.forge.BranchSHA(bg, "", "agent/topic"); got != d.SHA {
 		t.Errorf("remote at %s, approved %s", got, d.SHA)
@@ -362,7 +362,7 @@ func TestARestartBetweenTheApprovalAndThePushLosesNothing(t *testing.T) {
 	}
 	rep := f.reconcileNow()
 	if len(rep.Published) != 1 || !f.remoteHas() || len(f.forge.PRs) != 1 {
-		t.Fatalf("report %+v, %d PRs, errors %v / %v", rep, len(f.forge.PRs), rep.Errors, f.errs)
+		t.Fatalf("report %+v, %d PRs, errors %v / %v", rep, len(f.forge.PRs), rep.Errors, f.reported())
 	}
 	cand, _ := f.load().CurrentCandidate()
 	if !cand.Pushed || cand.PRURL != f.forge.PRs[0].URL {
@@ -389,7 +389,7 @@ func TestARestartBetweenThePushAndRecordPushedLosesNothing(t *testing.T) {
 	}
 	rep := f.reconcileNow()
 	if len(rep.Published) != 1 {
-		t.Fatalf("report %+v, errors %v / %v", rep, rep.Errors, f.errs)
+		t.Fatalf("report %+v, errors %v / %v", rep, rep.Errors, f.reported())
 	}
 	cand, _ := f.load().CurrentCandidate()
 	if !cand.Pushed || cand.PRURL == "" || len(f.forge.PRs) != 1 {
@@ -413,7 +413,7 @@ func TestAnApprovalDoesNotCoverANewerRevision(t *testing.T) {
 	f.svc.Wait()
 	cur, _ := f.load().CurrentCandidate()
 	if cur.SHA == d.SHA || cur.RunID != "r2" {
-		t.Fatalf("no newer revision: %+v (errors %v)", cur, f.errs)
+		t.Fatalf("no newer revision: %+v (errors %v)", cur, f.reported())
 	}
 	if rep := f.reconcileNow(); len(rep.Published) != 0 || f.remoteHas() || len(f.forge.PRs) != 0 {
 		t.Fatalf("an approval for %s published %s: %+v", d.SHA, cur.SHA, rep)
@@ -558,7 +558,7 @@ func TestARefusalEndsThePublishWithPublishFailed(t *testing.T) {
 
 			q, ok := f.question(domain.CausePublishFailed)
 			if !ok {
-				t.Fatalf("no publish_failed question; errors %v", f.errs)
+				t.Fatalf("no publish_failed question; errors %v", f.reported())
 			}
 			if q.RunID != "" || q.SHA != d.SHA || strings.Join(q.Options, ",") != "retry,rework,cancel" {
 				t.Errorf("question %+v", q)
@@ -579,7 +579,7 @@ func TestARefusalEndsThePublishWithPublishFailed(t *testing.T) {
 			f.svc.Wait()
 			cand, _ := f.load().CurrentCandidate()
 			if !cand.Pushed || len(f.forge.PRs) != 1 {
-				t.Errorf("after retry: candidate %+v, %d PRs, errors %v", cand, len(f.forge.PRs), f.errs)
+				t.Errorf("after retry: candidate %+v, %d PRs, errors %v", cand, len(f.forge.PRs), f.reported())
 			}
 		})
 	}

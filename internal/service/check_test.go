@@ -319,7 +319,8 @@ func TestAFailedStopAfterACheckForgetsTheStartMark(t *testing.T) {
 	c := newCheckRig(t)
 	c.reapOK = false
 	var reported []error
-	c.svc.cfg.OnError = func(err error) { reported = append(reported, err) }
+	var mu sync.Mutex // the pipeline's worker may call OnError concurrently
+	c.svc.cfg.OnError = func(err error) { mu.Lock(); reported = append(reported, err); mu.Unlock() }
 	c.svc.rt = failStopRuntime{runtimeAdapter: c.svc.rt, err: errors.New("stop refused")}
 	c.svc.markEnvStarted(c.env)
 	_, _ = c.pub.Prepare(bg, c.req)
@@ -329,7 +330,10 @@ func TestAFailedStopAfterACheckForgetsTheStartMark(t *testing.T) {
 	if c.svc.envStarted(c.env) {
 		t.Error("the environment is still marked as started by this process: the next launch would skip the stop and start beside the surviving check")
 	}
-	if len(reported) == 0 {
+	mu.Lock()
+	n := len(reported)
+	mu.Unlock()
+	if n == 0 {
 		t.Error("the failed stop is not reported")
 	}
 	if c.svc.freshMu.TryLock() {
