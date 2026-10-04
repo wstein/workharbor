@@ -96,7 +96,11 @@ and `whr serve` only logs a warning at start, so `--dev` need not be typed
 again; an explicit `--dev` or `--prefix` wins, and `--prefix` without `--dev` is
 a managed call that ignores the key. `whr doctor` reports `warn` on every run
 while the key is set, naming the key, the file and the way out. The key loosens
-nothing beyond `--dev`: every check of the prefix runs again on each read.
+nothing beyond `--dev`: `whr setup` and `whr doctor` run every check of the
+prefix again on each read (owner, writer, home, binary under the prefix), and
+`whr service install` runs the configuration's checks of the key and its file,
+the refusal of a managed whr and the test that its binary lies under the prefix,
+but not the owner, writer and home walk.
 
 The key is refused, as a configuration error (setup and doctor fail, `whr serve`
 does not start), when its value is not an absolute path or is a managed prefix
@@ -113,7 +117,10 @@ managed installation refuses it.
 To leave development mode run `whr setup --managed` (`--only development-key`
 does just that step). It shows a diff, removes `development_prefix` after your
 `y`, keeps every other key, and then checks the managed prefix; it cannot be
-combined with `--dev`. Deleting the key by hand does the same. `--dry-run` writes
+combined with `--dev`. From a whr that is not an installed binary (a source build
+or a user-writable one) it runs only `--only development-key`: every other step
+is refused, so install the release first. It removes every spelling of the key
+that differs only in case. Deleting the key by hand does the same. `--dry-run` writes
 nothing, and `whr doctor` and `whr serve` never write the key.
 
 When setup reaches `service-install`, it passes the chosen executable through

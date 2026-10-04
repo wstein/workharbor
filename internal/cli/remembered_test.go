@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/exitcode"
 )
 
@@ -413,5 +414,71 @@ func TestSetupNextCommandFollowsTheMode(t *testing.T) {
 	_, _, errOut = runDevSetup(t, r, home, "setup", "--managed", "--user", "werner", "--only", "config-base", "--dry-run")
 	if !strings.Contains(errOut, "next: whr setup --managed --user werner --only config-base") {
 		t.Errorf("--managed: %q", errOut)
+	}
+}
+
+// A whr in a managed prefix refuses the key in `service install` (the value itself
+// is fine, so Load passes): the seam stands in for the fixed managed prefixes.
+func TestServiceInstallRefusesTheKeyFromAManagedBinary(t *testing.T) {
+	r := newServiceRig(t)
+	prefix := filepath.Dir(filepath.Dir(r.whr))
+	raw, err := os.ReadFile(r.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["development_prefix"] = prefix
+	raw, _ = json.Marshal(m)
+	if err := os.WriteFile(r.cfg, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := underManagedPrefix
+	t.Cleanup(func() { underManagedPrefix = old })
+	underManagedPrefix = func(path string) bool { return config.Within(path, prefix) }
+
+	code, _, errOut := r.run(t, "service", "install")
+	if code != exitcode.Usage || !strings.Contains(errOut, "managed prefix") || !strings.Contains(errOut, "whr setup --managed") {
+		t.Errorf("a managed binary with the key: exit %d, stderr %q", code, errOut)
+	}
+	if len(r.launchctl.calls) != 0 {
+		t.Errorf("the job was installed anyway: %v", r.launchctl.calls)
+	}
+}
+
+// From a binary that is not installed, --managed runs only the development-key step
+// (and the managed-prefix check): every other step is refused as without --managed.
+func TestSetupManagedFromANonInstalledBinaryRunsOnlyTheKeyStep(t *testing.T) {
+	r, home := devSetupRig(t)
+	writeKey(t, home, 0o600, map[string]any{"development_prefix": filepath.Join(home, ".local"), "listen": "127.0.0.1:1"})
+	var shown []string
+	r.env.Host = rememberHost{r.host, &shown}
+
+	for _, args := range [][]string{
+		{"setup", "--managed", "--user", "werner"},
+		{"setup", "--managed", "--user", "werner", "--only", "service-install"},
+		{"setup", "--managed", "--user", "werner", "--only", "development-key,service-install"},
+		{"setup", "--managed", "--user", "werner", "--from", "development-key"},
+	} {
+		code, _, errOut := runDevSetup(t, r, home, args...)
+		if code != exitcode.Usage || !strings.Contains(errOut, "not an installed binary") || !strings.Contains(errOut, "only development-key") {
+			t.Errorf("%v: exit %d, stderr %q", args, code, errOut)
+		}
+		if _, ok := keysOf(t, home)["development_prefix"]; !ok {
+			t.Fatalf("%v removed the key", args)
+		}
+		if len(r.host.ran) != 0 {
+			t.Fatalf("%v ran commands: %v", args, r.host.ran)
+		}
+	}
+
+	code, _, errOut := runDevSetup(t, r, home, "setup", "--managed", "--user", "werner", "--only", "development-key")
+	if _, ok := keysOf(t, home)["development_prefix"]; ok {
+		t.Errorf("--only development-key left the key: exit %d, stderr %q", code, errOut)
+	}
+	if !strings.Contains(errOut, "only the development-key step runs") || len(r.host.ran) != 0 {
+		t.Errorf("stderr %q, ran %v", errOut, r.host.ran)
 	}
 }
