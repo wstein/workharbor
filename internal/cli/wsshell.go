@@ -31,15 +31,20 @@ func newWsShell(s *state) *cobra.Command {
 		Long: "Opens an interactive shell in the workspace's environment as the agent's user, with the agent's CLI " +
 			"first on PATH and the agent's auth directory (CLAUDE_CONFIG_DIR) and the egress proxy set as for a run, so " +
 			"that you can sign in with the vendor's own command (design D40; the first-run guide, step 8). The shell " +
-			"reads no startup file, ~/.inputrc, ~/.terminfo or history file of the agent's home, which the agent writes (bash with " +
+			"uses absolute image paths /bin/bash or /bin/sh, with PATH restricted to the read-only tool store and fixed system directories. " +
+			"The image's shells, libraries (including libc), system files and environment must be trusted: sanitisation inside /bin/sh " +
+			"happens after its loader and libc initialise. Bash avoids startup files, readline and history from the agent's home (bash with " +
 			"--noprofile --norc --noediting, so without line editing at its prompt, and INPUTRC=/dev/null and HISTFILE=/dev/null; sh with " +
-			"ENV=/dev/null; the variables that name another place to read terminfo, termcap, locale or startup files from are unset). " +
+			"ENV=/dev/null; its behaviour depends on the image's /bin/sh implementation and is unverified on the target image; " +
+			"the variables that name another place to read terminfo, termcap, locale or startup files from are unset). " +
 			"Not blocked: the image's own /etc files, and any program you start in the shell, such as less or vim, which still reads " +
 			"~/.terminfo. This command asks the supervisor only " +
 			"which environment and variables to use, then replaces itself with the runtime's own interactive exec: " +
 			"your terminal is attached to the environment directly, and nothing you type or the agent's CLI writes " +
 			"passes through whr, the supervisor, a file, a log or the web UI. whr adds no secret and types nothing for " +
-			"you. It is refused while a run of the workspace is unfinished, and checked when the shell opens only: do " +
+			"you. It is refused while a run of the workspace is unfinished. Preparation holds the environment through a stop, start " +
+			"and readiness check, including when already running, preserving its home/login volumes and proxy. This hold ends before " +
+			"the terminal opens: do " +
 			"not start a run while it is open. Provisional (issue #281).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
