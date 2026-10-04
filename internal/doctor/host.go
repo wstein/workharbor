@@ -996,6 +996,7 @@ func userSteps(d Deps) []Check {
 			},
 		},
 
+		d.developmentKeyStep(),
 		{
 			Name: "service-install", Phase: PhaseUser, Step: 4, Title: "whr serve as a LaunchAgent (manual step 13)",
 			Run: func(ctx context.Context) (Status, string) {
@@ -1025,7 +1026,7 @@ func userSteps(d Deps) []Check {
 // that needs a service says so with Needs, and a test holds the order to it.
 var userOrder = []string{
 	"config-dir", "api-token", "agent-key", "ssh-ca", "container-start", "container-kernel", "standard-user-check",
-	"config-base", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
+	"config-base", "development-key", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
 }
 
 // ordered returns the checks in the given order. A name with no check is a bug
@@ -1050,6 +1051,8 @@ type runnerAdapter struct{ r Runner }
 func (a runnerAdapter) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return a.r.Output(ctx, append([]string{name}, args...)...)
 }
+
+func marshalConfig(m map[string]any) ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
 
 func readConfigMap(path string) (map[string]any, error) {
 	raw, err := os.ReadFile(path) //nolint:gosec // the operator's own configuration file

@@ -381,7 +381,7 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	for _, c := range Steps(all, PhaseUser) {
 		user = append(user, c.Name)
 	}
-	want := "config-dir api-token agent-key ssh-ca container-start container-kernel standard-user-check config-base github-app config-github tool-store service-install drop-admin"
+	want := "config-dir api-token agent-key ssh-ca container-start container-kernel standard-user-check config-base development-key github-app config-github tool-store service-install drop-admin"
 	if strings.Join(user, " ") != want {
 		t.Errorf("user steps %v\nwant %s", user, want)
 	}
