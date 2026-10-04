@@ -24,6 +24,14 @@ $ARGUMENTS (empty: the current branch). Never push.
       stop and report to the human: a stale lock in the shared checkout is
       theirs to clear. Never remove `index.lock` (or anything else) in the
       shared checkout yourself, whatever git's message suggests.
+    - `the shared checkout's index is stale` or `the shared checkout's index
+      differs from HEAD after the merge` (both end in `repair it with: git -C
+      <shared> reset ...`): stop and report that line to the human. The index
+      of the shared checkout is theirs to repair, like a stale `index.lock`;
+      never run the printed `reset` (or any other git command) there yourself
+      (AGENTS.md step 3). The first message came before the merge, so nothing
+      landed. The second came after `land: main is now <sha>`: the land itself
+      succeeded, so go on to 4 and report the repair as open.
     - `Rejected status code: 50x` from github.com in the link check: not your
       content; wait 60 seconds and run it again, at most 4 times, then report.
     - Anything else (tests, lint, commitlint, secrets): stop, fix it and fold
