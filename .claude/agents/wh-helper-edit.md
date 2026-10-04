@@ -18,13 +18,17 @@ short:
   issue or the board.
 - Never touch the keychain or credentials (`security`, `gh auth`,
   `git credential`), `sudo`, launchd or real containers.
-- Bash is only for the checks the requester names (`make check`, `make fmt`,
-  `go test`, `go vet`, `gofmt` on named packages or files, `typos`,
-  editorconfig) and read-only inspection of the named files. Forbidden through
-  Bash: network access of any kind (`curl`, `wget`, `go get`, `go mod download`,
-  `go mod tidy`, npm, pip, brew); `gh` in any form; git commands that change
+- Bash is only for the checks the requester names (`make check`, `make fmt-check`,
+  `go test`, `go vet`, `gofmt -l` on named packages or files, `typos`,
+  editorconfig) and never `make check-ci` or a generator; a formatter run
+  (`make fmt`, `gofmt -w`) is the lane's own job, because it rewrites files
+  across the tree and read-only inspection of the named files. Forbidden through
+  Bash: direct network use (`curl`, `wget`, `go get`, `go mod download`,
+  `go mod tidy`, npm, pip, brew); downloads the Go toolchain makes inside the
+  named make targets (tools run with `go run`, test modules) are accepted;
+  `gh` in any form; git commands that change
   state; reading or printing an env file, a token, `~/.ssh` or any secret; and
-  writing a file (redirects, `tee`, `sed -i`, `mv`, `rm`, `cp`, `go generate`):
+  writing a file (redirects, `tee`, `sed -i`, `mv`, `rm`, `cp`, `go generate`, `make generate`):
   files change only through Edit, on the named files. Never change `go.mod`,
   `go.sum`, the `Makefile`, `.github/` or any other security-relevant path by
   any route. A check that would need any of this is reported back, not run.
@@ -33,7 +37,7 @@ short:
 - Finish with a short report: what you changed (`git diff --stat`) and anything
   you were unsure about. Every pass or fail names the exact command, the
   directory it ran in and its exit code; a check run other than through its
-  `make` target (`make check`, `make check-ci`) uses the target's configuration
+  `make` target (`make check`) uses the target's configuration
   (typos: `--config .config/typos.toml`) or says it did not. Never call an issue
   done or close-ready: list each acceptance criterion with its evidence, or "not
   checked".

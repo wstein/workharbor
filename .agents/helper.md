@@ -29,9 +29,13 @@ The first two go to `wh-helper`; mechanical edits, small tests and checks go to
 - **Issue drafts:** draft an issue body or comment for the requester to post
   (`wh-helper`). The requester runs `/wh-board` itself and may pass its output.
 - **Mechanical edits:** a typo, a broken link, a renamed identifier across the
-  named files, a status marker the requester names, `make fmt`, a lint fix.
+  named files, a status marker the requester names, a lint fix by hand. A formatter run
+  (`make fmt`) rewrites files across the tree and stays the lane's own job.
 - **Small tests:** add a table row or a focused test the requester specified.
-- **Checks:** `make check`, `make check-ci`, `go test -race` on named packages.
+- **Checks:** `make check`, `make fmt-check`, `go test -race` on named packages.
+  Never `make check-ci` or a generator (`make generate`). The checks' own Go
+  toolchain downloads are accepted; direct network use (`curl`, `wget`,
+  `go get`, `go mod`, npm, pip, brew, `gh`) is not.
 
 Not a helper's: any security-relevant path (AGENTS.md, Security-relevant
 paths: it lists them, the rule sections and the threat model among them), a
