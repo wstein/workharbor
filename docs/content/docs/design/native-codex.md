@@ -15,6 +15,10 @@ the release boundary, authorize publication or weaken policy. Existing Claude
 discovery suppression remains required. Codex support is not implemented or
 measured by this decision.
 
+[D54's canonical role contract](native-bindings.md) specifies the versioned
+package fields, host projection and effective native evidence. It does not
+approve a project-policy authority or establish measured native support.
+
 ### Native protocol and capability gate
 
 Use the unmodified, verified, exactly pinned Codex CLI's `app-server` over stdio
