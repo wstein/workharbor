@@ -11,6 +11,8 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const ManifestName = "workharbor.json"
@@ -47,6 +49,159 @@ type Manifest struct {
 	RequiredProjectInputs []string  `json:"required_project_inputs"`
 	Adapters              []Binding `json:"adapters"`
 	Files                 []File    `json:"files"`
+}
+
+type NativeClient struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type RoleBinding struct {
+	Client string `json:"client"`
+	Model  string `json:"model"`
+	Effort string `json:"effort"`
+}
+
+type NativeRole struct {
+	Name         string        `json:"name"`
+	Description  string        `json:"description"`
+	Instructions string        `json:"instructions"`
+	Bindings     []RoleBinding `json:"bindings"`
+	Tools        []string      `json:"tools"`
+}
+
+type NativeManifest struct {
+	ContractVersion       int            `json:"contract_version"`
+	Identity              string         `json:"identity"`
+	Entrypoint            string         `json:"entrypoint"`
+	RequiredProjectInputs []string       `json:"required_project_inputs"`
+	Clients               []NativeClient `json:"clients"`
+	Roles                 []NativeRole   `json:"roles"`
+	Files                 []File         `json:"files"`
+}
+
+func DecodeNativeManifest(data []byte, pin Pin) (NativeManifest, error) {
+	var manifest NativeManifest
+	if len(data) > MaxManifestBytes || !utf8.Valid(data) || pin.ContractVersion != 2 || Digest(data) != pin.ManifestSHA256 {
+		return manifest, errors.New("native skill manifest needs bounded UTF-8 and an exact trusted v2 pin")
+	}
+	v1Pin := pin
+	v1Pin.ContractVersion = 1
+	if err := v1Pin.Validate(); err != nil {
+		return manifest, err
+	}
+	if err := decode(data, &manifest); err != nil {
+		return NativeManifest{}, err
+	}
+	if err := nativeShape(data, "manifest"); err != nil {
+		return NativeManifest{}, err
+	}
+	if err := manifest.Validate(pin); err != nil {
+		return NativeManifest{}, err
+	}
+	return manifest, nil
+}
+
+func nativeShape(data []byte, kind string) error {
+	fields := map[string][]string{
+		"manifest": {"contract_version", "identity", "entrypoint", "required_project_inputs", "clients", "roles", "files"},
+		"clients":  {"name", "version"},
+		"roles":    {"name", "description", "instructions", "bindings", "tools"},
+		"bindings": {"client", "model", "effort"},
+		"files":    {"path", "sha256"},
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(data, &object); err != nil {
+		return err
+	}
+	if len(object) != len(fields[kind]) {
+		return errors.New("native skill object has missing or unknown fields")
+	}
+	for _, field := range fields[kind] {
+		value, found := object[field]
+		if !found || string(value) == "null" {
+			return errors.New("native skill fields must use exact names and nonnull values")
+		}
+		if field == "clients" || field == "roles" || field == "bindings" || field == "files" {
+			var entries []json.RawMessage
+			if err := json.Unmarshal(value, &entries); err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				if err := nativeShape(entry, field); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func nativeValue(value string, limit int) bool {
+	if value == "" || len(value) > limit || !utf8.ValidString(value) {
+		return false
+	}
+	for _, char := range value {
+		if unicode.IsControl(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func nativeNames(names []string, limit int) bool {
+	if names == nil || len(names) > limit {
+		return false
+	}
+	previous := ""
+	for _, name := range names {
+		if !nameRE.MatchString(name) || name <= previous {
+			return false
+		}
+		previous = name
+	}
+	return true
+}
+
+func (m NativeManifest) Validate(pin Pin) error {
+	digest, err := InventoryDigest(m.Files)
+	if err != nil {
+		return err
+	}
+	if m.ContractVersion != 2 || pin.ContractVersion != 2 || !nameRE.MatchString(m.Identity) || m.Identity != pin.Identity || digest != pin.InventorySHA256 || !validPath(m.Entrypoint) {
+		return errors.New("native skill manifest does not match the trusted v2 pin")
+	}
+	inventory := map[string]bool{}
+	for _, file := range m.Files {
+		inventory[file.Path] = true
+	}
+	if !inventory[m.Entrypoint] || !nativeNames(m.RequiredProjectInputs, 32) || len(m.Clients) == 0 || len(m.Clients) > 32 || len(m.Roles) == 0 || len(m.Roles) > 64 {
+		return errors.New("native skill manifest needs bounded clients, roles, inputs and an inventoried entrypoint")
+	}
+	clients := map[string]bool{}
+	previous := ""
+	for _, client := range m.Clients {
+		if !nameRE.MatchString(client.Name) || client.Name <= previous || !nativeValue(client.Version, 128) {
+			return errors.New("invalid, duplicate or unsorted native skill client")
+		}
+		clients[client.Name] = true
+		previous = client.Name
+	}
+	previous = ""
+	for _, role := range m.Roles {
+		if !nameRE.MatchString(role.Name) || role.Name <= previous || role.Description == "" || len(role.Description) > 4096 || !utf8.ValidString(role.Description) || !validPath(role.Instructions) || !inventory[role.Instructions] || !nativeNames(role.Tools, 64) || len(role.Bindings) == 0 || len(role.Bindings) > 32 {
+			return errors.New("invalid, duplicate, unsorted or unbounded native skill role")
+		}
+		previous = role.Name
+		previousClient := ""
+		for _, binding := range role.Bindings {
+			if !clients[binding.Client] || binding.Client <= previousClient || !nativeValue(binding.Model, 128) || !nativeValue(binding.Effort, 32) {
+				return errors.New("invalid, duplicate, unsorted or undeclared native role binding")
+			}
+			previousClient = binding.Client
+		}
+	}
+	return nil
 }
 
 type Pin struct {
