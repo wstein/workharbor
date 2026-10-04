@@ -28,6 +28,7 @@ func devSetupRig(t *testing.T) (*setupRig, string) {
 	}
 	r.env.Executable = func() (string, error) { return r.exe, nil }
 	r.env.UID = os.Getuid() // the checks compare owners with the running account
+	r.host.outputs["dscl . -read /Users/werner NFSHomeDirectory"] = "NFSHomeDirectory: " + home + "\n"
 	return r, home
 }
 
@@ -440,6 +441,59 @@ func TestDoctorDevRefusesAPrefixWhenHomeIsEmptyOrRelative(t *testing.T) {
 			r, home := devSetupRig(t)
 			code, out, errOut := runDevSetup(t, r, h, "doctor", "--dev", "--user", "werner", "--prefix", filepath.Dir(home))
 			if code == 0 || !strings.Contains(out, "fail\tprefix\t") || !strings.Contains(out, "absolute HOME") {
+				t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+			}
+		})
+	}
+}
+
+// $HOME is the caller's word: the prefix is also compared with the account's
+// home from the directory service, and a lookup that fails or gives no absolute
+// path fails --dev closed (#278).
+func TestDoctorDevComparesThePrefixWithTheDirectoryServiceHome(t *testing.T) {
+	const lookup = "dscl . -read /Users/werner NFSHomeDirectory"
+	for _, c := range []struct {
+		name    string
+		env     string // HOME; "@HOME@" is the real home
+		prefix  string // "@PARENT@", "@HOME@", or the default
+		dscl    string // "" keeps the rig's answer, "-" removes it
+		refused string
+	}{
+		{"HOME elsewhere, parent of the real home", "/nonexistent/home", "@PARENT@", "", "too broad"},
+		{"HOME elsewhere, the real home", "/nonexistent/home", "@HOME@", "", "too broad"},
+		{"HOME right, the real home", "@HOME@", "@HOME@", "", "too broad"},
+		{"lookup fails", "@HOME@", "", "-", "directory service"},
+		{"lookup empty", "@HOME@", "", "NFSHomeDirectory:\n", "no absolute NFSHomeDirectory"},
+		{"lookup relative", "@HOME@", "", "NFSHomeDirectory: relative/home\n", "no absolute NFSHomeDirectory"},
+		{"lookup other text", "@HOME@", "", "No such key\n", "no absolute NFSHomeDirectory"},
+		{"normal prefix warns", "@HOME@", "", "", ""},
+		{"HOME elsewhere, normal prefix warns", "/nonexistent/home", "", "", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			switch c.dscl {
+			case "":
+			case "-":
+				delete(r.host.outputs, lookup)
+			default:
+				r.host.outputs[lookup] = c.dscl
+			}
+			env := strings.ReplaceAll(c.env, "@HOME@", home)
+			prefix := filepath.Join(home, ".local")
+			switch c.prefix {
+			case "@PARENT@":
+				prefix = filepath.Dir(home)
+			case "@HOME@":
+				prefix = home
+			}
+			code, out, errOut := runDevSetup(t, r, env, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
+			if c.refused == "" {
+				if !strings.Contains(out, "warn\tprefix\t") {
+					t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+				}
+				return
+			}
+			if code == 0 || !strings.Contains(out, "fail\tprefix\t") || !strings.Contains(out, c.refused) {
 				t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
 			}
 		})

@@ -532,9 +532,9 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "prefix", Phase: PhaseHost, Step: 13, Title: prefixTitle(d),
-			Run: func(context.Context) (Status, string) {
+			Run: func(ctx context.Context) (Status, string) {
 				if d.Dev {
-					return d.developmentPrefix()
+					return d.developmentPrefix(ctx)
 				}
 				fi, err := os.Stat(d.prefix())
 				if err != nil {
@@ -1319,12 +1319,19 @@ func serviceInstallArgv(d Deps) []string {
 	return args
 }
 
-func (d Deps) developmentPrefix() (Status, string) {
+func (d Deps) developmentPrefix(ctx context.Context) (Status, string) {
 	if d.UID == 0 {
 		return Fail, "whr never runs as root"
 	}
 	if !filepath.IsAbs(d.Home) { // without the home, "too broad" cannot be judged
 		return Fail, "a development installation needs an absolute HOME: it is how the prefix is kept from holding the home directory"
+	}
+	// $HOME is the caller's word (`HOME=/tmp/x whr doctor --dev`, or one kept by
+	// `sudo -u`): the account's home comes from the directory service too, and
+	// without it the check fails closed (#278).
+	accountHome, err := d.directoryHome(ctx)
+	if err != nil {
+		return Fail, "a development installation needs the account's home from the directory service, to keep the prefix from holding it: " + err.Error()
 	}
 	if err := launchd.CheckBinary(d.Whr); err != nil {
 		return Fail, err.Error()
@@ -1341,7 +1348,7 @@ func (d Deps) developmentPrefix() (Status, string) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return Fail, binary + " is not under " + prefix
 	}
-	if prefix == "/" || prefix == filepath.Dir(prefix) || d.holdsHome(prefix) {
+	if prefix == "/" || prefix == filepath.Dir(prefix) || holds(prefix, d.Home) || holds(prefix, accountHome) {
 		return Fail, prefix + " is too broad for a development prefix (the home directory and every directory above it are refused): name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
 	}
 	// The binary up to the prefix, then every directory above it: none may be
@@ -1385,12 +1392,27 @@ func prefixInstallGuide(d Deps) string {
 	return "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13)."
 }
 
-// holdsHome reports whether prefix is the home directory or a directory above it.
-func (d Deps) holdsHome(prefix string) bool {
-	if d.Home == "" {
+// directoryHome is the home directory of the account that runs whr, from
+// `dscl . -read /Users/<user> NFSHomeDirectory`. An error names why the answer
+// is not an absolute path.
+func (d Deps) directoryHome(ctx context.Context) (string, error) {
+	out, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.User, "NFSHomeDirectory")
+	if err != nil {
+		return "", errors.New("dscl NFSHomeDirectory for " + d.User + " failed: " + err.Error())
+	}
+	_, val, ok := strings.Cut(out, "NFSHomeDirectory:")
+	val = strings.TrimSpace(val)
+	if !ok || !filepath.IsAbs(val) {
+		return "", errors.New("dscl gave no absolute NFSHomeDirectory for " + d.User)
+	}
+	return val, nil
+}
+
+// holds reports whether prefix is home or a directory above it.
+func holds(prefix, home string) bool {
+	if home == "" {
 		return false
 	}
-	home := d.Home
 	if r, err := filepath.EvalSymlinks(home); err == nil {
 		home = r
 	}
