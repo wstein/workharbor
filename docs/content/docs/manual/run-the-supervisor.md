@@ -22,6 +22,11 @@ Most commands accept `--config <file>` (default `$WHR_CONFIG`, then `~/.config/w
 
 `whr doctor` checks the configuration, the host and the supervisor and says what it could not verify. A check that cannot read a setting says "not verified", never "ok". `--skip <check>` leaves one out (repeatable). Run it before the first start and after any change to the host.
 
+For a source installation under `$HOME/.local`, use `whr doctor --dev` and
+`whr setup --dev --user <your-account>`. An explicit `--prefix` overrides the
+development default; use it consistently. See [development installation](install-upgrade-release.md)
+for the warning and service behavior.
+
 ## First-time setup: `whr setup` (provisional)
 
 Two wizards, each checking a step first, showing the exact commands of its fix and running them only after you answer `y`:

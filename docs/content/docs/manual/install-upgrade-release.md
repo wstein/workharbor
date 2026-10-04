@@ -57,6 +57,38 @@ Then, as `whr`, build the tool store with the guest launcher (the script prints 
 
 `make install` builds from the source tree of a clone of the repository instead. It refuses a dirty tree and a commit that is not on `origin/main`, and is for a developer's machine, not the supervisor.
 
+For a development installation, `make install` defaults to `$HOME/.local`.
+Select that installation explicitly when running setup or doctor (provisional;
+{{< status unverified >}} on the reference host):
+
+```bash
+whr setup --dev --user "$USER" --only config-base --dry-run
+whr setup --dev --user "$USER" --only config-base
+whr doctor --dev --user "$USER"
+```
+
+`config-base` writes the usual `~/.config/whr/config.json`; it does not install
+or start a service. Remove `--only config-base` to run the other setup steps.
+`--dev` prints a warning: a supervisor in a user-writable prefix can be replaced
+by that user and lacks the managed installation's replacement protection.
+It adds no confirmation. The account and remote-access checks still apply,
+and running as root or from a Git working tree is still refused.
+
+An explicit `--prefix /absolute/path` takes precedence over `$HOME/.local`.
+Use the same prefix with `make install`, setup and doctor. Symlinks are resolved
+before checking the binary's location. Without `--dev`, setup retains the
+managed prefix list; `--prefix` alone selects a custom managed installation,
+whose ownership doctor checks separately.
+
+Development mode is selected per invocation, without a configuration key.
+When setup reaches `service-install`, it passes the chosen executable through
+`whr service install --whr <binary>`. Direct service installation already accepts
+an installed executable outside a Git working tree. The LaunchAgent retains
+that executable path, so stopping and starting it needs no development flag;
+run `whr doctor --dev` with the same prefix afterwards. The default production
+procedure remains the administrator-owned release installation above.
+
+
 ## From `v0.1.0`: the tap
 
 A published, non-prerelease release updates the Homebrew tap, so the tap never points at a draft:

@@ -57,6 +57,7 @@ install: check-clean check-main
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-proxy-linux-arm64 ./cmd/whr-proxy
 	@echo "installed whr $$($(PREFIX)/bin/whr version), whr-shim and whr-proxy (linux-arm64) under $(PREFIX)"
+	@echo "development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual)"
 	@echo "next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64"
 
 # Install a release, a dogfood draft included (D24, D34), as the administrator
