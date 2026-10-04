@@ -28,6 +28,7 @@ The design is split by topic. Section numbers (§) are the same on every page, s
 | [External skill sets](skill-sets.md) | §5.8 Selection, loading, pinning, provenance and migration (D52) |
 | [Native Codex supervision](native-codex.md) | §5.9 Native protocol, loading, policy isolation and measurements (D53) |
 | [Canonical native role bindings](native-bindings.md) | §5.10 Versioned roles, host projection and effective evidence (D54) |
+| [Guarded forge MCP](forge-mcp.md) | §5.11 Run-scoped policy checks, forge operations and provider tiers (D55) |
 | [Security](security.md) | §6 Policy and autonomy, §7 Security |
 | [Interfaces](interfaces.md) | §9 CLI, scripting contract, web UI, notifications, onboarding, mobile clients; §10 Forge, CI and identity |
 | [Roadmap](roadmap.md) | §11 Existing platforms, §12 Open decisions and spikes, §13 Delivery |
