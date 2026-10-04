@@ -331,6 +331,7 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 	}{
 		{"user phase", false, []string{"setup", "--dev", "--user", "werner"}, "next: whr setup --dev --user werner --from "},
 		{"host phase", true, []string{"setup", "host", "--dev", "--user", "werner"}, "next: whr setup host --dev --user werner --from "},
+		{"prefix with a space", false, []string{"setup", "--dev", "--user", "werner", "--prefix", "@HOME@/my prefix"}, "next: whr setup --dev --user werner --prefix '@HOME@/my prefix' --from "},
 		{"only", false, []string{"setup", "--dev", "--user", "werner", "--only", "api-token", "--only", "config-dir"}, "next: whr setup --dev --user werner --only "},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -338,6 +339,21 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 			if c.host {
 				r.env.User = "admin" // the administrator runs the host phase, not the standard account
 			}
+			if strings.Contains(c.name, "prefix") {
+				custom := filepath.Join(home, "my prefix")
+				if err := os.MkdirAll(filepath.Join(custom, "bin"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				r.exe = filepath.Join(custom, "bin", "whr")
+				if err := os.WriteFile(r.exe, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // executable stand-in in an isolated test directory
+					t.Fatal(err)
+				}
+			}
+			c.args = append([]string(nil), c.args...)
+			for i := range c.args {
+				c.args[i] = strings.ReplaceAll(c.args[i], "@HOME@", home)
+			}
+			c.want = strings.ReplaceAll(c.want, "@HOME@", home)
 			_, _, errOut := runDevSetup(t, r, home, append(c.args, "--dry-run")...)
 			var next string
 			for _, l := range strings.Split(errOut, "\n") {
@@ -348,13 +364,69 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 			if !strings.HasPrefix(next, c.want) || (c.name == "only" && strings.Contains(next, "--from")) {
 				t.Fatalf("want %q, got %q in\n%s", c.want, next, errOut)
 			}
-			words := strings.Fields(strings.TrimPrefix(next, "next: whr "))
+			words := shellWords(strings.TrimPrefix(next, "next: whr "))
 			_, _, again := runDevSetup(t, r, home, append(words, "--dry-run")...)
 			if strings.Contains(again, "no step") || strings.Contains(again, "this part runs as another user") || strings.Contains(again, "not an installed binary") {
 				t.Fatalf("the suggested command %q is refused:\n%s", next, again)
 			}
 			if !strings.Contains(again, "summary") {
 				t.Fatalf("the suggested command %q did not run:\n%s", next, again)
+			}
+		})
+	}
+}
+
+// shellWords splits a printed command the way a shell does for the quoting
+// quoteArgv writes: single quotes, with a quote inside them closed, escaped
+// and opened again.
+func shellWords(s string) []string {
+	var words []string
+	var cur strings.Builder
+	in, started := false, false
+	for i := 0; i < len(s); i++ {
+		switch ch := s[i]; {
+		case ch == '\'':
+			in, started = !in, true
+		case ch == '\\' && !in && i+1 < len(s):
+			i++
+			cur.WriteByte(s[i])
+			started = true
+		case ch == ' ' && !in:
+			if started {
+				words = append(words, cur.String())
+				cur.Reset()
+				started = false
+			}
+		default:
+			cur.WriteByte(ch)
+			started = true
+		}
+	}
+	if started {
+		words = append(words, cur.String())
+	}
+	return words
+}
+
+// A control character in --prefix or --user is refused up front, with no
+// summary that would print it into a command a human may paste.
+func TestSetupRefusesControlCharactersInPrefixAndUser(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		args func(home string) []string
+	}{
+		{"prefix newline", func(home string) []string { return []string{"--prefix", home + "/x\nreboot"} }},
+		{"prefix escape", func(home string) []string { return []string{"--prefix", home + "/x\x1b[2J"} }},
+		{"user newline", func(string) []string { return []string{"--user", "w\nreboot"} }},
+		{"user escape", func(string) []string { return []string{"--user", "w\x1b[2J"} }},
+		{"user bidi", func(string) []string { return []string{"--user", "w\u202ex"} }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			args := append([]string{"setup", "--dev", "--dry-run"}, c.args(home)...)
+			code, _, errOut := runDevSetup(t, r, home, args...)
+			if code != exitcode.Usage || !strings.Contains(errOut, "must not contain a control") || strings.Contains(errOut, "next:") || strings.ContainsAny(errOut, "\x1b\u202e") {
+				t.Fatalf("exit %d, stderr %q", code, errOut)
 			}
 		})
 	}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Host is the one interface the wizard acts through: commands, opening a URL,
@@ -286,11 +287,16 @@ func show(w io.Writer, f *doctor.Fix) {
 }
 
 // quoteArgv writes an argument vector so a human can read where each argument
-// begins; it is for display only.
+// begins; it is for display only. A control, bidirectional or separator
+// character is never printed raw (a newline would start a second command when
+// the line is pasted, an escape sequence would reach the terminal): the
+// argument is quoted with the visible escape textsafe.Escape gives it.
 func quoteArgv(argv []string) string {
 	parts := make([]string, len(argv))
 	for i, a := range argv {
-		if a == "" || strings.ContainsAny(a, " \t\"'$`\\<>|&;*?") {
+		if e := textsafe.Escape(a); e != a {
+			parts[i] = "'" + strings.ReplaceAll(e, "'", `'\''`) + "'"
+		} else if a == "" || strings.ContainsAny(a, " \t\"'$`\\<>|&;*?") {
 			parts[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
 		} else {
 			parts[i] = a

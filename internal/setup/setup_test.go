@@ -468,3 +468,24 @@ func TestNeedsAreMetByAServiceThatRunsOrWasFoundRunning(t *testing.T) {
 		}
 	})
 }
+
+// A control, bidirectional or separator character never reaches the printed
+// command raw: a newline would start a second command when the line is pasted.
+func TestQuoteArgvEscapesWhatWouldBreakTheLine(t *testing.T) {
+	for name, c := range map[string]struct{ arg, want string }{
+		"newline": {"/tmp/x\nreboot", `'/tmp/x\nreboot'`},
+		"return":  {"/tmp/x\rreboot", `'/tmp/x\rreboot'`},
+		"escape":  {"w\x1b[2J", `'w\x1b[2J'`},
+		"bidi":    {"a\u202eb", `'a\u202eb'`},
+		"quote":   {"it's\n", `'it'\''s\n'`},
+		"plain":   {"/opt/whr", `/opt/whr`},
+		"space":   {"/tmp/x y", `'/tmp/x y'`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := quoteArgv([]string{"whr", c.arg})
+			if got != "whr "+c.want || strings.ContainsAny(got, "\n\r\x1b\u202e") {
+				t.Fatalf("quoteArgv = %q, want %q", got, "whr "+c.want)
+			}
+		})
+	}
+}

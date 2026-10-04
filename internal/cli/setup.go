@@ -16,6 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/launchd"
 	rt "github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/setup"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // SetupEnv is what `whr setup` needs of the machine, so a test runs it with a
@@ -99,6 +100,9 @@ func newSetup(st *state) *cobra.Command {
 		}
 		if !dryRun && !env.IsTerminal() {
 			return usageError{"whr setup asks you questions and runs commands after your answer, so it needs a terminal: run it in one, or add --dry-run to see what it would do"}
+		}
+		if err := plainFlag("--user", whrUser); err != nil {
+			return err
 		}
 		prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME"))
 		if err != nil {
@@ -243,6 +247,11 @@ func newSetup(st *state) *cobra.Command {
 const developmentWarning = "warning: development installation; a user-writable supervisor lacks managed-install replacement protection"
 
 func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string) (string, error) {
+	if cmd.Flags().Changed("prefix") {
+		if err := plainFlag("--prefix", prefix); err != nil {
+			return "", err
+		}
+	}
 	if dev && !cmd.Flags().Changed("prefix") {
 		if !filepath.IsAbs(home) {
 			return "", usageError{"--dev needs an absolute HOME or an explicit --prefix"}
@@ -253,6 +262,16 @@ func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string
 		return "", usageError{"--prefix must be absolute"}
 	}
 	return filepath.Clean(prefix), nil
+}
+
+// plainFlag refuses a flag value with a control, bidirectional or separator
+// character: the value is printed in the suggested next command, which a human
+// may paste, and a newline in it would start a second command.
+func plainFlag(name, value string) error {
+	if strings.IndexFunc(value, func(r rune) bool { return textsafe.IsControl(r) || textsafe.IsBidiOrSeparator(r) || r == '\t' }) >= 0 {
+		return usageError{name + " must not contain a control, bidirectional or separator character"}
+	}
+	return nil
 }
 
 func setupPrefixes(prefix string, dev bool) []string {
