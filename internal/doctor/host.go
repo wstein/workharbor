@@ -1323,6 +1323,9 @@ func (d Deps) developmentPrefix() (Status, string) {
 	if d.UID == 0 {
 		return Fail, "whr never runs as root"
 	}
+	if !filepath.IsAbs(d.Home) { // without the home, "too broad" cannot be judged
+		return Fail, "a development installation needs an absolute HOME: it is how the prefix is kept from holding the home directory"
+	}
 	if err := launchd.CheckBinary(d.Whr); err != nil {
 		return Fail, err.Error()
 	}

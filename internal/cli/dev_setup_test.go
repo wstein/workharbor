@@ -431,3 +431,17 @@ func TestSetupRefusesControlCharactersInPrefixAndUser(t *testing.T) {
 		})
 	}
 }
+
+// Without an absolute HOME a development prefix cannot be judged against the
+// home, so `HOME= whr setup --dev --prefix /Users` must not accept the home's parent.
+func TestDoctorDevRefusesAPrefixWhenHomeIsEmptyOrRelative(t *testing.T) {
+	for _, h := range []string{"", "relative/home"} {
+		t.Run("HOME="+h, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			code, out, errOut := runDevSetup(t, r, h, "doctor", "--dev", "--user", "werner", "--prefix", filepath.Dir(home))
+			if code == 0 || !strings.Contains(out, "fail\tprefix\t") || !strings.Contains(out, "absolute HOME") {
+				t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+			}
+		})
+	}
+}
