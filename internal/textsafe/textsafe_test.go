@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestEscape(t *testing.T) {
@@ -22,6 +23,9 @@ func TestEscape(t *testing.T) {
 		{"bidi isolate", "a\u2066b\u2069", `a\u2066b\u2069`},
 		{"marks", "a\u200eb\u200f\u061c", `a\u200eb\u200f\u061c`},
 		{"line and paragraph separator", "a\u2028b\u2029", `a\u2028b\u2029`},
+		{"lone C1 byte", "a\x9bb", "a\ufffdb"},
+		{"truncated sequence", "a\xe2\x82", "a\ufffd\ufffd"},
+		{"real U+FFFD kept", "a\ufffdb", "a\ufffdb"},
 	} {
 		if got := Escape(tc.in); got != tc.want {
 			t.Errorf("%s: Escape(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
@@ -56,5 +60,18 @@ func TestEscapeJSONKeepsValidJSON(t *testing.T) {
 	}
 	if plain := []byte(`{"a":"é"}`); string(EscapeJSON(plain)) != string(plain) {
 		t.Errorf("clean input changed")
+	}
+}
+
+func TestEscapeJSONInvalidUTF8(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"lone C1 byte", "{\"a\":\"x\x9by\"}", "{\"a\":\"x\ufffdy\"}"},
+		{"truncated sequence", "{\"a\":\"x\xe2\x82\"}", "{\"a\":\"x\ufffd\ufffd\"}"},
+		{"real U+FFFD kept", "{\"a\":\"\ufffd\"}", "{\"a\":\"\ufffd\"}"},
+	} {
+		got := EscapeJSON([]byte(tc.in))
+		if string(got) != tc.want || !utf8.Valid(got) {
+			t.Errorf("%s: EscapeJSON(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
 	}
 }

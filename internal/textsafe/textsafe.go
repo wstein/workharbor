@@ -57,12 +57,20 @@ func EscapeJSON(b []byte) []byte {
 	var out []byte
 	for i := 0; i < len(b); {
 		r, n := utf8.DecodeRune(b[i:])
-		if r != utf8.RuneError && (r >= 0x7f && IsControl(r) || IsBidiOrSeparator(r)) {
+		switch {
+		case r == utf8.RuneError && n == 1:
+			// A stray invalid byte (a lone 0x9b is a one-byte CSI to some
+			// terminals) becomes U+FFFD, as encoding/json does.
+			if out == nil {
+				out = append(make([]byte, 0, len(b)+16), b[:i]...)
+			}
+			out = utf8.AppendRune(out, utf8.RuneError)
+		case r >= 0x7f && IsControl(r) || IsBidiOrSeparator(r):
 			if out == nil {
 				out = append(make([]byte, 0, len(b)+16), b[:i]...)
 			}
 			out = fmt.Appendf(out, `\u%04x`, r)
-		} else if out != nil {
+		case out != nil:
 			out = append(out, b[i:i+n]...)
 		}
 		i += n
