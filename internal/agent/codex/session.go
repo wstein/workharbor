@@ -82,7 +82,7 @@ func (session *session) run() {
 					ID string `json:"id"`
 				} `json:"thread"`
 			}
-			if json.Unmarshal(value.Params, &notification) != nil || notification.Thread.ID != session.state.thread {
+			if decodeExact(value.Params, &notification) != nil || notification.Thread.ID != session.state.thread {
 				session.client.fail(errProtocol)
 				session.order.Unlock()
 				break
@@ -135,7 +135,10 @@ func (session *session) approve(value message) bool {
 	var identity struct {
 		ItemID string `json:"itemId"`
 	}
-	_ = json.Unmarshal(value.Params, &identity)
+	if decodeExact(value.Params, &identity) != nil {
+		session.client.fail(errProtocol)
+		return false
+	}
 	select {
 	case session.open <- struct{}{}:
 	default:
@@ -188,7 +191,7 @@ func (session *session) Instruct(ctx context.Context, text string) (agent.Delive
 	var result struct {
 		TurnID string `json:"turnId"`
 	}
-	if json.Unmarshal(response, &result) != nil || result.TurnID != session.state.turn {
+	if decodeExact(response, &result) != nil || result.TurnID != session.state.turn {
 		session.client.fail(errProtocol)
 		return "", errProtocol
 	}

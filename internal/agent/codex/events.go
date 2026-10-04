@@ -83,7 +83,7 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 		Delta  *string      `json:"delta"`
 		Error  *nativeError `json:"error"`
 	}
-	if json.Unmarshal(value.Params, &params) != nil {
+	if decodeExact(value.Params, &params) != nil {
 		return nil, errProtocol
 	}
 	if params.Thread != state.thread {
@@ -277,7 +277,7 @@ func (state *state) usage(raw json.RawMessage) ([]agent.Event, error) {
 			Total json.RawMessage `json:"total"`
 		} `json:"tokenUsage"`
 	}
-	if json.Unmarshal(raw, &params) != nil {
+	if decodeExact(raw, &params) != nil {
 		return nil, errProtocol
 	}
 	var last struct {
@@ -290,7 +290,7 @@ func (state *state) usage(raw json.RawMessage) ([]agent.Event, error) {
 	}
 	for _, counts := range []json.RawMessage{params.Usage.Total, params.Usage.Last} {
 		last.Input, last.Output, last.Cached, last.CacheWrite, last.Reasoning, last.Total = 0, 0, 0, 0, 0, 0
-		if object(counts, "inputTokens", "outputTokens", "cachedInputTokens", "reasoningOutputTokens", "totalTokens") != nil || json.Unmarshal(counts, &last) != nil {
+		if object(counts, "inputTokens", "outputTokens", "cachedInputTokens", "reasoningOutputTokens", "totalTokens") != nil || decodeExact(counts, &last) != nil {
 			return nil, errProtocol
 		}
 		if last.Input < 0 || last.Output < 0 || last.Cached < 0 || last.CacheWrite < 0 || last.Reasoning < 0 || last.Total < 0 || last.Input > agent.MaxTokensPerTurn || last.Output > agent.MaxTokensPerTurn || last.Cached > last.Input || last.Reasoning > last.Output || last.Total > agent.MaxTokensPerTurn || last.Total != last.Input+last.Output {
@@ -332,7 +332,7 @@ func (state *state) approval(value message) (agent.ApprovalRequest, error) {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(value.Params))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&params) != nil || params.Thread != state.thread || params.Turn != state.turn || params.Started == nil || *params.Started < 0 {
+	if decodeExact(value.Params, &params) != nil || decoder.Decode(&params) != nil || params.Thread != state.thread || params.Turn != state.turn || params.Started == nil || *params.Started < 0 {
 		return agent.ApprovalRequest{}, errProtocol
 	}
 	item, exists := state.items[params.Item]

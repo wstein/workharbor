@@ -68,7 +68,7 @@ func decodeMessage(line []byte) (message, error) {
 	}
 	decoder = json.NewDecoder(bytes.NewReader(line))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&result) != nil {
+	if decodeExact(line, &result) != nil || decoder.Decode(&result) != nil {
 		return result, errProtocol
 	}
 	if result.ID != nil {

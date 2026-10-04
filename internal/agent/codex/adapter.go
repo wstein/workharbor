@@ -139,7 +139,7 @@ func (adapter *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume
 		} `json:"sandbox"`
 		Sources []string `json:"instructionSources"`
 	}
-	if json.Unmarshal(response, &thread) != nil || !validID(thread.Thread.ID) || thread.Model != adapter.config.Model || thread.Effort != adapter.config.Effort || thread.Cwd != spec.Workdir || thread.Policy != "untrusted" || thread.Reviewer != "user" || thread.Sandbox.Type != "readOnly" || len(thread.Sources) > 0 || (resume != "" && thread.Thread.ID != resume) {
+	if decodeExact(response, &thread) != nil || !validID(thread.Thread.ID) || thread.Model != adapter.config.Model || thread.Effort != adapter.config.Effort || thread.Cwd != spec.Workdir || thread.Policy != "untrusted" || thread.Reviewer != "user" || thread.Sandbox.Type != "readOnly" || len(thread.Sources) > 0 || (resume != "" && thread.Thread.ID != resume) {
 		return refuse(errProtocol)
 	}
 	response, err = connection.call(startup, "turn/start", map[string]any{"threadId": thread.Thread.ID, "model": adapter.config.Model, "effort": adapter.config.Effort, "input": textInput(spec.Prompt)})
@@ -149,7 +149,7 @@ func (adapter *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume
 	var turn struct {
 		Turn nativeTurn `json:"turn"`
 	}
-	if json.Unmarshal(response, &turn) != nil || !validID(turn.Turn.ID) || turn.Turn.Status != "inProgress" || turn.Turn.Error != nil {
+	if decodeExact(response, &turn) != nil || !validID(turn.Turn.ID) || turn.Turn.Status != "inProgress" || turn.Turn.Error != nil {
 		return refuse(errProtocol)
 	}
 	session, err := newSession(ctx, connection, newState(thread.Thread.ID, turn.Turn.ID, adapter.config.Model), spec, reaped)
