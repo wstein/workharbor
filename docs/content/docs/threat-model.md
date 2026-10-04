@@ -9,12 +9,25 @@ toc: true
 
 ## Scope and assumptions
 
-workharbor runs on one developer's Apple-silicon Mac. It drives coding agents (Claude Code first; Codex CLI second, a target not yet built, #35) in Apple Container environments and talks to one forge, GitHub (D15). The developer reaches it from a laptop or phone over a VPN.
+workharbor runs on one developer's Apple-silicon Mac. It drives coding agents in Apple Container environments and talks to one forge, GitHub (D15). Claude Code is implemented; native Codex is the P1 full-support target, not yet built (#35, [D53](design/native-codex.md)); Antigravity follows. The developer reaches it from a laptop or phone over a VPN.
 
 - **One trusted human.** The developer and the Mac's macOS account are trusted. Protecting the developer from themselves is out of scope.
 - **The agent is not trusted.** Its model output follows whatever text reaches it, including issue text written by strangers, so every agent and everything it writes is treated as potentially hostile.
 - **The VM boundary holds.** Apple Container runs each container in its own lightweight VM (§5.1). A hypervisor escape is out of scope; what the supervisor deliberately exposes to a guest is in scope.
 - **Vendors are trusted for what they host.** The LLM vendors and GitHub see the code they are sent. Choosing to send it is the developer's decision, not a threat this page addresses.
+
+**Native instruction/configuration boundary (D53).** Selected external skills
+and roles are reviewed text, never policy authority. Native discovery must not
+load agent-writable repository/home configuration, hooks, MCP, plugins or role
+settings that can widen permissions. Supervisor-owned read-only bindings and
+separate reviewed project instructions apply on root/child start and resume;
+unknown instruction sources or model/effort drift refuse launch. Correlated
+human approvals grant only the pending request within existing ceilings, with
+denial and process cleanup on channel loss. D40 sign-in stays in the environment;
+no app-server token relay or auth import is permitted. These controls are planned
+under #35/#283/#242 and {{< status unverified >}} on the target; stage-1 validation
+has open FIFO-swap and manifest/inventory coexistence findings (#283). Hashes do
+not prove instruction safety, and native tool catalogs do not prove enforcement.
 
 **Sign-in preparation (#281).** The warm idle path now holds and leases the
 environment and serializes stop/start/readiness before returning a target

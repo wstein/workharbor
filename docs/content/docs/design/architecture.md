@@ -82,7 +82,7 @@ Adapter rules that follow from it:
 
 ### 5.2 Agent adapter
 
-Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 targets Claude Code and Codex CLI as built-in adapters against it; as built, only Claude Code is composed in `serve` (`internal/serve/real.go`), and the Codex CLI adapter is issue #35 (§13, capability matrix). Codex CLI lacks mid-run injection and host-routed approvals in what [spike #1](../spikes/agent-contract.md) could test (approvals and cancel: [spike #7](../spikes/agent-approval.md); planted configuration: [spike #68](../spikes/claude-config.md)), so in release 1 it runs in the degraded mode below, labelled in the UI. *Full mode* needs every capability marked so; an agent without them runs degraded (D12 requires full mode only of Claude Code, the first agent). Capability flags:
+Specified as explicitly as the runtime contract, and versioned: the contract carries a `contract_version`, and an adapter declares which version it implements. Release 1 targets Claude Code and Codex CLI as built-in adapters against it; as built, only Claude Code is composed in `serve` (`internal/serve/real.go`), and the Codex CLI adapter is issue #35 (§13, capability matrix). [D53](native-codex.md) selects native app-server for the P1 full-support target, extending D52's isolated external loading. [Spike #1](../spikes/agent-contract.md) tested Codex `exec`, not app-server; its degraded observations do not establish a native protocol limitation. Target app-server steering, approvals and isolation remain {{< status unverified >}} until #34/#241 measure the pinned binary. *Full mode* needs every capability marked so; an agent without them runs honestly labelled degraded or refuses unsupported mandatory controls. Capability flags:
 
 - headless / unattended operation
 - **mid-run message injection (required for full mode)**: send a user message into a running session and report how it was delivered (injected now, or at the next turn). Without it an agent cannot be a remote-controlled assistant (§1); an agent that lacks it may only run in a degraded mode that the UI labels
@@ -135,6 +135,11 @@ Specified as explicitly as the runtime contract, and versioned: the contract car
 | Approvals to the host | Yes, on the host through an MCP prompt tool; in a container, the stdio control protocol (D26, measured in spike #7) | Untested | None found in print mode; the run ends in `ERROR` on a denial |
 | Usage window | Structured: five-hour and seven-day windows with reset time | Text only, reset time inside the message | Not observed |
 | Cancel | Hard interrupt only, session stays resumable | Untested | Untested |
+
+These are historical measurements for the named versions and invocation modes.
+D53 requires fresh native Codex measurements; [spike #84](../spikes/agy.md) supplies
+later version-scoped Antigravity event, cancellation and resume evidence, without
+establishing full support for it.
 
 Findings that shape the contract:
 
