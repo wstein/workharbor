@@ -25,10 +25,12 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
   sections and dependencies, added to the board with a `Priority` and a lane
   when the lane is obvious; otherwise leave the lane to `wh/design`. Labels
   as in AGENTS.md, GitHub rate limit.
-- **Post a local review or report as a comment.** When you file an issue from
-  a review or report held in a local file (GitHub's REST API cannot attach
-  files, so a bare path is lost to everyone else):
-  1. Scan the file for secrets and personal data first, because the repository
+- **Summarise a local review or report with durable evidence.** Post a short
+  conclusion and a sanitized durable evidence link, following AGENTS.md,
+  Writing issues and comments. A local path is not accessible evidence; never
+  publish it or paste the full report by default. When an artifact needs to be
+  published:
+  1. Scan the publication file for secrets and personal data first, because the repository
       is public. Check first that the file exists and is a regular file, not a
       symlink (`gitleaks dir` skips a symlink without `--follow-symlinks`, and
       a missing path scans nothing and still exits 0). From the repository
@@ -40,18 +42,21 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
       a stop (exit 1 is both a finding and a fatal error): post nothing and
       tell Werner. Also read the file for names, addresses and paths of the
       human's machine. Never print a match.
-  2. Summarise in the issue body; do not paste the text there.
-  3. Post the full text as one issue comment inside a collapsed `<details>`
-      block, and name the source file. Put the text in a fenced code block
-      inside the `<details>`, with a fence longer than any run of backticks in
-      the text: bare Markdown there is live (`@name` notifies, `#N` links back
-      to other issues, a stray `</details>` breaks the block). Leave a blank
-      line after `</summary>`, put the fence on its own lines, and leave a
-      blank line before `</details>`; without the blank lines the fence is
-      raw HTML and the text inside stays live.
-  4. A file over about 60 KB (the comment limit is 65,536 characters) is split
-      across comments, or committed through `wh/docs` instead.
-  5. A screenshot cannot be posted by REST: ask Werner to drag it into the issue.
+  2. Prepare a sanitized artifact with portable repository paths, retaining
+      the acceptance and security facts and exact reviewed SHA. Label any
+      redaction or excerpt; do not call it raw evidence. Repeat step 1 on the
+      final publication file after any change. Never print a secret match.
+  3. Route the artifact through its documentation owner for versioned,
+      reviewed publication; link the exact committed revision and relevant
+      section. Spike scripts and raw results stay on their spike branch
+      under AGENTS.md, Design decisions. Until an accessible artifact exists,
+      report the evidence as unavailable; never claim it is archived.
+  4. Consolidate the issue body and post only the conclusion, decisive evidence
+      link and blocker or next action. Preserve contracts in the artifact before
+      shortening their only issue or comment copy. Do not split a full report
+      across comments to work around the default.
+  5. A screenshot cannot be posted by REST: ask Werner to drag a sanitized
+      image into the issue when needed.
 - **Route.** A rule question (§3, §4.1, §4.2, §6, §7, the threat model), a
   priority change or a conflict between lanes goes to `wh/design` with Werner's
   words and your summary. A request to start or queue work goes to `wh/dispatch`
