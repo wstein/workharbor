@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"path"
+	"strings"
 
 	"github.com/wstein/workharbor/internal/domain"
 )
@@ -11,7 +13,7 @@ import (
 // agent's CLI and home are in the environment. It holds no secret.
 type ShellConfig struct {
 	// Bin is the directory of the agent's CLI in the environment, put first on
-	// PATH.
+	// PATH. It must be an absolute directory below the read-only /tools mount.
 	Bin string
 	// Env are the variables a run has besides the proxy's: the agent's home and its
 	// auth directory (CLAUDE_CONFIG_DIR, never $HOME's own dotfiles).
@@ -34,7 +36,13 @@ type ShellTarget struct {
 	Cmd     []string `json:"cmd"` // the shell, with the agent's CLI first on PATH
 }
 
-// shellScript puts the agent's CLI first on PATH and starts an interactive shell
+// shellScript replaces the image's PATH with the read-only tool store and fixed
+// system directories, selecting /bin/bash or /bin/sh by absolute image path.
+// The image's shells, libraries (including libc), system files and mounts must
+// be trusted. Unsetting variables happens inside /bin/sh, after its loader and
+// libc initialise; this is not protection from an untrusted image environment.
+// Programs the human starts, including the vendor CLI, have their own startup
+// and terminal behaviour. Their output is not filtered. The script starts a shell
 // that does not read the agent-writable files it would otherwise trust: the
 // agent's home is a volume the agent writes, so what a shell, readline or the
 // terminal database finds there is the agent's, and would run in, rebind keys of,
@@ -50,8 +58,8 @@ type ShellTarget struct {
 // TERMINFO_DIRS, TERMCAP, LOCPATH, GCONV_PATH, NLSPATH, BASH_ENV, CDPATH,
 // PROMPT_COMMAND) and EDITRC=/dev/null covers a libedit shell. sh, the fallback
 // when the image has no bash, gets ENV=/dev/null; dash and busybox ash have no
-// readline and read no terminfo (reasoned from their documentation, not
-// measured). HOME stays set for the CLI. NOT blocked: the image's own /etc files
+// readline and read no terminfo (unverified for the target image); other /bin/sh
+// implementations may behave differently. HOME stays set for the CLI. NOT blocked: the image's own /etc files
 // (/etc/inputrc, /etc/bash.bashrc, /etc/terminfo) belong to the image, which has
 // to come from the human's configuration or the repository's default branch; and
 // any program the human starts in the shell (less, vim, clear) still reads
@@ -60,17 +68,19 @@ type ShellTarget struct {
 // has no part in the stream, so it cannot filter it (an accepted risk for
 // wh/design to name, #223). The directory arrives as $1, so no path is spliced
 // into the script.
-const shellScript = `PATH="$1:$PATH"; export PATH; unset TERMINFO TERMINFO_DIRS TERMCAP LOCPATH GCONV_PATH NLSPATH BASH_ENV CDPATH PROMPT_COMMAND; INPUTRC=/dev/null; HISTFILE=/dev/null; EDITRC=/dev/null; export INPUTRC HISTFILE EDITRC; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc --noediting -i; fi; ENV=/dev/null; export ENV; exec sh -i`
+const shellScript = `PATH="$1:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; export PATH; unset TERMINFO TERMINFO_DIRS TERMCAP LOCPATH GCONV_PATH NLSPATH BASH_ENV CDPATH PROMPT_COMMAND; INPUTRC=/dev/null; HISTFILE=/dev/null; EDITRC=/dev/null; export INPUTRC HISTFILE EDITRC; if [ -x /bin/bash ]; then exec /bin/bash --noprofile --norc --noediting -i; fi; ENV=/dev/null; export ENV; exec /bin/sh -i`
 
-// ShellTarget finds a workspace's environment, makes sure it is running and
+// ShellTarget finds a workspace's environment, restarts it even when warm and
 // returns what the human's terminal needs to open a shell in it as the agent's
 // user, to sign in to the agent (D40). It is refused while a run of the workspace
 // is unfinished (live or interrupted: the reconciler would resume it), under the
-// lock a run's start takes, like a rebuild. The check is made at open time only:
+// environment hold and restart lock. Preparation blocks run ownership and rebuilds
+// until stop, start and readiness succeed, keeping the existing mounts and proxy.
+// The hold ends before the target is returned; it does not cover the terminal:
 // the caller's process then replaces itself with the runtime's exec, so nothing
 // holds the environment (Service.HoldEnvironment would need a process that stays
 // and waits), and a run may start while the shell is open (review of #281, L1). It adds no secret, opens no terminal
-// and writes nothing: the caller replaces its own process with the runtime's
+// and writes no terminal data: the caller replaces its own process with the runtime's
 // interactive exec.
 func (w *Workspaces) ShellTarget(ctx context.Context, workspace string) (ShellTarget, error) {
 	if w.cfg.Shell == nil {
@@ -78,6 +88,9 @@ func (w *Workspaces) ShellTarget(ctx context.Context, workspace string) (ShellTa
 	}
 	if !w.svc.rt.Capabilities().InteractiveExec {
 		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the %s runtime does not report an interactive exec, so there is no agent shell", w.svc.rt.Name())
+	}
+	if bin := w.cfg.Shell.Bin; !strings.HasPrefix(bin, "/tools/") || path.Clean(bin) != bin || strings.ContainsAny(bin, ":\x00\r\n") {
+		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the agent shell needs an absolute CLI directory below the read-only /tools mount")
 	}
 	ws, err := w.svc.store.Workspace(ctx, workspace)
 	if err != nil {
@@ -89,10 +102,19 @@ func (w *Workspaces) ShellTarget(ctx context.Context, workspace string) (ShellTa
 	if err := w.noRunLive(ctx, ws); err != nil {
 		return ShellTarget{}, err
 	}
-	if w.svc.rebuilding(ws.ID) {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s is being rebuilt: try again when it is done", ws.Name)
+	release, err := w.svc.HoldEnvironment(ctx, ws)
+	if err != nil {
+		return ShellTarget{}, err
 	}
-	if err := w.ensureEnvironment(ctx, ws); err != nil {
+	defer release()
+	current, err := w.svc.store.Workspace(ctx, string(ws.ID))
+	if err != nil {
+		return ShellTarget{}, err
+	}
+	if current.EnvID != ws.EnvID {
+		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the environment of workspace %s changed while preparing the shell: try again", ws.Name)
+	}
+	if err := w.restartForShell(ctx, ws); err != nil {
 		return ShellTarget{}, fmt.Errorf("make the environment of workspace %s ready: %w", ws.Name, err)
 	}
 	env := append(append([]string(nil), w.cfg.Shell.Env...), w.svc.agentEnv(ctx, ws.EnvID)...)
@@ -104,6 +126,19 @@ func (w *Workspaces) ShellTarget(ctx context.Context, workspace string) (ShellTa
 		Env:     env,
 		Cmd:     []string{"/bin/sh", "-c", shellScript, "whr-shell", w.cfg.Shell.Bin},
 	}, nil
+}
+
+func (w *Workspaces) restartForShell(ctx context.Context, ws domain.Workspace) error {
+	w.svc.freshMu.Lock()
+	defer w.svc.freshMu.Unlock()
+	w.svc.forgetEnvStarted(ws.EnvID)
+	if err := w.svc.stopLeftover(ctx, "", ws.EnvID, false, nil); err != nil {
+		return err
+	}
+	if err := w.svc.startEnv(ctx, string(ws.EnvID)); err != nil {
+		return err
+	}
+	return w.svc.waitReady(ctx, ws.EnvID)
 }
 
 // noRunLive refuses a workspace that has an unfinished run, naming it.
