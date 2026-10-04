@@ -295,3 +295,29 @@ func pollUntil(t *testing.T, ok func() bool) {
 	}
 	t.Fatal("condition not reached")
 }
+
+// An answer "cancel" to a Decision with no cause leaves the task and the run as
+// they are (the domain cancels only for a cause), so it must not take the run's
+// environment: the agent stop's fallback would stop it under a live run.
+func TestACancelAnswerWithoutACauseDoesNotStopTheEnvironment(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.liveStopFails()
+	c := r.counting()
+	a := r.load()
+	_, err := a.RaiseDecision(domain.NewDecision{
+		ID: "q1", RunID: "r1", Kind: domain.DecisionQuestion, Blocking: true,
+		Subject: "go on?", Options: []string{domain.AnswerCancel, "go"}, Now: r.clock.now,
+	})
+	must(t, err)
+	_, err = r.store.SaveTask(bg, a)
+	must(t, err)
+	must(t, r.svc.AnswerDecision(bg, "q1", domain.Response{Option: domain.AnswerCancel, By: "werner", At: r.clock.now}))
+	r.svc.Wait()
+	if c.stops.Load() != 0 || r.envState() == domain.EnvStopped {
+		t.Errorf("stops %d, env %s: the environment of a live run was stopped", c.stops.Load(), r.envState())
+	}
+	if err := r.svc.checkNotHeld(r.env); err != nil {
+		t.Errorf("a hold was left on the environment: %v", err)
+	}
+}

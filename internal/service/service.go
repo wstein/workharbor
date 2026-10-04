@@ -558,7 +558,8 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	hold := &stopHold{s: s}
 	defer hold.drop() // a no-op once stopAgent has taken it
 	var cancelEnv domain.ID
-	if r.Option == domain.AnswerCancel && row.RunID != "" {
+	// Only an answer the domain turns into a cancel of the task (a cause) ends the run.
+	if r.Option == domain.AnswerCancel && row.RunID != "" && row.Cause != "" {
 		if agg, lerr := s.loadTask(ctx, row.TaskID); lerr == nil {
 			if run, ok := agg.Run(row.RunID); ok && ownsAgent(run.State) {
 				cancelEnv = run.EnvID
