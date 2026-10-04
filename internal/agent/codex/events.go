@@ -140,6 +140,9 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 			return nil, errProtocol
 		}
 		item := params.Item
+		if item.Type == "fileChange" && validateChanges(item.Changes) != nil {
+			return nil, errProtocol
+		}
 		if state.completed[item.ID] {
 			return nil, errProtocol
 		}
@@ -352,7 +355,7 @@ func (state *state) approval(value message) (agent.ApprovalRequest, error) {
 		}
 		req.Input = fmt.Sprintf("cwd: %s\ncommand: %s", item.Cwd, item.Command)
 	case "item/fileChange/requestApproval":
-		if item.Type != "fileChange" || len(item.Changes) == 0 || params.Command != nil || params.Cwd != nil || params.Kind != "" {
+		if item.Type != "fileChange" || validateChanges(item.Changes) != nil || params.Command != nil || params.Cwd != nil || params.Kind != "" {
 			return agent.ApprovalRequest{}, errProtocol
 		}
 		req.Input = string(item.Changes)
