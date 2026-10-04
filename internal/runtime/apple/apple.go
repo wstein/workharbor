@@ -95,6 +95,7 @@ func (a *Adapter) Capabilities() runtime.Capabilities {
 		Arch:              "arm64",
 		PersistentStorage: []string{"volumes", "bind mounts"}, // the root filesystem does not survive a delete
 		NetworkIsolation:  true,                               // --internal networks
+		InteractiveExec:   true,                               // container exec -t -i; unverified on a host
 	}
 }
 

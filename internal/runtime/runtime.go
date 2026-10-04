@@ -30,6 +30,11 @@ type Capabilities struct {
 	Suspend           bool
 	SSH               bool
 	Browser           bool
+	// InteractiveExec says the backend's own command line can run an interactive
+	// command in a running environment with the caller's terminal attached
+	// directly (design §7.3, "The sign-in shell"). Whether a given backend's does
+	// is measured, not assumed.
+	InteractiveExec bool
 }
 
 // Errors every adapter returns for the same situations, so callers and the
@@ -125,6 +130,18 @@ type EgressUpdater interface {
 // can relay inbound traffic is measured, not assumed (issue #69).
 type Previewer interface {
 	DialPreview(ctx context.Context, envID string, port int) (net.Conn, error)
+}
+
+// InteractiveRequest is an interactive command in a running environment for the
+// human's own terminal: the caller replaces its own process with the runtime's
+// command line for it, so nothing the human types or the command writes passes
+// through workharbor (design §7.3, "The sign-in shell"). Env holds non-secret
+// variables only: they appear on a command line.
+type InteractiveRequest struct {
+	Cmd  []string
+	Env  []string
+	Dir  string
+	User string // "uid:gid"; empty for the environment's own user
 }
 
 // Resources are what an environment depends on besides its own container.

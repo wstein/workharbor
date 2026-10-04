@@ -104,6 +104,7 @@ func (f *Fake) Capabilities() runtime.Capabilities {
 		Arch:              "arm64",
 		PersistentStorage: []string{"volumes", "bind mounts"},
 		NetworkIsolation:  true,
+		InteractiveExec:   true,
 	}
 }
 
