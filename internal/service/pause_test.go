@@ -65,8 +65,8 @@ func TestPauseStopsTheAgentSupersedesWhatItAskedAndKeepsTheEnvironment(t *testin
 	if err := r.svc.Pause(bg, "nope"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("pausing an unknown task: %v", err)
 	}
-	if len(r.errs) != 0 {
-		t.Errorf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 }
 
@@ -291,7 +291,7 @@ func TestConcurrentResumesStartTheAgentOnce(t *testing.T) {
 	}
 	must(t, r.svc.Cancel(bg, "t1"))
 	r.svc.Wait()
-	if len(r.errs) != 0 {
-		t.Errorf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 }

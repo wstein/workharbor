@@ -86,8 +86,8 @@ func TestAFailingBoardWriteNeverAffectsTheTask(t *testing.T) {
 	if len(fake.CardsSeen()) != 2 {
 		t.Errorf("cards %+v: a failed write must not stop the later ones", fake.CardsSeen())
 	}
-	if len(r.errs) != 2 {
-		t.Errorf("reported %v, want both failures", r.errs)
+	if len(r.reported()) != 2 {
+		t.Errorf("reported %v, want both failures", r.reported())
 	}
 }
 

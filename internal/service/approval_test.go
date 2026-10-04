@@ -33,9 +33,17 @@ type approved struct {
 	err error
 }
 
+// ask starts the agent's permission prompt in a goroutine. The goroutine is
+// ended with the test: a test that returns early (a failed wait) cancels the
+// prompt and waits for it, so it never touches the service after the test is
+// over (issue #260).
 func (r *rig) ask(ctx context.Context, input string) <-chan approved {
 	out := make(chan approved, 1)
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	r.t.Cleanup(func() { cancel(); <-done }) // runs before the service's Shutdown, which newRig registered first
 	go func() {
+		defer close(done)
 		a, err := r.svc.approverFor("t1", "r1").Approve(ctx, agent.ApprovalRequest{ID: "req-1", Tool: "Bash", Input: input})
 		out <- approved{a, err}
 	}()

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,8 +49,9 @@ type rig struct {
 	clock   *fakeClock
 	env     domain.ID
 	session string
-	errs    []error
-	ids     int
+	errMu   sync.Mutex
+	errs    []error // what OnError got, possibly from service goroutines; read through reported
+	ids     atomic.Int64
 }
 
 func spec() agent.StartSpec {
@@ -151,9 +154,9 @@ func newRig(t *testing.T, opts ...rigOption) *rig {
 	r.svc = New(st, r.rt.Adapter, r.agent, r.clock, Config{
 		Owner:    r.rt.Owner,
 		Spec:     func(domain.Task, domain.Run) agent.StartSpec { return spec() },
-		NewID:    func() domain.ID { r.ids++; return domain.ID(fmt.Sprintf("d-%d", r.ids)) },
+		NewID:    func() domain.ID { return domain.ID(fmt.Sprintf("d-%d", r.ids.Add(1))) },
 		ReadyCmd: []string{"echo", "ready"},
-		OnError:  func(err error) { r.errs = append(r.errs, err) },
+		OnError:  func(err error) { r.errMu.Lock(); r.errs = append(r.errs, err); r.errMu.Unlock() },
 	})
 	t.Cleanup(func() {
 		// Bounded: a session that is no longer in s.sessions (a bug under test
@@ -458,7 +461,7 @@ func TestAnAuthEventSuspendsTheRun(t *testing.T) {
 	run, _ := got.Run("r1")
 	ds := got.Decisions()
 	if run.State != domain.RunPaused || got.Task().State != domain.TaskAwaitingGuidance || len(ds) != 1 || ds[0].Cause != domain.CauseAuthExpired {
-		t.Errorf("run %s, task %s, decisions %+v, errors %v", run.State, got.Task().State, ds, r.errs)
+		t.Errorf("run %s, task %s, decisions %+v, errors %v", run.State, got.Task().State, ds, r.reported())
 	}
 }
 
@@ -807,4 +810,13 @@ func TestReadyTimeoutEndsRepeatedFailures(t *testing.T) {
 	if r.clock.slept < time.Second {
 		t.Errorf("slept %s, want the timeout to run on the injected clock", r.clock.slept)
 	}
+}
+
+// reported returns what the service reported through OnError so far. The service
+// reports from goroutines of its own (the board worker, an asking agent), so it
+// is read under the lock that OnError writes under.
+func (r *rig) reported() []error {
+	r.errMu.Lock()
+	defer r.errMu.Unlock()
+	return append([]error(nil), r.errs...)
 }

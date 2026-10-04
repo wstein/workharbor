@@ -77,8 +77,8 @@ func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
 	if later, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(later) != 1 || later[0].Host != "example.org" {
 		t.Errorf("later = %+v", later)
 	}
-	if len(r.errs) != 0 {
-		t.Errorf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 }
 
@@ -304,8 +304,8 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 	if len(again) != 1 || again[0].Ref != "ghcr.io/someone/else/thing:1" || again[0].Digest != d3 {
 		t.Errorf("a moved tag must be asked again, and a deny must stay: %v", again)
 	}
-	if len(r.errs) != 0 {
-		t.Errorf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 }
 
@@ -316,12 +316,12 @@ func TestFeatureAnswerWithoutADigestIsNotAnError(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	d := domain.Decision{ID: "dx", TaskID: "t1", Cause: domain.CauseFeatureSource, Feature: "ghcr.io/someone/else/thing:1"}
-	before := len(r.errs)
+	before := len(r.reported())
 	if err := r.svc.keepFeatureAnswer(bg, d, domain.AnswerAllow); err != nil {
 		t.Fatalf("keepFeatureAnswer = %v, want nil", err)
 	}
-	if len(r.errs) != before+1 {
-		t.Errorf("reported %d errors, want one", len(r.errs)-before)
+	if len(r.reported()) != before+1 {
+		t.Errorf("reported %d errors, want one", len(r.reported())-before)
 	}
 	if ok, _ := r.svc.ApprovedFeatureSources(bg, "wstein/workharbor"); len(ok) != 0 {
 		t.Errorf("approved = %v, want nothing", ok)

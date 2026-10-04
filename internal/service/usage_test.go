@@ -62,8 +62,8 @@ func TestUsageFromRecordedRunsAddsUpAndSurvivesAPurge(t *testing.T) {
 		wantCost += e.Usage.Cost.MicroUSD
 		r.svc.recordUsage(bg, "t1", "r1", e)
 	}
-	if len(r.errs) != 0 {
-		t.Fatalf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Fatalf("errors: %v", r.reported())
 	}
 	check := func(when string) {
 		rep, err := r.svc.Usage(bg, UsageQuery{TaskID: "t1", Group: store.GroupTask})
@@ -117,8 +117,8 @@ func TestNothingIsEstimatedAndTheBalanceIsTheAgents(t *testing.T) {
 	}
 	// A source other than reported is refused: there is no estimate to label.
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{Model: "m", Cost: &agent.Cost{MicroUSD: 1, Source: "estimated"}}})
-	if len(r.errs) != 1 {
-		t.Errorf("errors = %v, want one for the estimated source", r.errs)
+	if len(r.reported()) != 1 {
+		t.Errorf("errors = %v, want one for the estimated source", r.reported())
 	}
 }
 
@@ -153,8 +153,8 @@ func TestAMalformedUsageReportIsDropped(t *testing.T) {
 	r := newRig(t)
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage, Usage: &agent.Usage{Model: "m", Tokens: &agent.TokenCounts{Input: -1}}})
 	r.svc.recordUsage(bg, "t1", "r1", agent.Event{Kind: agent.EventUsage})
-	if len(r.errs) != 1 {
-		t.Errorf("errors = %v, want one for the negative count", r.errs)
+	if len(r.reported()) != 1 {
+		t.Errorf("errors = %v, want one for the negative count", r.reported())
 	}
 	if rows, _ := r.store.UsageTotals(bg, store.UsageFilter{}, store.GroupAll); len(rows) != 0 {
 		t.Errorf("a malformed report was recorded: %+v", rows)

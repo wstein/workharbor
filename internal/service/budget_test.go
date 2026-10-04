@@ -110,13 +110,13 @@ func TestASoftThresholdWarnsOnceAndAHardLimitFailsTheTask(t *testing.T) {
 			t.Error("a budget stop must say budget, not that the run ended")
 		}
 	}
-	if len(r.errs) != 0 {
-		t.Errorf("errors: %v", r.errs)
+	if len(r.reported()) != 0 {
+		t.Errorf("errors: %v", r.reported())
 	}
 	// Later reports of the stopped task change nothing and do not fail again.
 	r.turn(5, 500, 0)
-	if len(r.auditKinds(domain.EventBudgetExceeded)) != 1 || len(r.errs) != 0 {
-		t.Errorf("a second exceed: %+v %v", r.auditKinds(domain.EventBudgetExceeded), r.errs)
+	if len(r.auditKinds(domain.EventBudgetExceeded)) != 1 || len(r.reported()) != 0 {
+		t.Errorf("a second exceed: %+v %v", r.auditKinds(domain.EventBudgetExceeded), r.reported())
 	}
 }
 

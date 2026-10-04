@@ -39,7 +39,7 @@ type wsRig struct {
 	agent  *agenttest.Fake
 	root   string // the workspace root
 	forge  string // the source repository
-	ids    int
+	ids    int    // guarded by bgMu: the service calls NewID from goroutines of its own
 	failAg bool
 	issues *forgetest.Fake
 	clock  *fakeClock
@@ -157,6 +157,8 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 }
 
 func (r *wsRig) id(prefix string) domain.ID {
+	r.bgMu.Lock()
+	defer r.bgMu.Unlock()
 	r.ids++
 	return domain.ID(fmt.Sprintf("%s-%d", prefix, r.ids))
 }
