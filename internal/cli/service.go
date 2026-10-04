@@ -96,7 +96,7 @@ func newService(st *state) *cobra.Command {
 			// value and its file; the job's binary must be the one under that prefix, and
 			// a managed whr refuses the key
 			if cfg.DevelopmentPrefix != "" {
-				if config.UnderManagedPrefix(s.Whr) {
+				if underManagedPrefix(s.Whr) {
 					return usageError{fmt.Sprintf("%s holds %s, which a whr in a managed prefix refuses: run `whr setup --managed`, or delete the key", s.Config, config.DevelopmentPrefixKey)}
 				}
 				if !config.Within(s.Whr, cfg.DevelopmentPrefix) {
@@ -162,3 +162,7 @@ func newService(st *state) *cobra.Command {
 	g.AddCommand(install, uninstall, status)
 	return g
 }
+
+// underManagedPrefix is config.UnderManagedPrefix; a test points it at a temporary
+// directory, because the managed prefixes are fixed paths outside the test's reach.
+var underManagedPrefix = config.UnderManagedPrefix
