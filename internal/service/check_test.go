@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
@@ -381,6 +382,8 @@ func TestTheReapScriptEndsTheGroupInDashAndBash(t *testing.T) {
 			// The check: leader of its own group, leaves a background process, exits 0.
 			lead := exec.CommandContext(bg, path, "-c", `echo $$ > "$1.pid"; sleep 77 >/dev/null 2>&1 & echo $! > "$1.bg"; exit 0`, "x", d) //nolint:gosec // a test shell found by LookPath
 			lead.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			env := gittest.Env(t.TempDir())
+			lead.Env = env
 			if err := lead.Run(); err != nil {
 				t.Fatal(err)
 			}
@@ -393,7 +396,9 @@ func TestTheReapScriptEndsTheGroupInDashAndBash(t *testing.T) {
 				t.Fatalf("the background process %d is not running", pid)
 			}
 			t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
-			out, err := exec.CommandContext(bg, path, "-c", reapScript, "whr-check", d, dir).CombinedOutput() //nolint:gosec // a test shell found by LookPath
+			reap := exec.CommandContext(bg, path, "-c", reapScript, "whr-check", d, dir) //nolint:gosec // a test shell found by LookPath
+			reap.Env = env
+			out, err := reap.CombinedOutput()
 			if err != nil {
 				t.Fatalf("reap: %v: %s", err, out)
 			}
