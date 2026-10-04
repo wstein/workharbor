@@ -16,6 +16,19 @@ workharbor runs on one developer's Apple-silicon Mac. It drives coding agents (C
 - **The VM boundary holds.** Apple Container runs each container in its own lightweight VM (§5.1). A hypervisor escape is out of scope; what the supervisor deliberately exposes to a guest is in scope.
 - **Vendors are trusted for what they host.** The LLM vendors and GitHub see the code they are sent. Choosing to send it is the developer's decision, not a threat this page addresses.
 
+**Sign-in preparation (#281).** The warm idle path now holds and leases the
+environment and serializes stop/start/readiness before returning a target
+(dd48c4a); errors fail closed. The shell uses absolute `/bin/bash` or `/bin/sh`
+and a validated tool-store/fixed-system PATH. It still trusts the image's loader,
+libc, system files, mounts and environment before sanitisation, and programs the
+human starts have their own startup/terminal behaviour (f3df0f6). Fake-runtime,
+concurrency and hostile-PATH regressions passed; Hooke's independent clean review
+at `2e1c1c53639c32d37b29a1330541e71ce3c30242` uses Werner's approved sol6.1
+medium substitution. Live target leftover-process exclusion, fallback/libc file
+access, vendor login and runtime handling of terminal bytes remain
+{{< status unverified >}}. #282's terminal-session hold, child lifecycle and
+metadata-only audit remain pending; the preparation hold does not cover them.
+
 ## Assets
 
 | Asset | Why it matters |
