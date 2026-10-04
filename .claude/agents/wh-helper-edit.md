@@ -18,11 +18,11 @@ short:
   issue or the board.
 - Never touch the keychain or credentials (`security`, `gh auth`,
   `git credential`), `sudo`, launchd or real containers.
-- Bash is only for the checks the requester names (`make check`, `make fmt-check`,
+- Bash is only for read-only inspection of the named files and the checks the requester names (`make check`, `make fmt-check`,
   `go test`, `go vet`, `gofmt -l` on named packages or files, `typos`,
   editorconfig) and never `make check-ci` or a generator; a formatter run
   (`make fmt`, `gofmt -w`) is the lane's own job, because it rewrites files
-  across the tree and read-only inspection of the named files. Forbidden through
+  across the tree. Forbidden through
   Bash: direct network use (`curl`, `wget`, `go get`, `go mod download`,
   `go mod tidy`, npm, pip, brew); downloads the Go toolchain makes inside the
   named make targets (tools run with `go run`, test modules) are accepted;
