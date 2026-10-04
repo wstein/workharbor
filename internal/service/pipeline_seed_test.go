@@ -124,3 +124,42 @@ func TestAFaultThatNeverClearsEndsThePublishAfterTheCap(t *testing.T) {
 		})
 	}
 }
+
+// A refusal ends a run of transport faults: after a Retry the first new fault
+// starts the cap's clock, it does not inherit the start of the earlier run.
+func TestSeedRetryStartsTheCapAfterARefusalAndRetry(t *testing.T) {
+	t.Parallel()
+	f := newFlowRig(t)
+	fp := &failingPusher{err: fmt.Errorf("push: %w", hostgit.ErrTransport), next: localPusher{repo: f.repo, remote: f.remote}}
+	f.pusher(fp)
+	f.reconcileNow()
+	d, _ := f.review()
+	must(t, f.approve(d))
+	f.svc.Wait()
+	first := f.clock.now
+
+	fp.set(fmt.Errorf("push: %w", hostgit.ErrNotFastForward))
+	f.clock.now = first.Add(time.Minute)
+	f.reconcileNow()
+	f.svc.Wait()
+	q, ok := f.question(domain.CausePublishFailed)
+	if !ok {
+		t.Fatalf("no publish_failed; errors %v", f.reported())
+	}
+
+	// Retry, restart, and the new fault: the run of faults starts here.
+	retryAt := first.Add(3 * time.Hour)
+	f.clock.now = retryAt
+	fp.set(fmt.Errorf("push: %w", hostgit.ErrTransport))
+	if _, err := f.ws.Answer(bg, q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.Wait()
+	r := restartedRetry(t, f, d.SHA)
+	if r == nil || r.attempts < 1 {
+		t.Fatalf("the new fault did not seed: %+v", r)
+	}
+	if r.first.Before(retryAt) {
+		t.Fatalf("the first fault after Retry inherited the old start: first %v, retry at %v", r.first, retryAt)
+	}
+}
