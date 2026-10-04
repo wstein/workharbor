@@ -1,7 +1,9 @@
 package textsafe
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -74,4 +76,75 @@ func TestEscapeJSONInvalidUTF8(t *testing.T) {
 			t.Errorf("%s: EscapeJSON(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
 		}
 	}
+}
+
+// escapeJSONRef is the pre-#266 implementation, kept to check the refactor.
+func escapeJSONRef(b []byte) []byte {
+	var out []byte
+	for i := 0; i < len(b); {
+		r, n := utf8.DecodeRune(b[i:])
+		switch {
+		case r == utf8.RuneError && n == 1:
+			if out == nil {
+				out = append(make([]byte, 0, len(b)+16), b[:i]...)
+			}
+			out = utf8.AppendRune(out, utf8.RuneError)
+		case r >= 0x7f && IsControl(r) || IsBidiOrSeparator(r):
+			if out == nil {
+				out = append(make([]byte, 0, len(b)+16), b[:i]...)
+			}
+			out = fmt.Appendf(out, `\u%04x`, r)
+		case out != nil:
+			out = append(out, b[i:i+n]...)
+		}
+		i += n
+	}
+	if out == nil {
+		return b
+	}
+	return out
+}
+
+func checkEscapeJSONSame(t *testing.T, in []byte) {
+	t.Helper()
+	got, want := EscapeJSON(append([]byte(nil), in...)), escapeJSONRef(in)
+	if !bytes.Equal(got, want) {
+		t.Errorf("EscapeJSON(%q) = %q, reference %q", in, got, want)
+	}
+	if utf8.Valid(in) && !utf8.Valid(got) {
+		t.Errorf("EscapeJSON(%q) = %q is not valid UTF-8", in, got)
+	}
+}
+
+func TestEscapeJSONFirstEscapePath(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"special after prefix", "abc\u009bdef", `abc\u009bdef`},
+		{"invalid byte after prefix", "abc\x9bdef", "abc\ufffddef"},
+		{"invalid byte at start", "\x9bdef", "\ufffddef"},
+		{"invalid in prefix then special", "ab\xffc\u202ed", "ab\ufffdc\\u202ed"},
+		{"special then invalid", "é\u2028\xc3", "é\\u2028\ufffd"},
+		{"multibyte prefix", "日本\u007f日", `日本\u007f日`},
+		{"no escape returns input", "日本abc", "日本abc"},
+	} {
+		got := EscapeJSON([]byte(tc.in))
+		if string(got) != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+		checkEscapeJSONSame(t, []byte(tc.in))
+		if !utf8.Valid(got) {
+			t.Errorf("%s: output %q not valid UTF-8", tc.name, got)
+		}
+	}
+}
+
+func FuzzEscapeJSON(f *testing.F) {
+	for _, s := range []string{"", "abc", "abc\u009bd", "a\x9bb", "\xff", "é\u202e\xc3", "x\u007f"} {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, in []byte) {
+		checkEscapeJSONSame(t, in)
+		if out := EscapeJSON(append([]byte(nil), in...)); !utf8.Valid(out) && utf8.Valid(in) {
+			t.Errorf("invalid output %q", out)
+		}
+	})
 }
