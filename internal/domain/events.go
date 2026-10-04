@@ -12,8 +12,9 @@ import (
 type Tier string
 
 const (
-	TierAudit      Tier = "audit"
-	TierTranscript Tier = "transcript"
+	EventRunSkills EventKind = "run.skills"
+	TierAudit      Tier      = "audit"
+	TierTranscript Tier      = "transcript"
 	// TierEphemeral is for events that are published to subscribers and never
 	// stored: token deltas and heartbeats (design §5.4). The store refuses it.
 	TierEphemeral Tier = "ephemeral"

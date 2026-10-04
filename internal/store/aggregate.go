@@ -108,8 +108,16 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		}
 	}
 	for i, r := range snap.Runs {
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.AgentID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i); err != nil {
+		selection := r.Skills
+		if selection.Mode == "" {
+			selection.Mode = "legacy"
+		}
+		skills, err := json.Marshal(selection)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, ord, skills) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.AgentID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i, string(skills)); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
@@ -179,16 +187,25 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, agent_id, env_id, state, session_id, resume_attempts FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
+	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, skills FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 	for runs.Next() {
 		var r domain.Run
 		var rid, ws, ag, env, st string
-		if err := runs.Scan(&rid, &ws, &ag, &env, &st, &r.SessionID, &r.ResumeAttempts); err != nil {
+		var skills string
+		if err := runs.Scan(&rid, &ws, &ag, &env, &st, &r.SessionID, &r.ResumeAttempts, &skills); err != nil {
 			_ = runs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
+		}
+		if err := json.Unmarshal([]byte(skills), &r.Skills); err != nil {
+			_ = runs.Close()
+			return nil, fmt.Errorf("store: invalid run skill provenance: %w", err)
+		}
+		if r.Skills.Mode != "legacy" && r.Skills.Mode != "none" && r.Skills.Mode != "package" {
+			_ = runs.Close()
+			return nil, errors.New("store: unknown or absent run skill provenance marker")
 		}
 		r.ID, r.TaskID, r.WorkspaceID, r.AgentID, r.EnvID, r.State = domain.ID(rid), id, domain.ID(ws), domain.ID(ag), domain.ID(env), domain.RunState(st)
 		snap.Runs = append(snap.Runs, r)

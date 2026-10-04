@@ -70,6 +70,7 @@ type Task struct {
 
 // Run is one execution of an agent in an environment.
 type Run struct {
+	Skills      SkillSelection
 	ID          ID
 	TaskID      ID
 	WorkspaceID ID

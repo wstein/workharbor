@@ -181,9 +181,18 @@ func (a *TaskAggregate) StartRun(r Run) error {
 		}
 	}
 	run.TaskID = a.task.ID
+	if run.Skills.Mode == "" {
+		run.Skills.Mode = "legacy"
+	}
 	run.State = RunStarting
 	a.runs = append(a.runs, run)
 	a.record(EventRunStarted, RunStarted{RunID: run.ID, EnvID: run.EnvID})
+	if run.Skills.Mode != "" && run.Skills.Mode != "legacy" {
+		a.record(EventRunSkills, struct {
+			RunID     ID             `json:"run_id"`
+			Selection SkillSelection `json:"selection"`
+		}{run.ID, run.Skills})
+	}
 	return nil
 }
 
