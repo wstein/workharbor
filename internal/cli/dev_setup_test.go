@@ -271,7 +271,7 @@ func TestDoctorDevRepairOfABrokenConfigKeepsDevAndPrefix(t *testing.T) {
 }
 
 func TestDoctorDevRefusesBroadOrForeignPrefixes(t *testing.T) {
-	for _, kind := range []string{"root", "home", "foreign-owner", "writable-above"} {
+	for _, kind := range []string{"root", "home", "home-parent", "home-grandparent", "foreign-owner", "writable-above"} {
 		t.Run(kind, func(t *testing.T) {
 			r, home := devSetupRig(t)
 			prefix := filepath.Join(home, ".local")
@@ -280,6 +280,10 @@ func TestDoctorDevRefusesBroadOrForeignPrefixes(t *testing.T) {
 				prefix = "/"
 			case "home":
 				prefix = home
+			case "home-parent":
+				prefix = filepath.Dir(home) // like `--prefix ~/..`
+			case "home-grandparent":
+				prefix = filepath.Dir(filepath.Dir(home)) // like `--prefix /Users` for /Users/<u>
 			case "foreign-owner":
 				r.env.UID++ // the running account is not the owner of the files
 			case "writable-above":
@@ -290,6 +294,27 @@ func TestDoctorDevRefusesBroadOrForeignPrefixes(t *testing.T) {
 			code, out, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
 			if code == 0 || !strings.Contains(out, "fail\tprefix\t") {
 				t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+			}
+		})
+	}
+}
+
+func TestDoctorDevStickyDirectoryAbovePrefixIsAcceptedInsideIsRefused(t *testing.T) {
+	for _, where := range []string{"above", "inside"} {
+		t.Run(where, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			prefix := filepath.Join(home, ".local")
+			dir := home // a sticky directory above the prefix, like /tmp
+			if where == "inside" {
+				dir = filepath.Join(prefix, "bin") // between the prefix and the binary
+			}
+			if err := os.Chmod(dir, os.ModeSticky|0o777); err != nil { //nolint:gosec // deliberately unsafe permissions to test the sticky exception
+				t.Fatal(err)
+			}
+			_, out, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
+			failed := strings.Contains(out, "fail\tprefix\t")
+			if failed != (where == "inside") {
+				t.Fatalf("%s: prefix failed = %v, stdout %q, stderr %q", where, failed, out, errOut)
 			}
 		})
 	}

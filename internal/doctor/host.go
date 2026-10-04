@@ -1334,8 +1334,8 @@ func (d Deps) developmentPrefix() (Status, string) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return Fail, binary + " is not under " + prefix
 	}
-	if prefix == "/" || prefix == filepath.Dir(prefix) || (d.Home != "" && samePath(prefix, d.Home)) {
-		return Fail, prefix + " is too broad for a development prefix: name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
+	if prefix == "/" || prefix == filepath.Dir(prefix) || d.holdsHome(prefix) {
+		return Fail, prefix + " is too broad for a development prefix (the home directory and every directory above it are refused): name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
 	}
 	// The binary up to the prefix, then every directory above it: none may be
 	// written by group or other (a sticky directory above the prefix, such as
@@ -1378,14 +1378,17 @@ func prefixInstallGuide(d Deps) string {
 	return "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13)."
 }
 
-func samePath(a, b string) bool {
-	if ra, err := filepath.EvalSymlinks(a); err == nil {
-		a = ra
+// holdsHome reports whether prefix is the home directory or a directory above it.
+func (d Deps) holdsHome(prefix string) bool {
+	if d.Home == "" {
+		return false
 	}
-	if rb, err := filepath.EvalSymlinks(b); err == nil {
-		b = rb
+	home := d.Home
+	if r, err := filepath.EvalSymlinks(home); err == nil {
+		home = r
 	}
-	return filepath.Clean(a) == filepath.Clean(b)
+	rel, err := filepath.Rel(prefix, filepath.Clean(home))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func (d Deps) homeOrDefault() string {
