@@ -126,7 +126,7 @@ func newPubRig(t *testing.T, opts ...rigOption) *pubRig {
 
 	fake := forgetest.NewFake()
 	pr.forge = &remoteForge{Fake: fake, t: t, remote: pr.remote, home: pr.home}
-	guard := forge.NewGuard(pr.forge, RepoPusher{Repo: pr.repo, Remote: pr.remote}, policy.Default(), r.svc.VerifierFor())
+	guard := forge.NewGuard(pr.forge, localPusher{repo: pr.repo, remote: pr.remote}, policy.Default(), r.svc.VerifierFor())
 	pr.pub = NewPublisher(r.svc, PublishConfig{
 		Repo: pr.repo, Cache: cache, Guard: guard, ForgeRepo: "wstein/workharbor",
 		Prepare: hostgit.PrepareSpec{
@@ -520,4 +520,15 @@ func TestATaskWithAnEmptyPresetStillPublishesUnderTheRepositoryPreset(t *testing
 	if !hasCall(p.forge, "OpenPR") {
 		t.Errorf("the repository's published preset did not apply: %v", p.forge.Calls)
 	}
+}
+
+// localPusher is a forge.Pusher over a local remote for these tests. Production
+// pushes with the GitHub adapter's Pusher, which holds the per-push token (D51).
+type localPusher struct {
+	repo   *hostgit.Repo
+	remote string
+}
+
+func (l localPusher) Push(ctx context.Context, _, branch, sha string) error {
+	return l.repo.Push(ctx, l.remote, branch, sha)
 }

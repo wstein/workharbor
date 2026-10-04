@@ -307,17 +307,6 @@ func (v storeVerifier) Approved(ctx context.Context, ap forge.Approval) bool {
 	return ok && cand.SHA == ap.SHA
 }
 
-// RepoPusher is a forge.Pusher that sends the branch with hostgit.
-type RepoPusher struct {
-	Repo   *hostgit.Repo
-	Remote string
-}
-
-// Push implements forge.Pusher.
-func (r RepoPusher) Push(ctx context.Context, _, branch, sha string) error {
-	return r.Repo.Push(ctx, r.Remote, branch, sha)
-}
-
 // EditorCopy is what `whr open` and the web UI's editor launch return: the path
 // of a supervisor-owned copy of the branch, never the agent's worktree, and the
 // files in it that an editor may act on by itself, for the UI to warn about.
