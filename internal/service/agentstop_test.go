@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -274,14 +275,38 @@ func TestACancelWithAHangingStopKeepsTheEnvironmentBusy(t *testing.T) {
 	}
 	r.svc.Wait()
 	// The fallback has ended: the second task starts and its agent lives.
-	_, run2, err := r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
+	r.agent.Block()
+	task2, run2, err := r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
 	must(t, err)
+	pollUntil(t, func() bool {
+		agg, err := r.store.LoadTask(bg, task2)
+		must(t, err)
+		run, ok := agg.Run(run2)
+		if ok && run.State.Terminal() {
+			t.Fatalf("the second task's run ended: %s", run.State)
+		}
+		events, err := r.svc.Log(bg, task2, 0, 0)
+		must(t, err)
+		for _, event := range events {
+			var observed agent.Event
+			if json.Unmarshal(event.Payload, &observed) == nil && observed.Kind == agent.EventMessage && observed.Text == "working" {
+				return true
+			}
+		}
+		return false
+	})
 	info, err := r.rt.Adapter.Inspect(bg, string(w.EnvID))
 	if err != nil || info.State != domain.EnvRunning {
 		t.Errorf("the environment is %v, %v after the second start", info.State, err)
 	}
 	if !r.svc.attached(run2) {
 		t.Error("the second task's agent is not attached")
+	}
+	if err := r.svc.checkEnvFree(bg, w.EnvID, ""); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
+		t.Errorf("the second task's live agent does not own the environment: %v", err)
+	}
+	if stops := r.agent.Stops(); stops != 1 {
+		t.Errorf("agent stops %d; want only the first agent stopped", stops)
 	}
 }
 
