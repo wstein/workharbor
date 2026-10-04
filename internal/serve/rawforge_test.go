@@ -40,7 +40,7 @@ func rawForgeUses(t *testing.T, modRoot string, allowed func(rel string) bool) [
 			return err
 		}
 		if allowed(rel) {
-			if strings.HasPrefix(rel, "internal/forge/") && reExportsAdapter(f) {
+			if strings.HasPrefix(rel, "internal/forge/") && reExportsAdapter(rel, f) {
 				bad = append(bad, rel)
 			}
 			return nil
@@ -79,20 +79,66 @@ func rawForgeUses(t *testing.T, modRoot string, allowed func(rel string) bool) [
 	return bad
 }
 
-// reExportsAdapter reports a type in package forge that aliases, redefines or
-// embeds Adapter: used elsewhere as forge.<Name>, it would hand out the adapter
-// without naming forge.Adapter (issue #247). A named field or parameter of type
+// adapterReturners names exported functions and methods under internal/forge
+// that may return Adapter, as "<rel path>:<Func or Recv.Method>". None does
+// today: NewGuard takes the adapter and returns *Guard. A caller of such a
+// function would hold the adapter without naming the type, so each entry needs
+// a reason here.
+var adapterReturners = map[string]bool{}
+
+// reExportsAdapter reports a type in forge or one of its subpackages that
+// aliases, redefines or embeds Adapter, or an exported function or method that
+// returns it (not in adapterReturners): used elsewhere as forge.<Name>, each
+// would hand out the adapter without naming forge.Adapter (issue #247). Adapter
+// is the bare name inside package forge and <alias>.Adapter elsewhere, under
+// any import alias of the forge package. A named field or parameter of type
 // Adapter (the Guard's) is fine.
-func reExportsAdapter(f *ast.File) bool {
+func reExportsAdapter(rel string, f *ast.File) bool {
+	names := map[string]bool{}
+	for _, im := range f.Imports {
+		if p, _ := strconv.Unquote(im.Path.Value); p == forgePkg {
+			name := "forge"
+			if im.Name != nil {
+				name = im.Name.Name
+			}
+			names[name] = true
+		}
+	}
 	isAdapter := func(e ast.Expr) bool {
 		if st, ok := e.(*ast.StarExpr); ok {
 			e = st.X
 		}
-		id, ok := e.(*ast.Ident)
-		return ok && id.Name == "Adapter"
+		switch t := e.(type) {
+		case *ast.Ident:
+			return t.Name == "Adapter"
+		case *ast.SelectorExpr:
+			id, ok := t.X.(*ast.Ident)
+			return ok && t.Sel.Name == "Adapter" && names[id.Name]
+		}
+		return false
 	}
 	found := false
 	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok {
+			name := fd.Name.Name
+			if fd.Recv != nil && len(fd.Recv.List) == 1 {
+				r := fd.Recv.List[0].Type
+				if st, ok := r.(*ast.StarExpr); ok {
+					r = st.X
+				}
+				if id, ok := r.(*ast.Ident); ok {
+					name = id.Name + "." + name
+				}
+			}
+			if fd.Name.IsExported() && fd.Type.Results != nil && !adapterReturners[rel+":"+name] {
+				for _, res := range fd.Type.Results.List {
+					if isAdapter(res.Type) {
+						found = true
+					}
+				}
+			}
+			continue
+		}
 		gd, ok := d.(*ast.GenDecl)
 		if !ok {
 			continue
@@ -173,13 +219,22 @@ func TestRawForgeScanCatchesDotImportAndReExport(t *testing.T) {
 		rel, src string
 		want     bool
 	}{
-		"dot import":     {"internal/x/x.go", "package x\nimport . \"" + forgePkg + "\"\nvar _ Adapter\n", true},
-		"alias":          {"internal/forge/raw.go", "package forge\ntype Raw = Adapter\n", true},
-		"definition":     {"internal/forge/raw.go", "package forge\ntype Raw Adapter\n", true},
-		"interface":      {"internal/forge/raw.go", "package forge\ntype Raw interface{ Adapter; X() }\n", true},
-		"struct":         {"internal/forge/raw.go", "package forge\ntype Raw struct{ *Adapter }\n", true},
-		"named field":    {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter }\n", false},
-		"adapter itself": {"internal/forge/raw.go", "package forge\ntype Adapter interface{ X() }\n", false},
+		"dot import":       {"internal/x/x.go", "package x\nimport . \"" + forgePkg + "\"\nvar _ Adapter\n", true},
+		"alias":            {"internal/forge/raw.go", "package forge\ntype Raw = Adapter\n", true},
+		"definition":       {"internal/forge/raw.go", "package forge\ntype Raw Adapter\n", true},
+		"interface":        {"internal/forge/raw.go", "package forge\ntype Raw interface{ Adapter; X() }\n", true},
+		"struct":           {"internal/forge/raw.go", "package forge\ntype Raw struct{ *Adapter }\n", true},
+		"selector alias":   {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\ntype Raw = f.Adapter\n", true},
+		"selector embed":   {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype Raw struct{ forge.Adapter }\n", true},
+		"func returns":     {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) Adapter { return nil }\n", true},
+		"func returns ptr": {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) (*Adapter, error) { return nil, nil }\n", true},
+		"selector func":    {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\nfunc AsRaw() f.Adapter { return nil }\n", true},
+		"method returns":   {"internal/forge/raw.go", "package forge\nfunc (g *Guard) Inner() Adapter { return nil }\n", true},
+		"unexported func":  {"internal/forge/raw.go", "package forge\nfunc asRaw() Adapter { return nil }\n", false},
+		"func takes":       {"internal/forge/raw.go", "package forge\nfunc NewGuard(a Adapter) *Guard { return nil }\n", false},
+		"selector field":   {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype G struct{ a forge.Adapter }\n", false},
+		"named field":      {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter }\n", false},
+		"adapter itself":   {"internal/forge/raw.go", "package forge\ntype Adapter interface{ X() }\n", false},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -197,4 +252,25 @@ func TestRawForgeScanCatchesDotImportAndReExport(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAdapterReturnersAllowlist: a listed function or method is let through,
+// by "<file>:<Recv.Method>" or "<file>:<Func>", and its neighbour is not.
+func TestAdapterReturnersAllowlist(t *testing.T) {
+	adapterReturners["internal/forge/raw.go:Guard.Inner"] = true
+	adapterReturners["internal/forge/raw.go:AsRaw"] = true
+	t.Cleanup(func() { clear(adapterReturners) })
+	check := func(src string, want bool) {
+		t.Helper()
+		f, err := parser.ParseFile(gotoken.NewFileSet(), "raw.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := reExportsAdapter("internal/forge/raw.go", f); got != want {
+			t.Errorf("%q: got %v, want %v", src, got, want)
+		}
+	}
+	check("package forge\nfunc (g *Guard) Inner() Adapter { return nil }\n", false)
+	check("package forge\nfunc AsRaw() Adapter { return nil }\n", false)
+	check("package forge\nfunc (g *Guard) Other() Adapter { return nil }\n", true)
 }
