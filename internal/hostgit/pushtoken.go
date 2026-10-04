@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -11,13 +12,32 @@ import (
 
 // pipeHelper is the one credential helper a token push uses (D51, D48's handover
 // pattern). Git runs a "!" helper through the shell with the action appended, and
-// every child of git inherits file descriptor 3, which runPipe makes the read end
+// every child of git inherits file descriptor 3, which attachToken makes the read end
 // of a pipe already holding the whole credential answer. The helper answers only
 // "get" and copies the pipe, so the token is in no argv (cat and the shell's test
 // are given none), no environment, no file and no URL. The pipe is read once: a
 // second "get" (after a rejected credential) finds it empty and git fails
-// instead of retrying with a token GitHub already refused.
+// instead of retrying with a token GitHub already refused. The helper ignores
+// the host it is asked for, so tokenArgs registers it for the push's own host
+// only. That git passes fd 3 through git-remote-http to this helper over https is
+// unverified until #28 (measured only over http on loopback, issue #252).
 const pipeHelper = `!f() { test "$1" = get && cat <&3; }; f`
+
+// tokenArgs is the git configuration of a token push to remote: the reset of
+// every inherited helper, the pipe helper registered for remote's scheme and host
+// alone (a redirect to another host then gets no credential, which git would
+// otherwise fetch from a generic helper), and no redirects at all.
+func tokenArgs(remote string) ([]string, error) {
+	u, err := url.Parse(remote)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil {
+		return nil, fmt.Errorf("%w: %q is not a usable remote", ErrBadSource, remote)
+	}
+	return []string{
+		"-c", "credential.helper=",
+		"-c", "credential." + u.Scheme + "://" + u.Host + ".helper=" + pipeHelper,
+		"-c", "http.followRedirects=false",
+	}, nil
+}
 
 // credentialAnswer is the git credential protocol's answer for the token.
 func credentialAnswer(token string) string {
@@ -78,7 +98,7 @@ func (g *Git) runToken(ctx context.Context, dir string, extraEnv []string, token
 func redactArgs(args []string) []string {
 	out := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-c" && i+1 < len(args) && strings.HasPrefix(args[i+1], "credential.helper=") {
+		if args[i] == "-c" && i+1 < len(args) && strings.HasPrefix(args[i+1], "credential.") {
 			i++
 			continue
 		}

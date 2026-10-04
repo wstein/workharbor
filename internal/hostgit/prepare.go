@@ -263,7 +263,11 @@ func (r *Repo) push(ctx context.Context, remote, branch, sha, token string) erro
 	}
 	env, pre := netArgs(remote)
 	if token != "" {
-		pre = append(pre, "-c", "credential.helper="+pipeHelper)
+		ta, err := tokenArgs(remote)
+		if err != nil {
+			return err
+		}
+		pre = append(pre, ta...)
 	}
 	args := append(pre, "push", "--quiet", "--no-follow-tags", "--no-verify", "--", remote, sha+":refs/heads/"+branch)
 	if _, err := r.g.runToken(ctx, r.path, env, token, args...); err != nil {
