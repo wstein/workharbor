@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"reflect"
 	"time"
 	"unicode/utf8"
 
@@ -50,7 +52,7 @@ func (f ApproverFunc) Approve(ctx context.Context, req ApprovalRequest) (Approva
 // denial, and the reason says why so the agent can see it. Adapters use it for
 // every prompt.
 func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRequest) Approval {
-	if ap == nil {
+	if isNil(ap) {
 		return Approval{Reason: "no approver: denied"}
 	}
 	if timeout <= 0 {
@@ -67,6 +69,15 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	}
 	ch := make(chan answer, 1)
 	go func() {
+		// A panic in the approver must deny, not take the supervisor down. Only
+		// the panic's type is logged: its value may carry untrusted input or a
+		// secret, and the reason the agent sees is fixed text.
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("approver panicked", "type", reflect.TypeOf(r).String())
+				ch <- answer{err: errApproverPanic}
+			}
+		}()
 		a, err := ap.Approve(ctx, req)
 		ch <- answer{a, err}
 	}()
@@ -88,6 +99,21 @@ func Ask(ctx context.Context, ap Approver, timeout time.Duration, req ApprovalRe
 	case <-ctx.Done():
 		return ctxDenial(ctx)
 	}
+}
+
+var errApproverPanic = errors.New("approver panicked")
+
+// isNil reports an Approver that is nil or holds a nil func, pointer, map,
+// slice or interface (a typed nil passes an == nil check).
+func isNil(ap Approver) bool {
+	if ap == nil {
+		return true
+	}
+	switch v := reflect.ValueOf(ap); v.Kind() {
+	case reflect.Func, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Chan:
+		return v.IsNil()
+	}
+	return false
 }
 
 // ctxDenial is the denial for a done context, saying whether time ran out or

@@ -205,3 +205,25 @@ func (c *stopCtx) Err() error {
 		return nil
 	}
 }
+
+func TestAskDeniesAPanickingApprover(t *testing.T) {
+	const leak = "tok-SECRET\x1b[31m"
+	ap := ApproverFunc(func(context.Context, ApprovalRequest) (Approval, error) {
+		panic(leak)
+	})
+	got := Ask(context.Background(), ap, time.Second, ApprovalRequest{ID: "1", Tool: "Bash"})
+	if got.Allow || got.Reason == "" {
+		t.Fatalf("got %+v, want a denial with a reason", got)
+	}
+	if strings.Contains(got.Reason, "SECRET") || strings.ContainsRune(got.Reason, '\x1b') {
+		t.Fatalf("reason leaks the panic value: %q", got.Reason)
+	}
+}
+
+func TestAskDeniesATypedNilApprover(t *testing.T) {
+	var f ApproverFunc
+	got := Ask(context.Background(), f, time.Second, ApprovalRequest{ID: "1"})
+	if got.Allow || got.Reason == "" {
+		t.Fatalf("got %+v, want a denial with a reason", got)
+	}
+}
