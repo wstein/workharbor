@@ -390,7 +390,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	return Deps{
 		Notifier:   ntfyNotifier(c),
 		ConsoleSSH: consoleSSH,
-		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: gh, Forge: NewForgeAccess(gh), Git: git, Owner: Owner,
+		SocketPath: config.APISocketPath(c.StateDir, home), Config: c, Store: st, Runtime: rt, Agent: ag, Issues: NewIssueAccess(gh), Forge: NewForgeAccess(gh), Git: git, Owner: Owner,
 		ConsoleSpec: consoleOpts.For, ConsoleImage: ensureConsole, ConsoleDir: consoleOpts.Dir,
 		Environment: Environment(git, Topics(git, c, dir), devcontainer.Options{BaseImage: spec.Image, ToolchainImages: devcontainer.DefaultToolchainImages, Features: &feature.Resolver{Client: oci.New(oci.Config{})}}, rt, Owner, filepath.Join(dir, "build"), func(ctx context.Context, repo string) (map[string]string, error) {
 			a, err := st.FeatureSources(ctx, repo)
