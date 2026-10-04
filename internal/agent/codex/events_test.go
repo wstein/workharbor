@@ -147,7 +147,7 @@ func TestStreamedMessageResult(t *testing.T) {
 		{"item/started", `{"threadId":"thread","turnId":"turn","item":{"id":"message","type":"agentMessage","text":""}}`, 0},
 		{"item/agentMessage/delta", `{"threadId":"thread","turnId":"turn","itemId":"message","delta":"finished"}`, 1},
 		{"item/completed", `{"threadId":"thread","turnId":"turn","item":{"id":"message","type":"agentMessage","text":"finished"}}`, 0},
-		{"turn/completed", `{"threadId":"thread","turn":{"id":"turn","status":"completed","items":[],"error":null}}`, 0},
+		{"turn/completed", `{"threadId":"thread","turn":{"id":"turn","status":"completed","items":[{"id":"message","type":"agentMessage","text":"finished"}],"error":null}}`, 0},
 	} {
 		events, err := state.observe(nativeMessage(t, test.method, test.params))
 		if err != nil || len(events) != test.count {

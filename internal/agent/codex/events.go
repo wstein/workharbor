@@ -19,6 +19,9 @@ type nativeItem struct {
 	Status           string          `json:"status,omitempty"`
 	Changes          json.RawMessage `json:"changes,omitempty"`
 	AggregatedOutput *string         `json:"aggregatedOutput,omitempty"`
+	Content          json.RawMessage `json:"content,omitempty"`
+	Summary          []string        `json:"summary,omitempty"`
+	Actions          json.RawMessage `json:"commandActions,omitempty"`
 }
 
 type nativeTurn struct {
@@ -26,6 +29,7 @@ type nativeTurn struct {
 	Status string          `json:"status"`
 	Items  json.RawMessage `json:"items"`
 	Error  *nativeError    `json:"error"`
+	View   string          `json:"itemsView,omitempty"`
 }
 
 type nativeError struct {
@@ -90,7 +94,7 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 		return nil, errProtocol
 	}
 	if value.Method == "turn/started" || value.Method == "turn/completed" {
-		if params.Turn.ID != state.turn || object(value.Params, "turn") != nil || len(params.Turn.Items) == 0 || params.Turn.Items[0] != '[' {
+		if params.Turn.ID != state.turn || object(value.Params, "turn") != nil || state.validateSnapshot(params.Turn) != nil {
 			return nil, errProtocol
 		}
 	} else if params.TurnID != state.turn {
@@ -98,7 +102,7 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 	}
 	switch value.Method {
 	case "turn/started":
-		if params.Turn.Status != "inProgress" {
+		if params.Turn.Status != "inProgress" || params.Turn.Error != nil {
 			return nil, errProtocol
 		}
 		return nil, nil
@@ -140,7 +144,13 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 			return nil, errProtocol
 		}
 		item := params.Item
-		if item.Type == "fileChange" && validateChanges(item.Changes) != nil {
+		var fields struct {
+			Item json.RawMessage `json:"item"`
+		}
+		if decodeExact(value.Params, &fields) != nil {
+			return nil, errProtocol
+		}
+		if _, err := decodeItem(fields.Item); err != nil {
 			return nil, errProtocol
 		}
 		if state.completed[item.ID] {
@@ -182,6 +192,7 @@ func (state *state) observe(value message) ([]agent.Event, error) {
 			}
 			state.text = *item.Text
 			if state.streamed[item.ID] {
+				state.items[item.ID] = item
 				state.completed[item.ID] = true
 				return nil, nil
 			}

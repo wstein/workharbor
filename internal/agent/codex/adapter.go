@@ -152,7 +152,11 @@ func (adapter *Adapter) launch(ctx context.Context, spec agent.StartSpec, resume
 	if decodeExact(response, &turn) != nil || !validID(turn.Turn.ID) || turn.Turn.Status != "inProgress" || turn.Turn.Error != nil {
 		return refuse(errProtocol)
 	}
-	session, err := newSession(ctx, connection, newState(thread.Thread.ID, turn.Turn.ID, adapter.config.Model), spec, reaped)
+	state := newState(thread.Thread.ID, turn.Turn.ID, adapter.config.Model)
+	if state.validateSnapshot(turn.Turn) != nil {
+		return refuse(errProtocol)
+	}
+	session, err := newSession(ctx, connection, state, spec, reaped)
 	if err != nil {
 		return refuse(err)
 	}

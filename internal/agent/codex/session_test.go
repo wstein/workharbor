@@ -24,6 +24,7 @@ type fixtureRunner struct {
 	approval         bool
 	approvalAnswered chan message
 	terminal         string
+	startItems       string
 }
 
 type fixtureStream struct {
@@ -85,7 +86,11 @@ func (runner *fixtureRunner) Exec(ctx context.Context, _ string, req runtime.Exe
 				}
 				result = `{"thread":{"id":"` + thread + `"},"model":"` + model + `","modelProvider":"openai","reasoningEffort":"low","cwd":"/ws","approvalPolicy":"untrusted","approvalsReviewer":"user","sandbox":{"type":"readOnly"},"instructionSources":[]}`
 			case "turn/start":
-				result = `{"turn":{"id":"turn","status":"inProgress","items":[],"error":null}}`
+				items := runner.startItems
+				if items == "" {
+					items = "[]"
+				}
+				result = `{"turn":{"id":"turn","status":"inProgress","items":` + items + `,"error":null}}`
 			case "turn/steer":
 				if runner.steerError {
 					send(message{ID: request.ID, Error: &rpcError{Code: -1, Message: "refused"}})

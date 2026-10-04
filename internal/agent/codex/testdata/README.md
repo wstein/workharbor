@@ -44,6 +44,17 @@ parent cancellation, pending approval cancellation and exact response IDs.
 native settings enforce the supervisor's policy. Unexpected instruction sources,
 required controls, child item kinds and permission-widening shapes are refused.
 
+Turn response and notification snapshots must contain the full, unique set of
+already owned items, with matching normalized payloads. A successful terminal
+snapshot must agree with completed item events. Partial views and nonempty
+startup snapshots refuse rather than infer missing ownership or event history.
+The supported item subset is text-only user messages, agent messages, reasoning,
+context compaction, command execution and typed file changes. Rich input spans,
+questions, memory citations, plugin scripts and non-agent command sources remain
+unsupported. Nested changes and command actions are validated against the
+retained variants before retention or approval; raw approval payloads are not
+shell-quoted, reinterpreted or rewritten for display.
+
 Usage normalization currently accepts one complete `tokenUsage.last` observation
 per turn, keeps input/cache/output counters separate and leaves costs and reset
 times unknown. A second observation refuses the session rather than charging
