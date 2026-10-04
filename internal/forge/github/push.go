@@ -126,7 +126,8 @@ func (c *Client) mintPushToken(ctx context.Context, repo string) (string, error)
 }
 
 // revokeToken revokes a token with DELETE /installation/token, which it
-// authenticates itself. A 401 means it is already gone.
+// authenticates itself. A 401 means it is already gone: that is unverified until
+// #28 (GitHub's answer for a revoked token was not measured).
 func (c *Client) revokeToken(ctx context.Context, tok string) error {
 	err := c.do(ctx, tok, http.MethodDelete, "/installation/token", nil, nil)
 	var ae *APIError
@@ -160,7 +161,8 @@ func (c *Client) BotIdentity(ctx context.Context) (hostgit.Identity, error) {
 	var user struct {
 		ID int64 `json:"id"`
 	}
-	// a public read, made with an installation token like every other call
+	// a public read, made with an installation token like every other call;
+	// that GitHub serves /users/<slug>[bot] this way is unverified until #28
 	if err := c.call(ctx, c.cfg.Repos[0], http.MethodGet, "/users/"+name, nil, &user); err != nil {
 		return hostgit.Identity{}, fmt.Errorf("read the bot user %s: %w", name, err)
 	}
