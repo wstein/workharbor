@@ -134,5 +134,17 @@ func (s *Service) prepareSkills(ctx context.Context, run domain.Run, mount *Skil
 	if s.cfg.PrepareSkills == nil {
 		return errors.New("the runtime has no prepared read-only external skill mount; runtime integration is pending")
 	}
+	if run.Skills.Mode != "package" || s.cfg.SkillSet == nil {
+		return errors.New("external skill preparation requires a recorded package and configured store")
+	}
+	selected := run.Skills
+	pin := skillset.Pin{Identity: selected.Identity, Source: selected.Source, Commit: selected.Commit, ManifestSHA256: selected.ManifestSHA256, InventorySHA256: selected.InventorySHA256, ContractVersion: selected.ContractVersion}
+	pkg, err := (skillset.Store{Root: s.cfg.SkillSet.Store, Forbidden: s.cfg.SkillForbidden}).Load(pin)
+	if err != nil {
+		return err
+	}
+	if !mount.ReadOnly || mount.Source != pkg.Directory || mount.Target != pkg.Target() {
+		return errors.New("external skill mount must match the validated recorded package read-only")
+	}
 	return s.cfg.PrepareSkills(ctx, run, *mount)
 }
