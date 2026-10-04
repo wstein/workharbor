@@ -368,6 +368,57 @@ lock_take() {
   date +%s >"$lock/ts"
 }
 
+configure_lock_take() {
+  local attempt=0 owner_pid owner_token extra process_status process_output
+  configure_token=$(mktemp "$cache_root/.board-owner.XXXXXX") || return 1
+  while [ "$attempt" -lt 600 ]; do
+    attempt=$((attempt + 1))
+    if mkdir "$lock.guard" 2>/dev/null; then
+      if [ -d "$lock" ]; then
+        owner_pid='' owner_token='' extra=''
+        read -r owner_pid owner_token extra <"$lock/owner" 2>/dev/null || true
+        case $owner_pid in
+        '' | 0 | *[!0-9]*) owner_pid='' ;;
+        esac
+        if [ -n "$owner_pid" ] && [ -n "$owner_token" ] && [ -z "$extra" ] && ! kill -0 "$owner_pid" 2>/dev/null; then
+          process_status=0
+          process_output=$(ps -p "$owner_pid" -o pid= 2>/dev/null) || process_status=$?
+          if [ "$process_status" -eq 1 ] && [ -z "$process_output" ]; then
+            rm -rf "$lock"
+          fi
+        fi
+      fi
+      if mkdir "$lock" 2>/dev/null; then
+        printf '%s %s\n' "$$" "$configure_token" >"$lock/owner"
+        rmdir "$lock.guard"
+        return 0
+      fi
+      rmdir "$lock.guard"
+    fi
+    sleep 0.1
+  done
+  rm -f "$configure_token"
+  return 1
+}
+
+configure_lock_release() {
+  local attempt=0
+  while [ "$attempt" -lt 600 ]; do
+    attempt=$((attempt + 1))
+    if mkdir "$lock.guard" 2>/dev/null; then
+      if [ "$(cat "$lock/owner" 2>/dev/null)" = "$$ $configure_token" ]; then
+        rm -rf "$lock"
+      fi
+      rmdir "$lock.guard"
+      rm -f "$configure_token"
+      return
+    fi
+    sleep 0.1
+  done
+  rm -f "$configure_token"
+  echo "board-snapshot: configuration lock cleanup is busy; lock retained" >&2
+}
+
 # patch rewrites the cache with one jq filter ($@ are its jq arguments), only
 # when the cache is fresh, under the lock, re-reading the file under the lock.
 patch() {
@@ -459,8 +510,8 @@ fi
 if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
   [[ $project =~ ^PVT_[A-Za-z0-9_-]+$ ]] || die "invalid resolved project ID"
   lock=$cache_root/.board-configure-$project.lock
-  lock_take || die "configuration lock is busy"
-  trap 'rm -rf "$lock"' EXIT
+  configure_lock_take || die "configuration lock is busy (an incomplete lock or abandoned guard requires manual inspection)"
+  trap 'configure_lock_release' EXIT
   if [ "$mode" = configure-fields ]; then
     schema_fields=$(connection_read fields) || die "could not read complete field metadata; no configuration changed"
     schema_views='[]' schema_workflows='[]'

@@ -204,6 +204,13 @@ case "$*" in
 esac
 for connection in fields views workflows; do
 	case "$*" in *"$connection(first:"*)
+		if [ "$connection" = fields ] && [ -n "$FAKE_LOCK_BARRIER" ] && mkdir "$FAKE_LOCK_BARRIER" 2>/dev/null; then
+			while [ ! -f "$FAKE_LOCK_BARRIER/release" ]; do /bin/sleep 0.01; done
+		fi
+		if [ "$connection" = fields ] && [ -n "$FAKE_LOCK_SUCCESSOR" ]; then
+			read -r owner_pid owner_token < "$FAKE_LOCK_SUCCESSOR/owner"
+			printf '%s successor-generation\n' "$owner_pid" > "$FAKE_LOCK_SUCCESSOR/owner"
+		fi
 		if [ "$FAKE_SCHEMA_FAIL_PAGE" = "$connection" ]; then echo '{}'; exit 0; fi
 		if [ "$FAKE_SCHEMA_PAGINATE" = "$connection" ]; then
 			case "$*" in *after=next*)
@@ -225,6 +232,115 @@ echo '{}'
 
 func schemaEnv(fixture board) []string {
 	return []string{"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_OWNER=wstein", "WHR_BOARD_PROJECT_ID=PVT_crewbook", "WHR_BOARD_LANE_PREFIX=cb", "WHR_BOARD_ROLES=desk,platform,review", "SCHEMA_STATE=" + filepath.Join(fixture.bin, "schema.json"), "SCHEMA_LOG=" + fixture.log}
+}
+
+func TestBoardSnapshotConfigureLockOwner(t *testing.T) {
+	for _, scenario := range []string{"live", "reused", "dead", "missing", "guard"} {
+		t.Run(scenario, func(t *testing.T) {
+			fixture := newSchemaBoard(t)
+			lock := filepath.Join(filepath.Dir(fixture.snap), ".board-configure-PVT_crewbook.lock")
+			if err := os.MkdirAll(lock, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			pid := os.Getpid()
+			if scenario == "dead" {
+				process := exec.CommandContext(t.Context(), "sh", "-c", "exit 0")
+				if err := process.Run(); err != nil {
+					t.Fatal(err)
+				}
+				pid = process.Process.Pid
+			}
+			if scenario != "missing" {
+				if err := os.WriteFile(filepath.Join(lock, "owner"), []byte(strconv.Itoa(pid)+" generation-old\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(lock, "ts"), []byte("1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "guard" {
+				if err := os.Mkdir(lock+".guard", 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			startup := filepath.Join(fixture.bin, "startup")
+			if err := os.WriteFile(startup, []byte("sleep() { :; }\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, stderr, err := fixture.runEnv(t, append(schemaEnv(fixture), "BASH_ENV="+startup), "configure-fields", "PVT_crewbook")
+			if scenario == "dead" {
+				if err != nil || fixture.calls(t) == 0 {
+					t.Fatalf("dead owner not recovered: %v %s", err, stderr)
+				}
+			} else if err == nil || fixture.calls(t) != 0 {
+				t.Fatalf("unsafe takeover: %v %s mutations %d", err, stderr, fixture.calls(t))
+			}
+		})
+	}
+}
+
+func TestBoardSnapshotConfigureHeldLockAndSuccessor(t *testing.T) {
+	for _, successor := range []bool{false, true} {
+		t.Run(strconv.FormatBool(successor), func(t *testing.T) {
+			fixture := newSchemaBoard(t)
+			lock := filepath.Join(filepath.Dir(fixture.snap), ".board-configure-PVT_crewbook.lock")
+			barrier := filepath.Join(fixture.bin, "barrier")
+			env := append(schemaEnv(fixture), "FAKE_LOCK_BARRIER="+barrier)
+			if successor {
+				env = append(env, "FAKE_LOCK_SUCCESSOR="+lock)
+			}
+			finished := make(chan error, 1)
+			go func() {
+				_, _, err := fixture.runEnv(t, env, "configure", "PVT_crewbook")
+				finished <- err
+			}()
+			defer func() {
+				_ = os.WriteFile(filepath.Join(barrier, "release"), nil, 0o600)
+			}()
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				if _, err := os.Stat(barrier); err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("owner never reached schema barrier")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err := os.WriteFile(filepath.Join(lock, "ts"), []byte("1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			startup := filepath.Join(fixture.bin, "startup")
+			if err := os.WriteFile(startup, []byte("sleep() { :; }\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := fixture.runEnv(t, append(schemaEnv(fixture), "BASH_ENV="+startup), "configure", "PVT_crewbook"); err == nil || fixture.calls(t) != 0 {
+				t.Fatal("second configuration stole aged active lock")
+			}
+			if err := os.WriteFile(filepath.Join(barrier, "release"), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-finished; err != nil {
+				t.Fatal(err)
+			}
+			root, err := os.OpenRoot(filepath.Dir(lock))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			owner, err := root.ReadFile(filepath.Base(lock) + "/owner")
+			if successor {
+				if err != nil || !strings.HasSuffix(string(owner), " successor-generation\n") {
+					t.Fatalf("successor removed: %q %v", owner, err)
+				}
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("owner did not release: %v", err)
+			}
+			if fixture.calls(t) != 13 {
+				t.Fatalf("expected one configuration, got %d mutations", fixture.calls(t))
+			}
+		})
+	}
 }
 
 func TestBoardSnapshotConfigureRepeatPreservesOptions(t *testing.T) {
