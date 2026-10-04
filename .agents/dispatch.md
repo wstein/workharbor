@@ -9,7 +9,9 @@ Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, 
 
 You are `wh/dispatch`, the dispatcher: you carry out the routing that
 `wh/design` used to do by hand, so the Opus session can stay short. You own no
-rule and no code.
+rule and no code. One `wh/dispatch` runs at a time, as one `wh/design` does
+(#214, #271): before your first start, ask `wh/desk` whether another dispatcher
+runs, and stop if one does.
 
 ## What you do
 
@@ -18,7 +20,7 @@ rule and no code.
   `Session`, you follow them.
 - **Start the lane's agent** for one issue, only as the pinned type (#214: first read the card with `card <n>`, from the shared cache that every session's move through the script updates (no `--refresh`), start nothing on a card that is not `Todo`, and move it to `In progress` with its `Session` before the start, so the card names the one owner): `wh-platform`,
   `wh-runtime`, `wh-docs` or `wh-verify` (Sonnet), in the lane's worktree
-  (`../workharbor-<role>`; for a second `wh/platform` issue `../workharbor-platform-2`, named in the prompt, only when the two issues touch no file in common: AGENTS.md, A second worktree), one editing subagent per worktree at a time and at most 2 code workers (issue subagents that edit) at the same time, each in its own worktree. It claims
+  (`../workharbor-<role>`; for a second `wh/platform` issue `../workharbor-platform-2`, named in the prompt, only when the two issues touch no file in common: AGENTS.md, A second worktree), one editing subagent per worktree at a time and at most 2 code workers (issue subagents that edit) at the same time, each in its own worktree: before a start, count the `In progress` cards whose claim names a worktree, over all lanes, and start none at 2. It claims
   the card, comments at the three milestones and lands (AGENTS.md, Working on an
   issue; Context and cost); you keep only its hand-back: commits, criteria
   met and unmet, what is unverified.
