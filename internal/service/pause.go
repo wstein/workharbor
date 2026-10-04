@@ -78,7 +78,11 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 			return domain.NewConflict(domain.RuleTransition, "task %s has no run to resume", task)
 		}
 		if unlock == nil { // one resume of a run at a time, so two cannot both start it
-			unlock = s.lockRun(r.ID)
+			u, lerr := s.lockRun(ctx, r.ID)
+			if lerr != nil {
+				return lerr
+			}
+			unlock = u
 		}
 		if s.attached(r.ID) {
 			return domain.NewConflict(domain.RuleTransition, "run %s is already running", r.ID)
@@ -99,6 +103,9 @@ func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error)
 		sl = b
 		return nil
 	})
+	if unlock != nil {
+		unlock() // the starting write is saved and the slot is taken: the launch needs no lock (#225)
+	}
 	if err != nil {
 		if sl != nil {
 			s.end(run, sl)
@@ -156,31 +163,45 @@ func (s *Service) PurgeTranscript(ctx context.Context, task domain.ID, actor str
 }
 
 // lockRun serialises the operations that start a run's agent: it returns the
-// function that releases the run. Different runs do not wait for each other.
-func (s *Service) lockRun(run domain.ID) func() {
+// function that releases the run (safe to call more than once). Different runs
+// do not wait for each other. The wait ends with ctx, so a path stuck behind a
+// wedged holder is cancelled, not stalled. Callers hold it only until the run's
+// starting write is saved: the session slot (begin) guards the launch itself.
+func (s *Service) lockRun(ctx context.Context, run domain.ID) (func(), error) {
 	s.mu.Lock()
 	if s.runLocks == nil {
 		s.runLocks = map[domain.ID]*runLock{}
 	}
 	l := s.runLocks[run]
 	if l == nil {
-		l = &runLock{}
+		l = &runLock{ch: make(chan struct{}, 1)}
 		s.runLocks[run] = l
 	}
 	l.refs++
 	s.mu.Unlock()
-	l.mu.Lock()
-	return func() {
-		l.mu.Unlock()
+	drop := func() {
 		s.mu.Lock()
 		if l.refs--; l.refs == 0 {
 			delete(s.runLocks, run)
 		}
 		s.mu.Unlock()
 	}
+	select {
+	case l.ch <- struct{}{}:
+	case <-ctx.Done():
+		drop()
+		return nil, ctx.Err()
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			<-l.ch
+			drop()
+		})
+	}, nil
 }
 
 type runLock struct {
-	mu   sync.Mutex
+	ch   chan struct{} // holds a token while the lock is taken
 	refs int
 }

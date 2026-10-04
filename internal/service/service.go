@@ -556,6 +556,7 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	}
 	resumes := r.Option == domain.AnswerResume && row.Cause != domain.CauseRunFailed && row.RunID != ""
 	var sl *slot
+	unlock := func() {}
 	if resumes {
 		// An environment this process did not start is stopped and started first;
 		// a failed stop launches nothing and leaves the answer open (#216).
@@ -564,8 +565,11 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		}
 		// One live agent per run (design 4.1): the answer holds the run's lock
 		// like Resume and recovery, and is refused while an agent is attached.
-		unlock := s.lockRun(row.RunID)
-		defer unlock()
+		var lerr error
+		if unlock, lerr = s.lockRun(ctx, row.RunID); lerr != nil {
+			return lerr
+		}
+		defer unlock() // released after the answer is saved, before the launch (#225)
 		// A failed read stops the answer: the gate must not fail open.
 		agg, lerr := s.loadTask(ctx, row.TaskID)
 		if lerr != nil {
@@ -596,6 +600,7 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		}
 	}
 	d, answered, err := s.store.RespondDecision(ctx, id, r)
+	unlock()
 	s.publish(answered)
 	if err == nil {
 		s.deliverApproval(d)

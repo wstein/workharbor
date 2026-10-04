@@ -229,8 +229,11 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	// resumes (design 4.1, one live agent per run). The wait above can be long, so
 	// the lock is taken only now, and the run is read again: a human may have
 	// resumed it meanwhile, and the path that loses the race changes nothing.
-	unlock := s.lockRun(run)
-	defer unlock()
+	unlock, err := s.lockRun(ctx, run)
+	if err != nil {
+		return err
+	}
+	defer unlock() // released again once the starting write is saved: the launch needs no lock (#225)
 	agg, err = s.store.LoadTask(ctx, task)
 	if err != nil {
 		return err
@@ -255,6 +258,7 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 		}
 		return a.Resume(run)
 	})
+	unlock()
 	if err != nil {
 		s.end(run, sl)
 		return err
