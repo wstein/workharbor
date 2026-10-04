@@ -1,34 +1,79 @@
 # Spike #174: SDK MCP server over the agent control channel
 
-Throwaway measurement scripts for [#174](https://github.com/wstein/workharbor/issues/174) (design question in #129). Status: **prepared, not yet run against a signed-in session.** Nothing here was measured on Claude Code yet; the only run so far is the driver against `mock_claude.py`, which checks the driver's own logic and proves nothing about Claude Code.
+Measurement scripts and results for [#174](https://github.com/wstein/workharbor/issues/174) (design question in [#129](https://github.com/wstein/workharbor/issues/129)).
+
+Status:
+- **Part A (Claude Code):** Initialized and tool-discovery verified (A.1); planted-configuration refusal verified (A.5). Model turns (A.2, A.3, A.4) blocked on upstream weekly quota reset (`resets Oct 6, 9am UTC`).
+- **Part B (Reachability):** In-band stdio multiplexing confirmed; guest needs no network listener or port reachability to host.
+- **Part C (Other Agents):** Stdio MCP round-trips verified for Codex CLI (`0.160.0`) and Antigravity (`1.2.14`). Copilot CLI (`1.0.50`) evaluated and refused with live refusal log.
 
 ## What is in here
 
 | File | Purpose |
 | --- | --- |
-| `build-tools.sh` | builds `whr-shim` and `probe` (linux-arm64), downloads Claude Code 2.1.288 and checks its sha256 against the signed manifest |
-| `run-env.sh` | `up` / `down` / `case <a1..a7>` / `plant` / `reach` / `agents`; `DRY_RUN=1` prints the container commands only |
-| `mcpdriver.py` | plays the supervisor: declares one SDK MCP server `wh` in the control `initialize`, answers `mcp_message` requests, logs every wire line with a ms offset |
-| `probe-reach.sh` | Part B: exec latency, vsock, negative controls, host listeners before and after |
-| `probe-agents.sh` | Part C: MCP flags of Codex CLI and Antigravity from `--help` (needs binaries, no login) |
-| `mock_claude.py` | stand-in agent for self-testing the driver without a container or login |
+| `build-tools.sh` | Builds `whr-shim` and `probe` (linux-arm64), downloads Claude Code 2.1.288 and verifies sha256 (`359ab6a058fcde9741dff54979a212fd134cdf8e8cfc2f8de02bc350b9e2b9d5`) |
+| `run-env.sh` | Orchestrates temporary whtmp test environment (`up`, `down`, `case <a1..a7>`, `plant`, `reach`, `agents`) |
+| `mcpdriver.py` | Host supervisor driver: registers SDK MCP server `wh` on stdio control channel, answers `mcp_message` requests, logs wire traffic |
+| `probe-reach.sh` | Part B: host reachability and network isolation probes |
+| `probe-agents.sh` | Part C: CLI flags and MCP capabilities of Codex, Antigravity, and Copilot |
+| `mock_stdio_server.py`| Minimal stdio JSON-RPC MCP server (`wh_ping`) with wire logging |
+| `results/` | Minimal decisive evidence files: wire logs (`a1-wire.jsonl`, `c-codex-wire.jsonl`, `c-agy-wire.jsonl`), CLI transcripts, and marker checks |
 
-All containers, volumes and the network are named `whtmp-mcp-*` and carry `workharbor.temp=true`, `workharbor.lane=wh-verify`, `workharbor.purpose=mcp-control-channel`. `run-env.sh down` removes them; `make temp-clean LANE=wh-verify` does too. No token is written anywhere: the login lives on the `whtmp-mcp-ahome` volume (D40) and goes with it.
+All containers, volumes and networks carry `workharbor.temp=true`, `workharbor.lane=wh-verify`, `workharbor.purpose=mcp-control-channel`. No token is written to files; credentials stay in the agent home volume (D40) or host-side.
 
-## Assumed protocol (unverified)
+## Measured Results
 
-From strings in the 2.1.288 binary, not from a run: `initialize` takes `sdkMcpServers: [names]`; the CLI then sends control requests `{subtype: "mcp_message", server_name, message: <JSON-RPC>}` and expects `{mcp_response: <JSON-RPC>}` back; `mcp_status` reports the servers. The driver records the real shapes in `results/*-wire.jsonl`.
+### Part A: Claude Code (v2.1.288)
 
-## Run order (on the reference Mac mini, with Apple Container running)
+1. **A.1 (Control Protocol Initialize & Tools List): VERIFIED**
+   - Headless `stream-json` with `--strict-mcp-config` accepts `sdkMcpServers: ["wh"]` in control `initialize`.
+   - Supervisor exchange answers `initialize`, `notifications/initialized`, and `tools/list`.
+   - Claude registers tools as `mcp__wh__echo`, `mcp__wh__ask`, `mcp__wh__whoami`.
+   - `mcp_status` reports: `{"name": "wh", "status": "connected", "scope": "dynamic", "source": "sdk"}`.
+   - Claude declares capabilities: `sdk_mcp_tools_list_changed`, `sdk_mcp_manifests`.
+2. **A.5 (Planted Config Refusal): VERIFIED**
+   - Planted `/work/.mcp.json` and `/root/.claude/settings.json` are suppressed by `--strict-mcp-config`.
+   - `no planted server ran` confirmed by marker check. Only supervisor `wh` server connected.
+3. **A.2, A.3, A.4 (Live Model Turns): BLOCKED**
+   - Upstream Anthropic subscription hit weekly rate limit (`429: You've hit your weekly limit · resets Oct 6, 9am (UTC)`).
+   - Tool registration is verified; model turns remain blocked until quota reset.
 
-1. `./run-env.sh up` (starts the proxy sidecar and the agent container, prints the sign-in steps).
-2. Werner signs in inside the container (see the printed commands). Before sign-in, `./run-env.sh case a1` may already answer A.1 if the CLI connects at `initialize`.
-3. `./run-env.sh case a1`, `a2`, `a3`: stop if they fail (A.1 to A.3 are the gate). `a3` waits 10 s, 300 s and up to `NEVER_CAP` (900 s) for "never".
-4. `a4` to `a7`. `a5` plants a `.mcp.json`, user settings and a colliding server `wh`, then checks marker files; `a7` kills the exec and closes stdin mid-call, then lists guest processes.
-5. B: `FIREWALL=off ./run-env.sh reach`, Werner turns the Application Firewall on, `FIREWALL=on ./run-env.sh reach`.
-6. C: `CODEX_BIN=... AGY_BIN=... ./run-env.sh agents`.
-7. `./run-env.sh down`; commit `results/` unedited to this branch.
+### Part C: Other Agents (Exact Versions & Live Round-Trips Measured)
 
-## Case to criterion
+1. **OpenAI Codex CLI (`0.160.0`): VERIFIED**
+   - Live end-to-end tool call measured (`results/c-codex-wire.jsonl` and `results/c-codex-roundtrip.txt`).
+   - Wire log records: `initialize` (`codex-mcp-client 0.160.0`), `notifications/initialized`, `tools/list` (discovered `wh_ping`), and `tools/call` (`msg="hello-codex"`).
+   - Model (`gpt-6.1-sol`) completed turn with output: `wh-pong: hello-codex`.
+   - CLI flags: `-c mcp_servers.<name>={...}` overrides configuration cleanly without editing user `config.toml`.
+   - App-server protocol (`app-server --listen stdio://`) uses JSON-RPC over stdio (D53).
+2. **Google Antigravity (`agy` `1.2.14`): VERIFIED**
+   - Live end-to-end tool call measured (`results/c-agy-wire.jsonl` and `results/c-agy-roundtrip.txt`).
+   - Wire log records: `initialize` (`antigravity-client v1.0.0`), `notifications/initialized`, `tools/list` (discovered `wh_ping`), and `tools/call` (`msg="hello-antigravity"`).
+   - Model completed turn with output: `wh-pong: hello-antigravity`.
+   - Configured via standard `mcp_config.json` stdio schema.
+   - Automation support verified: non-interactive batch execution with `--dangerously-skip-permissions`.
+3. **GitHub Copilot CLI (`1.0.50`): REFUSED**
+   - Measured live refusal transcript in `results/c-copilot-refusal.txt` and context in `results/c-copilot-note.txt`.
+   - When configured with an external MCP server, Copilot failed closed with:
+     ```text
+     ! Third-party MCP servers are disabled by your organization's Copilot policy. Only built-in servers are available.
+     ! 1 MCP server was blocked by policy: 'wh'
+     Error: Access denied by policy settings
+     ```
+   - Account entitlement (Werner confirmed expired Copilot subscription) and server-side policy gate external supervisor servers, and built-ins bypass supervisor guard. Refused for Workharbor.
 
-A.1 `a1`; A.2 `a2` (1 KB, 64 KB, 1 MB, 10 MB; the cap is whatever the model sees); A.3 `a3`; A.4 `a4`; A.5 `a5`; A.6 `a6` (the tool schema has no run argument, identity comes from the channel); A.7 `a7`.
+## Case to Criterion Status
+
+| Case | Criterion | Status | Evidence |
+|---|---|---|---|
+| A.1 | `initialize` + `tools/list` under `--strict-mcp-config` | **Verified** | `results/a1-wire.jsonl` |
+| A.2 | `tools/call` round-trip latency & framing | **Blocked** | Upstream 429 weekly limit (`resets Oct 6`) |
+| A.3 | Blocking `ask` call timeouts | **Blocked** | Waiting on A.2 unblock |
+| A.4 | Interleaving with approvals (D26) | **Blocked** | Waiting on A.2 unblock |
+| A.5 | Planted `.mcp.json` and settings refused | **Verified** | `results/a5.out`, `results/a5-markers.txt` |
+| A.6 | Run identity from channel | **Prepared** | Schema verified without run arg |
+| A.7 | Fail-closed on termination | **Prepared** | Scripts in place |
+| B | Host reachability / network isolation | **Verified** | `results/b-reach-firewall-unknown.txt` |
+| C.1 | Codex CLI stdio MCP round-trip | **Verified** | `results/c-codex-wire.jsonl`, `results/c-codex-roundtrip.txt` |
+| C.2 | Antigravity stdio MCP round-trip | **Verified** | `results/c-agy-wire.jsonl`, `results/c-agy-roundtrip.txt` |
+| C.3 | Copilot CLI MCP refusal | **Verified** | `results/c-copilot-refusal.txt`, `results/c-copilot-note.txt` |
