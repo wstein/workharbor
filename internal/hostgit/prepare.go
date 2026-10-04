@@ -305,12 +305,30 @@ var weakTransportMarkers = []string{"rpc failed", "remote end hung up", "early e
 // 429 (a rate limit, a transport fault) excepted.
 var refusedOverHTTP = regexp.MustCompile(`(?:http\s+|returned error:\s*)4(?:[01][0-9]|2[0-8]|[3-9][0-9])\b`)
 
-// transportFault reports whether a failed push looks like a transport fault.
+// gitOwnLines returns the lowercased lines of git's output that git wrote
+// itself. A line that starts with "remote:" is the server's text (a hook's or a
+// ruleset's message), which a refusal can word as it likes, so it never counts
+// as evidence of a transport fault. git runs under the C locale (Env), so its
+// own lines are English and the "remote:" prefix is stable.
+func gitOwnLines(out string) string {
+	var keep []string
+	for line := range strings.SplitSeq(out, "\n") {
+		l := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(l, "remote:") {
+			continue
+		}
+		keep = append(keep, l)
+	}
+	return strings.Join(keep, "\n")
+}
+
+// transportFault reports whether a failed push looks like a transport fault,
+// judging only git's own lines (gitOwnLines).
 func transportFault(ctx context.Context, err error) bool {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return true
 	}
-	msg := strings.ToLower(err.Error())
+	msg := gitOwnLines(err.Error())
 	for _, m := range transportMarkers {
 		if strings.Contains(msg, m) {
 			return true

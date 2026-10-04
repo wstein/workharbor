@@ -25,6 +25,11 @@ func TestTransportFault(t *testing.T) {
 		{"error: RPC failed; curl 56 OpenSSL SSL_read: Connection reset by peer\nfatal: early EOF", true},
 		{"fatal: early EOF", true},
 		{"remote: Permission to x/y.git denied to the bot.\nfatal: unable to access: The requested URL returned error: 403", false},
+		// the server's own lines never count: a refusal can word them as it likes
+		{"remote: error: GH013: rate limit hook says connection reset\nfatal: unable to access: The requested URL returned error: 403", false},
+		{"remote: Rate limit exceeded by our pre-receive hook\n ! [remote rejected] x", false},
+		{"  remote: could not resolve host\nerror: failed to push some refs", false},
+		{"remote: internal\nfatal: unable to access: Could not resolve host: github.com", true},
 		{"fatal: repository 'https://x/y.git/' not found", false},
 		{"! [remote rejected] abc -> agent/x (protected branch hook declined)", false},
 	} {
