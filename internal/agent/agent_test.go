@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -207,23 +209,51 @@ func (c *stopCtx) Err() error {
 }
 
 func TestAskDeniesAPanickingApprover(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(prev)
+
 	const leak = "tok-SECRET\x1b[31m"
 	ap := ApproverFunc(func(context.Context, ApprovalRequest) (Approval, error) {
 		panic(leak)
 	})
 	got := Ask(context.Background(), ap, time.Second, ApprovalRequest{ID: "1", Tool: "Bash"})
-	if got.Allow || got.Reason == "" {
-		t.Fatalf("got %+v, want a denial with a reason", got)
+	if got.Allow || got.Reason != "approval failed: denied" {
+		t.Fatalf("got %+v, want the fixed denial", got)
 	}
 	if strings.Contains(got.Reason, "SECRET") || strings.ContainsRune(got.Reason, '\x1b') {
 		t.Fatalf("reason leaks the panic value: %q", got.Reason)
 	}
+	if buf.Len() == 0 {
+		t.Fatal("the panic was not logged")
+	}
+	if strings.Contains(buf.String(), "SECRET") {
+		t.Fatalf("log leaks the panic value: %q", buf.String())
+	}
+}
+
+type ptrApprover struct{}
+
+func (*ptrApprover) Approve(context.Context, ApprovalRequest) (Approval, error) {
+	return Approval{Allow: true}, nil
 }
 
 func TestAskDeniesATypedNilApprover(t *testing.T) {
 	var f ApproverFunc
-	got := Ask(context.Background(), f, time.Second, ApprovalRequest{ID: "1"})
-	if got.Allow || got.Reason == "" {
-		t.Fatalf("got %+v, want a denial with a reason", got)
+	var p *ptrApprover
+	tests := []struct {
+		name string
+		ap   Approver
+	}{
+		{"nil interface", nil},
+		{"nil func", f},
+		{"nil pointer", p},
+	}
+	for _, tc := range tests {
+		got := Ask(context.Background(), tc.ap, time.Second, ApprovalRequest{ID: "1"})
+		if got.Allow || got.Reason != "no approver: denied" {
+			t.Errorf("%s: got %+v, want the no-approver denial", tc.name, got)
+		}
 	}
 }
