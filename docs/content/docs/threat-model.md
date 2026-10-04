@@ -5,11 +5,11 @@ weight: 2
 toc: true
 ---
 
-**Status:** updated 1 October 2026 for release 1 (issue #11): after the review of `main` at 26ce0d4 and its fixes (#78, #79), for the vendor terms of subscription logins (D40, T17), on 3 October for signed releases (D24, T19, #180), and for the refused IPv6 prefixes (T5, #124, #194). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
+**Status:** updated 1 October 2026 for release 1 (issue #11): after the review of `main` at 26ce0d4 and its fixes (#78, #79), for the vendor terms of subscription logins (D40, T17), on 3 October for signed releases (D24, T19, #180), for the refused IPv6 prefixes (T5, #124, #194), and on 4 October for the trusted computing base (#248). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
 
 ## Scope and assumptions
 
-workharbor runs on one developer's Apple-silicon Mac. It drives coding agents (Claude Code first, Codex CLI second) in Apple Container environments and talks to one forge, GitHub (D15). The developer reaches it from a laptop or phone over a VPN.
+workharbor runs on one developer's Apple-silicon Mac. It drives coding agents (Claude Code first; Codex CLI second, a target not yet built, #35) in Apple Container environments and talks to one forge, GitHub (D15). The developer reaches it from a laptop or phone over a VPN.
 
 - **One trusted human.** The developer and the Mac's macOS account are trusted. Protecting the developer from themselves is out of scope.
 - **The agent is not trusted.** Its model output follows whatever text reaches it, including issue text written by strangers, so every agent and everything it writes is treated as potentially hostile.
@@ -47,6 +47,24 @@ phone / laptop ──VPN──▶ supervisor (host, trusted) ──▶ GitHub AP
 3. **Supervisor to clients.** The JSON API and web UI, reachable only on loopback or the VPN (§7.5).
 4. **Supervisor to the forge.** API calls and pushes with the App's tokens; webhooks coming back.
 5. **Untrusted text into the agent.** Issue and PR text, comments, CI logs and anything fetched while working.
+
+## Trusted computing base
+
+The trusted computing base is what must be right for a boundary above to hold: trusted means that a flaw in it breaks a boundary, not that it is safe. Each component names the boundaries it guards, the control that checks them and where that control is built and tested (issue #248; drawn from `main` at 1835ca0, nothing newly measured).
+
+| Component | Boundary | Control that checks it | Built and tested in | Residual and unverified |
+| --- | --- | --- | --- | --- |
+| The supervisor (`whr serve`) and its SQLite database: every token, session, Decision and the audit log | 3, 1 | The policy table and the forge `Guard`; redaction at ingest; state directory `0700`, API on a `0600` unix socket, web UI on loopback only (D29) | `internal/policy`, `internal/forge` (`Guard`), `internal/store` (`WithRedactor`), `internal/serve` | A `shared` account lets the developer's other processes drive it (T18, accepted); a tampered binary (T19; the install from a real draft is {{< status unverified >}}) |
+| Host git (`hostgit`): reads and writes repositories an agent can write | 1 | The only way the host runs git on agent-writable repositories; agent work arrives as a checked bundle; an isolated git environment (§4.5, D42) | `internal/hostgit`, `internal/gittest` | Git's own parsing of a crafted bundle is trusted, limited but not sandboxed (Accepted risks) |
+| Runtime tooling: Apple's `container` CLI and services, the VM and hypervisor, and the mount check | 1 | Each environment its own kernel; mounts refused for the home directory, its parents, `~/.ssh`, runtime sockets and anything outside the configured roots; removal by exact ID (§7.4) | `internal/runtime` (`CheckMounts`, `CheckMountsWithin`), `internal/runtime/apple`, the conformance suite | The hypervisor holds by assumption (Scope); a runtime other than Apple Container has no measured isolation; what Apple's services do with an exec's environment is {{< status unverified >}} (§7.3) |
+| The proxy sidecar (`whr-proxy`): the only way out of a guest's internal network, running no agent code | 2 | Hostname allowlist, ports 443 and 80, non-public and host-prefix addresses refused after resolution, every decision logged (§7.2) | `internal/egress`, `internal/serve` (T5) | Real global IPv6 prefixes and the /128 mask are {{< status unverified >}}; an image build uses the builder VM's network (accepted, D38) |
+| Tool-store binaries: the agent CLIs, `whr-shim` (runs as root in the guest) and `whr-proxy` | Upstream to guest (A5), 1 | Pinned and content-addressed, mounted read-only, checked against the recorded hashes at start (D19) | `internal/toolstore` (`pins.json`), `checkToolStore` in `internal/serve` | A malicious upstream release that was pinned stays trusted: the check proves identity, not behaviour |
+| The console (D43): the human's shell, no agent, reaching every workspace | 3, 1 | sshd trusts only the supervisor's certificate authority, certificates last minutes and name one session; workspaces read-only by default; git with hooks and fsmonitor off | `internal/console`, `internal/sshca` (T16) | An SSH session on the real host is {{< status unverified >}}; agent-written config and the raw terminal stream (Accepted risks) |
+| Repository images and content: untrusted input the supervisor builds and reads | 5, 1 | Only the default branch's Dockerfile and context are built; features only from the allowed source, pinned by digest, a foreign one asks first (D38); host reads of agent work through `hostgit` | `internal/devcontainer`, `internal/oci`, `internal/hostgit` | The build has the builder's network, and a feature's `install.sh` runs as root in the builder (accepted, §7.2) |
+| Credentials: the App key, installation tokens, the bot signing key, the agent API key | 4 | `0600` files of the supervisor's user outside every workspace root; a push token per push over an inherited pipe; every token registered with the redactor (§7.3) | `internal/config`, `internal/githubapp`, `internal/hostgit` (push token), `internal/redact` (T8, T10, T21) | An https push to GitHub with the token is {{< status unverified >}} until #28; a subscription login is never handled by `whr` (D40) |
+| Channels: the forwarder (`tailscale serve` or a proxy), passkeys, ntfy | 3 | The forwarder reaches the web UI only, never the API; a user-verified passkey, fresh and bound to the Decision for a sensitive answer; ntfy messages carry only a task ID, a kind and a link (D29, D45) | `internal/passkey`, `internal/web`, `internal/notify` (T11) | The forwarder and the `pf` rules, and passkeys on a real phone, are {{< status unverified >}}; a public ntfy relay sees the generic message |
+
+The console has no threat ID of its own: T16 covers access into it and the accepted risks cover what runs and is shown there.
 
 ## Threat sources
 
