@@ -28,7 +28,7 @@ func devSetupRig(t *testing.T) (*setupRig, string) {
 	}
 	r.env.Executable = func() (string, error) { return r.exe, nil }
 	r.env.UID = os.Getuid() // the checks compare owners with the running account
-	r.host.outputs["dscl . -read /Users/werner NFSHomeDirectory"] = "NFSHomeDirectory: " + home + "\n"
+	r.host.outputs["/usr/bin/dscl . -read /Users/werner NFSHomeDirectory"] = "NFSHomeDirectory: " + home + "\n"
 	return r, home
 }
 
@@ -451,7 +451,7 @@ func TestDoctorDevRefusesAPrefixWhenHomeIsEmptyOrRelative(t *testing.T) {
 // home from the directory service, and a lookup that fails or gives no absolute
 // path fails --dev closed (#278).
 func TestDoctorDevComparesThePrefixWithTheDirectoryServiceHome(t *testing.T) {
-	const lookup = "dscl . -read /Users/werner NFSHomeDirectory"
+	const lookup = "/usr/bin/dscl . -read /Users/werner NFSHomeDirectory"
 	for _, c := range []struct {
 		name    string
 		env     string // HOME; "@HOME@" is the real home
@@ -462,6 +462,9 @@ func TestDoctorDevComparesThePrefixWithTheDirectoryServiceHome(t *testing.T) {
 		{"HOME elsewhere, parent of the real home", "/nonexistent/home", "@PARENT@", "", "too broad"},
 		{"HOME elsewhere, the real home", "/nonexistent/home", "@HOME@", "", "too broad"},
 		{"HOME right, the real home", "@HOME@", "@HOME@", "", "too broad"},
+		{"upper-cased parent of the real home", "/nonexistent/home", "@PARENT@", "", "too broad"},
+		{"upper-cased real home", "/nonexistent/home", "@HOME@", "", "too broad"},
+		{"upper-cased real home, HOME right", "@HOME@", "@HOME@", "", "too broad"},
 		{"lookup fails", "@HOME@", "", "-", "directory service"},
 		{"lookup empty", "@HOME@", "", "NFSHomeDirectory:\n", "no absolute NFSHomeDirectory"},
 		{"lookup relative", "@HOME@", "", "NFSHomeDirectory: relative/home\n", "no absolute NFSHomeDirectory"},
@@ -485,6 +488,15 @@ func TestDoctorDevComparesThePrefixWithTheDirectoryServiceHome(t *testing.T) {
 				prefix = filepath.Dir(home)
 			case "@HOME@":
 				prefix = home
+			}
+			if strings.HasPrefix(c.name, "upper-cased") {
+				// The same directory under another spelling, on a case-insensitive
+				// volume: the identity comparison must still refuse it.
+				if _, err := os.Stat(strings.ToUpper(home)); err != nil {
+					t.Skip("the volume is case-sensitive")
+				}
+				prefix = strings.ToUpper(prefix)
+				r.exe = strings.ToUpper(r.exe)
 			}
 			code, out, errOut := runDevSetup(t, r, env, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
 			if c.refused == "" {

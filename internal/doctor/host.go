@@ -1348,7 +1348,7 @@ func (d Deps) developmentPrefix(ctx context.Context) (Status, string) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return Fail, binary + " is not under " + prefix
 	}
-	if prefix == "/" || prefix == filepath.Dir(prefix) || holds(prefix, d.Home) || holds(prefix, accountHome) {
+	if prefix == "/" || prefix == filepath.Dir(prefix) || prefixHoldsDir(prefix, d.Home) || prefixHoldsDir(prefix, accountHome) {
 		return Fail, prefix + " is too broad for a development prefix (the home directory and every directory above it are refused): name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
 	}
 	// The binary up to the prefix, then every directory above it: none may be
@@ -1393,10 +1393,12 @@ func prefixInstallGuide(d Deps) string {
 }
 
 // directoryHome is the home directory of the account that runs whr, from
-// `dscl . -read /Users/<user> NFSHomeDirectory`. An error names why the answer
+// `/usr/bin/dscl . -read /Users/<user> NFSHomeDirectory`, run by its absolute
+// path because $PATH is the caller's word as much as $HOME is (no shell; the
+// runner's timeout and scrubbed environment apply). An error names why the answer
 // is not an absolute path.
 func (d Deps) directoryHome(ctx context.Context) (string, error) {
-	out, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.User, "NFSHomeDirectory")
+	out, err := d.output(ctx, "/usr/bin/dscl", ".", "-read", "/Users/"+d.User, "NFSHomeDirectory")
 	if err != nil {
 		return "", errors.New("dscl NFSHomeDirectory for " + d.User + " failed: " + err.Error())
 	}
@@ -1408,16 +1410,46 @@ func (d Deps) directoryHome(ctx context.Context) (string, error) {
 	return val, nil
 }
 
-// holds reports whether prefix is home or a directory above it.
-func holds(prefix, home string) bool {
-	if home == "" {
+// statDir is how prefixHoldsDir looks at the file system; a test swaps it to
+// stand in for a spelling no temporary directory has (a firmlink).
+var statDir = os.Stat
+
+// prefixHoldsDir reports whether prefix is dir or a directory above it. It
+// compares by identity, never by spelling: it stats prefix once, then dir and
+// every directory above it, and answers true when os.SameFile matches. So
+// `/users` on a case-insensitive volume, or `/System/Volumes/Data/Users`
+// through the firmlink, is refused as `/Users` is (D24, #278). A directory
+// that does not exist is skipped (it cannot be the prefix, and its parents are
+// still walked); any other stat error, and an empty or relative dir, fails
+// closed. #276's file checks reuse it.
+func prefixHoldsDir(prefix, dir string) bool {
+	if dir == "" {
 		return false
 	}
-	if r, err := filepath.EvalSymlinks(home); err == nil {
-		home = r
+	pfi, err := statDir(prefix)
+	if err != nil {
+		return true
 	}
-	rel, err := filepath.Rel(prefix, filepath.Clean(home))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	if !filepath.IsAbs(dir) {
+		return true
+	}
+	if r, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = r
+	}
+	for p := filepath.Clean(dir); ; p = filepath.Dir(p) {
+		fi, err := statDir(p)
+		switch {
+		case err == nil:
+			if os.SameFile(pfi, fi) {
+				return true
+			}
+		case !errors.Is(err, fs.ErrNotExist):
+			return true
+		}
+		if p == filepath.Dir(p) {
+			return false
+		}
+	}
 }
 
 func (d Deps) homeOrDefault() string {
