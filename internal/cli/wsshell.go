@@ -31,7 +31,11 @@ func newWsShell(s *state) *cobra.Command {
 		Long: "Opens an interactive shell in the workspace's environment as the agent's user, with the agent's CLI " +
 			"first on PATH and the agent's auth directory (CLAUDE_CONFIG_DIR) and the egress proxy set as for a run, so " +
 			"that you can sign in with the vendor's own command (design D40; the first-run guide, step 8). The shell " +
-			"reads no startup file, ~/.inputrc or history file of the agent's home, which the agent writes (bash with --noprofile --norc, INPUTRC=/dev/null and HISTFILE=/dev/null; sh with ENV=/dev/null). This command asks the supervisor only " +
+			"reads no startup file, ~/.inputrc, ~/.terminfo or history file of the agent's home, which the agent writes (bash with " +
+			"--noprofile --norc --noediting, so without line editing at its prompt, and INPUTRC=/dev/null and HISTFILE=/dev/null; sh with " +
+			"ENV=/dev/null; the variables that name another place to read terminfo, termcap, locale or startup files from are unset). " +
+			"Not blocked: the image's own /etc files, and any program you start in the shell, such as less or vim, which still reads " +
+			"~/.terminfo. This command asks the supervisor only " +
 			"which environment and variables to use, then replaces itself with the runtime's own interactive exec: " +
 			"your terminal is attached to the environment directly, and nothing you type or the agent's CLI writes " +
 			"passes through whr, the supervisor, a file, a log or the web UI. whr adds no secret and types nothing for " +

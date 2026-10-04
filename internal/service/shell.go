@@ -35,21 +35,32 @@ type ShellTarget struct {
 }
 
 // shellScript puts the agent's CLI first on PATH and starts an interactive shell
-// that reads none of the agent-writable files it would otherwise trust: the
-// agent's home is a volume the agent writes, so a ~/.bashrc, ~/.profile, ENV file
-// or ~/.inputrc in it is the agent's, and would run in, or rebind keys of, the
-// human's terminal beside the login (review of #281, M1). bash gets --noprofile
-// --norc (no startup file) and INPUTRC=/dev/null (readline reads no ~/.inputrc,
-// where a planted binding could append a command to the typed line); editing stays
-// on, so pasting the login code works as in any terminal. sh gets ENV=/dev/null,
-// and has no readline. Both get HISTFILE=/dev/null, so what the human types is not
-// written to a history file in the home the next run's agent reads (M2). HOME stays
-// set for the CLI. The system-wide /etc/inputrc and /etc/bash.bashrc-style files
-// belong to the image, not the agent, and are not blocked. The CLI's own output
-// still reaches the terminal as it is: whr has no part in the stream, so it cannot
-// filter it (an accepted risk for wh/design to name, #223). The directory arrives
-// as $1, so no path is spliced into the script.
-const shellScript = `PATH="$1:$PATH"; export PATH; INPUTRC=/dev/null; HISTFILE=/dev/null; export INPUTRC HISTFILE; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; fi; ENV=/dev/null; export ENV; exec sh -i`
+// that does not read the agent-writable files it would otherwise trust: the
+// agent's home is a volume the agent writes, so what a shell, readline or the
+// terminal database finds there is the agent's, and would run in, rebind keys of,
+// or send bytes to the human's terminal beside the login (review of #281, M1 to
+// M3). bash gets --noprofile --norc (no startup file) and --noediting: no
+// readline, so neither ~/.inputrc (a binding could append a command to the typed
+// line) nor ~/.terminfo (an entry could make every edit write bytes the agent
+// chose, such as an OSC 52 clipboard write) is read. The cost is line editing at
+// the bash prompt; the login code is pasted into the CLI's own prompt, not
+// bash's. INPUTRC=/dev/null stays as a second wall. HISTFILE=/dev/null keeps what
+// the human types out of a history file the next run's agent reads (M2). The
+// variables that name another place to read from are unset (TERMINFO,
+// TERMINFO_DIRS, TERMCAP, LOCPATH, GCONV_PATH, NLSPATH, BASH_ENV, CDPATH,
+// PROMPT_COMMAND) and EDITRC=/dev/null covers a libedit shell. sh, the fallback
+// when the image has no bash, gets ENV=/dev/null; dash and busybox ash have no
+// readline and read no terminfo (reasoned from their documentation, not
+// measured). HOME stays set for the CLI. NOT blocked: the image's own /etc files
+// (/etc/inputrc, /etc/bash.bashrc, /etc/terminfo) belong to the image, which has
+// to come from the human's configuration or the repository's default branch; and
+// any program the human starts in the shell (less, vim, clear) still reads
+// ~/.terminfo, because it is the agent's home and the terminal database path is
+// the program's. The CLI's own output still reaches the terminal as it is: whr
+// has no part in the stream, so it cannot filter it (an accepted risk for
+// wh/design to name, #223). The directory arrives as $1, so no path is spliced
+// into the script.
+const shellScript = `PATH="$1:$PATH"; export PATH; unset TERMINFO TERMINFO_DIRS TERMCAP LOCPATH GCONV_PATH NLSPATH BASH_ENV CDPATH PROMPT_COMMAND; INPUTRC=/dev/null; HISTFILE=/dev/null; EDITRC=/dev/null; export INPUTRC HISTFILE EDITRC; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc --noediting -i; fi; ENV=/dev/null; export ENV; exec sh -i`
 
 // ShellTarget finds a workspace's environment, makes sure it is running and
 // returns what the human's terminal needs to open a shell in it as the agent's
