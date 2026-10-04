@@ -79,6 +79,8 @@ The console has no threat ID of its own: T16 covers access into it and the accep
 
 ## Threats and controls
 
+**External skill sets (D52, #283; to be built).** A compromised package source can inject instructions (T1) or attempt to substitute settings and resources at load time (T2/T3). The [loading contract](design/skill-sets.md) confines reviewed text to an inventoried, supervisor-controlled store mounted read-only, validates exact pins on start and resume, and preserves repository/home discovery suppression and platform policy. A pin identifies content; it does not make that content safe. Live loading and these additional supply-chain checks are {{< status unverified >}}; the implemented statuses below do not cover the new loader.
+
 | # | Threat | Source | Controls | Enforced and tested in | Status |
 | --- | --- | --- | --- | --- | --- |
 | T1 | Injected instructions make the agent do something harmful | A1 | Untrusted input is data, never instructions; runs on issues by untrusted authors wait for a Decision; sensitive actions on untrusted input ask (§6, §7.1) | #53 | Partly implemented (untrusted authors held for a Decision; #53) |

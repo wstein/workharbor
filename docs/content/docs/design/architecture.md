@@ -9,6 +9,8 @@ toc: true
 
 Logical components live in one Go binary on the Mac; boundaries are package interfaces, not microservices.
 
+**External skill sets (D52, #283; to be built).** The platform supplies execution and enforcement; crewbook is the default replaceable workflow input. The [§5.8 contract](skill-sets.md) specifies operator selection, immutable inventory, read-only runtime mounts, explicit text loading and recorded start/resume provenance. It does not enable repository-discovered skills, hooks or MCP configuration, change the settings flags below or make a package an executable adapter plugin.
+
 | Component | Responsibility |
 | --- | --- |
 | Control plane | Tasks, runs, workspaces, decisions, policies, integration config, event log, reconciler |

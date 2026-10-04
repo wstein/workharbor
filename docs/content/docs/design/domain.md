@@ -22,6 +22,8 @@ toc: true
 
 Task, run and environment each get their own small FSM with explicit legal transitions; these are specified before coding.
 
+**Skill selection (D52, #283; to be built).** Before launch, a run records the resolved external skill selection or explicit `none`; every resume uses and validates that record, independently of changes to the configured default. Older runs get a legacy marker, not inferred crewbook provenance. Missing or incompatible recorded content fails launch through the existing start/resume handling. The [§5.8 contract](skill-sets.md) defines migration and audit fields; none of it changes the locks, environment ownership or legal transitions below.
+
 - **Task** (D13):
 
     | From | To |
