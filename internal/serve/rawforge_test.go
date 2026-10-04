@@ -104,16 +104,65 @@ func reExportsAdapter(rel string, f *ast.File) bool {
 			names[name] = true
 		}
 	}
-	isAdapter := func(e ast.Expr) bool {
-		if st, ok := e.(*ast.StarExpr); ok {
-			e = st.X
+	// isAdapter walks a type expression: Adapter itself, or any composite that
+	// holds one a caller can read out (pointer, slice, array, map, chan, a
+	// func's results, an exported or embedded struct field, an interface
+	// method's results, a generic argument). Parameters and unexported fields
+	// do not hand the adapter out.
+	var isAdapter func(e ast.Expr) bool
+	fieldsHave := func(fl *ast.FieldList, exportedOnly bool) bool {
+		if fl == nil {
+			return false
 		}
+		for _, fd := range fl.List {
+			visible := len(fd.Names) == 0 || !exportedOnly
+			for _, n := range fd.Names {
+				if n.IsExported() {
+					visible = true
+				}
+			}
+			if visible && isAdapter(fd.Type) {
+				return true
+			}
+		}
+		return false
+	}
+	isAdapter = func(e ast.Expr) bool {
 		switch t := e.(type) {
 		case *ast.Ident:
 			return t.Name == "Adapter"
 		case *ast.SelectorExpr:
 			id, ok := t.X.(*ast.Ident)
 			return ok && t.Sel.Name == "Adapter" && names[id.Name]
+		case *ast.StarExpr:
+			return isAdapter(t.X)
+		case *ast.ParenExpr:
+			return isAdapter(t.X)
+		case *ast.ArrayType:
+			return isAdapter(t.Elt)
+		case *ast.Ellipsis:
+			return isAdapter(t.Elt)
+		case *ast.MapType:
+			return isAdapter(t.Key) || isAdapter(t.Value)
+		case *ast.ChanType:
+			return isAdapter(t.Value)
+		case *ast.IndexExpr:
+			return isAdapter(t.X) || isAdapter(t.Index)
+		case *ast.IndexListExpr:
+			if isAdapter(t.X) {
+				return true
+			}
+			for _, i := range t.Indices {
+				if isAdapter(i) {
+					return true
+				}
+			}
+		case *ast.FuncType:
+			return fieldsHave(t.Results, false)
+		case *ast.StructType:
+			return fieldsHave(t.Fields, true)
+		case *ast.InterfaceType:
+			return fieldsHave(t.Methods, true)
 		}
 		return false
 	}
@@ -131,10 +180,8 @@ func reExportsAdapter(rel string, f *ast.File) bool {
 				}
 			}
 			if fd.Name.IsExported() && fd.Type.Results != nil && !adapterReturners[rel+":"+name] {
-				for _, res := range fd.Type.Results.List {
-					if isAdapter(res.Type) {
-						found = true
-					}
+				if fieldsHave(fd.Type.Results, false) {
+					found = true
 				}
 			}
 			continue
@@ -144,30 +191,19 @@ func reExportsAdapter(rel string, f *ast.File) bool {
 			continue
 		}
 		for _, sp := range gd.Specs {
-			ts, ok := sp.(*ast.TypeSpec)
-			if !ok || ts.Name.Name == "Adapter" {
-				continue
-			}
-			if isAdapter(ts.Type) {
-				found = true
-			}
-			ast.Inspect(ts.Type, func(n ast.Node) bool {
-				var fl *ast.FieldList
-				switch t := n.(type) {
-				case *ast.InterfaceType:
-					fl = t.Methods
-				case *ast.StructType:
-					fl = t.Fields
+			switch s := sp.(type) {
+			case *ast.TypeSpec:
+				if s.Name.Name != "Adapter" && isAdapter(s.Type) {
+					found = true
 				}
-				if fl != nil {
-					for _, fd := range fl.List {
-						if len(fd.Names) == 0 && isAdapter(fd.Type) {
-							found = true
-						}
+			case *ast.ValueSpec:
+				// Only a declared type is visible to the scan.
+				for _, n := range s.Names {
+					if n.IsExported() && s.Type != nil && isAdapter(s.Type) {
+						found = true
 					}
 				}
-				return true
-			})
+			}
 		}
 	}
 	return found
@@ -219,22 +255,50 @@ func TestRawForgeScanCatchesDotImportAndReExport(t *testing.T) {
 		rel, src string
 		want     bool
 	}{
-		"dot import":       {"internal/x/x.go", "package x\nimport . \"" + forgePkg + "\"\nvar _ Adapter\n", true},
-		"alias":            {"internal/forge/raw.go", "package forge\ntype Raw = Adapter\n", true},
-		"definition":       {"internal/forge/raw.go", "package forge\ntype Raw Adapter\n", true},
-		"interface":        {"internal/forge/raw.go", "package forge\ntype Raw interface{ Adapter; X() }\n", true},
-		"struct":           {"internal/forge/raw.go", "package forge\ntype Raw struct{ *Adapter }\n", true},
-		"selector alias":   {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\ntype Raw = f.Adapter\n", true},
-		"selector embed":   {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype Raw struct{ forge.Adapter }\n", true},
-		"func returns":     {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) Adapter { return nil }\n", true},
-		"func returns ptr": {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) (*Adapter, error) { return nil, nil }\n", true},
-		"selector func":    {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\nfunc AsRaw() f.Adapter { return nil }\n", true},
-		"method returns":   {"internal/forge/raw.go", "package forge\nfunc (g *Guard) Inner() Adapter { return nil }\n", true},
-		"unexported func":  {"internal/forge/raw.go", "package forge\nfunc asRaw() Adapter { return nil }\n", false},
-		"func takes":       {"internal/forge/raw.go", "package forge\nfunc NewGuard(a Adapter) *Guard { return nil }\n", false},
-		"selector field":   {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype G struct{ a forge.Adapter }\n", false},
-		"named field":      {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter }\n", false},
-		"adapter itself":   {"internal/forge/raw.go", "package forge\ntype Adapter interface{ X() }\n", false},
+		"dot import":        {"internal/x/x.go", "package x\nimport . \"" + forgePkg + "\"\nvar _ Adapter\n", true},
+		"alias":             {"internal/forge/raw.go", "package forge\ntype Raw = Adapter\n", true},
+		"definition":        {"internal/forge/raw.go", "package forge\ntype Raw Adapter\n", true},
+		"interface":         {"internal/forge/raw.go", "package forge\ntype Raw interface{ Adapter; X() }\n", true},
+		"struct":            {"internal/forge/raw.go", "package forge\ntype Raw struct{ *Adapter }\n", true},
+		"selector alias":    {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\ntype Raw = f.Adapter\n", true},
+		"selector embed":    {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype Raw struct{ forge.Adapter }\n", true},
+		"func returns":      {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) Adapter { return nil }\n", true},
+		"func returns ptr":  {"internal/forge/raw.go", "package forge\nfunc AsRaw(a any) (*Adapter, error) { return nil, nil }\n", true},
+		"selector func":     {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\nfunc AsRaw() f.Adapter { return nil }\n", true},
+		"method returns":    {"internal/forge/raw.go", "package forge\nfunc (g *Guard) Inner() Adapter { return nil }\n", true},
+		"result second":     {"internal/forge/raw.go", "package forge\nfunc AsRaw() (error, Adapter) { return nil, nil }\n", true},
+		"result third":      {"internal/forge/raw.go", "package forge\nfunc AsRaw() (int, error, *Adapter) { return 0, nil, nil }\n", true},
+		"result named":      {"internal/forge/raw.go", "package forge\nfunc AsRaw() (n int, a Adapter) { return }\n", true},
+		"exported var":      {"internal/forge/raw.go", "package forge\nvar Default Adapter\n", true},
+		"exported var sel":  {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\nvar A, Default forge.Adapter\n", true},
+		"unexported var":    {"internal/forge/raw.go", "package forge\nvar def Adapter\n", false},
+		"exported field":    {"internal/forge/raw.go", "package forge\ntype G struct{ Raw Adapter }\n", true},
+		"exported field 2":  {"internal/forge/raw.go", "package forge\ntype G struct{ a, Raw Adapter }\n", true},
+		"mixed fields":      {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter; N int }\n", false},
+		"slice result":      {"internal/forge/raw.go", "package forge\nfunc All() []Adapter { return nil }\n", true},
+		"array result":      {"internal/forge/raw.go", "package forge\nfunc All() [2]Adapter { return [2]Adapter{} }\n", true},
+		"map value result":  {"internal/forge/raw.go", "package forge\nfunc All() map[string]Adapter { return nil }\n", true},
+		"map key result":    {"internal/forge/raw.go", "package forge\nfunc All() map[Adapter]int { return nil }\n", true},
+		"chan result":       {"internal/forge/raw.go", "package forge\nfunc All() <-chan Adapter { return nil }\n", true},
+		"func result":       {"internal/forge/raw.go", "package forge\nfunc All() func() Adapter { return nil }\n", true},
+		"nested result":     {"internal/forge/raw.go", "package forge\nfunc All() map[string][]*Adapter { return nil }\n", true},
+		"selector slice":    {"internal/forge/github/raw.go", "package github\nimport f \"" + forgePkg + "\"\nfunc All() []f.Adapter { return nil }\n", true},
+		"generic result":    {"internal/forge/raw.go", "package forge\nfunc All() List[Adapter] { return nil }\n", true},
+		"generic base":      {"internal/forge/raw.go", "package forge\nfunc All() Adapter[int] { return nil }\n", true},
+		"slice var":         {"internal/forge/raw.go", "package forge\nvar All []Adapter\n", true},
+		"slice field":       {"internal/forge/raw.go", "package forge\ntype G struct{ All []Adapter }\n", true},
+		"func field":        {"internal/forge/raw.go", "package forge\ntype G struct{ Get func() Adapter }\n", true},
+		"nested struct":     {"internal/forge/raw.go", "package forge\ntype G struct{ In struct{ Raw Adapter } }\n", true},
+		"slice type":        {"internal/forge/raw.go", "package forge\ntype L []Adapter\n", true},
+		"iface method":      {"internal/forge/raw.go", "package forge\ntype I interface{ Get() Adapter }\n", true},
+		"func param slice":  {"internal/forge/raw.go", "package forge\nfunc Set(a []Adapter) {}\n", false},
+		"slice unexported":  {"internal/forge/raw.go", "package forge\ntype G struct{ all []Adapter }\nvar all []Adapter\nfunc all2() []Adapter { return nil }\n", false},
+		"func param result": {"internal/forge/raw.go", "package forge\nfunc Hook() func(Adapter) { return nil }\n", false},
+		"unexported func":   {"internal/forge/raw.go", "package forge\nfunc asRaw() Adapter { return nil }\n", false},
+		"func takes":        {"internal/forge/raw.go", "package forge\nfunc NewGuard(a Adapter) *Guard { return nil }\n", false},
+		"selector field":    {"internal/forge/github/raw.go", "package github\nimport \"" + forgePkg + "\"\ntype G struct{ a forge.Adapter }\n", false},
+		"named field":       {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter }\n", false},
+		"adapter itself":    {"internal/forge/raw.go", "package forge\ntype Adapter interface{ X() }\n", false},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
