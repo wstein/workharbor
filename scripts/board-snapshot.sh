@@ -64,6 +64,29 @@ die() { echo "board-snapshot: $*" >&2; exit 1; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required (brew install jq)"
 
+repository=${WHR_BOARD_REPOSITORY:-wstein/workharbor}
+owner=${WHR_BOARD_OWNER:-${repository%%/*}}
+project=${WHR_BOARD_PROJECT_ID:-}
+project_number=${WHR_BOARD_PROJECT_NUMBER:-}
+lane_prefix=${WHR_BOARD_LANE_PREFIX:-wh}
+roles=${WHR_BOARD_ROLES:-desk,dispatch,design,review,platform,runtime,docs,verify,spikes}
+[[ $repository =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "invalid repository"
+[[ $owner =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid owner"
+[[ $lane_prefix =~ ^[a-z][a-z0-9_-]*$ ]] || die "invalid lane prefix"
+[[ $roles =~ ^[a-z]+(,[a-z]+)*$ ]] || die "invalid roles"
+[[ -z "$project_number" || $project_number =~ ^[1-9][0-9]*$ ]] || die "invalid project number"
+case $project in '' | PVT_*) ;; *) die "invalid project ID" ;; esac
+[[ -z "$project" || $project =~ ^PVT_[A-Za-z0-9_-]+$ ]] || die "invalid project ID"
+if [ "$repository" != wstein/workharbor ] && { [ "$project" = PVT_kwHNjWrOAZVCuA ] || { [ "$owner" = wstein ] && [ "$project_number" = 6 ]; }; }; then
+  die "nondefault repository cannot target workharbor project 6"
+fi
+if [ "$repository" != wstein/workharbor ] || [ "$owner" != wstein ]; then
+  [ -n "$project$project_number" ] || die "nondefault repository requires an explicit project"
+else
+  if [ -z "$project$project_number" ]; then project=PVT_kwHNjWrOAZVCuA; fi
+fi
+target="$owner/$repository/${project:-$project_number}/$lane_prefix/$roles"
+
 max_age=${WHR_BOARD_MAX_AGE:-300}
 case $max_age in '' | *[!0-9]*) die "WHR_BOARD_MAX_AGE must be a number of seconds" ;; esac
 
@@ -75,6 +98,10 @@ else
 fi
 case $file in /*) ;; *) die "the snapshot path must be absolute" ;; esac
 case $file in *$'\n'*) die "the snapshot path must not contain a newline" ;; esac
+if [ "$target" != "wstein/wstein/workharbor/PVT_kwHNjWrOAZVCuA/wh/desk,dispatch,design,review,platform,runtime,docs,verify,spikes" ]; then
+  scope=$(printf '%s' "$target" | shasum -a 256 | cut -d ' ' -f 1)
+  file="${file}.scopes/$scope/board.json"
+fi
 
 refresh=0
 args=()
@@ -84,6 +111,7 @@ done
 mode=${args[0]:-print}
 case $mode in
 print) ;;
+metadata) ;;
 queue) [ -n "${args[1]:-}" ] || die "usage: board-snapshot.sh queue <lane>" ;;
 card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
@@ -116,10 +144,10 @@ move | session | priority | add | ready)
     esac
     ;;
   session)
-    case $value in
-    "wh/design" | "wh/dispatch" | "wh/platform" | "wh/runtime" | "wh/review" | "wh/verify" | "wh/docs" | "wh/spikes" | "wh/desk" | "Werner") ;;
-    *) die "lane must be one of: wh/design, wh/dispatch, wh/platform, wh/runtime, wh/review, wh/verify, wh/docs, wh/spikes, wh/desk, Werner" ;;
-    esac
+    if [ "$value" != Werner ] || [ "$lane_prefix" != wh ]; then
+      case ",$roles," in *",${value#"$lane_prefix/"},"*) [[ $value == "$lane_prefix/"* ]] || die "invalid lane" ;;
+      *) die "lane must use $lane_prefix and a configured role" ;; esac
+    fi
     ;;
   priority)
     case $value in P1 | P2 | P3) ;; *) die "priority must be one of: P1, P2, P3" ;; esac
@@ -134,10 +162,31 @@ dir=$(dirname "$file")
 lock=$dir/.board.lock
 mkdir -p "$dir"
 
+if [ "$mode" != budget ] && { [ -n "${WHR_BOARD_OWNER+x}${WHR_BOARD_PROJECT_NUMBER+x}${WHR_BOARD_PROJECT_ID+x}" ] || [ "$repository" != wstein/workharbor ] || [ "$mode" = metadata ]; }; then
+  repo_name=${repository#*/}
+  repo_owner=${repository%%/*}
+  if [ -n "$project_number" ]; then
+    metadata=$(gh api graphql -f query='query($owner:String!,$number:Int!,$repoOwner:String!,$repoName:String!){repository(owner:$repoOwner,name:$repoName){nameWithOwner} user(login:$owner){projectV2(number:$number){id number url owner{... on User{login} ... on Organization{login}}}}}' -f owner="$owner" -F number="$project_number" -f repoOwner="$repo_owner" -f repoName="$repo_name") || die "project lookup failed"
+    resolved=$(printf '%s' "$metadata" | jq -er '.data.user.projectV2.id') || die "project not found"
+    [ -z "$project" ] || [ "$project" = "$resolved" ] || die "project ID and number disagree"
+    project=$resolved
+    metadata=$(printf '%s' "$metadata" | jq '.data.node = .data.user.projectV2')
+  else
+    metadata=$(gh api graphql -f query='query($p:ID!,$repoOwner:String!,$repoName:String!){repository(owner:$repoOwner,name:$repoName){nameWithOwner} node(id:$p){... on ProjectV2{id number url owner{... on User{login} ... on Organization{login}}}}}' -f p="$project" -f repoOwner="$repo_owner" -f repoName="$repo_name") || die "project lookup failed"
+  fi
+  printf '%s' "$metadata" | jq -e --arg owner "$owner" --arg repo "$repository" --arg project "$project" '.data.repository.nameWithOwner == $repo and .data.node.owner.login == $owner and .data.node.id == $project' >/dev/null || die "project/repository identity mismatch"
+  if [ "$mode" = metadata ]; then printf '%s\n' "$metadata"; exit 0; fi
+fi
+
 # fresh succeeds when the file holds a snapshot younger than max_age.
+matches_target() {
+  [ -f "$file" ] && jq -e --arg target "$target" '.target == $target' "$file" >/dev/null 2>&1
+}
+
 fresh() {
   local at now
   [ -f "$file" ] || return 1
+  matches_target || return 1
   at=$(jq -er '.fetched_at | numbers' "$file" 2>/dev/null) || return 1
   now=$(date +%s)
   [ $((now - at)) -lt "$max_age" ] && [ "$at" -le "$now" ]
@@ -180,7 +229,6 @@ budget_note() {
   fi
 }
 
-project=PVT_kwHNjWrOAZVCuA
 fields=$dir/board-fields.json
 
 # fields_fetch caches the field and option IDs of Status, Session and Priority.
@@ -210,7 +258,7 @@ field_ids() {
 }
 
 # items_query asks only for what the snapshot holds, 100 items a page (#165).
-items_query='query($p:ID!,$after:String){rateLimit{cost remaining limit resetAt} node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url labels(first:20){nodes{name}}} ... on PullRequest{number title url labels(first:20){nodes{name}}} ... on DraftIssue{title}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
+items_query='query($p:ID!,$after:String){rateLimit{cost remaining limit resetAt} node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url repository{nameWithOwner} labels(first:20){nodes{name}}}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
 
 # query reads every page of the board with first:100 and an after: cursor and
 # rewrites the snapshot only when all pages came back; one failed page leaves
@@ -242,9 +290,10 @@ query() {
     fi
   done
   tmp=$(mktemp "$dir/.board.XXXXXX")
-  if ! jq -s --argjson now "$(date +%s)" '{
+  if ! jq -s --arg target "$target" --arg repo "$repository" --argjson now "$(date +%s)" '{
+    target: $target,
     fetched_at: $now,
-    items: [.[] | {
+    items: [.[] | select(.content.__typename == "Issue" and .content.repository.nameWithOwner == $repo) | {
       number: .content.number,
       title: .content.title,
       status: .status.name,
@@ -353,7 +402,7 @@ move | session | priority | add | ready)
     seen="$seen$n "
     if [ "$mode" = add ]; then
       # Two calls: the issue's node ID and title, then addProjectV2ItemById.
-      info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){id title}}}' -F n="$n") || {
+      info=$(gh api graphql -f query='query($n:Int!,$owner:String!,$repo:String!){repository(owner:$owner,name:$repo){issue(number:$n){id title}}}' -f owner="${repository%%/*}" -f repo="${repository#*/}" -F n="$n") || {
         echo "board-snapshot: #$n: GitHub refused the add" >&2; failed=1; continue; }
       cid=$(printf '%s' "$info" | jq -r '.data.repository.issue.id // empty')
       title=$(printf '%s' "$info" | jq -r '.data.repository.issue.title // empty')
@@ -362,7 +411,7 @@ move | session | priority | add | ready)
         echo "board-snapshot: #$n: GitHub refused the add" >&2; failed=1; continue; }
       done_json=$(printf '%s' "$done_json" | jq -c --argjson n "$n" --arg t "$title" '. + [{n: $n, title: $t}]')
     else
-      info=$(gh api graphql -f query='query($n:Int!){repository(owner:"wstein",name:"workharbor"){issue(number:$n){projectItems(first:10){nodes{id project{id}}}}}}' -F n="$n") || {
+      info=$(gh api graphql -f query='query($n:Int!,$owner:String!,$repo:String!){repository(owner:$owner,name:$repo){issue(number:$n){projectItems(first:100){pageInfo{hasNextPage} nodes{id project{id}}}}}}' -f owner="${repository%%/*}" -f repo="${repository#*/}" -F n="$n") || {
         echo "board-snapshot: #$n: GitHub refused the lookup" >&2; failed=1; continue; }
       item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
       [ -n "$item" ] || { echo "board-snapshot: #$n: not on the board (use: board-snapshot.sh add $n)" >&2; failed=1; continue; }
@@ -375,8 +424,8 @@ move | session | priority | add | ready)
   # One cache patch for every issue that succeeded.
   if [ "$mode" = add ]; then
     [ "$done_json" = "[]" ] ||
-      patch '.items |= (reduce $adds[] as $a (.; if any(.[]; .number == $a.n) then . else . + [{number: $a.n, title: (if $a.title == "" then null else $a.title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: ("https://github.com/wstein/workharbor/issues/" + ($a.n | tostring))}] end))' \
-        --argjson adds "$done_json"
+      patch '.items |= (reduce $adds[] as $a (.; if any(.[]; .number == $a.n) then . else . + [{number: $a.n, title: (if $a.title == "" then null else $a.title end), status: null, session: null, priority: null, labels: [], type: "Issue", url: ("https://github.com/" + $repo + "/issues/" + ($a.n | tostring))}] end))' \
+        --arg repo "$repository" --argjson adds "$done_json"
   elif [ ${#done_nums[@]} -gt 0 ]; then
     nj=$(printf '%s\n' "${done_nums[@]}" | jq -sc 'map(tonumber)')
     patch '.items |= map(if (.number as $x | $ns | index($x)) != null then .[$k] = $v else . end)' \
@@ -407,7 +456,7 @@ if [ "$refresh" = 1 ] || ! fresh; then
     }; then
       :
     elif ! query; then
-      if [ -f "$file" ]; then
+      if matches_target; then
         echo "board-snapshot: stale: the board query failed (rate limit?), using the snapshot of $(jq -r '.fetched_at' "$file" 2>/dev/null || echo unknown)" >&2
       else
         die "the board query failed and there is no snapshot"
@@ -421,6 +470,7 @@ if [ "$refresh" = 1 ] || ! fresh; then
 fi
 
 [ -f "$file" ] || die "no snapshot"
+matches_target || die "snapshot target identity mismatch"
 
 case $mode in
 print) cat "$file" ;;

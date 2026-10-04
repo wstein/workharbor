@@ -21,6 +21,7 @@ const fakeNodes = `[
 ]`
 
 func page(nodes string, next string) string {
+	nodes = strings.ReplaceAll(nodes, `"__typename":"Issue",`, `"__typename":"Issue","repository":{"nameWithOwner":"wstein/workharbor"},`)
 	if next == "" {
 		return `{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":` + nodes + `}}}}`
 	}
@@ -29,6 +30,137 @@ func page(nodes string, next string) string {
 
 type board struct {
 	bin, snap, log string
+}
+
+func TestBoardSnapshotExplicitRepositoryRequiresProject(t *testing.T) {
+	t.Parallel()
+	fixture := newBoard(t)
+	_, stderr, err := fixture.runEnv(t, []string{"WHR_BOARD_REPOSITORY=wstein/crewbook"}, "move", "7", "Todo")
+	if err == nil || !strings.Contains(stderr, "explicit project") || fixture.calls(t) != 0 {
+		t.Fatalf("err %v stderr %q calls %d", err, stderr, fixture.calls(t))
+	}
+}
+
+func TestBoardSnapshotScopedCacheAndRepositoryCollision(t *testing.T) {
+	t.Parallel()
+	fixture := newBoard(t)
+	if _, _, err := fixture.run(t); err != nil {
+		t.Fatal(err)
+	}
+	nodes := `[{"content":{"__typename":"Issue","number":7,"repository":{"nameWithOwner":"wstein/crewbook"}},"session":{"name":"cb/platform"},"status":{"name":"Todo"}},{"content":{"__typename":"Issue","number":7,"repository":{"nameWithOwner":"wstein/workharbor"}}},{"content":{"__typename":"PullRequest","number":7,"repository":{"nameWithOwner":"wstein/crewbook"}}}]`
+	fixture.pages(t, map[string]string{"first": page(nodes, "")})
+	env := []string{"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_PROJECT_ID=PVT_crewbook", "WHR_BOARD_LANE_PREFIX=cb"}
+	stdout, stderr, err := fixture.runEnv(t, env)
+	if err != nil {
+		t.Fatalf("%v %s", err, stderr)
+	}
+	var snapshot struct{ Items []map[string]any }
+	if err := json.Unmarshal([]byte(stdout), &snapshot); err != nil || len(snapshot.Items) != 1 {
+		t.Fatalf("snapshot %s err %v", stdout, err)
+	}
+	if fixture.calls(t) != 3 {
+		t.Fatal("another target reused the default snapshot")
+	}
+	_, _, err = fixture.runEnv(t, env, "move", "7", "Ready to push")
+	if err == nil || fixture.calls(t) != 3 {
+		t.Fatal("move bypassed review gate")
+	}
+}
+
+func TestBoardSnapshotScopedMetadataAndAdd(t *testing.T) {
+	t.Parallel()
+	fixture := newBoard(t)
+	env := []string{"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_PROJECT_NUMBER=10", "WHR_BOARD_LANE_PREFIX=cb"}
+	stdout, stderr, err := fixture.runEnv(t, env, "metadata")
+	if err != nil || !strings.Contains(stdout, "PVT_crewbook") {
+		t.Fatalf("metadata: %v %s %s", err, stderr, stdout)
+	}
+	if _, stderr, err := fixture.runEnv(t, env, "add", "1", "2", "3", "4", "5", "6", "7", "8"); err != nil {
+		t.Fatalf("add: %v %s", err, stderr)
+	}
+	for _, call := range fixture.lines(t) {
+		if strings.Contains(call, "PVT_kwHNjWrOAZVCuA") || strings.Contains(call, "fields(first") {
+			t.Fatalf("add touched default project or required schema: %s", call)
+		}
+		if strings.Contains(call, "issue(number") && !strings.Contains(call, "repo=crewbook") {
+			t.Fatalf("wrong repository: %s", call)
+		}
+	}
+	mutations := 0
+	for _, call := range fixture.lines(t) {
+		if strings.Contains(call, "addProjectV2ItemById") {
+			mutations++
+			if !strings.Contains(call, "p=PVT_crewbook") || !strings.Contains(call, "c=I_"+strconv.Itoa(mutations)) {
+				t.Fatalf("unexpected resolved mutation: %s", call)
+			}
+		}
+	}
+	if mutations != 8 {
+		t.Fatalf("mutations %d, want 8", mutations)
+	}
+	before := fixture.calls(t)
+	_, _, err = fixture.runEnv(t, append(env, "WHR_BOARD_PROJECT_ID=PVT_wrong"), "add", "7")
+	if err == nil || fixture.calls(t) != before+1 {
+		t.Fatal("inconsistent ID and number allowed mutation")
+	}
+	_, _, err = fixture.runEnv(t, []string{"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_PROJECT_NUMBER=6"}, "add", "7")
+	if err == nil || fixture.calls(t) != before+1 {
+		t.Fatal("nondefault repository targeted project 6")
+	}
+	_, _, err = fixture.runEnv(t, []string{"WHR_BOARD_REPOSITORY=wstein/other", "WHR_BOARD_PROJECT_NUMBER=10"}, "add", "7")
+	if err == nil || fixture.calls(t) != before+2 {
+		t.Fatal("repository metadata mismatch allowed mutation")
+	}
+	before = fixture.calls(t)
+	_, stderr, err = fixture.runEnv(t, env, "add", "1", "99", "7")
+	if err == nil || !strings.Contains(stderr, "#99") || fixture.calls(t) != before+6 {
+		t.Fatalf("partial add: %v %s calls %d", err, stderr, fixture.calls(t)-before)
+	}
+	if _, stderr, err := fixture.runEnv(t, env, "add", "1", "7"); err != nil {
+		t.Fatalf("retry: %v %s", err, stderr)
+	}
+	before = fixture.calls(t)
+	_, _, err = fixture.runEnv(t, []string{"WHR_BOARD_PROJECT_ID=PVT_kwHNjWrOAZVCuA", "WHR_BOARD_PROJECT_NUMBER=10"}, "add", "7")
+	if err == nil || fixture.calls(t) != before+1 {
+		t.Fatal("explicit default ID bypassed identity validation")
+	}
+}
+
+func TestBoardSnapshotMismatchedFallbackRefused(t *testing.T) {
+	t.Parallel()
+	for _, busy := range []bool{false, true} {
+		t.Run(strconv.FormatBool(busy), func(t *testing.T) {
+			fixture := newBoard(t)
+			if _, _, err := fixture.run(t); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(fixture.snap, []byte(`{"target":"another-project","fetched_at":1,"items":[{"title":"must-not-leak"}]}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if busy {
+				lock := filepath.Join(filepath.Dir(fixture.snap), ".board.lock")
+				if err := os.Mkdir(lock, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(lock, "ts"), []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				clock := strconv.FormatInt(time.Now().Unix(), 10)
+				functions := "sleep() { :; }\ndate() { echo " + clock + "; }\nmkdir() { if [ \"$1\" = '" + lock + "' ]; then return 1; fi; command mkdir \"$@\"; }\ncat() { if [ \"$1\" = '" + lock + "/ts' ]; then echo " + clock + "; else command cat \"$@\"; fi; }\n"
+				if err := os.WriteFile(filepath.Join(fixture.bin, "functions"), []byte(functions), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			env := []string{"FAKE_GH_FAIL=1"}
+			if busy {
+				env = append(env, "BASH_ENV="+filepath.Join(fixture.bin, "functions"))
+			}
+			stdout, _, err := fixture.runEnv(t, env, "--refresh")
+			if err == nil || strings.Contains(stdout, "must-not-leak") {
+				t.Fatalf("mismatched cache returned: %v %s", err, stdout)
+			}
+		})
+	}
 }
 
 func newBoard(t *testing.T) board {
@@ -50,6 +182,7 @@ echo "$*" >> "` + b.log + `"
 sleep 0.3
 if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exit 1; fi
 case "$*" in
+*"repoOwner="*) echo '{"data":{"repository":{"nameWithOwner":"wstein/crewbook"},"node":{"id":"PVT_crewbook","number":10,"url":"https://github.com/users/wstein/projects/10","owner":{"login":"wstein"}},"user":{"projectV2":{"id":"PVT_crewbook","number":10,"url":"https://github.com/users/wstein/projects/10","owner":{"login":"wstein"}}}}}'; exit 0 ;;
 *addProjectV2ItemById*) echo '{"data":{}}'; exit 0 ;;
 *updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
 *projectItems*) if [ -n "$FAKE_NOITEM" ] || case "$*" in *"n=99"*) true ;; *) false ;; esac; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
@@ -58,8 +191,11 @@ case "$*" in
 	cur=first
 	for a in "$@"; do case "$a" in after=*) cur=${a#after=} ;; esac; done
 	if [ "$FAKE_FAIL_PAGE" = "$cur" ]; then echo "GraphQL: secondary rate limit" >&2; exit 1; fi
-	cat "` + b.bin + `/pages/$cur.json"; exit 0 ;;
-*"issue(number"*) echo '{"data":{"repository":{"issue":{"id":"I_77","title":"A new title"}}}}'; exit 0 ;;
+	jq '(.data.node.items.nodes[].content | select(.repository == null)) |= (. + {repository:{nameWithOwner:"wstein/workharbor"}})' "` + b.bin + `/pages/$cur.json"; exit 0 ;;
+*"issue(number"*)
+	for arg in "$@"; do case "$arg" in n=*) number=${arg#n=} ;; esac; done
+	if [ "$number" = 99 ]; then echo '{"data":{"repository":{"issue":null}}}'; else printf '{"data":{"repository":{"issue":{"id":"I_%s","title":"A new title"}}}}\n' "$number"; fi
+	exit 0 ;;
 esac
 echo '{}'
 `
