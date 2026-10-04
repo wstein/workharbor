@@ -27,6 +27,7 @@ func devSetupRig(t *testing.T) (*setupRig, string) {
 		t.Fatal(err)
 	}
 	r.env.Executable = func() (string, error) { return r.exe, nil }
+	r.env.UID = os.Getuid() // the checks compare owners with the running account
 	return r, home
 }
 
@@ -245,5 +246,51 @@ func TestServiceInstallRetainsDevelopmentBinary(t *testing.T) {
 	}
 	if !bytes.Contains(plist, []byte(r.whr)) {
 		t.Fatalf("service did not retain the development binary: %s", plist)
+	}
+}
+
+func TestDoctorDevRepairOfABrokenConfigKeepsDevAndPrefix(t *testing.T) {
+	r, home := devSetupRig(t)
+	if err := os.MkdirAll(filepath.Join(home, ".config", "whr"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".config", "whr", "config.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prefix := filepath.Join(home, ".local")
+	_, _, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
+	want := "whr setup --dev --prefix '" + prefix + "'"
+	if !strings.Contains(errOut, want) {
+		t.Fatalf("a bare `whr setup` repair must keep --dev and the prefix, want %q in %q", want, errOut)
+	}
+	for _, l := range strings.Split(errOut, "\n") {
+		if strings.Contains(l, "→ whr setup") && !strings.Contains(l, "whr setup --dev") && !strings.Contains(l, "whr setup host --dev") {
+			t.Fatalf("repair without --dev: %q", l)
+		}
+	}
+}
+
+func TestDoctorDevRefusesBroadOrForeignPrefixes(t *testing.T) {
+	for _, kind := range []string{"root", "home", "foreign-owner", "writable-above"} {
+		t.Run(kind, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			prefix := filepath.Join(home, ".local")
+			switch kind {
+			case "root":
+				prefix = "/"
+			case "home":
+				prefix = home
+			case "foreign-owner":
+				r.env.UID++ // the running account is not the owner of the files
+			case "writable-above":
+				if err := os.Chmod(home, 0o777); err != nil { //nolint:gosec // deliberately unsafe permissions to test rejection
+					t.Fatal(err)
+				}
+			}
+			code, out, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "werner", "--prefix", prefix)
+			if code == 0 || !strings.Contains(out, "fail\tprefix\t") {
+				t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errOut)
+			}
+		})
 	}
 }

@@ -76,7 +76,10 @@ and running as root or from a Git working tree is still refused.
 
 An explicit `--prefix /absolute/path` takes precedence over `$HOME/.local`.
 Use the same prefix with `make install`, setup and doctor. Symlinks are resolved
-before checking the binary's location. Without `--dev`, setup retains the
+before checking the binary's location. The prefix must be a directory of its
+own (not `/` or your home itself), and the binary, the prefix and every
+directory above it must belong to the account that runs `whr` or to root and
+be closed to group and other writers. Without `--dev`, setup retains the
 managed prefix list; `--prefix` alone selects a custom managed installation,
 whose ownership doctor checks separately.
 

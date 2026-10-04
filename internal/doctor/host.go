@@ -1306,15 +1306,30 @@ func (d Deps) developmentPrefix() (Status, string) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return Fail, binary + " is not under " + prefix
 	}
+	if prefix == "/" || prefix == filepath.Dir(prefix) || (d.Home != "" && samePath(prefix, d.Home)) {
+		return Fail, prefix + " is too broad for a development prefix: name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
+	}
+	// The binary up to the prefix, then every directory above it: none may be
+	// written by group or other (a sticky directory above the prefix, such as
+	// /tmp, only lets an owner replace its own entries), and each belongs to
+	// the account that runs whr or to root, so no other account can replace
+	// the supervisor binary.
+	inside := true
 	for p := binary; ; p = filepath.Dir(p) {
 		fi, err := os.Stat(p)
 		if err != nil {
 			return Fail, err.Error()
 		}
-		if fi.Mode().Perm()&0o022 != 0 {
+		if fi.Mode().Perm()&0o022 != 0 && (inside || fi.Mode()&os.ModeSticky == 0) {
 			return Fail, p + " can be written by others than its owner"
 		}
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != d.UID && st.Uid != 0 {
+			return Fail, p + " belongs to another account than " + d.User + " or root"
+		}
 		if p == prefix {
+			inside = false
+		}
+		if p == filepath.Dir(p) {
 			break
 		}
 	}
@@ -1333,4 +1348,21 @@ func prefixInstallGuide(d Deps) string {
 		return "Install approved source with `make install` using the selected PREFIX, then run `whr doctor --dev` with the same --prefix."
 	}
 	return "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13)."
+}
+
+func samePath(a, b string) bool {
+	if ra, err := filepath.EvalSymlinks(a); err == nil {
+		a = ra
+	}
+	if rb, err := filepath.EvalSymlinks(b); err == nil {
+		b = rb
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
+func (d Deps) homeOrDefault() string {
+	if d.Home != "" {
+		return d.Home
+	}
+	return "$HOME"
 }

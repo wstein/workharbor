@@ -89,6 +89,9 @@ func newDoctor(st *state) *cobra.Command {
 			rs := doctor.Run(cmd.Context(), checks, skipped)
 			for i, r := range rs {
 				if dev {
+					if rs[i].Fix == "whr setup" {
+						rs[i].Fix = "whr setup --dev"
+					}
 					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup host ", "whr setup host --dev ", 1)
 					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup --only ", "whr setup --dev --only ", 1)
 					if cmd.Flags().Changed("prefix") && strings.HasPrefix(rs[i].Fix, "whr setup ") {
