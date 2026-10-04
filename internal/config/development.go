@@ -55,6 +55,9 @@ func UnderManagedPrefix(path string) bool {
 	return false
 }
 
+// Within reports whether path is dir or lies below it, compared by identity.
+func Within(path, dir string) bool { return within(path, dir) }
+
 // CheckDevelopmentPrefix applies to the key's value every check the --prefix
 // flag has: absolute, clean, no control, bidirectional or separator character,
 // and not a managed prefix. It returns "" when the value passes. The checks

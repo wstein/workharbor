@@ -74,6 +74,7 @@ func newSetup(st *state) *cobra.Command {
 	var (
 		dryRun   bool
 		dev      bool
+		managed  bool
 		only     []string
 		from     string
 		whrUser  string
@@ -83,7 +84,7 @@ func newSetup(st *state) *cobra.Command {
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
 				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: doctor.DefaultLookPath,
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev, Managed: managed,
 			})
 		}
 	)
@@ -104,11 +105,24 @@ func newSetup(st *state) *cobra.Command {
 		if err := plainFlag("--user", whrUser); err != nil {
 			return err
 		}
-		prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME"))
+		if dev && managed {
+			return usageError{"--dev and --managed cannot be combined: --dev remembers a development installation, --managed removes the memory"}
+		}
+		exe, exeErr := env.Executable()
+		key, err := rememberedPrefix(cmd, dev, managed, configPath(), exe)
 		if err != nil {
 			return err
 		}
-		if dev {
+		remembered := useRemembered(cmd, dev, key)
+		if remembered {
+			dev, prefix = true, key
+		} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
+			return err
+		}
+		switch {
+		case remembered:
+			fmt.Fprintln(st.env.Stderr, rememberedWarning(configPath()))
+		case dev:
 			fmt.Fprintln(st.env.Stderr, developmentWarning)
 		}
 		ctx := cmd.Context()
@@ -132,8 +146,15 @@ func newSetup(st *state) *cobra.Command {
 				fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 			}
 		}
-		if exe, err := env.Executable(); err != nil {
-			return err
+		if exeErr != nil {
+			return exeErr
+		}
+		// --managed only leaves development mode: it may run from a source build, and the
+		// managed prefix is checked after the steps; the binary is replaced by the release
+		if managed {
+			if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
+				fmt.Fprintf(st.env.Stderr, "note: %s; install the release before `whr service install` (manual, host setup step 13)\n", oneLineError(err))
+			}
 		} else if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
 			if !dev {
 				err = fmt.Errorf("%w; for a source installation use --dev (or select its --prefix)", err)
@@ -173,8 +194,11 @@ func newSetup(st *state) *cobra.Command {
 		if phase == doctor.PhaseHost {
 			resume = append(resume, "host")
 		}
-		if dev {
+		if dev && !remembered {
 			resume = append(resume, "--dev")
+		}
+		if managed {
+			resume = append(resume, "--managed")
 		}
 		if cmd.Flags().Changed("user") {
 			resume = append(resume, "--user", whrUser)
@@ -188,6 +212,20 @@ func newSetup(st *state) *cobra.Command {
 			return usageError{err.Error()}
 		}
 		setup.Summary(st.env.Stderr, outs, so)
+		if managed {
+			// leaving development mode: the key is gone (or was refused above), and
+			// the managed prefix is what the installation now relies on
+			for _, c := range steps {
+				if c.Name == "prefix" {
+					stt, detail := c.Run(ctx)
+					fmt.Fprintf(st.env.Stderr, "prefix: %s: %s\n", stt, clean(strings.TrimSpace(detail)))
+					if stt == doctor.Fail {
+						fmt.Fprintln(st.env.Stderr, "whr: the managed prefix is not ready: `whr setup host --only prefix` as the administrator prepares it")
+						return quietError{}
+					}
+				}
+			}
+		}
 		for _, o := range outs {
 			if o.Status == doctor.Fail {
 				if dryRun {
@@ -203,6 +241,7 @@ func newSetup(st *state) *cobra.Command {
 	flags := func(c *cobra.Command) {
 		f := c.Flags()
 		f.BoolVar(&dev, "dev", false, "use a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
+		f.BoolVar(&managed, "managed", false, "leave development mode: remove development_prefix from the configuration (`--only development-key` does only that), then check the managed prefix; not with --dev")
 		f.BoolVar(&dryRun, "dry-run", false, "run the read-only checks for real and print every fix without running any")
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
 		f.StringVar(&from, "from", "", "start at this step")

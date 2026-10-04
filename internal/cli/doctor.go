@@ -44,14 +44,23 @@ func newDoctor(st *state) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME"))
+			exe, _ := env.Executable()
+			key, err := rememberedPrefix(cmd, dev, false, path, exe)
 			if err != nil {
 				return err
 			}
-			if dev {
+			remembered := useRemembered(cmd, dev, key)
+			if remembered {
+				dev, prefix = true, key
+			} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
+				return err
+			}
+			switch {
+			case remembered:
+				fmt.Fprintln(st.env.Stderr, rememberedWarning(path))
+			case dev:
 				fmt.Fprintln(st.env.Stderr, developmentWarning)
 			}
-			exe, _ := env.Executable()
 			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
 				ConfigPath: path,
@@ -93,7 +102,8 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
 			for i, r := range rs {
-				if dev {
+				// a remembered development installation is read by `whr setup` itself
+				if dev && !remembered {
 					if rs[i].Fix == "whr setup" {
 						rs[i].Fix = "whr setup --dev"
 					}

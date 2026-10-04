@@ -39,6 +39,9 @@ func serveCommand(stderr io.Writer) *cobra.Command {
 				return err
 			}
 			logf := func(format string, args ...any) { fmt.Fprintf(stderr, "whr serve: "+format+"\n", args...) }
+			if err := noteDevelopmentPrefix(cfg, path, exe, logf); err != nil {
+				return err
+			}
 			deps, closeAll, err := serve.Build(cfg, exe, home, logf)
 			if err != nil {
 				return err
@@ -51,4 +54,19 @@ func serveCommand(stderr io.Writer) *cobra.Command {
 	}
 	c.Flags().Bool("accept-workflow-change", false, "confirm that a repository's workflow preset in the configuration differs from the recorded one (a policy change, D47)")
 	return c
+}
+
+// noteDevelopmentPrefix only logs development_prefix at start (D24, issue
+// #276): serve has no prefix check, so the key loosens nothing here. Load has
+// checked the value and the file; a whr in a managed prefix refuses the key, and
+// serve does not start.
+func noteDevelopmentPrefix(cfg *config.Config, path, exe string, logf func(string, ...any)) error {
+	if cfg.DevelopmentPrefix == "" {
+		return nil
+	}
+	if config.UnderManagedPrefix(exe) {
+		return fmt.Errorf("%s holds %s, which a whr in a managed prefix refuses: run `whr setup --managed`, or delete the key", path, config.DevelopmentPrefixKey)
+	}
+	logf("warning: development installation remembered as %s %s in %s; a user-writable supervisor lacks managed-install replacement protection (`whr setup --managed` leaves development mode)", config.DevelopmentPrefixKey, cfg.DevelopmentPrefix, path)
+	return nil
 }
