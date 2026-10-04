@@ -35,17 +35,24 @@ func rawForgeUses(t *testing.T, modRoot string, allowed func(rel string) bool) [
 		}
 		rel, _ := filepath.Rel(modRoot, path)
 		rel = filepath.ToSlash(rel)
-		if allowed(rel) {
-			return nil
-		}
 		f, err := parser.ParseFile(gotoken.NewFileSet(), path, nil, parser.SkipObjectResolution)
 		if err != nil {
 			return err
+		}
+		if allowed(rel) {
+			if strings.HasPrefix(rel, "internal/forge/") && reExportsAdapter(f) {
+				bad = append(bad, rel)
+			}
+			return nil
 		}
 		names := map[string]bool{}
 		for _, im := range f.Imports {
 			if p, _ := strconv.Unquote(im.Path.Value); p == forgePkg {
 				name := "forge"
+				if im.Name != nil && im.Name.Name == "." {
+					bad = append(bad, rel) // a dot import hides every bare Adapter
+					return nil
+				}
 				if im.Name != nil {
 					name = im.Name.Name
 				}
@@ -72,11 +79,59 @@ func rawForgeUses(t *testing.T, modRoot string, allowed func(rel string) bool) [
 	return bad
 }
 
-func rawForgeAllowed(rel string) bool {
-	return strings.HasPrefix(rel, "internal/forge/") || rel == "internal/serve/forge.go"
+// reExportsAdapter reports a type in package forge that aliases, redefines or
+// embeds Adapter: used elsewhere as forge.<Name>, it would hand out the adapter
+// without naming forge.Adapter (issue #247). A named field or parameter of type
+// Adapter (the Guard's) is fine.
+func reExportsAdapter(f *ast.File) bool {
+	isAdapter := func(e ast.Expr) bool {
+		if st, ok := e.(*ast.StarExpr); ok {
+			e = st.X
+		}
+		id, ok := e.(*ast.Ident)
+		return ok && id.Name == "Adapter"
+	}
+	found := false
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, sp := range gd.Specs {
+			ts, ok := sp.(*ast.TypeSpec)
+			if !ok || ts.Name.Name == "Adapter" {
+				continue
+			}
+			if isAdapter(ts.Type) {
+				found = true
+			}
+			ast.Inspect(ts.Type, func(n ast.Node) bool {
+				var fl *ast.FieldList
+				switch t := n.(type) {
+				case *ast.InterfaceType:
+					fl = t.Methods
+				case *ast.StructType:
+					fl = t.Fields
+				}
+				if fl != nil {
+					for _, fd := range fl.List {
+						if len(fd.Names) == 0 && isAdapter(fd.Type) {
+							found = true
+						}
+					}
+				}
+				return true
+			})
+		}
+	}
+	return found
 }
 
-// TestRawForgeStaysAtTheRoot: only forge/ and the composition root (forge.go
+func rawForgeAllowed(rel string) bool {
+	return strings.HasPrefix(rel, "internal/forge/") || rel == "internal/serve/forge.go" || rel == "internal/serve/forge_test.go"
+}
+
+// TestRawForgeStaysAtTheRoot: only forge/, forge_test.go (it asserts against the type) and the composition root (forge.go
 // narrows the adapter; real.go builds the GitHub client without naming the
 // type) take forge.Adapter; every other package gets a narrow member.
 func TestRawForgeStaysAtTheRoot(t *testing.T) {
@@ -108,5 +163,38 @@ func TestRawForgeScanCatchesAViolation(t *testing.T) {
 	got := rawForgeUses(t, root, rawForgeAllowed)
 	if len(got) != 1 || got[0] != "internal/x/x.go" {
 		t.Errorf("violations = %v, want only internal/x/x.go", got)
+	}
+}
+
+// TestRawForgeScanCatchesDotImportAndReExport: a dot import of forge outside the
+// allowlist and an alias or embedding of Adapter inside forge/ are reported.
+func TestRawForgeScanCatchesDotImportAndReExport(t *testing.T) {
+	cases := map[string]struct {
+		rel, src string
+		want     bool
+	}{
+		"dot import":     {"internal/x/x.go", "package x\nimport . \"" + forgePkg + "\"\nvar _ Adapter\n", true},
+		"alias":          {"internal/forge/raw.go", "package forge\ntype Raw = Adapter\n", true},
+		"definition":     {"internal/forge/raw.go", "package forge\ntype Raw Adapter\n", true},
+		"interface":      {"internal/forge/raw.go", "package forge\ntype Raw interface{ Adapter; X() }\n", true},
+		"struct":         {"internal/forge/raw.go", "package forge\ntype Raw struct{ *Adapter }\n", true},
+		"named field":    {"internal/forge/raw.go", "package forge\ntype G struct{ a Adapter }\n", false},
+		"adapter itself": {"internal/forge/raw.go", "package forge\ntype Adapter interface{ X() }\n", false},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			p := filepath.Join(root, c.rel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(c.src), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got := rawForgeUses(t, root, rawForgeAllowed)
+			if (len(got) > 0) != c.want {
+				t.Errorf("violations = %v, want violation %v", got, c.want)
+			}
+		})
 	}
 }
