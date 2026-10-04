@@ -32,6 +32,18 @@ authorize a later call. Unknown operations, invalid arguments, missing
 capabilities and unavailable authorization fail closed. Ending or revoking a
 run invalidates its binding; a resumed run requires revalidation before use.
 
+Every invocation derives its effective `policy.Context` from authoritative
+host state: input provenance, access to private data and effective egress.
+The host passes that context into the run-scoped `Guard.For` and its
+`Table.DecideIn` decision; invoking a shared Guard with its default zero
+context is not authorized. Service policy checks for reads use the same
+effective context. Newly consumed untrusted issue, comment, CI or session
+message text remains represented in subsequent invocation decisions. Unknown
+provenance is untrusted; unknown private-data access is treated as private,
+and unavailable effective context fails closed. Caller-provided context or
+trust claims cannot clear these restrictions. Context composition preserves
+the stricter workflow/policy result and existing approval requirements.
+
 The existing forge Guard remains the enforcement point for forge mutations.
 The service's invocation checks also cover reads; the current adapter's
 repository configuration check alone does not establish run authorization.
@@ -58,7 +70,7 @@ native-client support. Exact schemas and limits precede implementation.
 | Read an issue or search issues | Bound repository; validated identifiers or bounded query, page size and result count | Explicit issue-read/search capabilities; unsupported searches return unavailable |
 | Inspect a pull request | Bound repository and validated PR identifier; bounded metadata and diff response | Explicit PR-read capability; forge content remains untrusted |
 | Read CI status | Bound repository and exact revision or PR binding; bounded checks and links | Explicit CI-status capability; no implicit log/artifact download or retry |
-| Comment on an issue | Bound repository and issue; bounded text; existing comment policy and any required approval | Guarded issue-comment capability |
+| Comment on an issue | Bound repository and issue; bounded text; host-derived trust context through Guard.For/DecideIn; existing comment policy and any required approval | Guarded issue-comment capability; an untrusted invocation cannot use the default auto-comment path |
 | Open or update a PR | Existing prepared candidate, agent branch and exact approved SHA; existing publication service path | Guarded PR capability; no direct transport bypass |
 | Merge, tag, release or deploy | Always denied for agents | No callable operation or passthrough |
 
@@ -90,6 +102,11 @@ actual API compatibility remains {{< status unverified >}}.
 Tests must prove that forbidden actions, cross-repository/provider calls,
 revoked bindings, invalid arguments, missing capabilities and stale approvals
 reach no provider mutation. Provider fakes and focused contract tests establish
-only their tested scope. Live target evidence and independent security review
+only their tested scope. Acceptance tests must show that newly consumed
+untrusted content restricts later invocations, that an untrusted invocation
+cannot use the shared Guard's default auto-comment path, and that caller trust
+or context claims cannot weaken `DecideIn`, workflow policy or approval rules.
+Unknown provenance and unavailable context must not become trusted defaults.
+Live target evidence and independent security review
 of the exact implementation revision are required before claiming support.
 This design implements no MCP endpoint, credential flow or provider adapter.

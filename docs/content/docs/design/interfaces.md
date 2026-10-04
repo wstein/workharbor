@@ -213,7 +213,9 @@ The phone and a 12-inch tablet are the **primary** clients (D35); a laptop brows
 approved MCP-to-invocation-policy-to-forge-adapter boundary and bounded operation
 matrix, tracked in [crewbook #20](https://github.com/wstein/crewbook/issues/20).
 GitHub is tier 1 and GitLab/Codeberg tier 2; credentials remain host-side and
-agent merge, tag, release and deploy remain forbidden. Transport and actual
+agent merge, tag, release and deploy remain forbidden. Each invocation carries
+authoritative host-derived trust, private-data and egress context through the
+run-scoped Guard's policy decision; caller claims cannot weaken it. Transport and actual
 provider/client compatibility remain {{< status unverified >}}. This does not
 change D15's release 1 scope or D53's native Codex ordering.
 
