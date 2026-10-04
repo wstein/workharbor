@@ -5,7 +5,7 @@
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![CI](https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wstein/workharbor/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge)](https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor)
-[![Go](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Go](https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Status: dogfooding release 1](https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg)](docs/content/docs/design/roadmap.md)
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
@@ -41,7 +41,7 @@ Each failure below has an answer in the design. Release 1 is still being built, 
 - An Apple-silicon Mac mini (or Mac) running macOS with [Apple Container](https://github.com/apple/container), the first runtime. Release 1 supports no other host.
 - A GitHub App for the repositories the agents work on: `whr github app create` makes it from a manifest.
 - An agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file.
-- Go, only to build from source.
+- Go 1.26.0 or later, only to build from source. CI checks the latest Go 1.26 and 1.27 patches separately from the module minimum. Documentation, release and documentation vulnerability tools require Go 1.27; the development image uses Go 1.27.1.
 
 The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until the first release.
 

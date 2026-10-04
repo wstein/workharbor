@@ -3,6 +3,7 @@ package devcontainer
 import (
 	"context"
 	"errors"
+	"go/version"
 	"os"
 	"reflect"
 	"slices"
@@ -265,15 +266,27 @@ func TestThisRepositoryDevcontainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goMod, _ := os.ReadFile("../../go.mod")
+	goMod, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var goVersion string
 	for _, l := range strings.Split(string(goMod), "\n") {
 		if v, ok := strings.CutPrefix(l, "go "); ok {
 			goVersion = strings.TrimSpace(v)
 		}
 	}
-	if !strings.Contains(string(dockerfile), "FROM golang:"+goVersion+"-") {
-		t.Errorf("the Dockerfile does not start from go.mod's Go %s", goVersion)
+	var imageVersion string
+	for _, line := range strings.Split(string(dockerfile), "\n") {
+		if tag, ok := strings.CutPrefix(line, "FROM golang:"); ok {
+			imageVersion, _, _ = strings.Cut(tag, "-")
+		}
+	}
+	if !version.IsValid("go"+goVersion) || !version.IsValid("go"+imageVersion) {
+		t.Fatalf("invalid module minimum %q or image version %q", goVersion, imageVersion)
+	}
+	if version.Compare("go"+imageVersion, "go"+goVersion) < 0 {
+		t.Errorf("the Dockerfile's Go %s is older than go.mod's minimum %s", imageVersion, goVersion)
 	}
 }
 

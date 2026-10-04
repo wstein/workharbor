@@ -306,7 +306,7 @@ func TestTheEnvironmentFollowsADefaultBranchChangeAndFailsClosedOnAFailedRead(t 
 	var read []string
 	r.ws.cfg.Environment = func(_ context.Context, _, branch string) (RepoEnvironment, error) {
 		read = append(read, branch)
-		return RepoEnvironment{Commit: "c-" + branch}, nil
+		return RepoEnvironment{Environment: devcontainer.Environment{Commit: "c-" + branch}}, nil
 	}
 	r.issues.DefaultBranch = "trunk"
 	if env, ok := r.ws.repoEnvironment(bg, w); !ok || env.Commit != "c-trunk" {
