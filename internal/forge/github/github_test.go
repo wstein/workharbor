@@ -369,6 +369,7 @@ func TestOpenPRChecksTheBranchAndOpensAgainstTheDefaultBranch(t *testing.T) {
 		w.WriteHeader(201)
 		_, _ = io.WriteString(w, `{"number":12,"html_url":"https://github.com/wstein/workharbor/pull/12","head":{"sha":"approved1"}}`)
 	}
+	f.handlers["GET /repos/wstein/workharbor/pulls"] = func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "[]") }
 	f.handlers["PATCH /repos/wstein/workharbor/pulls/12"] = func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "{}") }
 
 	// A branch that moved after the approval is not published, and nothing is posted.
@@ -547,6 +548,7 @@ func TestBehindTheGuardAPRNeedsAnApprovedCommit(t *testing.T) {
 		w.WriteHeader(201)
 		_, _ = io.WriteString(w, `{"number":3,"html_url":"https://github.com/wstein/workharbor/pull/3"}`)
 	}
+	f.handlers["GET /repos/wstein/workharbor/pulls"] = func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "[]") }
 	g := forge.NewGuard(c, nil, policy.Default(), approvedOnly{"d1", "sha-ok"})
 	if _, err := g.OpenPR(bg, "wstein/workharbor", "agent/docs", forge.Approval{DecisionID: "d1", SHA: "other"}, "t", "b"); !errors.Is(err, forge.ErrNotApproved) {
 		t.Errorf("an unapproved commit = %v", err)

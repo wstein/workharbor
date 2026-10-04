@@ -91,6 +91,9 @@ type Config struct {
 	// BaseURL defaults to DefaultBaseURL. Only https, or http to a loopback
 	// address (a test server), is accepted.
 	BaseURL string
+	// GitBaseURL is where repositories are pushed to over https; default
+	// DefaultGitBaseURL. A push remote is GitBaseURL + "/owner/name.git".
+	GitBaseURL string
 	// HTTP is the client to use; default one with a 30 s timeout.
 	HTTP *http.Client
 	// Redactor, if set, learns each installation token the moment it is minted.
@@ -161,6 +164,12 @@ func New(cfg Config) (*Client, error) {
 		}
 	default:
 		return nil, errors.New("github: the base URL must be https")
+	}
+	if cfg.GitBaseURL != "" {
+		gb, gerr := url.Parse(cfg.GitBaseURL)
+		if gerr != nil || gb.Scheme != "https" || gb.Host == "" || gb.User != nil || gb.RawQuery != "" || gb.Fragment != "" {
+			return nil, fmt.Errorf("github: %q is not a usable https git base URL", cfg.GitBaseURL)
+		}
 	}
 	if cfg.HTTP == nil {
 		cfg.HTTP = &http.Client{Timeout: 30 * time.Second}
@@ -234,7 +243,9 @@ func (c *Client) do(ctx context.Context, bearer, method, path string, body, out 
 		rd = bytes.NewReader(b)
 	}
 	u := *c.base
+	path, rawQuery, _ := strings.Cut(path, "?")
 	u.Path = strings.TrimRight(c.base.Path, "/") + path
+	u.RawQuery = rawQuery
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), rd)
 	if err != nil {
 		return err
@@ -346,13 +357,9 @@ func (c *Client) tokenFor(ctx context.Context, repo string, board bool) (string,
 		return "", err
 	}
 	if id == 0 {
-		var inst struct {
-			ID int64 `json:"id"`
+		if id, err = c.findInstallation(ctx, jwt, repo); err != nil {
+			return "", err
 		}
-		if err := c.do(ctx, jwt, http.MethodGet, "/repos/"+repo+"/installation", nil, &inst); err != nil {
-			return "", fmt.Errorf("find the App's installation on %s: %w", repo, err)
-		}
-		id = inst.ID
 	}
 	_, name, _ := strings.Cut(repo, "/")
 	var tok struct {
@@ -381,6 +388,17 @@ func (c *Client) tokenFor(ctx context.Context, repo string, board bool) (string,
 	c.tokens[key] = token{value: tok.Token, expires: tok.ExpiresAt}
 	c.mu.Unlock()
 	return tok.Token, nil
+}
+
+// findInstallation asks GitHub for the App's installation on repo.
+func (c *Client) findInstallation(ctx context.Context, jwt, repo string) (int64, error) {
+	var inst struct {
+		ID int64 `json:"id"`
+	}
+	if err := c.do(ctx, jwt, http.MethodGet, "/repos/"+repo+"/installation", nil, &inst); err != nil {
+		return 0, fmt.Errorf("find the App's installation on %s: %w", repo, err)
+	}
+	return inst.ID, nil
 }
 
 // call makes an installation-authenticated request for repo, retrying once with
@@ -505,8 +523,34 @@ type prAnswer struct {
 	Number  int    `json:"number"`
 	HTMLURL string `json:"html_url"`
 	Head    struct {
-		SHA string `json:"sha"`
+		SHA  string `json:"sha"`
+		Ref  string `json:"ref"`
+		Repo struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
 	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+}
+
+// openPRFor finds the open pull request whose head is the repository's own
+// branch (never a fork's branch of the same name) and whose base is base, so a
+// retry after a restart does not open a second one (D51). It reports false when
+// there is none.
+func (c *Client) openPRFor(ctx context.Context, repo, base, branch string) (prAnswer, bool, error) {
+	owner, _, _ := strings.Cut(repo, "/")
+	q := url.Values{"state": {"open"}, "head": {owner + ":" + branch}, "base": {base}, "per_page": {"100"}}
+	var list []prAnswer
+	if err := c.call(ctx, repo, http.MethodGet, "/repos/"+repo+"/pulls?"+q.Encode(), nil, &list); err != nil {
+		return prAnswer{}, false, err
+	}
+	for _, p := range list {
+		if strings.EqualFold(p.Head.Repo.FullName, repo) && p.Head.Ref == branch && p.Base.Ref == base {
+			return p, true, nil
+		}
+	}
+	return prAnswer{}, false, nil
 }
 
 // OpenPR implements forge.Adapter: it opens a pull request from branch into the
@@ -531,6 +575,11 @@ func (c *Client) OpenPRInto(ctx context.Context, repo, base, branch, sha, title,
 	} else if _, err := escapeBranch(base); err != nil {
 		return forge.PullRequest{}, err
 	}
+	if p, ok, err := c.openPRFor(ctx, repo, base, branch); err != nil {
+		return forge.PullRequest{}, err
+	} else if ok {
+		return forge.PullRequest{Repo: repo, Number: p.Number, URL: p.HTMLURL, Branch: branch, SHA: sha}, nil
+	}
 	var err error
 	var v prAnswer
 	err = c.call(ctx, repo, http.MethodPost, "/repos/"+repo+"/pulls", map[string]any{"title": title, "head": branch, "base": base, "body": body}, &v)
@@ -550,6 +599,11 @@ func (c *Client) FastForward(ctx context.Context, repo, branch, sha string) erro
 	}
 	if !shaRE.MatchString(sha) {
 		return fmt.Errorf("github: %q is not a commit", sha)
+	}
+	// A target that already points at sha is done (a retry after a restart); a
+	// read that fails is not an answer, so the move is attempted.
+	if at, rerr := c.BranchSHA(ctx, repo, branch); rerr == nil && at == sha {
+		return nil
 	}
 	err = c.call(ctx, repo, http.MethodPatch, "/repos/"+repo+"/git/refs/heads/"+esc, map[string]any{"sha": sha, "force": false}, nil)
 	var ae *APIError
