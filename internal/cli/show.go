@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -27,6 +29,21 @@ type taskCard struct {
 		Added   int64  `json:"added"`
 		Removed int64  `json:"removed"`
 	} `json:"candidate"`
+	Check *struct {
+		SHA        string `json:"sha"`
+		Command    string `json:"command"`
+		Source     string `json:"source"`
+		ExitStatus int    `json:"exit_status"`
+		TimedOut   bool   `json:"timed_out"`
+		DurationMS int64  `json:"duration_ms"`
+		Output     string `json:"output"`
+	} `json:"check"`
+	PublishAttempts []struct {
+		Attempt   int    `json:"attempt"`
+		Transient bool   `json:"transient"`
+		Error     string `json:"error"`
+		RetryAt   string `json:"retry_at"`
+	} `json:"publish_attempts"`
 	UsageLine string `json:"usage_line"`
 }
 
@@ -88,6 +105,33 @@ func printCard(w io.Writer, c taskCard) error {
 			p("PR:       %s", clean(k.PRURL))
 		}
 	}
+	if k := c.Check; k != nil {
+		result := "passed"
+		switch {
+		case k.TimedOut:
+			result = "timed out"
+		case k.ExitStatus != 0:
+			result = fmt.Sprintf("exit status %d", k.ExitStatus)
+		}
+		p("Check:    %s (from %s) %s in %s, on %s", clean(k.Command), clean(k.Source), result, (time.Duration(k.DurationMS) * time.Millisecond).String(), clean(k.SHA))
+		if k.ExitStatus != 0 || k.TimedOut {
+			for _, line := range lastLines(k.Output, 20) {
+				p("  | %s", clean(line))
+			}
+		}
+	} else if c.Candidate != nil {
+		p("Check:    no receipt for %s", clean(c.Candidate.SHA))
+	}
+	for _, a := range c.PublishAttempts {
+		kind := "refused"
+		if a.Transient {
+			kind = "will retry"
+			if a.RetryAt != "" {
+				kind += " after " + clean(a.RetryAt)
+			}
+		}
+		p("Publish:  attempt %d failed (%s): %s", a.Attempt, kind, clean(a.Error))
+	}
 	p("Tests:    not available")
 	p("Notes:    not available")
 	if c.UsageLine != "" {
@@ -104,4 +148,13 @@ func printCard(w io.Writer, c taskCard) error {
 		p("  %s  %s  %s", clean(d.ID), clean(d.Kind), clean(d.Subject))
 	}
 	return nil
+}
+
+// lastLines returns the last n lines of s.
+func lastLines(s string, n int) []string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
 }

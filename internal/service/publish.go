@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
@@ -132,6 +133,12 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 		return hostgit.Prepared{}, fmt.Errorf("the repository's checks failed: %w", err)
 	}
 
+	// The receipt the check left for exactly this commit goes with the question,
+	// so the human sees which SHA was checked, by what and with what result.
+	var input string
+	if rc, rerr := s.checkReceipt(ctx, req.Task, prepared.SHA); rerr == nil && rc != nil {
+		input = receiptInput(*rc)
+	}
 	err = s.update(ctx, req.Task, func(a *domain.TaskAggregate) error {
 		if _, err := a.PinPreparedStat(last.ID, req.Branch, prepared.SHA, prepared.Source, domain.DiffStat{Files: prepared.Files, Added: prepared.Added, Removed: prepared.Removed}); err != nil {
 			return err
@@ -140,12 +147,24 @@ func (p *Publisher) Prepare(ctx context.Context, req Request) (hostgit.Prepared,
 			return err
 		}
 		_, err := a.RaiseDecision(domain.NewDecision{
-			ID: req.DecisionID, Kind: domain.DecisionReview, Blocking: true, SHA: prepared.SHA,
+			ID: req.DecisionID, Kind: domain.DecisionReview, Blocking: true, SHA: prepared.SHA, Input: input,
 			Subject: fmt.Sprintf("Ready to push? %d commits on %s (%d files, +%d −%d)", len(prepared.Commits), req.Branch, prepared.Files, prepared.Added, prepared.Removed), Now: s.clock.Now(),
 		})
 		return err
 	})
 	return prepared, err
+}
+
+// receiptInput is the check's receipt as the input of "Ready to push?": its
+// line, then as much of the output's tail as the Decision keeps. The output is
+// untrusted data.
+func receiptInput(r domain.CheckReceipt) string {
+	line := r.Line()
+	budget := domain.MaxDecisionInput - utf8.RuneCountInString(line) - 1
+	if r.Output == "" || budget <= 0 {
+		return line
+	}
+	return line + "\n" + tailRunes(r.Output, budget)
 }
 
 // fetchTarget refreshes the mirror from the forge and brings the target into

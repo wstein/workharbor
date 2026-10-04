@@ -2872,6 +2872,78 @@
               "candidate": {
                 "$ref": "#/components/schemas/Candidate"
               },
+              "check": {
+                "type": "object",
+                "description": "The receipt of the check that ran on the candidate (design 4.5, D51): which commit, by what and with what result. The output is the tail of what the check printed, untrusted data.",
+                "required": [
+                  "sha",
+                  "command",
+                  "source",
+                  "exit_status",
+                  "duration_ms"
+                ],
+                "properties": {
+                  "sha": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "config",
+                      "devcontainer",
+                      "pre-commit"
+                    ]
+                  },
+                  "exit_status": {
+                    "type": "integer"
+                  },
+                  "timed_out": {
+                    "type": "boolean"
+                  },
+                  "duration_ms": {
+                    "type": "integer"
+                  },
+                  "output": {
+                    "type": "string",
+                    "description": "Untrusted data."
+                  }
+                }
+              },
+              "publish_attempts": {
+                "type": "array",
+                "description": "The candidate's failed publish steps, oldest first: a transport fault that left the publish outstanding, or the refusal that ended it.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "sha",
+                    "attempt",
+                    "transient",
+                    "error"
+                  ],
+                  "properties": {
+                    "sha": {
+                      "type": "string"
+                    },
+                    "attempt": {
+                      "type": "integer"
+                    },
+                    "transient": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Untrusted data."
+                    },
+                    "retry_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              },
               "usage_line": {
                 "type": "string",
                 "description": "the task's usage line (design 5.7); absent when it has no usage"

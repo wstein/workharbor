@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/devcontainer"
 	"github.com/wstein/workharbor/internal/domain"
@@ -144,40 +145,53 @@ func (s *Service) checkNotHeld(env domain.ID) error {
 // repository's customizations.workharbor.check, else pre-commit when the
 // default branch has a .pre-commit-config.yaml; with none, ErrNoChecks.
 func (c *RepoChecker) Command(ctx context.Context, repo string) (string, error) {
+	cmd, _, err := c.resolve(ctx, repo)
+	return cmd, err
+}
+
+// Where a check command came from, for its receipt (D51).
+const (
+	CheckFromConfig       = "config"
+	CheckFromDevcontainer = "devcontainer"
+	CheckFromPreCommit    = "pre-commit"
+)
+
+// resolve is Command and where the command came from.
+func (c *RepoChecker) resolve(ctx context.Context, repo string) (cmd, source string, err error) {
 	if cmd := strings.TrimSpace(c.cfg.Command(repo)); cmd != "" {
-		return cmd, nil
+		return cmd, CheckFromConfig, nil
 	}
 	if c.cfg.Source == nil {
-		return "", fmt.Errorf("%w: no check is configured for %s", ErrNoChecks, repo)
+		return "", "", fmt.Errorf("%w: no check is configured for %s", ErrNoChecks, repo)
 	}
 	src, err := c.cfg.Source(ctx, repo)
 	if err != nil {
-		return "", fmt.Errorf("read the default branch of %s: %w", repo, err)
+		return "", "", fmt.Errorf("read the default branch of %s: %w", repo, err)
 	}
 	out, err := src.Git.RunCapped(ctx, 256, "rev-parse", "--verify", "--quiet", "--end-of-options", src.Ref+"^{commit}")
 	if err != nil {
-		return "", fmt.Errorf("resolve the default branch of %s: %w", repo, err)
+		return "", "", fmt.Errorf("resolve the default branch of %s: %w", repo, err)
 	}
 	sha := strings.TrimSpace(string(out))
 	if !commitRe.MatchString(sha) {
-		return "", fmt.Errorf("the default branch of %s is not a commit", repo)
+		return "", "", fmt.Errorf("the default branch of %s is not a commit", repo)
 	}
 	// An unreadable or refused devcontainer.json is an error, never "no check".
 	cfg, found, err := devcontainer.Read(ctx, src.Git, sha)
 	if err != nil {
-		return "", fmt.Errorf("read the devcontainer.json of %s: %w", repo, err)
+		return "", "", fmt.Errorf("read the devcontainer.json of %s: %w", repo, err)
 	}
 	if found && cfg.Hints.Check != "" {
-		return cfg.Hints.Check, nil
+		return cfg.Hints.Check, CheckFromDevcontainer, nil
 	}
 	ls, err := src.Git.RunCapped(ctx, 4096, "ls-tree", sha, "--", ".pre-commit-config.yaml")
 	if err != nil {
-		return "", fmt.Errorf("read the tree of %s: %w", repo, err)
+		return "", "", fmt.Errorf("read the tree of %s: %w", repo, err)
 	}
 	if strings.HasPrefix(string(ls), "100644 blob ") || strings.HasPrefix(string(ls), "100755 blob ") {
-		return PreCommitCheck, nil
+		return PreCommitCheck, CheckFromPreCommit, nil
 	}
-	return "", fmt.Errorf("%w: %s has no check configured, no customizations.workharbor.check and no .pre-commit-config.yaml", ErrNoChecks, repo)
+	return "", "", fmt.Errorf("%w: %s has no check configured, no customizations.workharbor.check and no .pre-commit-config.yaml", ErrNoChecks, repo)
 }
 
 // checkScript runs in the guest as `sh -c <script> whr-check <dir> <worktree>
@@ -265,7 +279,7 @@ func (c *RepoChecker) Check(ctx context.Context, task domain.ID, sha string) err
 	if ws.EnvID == "" {
 		return domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
-	command, err := c.Command(ctx, agg.Task().Repo)
+	command, source, err := c.resolve(ctx, agg.Task().Repo)
 	if err != nil {
 		return err
 	}
@@ -290,7 +304,50 @@ func (c *RepoChecker) Check(ctx context.Context, task domain.ID, sha string) err
 	if err != nil {
 		return err
 	}
-	return c.run(ctx, task, ws, a, sha, base, command)
+	started := s.clock.Now()
+	out, err := c.run(ctx, task, ws, a, sha, base, command)
+	c.leaveReceipt(ctx, task, sha, command, source, s.clock.Now().Sub(started), out, err)
+	return err
+}
+
+// ReceiptOutputMax is how much of a check's output its receipt keeps: the last
+// bytes, which are where a failure says what failed.
+const ReceiptOutputMax = 16 << 10
+
+// leaveReceipt records the check on the task, bound to the prepared commit (D51,
+// issue #259): the command and where it came from, the exit status, the duration
+// and the capped output. A check that did not run (the environment would not
+// take the bundle, the supervisor's context ended) leaves none, only its error.
+// A receipt that cannot be saved is reported, and never changes the result.
+func (c *RepoChecker) leaveReceipt(ctx context.Context, task domain.ID, sha, command, source string, took time.Duration, out string, runErr error) {
+	r := domain.CheckReceipt{SHA: sha, Command: textsafe.Escape(command), Source: source, Millis: took.Milliseconds(), Output: tailOf(out, ReceiptOutputMax)}
+	var ce *CheckError
+	switch {
+	case runErr == nil:
+	case errors.As(runErr, &ce):
+		r.Code, r.TimedOut = ce.Code, ce.TimedOut
+	default:
+		return
+	}
+	s := c.svc
+	saved, err := s.store.Append(context.WithoutCancel(ctx), domain.NewCheckReceiptEvent(task, r, s.clock.Now()))
+	if err != nil {
+		s.report(fmt.Errorf("record the receipt of the check on %s: %w", sha, err))
+		return
+	}
+	s.publish(saved)
+}
+
+// tailOf keeps the last limit bytes of s, from a character boundary.
+func tailOf(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	s = s[len(s)-limit:]
+	for len(s) > 0 && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return s
 }
 
 // guestBase asks the guest for the commit the agent's branch left the
@@ -309,7 +366,7 @@ func (c *RepoChecker) guestBase(ctx context.Context, ws domain.Workspace, a doma
 	return base, nil
 }
 
-func (c *RepoChecker) run(ctx context.Context, task domain.ID, ws domain.Workspace, a domain.Agent, sha, base, command string) error {
+func (c *RepoChecker) run(ctx context.Context, task domain.ID, ws domain.Workspace, a domain.Agent, sha, base, command string) (string, error) {
 	s := c.svc
 	timeout := c.cfg.Timeout
 	if timeout <= 0 {
@@ -341,7 +398,7 @@ func (c *RepoChecker) run(ctx context.Context, task domain.ID, ws domain.Workspa
 		Env: gitEnv(), Stdin: pr,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	tail := &tailBuffer{max: CheckOutputTail}
 	for ch := range st.Chunks() {
@@ -354,21 +411,23 @@ func (c *RepoChecker) run(ctx context.Context, task domain.ID, ws domain.Workspa
 	c.end(ctx, task, env, dir, a.Worktree)
 	if rctx.Err() != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return "", ctx.Err()
 		}
-		return &CheckError{TimedOut: true, Timeout: timeout, Output: c.untrusted(tail.String())}
+		out := c.untrusted(tail.String())
+		return out, &CheckError{TimedOut: true, Timeout: timeout, Output: out}
 	}
 	if werr != nil {
-		return werr
+		return "", werr
 	}
 	if code != 0 {
 		// The guest could not take the bundle: the host's reason is the better one.
 		if serr := <-streamed; serr != nil && !errors.Is(serr, io.ErrClosedPipe) && code == 125 {
-			return fmt.Errorf("the prepared commits could not be sent to the environment: %w", serr)
+			return "", fmt.Errorf("the prepared commits could not be sent to the environment: %w", serr)
 		}
-		return &CheckError{Code: code, Output: c.untrusted(tail.String())}
+		out := c.untrusted(tail.String())
+		return out, &CheckError{Code: code, Output: out}
 	}
-	return nil
+	return c.untrusted(tail.String()), nil
 }
 
 // end kills what the check left in its process group after every check, and

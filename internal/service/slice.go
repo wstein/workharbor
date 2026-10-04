@@ -225,6 +225,14 @@ type TaskView struct {
 	// where no human call waited (a suspension, a budget stop, kill-all): the
 	// agent may still run (design 4.1, issue #238).
 	AgentMayRun []domain.AgentMayRun
+	// Check is the receipt of the check that ran on the current revision (D51,
+	// §4.5), nil when none ran for it: which commit was checked, by what and with
+	// what result. Its output is the agent's data and untrusted.
+	Check *domain.CheckReceipt
+	// PublishAttempts are the failed publish steps of the current revision, oldest
+	// first: a transport fault that left the publish outstanding, or the refusal
+	// that ended it (D51, §4.5).
+	PublishAttempts []domain.PublishAttempt
 }
 
 // Show returns a task with its runs, its open Decisions and its current
@@ -252,6 +260,11 @@ func (s *Service) Show(ctx context.Context, task domain.ID) (TaskView, error) {
 	}
 	if v.AgentMayRun, err = s.agentNotices(ctx, task); err != nil {
 		return TaskView{}, err
+	}
+	if v.Candidate != nil {
+		if v.Check, v.PublishAttempts, err = s.publishRecords(ctx, task, v.Candidate.SHA); err != nil {
+			return TaskView{}, err
+		}
 	}
 	return v, nil
 }

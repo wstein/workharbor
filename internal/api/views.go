@@ -84,11 +84,36 @@ type candidateView struct {
 	Removed int64 `json:"removed"`
 }
 
+// checkView is the receipt of the check on the current revision (D51). Output is
+// the agent's data, untrusted: a client shows it escaped, never as markup.
+type checkView struct {
+	SHA        string `json:"sha"`
+	Command    string `json:"command"`
+	Source     string `json:"source"`
+	ExitStatus int    `json:"exit_status"`
+	TimedOut   bool   `json:"timed_out,omitempty"`
+	DurationMS int64  `json:"duration_ms"`
+	Output     string `json:"output,omitempty"`
+}
+
+// publishAttemptView is one failed publish step of the current revision.
+type publishAttemptView struct {
+	SHA       string `json:"sha"`
+	Attempt   int    `json:"attempt"`
+	Transient bool   `json:"transient"`
+	Error     string `json:"error"`
+	RetryAt   string `json:"retry_at,omitempty"`
+}
+
 type taskView struct {
 	taskSummaryView
 	Runs      []runView      `json:"runs"`
 	Open      []decisionView `json:"open_decisions"`
 	Candidate *candidateView `json:"candidate,omitempty"`
+	// Check is the receipt of the check that ran on the candidate.
+	Check *checkView `json:"check,omitempty"`
+	// PublishAttempts are the candidate's failed publish steps, oldest first.
+	PublishAttempts []publishAttemptView `json:"publish_attempts,omitempty"`
 	// UsageLine is service.FormatUsageLine for the task, empty when it has no usage.
 	UsageLine string `json:"usage_line,omitempty"`
 }
@@ -109,6 +134,16 @@ func taskOf(v service.TaskView) taskView {
 	}
 	if c := v.Candidate; c != nil {
 		out.Candidate = &candidateView{Branch: c.Branch, SHA: c.SHA, PRURL: c.PRURL, CI: string(c.CI), Pushed: c.Pushed, Files: c.Files, Added: c.Added, Removed: c.Removed}
+	}
+	if r := v.Check; r != nil {
+		out.Check = &checkView{SHA: r.SHA, Command: r.Command, Source: r.Source, ExitStatus: r.Code, TimedOut: r.TimedOut, DurationMS: r.Millis, Output: r.Output}
+	}
+	for _, a := range v.PublishAttempts {
+		pv := publishAttemptView{SHA: a.SHA, Attempt: a.Attempt, Transient: a.Transient, Error: a.Error}
+		if !a.RetryAt.IsZero() {
+			pv.RetryAt = a.RetryAt.UTC().Format(time.RFC3339)
+		}
+		out.PublishAttempts = append(out.PublishAttempts, pv)
 	}
 	return out
 }
