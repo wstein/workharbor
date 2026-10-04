@@ -1,0 +1,116 @@
+[
+  {
+    "id": "whtmp-mcp-ag1",
+    "state": "running",
+    "image": "sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+    "labels": {
+      "workharbor.lane": "wh-verify",
+      "workharbor.purpose": "mcp-control-channel",
+      "workharbor.temp": "true"
+    },
+    "networks": [
+      "whtmp-mcp-net"
+    ],
+    "mounts": [
+      {
+        "destination": "/root",
+        "type": [
+          "volume"
+        ],
+        "options": []
+      },
+      {
+        "destination": "/work",
+        "type": [
+          "volume"
+        ],
+        "options": []
+      },
+      {
+        "destination": "/tools",
+        "type": [
+          "virtiofs"
+        ],
+        "options": [
+          "ro"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "whtmp-mcp-p1",
+    "state": "running",
+    "image": "sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+    "labels": {
+      "workharbor.lane": "wh-verify",
+      "workharbor.purpose": "mcp-control-channel",
+      "workharbor.temp": "true"
+    },
+    "networks": [
+      "default",
+      "whtmp-mcp-net"
+    ],
+    "mounts": [
+      {
+        "destination": "/tools",
+        "type": [
+          "virtiofs"
+        ],
+        "options": [
+          "ro"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "buildkit",
+    "state": "stopped",
+    "image": "sha256:b5b3f7fa81e662db6929f1ad66d835d151a1b03f682cfe5f9fcb17fa46d6bcc9",
+    "labels": {
+      "com.apple.container.plugin": "builder",
+      "com.apple.container.resource.role": "builder"
+    },
+    "networks": [
+      "default"
+    ],
+    "mounts": [
+      {
+        "destination": "/run",
+        "type": [
+          "tmpfs"
+        ],
+        "options": []
+      },
+      {
+        "destination": "/var/lib/container-builder-shim/exports",
+        "type": [
+          "virtiofs"
+        ],
+        "options": []
+      }
+    ]
+  }
+]
+[
+  {
+    "id": "whtmp-mcp-net",
+    "mode": "hostOnly"
+  }
+]
+/tools/codex absent
+/usr/local/bin/codex absent
+/usr/bin/codex absent
+claude
+probe
+whr-shim
+[
+  {
+    "id": "whtmp-mcp-p1",
+    "executable": "/tools/probe",
+    "arguments": [
+      "proxy",
+      "0.0.0.0:3128",
+      "claude.com,platform.claude.com,api.anthropic.com,auth.anthropic.com,statsig.anthropic.com"
+    ]
+  }
+]
