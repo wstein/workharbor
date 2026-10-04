@@ -298,9 +298,13 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
 	spec.EnvID, spec.Env = string(r.EnvID), append(spec.Env, s.agentEnv(ctx, r.EnvID)...)
 	if r.AgentID != "" { // a resumed agent works in its own worktree, as a started one does
-		if a, err := s.store.Agent(ctx, r.AgentID); err == nil {
-			spec.Workdir = a.Worktree
+		a, err := s.store.Agent(ctx, r.AgentID)
+		if err != nil {
+			// never fall back to the default workdir: the agent would work outside its worktree (§6, #250)
+			s.end(run, sl)
+			return s.recordLaunchFailure(ctx, task, run, fmt.Errorf("the run's agent cannot be read, so it is not started: %w", err))
 		}
+		spec.Workdir = a.Worktree
 	}
 	// The session outlives the call that starts it: an answer to a Decision comes
 	// in on a request that ends long before the agent does.

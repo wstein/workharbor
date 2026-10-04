@@ -125,7 +125,7 @@ type Service struct {
 	// one that is not, so each is stopped once per process.
 	startedEnvs map[domain.ID]bool
 	freshMu     sync.Mutex
-	// loadTask reads a task for the resume gate; a test replaces it to fail a read.
+	// loadTask reads a task for the resume, egress, pause and stale paths; a test replaces it to fail a read.
 	loadTask    func(ctx context.Context, id domain.ID) (*domain.TaskAggregate, error)
 	limitWarned map[string]limitWarn // per key: last low-limit push and state
 	// egressSources is what each open egress request was asked about (its

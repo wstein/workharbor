@@ -256,10 +256,13 @@ func (w *Workspaces) startHeld(ctx context.Context, d *domain.Decision) (domain.
 	}
 	run := w.cfg.NewID()
 	if err := w.launch(ctx, agg, ws, a, run, IssuePrompt(issue, "")); err != nil {
-		if again, lerr := w.svc.store.LoadTask(ctx, t.ID); lerr == nil {
-			if _, saved := again.Run(run); !saved { // no run was made: nothing else will pick the task up
-				return cancel(err)
-			}
+		again, lerr := w.svc.store.LoadTask(ctx, t.ID)
+		if lerr != nil {
+			// cannot tell whether a run was made: cancel rather than leave the task stuck
+			return cancel(errors.Join(err, lerr))
+		}
+		if _, saved := again.Run(run); !saved { // no run was made: nothing else will pick the task up
+			return cancel(err)
 		}
 		return "", err
 	}
