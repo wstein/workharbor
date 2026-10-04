@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -169,12 +170,13 @@ func TestTheHelperIsScopedToThePushHostAndRedirectsGetNoCredential(t *testing.T)
 	}))
 	t.Cleanup(a.Close)
 
-	lsRemote := func(remote string) error {
+	lsRemote := func(remote string, extra ...string) error {
 		ta, err := tokenArgs(remote)
 		if err != nil {
 			t.Fatal(err)
 		}
 		args := append([]string{"-c", "protocol.http.allow=always"}, ta...)
+		args = append(args, extra...)
 		args = append(args, "ls-remote", remote)
 		out, err := g.runToken(context.Background(), g.home, []string{"GIT_ALLOW_PROTOCOL=http"}, testToken, args...)
 		if bytes.Contains(out, []byte(testToken)) {
@@ -186,11 +188,35 @@ func TestTheHelperIsScopedToThePushHostAndRedirectsGetNoCredential(t *testing.T)
 	if other.sawToken() {
 		t.Error("the host a redirect led to got the token")
 	}
+	// Each defence alone must hold: with redirects followed again (git's own
+	// default, "initial"), only the host scoping keeps the token from the other host.
+	_ = lsRemote(a.URL+"/redirect/o/n.git", "-c", "http.followRedirects=initial")
+	if other.sawToken() {
+		t.Error("with redirects followed, the host a redirect led to got the token")
+	}
 	if err := lsRemote(a.URL + "/o/n.git"); err != nil {
 		t.Logf("the direct ls-remote: %v", err) // the stub's answer is minimal; the credential is what counts
 	}
 	if !direct.sawToken() {
 		t.Error("the direct request did not get the token")
+	}
+}
+
+// The scoped key and the redirect switch are each pinned exactly, so dropping
+// either one fails here even when the other still protects the token.
+func TestTokenArgsScopeTheHelperToTheRemoteAndTurnRedirectsOff(t *testing.T) {
+	t.Parallel()
+	got, err := tokenArgs("https://Example.COM:8443/o/n.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"-c", "credential.helper=",
+		"-c", "credential.https://Example.COM:8443.helper=" + pipeHelper,
+		"-c", "http.followRedirects=false",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("tokenArgs = %q, want %q", got, want)
 	}
 }
 
