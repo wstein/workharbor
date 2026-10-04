@@ -149,20 +149,25 @@ func newSetup(st *state) *cobra.Command {
 		if exeErr != nil {
 			return exeErr
 		}
-		// --managed only leaves development mode: it may run from a source build, and the
-		// managed prefix is checked after the steps; the binary is replaced by the release
-		if managed {
-			if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
-				fmt.Fprintf(st.env.Stderr, "note: %s; install the release before `whr service install` (manual, host setup step 13)\n", oneLineError(err))
+		// --managed from a binary that is not installed (a source build, a user-writable
+		// whr) may only leave development mode: the development-key step and the managed
+		// prefix check run, every other step is refused as without --managed
+		onlyKey := len(only) == 1 && only[0] == "development-key"
+		if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
+			switch {
+			case managed && onlyKey:
+				fmt.Fprintf(st.env.Stderr, "note: %s; only the development-key step runs from this binary, and the managed prefix is checked afterwards\n", oneLineError(err))
+			default:
+				if managed {
+					err = fmt.Errorf("%w; from this binary --managed runs only `--only development-key`: install the release for the other steps (manual, host setup step 13)", err)
+				} else if !dev {
+					err = fmt.Errorf("%w; for a source installation use --dev (or select its --prefix)", err)
+				}
+				if !dryRun {
+					return usageError{err.Error()}
+				}
+				fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 			}
-		} else if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
-			if !dev {
-				err = fmt.Errorf("%w; for a source installation use --dev (or select its --prefix)", err)
-			}
-			if !dryRun {
-				return usageError{err.Error()}
-			}
-			fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 		}
 		steps := doctorOn(env, configPath())
 		if dev && !dryRun {
