@@ -183,3 +183,110 @@ func TestAnAnswerThatResumesNeverReplacesAnAttachedSession(t *testing.T) {
 	}
 	r.svc.end("r1", holder)
 }
+
+// recoverWhileGated starts recover for run r1 and returns once it waits for the
+// environment to answer (it has read the run), with a channel for its result.
+func recoverWhileGated(t *testing.T, r *rig) (*gateRuntime, <-chan error, *Report) {
+	t.Helper()
+	gate := newGateRuntime(t, r.rt.Adapter)
+	r.svc.rt = gate
+	done := make(chan error, 1)
+	rep := &Report{}
+	ctx, cancel := context.WithCancel(bg)
+	t.Cleanup(cancel)
+	go func() { done <- r.svc.recover(ctx, "t1", "r1", rep) }()
+	waitFor(t, gate.entered, "recovery to reach the environment's exec")
+	return gate, done, rep
+}
+
+// The second read after the wait is the guard when no session is attached: a
+// run the human cancelled while recover waited is left cancelled, and recover
+// reports neither an error nor a resume (issue #231, after #225).
+func TestRecoveryReadsTheRunAgainAfterTheWait(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	must(t, r.svc.Pause(bg, "t1"))
+	gate, done, rep := recoverWhileGated(t, r)
+
+	must(t, r.svc.Cancel(bg, "t1"))
+	if r.svc.attached("r1") {
+		t.Fatal("setup: the cancelled run holds a session slot")
+	}
+	gate.open()
+	if err := waitFor(t, done, "recovery to return"); err != nil {
+		t.Errorf("recovery of a run cancelled meanwhile failed: %v", err)
+	}
+	if len(rep.Resumed) != 0 || len(rep.Failed) != 0 {
+		t.Errorf("recovery changed a cancelled run: %+v", rep)
+	}
+	if st := r.runState(); st != domain.RunStopped {
+		t.Errorf("run state = %s, want stopped", st)
+	}
+	if r.svc.attached("r1") {
+		t.Error("recovery attached an agent to a cancelled run")
+	}
+}
+
+// Recover takes the run lock after the wait: while another path holds it,
+// recover does not write or launch, and it goes on once the lock is free.
+func TestRecoveryWaitsForTheRunLockAfterTheWait(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	must(t, r.svc.Pause(bg, "t1"))
+	gate, done, rep := recoverWhileGated(t, r)
+
+	unlock, err := r.svc.lockRun(bg, "r1")
+	must(t, err)
+	released := false
+	t.Cleanup(func() {
+		if !released {
+			unlock()
+		}
+	})
+	gate.open()
+	select {
+	case err := <-done:
+		t.Fatalf("recovery went on while the run lock was held (error %v, %+v)", err, rep)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if st := r.runState(); st != domain.RunPaused {
+		t.Errorf("run state = %s while the lock was held, want paused", st)
+	}
+	unlock()
+	released = true
+	if err := waitFor(t, done, "recovery to return after the unlock"); err != nil {
+		t.Fatalf("recovery failed: %v", err)
+	}
+	if len(rep.Resumed) != 1 {
+		t.Errorf("recovery did not resume the run once the lock was free: %+v", rep)
+	}
+	r.svc.Wait()
+}
+
+// A run started in the environment during the wait makes recover return the
+// env-busy error and leave its own run alone.
+func TestRecoveryChecksTheEnvironmentIsFreeAfterTheWait(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	must(t, r.svc.Pause(bg, "t1"))
+	gate, done, rep := recoverWhileGated(t, r)
+
+	other := domain.NewTaskAggregate(domain.Task{ID: "t2", Repo: "wstein/workharbor", Issue: "#24", State: domain.TaskRunning, CreatedAt: t0})
+	other.AddEnvironment(domain.Environment{ID: r.env, Backend: "fake", State: domain.EnvRunning})
+	must(t, other.StartRun(domain.Run{ID: "r2", WorkspaceID: "w2", EnvID: r.env}))
+	if _, err := r.store.SaveTask(bg, other); err != nil {
+		t.Fatal(err)
+	}
+	gate.open()
+	err := waitFor(t, done, "recovery to return")
+	var c *domain.ConflictError
+	if !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
+		t.Fatalf("recovery returned %v, want the env-busy conflict", err)
+	}
+	if len(rep.Resumed) != 0 || r.svc.attached("r1") {
+		t.Errorf("recovery launched in a busy environment: %+v", rep)
+	}
+	if st := r.runState(); st != domain.RunPaused {
+		t.Errorf("run state = %s, want paused", st)
+	}
+}
