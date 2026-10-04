@@ -163,6 +163,165 @@ func TestBoardSnapshotMismatchedFallbackRefused(t *testing.T) {
 	}
 }
 
+func TestBoardSnapshotConfigureRequiresConfirmation(t *testing.T) {
+	t.Parallel()
+	fixture := newBoard(t)
+	for _, env := range [][]string{nil, {"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_PROJECT_NUMBER=10"}} {
+		if _, _, err := fixture.runEnv(t, env, "configure"); err == nil || fixture.calls(t) != 0 {
+			t.Fatal("configure without explicit confirmation reached GitHub")
+		}
+	}
+}
+
+func newSchemaBoard(t *testing.T) board {
+	t.Helper()
+	fixture := newBoard(t)
+	state := `{"fields":[{"id":"F_title","name":"Title","dataType":"TITLE"},{"id":"F_assignees","name":"Assignees","dataType":"ASSIGNEES"},{"id":"F_milestone","name":"Milestone","dataType":"MILESTONE"},{"id":"F_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"O_todo","name":"Todo","color":"GRAY","description":""},{"id":"O_ip","name":"In progress","color":"YELLOW","description":""},{"id":"O_done","name":"Done","color":"GREEN","description":""}]}],"views":[],"workflows":[{"id":"W_closed","name":"Item closed","enabled":true}]}`
+	if err := os.WriteFile(filepath.Join(fixture.bin, "schema.json"), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := `#!/bin/sh
+if [ "$1 $2" = "api rate_limit" ]; then echo '{}'; exit 0; fi
+case "$*" in
+*--input*)
+	for arg in "$@"; do request=$arg; done
+	payload=$(cat "$request")
+	echo "$payload" | jq -c . >> "$SCHEMA_LOG"
+	if [ -n "$FAKE_SCHEMA_FAIL" ] && echo "$payload" | jq -e --arg fail "$FAKE_SCHEMA_FAIL" '.variables.input.name == $fail' >/dev/null; then echo '{"errors":[{"message":"refused"}]}'; exit 0; fi
+	query=$(echo "$payload" | jq -r '.query')
+	input=$(echo "$payload" | jq -c '.variables.input')
+	case "$query" in
+	*createProjectV2Field*) jq --argjson input "$input" '.fields += [{id:("F_"+$input.name),name:$input.name,dataType:"SINGLE_SELECT",options:($input.singleSelectOptions | map(. + {id:("O_"+.name)}))}]' "$SCHEMA_STATE" > "$SCHEMA_STATE.tmp"; result=createProjectV2Field; node=projectV2Field; identifier=$(echo "$input" | jq -r '"F_"+.name') ;;
+	*updateProjectV2Field*) jq --argjson input "$input" '.fields |= map(if .id == $input.fieldId then .options = ($input.singleSelectOptions | map(. + {id:(.id // ("O_"+.name))})) else . end)' "$SCHEMA_STATE" > "$SCHEMA_STATE.tmp"; result=updateProjectV2Field; node=projectV2Field; identifier=$(echo "$input" | jq -r '.fieldId') ;;
+	*createProjectV2View*) jq --argjson input "$input" '.views += [{id:("V_"+$input.name),name:$input.name,layout:$input.layout,filter:"",configuration:{visibleFields:{nodes:($input.configuration.visibleFieldIds | map({id:.})),pageInfo:{hasNextPage:false}}}}]' "$SCHEMA_STATE" > "$SCHEMA_STATE.tmp"; result=createProjectV2View; node=projectV2View; identifier=$(echo "$input" | jq -r '"V_"+.name') ;;
+	*updateProjectV2View*) jq --argjson input "$input" '.views |= map(if .id == $input.viewId then .filter=$input.filter | .layout=$input.layout | .configuration.visibleFields.nodes=($input.configuration.visibleFieldIds | map({id:.})) else . end)' "$SCHEMA_STATE" > "$SCHEMA_STATE.tmp"; result=updateProjectV2View; node=projectV2View; identifier=$(echo "$input" | jq -r '.viewId') ;;
+	*) exit 1 ;;
+	esac
+	mv "$SCHEMA_STATE.tmp" "$SCHEMA_STATE"
+	jq -n --arg result "$result" --arg node "$node" --arg id "$identifier" '{data:{($result):{($node):{id:$id}}}}'
+	exit 0 ;;
+*repoOwner=*) echo '{"data":{"repository":{"nameWithOwner":"wstein/crewbook"},"node":{"id":"PVT_crewbook","number":10,"url":"https://github.com/users/wstein/projects/10","owner":{"login":"wstein"}}}}'; exit 0 ;;
+esac
+for connection in fields views workflows; do
+	case "$*" in *"$connection(first:"*)
+		if [ "$FAKE_SCHEMA_FAIL_PAGE" = "$connection" ]; then echo '{}'; exit 0; fi
+		if [ "$FAKE_SCHEMA_PAGINATE" = "$connection" ]; then
+			case "$*" in *after=next*)
+				if [ -n "$FAKE_SCHEMA_FAIL_AFTER" ]; then echo '{}'; exit 0; fi
+				jq --arg connection "$connection" '{data:{node:{id:"PVT_crewbook",($connection):{nodes:.[$connection][2:],pageInfo:{hasNextPage:false,endCursor:null}}}}}' "$SCHEMA_STATE"; exit 0 ;;
+			esac
+			jq --arg connection "$connection" '{data:{node:{id:"PVT_crewbook",($connection):{nodes:.[$connection][:2],pageInfo:{hasNextPage:true,endCursor:"next"}}}}}' "$SCHEMA_STATE"; exit 0
+		fi
+		jq --arg connection "$connection" '{data:{node:{id:"PVT_crewbook",($connection):{nodes:.[$connection],pageInfo:{hasNextPage:false,endCursor:null}}}}}' "$SCHEMA_STATE"; exit 0 ;;
+	esac
+done
+echo '{}'
+`
+	if err := os.WriteFile(filepath.Join(fixture.bin, "gh"), []byte(fake), 0o755); err != nil { //nolint:gosec // a test fake
+		t.Fatal(err)
+	}
+	return fixture
+}
+
+func schemaEnv(fixture board) []string {
+	return []string{"WHR_BOARD_REPOSITORY=wstein/crewbook", "WHR_BOARD_OWNER=wstein", "WHR_BOARD_PROJECT_ID=PVT_crewbook", "WHR_BOARD_LANE_PREFIX=cb", "WHR_BOARD_ROLES=desk,platform,review", "SCHEMA_STATE=" + filepath.Join(fixture.bin, "schema.json"), "SCHEMA_LOG=" + fixture.log}
+}
+
+func TestBoardSnapshotConfigureRepeatPreservesOptions(t *testing.T) {
+	t.Parallel()
+	fixture := newSchemaBoard(t)
+	for attempt := 0; attempt < 2; attempt++ {
+		stdout, stderr, err := fixture.runEnv(t, schemaEnv(fixture), "configure", "PVT_crewbook")
+		if err != nil {
+			t.Fatalf("configure: %v %s", err, stderr)
+		}
+		var metadata struct {
+			Fields []struct {
+				Name    string
+				Options []struct{ ID, Name string }
+			}
+			Views []struct{ Name, Filter string }
+		}
+		if err := json.Unmarshal([]byte(stdout), &metadata); err != nil || len(metadata.Fields) != 6 || len(metadata.Views) != 5 {
+			t.Fatalf("metadata: %v %s", err, stdout)
+		}
+		for _, field := range metadata.Fields {
+			if field.Name == "Status" {
+				if len(field.Options) != 6 || field.Options[0].ID != "O_todo" || field.Options[5].ID != "O_done" {
+					t.Fatalf("status identities changed: %+v", field.Options)
+				}
+			}
+		}
+	}
+	calls := fixture.lines(t)
+	if len(calls) != 13 {
+		t.Fatalf("mutations %d, want 3 fields and 5 create/filter view pairs", len(calls))
+	}
+	for _, call := range calls {
+		if strings.Contains(call, "Workflow") || strings.Contains(call, "ItemFieldValue") || strings.Contains(call, "createProjectV2(input") || strings.Contains(call, "PVT_kwHNjWrOAZVCuA") {
+			t.Fatalf("unexpected mutation: %s", call)
+		}
+	}
+}
+
+func TestBoardSnapshotConfigurePartialFailureRetry(t *testing.T) {
+	t.Parallel()
+	fixture := newSchemaBoard(t)
+	env := schemaEnv(fixture)
+	_, _, err := fixture.runEnv(t, append(env, "FAKE_SCHEMA_FAIL=Session"), "configure", "PVT_crewbook")
+	if err == nil {
+		t.Fatal("partial GraphQL error accepted")
+	}
+	if _, stderr, err := fixture.runEnv(t, env, "configure", "PVT_crewbook"); err != nil {
+		t.Fatalf("retry: %v %s", err, stderr)
+	}
+	if _, _, err := fixture.runEnv(t, append(env, "FAKE_SCHEMA_FAIL_PAGE=views"), "metadata", "schema"); err == nil {
+		t.Fatal("incomplete metadata accepted")
+	}
+}
+
+func TestBoardSnapshotConfigurePaginationAndPreflight(t *testing.T) {
+	t.Parallel()
+	fixture := newSchemaBoard(t)
+	env := append(schemaEnv(fixture), "FAKE_SCHEMA_PAGINATE=fields")
+	if _, _, err := fixture.runEnv(t, append(env, "FAKE_SCHEMA_FAIL_AFTER=1"), "configure", "PVT_crewbook"); err == nil || fixture.calls(t) != 0 {
+		t.Fatal("incomplete fields allowed configuration mutation")
+	}
+	if _, stderr, err := fixture.runEnv(t, env, "configure", "PVT_crewbook"); err != nil {
+		t.Fatalf("paginated fields: %v %s", err, stderr)
+	}
+	before := fixture.calls(t)
+	if _, _, err := fixture.runEnv(t, schemaEnv(fixture), "configure", "PVT_wrong"); err == nil || fixture.calls(t) != before {
+		t.Fatal("wrong confirmation allowed mutation")
+	}
+}
+
+func TestBoardSnapshotConfigureFieldsIndependentOfViews(t *testing.T) {
+	t.Parallel()
+	fixture := newSchemaBoard(t)
+	env := append(schemaEnv(fixture), "FAKE_SCHEMA_FAIL_PAGE=views")
+	stdout, stderr, err := fixture.runEnv(t, env, "configure-fields", "PVT_crewbook")
+	if err != nil {
+		t.Fatalf("fields-only configure: %v %s", err, stderr)
+	}
+	var metadata struct {
+		Fields    []map[string]any
+		Views     any
+		Workflows any
+	}
+	if err := json.Unmarshal([]byte(stdout), &metadata); err != nil || len(metadata.Fields) != 6 || metadata.Views != nil || metadata.Workflows != nil {
+		t.Fatalf("fields-only metadata %s: %v", stdout, err)
+	}
+	if len(fixture.lines(t)) != 3 {
+		t.Fatalf("mutations: %v", fixture.lines(t))
+	}
+	for _, call := range fixture.lines(t) {
+		if strings.Contains(call, "ProjectV2View") || strings.Contains(call, "ItemFieldValue") {
+			t.Fatalf("fields-only mode changed views or cards: %s", call)
+		}
+	}
+}
+
 func newBoard(t *testing.T) board {
 	t.Helper()
 	if _, err := exec.LookPath("jq"); err != nil {
@@ -186,7 +345,7 @@ case "$*" in
 *addProjectV2ItemById*) echo '{"data":{}}'; exit 0 ;;
 *updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
 *projectItems*) if [ -n "$FAKE_NOITEM" ] || case "$*" in *"n=99"*) true ;; *) false ;; esac; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
-*"fields(first"*) echo '{"data":{"node":{"fields":{"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
+*"fields(first"*) echo '{"data":{"node":{"id":"PVT_kwHNjWrOAZVCuA","fields":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
 *"items(first"*)
 	cur=first
 	for a in "$@"; do case "$a" in after=*) cur=${a#after=} ;; esac; done

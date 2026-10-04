@@ -74,6 +74,7 @@ roles=${WHR_BOARD_ROLES:-desk,dispatch,design,review,platform,runtime,docs,verif
 [[ $owner =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid owner"
 [[ $lane_prefix =~ ^[a-z][a-z0-9_-]*$ ]] || die "invalid lane prefix"
 [[ $roles =~ ^[a-z]+(,[a-z]+)*$ ]] || die "invalid roles"
+jq -en --arg roles "$roles" '$roles | split(",") | length == (unique | length)' >/dev/null || die "duplicate roles"
 [[ -z "$project_number" || $project_number =~ ^[1-9][0-9]*$ ]] || die "invalid project number"
 case $project in '' | PVT_*) ;; *) die "invalid project ID" ;; esac
 [[ -z "$project" || $project =~ ^PVT_[A-Za-z0-9_-]+$ ]] || die "invalid project ID"
@@ -98,6 +99,7 @@ else
 fi
 case $file in /*) ;; *) die "the snapshot path must be absolute" ;; esac
 case $file in *$'\n'*) die "the snapshot path must not contain a newline" ;; esac
+cache_root=$(dirname "$file")
 if [ "$target" != "wstein/wstein/workharbor/PVT_kwHNjWrOAZVCuA/wh/desk,dispatch,design,review,platform,runtime,docs,verify,spikes" ]; then
   scope=$(printf '%s' "$target" | shasum -a 256 | cut -d ' ' -f 1)
   file="${file}.scopes/$scope/board.json"
@@ -111,7 +113,14 @@ done
 mode=${args[0]:-print}
 case $mode in
 print) ;;
-metadata) ;;
+metadata)
+  [ ${#args[@]} -eq 1 ] || { [ ${#args[@]} -eq 2 ] && [ "${args[1]}" = schema ]; } || die "usage: board-snapshot.sh metadata [schema]"
+  ;;
+configure | configure-fields)
+  [ ${#args[@]} -eq 2 ] && [[ ${args[1]} =~ ^PVT_[A-Za-z0-9_-]+$ ]] || die "usage: board-snapshot.sh configure <confirmed-project-ID>"
+  [ -n "${WHR_BOARD_REPOSITORY:-}" ] && [ -n "${WHR_BOARD_OWNER:-}" ] && [ -n "$project$project_number" ] || die "configure requires explicit repository, owner and project"
+  [ "${args[1]}" != PVT_kwHNjWrOAZVCuA ] || die "configure does not change workharbor project 6"
+  ;;
 queue) [ -n "${args[1]:-}" ] || die "usage: board-snapshot.sh queue <lane>" ;;
 card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
@@ -175,7 +184,8 @@ if [ "$mode" != budget ] && { [ -n "${WHR_BOARD_OWNER+x}${WHR_BOARD_PROJECT_NUMB
     metadata=$(gh api graphql -f query='query($p:ID!,$repoOwner:String!,$repoName:String!){repository(owner:$repoOwner,name:$repoName){nameWithOwner} node(id:$p){... on ProjectV2{id number url owner{... on User{login} ... on Organization{login}}}}}' -f p="$project" -f repoOwner="$repo_owner" -f repoName="$repo_name") || die "project lookup failed"
   fi
   printf '%s' "$metadata" | jq -e --arg owner "$owner" --arg repo "$repository" --arg project "$project" '.data.repository.nameWithOwner == $repo and .data.node.owner.login == $owner and .data.node.id == $project' >/dev/null || die "project/repository identity mismatch"
-  if [ "$mode" = metadata ]; then printf '%s\n' "$metadata"; exit 0; fi
+  if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then [ "${args[1]}" = "$project" ] || die "confirmed project ID does not match the resolved target"; fi
+  if [ "$mode" = metadata ] && [ ${#args[@]} -eq 1 ]; then printf '%s\n' "$metadata"; exit 0; fi
 fi
 
 # fresh succeeds when the file holds a snapshot younger than max_age.
@@ -234,9 +244,9 @@ fields=$dir/board-fields.json
 # fields_fetch caches the field and option IDs of Status, Session and Priority.
 fields_fetch() {
   local out tmp
-  out=$(gh api graphql -f query='query($p:ID!){node(id:$p){... on ProjectV2{fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}' -f p="$project") || return 1
+  out=$(connection_read fields) || return 1
   tmp=$(mktemp "$dir/.board.XXXXXX")
-  if ! printf '%s' "$out" | jq '[.data.node.fields.nodes[] | select(.name == "Status" or .name == "Session" or .name == "Priority")
+  if ! printf '%s' "$out" | jq '[.[] | select(.name == "Status" or .name == "Session" or .name == "Priority")
       | {key: .name, value: {id: .id, options: ((.options // []) | map({key: .name, value: .id}) | from_entries)}}] | from_entries' >"$tmp"; then
     rm -f "$tmp"
     return 1
@@ -381,6 +391,151 @@ patch() {
   fi
   rm -rf "$lock"
 }
+
+connection_read() {
+  local connection=$1 selection query_text out cursor="" more=true result='[]' seen='|' pages=0
+  case $connection in
+  fields) selection='... on ProjectV2Field{id name dataType} ... on ProjectV2SingleSelectField{id name dataType options{id name color description}} ... on ProjectV2IterationField{id name dataType}' ;;
+  views) selection='id name layout filter configuration{visibleFields(first:100){nodes{... on ProjectV2FieldCommon{id}} pageInfo{hasNextPage}}}' ;;
+  workflows) selection='id name enabled' ;;
+  *) return 1 ;;
+  esac
+  query_text="query(\$p:ID!,\$after:String){node(id:\$p){... on ProjectV2{id $connection(first:100,after:\$after){nodes{$selection} pageInfo{hasNextPage endCursor}}}}}"
+  while [ "$more" = true ]; do
+    pages=$((pages + 1))
+    [ "$pages" -le 100 ] || return 1
+    out=$(gh api graphql -f query="$query_text" -f p="$project" -f after="$cursor") || return 1
+    printf '%s' "$out" | jq -e --arg p "$project" --arg c "$connection" '
+      ((.errors // []) | length) == 0 and .data.node.id == $p and
+      (.data.node[$c].nodes | type) == "array" and
+      (.data.node[$c].pageInfo.hasNextPage | type) == "boolean"' >/dev/null || return 1
+    if [ "$connection" = views ]; then
+      printf '%s' "$out" | jq -e 'all(.data.node.views.nodes[]; .configuration.visibleFields.pageInfo.hasNextPage == false)' >/dev/null || return 1
+    fi
+    result=$(printf '%s' "$out" | jq -c --arg c "$connection" --argjson previous "$result" '$previous + .data.node[$c].nodes') || return 1
+    more=$(printf '%s' "$out" | jq -r --arg c "$connection" '.data.node[$c].pageInfo.hasNextPage')
+    cursor=$(printf '%s' "$out" | jq -r --arg c "$connection" '.data.node[$c].pageInfo.endCursor // empty')
+    if [ "$more" = true ]; then
+      [ -n "$cursor" ] || return 1
+      case $seen in *"|$cursor|"*) return 1 ;; esac
+      seen="$seen$cursor|"
+    fi
+  done
+  printf '%s\n' "$result"
+}
+
+schema_fetch() {
+  schema_fields=$(connection_read fields) || return 1
+  schema_views=$(connection_read views) || return 1
+  schema_workflows=$(connection_read workflows) || return 1
+}
+
+schema_print() {
+  printf '%s' "$metadata" | jq --argjson fields "$schema_fields" --argjson views "$schema_views" --argjson workflows "$schema_workflows" '{
+    repository: .data.repository.nameWithOwner, project: .data.node,
+    fields: $fields, views: $views, workflows: $workflows,
+    automation: {configuration: "UI verification required", workflowMutations: false},
+    viewOrdering: "Set Priority ascending and milestone grouping in the UI"
+  }'
+}
+
+schema_mutate() {
+  local request out
+  request=$(mktemp "$dir/.board-request.XXXXXX") || return 1
+  if ! jq -n --arg query "$1" --argjson input "$2" '{query:$query,variables:{input:$input}}' >"$request"; then
+    rm -f "$request"; return 1
+  fi
+  out=$(gh api graphql --input "$request") || { rm -f "$request"; return 1; }
+  rm -f "$request"
+  printf '%s' "$out" | jq -e --arg operation "$3" --arg result "$4" '((.errors // []) | length) == 0 and (.data[$operation][$result].id | type) == "string"' >/dev/null
+}
+
+if [ "$mode" = metadata ]; then
+  schema_fetch || die "could not read complete schema metadata"
+  schema_print
+  exit 0
+fi
+
+if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
+  [[ $project =~ ^PVT_[A-Za-z0-9_-]+$ ]] || die "invalid resolved project ID"
+  lock=$cache_root/.board-configure-$project.lock
+  lock_take || die "configuration lock is busy"
+  trap 'rm -rf "$lock"' EXIT
+  if [ "$mode" = configure-fields ]; then
+    schema_fields=$(connection_read fields) || die "could not read complete field metadata; no configuration changed"
+    schema_views='[]' schema_workflows='[]'
+  else
+    schema_fetch || die "could not read complete schema metadata; no configuration changed"
+  fi
+  desired=$(jq -cn --arg prefix "$lane_prefix" --arg roles "$roles" '{
+    Status:["Todo","In progress","Blocked","In review","Ready to push","Done"],
+    Priority:["P1","P2","P3"],
+    Session:($roles | split(",") | map($prefix + "/" + .))
+  } | if $prefix == "wh" then .Session += ["Werner"] else . end')
+  printf '%s' "$schema_fields" | jq -e --argjson desired "$desired" '
+    . as $fields | all(["Title","Assignees","Milestone","Status"][]; . as $name | [$fields[] | select(.name == $name)] | length == 1) and
+    all(["Status","Priority","Session"][]; . as $name |
+      [$fields[] | select(.name == $name)] as $matches | ($matches | length) <= 1 and
+      all($matches[]; .dataType == "SINGLE_SELECT" and
+        ([.options[].name] | length) == ([.options[].name] | unique | length) and
+        all(.options[]; .name as $option | $desired[$name] | index($option) != null)))' >/dev/null || die "schema conflicts with required fields/options; resolve manually before configuration"
+  printf '%s' "$schema_views" | jq -e 'group_by(.name) | all(.[]; length == 1)' >/dev/null || die "duplicate view names; resolve manually before configuration"
+  printf '%s' "$schema_fields" | jq -e 'all(.[]; if .name == "Title" then .dataType == "TITLE" elif .name == "Assignees" then .dataType == "ASSIGNEES" elif .name == "Milestone" then .dataType == "MILESTONE" else true end)' >/dev/null || die "built-in field types do not match"
+  rm -f "$fields"
+  for name in Status Priority Session; do
+    current=$(printf '%s' "$schema_fields" | jq -c --arg name "$name" '[.[] | select(.name == $name)][0] // {}')
+    options=$(printf '%s' "$current" | jq -c --arg name "$name" --argjson desired "$desired" '. as $field | $desired[$name] | map(. as $option |
+      ([$field.options[]? | select(.name == $option)][0] // {name:$option,color:"GRAY",description:""}) | {name,color,description} + (if .id then {id} else {} end))')
+    if [ "$(printf '%s' "$current" | jq -c '[.options[]?.name]')" = "$(printf '%s' "$desired" | jq -c --arg name "$name" '.[$name]')" ]; then continue; fi
+    fid=$(printf '%s' "$current" | jq -r '.id // empty')
+    if [ -n "$fid" ]; then
+      input=$(jq -cn --arg id "$fid" --argjson options "$options" '{fieldId:$id,singleSelectOptions:$options}')
+      schema_mutate 'mutation($input:UpdateProjectV2FieldInput!){updateProjectV2Field(input:$input){projectV2Field{... on ProjectV2FieldCommon{id}}}}' "$input" updateProjectV2Field projectV2Field || die "configuration may be partial: $name update failed; read metadata schema before retry"
+    else
+      input=$(jq -cn --arg p "$project" --arg name "$name" --argjson options "$options" '{projectId:$p,name:$name,dataType:"SINGLE_SELECT",singleSelectOptions:$options}')
+      schema_mutate 'mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2FieldCommon{id}}}}' "$input" createProjectV2Field projectV2Field || die "configuration may be partial: $name creation failed; read metadata schema before retry"
+    fi
+  done
+  schema_fields=$(connection_read fields) || die "configuration may be partial: field readback failed"
+  printf '%s' "$schema_fields" | jq -e --argjson desired "$desired" '. as $fields | all(["Status","Priority","Session"][]; . as $name | [$fields[] | select(.name == $name)] | length == 1 and (.[0].options | map(.name)) == $desired[$name])' >/dev/null || die "configuration readback does not match required options"
+  if [ "$mode" = configure-fields ]; then
+    schema_views=null schema_workflows=null
+    schema_print
+    exit 0
+  fi
+  visible=$(printf '%s' "$schema_fields" | jq -c '. as $fields | ["Title","Status","Priority","Assignees","Session","Milestone"] | map(. as $name | [$fields[] | select(.name == $name)][0].id)')
+  printf '%s' "$visible" | jq -e 'all(.[]; type == "string")' >/dev/null || die "required field missing from readback"
+  for name in "Dispatch queue" "Active work" "Review queue" "Blocked work" "Release and milestones"; do
+    case $name in
+    "Dispatch queue") status=Todo ;;
+    "Active work") status="In progress" ;;
+    "Review queue") status="In review" ;;
+    "Blocked work") status=Blocked ;;
+    "Release and milestones") status="Ready to push" ;;
+    esac
+    filter="repo:$repository is:issue -is:closed status:\"$status\""
+    current=$(printf '%s' "$schema_views" | jq -c --arg name "$name" '[.[] | select(.name == $name)][0] // {}')
+    vid=$(printf '%s' "$current" | jq -r '.id // empty')
+    if [ -z "$vid" ]; then
+      input=$(jq -cn --arg p "$project" --arg name "$name" --argjson visible "$visible" '{projectId:$p,name:$name,layout:"TABLE_LAYOUT",configuration:{visibleFieldIds:$visible}}')
+      schema_mutate 'mutation($input:CreateProjectV2ViewInput!){createProjectV2View(input:$input){projectV2View{id}}}' "$input" createProjectV2View projectV2View || die "configuration may be partial: $name creation failed; read metadata schema before retry"
+      schema_views=$(connection_read views) || die "configuration may be partial: view readback failed"
+      vid=$(printf '%s' "$schema_views" | jq -er --arg name "$name" '[.[] | select(.name == $name)] | select(length == 1) | .[0].id') || die "created view missing from readback"
+    elif printf '%s' "$current" | jq -e --arg filter "$filter" --argjson visible "$visible" '.filter == $filter and .layout == "TABLE_LAYOUT" and ([.configuration.visibleFields.nodes[].id] == $visible)' >/dev/null; then continue
+    fi
+    input=$(jq -cn --arg id "$vid" --arg filter "$filter" --argjson visible "$visible" '{viewId:$id,filter:$filter,layout:"TABLE_LAYOUT",configuration:{visibleFieldIds:$visible}}')
+    schema_mutate 'mutation($input:UpdateProjectV2ViewInput!){updateProjectV2View(input:$input){projectV2View{id}}}' "$input" updateProjectV2View projectV2View || die "configuration may be partial: $name update failed; read metadata schema before retry"
+  done
+  schema_fetch || die "configuration may be partial: final metadata readback failed"
+  printf '%s' "$schema_fields" | jq -e --argjson desired "$desired" '. as $fields | all(["Status","Priority","Session"][]; . as $name | [$fields[] | select(.name == $name)] | length == 1 and (.[0].options | map(.name)) == $desired[$name])' >/dev/null || die "configuration readback does not match required options"
+  printf '%s' "$schema_views" | jq -e --arg repo "$repository" --argjson visible "$visible" '. as $views |
+    {"Dispatch queue":"Todo","Active work":"In progress","Review queue":"In review","Blocked work":"Blocked","Release and milestones":"Ready to push"} | to_entries |
+    all(.[]; . as $expected | [$views[] | select(.name == $expected.key)] | length == 1 and
+      .[0].filter == ("repo:" + $repo + " is:issue -is:closed status:\"" + $expected.value + "\"") and .[0].layout == "TABLE_LAYOUT" and
+      ([.[0].configuration.visibleFields.nodes[].id] == $visible))' >/dev/null || die "configuration readback does not match required views"
+  schema_print
+  exit 0
+fi
 
 case $mode in
 move | session | priority | add | ready)
