@@ -541,7 +541,8 @@ type prAnswer struct {
 
 // openPRFor finds the open pull request whose head is the repository's own
 // branch (never a fork's branch of the same name) and whose base is base, so a
-// retry after a restart does not open a second one (D51). It reports false when
+// retry after a restart does not open a second one (D51); OpenPRInto then updates its
+// title and body. It reports false when
 // there is none.
 func (c *Client) openPRFor(ctx context.Context, repo, base, branch string) (prAnswer, bool, error) {
 	owner, _, _ := strings.Cut(repo, "/")
@@ -583,7 +584,13 @@ func (c *Client) OpenPRInto(ctx context.Context, repo, base, branch, sha, title,
 	if p, ok, err := c.openPRFor(ctx, repo, base, branch); err != nil {
 		return forge.PullRequest{}, err
 	} else if ok {
-		return forge.PullRequest{Repo: repo, Number: p.Number, URL: p.HTMLURL, Branch: branch, SHA: sha}, nil
+		// a later revision of the same branch: the review summary the human
+		// reads must describe the commit that is now pushed (D51)
+		pr := forge.PullRequest{Repo: repo, Number: p.Number, URL: p.HTMLURL, Branch: branch, SHA: sha}
+		if err := c.call(ctx, repo, http.MethodPatch, "/repos/"+repo+"/pulls/"+strconv.Itoa(p.Number), map[string]string{"title": title, "body": body}, nil); err != nil {
+			return forge.PullRequest{}, err
+		}
+		return pr, nil
 	}
 	var err error
 	var v prAnswer

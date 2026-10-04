@@ -50,7 +50,7 @@ func TestPushMintsAScopedTokenHandsItToGitAndRevokesIt(t *testing.T) {
 	now, _ := clock()
 	f := newFake(t, now)
 	f.revokeHandler()
-	red := redact.New()
+	red := redact.New(redact.WithoutDefaults())
 	c := f.client(t, func(cfg *Config) { cfg.Redactor = red; cfg.GitBaseURL = "https://git.example.test" })
 	sha := strings.Repeat("a", 40)
 	g := &stubGit{}
@@ -178,9 +178,18 @@ func TestOpenPRReturnsTheOwnOpenPRInsteadOfOpeningASecond(t *testing.T) {
 		w.WriteHeader(201)
 		_, _ = io.WriteString(w, `{"number":9,"html_url":"u9"}`)
 	}
-	pr, err := c.OpenPR(bg, "wstein/workharbor", "agent/docs", "approved1", "t", "b")
+	f.handlers["PATCH /repos/wstein/workharbor/pulls/5"] = func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "{}") }
+	pr, err := c.OpenPR(bg, "wstein/workharbor", "agent/docs", "approved1", "revision 2", "summary 2")
 	if err != nil || pr.Number != 5 || pr.URL != "u5" || pr.SHA != "approved1" || pr.Branch != "agent/docs" {
 		t.Fatalf("pr = %+v, %v", pr, err)
+	}
+	// the found PR gets the new revision's title and body
+	var patched map[string]string
+	f.mu.Lock()
+	_ = json.Unmarshal([]byte(f.bodies["PATCH /repos/wstein/workharbor/pulls/5"]), &patched)
+	f.mu.Unlock()
+	if patched["title"] != "revision 2" || patched["body"] != "summary 2" {
+		t.Errorf("the found PR was patched with %v", patched)
 	}
 	if f.count("POST /repos/wstein/workharbor/pulls") != 0 {
 		t.Error("a second pull request was opened")
