@@ -20,6 +20,7 @@ import (
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
+	"github.com/wstein/workharbor/internal/store"
 )
 
 // checkRig is a publish rig whose Checks is the real RepoChecker, over the
@@ -437,5 +438,67 @@ func TestAHoldIsRefusedWhileAnAgentStopHoldsTheEnvironment(t *testing.T) {
 	r1()
 	if err := c.svc.checkEnvFree(bg, c.env, ""); err != nil {
 		t.Errorf("released: %v (the refused hold must not leak)", err)
+	}
+}
+
+// A check that takes its hold while another task's run still owns the
+// environment is refused when that run's cancel took its stop hold and committed
+// meanwhile: the stop holds are read after the run check (issue #238).
+func TestAHoldTakenBesideACancelCommitIsRefused(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	ws, err := c.store.Workspace(bg, "w1")
+	must(t, err)
+	a := c.load()
+	must(t, a.StartRun(domain.Run{ID: "r2", AgentID: "a1", WorkspaceID: "w1", EnvID: c.env}))
+	must(t, a.MarkRunning("r2"))
+	_, err = c.store.SaveTask(bg, a)
+	must(t, err)
+
+	cancel := c.load()
+	must(t, cancel.StopRun("r2"))
+	inTx, stopNow, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	relCh := make(chan func(), 1)
+	go func() { // task A's cancel: the run saved stopped and the stop hold taken, one transaction
+		var rel func()
+		err := c.store.Update(bg, func(tx *store.Tx) error {
+			if _, err := tx.SaveTask(bg, cancel); err != nil {
+				return err
+			}
+			close(inTx)
+			<-stopNow
+			rel = c.svc.holdEnvBusy(c.env) // taken after B's hold, before the commit
+			return nil
+		})
+		relCh <- rel
+		done <- err
+	}()
+	<-inTx
+	held := make(chan error, 1)
+	go func() { // task B's check: its run read waits for the open transaction
+		rel, err := c.svc.HoldEnvironment(bg, ws)
+		if rel != nil {
+			rel()
+		}
+		held <- err
+	}()
+	for i := 0; ; i++ { // B has its hold, and (before the fix) has read the stop holds
+		c.svc.rebuildMu.Lock()
+		n := c.svc.holds[c.env]
+		c.svc.rebuildMu.Unlock()
+		if n >= 1 {
+			break
+		}
+		if i > 500 {
+			t.Fatal("the check never took its hold")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(stopNow)
+	must(t, <-done)
+	defer (<-relCh)() // A's stop hold lasts until its stop ends
+	var conf *domain.ConflictError
+	if err := <-held; !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
+		t.Fatalf("a check beside a committed cancel: %v, want environment busy", err)
 	}
 }

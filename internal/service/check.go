@@ -102,13 +102,6 @@ func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (rel
 		return nil, err
 	}
 	s.rebuildMu.Lock()
-	if s.stopHolds[ws.EnvID] > 0 {
-		// An agent stop's fallback may stop this environment: a check taken now
-		// would be stopped under it (issue #238).
-		s.rebuildMu.Unlock()
-		lease()
-		return nil, domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: an agent stop is running in it", ws.EnvID)
-	}
 	if s.holds == nil {
 		s.holds = map[domain.ID]int{}
 	}
@@ -129,6 +122,18 @@ func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (rel
 	if err := s.checkNoOwningRun(ctx, ws.EnvID, ""); err != nil {
 		release()
 		return nil, err
+	}
+	// Read after the run check, as workspace.go does: a cancel takes its stop hold
+	// inside the update that saves the run cancelled, so a run that no longer owns
+	// the environment has its stop hold in place already (issue #238).
+	s.rebuildMu.Lock()
+	busy := s.stopHolds[ws.EnvID] > 0
+	s.rebuildMu.Unlock()
+	if busy {
+		// An agent stop's fallback may stop this environment: a check taken now
+		// would be stopped under it.
+		release()
+		return nil, domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: an agent stop is running in it", ws.EnvID)
 	}
 	return release, nil
 }
