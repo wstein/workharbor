@@ -37,7 +37,20 @@ type Config struct {
 	// ResumeProbe is how long Resume waits to learn whether the session
 	// exists. Default 10 s.
 	ResumeProbe time.Duration
+	// InstructionCheckTimeout bounds the instruction-file check. Default
+	// instructionCheckTimeout.
+	InstructionCheckTimeout time.Duration
 }
+
+// instructionCheckTimeout is the default deadline of the instruction-file
+// check. The check only lists a few files, so a few seconds is generous; a
+// longer wait means the exec is wedged (#279).
+const instructionCheckTimeout = 15 * time.Second
+
+// ErrInstructionCheckTimeout is returned when the instruction-file check does
+// not finish in time. It is a launch failure, never a passed check: the file
+// list is unknown, so the launch refuses (D38).
+var ErrInstructionCheckTimeout = errors.New("the instruction-file check did not finish in time")
 
 // Adapter is the Claude Code agent adapter. In manual mode the CLI runs with
 // `--permission-prompt-tool stdio` and every permission prompt reaches the
@@ -110,6 +123,9 @@ func New(r Runner, cfg Config) *Adapter {
 	if cfg.Settings == "" {
 		cfg.Settings = "{}"
 	}
+	if cfg.InstructionCheckTimeout <= 0 {
+		cfg.InstructionCheckTimeout = instructionCheckTimeout
+	}
 	if cfg.ResumeProbe <= 0 {
 		cfg.ResumeProbe = 10 * time.Second
 	}
@@ -123,23 +139,65 @@ func New(r Runner, cfg Config) *Adapter {
 }
 
 // checkInstructionFiles runs instructionCheck in the environment and refuses
-// when it finds anything.
+// when it finds anything. It runs under its own deadline: launch runs under
+// context.WithoutCancel, so without one a wedged exec would keep the run's
+// session slot until the supervisor restarts (#279). On expiry the exec's
+// context is cancelled, which makes the runtime stop the process (the Apple
+// Container adapter signals the process group in the guest, then ends its
+// client), and the check is abandoned at once: it does not wait for a runtime
+// that ignores the cancel, so the slot is freed either way. Whether a guest
+// process outlives the deadline on Apple Container is unverified (not
+// measured); a leftover process only lists files and holds no slot.
 func (a *Adapter) checkInstructionFiles(ctx context.Context, spec agent.StartSpec) error {
-	st, err := a.r.Exec(ctx, spec.EnvID, runtime.ExecRequest{Cmd: []string{"/bin/sh", "-c", instructionCheck, "whr-instruction-check", spec.Workdir}})
-	if err != nil {
-		return fmt.Errorf("the instruction-file check: %w", err)
+	cctx, cancel := context.WithTimeout(ctx, a.cfg.InstructionCheckTimeout)
+	defer cancel()
+	type result struct {
+		out  []byte
+		code int
+		err  error
 	}
-	out, _, code, err := runtime.Collect(st)
-	if err != nil {
-		return fmt.Errorf("the instruction-file check failed: %w", err)
+	done := make(chan result, 1) // buffered: an abandoned check's goroutine ends
+	go func() {
+		st, err := a.r.Exec(cctx, spec.EnvID, runtime.ExecRequest{Cmd: []string{"/bin/sh", "-c", instructionCheck, "whr-instruction-check", spec.Workdir}})
+		if err != nil {
+			done <- result{err: fmt.Errorf("the instruction-file check: %w", err)}
+			return
+		}
+		out, _, code, err := runtime.Collect(st)
+		if err != nil {
+			err = fmt.Errorf("the instruction-file check failed: %w", err)
+		}
+		done <- result{out, code, err}
+	}()
+	var res result
+	select {
+	case res = <-done:
+	case <-cctx.Done():
+		return a.checkTimedOut(ctx)
 	}
-	if code != 0 {
-		return fmt.Errorf("the instruction-file check failed with exit %d", code)
+	if res.err != nil {
+		if errors.Is(res.err, context.DeadlineExceeded) && cctx.Err() != nil {
+			return a.checkTimedOut(ctx)
+		}
+		return res.err
 	}
-	if found := strings.TrimSpace(string(out)); found != "" {
+	if res.code != 0 {
+		return fmt.Errorf("the instruction-file check failed with exit %d", res.code)
+	}
+	if found := strings.TrimSpace(string(res.out)); found != "" {
 		return fmt.Errorf("%w: %s", ErrInstructionFiles, found)
 	}
 	return nil
+}
+
+// checkTimedOut is the error of a check that ended with its context: the
+// caller's own cancel is returned as it is, the check's deadline as
+// ErrInstructionCheckTimeout.
+func (a *Adapter) checkTimedOut(parent context.Context) error {
+	if parent.Err() != nil {
+		return parent.Err()
+	}
+	return fmt.Errorf("%w (%s)", ErrInstructionCheckTimeout, a.cfg.InstructionCheckTimeout)
 }
 
 // Name implements agent.Adapter.

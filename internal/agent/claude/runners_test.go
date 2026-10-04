@@ -81,3 +81,11 @@ func (r foundRunner) Exec(_ context.Context, _ string, req runtime.ExecRequest) 
 	}
 	return deadRunner{}.Exec(context.Background(), "", req)
 }
+
+// wedgedRunner never returns from Exec and ignores its context.
+type wedgedRunner struct{ release chan struct{} }
+
+func (w wedgedRunner) Exec(context.Context, string, runtime.ExecRequest) (runtime.ExecStream, error) {
+	<-w.release
+	return nil, context.Canceled
+}

@@ -324,3 +324,20 @@ func TestInstructionCheckScript(t *testing.T) {
 		t.Errorf("found %q, but the workspace's own CLAUDE.md is the repository's", got)
 	}
 }
+
+// A wedged exec of the instruction-file check ends the launch at the check's
+// deadline, as a launch failure and never as a passed check (#279).
+func TestAWedgedInstructionCheckTimesOut(t *testing.T) {
+	h, _ := harness(t)
+	release := make(chan struct{})
+	defer close(release)
+	ad := New(wedgedRunner{release: release}, Config{InstructionCheckTimeout: 50 * time.Millisecond})
+	start := time.Now()
+	_, err := ad.Start(context.Background(), dontAsk(h))
+	if !errors.Is(err, ErrInstructionCheckTimeout) {
+		t.Fatalf("Start = %v, want ErrInstructionCheckTimeout", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("Start took %v, want about the deadline", d)
+	}
+}
