@@ -1,0 +1,35 @@
+
+== host listeners before (read-only)
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 11: lsof: command not found
+
+== exec round trip into the internal guest (10 samples, ms)
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+10.4
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+9.6
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+7.7
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+6.9
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+7.7
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+6.6
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+7.2
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+6.9
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+6.6
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 14: container: command not found
+6.9
+
+== vsock in the guest
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 18: container: command not found
+
+== negative controls from #69: guest to host addresses (no listener expected, so refuse or timeout)
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 26: container: command not found
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 29: container: command not found
+
+== host listeners after
+/work/workharbor/spikes/mcp-control-channel/probe-reach.sh: line 31: lsof: command not found
