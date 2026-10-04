@@ -1,9 +1,12 @@
 # Helpers: quick tasks as subagents (not a lane)
 
 A helper is a subagent on a small, fast model that a lane starts inside its own
-session for one quick, bounded task (`.claude/agents/wh-helper.md`; in Claude
-Code `/wh-delegate <task>`). It runs in the requester's worktree (the one the requester works in, `../workharbor-platform-2` included), never its own,
-under the requester's permissions, one editing helper at a time per worktree, sees only its task, and reports back to the requester,
+session for one quick, bounded task (in Claude Code `/wh-delegate <task>`).
+There are two types. `wh-helper` is read-only (Read, Grep, Glob, WebSearch,
+WebFetch) and takes every lookup. `wh-helper-edit` also has Edit and Bash and
+takes only an edit or a check that runs a command, with the files named one by
+one; it refuses a task that names none. It runs in the requester's worktree (the one the requester works in, `../workharbor-platform-2` included), never its own,
+under the requester's permissions, one `wh-helper-edit` at a time per worktree, sees only its task, and reports back to the requester,
 who reviews the result, commits it and lands it. A helper has no session,
 worktree, branch or card of its own. It adds to [AGENTS.md](../AGENTS.md), which
 always applies.
@@ -11,6 +14,9 @@ always applies.
 Model: Haiku. A helper never edits a security-relevant path (AGENTS.md, Security-relevant paths), even when asked; it may read them.
 
 ## Use cases
+
+The first two (and board hygiene) go to `wh-helper`; mechanical edits, small
+tests and checks go to `wh-helper-edit`.
 
 - **Find and report:** grep the code or docs, list where something is used,
   collect unticked criteria or unverified markers, summarise a CI log or a

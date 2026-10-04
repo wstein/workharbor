@@ -28,7 +28,8 @@ Every subagent's model is pinned in `.claude/agents/` and never inherited from t
 | `wh-design` | Opus | The decisions waiting in the issues, and nothing else. Only `wh/dispatch` starts it, in one batch when decisions wait and at most once an hour unless a P1 is blocked. |
 | `wh-reviewer` | Opus | Review of code and the rule sections. |
 | `wh-docs-reviewer` | Sonnet | Review of documentation outside the rule sections only. |
-| `wh-helper` | Haiku | A quick, bounded lookup or mechanical edit; changes no git state. |
+| `wh-helper` | Haiku | A quick, bounded lookup or web research; read-only (no Edit, Write or Bash). |
+| `wh-helper-edit` | Haiku | A mechanical edit or a check that runs a command, on files the requester names one by one; never a security-relevant path; changes no git state. |
 
 A decision that loosens a Hard rule or a security control, changes release scope or order, costs money, publishes or sets product direction is not made by the subagent: it goes to you first, through `wh/desk` ([`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md), Models).
 
@@ -94,7 +95,7 @@ The `Makefile` also has `install`, `install-release`, `changelog` and `editorcon
 
 ### Lanes
 
-The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research, board hygiene, mechanical edits, small tests, checks. It is not a lane and never touches a security-relevant path.
+The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research and board hygiene go to the read-only `wh-helper`; mechanical edits, small tests and checks go to `wh-helper-edit`. It is not a lane, and neither type edits a security-relevant path.
 
 ### Commits
 
