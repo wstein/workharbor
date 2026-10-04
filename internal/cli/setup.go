@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -71,16 +72,17 @@ func (e SetupEnv) resolve(st *state) (SetupEnv, error) {
 func newSetup(st *state) *cobra.Command {
 	var (
 		dryRun   bool
+		dev      bool
 		only     []string
 		from     string
 		whrUser  string
 		prefix   string
 		doctorOn = func(env SetupEnv, path string) []doctor.Check {
-			home, _ := os.UserHomeDir()
+			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
 				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: doctor.DefaultLookPath,
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev,
 			})
 		}
 	)
@@ -97,6 +99,13 @@ func newSetup(st *state) *cobra.Command {
 		}
 		if !dryRun && !env.IsTerminal() {
 			return usageError{"whr setup asks you questions and runs commands after your answer, so it needs a terminal: run it in one, or add --dry-run to see what it would do"}
+		}
+		prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME"))
+		if err != nil {
+			return err
+		}
+		if dev {
+			fmt.Fprintln(st.env.Stderr, developmentWarning)
 		}
 		ctx := cmd.Context()
 		if phase == doctor.PhaseHost {
@@ -121,13 +130,25 @@ func newSetup(st *state) *cobra.Command {
 		}
 		if exe, err := env.Executable(); err != nil {
 			return err
-		} else if err := setup.CheckInstalled(exe, installedPrefixes(prefix)...); err != nil {
+		} else if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
+			if !dev {
+				err = fmt.Errorf("%w; for a source installation use --dev (or select its --prefix)", err)
+			}
 			if !dryRun {
 				return usageError{err.Error()}
 			}
 			fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 		}
 		steps := doctorOn(env, configPath())
+		if dev && !dryRun {
+			for _, c := range steps {
+				if c.Name == "prefix" {
+					if status, detail := c.Run(ctx); status == doctor.Fail {
+						return usageError{detail}
+					}
+				}
+			}
+		}
 		// D49: without separation and with remote access, one explicit y that
 		// names the risk. Doctor fails on it too; nothing is enforced.
 		for _, c := range steps {
@@ -162,11 +183,12 @@ func newSetup(st *state) *cobra.Command {
 	}
 	flags := func(c *cobra.Command) {
 		f := c.Flags()
+		f.BoolVar(&dev, "dev", false, "use a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 		f.BoolVar(&dryRun, "dry-run", false, "run the read-only checks for real and print every fix without running any")
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
 		f.StringVar(&from, "from", "", "start at this step")
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
-		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the admin-owned prefix whr is installed under")
+		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
 		names := func(phase doctor.Phase) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 				var out []string
@@ -199,4 +221,28 @@ func newSetup(st *state) *cobra.Command {
 	flags(hostCmd)
 	root.AddCommand(hostCmd)
 	return root
+}
+
+// Development mode is explicit on each setup/doctor invocation. The LaunchAgent
+// retains the selected executable, so restart needs no mode flag or config key.
+const developmentWarning = "warning: development installation; a user-writable supervisor lacks managed-install replacement protection"
+
+func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string) (string, error) {
+	if dev && !cmd.Flags().Changed("prefix") {
+		if !filepath.IsAbs(home) {
+			return "", usageError{"--dev needs an absolute HOME or an explicit --prefix"}
+		}
+		prefix = filepath.Join(home, ".local")
+	}
+	if !filepath.IsAbs(prefix) {
+		return "", usageError{"--prefix must be absolute"}
+	}
+	return filepath.Clean(prefix), nil
+}
+
+func setupPrefixes(prefix string, dev bool) []string {
+	if dev {
+		return []string{prefix}
+	}
+	return installedPrefixes(prefix)
 }

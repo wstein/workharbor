@@ -510,8 +510,11 @@ func hostSteps(d Deps) []Check {
 		},
 
 		{
-			Name: "prefix", Phase: PhaseHost, Step: 13, Title: "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)",
+			Name: "prefix", Phase: PhaseHost, Step: 13, Title: prefixTitle(d),
 			Run: func(context.Context) (Status, string) {
+				if d.Dev {
+					return d.developmentPrefix()
+				}
 				fi, err := os.Stat(d.prefix())
 				if err != nil {
 					return Fail, d.prefix() + " does not exist"
@@ -537,8 +540,8 @@ func hostSteps(d Deps) []Check {
 				return OK, d.prefix() + " exists and only the administrator writes it"
 			},
 			Fix: &Fix{
-				Cmds:  []Cmd{{Sudo: true, Argv: d.prefixInstallArgv()}},
-				Guide: "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13).",
+				Cmds:  prefixInstallCommands(d),
+				Guide: prefixInstallGuide(d),
 			},
 		},
 
@@ -979,7 +982,7 @@ func userSteps(d Deps) []Check {
 				}
 				return OK, "the job is loaded (" + st.State + ")"
 			},
-			Fix: &Fix{Cmds: []Cmd{{Argv: []string{d.Whr, "service", "install", "--config", d.ConfigPath}}}},
+			Fix: &Fix{Cmds: []Cmd{{Argv: serviceInstallArgv(d)}}},
 		},
 		dropAdmin(d),
 	}, userOrder)
@@ -1267,4 +1270,67 @@ func colonLines(out string) map[string]string {
 		}
 	}
 	return m
+}
+
+func prefixInstallCommands(d Deps) []Cmd {
+	if d.Dev {
+		return nil
+	}
+	return []Cmd{{Sudo: true, Argv: d.prefixInstallArgv()}}
+}
+
+func serviceInstallArgv(d Deps) []string {
+	args := []string{d.Whr, "service", "install", "--config", d.ConfigPath}
+	if d.Dev {
+		args = append(args, "--whr", d.Whr)
+	}
+	return args
+}
+
+func (d Deps) developmentPrefix() (Status, string) {
+	if d.UID == 0 {
+		return Fail, "whr never runs as root"
+	}
+	if err := launchd.CheckBinary(d.Whr); err != nil {
+		return Fail, err.Error()
+	}
+	prefix, err := filepath.EvalSymlinks(d.prefix())
+	if err != nil {
+		return Fail, err.Error()
+	}
+	binary, err := filepath.EvalSymlinks(d.Whr)
+	if err != nil {
+		return Fail, err.Error()
+	}
+	rel, err := filepath.Rel(prefix, binary)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return Fail, binary + " is not under " + prefix
+	}
+	for p := binary; ; p = filepath.Dir(p) {
+		fi, err := os.Stat(p)
+		if err != nil {
+			return Fail, err.Error()
+		}
+		if fi.Mode().Perm()&0o022 != 0 {
+			return Fail, p + " can be written by others than its owner"
+		}
+		if p == prefix {
+			break
+		}
+	}
+	return Warn, prefix + ": development installation; a user-writable supervisor lacks managed-install replacement protection"
+}
+
+func prefixTitle(d Deps) string {
+	if d.Dev {
+		return "the development prefix " + d.prefix()
+	}
+	return "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)"
+}
+
+func prefixInstallGuide(d Deps) string {
+	if d.Dev {
+		return "Install approved source with `make install` using the selected PREFIX, then run `whr doctor --dev` with the same --prefix."
+	}
+	return "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13)."
 }

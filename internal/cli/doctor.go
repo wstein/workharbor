@@ -21,6 +21,7 @@ import (
 // non-zero exit. It never fixes anything.
 func newDoctor(st *state) *cobra.Command {
 	var (
+		dev     bool
 		skip    []string
 		whrUser string
 		prefix  string
@@ -38,6 +39,13 @@ func newDoctor(st *state) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME"))
+			if err != nil {
+				return err
+			}
+			if dev {
+				fmt.Fprintln(st.env.Stderr, developmentWarning)
+			}
 			exe, _ := env.Executable()
 			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
@@ -47,7 +55,7 @@ func newDoctor(st *state) *cobra.Command {
 				FS:         runtime.OSFS{},
 				LookPath:   doctor.DefaultLookPath,
 				// Output only: the checks read the machine and nothing writes.
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev,
 				Probe: func(ctx context.Context) error {
 					c, err := st.api()
 					if err != nil {
@@ -80,6 +88,13 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
 			for i, r := range rs {
+				if dev {
+					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup host ", "whr setup host --dev ", 1)
+					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup --only ", "whr setup --dev --only ", 1)
+					if cmd.Flags().Changed("prefix") && strings.HasPrefix(rs[i].Fix, "whr setup ") {
+						rs[i].Fix += " --prefix " + shellArgument(prefix)
+					}
+				}
 				if other && r.Fix != "" && r.Phase != doctor.PhaseHost {
 					rs[i].Fix += " (run as " + whrUser + ")"
 				}
@@ -113,9 +128,10 @@ func newDoctor(st *state) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&dev, "dev", false, "check a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
 	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
-	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the admin-owned prefix whr is installed under")
+	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		var names []string
 		for _, c := range doctor.Checks(doctor.Deps{}) {
@@ -136,4 +152,9 @@ func printDoctor(w io.Writer, rs []doctor.Result) {
 	for _, r := range rs {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Status, r.Check, clean(strings.TrimSpace(r.Detail)), r.Fix)
 	}
+}
+
+// shellArgument quotes a diagnostic command argument without interpreting it.
+func shellArgument(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

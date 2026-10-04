@@ -101,7 +101,8 @@ type Deps struct {
 	Account string // the account workharbor runs as (--user); empty means WhrUser
 	UID     int
 	Whr     string // the running whr binary
-	Prefix  string // the admin-owned prefix whr is installed under, "/opt/whr" by default
+	Dev     bool   // explicitly allow a user-owned development installation
+	Prefix  string // the selected installation prefix, "/opt/whr" by default
 	Brewing string // the Brewfile's text; empty means the one in this package
 }
 
