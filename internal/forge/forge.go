@@ -120,6 +120,12 @@ type QueueReader interface {
 // moved on: the topic is rebased and approved again, never forced.
 var ErrNotFastForward = errors.New("the branch has commits the approved one does not: it is not a fast-forward")
 
+// ErrTransient marks a forge failure that trying again later can fix: a network
+// fault, a timeout, a server error (HTTP 5xx) or a rate limit. An adapter's error
+// matches it with errors.Is. Every other failure is a refusal that a retry does
+// not change, and the publish path ends on it instead of retrying (design §4.5).
+var ErrTransient = errors.New("a transient forge failure")
+
 // FastForwarder is the optional capability of an adapter to move a branch to a
 // commit that is a fast-forward of it, never forced (the prototype workflow,
 // D47). It has no other way to change a branch.

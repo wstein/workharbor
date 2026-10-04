@@ -19,6 +19,10 @@ var (
 	ErrNotSigned      = errors.New("a rewritten commit is not signed")
 	ErrNoSigningKey   = errors.New("preparing a topic needs the bot's signing key")
 	ErrNotFastForward = errors.New("the push is not a fast-forward")
+	// ErrTransport is a push that failed for a transport fault (the network, a
+	// timeout, a server error): trying again later can work. Anything else a push
+	// reports is a refusal a retry does not change.
+	ErrTransport = errors.New("the push failed for a transport fault")
 	// ErrHistoryRewritten: the agent rewrote commits it had already handed in, so
 	// a follow-up round cannot tell which of its commits are new.
 	ErrHistoryRewritten = errors.New("the agent rewrote commits that were already prepared")
@@ -266,9 +270,37 @@ func (r *Repo) push(ctx context.Context, remote, branch, sha, token string) erro
 		if strings.Contains(err.Error(), "non-fast-forward") || strings.Contains(err.Error(), "rejected") {
 			return fmt.Errorf("%w: %v", ErrNotFastForward, err) //nolint:errorlint // the git output is the detail
 		}
+		if transportFault(ctx, err) {
+			return fmt.Errorf("%w: %v", ErrTransport, err) //nolint:errorlint // the git output is the detail
+		}
 		return err
 	}
 	return nil
+}
+
+// transportMarkers are what git prints when the network or the server failed and
+// not the request: DNS, connection and TLS faults, a dropped transfer, a server
+// error (HTTP 5xx) or a rate limit.
+var transportMarkers = []string{
+	"could not resolve host", "connection refused", "connection timed out", "connection reset",
+	"operation timed out", "network is unreachable", "no route to host", "ssl connection",
+	"tls connection", "unexpected disconnect", "early eof", "remote end hung up", "rpc failed",
+	"the remote end hung up", "returned error: 500", "returned error: 502", "returned error: 503",
+	"returned error: 504", "returned error: 429", "rate limit", "http2 framing", "gnutls_handshake",
+}
+
+// transportFault reports whether a failed push looks like a transport fault.
+func transportFault(ctx context.Context, err error) bool {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, m := range transportMarkers {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // PushToken is Push to an https remote with a per-push token (D51, §7.3). The

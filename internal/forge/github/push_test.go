@@ -264,3 +264,20 @@ func TestOnlyAnApprovedPushThroughTheGuardMintsAToken(t *testing.T) {
 		t.Errorf("an approved push = %v, mints %d", err, f.mints)
 	}
 }
+
+func TestAPIErrorTransientMatchesRateLimitsAndServerErrors(t *testing.T) {
+	for _, tc := range []struct {
+		err  *APIError
+		want bool
+	}{
+		{&APIError{Status: 502}, true},
+		{&APIError{Status: 429, kind: ErrRateLimited}, true},
+		{&APIError{Status: 403, kind: ErrAuth}, false},
+		{&APIError{Status: 404, kind: ErrNotFound}, false},
+		{&APIError{Status: 422}, false},
+	} {
+		if got := errors.Is(tc.err, forge.ErrTransient); got != tc.want {
+			t.Errorf("status %d: transient = %v, want %v", tc.err.Status, got, tc.want)
+		}
+	}
+}

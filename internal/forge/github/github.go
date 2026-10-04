@@ -77,7 +77,12 @@ func (e *APIError) Error() string {
 }
 
 // Is makes errors.Is(err, ErrNotFound / ErrAuth / ErrRateLimited) work.
-func (e *APIError) Is(target error) bool { return e.kind != nil && e.kind == target }
+func (e *APIError) Is(target error) bool {
+	if target == forge.ErrTransient { // a rate limit or a server error: a retry can work
+		return e.kind == ErrRateLimited || e.Status >= 500
+	}
+	return e.kind != nil && e.kind == target
+}
 
 // Config is what the client needs.
 type Config struct {
