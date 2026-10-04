@@ -39,7 +39,9 @@ type Deps struct {
 	Agent   agent.Adapter
 	// Issues loads issues from the forge, and Forge is the narrow access to the
 	// rest of it: guarded effects only (forge.go). The raw adapter stays in Build.
-	Issues service.IssueSource
+	// It is *IssueAccess, not an interface, so the compiler rejects the raw
+	// client here (issue #247).
+	Issues *IssueAccess
 	Forge  ForgeAccess
 	Git    *hostgit.Git
 	// Owner is the owner label of every environment this supervisor makes.
@@ -188,7 +190,7 @@ func Run(ctx context.Context, d Deps) error {
 			}
 			return ""
 		},
-		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: d.Issues, BuildDir: GuestBuild,
+		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: issueSource(d.Issues), BuildDir: GuestBuild,
 		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment, QueueStatus: queueStatus(d.Config),
 	})
 	// The publish path (D51): prepare when a run stops, publish on approval, and
@@ -532,4 +534,13 @@ func workflowBranch(r config.Repository) string {
 		return ""
 	}
 	return r.Target("")
+}
+
+// issueSource keeps a nil *IssueAccess a nil interface: the service tests
+// Issues for nil, and a typed nil would pass that test.
+func issueSource(a *IssueAccess) service.IssueSource {
+	if a == nil {
+		return nil
+	}
+	return a
 }

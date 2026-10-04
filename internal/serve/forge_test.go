@@ -41,3 +41,14 @@ func TestNarrowForgeValuesDoNotReachTheAdapter(t *testing.T) {
 		t.Error("Issues no longer asserts to forge.DefaultBrancher")
 	}
 }
+
+// TestIssueSourceKeepsNilNil: a Deps without Issues must reach the service as
+// a nil interface, as the service tests it for nil.
+func TestIssueSourceKeepsNilNil(t *testing.T) {
+	if issueSource(nil) != nil {
+		t.Error("issueSource(nil) is a typed nil")
+	}
+	if issueSource(&IssueAccess{}) == nil {
+		t.Error("issueSource drops a real value")
+	}
+}
