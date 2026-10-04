@@ -350,7 +350,7 @@ func (state *state) approval(value message) (agent.ApprovalRequest, error) {
 		if item.Type != "commandExecution" || params.Command == nil || params.Cwd == nil || *params.Command != item.Command || *params.Cwd != item.Cwd || (params.Kind != "" && params.Kind != "command") {
 			return agent.ApprovalRequest{}, errProtocol
 		}
-		req.Input = fmt.Sprintf("cwd: %state\ncommand: %state", item.Cwd, item.Command)
+		req.Input = fmt.Sprintf("cwd: %s\ncommand: %s", item.Cwd, item.Command)
 	case "item/fileChange/requestApproval":
 		if item.Type != "fileChange" || len(item.Changes) == 0 || params.Command != nil || params.Cwd != nil || params.Kind != "" {
 			return agent.ApprovalRequest{}, errProtocol
