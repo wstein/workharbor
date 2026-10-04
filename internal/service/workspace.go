@@ -60,6 +60,9 @@ type WorkspaceConfig struct {
 	// When set, each agent's tools put their output there (buildEnv), per agent,
 	// off the bind-mounted checkout (D39). Empty: nothing is relocated.
 	BuildDir string
+	// Shell says where the agent's CLI and home are, for the agent shell (design
+	// §7.3, "The sign-in shell"). Optional: without it there is no agent shell.
+	Shell *ShellConfig
 	// Environment reads the repository's environment from its default branch, in
 	// the supervisor's own copy, never from a checkout (D38): the hosts its
 	// devcontainer.json requests and its lockfiles suggest are asked about at a

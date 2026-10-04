@@ -236,6 +236,7 @@ var routes = []route{
 	{http.MethodDelete, "/v1/workspaces/{workspace}/agents/{role}", (*Server).removeAgent},
 	{http.MethodPost, "/v1/workspaces/{workspace}/open", (*Server).openCopy},
 	{http.MethodPost, "/v1/workspaces/{workspace}/rebuild", (*Server).rebuildWorkspace},
+	{http.MethodPost, "/v1/workspaces/{workspace}/shell", (*Server).workspaceShell},
 	{http.MethodGet, "/v1/previews", (*Server).listPreviews},
 	{http.MethodPost, "/v1/tasks/{task}/previews", (*Server).openPreview},
 	{http.MethodPost, "/v1/previews/{preview}/link", (*Server).previewLink},
@@ -885,4 +886,32 @@ func (s *Server) openCopy(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, editorCopyView{Path: c.Path, Warnings: warnings}, nil
 	})
+}
+
+// ShellBackend is what the agent shell route needs. A backend without it answers
+// with a conflict.
+type ShellBackend interface {
+	ShellTarget(ctx context.Context, workspace string) (service.ShellTarget, error)
+}
+
+// workspaceShell answers where a shell in a workspace's environment is opened and
+// with which variables. It carries no terminal: the `whr` process of the human
+// runs the runtime's interactive exec itself (design §7.3, "The sign-in shell").
+func (s *Server) workspaceShell(w http.ResponseWriter, r *http.Request) {
+	name, err := idParam(r, "workspace")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	sb, ok := s.be.(ShellBackend)
+	if !ok {
+		writeError(w, domain.NewConflict(domain.RuleEnvRunning, "this supervisor has no agent shell"))
+		return
+	}
+	t, err := sb.ShellTarget(r.Context(), string(name))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeOK(w, http.StatusOK, shellView(t))
 }

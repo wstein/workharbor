@@ -1,0 +1,24 @@
+HTTP OK (200)
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "env_id": "env-1",
+    "runtime": "apple-container",
+    "user": "1000:1000",
+    "dir": "/home/agent",
+    "env": [
+      "HOME=/home/agent",
+      "CLAUDE_CONFIG_DIR=/home/agent/.claude",
+      "HTTPS_PROXY=http://192.168.64.3:3128"
+    ],
+    "cmd": [
+      "/bin/sh",
+      "-c",
+      "exec sh -i",
+      "whr-shell",
+      "/tools/profiles/p/bin"
+    ]
+  }
+}
+

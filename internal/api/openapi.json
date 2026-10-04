@@ -999,6 +999,69 @@
         "description": "Replaces the environment with one made from the image the repository's default branch resolves to now, keeping the home and build volumes and the workspace folder. Refused (409) while a run of the workspace is live, naming it. The old environment is removed only after the new one is up; if the new one cannot be brought up the old one is started again. Audited with both image digests. It takes minutes when the image has to be built."
       }
     },
+    "/v1/workspaces/{workspace}/shell": {
+      "post": {
+        "operationId": "workspaceShell",
+        "summary": "Say where a shell in a workspace's environment opens and with which variables (the terminal never passes through the supervisor)",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the environment and the variables of a run; no secret, nothing stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ShellView"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error. The HTTP status follows the exit code: 400 usage (2), 401 auth (4), 404 not found (3), 409 conflict or needs human (5, 6), 504 timeout (7), 500 other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "description": "Names the environment of the workspace and the variables of a run (the agent's home and auth directory, the egress proxy as for a run), after making sure the environment runs. It opens no terminal and carries none: the caller's own process runs the runtime's interactive exec, so what the human types and the agent's CLI writes never reach the supervisor (design 7.3, the sign-in shell). Refused (409) while a run of the workspace is unfinished, naming it. Nothing is stored and no secret is returned."
+      }
+    },
     "/v1/workspaces/{workspace}/open": {
       "post": {
         "operationId": "openCopy",
@@ -3624,6 +3687,43 @@
           },
           "new_digest": {
             "type": "string"
+          }
+        }
+      },
+      "ShellView": {
+        "type": "object",
+        "required": [
+          "env_id",
+          "runtime",
+          "user",
+          "dir",
+          "env",
+          "cmd"
+        ],
+        "properties": {
+          "env_id": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "dir": {
+            "type": "string"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

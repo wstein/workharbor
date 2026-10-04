@@ -288,6 +288,20 @@ func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (ser
 	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr.invalid/whr-base/fedora:aaa", NewImage: "whr.invalid/whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
 }
 
+func (f *fake) ShellTarget(_ context.Context, workspace string) (service.ShellTarget, error) {
+	switch workspace {
+	case "nope":
+		return service.ShellTarget{}, &domain.NotFoundError{Kind: "workspace", ID: "nope"}
+	case "busy":
+		return service.ShellTarget{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish, stop or fail it before you sign in")
+	}
+	return service.ShellTarget{
+		EnvID: "env-1", Runtime: "apple-container", User: "1000:1000", Dir: "/home/agent",
+		Env: []string{"HOME=/home/agent", "CLAUDE_CONFIG_DIR=/home/agent/.claude", "HTTPS_PROXY=http://192.168.64.3:3128"},
+		Cmd: []string{"/bin/sh", "-c", "exec sh -i", "whr-shell", "/tools/profiles/p/bin"},
+	}, nil
+}
+
 func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.EditorCopy, error) {
 	switch {
 	case workspace == "nope":
@@ -618,6 +632,9 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"remove-workspace-busy":          {"DELETE", "/v1/workspaces/busy", ""},
 		"add-agent":                      {"POST", "/v1/workspaces/docs-ws/agents", `{"role":"runtime"}`},
 		"add-agent-unknown-workspace":    {"POST", "/v1/workspaces/nope/agents", `{"role":"runtime"}`},
+		"workspace-shell":                {"POST", "/v1/workspaces/docs-ws/shell", ""},
+		"workspace-shell-busy":           {"POST", "/v1/workspaces/busy/shell", ""},
+		"workspace-shell-unknown":        {"POST", "/v1/workspaces/nope/shell", ""},
 		"open-copy":                      {"POST", "/v1/workspaces/docs-ws/open", `{"role":"runtime"}`},
 		"open-copy-ambiguous":            {"POST", "/v1/workspaces/docs-ws/open", ""},
 		"open-copy-unknown-workspace":    {"POST", "/v1/workspaces/nope/open", `{"role":"x"}`},
@@ -884,7 +901,7 @@ func TestAClosedSubscriptionEndsTheStream(t *testing.T) {
 
 func TestTheBackendIsComplete(t *testing.T) {
 	var _ Backend = backend{}
-	if got := Routes(); len(got) != 38 {
+	if got := Routes(); len(got) != 39 {
 		sort.Strings(got)
 		t.Errorf("routes = %v", got)
 	}

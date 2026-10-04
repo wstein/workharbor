@@ -213,3 +213,20 @@ type RebuildReport struct {
 func rebuildView(r service.RebuildResult) RebuildReport {
 	return RebuildReport{OldEnv: r.OldEnv, NewEnv: r.NewEnv, OldImage: r.OldImage, NewImage: r.NewImage, OldDigest: r.OldDigest, NewDigest: r.NewDigest}
 }
+
+// ShellView is what the agent shell answers (design §7.3, "The sign-in shell"):
+// the environment and the variables of a run, nothing else. The terminal never
+// passes through the supervisor: the caller hands this to the runtime's own
+// interactive exec. It holds no secret and is not stored.
+type ShellView struct {
+	EnvID   string   `json:"env_id"`
+	Runtime string   `json:"runtime"`
+	User    string   `json:"user"`
+	Dir     string   `json:"dir"`
+	Env     []string `json:"env"`
+	Cmd     []string `json:"cmd"`
+}
+
+func shellView(t service.ShellTarget) ShellView {
+	return ShellView{EnvID: t.EnvID, Runtime: t.Runtime, User: t.User, Dir: t.Dir, Env: t.Env, Cmd: t.Cmd}
+}

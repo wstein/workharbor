@@ -42,6 +42,10 @@ const Owner = "whr"
 // the human signs in (D40).
 const GuestHome = "/home/agent"
 
+// AgentConfigDir is the agent CLI's auth directory in the environment
+// (CLAUDE_CONFIG_DIR): a run and the sign-in shell both use it.
+const AgentConfigDir = GuestHome + "/.claude"
+
 // GuestBuild is where the build volume of an environment is mounted: the output
 // directories of tools that read their location from the environment (cargo's
 // target, uv's environment) live there, one directory per agent, instead of in the
@@ -335,7 +339,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 	if gone := apple.SweepEnvFiles("", time.Now()); len(gone) > 0 {
 		logf("removed %d env file(s) an earlier run left behind", len(gone))
 	}
-	ag := claude.New(rt, claude.Config{Bin: bin + "/claude", ConfigDir: GuestHome + "/.claude", Env: env})
+	ag := claude.New(rt, claude.Config{Bin: bin + "/claude", ConfigDir: AgentConfigDir, Env: env})
 
 	spec := c.Environment.Resolved()
 	if spec.Image == "" {
@@ -403,6 +407,7 @@ func Build(c *config.Config, exe, home string, logf func(string, ...any)) (Deps,
 			return out, err
 		}),
 		Topics: Topics(git, c, dir), EditorDir: filepath.Join(dir, EditorCopyDir),
+		Shell:     &service.ShellConfig{Bin: bin, Dir: GuestHome, Env: []string{"HOME=" + GuestHome, "CLAUDE_CONFIG_DIR=" + AgentConfigDir}},
 		NewPusher: func(r *hostgit.Repo) forge.Pusher { return gh.NewPusher(r) }, Committer: gh.BotIdentity,
 		Spec: opts.For, Prepare: prepare, AgentSpec: AgentSpecFor(c, mode), Logf: redactedLogf(rd, logf),
 		AgentSpecFor: func(held *config.Config) func(domain.Task, domain.Run) agent.StartSpec {

@@ -72,6 +72,9 @@ type Deps struct {
 	// copy of its default branch (D38), for the egress requests a run's start
 	// asks about. Optional.
 	Environment func(ctx context.Context, repo, branch string) (service.RepoEnvironment, error)
+	// Shell says where the agent's CLI and home are, for `whr ws shell` (design
+	// §7.3, "The sign-in shell"). Optional.
+	Shell *service.ShellConfig
 	// AgentSpec returns how an agent is started for a run.
 	AgentSpec func(domain.Task, domain.Run) agent.StartSpec
 	// AgentSpecFor makes AgentSpec for a configuration. Run uses it when a
@@ -191,7 +194,7 @@ func Run(ctx context.Context, d Deps) error {
 			return ""
 		},
 		Config: d.Config, Git: d.Git, Spec: d.Spec, Prepare: d.Prepare, NewID: NewID, Issues: issueSource(d.Issues), BuildDir: GuestBuild,
-		Topics: d.Topics, EditorDir: d.EditorDir, Environment: d.Environment, QueueStatus: queueStatus(d.Config),
+		Topics: d.Topics, EditorDir: d.EditorDir, Shell: d.Shell, Environment: d.Environment, QueueStatus: queueStatus(d.Config),
 	})
 	// The publish path (D51): prepare when a run stops, publish on approval, and
 	// complete what a restart interrupted. Without a way to push, none of it runs.
