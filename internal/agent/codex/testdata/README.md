@@ -31,3 +31,33 @@ D53 landed as `c6b28807eaf73a85676a81e9a8332b77d08549ee` before source edits.
 Production launch remains unsupported while mandatory target configuration,
 instruction isolation, child admission/cleanup, artifact and exact model/effort
 gates are unmeasured. No exec fallback or token relay is provided.
+
+The offline lifecycle uses only initialization, thread start/resume, turn
+start/steer/interrupt and individual command/file approval responses. Synthetic
+tests exercise accepted and refused steering, changed effective bindings,
+parent cancellation, pending approval cancellation and exact response IDs.
+`untrusted` and `read-only` in fixtures are protocol values, not evidence that
+native settings enforce the supervisor's policy. Unexpected instruction sources,
+required controls, child item kinds and permission-widening shapes are refused.
+
+Usage normalization currently accepts one complete `tokenUsage.last` observation
+per turn, keeps input/cache/output counters separate and leaves costs and reset
+times unknown. A second observation refuses the session rather than charging
+the same snapshot twice. Multi-request/multi-update native accounting and quota
+reset interpretation must be measured before reporting production usage support.
+Typed `unauthorized` and `usageLimitExceeded` errors map to resumable pauses;
+ordinary rate limits remain failures rather than invented account exhaustion.
+
+Bounds include 1 MiB per wire message, 32 pending host requests, 64 queued native
+messages, 256 typed events, 256 items with at most 4 MiB retained item content,
+4096 request identities per connection and eight pending host approvals.
+Oversized or contradictory required input fails closed. Display text is capped
+at 64 KiB; `agent.Ask` applies the existing human Decision input cap separately.
+Native stderr and authentication payloads are not forwarded into event logs.
+
+The [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+documents `model_reasoning_effort`; offline binding requests also set the native
+turn's explicit `effort`. Synthetic model strings prove no resolution of Werner's
+sol6.1/luna requests, supported effort, subscription entitlement or authorized
+target turn. Immutable native settings, persisted resume provenance and the
+reviewed instruction/skill binding remain integration and measurement gates.
