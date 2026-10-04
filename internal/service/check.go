@@ -89,13 +89,22 @@ func NewRepoChecker(s *Service, cfg CheckConfig) *RepoChecker { return &RepoChec
 // single connection (store.Open: SetMaxOpenConns(1)): the hold's read of the
 // runs waits for a start's open transaction. A reader pool would break it, and
 // TestTheStoreKeepsOneConnection fails first. Holds are counted, so the whole
-// prepare may hold the environment around a check that holds it again.
+// prepare may hold the environment around a check that holds it again. It is
+// refused while an agent stop (a cancel, a budget stop or kill-all) holds the
+// environment, whose fallback may stop it: those holds are counted apart.
 func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (release func(), err error) {
 	lease, err := s.leaseEnvironment(ws)
 	if err != nil {
 		return nil, err
 	}
 	s.rebuildMu.Lock()
+	if s.stopHolds[ws.EnvID] > 0 {
+		// An agent stop's fallback may stop this environment: a check taken now
+		// would be stopped under it (issue #238).
+		s.rebuildMu.Unlock()
+		lease()
+		return nil, domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: an agent stop is running in it", ws.EnvID)
+	}
 	if s.holds == nil {
 		s.holds = map[domain.ID]int{}
 	}

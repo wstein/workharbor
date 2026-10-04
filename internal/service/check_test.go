@@ -414,3 +414,28 @@ func TestTheReapScriptEndsTheGroupInDashAndBash(t *testing.T) {
 		})
 	}
 }
+
+// An agent stop holds the environment because its fallback may stop it: a check
+// is refused while it runs, and a check's own hold counted twice stays allowed
+// (issue #238).
+func TestAHoldIsRefusedWhileAnAgentStopHoldsTheEnvironment(t *testing.T) {
+	t.Parallel()
+	c := newCheckRig(t)
+	ws, err := c.store.Workspace(bg, "w1")
+	must(t, err)
+	release := c.svc.holdEnvBusy(c.env)
+	var conf *domain.ConflictError
+	if _, err := c.svc.HoldEnvironment(bg, ws); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
+		t.Fatalf("a check during an agent stop: %v, want environment busy", err)
+	}
+	release()
+	r1, err := c.svc.HoldEnvironment(bg, ws)
+	must(t, err)
+	r2, err := c.svc.HoldEnvironment(bg, ws)
+	must(t, err)
+	r2()
+	r1()
+	if err := c.svc.checkEnvFree(bg, c.env, ""); err != nil {
+		t.Errorf("released: %v (the refused hold must not leak)", err)
+	}
+}

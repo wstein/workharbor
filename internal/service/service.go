@@ -147,6 +147,9 @@ type Service struct {
 	// holds counts the holders of an environment's busy mark (HoldEnvironment),
 	// under rebuildMu.
 	holds map[domain.ID]int
+	// stopHolds counts the holders among holds that are an agent stop's
+	// (holdEnvBusy): a check's HoldEnvironment is refused while one is on.
+	stopHolds map[domain.ID]int
 }
 
 // rebuilding reports whether the workspace's environment is being replaced.

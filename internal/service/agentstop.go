@@ -20,6 +20,10 @@ func (s *Service) holdEnvBusy(env domain.ID) (release func()) {
 		s.holds = map[domain.ID]int{}
 	}
 	s.holds[env]++
+	if s.stopHolds == nil {
+		s.stopHolds = map[domain.ID]int{}
+	}
+	s.stopHolds[env]++
 	s.rebuildMu.Unlock()
 	var once sync.Once
 	return func() {
@@ -27,6 +31,9 @@ func (s *Service) holdEnvBusy(env domain.ID) (release func()) {
 			s.rebuildMu.Lock()
 			if s.holds[env]--; s.holds[env] <= 0 {
 				delete(s.holds, env)
+			}
+			if s.stopHolds[env]--; s.stopHolds[env] <= 0 {
+				delete(s.stopHolds, env)
 			}
 			s.rebuildMu.Unlock()
 		})
