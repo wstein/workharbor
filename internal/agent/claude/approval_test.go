@@ -472,8 +472,16 @@ func TestBadToolNamesAndAFloodAreDeniedWithoutAsking(t *testing.T) {
 			}
 		}
 	}()
-	// The bad name and the two prompts beyond the limit are answered at once.
+	// The bad name and the two prompts beyond the limit are answered at once,
+	// and every approver goroutine must have called in before the count is read.
 	waitUntil(t, "three denials", func() bool { return len(r.written()) >= 4 })
+	waitUntil(t, "every open prompt asked", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return asked >= maxOpenPrompts
+	})
+	// Give a wrongly admitted prompt beyond the limit time to show up.
+	time.Sleep(50 * time.Millisecond)
 	mu.Lock()
 	n := asked
 	mu.Unlock()
