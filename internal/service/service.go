@@ -18,6 +18,7 @@ import (
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/skillset"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -48,6 +49,11 @@ func (SystemClock) Sleep(ctx context.Context, d time.Duration) error {
 
 // Config is what the service needs besides its adapters.
 type Config struct {
+	SkillSet            *skillset.Config
+	SkillForbidden      []string
+	ProjectInstructions func(context.Context, domain.Task, domain.Run) (ProjectInstructions, error)
+	SkillBinding        func(context.Context, []skillset.Binding) (skillset.Binding, error)
+	PrepareSkills       func(context.Context, domain.Run, SkillMount) error
 	// Location is the supervisor's time zone: the days of the usage summary and
 	// `whr usage --by day` are days there. Default time.Local.
 	Location *time.Location

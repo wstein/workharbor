@@ -24,6 +24,7 @@ import (
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/skillset"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -558,6 +559,17 @@ func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, a
 // a retry-or-cancel Decision, so the environment is free again.
 func (w *Workspaces) launch(ctx context.Context, agg *domain.TaskAggregate, ws domain.Workspace, a domain.Agent, run domain.ID, prompt string) error {
 	r := domain.Run{ID: run, WorkspaceID: ws.ID, AgentID: a.ID, EnvID: ws.EnvID}
+	initialRun := r
+	initialRun.TaskID, initialRun.State = agg.Task().ID, domain.RunStarting
+	initial := w.svc.cfg.Spec(agg.Task(), initialRun)
+	if prompt != "" {
+		initial.Prompt = prompt
+	}
+	selection, _, err := w.svc.composeSkills(ctx, agg.Task(), r, &initial, true)
+	if err != nil {
+		return err
+	}
+	r.Skills = selection
 	if err := agg.StartRun(r); err != nil {
 		return err
 	}
@@ -771,6 +783,16 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 	spec.EnvID, spec.Workdir = string(ws.EnvID), a.Worktree
 	if prompt != "" {
 		spec.Prompt = prompt
+	}
+	_, mount, err := w.svc.composeSkills(ctx, agg.Task(), r, &spec, false)
+	if err != nil {
+		return w.abortStart(ctx, task, run, sl, err)
+	}
+	if r.Skills.Mode != "legacy" && r.Skills.InstructionSHA256 != skillset.Digest([]byte(spec.Prompt)) {
+		return w.abortStart(ctx, task, run, sl, errors.New("the initial composed instruction changed after its provenance was recorded"))
+	}
+	if err := w.svc.prepareSkills(ctx, r, mount); err != nil {
+		return w.abortStart(ctx, task, run, sl, err)
 	}
 	spec.Env = append(spec.Env, w.svc.agentEnv(ctx, ws.EnvID)...)
 	spec.Env = append(spec.Env, w.buildEnv(a)...)

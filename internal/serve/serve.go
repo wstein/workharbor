@@ -25,6 +25,7 @@ import (
 	"github.com/wstein/workharbor/internal/passkey"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
+	"github.com/wstein/workharbor/internal/skillset"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/store"
 	"github.com/wstein/workharbor/internal/web"
@@ -33,10 +34,13 @@ import (
 // Deps is everything Run needs, already built. `whr serve` builds the real ones
 // (cmd/whr); tests pass fakes.
 type Deps struct {
-	Config  *config.Config
-	Store   *store.Store
-	Runtime runtime.Adapter
-	Agent   agent.Adapter
+	ProjectInstructions func(context.Context, domain.Task, domain.Run) (service.ProjectInstructions, error)
+	SkillBinding        func(context.Context, []skillset.Binding) (skillset.Binding, error)
+	PrepareSkills       func(context.Context, domain.Run, service.SkillMount) error
+	Config              *config.Config
+	Store               *store.Store
+	Runtime             runtime.Adapter
+	Agent               agent.Adapter
 	// Issues loads issues from the forge, and Forge is the narrow access to the
 	// rest of it: guarded effects only (forge.go). The raw adapter stays in Build.
 	// It is *IssueAccess, not an interface, so the compiler rejects the raw
@@ -375,13 +379,18 @@ func Run(ctx context.Context, d Deps) error {
 // then the board, the throttled notifier and the revoker.
 func serviceConfig(d Deps, logf func(string, ...any)) service.Config {
 	scfg := service.Config{
-		Owner:             d.Owner,
-		PostCreateTimeout: d.Config.Environment.PostCreate(),
-		Budgets:           Budgets(d.Config.Budgets),
-		LowLimits:         service.LowLimits{WindowPercent: d.Config.Limits.WarnPercent, BalanceMicroUSD: int64(math.Round(d.Config.Limits.LowBalanceUSD * 1e6))},
-		Spec:              d.AgentSpec,
-		NewID:             NewID,
-		OnError:           func(err error) { logf("background error: %v", err) },
+		ProjectInstructions: d.ProjectInstructions,
+		SkillBinding:        d.SkillBinding,
+		PrepareSkills:       d.PrepareSkills,
+		SkillSet:            &d.Config.SkillSet,
+		SkillForbidden:      d.Config.SkillStoreForbidden(),
+		Owner:               d.Owner,
+		PostCreateTimeout:   d.Config.Environment.PostCreate(),
+		Budgets:             Budgets(d.Config.Budgets),
+		LowLimits:           service.LowLimits{WindowPercent: d.Config.Limits.WarnPercent, BalanceMicroUSD: int64(math.Round(d.Config.Limits.LowBalanceUSD * 1e6))},
+		Spec:                d.AgentSpec,
+		NewID:               NewID,
+		OnError:             func(err error) { logf("background error: %v", err) },
 	}
 	addBoard(&scfg, d)
 	addNotifier(&scfg, d)

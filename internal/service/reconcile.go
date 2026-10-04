@@ -300,6 +300,14 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 	spec := s.cfg.Spec(agg.Task(), r)
 	s.fillApprover(&spec, task, run)
 	spec.Prompt = Briefing(agg.Task(), r, agg.SupersededOf(run), spec.Prompt)
+	_, mount, err := s.composeSkills(ctx, agg.Task(), r, &spec, false)
+	if err == nil {
+		err = s.prepareSkills(ctx, r, mount)
+	}
+	if err != nil {
+		s.end(run, sl)
+		return s.recordLaunchFailure(ctx, task, run, err)
+	}
 	spec.EnvID, spec.Env = string(r.EnvID), append(spec.Env, s.agentEnv(ctx, r.EnvID)...)
 	if r.AgentID != "" { // a resumed agent works in its own worktree, as a started one does
 		a, err := s.store.Agent(ctx, r.AgentID)

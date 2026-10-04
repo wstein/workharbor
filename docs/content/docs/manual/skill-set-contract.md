@@ -97,10 +97,10 @@ A package selection additionally requires `store`. Default status grants no
 permission. There is no automatic download, branch tracking or repository-local
 fallback.
 
-During staging, constructing the service directly without its `SkillSet`
-provider preserves the legacy protected path for existing integrations/tests.
-The composed supervisor always supplies its configuration, so an unconfigured
-default fails when a new run is requested. Existing runs retain the explicit
+Constructing the service without its `SkillSet` provider also refuses a fresh
+run: omission cannot be used as an implicit no-package mode. Tests and callers
+that create fresh runs explicitly select `none` or a pinned package. The composed
+supervisor supplies its configuration. Existing runs retain the explicit
 `legacy` marker from the additive migration; they resume without attaching any
 current package. Changing them requires a new run and session.
 
@@ -137,3 +137,9 @@ not today's default, and verifies the recorded project and binding. The original
 provenance survives launch failure. Missing old content must be restored at its
 same digest. Uninstall and operator CLI delivery remain follow-up integration;
 this stage supplies `skillset.Store.Install` and `Load` as platform interfaces.
+
+For `none`, stage 1 records the selection and project/composed digests, with no
+package tuple. Production native client version/model/effort provenance for this
+path, and the reviewed repository `AGENTS.md` reader behind `ProjectInstructions`,
+remain stage 2 integration work. The default standing-instruction provider does
+not claim to pin repository files the existing client reads independently.

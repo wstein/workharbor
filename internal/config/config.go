@@ -29,6 +29,7 @@ import (
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/policy"
+	"github.com/wstein/workharbor/internal/skillset"
 )
 
 // Repository is one repository workharbor works on.
@@ -196,6 +197,7 @@ func APISocketPath(stateDir, home string) string {
 
 // Config is the whole file.
 type Config struct {
+	SkillSet skillset.Config `json:"skill_set,omitzero"`
 	// Listen is the address `whr serve` binds: a loopback address (D29).
 	Listen string `json:"listen"`
 	// PublicURL is whr's HTTPS name behind the forwarder (D29), for example
@@ -567,6 +569,20 @@ func (c *Config) Validate() error {
 	}
 
 	roots := map[string]string{"roots.tool_store": c.Roots.ToolStore}
+	if c.SkillSet.Store != "" {
+		roots["skill_set.store"] = c.SkillSet.Store
+		if err := (skillset.Store{Root: c.SkillSet.Store, Forbidden: c.SkillStoreForbidden()}).CheckRoot(); err != nil {
+			add("skill_set.store: %v", err)
+		}
+	}
+	if c.SkillSet.Selection != "" || c.SkillSet.Default != nil || c.SkillSet.Package != nil {
+		pin, err := c.SkillSet.Resolve()
+		if err != nil {
+			add("skill_set: %v", err)
+		} else if pin != nil && c.SkillSet.Store == "" {
+			add("skill_set.store: a package needs a dedicated store")
+		}
+	}
 	if len(c.Roots.Workspaces) == 0 {
 		add("roots.workspaces: at least one workspace root is needed")
 	}

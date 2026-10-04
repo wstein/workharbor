@@ -24,6 +24,7 @@ import (
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
+	"github.com/wstein/workharbor/internal/skillset"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -114,7 +115,8 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		r.agent.Block()
 	}
 	r.svc = New(r.store, r.rt.Adapter, r.agent, clock, Config{
-		Owner: r.rt.Owner, ReadyCmd: []string{"echo", "ready"},
+		SkillSet: &skillset.Config{Selection: "none"},
+		Owner:    r.rt.Owner, ReadyCmd: []string{"echo", "ready"},
 		OnError: func(err error) { r.bgMu.Lock(); r.bgErrs = append(r.bgErrs, err); r.bgMu.Unlock() },
 		NewID:   func() domain.ID { return r.id("d") },
 		Spec: func(domain.Task, domain.Run) agent.StartSpec {
