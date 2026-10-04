@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/config"
 )
 
 // maxSettingsSize bounds what the check reads from a settings or pointer file.
@@ -65,6 +67,24 @@ func laneAgents(repo string) []string {
 // is `Agent(<name>)`, a bare `Agent` allows every subagent), never writes, and
 // never fails: a missing rule is a warn.
 func laneAgentsCheck(d Deps) func(context.Context) (Status, string) {
+	legacy := claudeLaneAgentsCheck(d)
+	return func(ctx context.Context) (Status, string) {
+		if d.ConfigPath == "" {
+			return legacy(ctx)
+		}
+		cfg, err := config.Load(d.ConfigPath)
+		if err != nil {
+			return Fail, needsConfig + " (see the config check)"
+		}
+		if cfg.SkillSet.Selection == "" && cfg.SkillSet.Default == nil && cfg.SkillSet.Package == nil {
+			status, detail := legacy(ctx)
+			return status, "legacy Claude permission policy: " + detail
+		}
+		return selectedLanePackage(cfg.SkillSet, cfg.SkillStoreForbidden())
+	}
+}
+
+func claudeLaneAgentsCheck(d Deps) func(context.Context) (Status, string) {
 	return func(context.Context) (Status, string) {
 		if d.RepoDir == "" {
 			return OK, "not run inside a checkout; nothing to check"
