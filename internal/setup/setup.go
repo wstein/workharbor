@@ -39,6 +39,10 @@ type Options struct {
 	DryRun bool
 	Only   []string // run only these steps, optional ones too
 	From   string   // start at this step
+	// Resume is the command that started the run, up to its flags, as words
+	// ("whr", "setup", "host", "--dev", "--user", "u"), without --dry-run,
+	// --only and --from. The summary's next command continues from it.
+	Resume []string
 	// Out gets the data (one line per step), Err the human text.
 	Out, Err io.Writer
 }
@@ -202,18 +206,20 @@ func names(cs []doctor.Check) []string {
 // are done, the ones that are left with why, and the command that goes on. A
 // step that is optional or was left alone by a warn counts as done only when it
 // passed. It writes nothing for an empty run.
-func Summary(w io.Writer, outs []Outcome, dryRun bool) {
-	var done, left []string
+func Summary(w io.Writer, outs []Outcome, o Options) {
+	dryRun := o.DryRun
+	var done, left, leftNames []string
 	first := ""
-	for _, o := range outs {
-		switch o.Status {
+	for _, out := range outs {
+		switch out.Status {
 		case doctor.OK:
-			done = append(done, o.Step)
+			done = append(done, out.Step)
 		case doctor.Warn, doctor.Skipped:
 		default:
-			left = append(left, o.Step+" ("+string(o.Status)+")")
+			left = append(left, out.Step+" ("+string(out.Status)+")")
+			leftNames = append(leftNames, out.Step)
 			if first == "" {
-				first = o.Step
+				first = out.Step
 			}
 		}
 	}
@@ -227,13 +233,32 @@ func Summary(w io.Writer, outs []Outcome, dryRun bool) {
 	fmt.Fprintf(w, "%s:\n  done: %s\n", prefix, listOrNone(done))
 	fmt.Fprintf(w, "  left: %s\n", listOrNone(left))
 	if first != "" {
-		fmt.Fprintf(w, "  next: whr setup --from %s\n", first)
+		fmt.Fprintf(w, "  next: %s\n", nextCommand(o, first, leftNames))
 	}
-	for _, o := range outs {
-		if o.Step == "container-kernel" && o.Status != doctor.OK {
+	for _, out := range outs {
+		if out.Step == "container-kernel" && out.Status != doctor.OK {
 			fmt.Fprintln(w, "  no Linux kernel is installed or verified: containers cannot boot until the container-kernel step passes")
 		}
 	}
+}
+
+// nextCommand is the command that goes on: the phase and the flags of this run
+// (so --dev, --user and --prefix survive), then --from the first step left, or,
+// when the run was limited by --only, --only the steps left, because --from
+// would also run steps nobody selected.
+func nextCommand(o Options, first string, left []string) string {
+	argv := append([]string(nil), o.Resume...)
+	if len(argv) == 0 {
+		argv = []string{"whr", "setup"}
+	}
+	if len(o.Only) > 0 {
+		for _, n := range left {
+			argv = append(argv, "--only", n)
+		}
+	} else {
+		argv = append(argv, "--from", first)
+	}
+	return quoteArgv(argv)
 }
 
 func listOrNone(l []string) string {

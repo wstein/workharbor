@@ -368,7 +368,7 @@ func TestSummaryNamesWhatIsDoneWhatIsLeftAndTheNextCommand(t *testing.T) {
 		{Step: "container-start", Status: doctor.OK},
 		{Step: "container-kernel", Status: doctor.Fail},
 		{Step: "config-base", Status: doctor.NotVerified},
-	}, false)
+	}, Options{})
 	got := b.String()
 	for _, want := range []string{"done: config-dir, container-start", "left: container-kernel (fail), config-base (not_verified)", "next: whr setup --from container-kernel", "no Linux kernel"} {
 		if !strings.Contains(got, want) {
@@ -376,8 +376,95 @@ func TestSummaryNamesWhatIsDoneWhatIsLeftAndTheNextCommand(t *testing.T) {
 		}
 	}
 	b.Reset()
-	Summary(&b, []Outcome{{Step: "config-dir", Status: doctor.OK}}, false)
+	Summary(&b, []Outcome{{Step: "config-dir", Status: doctor.OK}}, Options{})
 	if strings.Contains(b.String(), "next:") || !strings.Contains(b.String(), "left: none") {
 		t.Errorf("a finished run: %s", b.String())
 	}
+}
+
+// The next command keeps the phase and the flags of the run, so it works where
+// the bare `whr setup --from <step>` is refused (#265).
+func TestSummaryNextCommandKeepsThePhaseAndFlags(t *testing.T) {
+	left := []Outcome{
+		{Step: "config-dir", Status: doctor.OK},
+		{Step: "container-kernel", Status: doctor.Fail},
+		{Step: "api-token", Status: doctor.Fail},
+	}
+	for _, c := range []struct {
+		name string
+		o    Options
+		want string
+	}{
+		{"user phase", Options{}, "next: whr setup --from container-kernel\n"},
+		{"host phase", Options{Resume: []string{"whr", "setup", "host"}}, "next: whr setup host --from container-kernel\n"},
+		{
+			"dev user",
+			Options{Resume: []string{"whr", "setup", "--dev", "--user", "werner", "--prefix", "/Users/me/my prefix"}},
+			"next: whr setup --dev --user werner --prefix '/Users/me/my prefix' --from container-kernel\n",
+		},
+		{"host dev", Options{Resume: []string{"whr", "setup", "host", "--dev", "--user", "werner"}}, "next: whr setup host --dev --user werner --from container-kernel\n"},
+		// --from would also run steps nobody selected: name the steps left instead
+		{
+			"only",
+			Options{Only: []string{"container-kernel", "api-token"}, Resume: []string{"whr", "setup", "--dev", "--user", "werner"}},
+			"next: whr setup --dev --user werner --only container-kernel --only api-token\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var b bytes.Buffer
+			Summary(&b, left, c.o)
+			if !strings.Contains(b.String(), c.want) {
+				t.Errorf("want %q in\n%s", c.want, b.String())
+			}
+			if c.name == "only" && strings.Contains(b.String(), "--from") {
+				t.Errorf("--only run suggests --from:\n%s", b.String())
+			}
+		})
+	}
+}
+
+// providedElsewhere: `--only container-kernel` runs against a system that already
+// runs and is refused against a stopped one, and a start step that is already
+// done in this run counts as providing the service (#265).
+func TestNeedsAreMetByAServiceThatRunsOrWasFoundRunning(t *testing.T) {
+	mk := func(running bool) (start, kernel doctor.Check) {
+		up, k := running, false
+		start = step("container-start", doctor.PhaseUser, &up, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"start"}}}})
+		start.Provides = "svc"
+		kernel = step("container-kernel", doctor.PhaseUser, &k, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"kernel"}}}})
+		kernel.Needs = "svc"
+		return start, kernel
+	}
+	ranKernel := func(h *fakeHost) bool {
+		for _, c := range h.ran {
+			if c == "kernel" {
+				return true
+			}
+		}
+		return false
+	}
+	t.Run("only with the system running", func(t *testing.T) {
+		start, kernel := mk(true)
+		h := &fakeHost{answers: []string{"y"}}
+		run(t, h, []doctor.Check{start, kernel}, Options{Phase: doctor.PhaseUser, Only: []string{"container-kernel"}})
+		if !ranKernel(h) {
+			t.Errorf("the kernel fix did not run against a running system: %v", h.ran)
+		}
+	})
+	t.Run("only with the system stopped", func(t *testing.T) {
+		start, kernel := mk(false)
+		h := &fakeHost{answers: []string{"y"}}
+		outs, _, errOut := run(t, h, []doctor.Check{start, kernel}, Options{Phase: doctor.PhaseUser, Only: []string{"container-kernel"}})
+		if ranKernel(h) || !outs[0].Asked || !strings.Contains(errOut, "not run: it needs svc") {
+			t.Errorf("the kernel fix ran against a stopped system: ran %v, outs %+v, err %q", h.ran, outs, errOut)
+		}
+	})
+	t.Run("the start step is already ok in the same run", func(t *testing.T) {
+		start, kernel := mk(true)
+		h := &fakeHost{answers: []string{"y"}}
+		outs, _, _ := run(t, h, []doctor.Check{start, kernel}, Options{Phase: doctor.PhaseUser})
+		if !ranKernel(h) || len(outs) != 2 || outs[0].Status != doctor.OK {
+			t.Errorf("a re-run with the service up must run the kernel fix: ran %v, outs %+v", h.ran, outs)
+		}
+	})
 }

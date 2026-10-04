@@ -87,9 +87,12 @@ func (d Deps) desktopSession() string {
 	return account + "'s own desktop session (Screen Sharing)"
 }
 
-// desktopOnly is what a check that needs Apple Container says outside whr's
-// desktop session, where the container services do not answer (#156).
-const desktopOnly = "Apple Container answers only in whr's desktop session; run this check there (Screen Sharing), or use `whr ls` or `whr show <task>` over SSH"
+// desktopOnly is what a check that needs Apple Container says outside the
+// desktop session of the target account, where the container services do not
+// answer (#156).
+func (d Deps) desktopOnly() string {
+	return "Apple Container answers only in " + d.desktopSession() + "; run this check there, or use `whr ls` or `whr show <task>` over SSH"
+}
 
 // inDesktop asks launchd.CheckSession whether this is the Aqua session, before a
 // check runs any `container` command. When it is not, the check reports
@@ -100,7 +103,7 @@ func (d Deps) inDesktop(ctx context.Context) (Status, string, bool) {
 	}
 	m := launchd.Manager{R: runnerAdapter{d.Runner}, UID: d.UID, GOOS: d.GOOS}
 	if err := m.CheckSession(ctx); err != nil {
-		return NotVerified, desktopOnly, false
+		return NotVerified, d.desktopOnly(), false
 	}
 	return "", "", true
 }
@@ -779,11 +782,12 @@ func userSteps(d Deps) []Check {
 				// Where `container system kernel set` puts a kernel is unverified
 				// (issue #73): the start fix skips the kernel install, so a running
 				// system says nothing about it.
-				ents, _ := os.ReadDir(filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels"))
+				kernels := filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels")
+				ents, _ := os.ReadDir(kernels)
 				if len(ents) == 0 {
-					return Fail, "no Linux kernel is installed: containers cannot boot without one"
+					return Fail, "no Linux kernel is installed: containers cannot boot without one (read " + kernels + ", a location that is unverified until issue #73; if a kernel is installed elsewhere, tell issue #73)"
 				}
-				return OK, "a Linux kernel is installed"
+				return OK, "a Linux kernel is installed (found in " + kernels + ", a location that is unverified until issue #73)"
 			},
 			Fix: &Fix{
 				Cmds:  []Cmd{{Argv: []string{"container", "system", "kernel", "set", "--recommended"}}},

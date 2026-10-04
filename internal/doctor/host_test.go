@@ -672,7 +672,7 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		st := steps(t, hostDeps(r))
 		for _, name := range names {
 			got, detail := status(st[name])
-			if got != NotVerified || !strings.Contains(detail, "whr's desktop session") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
+			if got != NotVerified || !strings.Contains(detail, "whr's own desktop session (Screen Sharing)") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
 				t.Errorf("%s over %s = %s %q", name, session, got, detail)
 			}
 		}
@@ -709,13 +709,31 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 func TestKernelCheckSeesAMissingKernelOnceTheSystemRuns(t *testing.T) {
 	d := hostDeps(scripted{"launchctl managername": "Aqua", "container system status": "apiserver is running"})
 	d.Home = t.TempDir()
-	if got, detail := status(steps(t, d)["container-kernel"]); got != Fail || !strings.Contains(detail, "no Linux kernel") {
-		t.Errorf("running without a kernel = %s %q", got, detail)
+	if got, detail := status(steps(t, d)["container-kernel"]); got != Fail || !strings.Contains(detail, "no Linux kernel") ||
+		!strings.Contains(detail, filepath.Join(d.Home, "Library", "Application Support", "com.apple.container", "kernels")) || !strings.Contains(detail, "unverified until issue #73") {
+		t.Errorf("running without a kernel must name the directory it read and that it is unverified = %s %q", got, detail)
 	}
 	d = hostDeps(scripted{"launchctl managername": "Aqua", "container system status": "ERR:XPC connection error"})
 	d.Home = t.TempDir()
 	if got, _ := status(steps(t, d)["container-kernel"]); got != NotVerified {
 		t.Errorf("stopped = %s", got)
+	}
+}
+
+// Outside the Aqua session the detail names the session by who the target
+// account is, as the guide does (#265).
+func TestDesktopOnlyDetailDependsOnTheTargetUser(t *testing.T) {
+	for _, c := range []struct{ user, account, want, not string }{
+		{"werner", "werner", "this desktop session", "Screen Sharing"},
+		{"werner", "", "whr's own desktop session (Screen Sharing)", "this desktop session"},
+		{"werner", "other", "other's own desktop session", "this desktop session"},
+	} {
+		d := hostDeps(scripted{"launchctl managername": "Background"})
+		d.User, d.Account = c.user, c.account
+		_, detail := status(steps(t, d)["container-start"])
+		if !strings.Contains(detail, c.want) || strings.Contains(detail, c.not) {
+			t.Errorf("%s for %q: %q", c.user, c.account, detail)
+		}
 	}
 }
 

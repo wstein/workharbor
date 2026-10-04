@@ -165,11 +165,25 @@ func newSetup(st *state) *cobra.Command {
 				fmt.Fprintf(st.env.Stderr, "note (dry run): account: %s\n", clean(strings.TrimSpace(detail)))
 			}
 		}
-		outs, err := setup.Run(ctx, steps, env.Host, setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Out: st.env.Stdout, Err: st.env.Stderr})
+		resume := []string{"whr", "setup"}
+		if phase == doctor.PhaseHost {
+			resume = append(resume, "host")
+		}
+		if dev {
+			resume = append(resume, "--dev")
+		}
+		if cmd.Flags().Changed("user") {
+			resume = append(resume, "--user", whrUser)
+		}
+		if cmd.Flags().Changed("prefix") {
+			resume = append(resume, "--prefix", prefix)
+		}
+		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr}
+		outs, err := setup.Run(ctx, steps, env.Host, so)
 		if err != nil {
 			return usageError{err.Error()}
 		}
-		setup.Summary(st.env.Stderr, outs, dryRun)
+		setup.Summary(st.env.Stderr, outs, so)
 		for _, o := range outs {
 			if o.Status == doctor.Fail {
 				if dryRun {

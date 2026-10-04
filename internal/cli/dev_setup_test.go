@@ -319,3 +319,43 @@ func TestDoctorDevStickyDirectoryAbovePrefixIsAcceptedInsideIsRefused(t *testing
 		})
 	}
 }
+
+// The summary's next command keeps the phase and --dev, --user and --prefix, and
+// the suggested command is accepted when it is run again (#265).
+func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		host bool
+		args []string
+		want string
+	}{
+		{"user phase", false, []string{"setup", "--dev", "--user", "werner"}, "next: whr setup --dev --user werner --from "},
+		{"host phase", true, []string{"setup", "host", "--dev", "--user", "werner"}, "next: whr setup host --dev --user werner --from "},
+		{"only", false, []string{"setup", "--dev", "--user", "werner", "--only", "api-token", "--only", "config-dir"}, "next: whr setup --dev --user werner --only "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, home := devSetupRig(t)
+			if c.host {
+				r.env.User = "admin" // the administrator runs the host phase, not the standard account
+			}
+			_, _, errOut := runDevSetup(t, r, home, append(c.args, "--dry-run")...)
+			var next string
+			for _, l := range strings.Split(errOut, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(l), "next: ") {
+					next = strings.TrimSpace(l)
+				}
+			}
+			if !strings.HasPrefix(next, c.want) || (c.name == "only" && strings.Contains(next, "--from")) {
+				t.Fatalf("want %q, got %q in\n%s", c.want, next, errOut)
+			}
+			words := strings.Fields(strings.TrimPrefix(next, "next: whr "))
+			_, _, again := runDevSetup(t, r, home, append(words, "--dry-run")...)
+			if strings.Contains(again, "no step") || strings.Contains(again, "this part runs as another user") || strings.Contains(again, "not an installed binary") {
+				t.Fatalf("the suggested command %q is refused:\n%s", next, again)
+			}
+			if !strings.Contains(again, "summary") {
+				t.Fatalf("the suggested command %q did not run:\n%s", next, again)
+			}
+		})
+	}
+}
