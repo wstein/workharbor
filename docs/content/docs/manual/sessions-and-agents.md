@@ -124,6 +124,6 @@ The design is in `docs/content/docs/design/` (start at `_index.md`; §3 `decisio
 
 ### Landing and worktrees
 
-A session lands with `make land` from its own worktree (AGENTS.md, step 3). What to do with each of its messages, the retries, a stale index or lock in the shared checkout (yours to repair) and the branch cleanup afterwards are in [`/wh-land`](https://github.com/wstein/workharbor/blob/main/.claude/commands/wh-land.md); the `Makefile`'s `land` target is what it runs.
+A session lands with `make land` from its own worktree (AGENTS.md, step 3). What to do with each of its messages, the retries, a stale index or lock in the shared checkout (the human's to repair) and the branch cleanup afterwards are in [`/wh-land`](https://github.com/wstein/workharbor/blob/main/.claude/commands/wh-land.md); the `Makefile`'s `land` target is what it runs.
 
 Each lane's worktree is created once with `git worktree add <worktree> --detach main` and `make hooks` (the Setup steps above). In `wh/platform`'s second worktree, `workharbor.lane=wh/platform-2` keeps its temporary resources out of `make temp-clean LANE=wh/platform`.
