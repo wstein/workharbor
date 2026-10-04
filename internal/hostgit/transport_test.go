@@ -3,6 +3,8 @@ package hostgit
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -43,4 +45,56 @@ func TestTransportFault(t *testing.T) {
 	if !transportFault(ctx, errors.New("signal: killed")) {
 		t.Error("a push that ran out of time is a transport fault")
 	}
+}
+
+// The error of a failed push is built by run and runToken as
+// "git <args>: <cause>: <stderr>", which glues git's first stderr line to the
+// prefix. The judgement must see the stderr alone, so a first "remote:" line is
+// still the server's text.
+func TestTransportFaultJudgesStderrOfTheRealError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stderr string
+		want   bool
+	}{
+		{"a server line first", "remote: error: GH013: rate limit hook says connection reset\nfatal: unable to access: The requested URL returned error: 403", false},
+		{"a transport fault after a server line", "remote: internal\nfatal: unable to access: Could not resolve host: github.com", true},
+		{"git's own line first", "fatal: unable to access: Could not resolve host: github.com", true},
+	} {
+		for _, viaToken := range []bool{false, true} {
+			err := failingGit(t, tc.stderr, viaToken)
+			if got := transportFault(context.Background(), err); got != tc.want {
+				t.Errorf("%s (token %v): got %v, want %v; error %q", tc.name, viaToken, got, tc.want, err)
+			}
+		}
+	}
+}
+
+// failingGit returns the error of a real run or runToken whose git (a script)
+// exits 128 with the given standard error.
+func failingGit(t *testing.T, stderr string, viaToken bool) error {
+	t.Helper()
+	dir := t.TempDir()
+	msg := filepath.Join(dir, "stderr")
+	if err := os.WriteFile(msg, []byte(stderr+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(dir, "git")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ncat '"+msg+"' >&2\nexit 128\n"), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	g, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.bin = script
+	if viaToken {
+		_, err = g.runToken(context.Background(), dir, nil, "", "push", "x")
+	} else {
+		_, err = g.run(context.Background(), dir, true, nil, "push", "x")
+	}
+	if err == nil {
+		t.Fatal("the script did not fail")
+	}
+	return err
 }

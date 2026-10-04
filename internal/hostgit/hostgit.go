@@ -226,9 +226,31 @@ func (g *Git) run(ctx context.Context, dir string, fileTransport bool, extraEnv 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+		return nil, &gitError{text: fmt.Sprintf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String())), stderr: strings.TrimSpace(stderr.String()), cause: err}
 	}
 	return stdout.Bytes(), nil
+}
+
+// gitError is a failed git command. Its text is "git <args>: <cause>: <stderr>";
+// stderr is kept apart so a judgement of git's output never parses the prefix,
+// which would glue the cause to the first line of stderr.
+type gitError struct {
+	text   string
+	stderr string
+	cause  error
+}
+
+func (e *gitError) Error() string { return e.text }
+func (e *gitError) Unwrap() error { return e.cause }
+
+// stderrOf returns the standard error of a failed git command, or the whole
+// text of an error that is not one.
+func stderrOf(err error) string {
+	var ge *gitError
+	if errors.As(err, &ge) {
+		return ge.stderr
+	}
+	return err.Error()
 }
 
 // ErrOutputTooLarge is returned by a capped run whose standard output is longer

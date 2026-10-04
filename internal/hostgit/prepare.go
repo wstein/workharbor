@@ -323,12 +323,13 @@ func gitOwnLines(out string) string {
 }
 
 // transportFault reports whether a failed push looks like a transport fault,
-// judging only git's own lines (gitOwnLines).
+// judging only git's own lines (gitOwnLines) of its standard error, never the
+// "git <args>: <cause>:" prefix of the error text.
 func transportFault(ctx context.Context, err error) bool {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return true
 	}
-	msg := gitOwnLines(err.Error())
+	msg := gitOwnLines(stderrOf(err))
 	for _, m := range transportMarkers {
 		if strings.Contains(msg, m) {
 			return true

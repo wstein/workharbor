@@ -84,11 +84,13 @@ func (g *Git) runToken(ctx context.Context, dir string, extraEnv []string, token
 		err = cmd.Wait()
 	}
 	if err != nil {
-		msg := fmt.Sprintf("git %s: %v: %s", strings.Join(redactArgs(args), " "), err, strings.TrimSpace(stderr.String()))
+		errText := strings.TrimSpace(stderr.String())
+		msg := fmt.Sprintf("git %s: %v: %s", strings.Join(redactArgs(args), " "), err, errText)
 		if token != "" {
 			msg = strings.ReplaceAll(msg, token, "[redacted]")
+			errText = strings.ReplaceAll(errText, token, "[redacted]")
 		}
-		return nil, fmt.Errorf("%s", msg) //nolint:err113 // the scrubbed git output is the error
+		return nil, &gitError{text: msg, stderr: errText} // the scrubbed git output is the error
 	}
 	return stdout.Bytes(), nil
 }
