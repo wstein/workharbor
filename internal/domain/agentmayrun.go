@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // EventAgentMayRun is the audit entry of an agent stop that failed together with
 // the stop of its environment: the agent may still run (design 4.1, "No surviving
@@ -21,4 +24,26 @@ type AgentMayRun struct {
 // NewAgentMayRunEvent returns the audit entry of an agent that may still run.
 func NewAgentMayRunEvent(task ID, a AgentMayRun, at time.Time) Event {
 	return newEvent(task, EventAgentMayRun, a, at)
+}
+
+// RaiseAgentMayRun records a stop failure and its enduring acknowledgement notice.
+// The run must exist, but may already be terminal. Seeing it has no task effect.
+func (a *TaskAggregate) RaiseAgentMayRun(id ID, notice AgentMayRun, now time.Time) (Decision, error) {
+	if _, err := a.run(notice.RunID); err != nil {
+		return Decision{}, err
+	}
+	if _, err := a.decision(id); err == nil {
+		return Decision{}, conflict(RuleDecisionID, "decision %s already exists", id)
+	}
+	d, err := raise(NewDecision{
+		ID: id, TaskID: a.task.ID, RunID: notice.RunID,
+		Kind: DecisionQuestion, Cause: CauseAgentMayRun, Subject: "The agent may still run",
+		Input: fmt.Sprintf("Path: %s\nError: %s", notice.Path, notice.Error), Options: []string{AnswerSeen}, Now: now,
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	a.events = append(a.events, NewAgentMayRunEvent(a.task.ID, notice, now))
+	a.addDecision(d)
+	return *d, nil
 }

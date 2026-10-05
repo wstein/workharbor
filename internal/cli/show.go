@@ -44,6 +44,12 @@ type taskCard struct {
 		Error     string `json:"error"`
 		RetryAt   string `json:"retry_at"`
 	} `json:"publish_attempts"`
+	AgentMayRun []struct {
+		RunID string `json:"run_id"`
+		EnvID string `json:"env_id"`
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	} `json:"agent_may_run"`
 	UsageLine string `json:"usage_line"`
 }
 
@@ -131,6 +137,9 @@ func printCard(w io.Writer, c taskCard) error {
 			}
 		}
 		p("Publish:  attempt %d failed (%s): %s", a.Attempt, kind, clean(a.Error))
+	}
+	for _, n := range c.AgentMayRun {
+		p("Warning:  agent may still run (run %s, environment %s, path %s): %s", clean(n.RunID), clean(n.EnvID), clean(n.Path), clean(n.Error))
 	}
 	p("Tests:    not available")
 	p("Notes:    not available")

@@ -11,6 +11,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/notify"
 )
 
 // gateSession blocks in Stop until the gate opens, then stops the fake agent and
@@ -153,6 +154,10 @@ func TestABudgetStopWhoseEnvironmentStopFailsTooIsAnEventOnTheTask(t *testing.T)
 	if len(ev) != 1 || ev[0].RunID != "r1" || ev[0].EnvID != r.env || ev[0].Path != "budget" || !strings.Contains(ev[0].Error, "stop refused") {
 		t.Fatalf("events %+v", ev)
 	}
+	in, ierr := r.store.InboxDecisions(bg)
+	if ierr != nil || len(in) != 1 || in[0].Cause != domain.CauseAgentMayRun || in[0].Blocking {
+		t.Fatalf("budget notice: %+v, %v", in, ierr)
+	}
 	v, err := r.svc.Show(bg, "t1")
 	if err != nil || len(v.AgentMayRun) != 1 {
 		t.Errorf("show: %+v, %v", v.AgentMayRun, err)
@@ -177,6 +182,8 @@ func TestKillAllWhoseAgentStopFailsStopsTheEnvironment(t *testing.T) {
 func TestKillAllWhoseEnvironmentStopFailsTooReportsTheTask(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
+	n := &recNotifier{}
+	r.svc.cfg.Notifier = n
 	r.liveStopFails()
 	c := r.counting()
 	c.stopErr = errors.New("stop refused")
@@ -191,6 +198,26 @@ func TestKillAllWhoseEnvironmentStopFailsTooReportsTheTask(t *testing.T) {
 	if ev := r.mayRun(); len(ev) != 1 || ev[0].Path != "kill-all" {
 		t.Errorf("events %+v", ev)
 	}
+	in, ierr := r.svc.store.InboxDecisions(bg)
+	if ierr != nil || len(in) != 1 || in[0].Cause != "agent_may_run" || in[0].Blocking {
+		t.Fatalf("surviving kill-all notice: %+v, %v", in, ierr)
+	}
+	foundPush := false
+	for _, kind := range n.kinds() {
+		foundPush = foundPush || kind == notify.KindAgentMayRun
+	}
+	if !foundPush {
+		t.Fatal("agent warning was not sent through the notifier")
+	}
+	if err := r.svc.AnswerDecision(bg, in[0].ID, domain.Response{Option: domain.AnswerResume, By: "werner", At: t0}); !errors.Is(err, domain.ErrDecisionOption) {
+		t.Fatalf("notice accepted resume: %v", err)
+	}
+	must(t, r.svc.AnswerDecision(bg, in[0].ID, domain.Response{Option: domain.AnswerSeen, By: "werner", At: t0}))
+	seen, err := r.store.LoadDecision(bg, in[0].ID)
+	must(t, err)
+	if seen.AnsweredBy != "werner" || seen.Status != domain.DecisionAnswered || r.load().Task().State != domain.TaskCancelled {
+		t.Fatalf("acknowledgement: %+v", seen)
+	}
 	r.wantForgotten(c, domain.RunStopped)
 }
 
@@ -203,6 +230,17 @@ func TestASuspensionWhoseEnvironmentStopFailsTooIsAnEventOnTheTask(t *testing.T)
 	c.stopErr = errors.New("stop refused")
 	_ = r.svc.suspend(bg, "t1", "r1", domain.CauseQuotaExhausted, time.Time{})
 	r.svc.Wait()
+	in, err := r.store.InboxDecisions(bg)
+	if err != nil || len(in) != 2 {
+		t.Fatalf("suspension inbox: %+v, %v", in, err)
+	}
+	found := false
+	for _, d := range in {
+		found = found || (d.Cause == domain.CauseAgentMayRun && !d.Blocking)
+	}
+	if !found {
+		t.Fatal("suspension warning missing")
+	}
 	if ev := r.mayRun(); len(ev) != 1 || ev[0].Path != "suspension" || ev[0].RunID != "r1" {
 		t.Errorf("events %+v", ev)
 	}
@@ -368,6 +406,10 @@ func TestAStopBeforeTheSessionIsUpWhoseEnvironmentStopFailsTooIsAnEvent(t *testi
 	if ev := r.mayRun(); len(ev) != 1 || ev[0].Path != "cancel" || ev[0].RunID != "r1" {
 		t.Errorf("events %+v", ev)
 	}
+	in, err := r.store.InboxDecisions(bg)
+	if err != nil || len(in) != 1 || in[0].Cause != domain.CauseAgentMayRun {
+		t.Fatalf("late cancel notice: %+v, %v", in, err)
+	}
 }
 
 // A failed record after a good environment stop is no surviving agent: it is an
@@ -384,5 +426,36 @@ func TestAFailedRecordAfterAGoodEnvironmentStopIsNotAnAgentMayRun(t *testing.T) 
 	err = r.svc.stopEnvAfterAgent(bg, "t1", r.env, "cancelled", errors.New("exec client lost"))
 	if !agentMayRun(err) || !strings.Contains(err.Error(), "agent may still run") {
 		t.Errorf("failed runtime stop: %v; want an agent-may-run error", err)
+	}
+}
+
+func TestKillAllReportsAStartingRunWhoseAgentStopIsPending(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	must(t, r.svc.update(bg, "t1", func(a *domain.TaskAggregate) error {
+		if err := a.Interrupt("r1"); err != nil {
+			return err
+		}
+		return a.Resume("r1")
+	}))
+	r.agent.Block()
+	sl := mustBegin(t, r.svc)
+	r.svc.markEnvStarted(r.env)
+	c := r.counting()
+	c.stopErr = errors.New("stop refused")
+	rep, err := r.svc.KillAll(bg, "werner")
+	must(t, err)
+	raw, err := json.Marshal(rep)
+	must(t, err)
+	if !strings.Contains(string(raw), `"agent_stop_pending":["t1"]`) {
+		t.Errorf("pending stop missing: %s", raw)
+	}
+	sess, err := r.agent.Resume(bg, spec(), r.session)
+	must(t, err)
+	r.svc.attach("t1", "r1", sl, stopFailSession{sess, errors.New("exec client lost")})
+	r.svc.Wait()
+	in, err := r.svc.store.InboxDecisions(bg)
+	if err != nil || len(in) != 1 || in[0].Cause != "agent_may_run" {
+		t.Fatalf("deferred notice: %+v, %v", in, err)
 	}
 }

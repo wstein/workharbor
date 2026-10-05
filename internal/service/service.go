@@ -557,6 +557,9 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	if err != nil {
 		return err
 	}
+	if row.Cause == domain.CauseAgentMayRun && r.Option != domain.AnswerSeen {
+		return domain.ErrDecisionOption
+	}
 	// An egress request is asked before the agent starts, so no agent waits for it.
 	if row.Kind == domain.DecisionApproval && !row.Cause.AsksBeforeStart() && row.Status == domain.DecisionOpen && !s.approvalWaiting(id) {
 		// The agent that asked is gone (stopped, paused, or the supervisor

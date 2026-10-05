@@ -14,10 +14,12 @@ type KillReport struct {
 	// AgentMayRun lists the tasks whose agent stop and environment stop both
 	// failed: the agent may still run (the task carries an event for it). A run
 	// whose session was not up yet is stopped by attach after KillAll has returned:
-	// a failure there is only the event on the task.
-	AgentMayRun   []domain.ID `json:"agent_may_run,omitempty"`
-	TokensRevoked int         `json:"tokens_revoked"`
-	Problems      []string    `json:"problems"`
+	// a failure there is recorded with its notice on the task.
+	// AgentStopPending lists starts whose session has not yet attached.
+	AgentStopPending []domain.ID `json:"agent_stop_pending,omitempty"`
+	AgentMayRun      []domain.ID `json:"agent_may_run,omitempty"`
+	TokensRevoked    int         `json:"tokens_revoked"`
+	Problems         []string    `json:"problems"`
 }
 
 // KillAll is the kill switch (design §7.7): it stops every run, cancels every
@@ -40,6 +42,12 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 	// environment is busy until then, and a task whose environment stop failed too
 	// is reported, as an event on the task as well.
 	stopped := map[domain.ID]bool{}
+	type failedStop struct {
+		run, env domain.ID
+		err      error
+	}
+	failures := map[domain.ID]failedStop{}
+	cancelSaved := make(chan struct{})
 	for _, t := range tasks {
 		agg, err := s.store.LoadTask(ctx, t.ID)
 		if err != nil {
@@ -51,9 +59,14 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 				continue
 			}
 			stopped[t.ID] = true
-			if err := s.stopAgent(ctx, t.ID, r.ID, r.EnvID, "cancelled", "kill-all", false, s.holdEnvBusy(r.EnvID)); err != nil {
+			pending, err := s.stopAgentWhenSaved(ctx, t.ID, r.ID, r.EnvID, "cancelled", "kill-all", true, s.holdEnvBusy(r.EnvID), cancelSaved)
+			if pending {
+				rep.AgentStopPending = append(rep.AgentStopPending, t.ID)
+			}
+			if err != nil {
 				if agentMayRun(err) {
 					rep.AgentMayRun = append(rep.AgentMayRun, t.ID)
+					failures[t.ID] = failedStop{r.ID, r.EnvID, err}
 				}
 				rep.Problems = append(rep.Problems, fmt.Sprintf("stop the agent of task %s: %v", t.ID, err))
 			}
@@ -65,6 +78,14 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 			continue
 		}
 		rep.Cancelled = append(rep.Cancelled, t.ID)
+	}
+	close(cancelSaved) // deferred notices follow the cancellation attempts
+	for _, t := range tasks {
+		if f, ok := failures[t.ID]; ok {
+			if err := s.recordAgentMayRun(ctx, t.ID, f.run, f.env, "kill-all", f.err); err != nil {
+				rep.Problems = append(rep.Problems, fmt.Sprintf("record agent notice for task %s: %v", t.ID, err))
+			}
+		}
 	}
 	if s.cfg.RevokeTokens != nil {
 		n, err := s.cfg.RevokeTokens(ctx)

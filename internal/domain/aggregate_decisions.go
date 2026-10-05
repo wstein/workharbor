@@ -412,7 +412,7 @@ func (a *TaskAggregate) Cancel() error {
 		}
 	}
 	for _, d := range a.decisions {
-		if d.Status == DecisionOpen && d.move(DecisionSuperseded, time.Time{}) == nil {
+		if d.Status == DecisionOpen && d.Cause != CauseAgentMayRun && d.move(DecisionSuperseded, time.Time{}) == nil {
 			a.absorb(d)
 		}
 	}
@@ -552,7 +552,7 @@ func (a *TaskAggregate) ResumeBlocked(runID ID) error {
 		return run.transition(RunStarting) // reports the illegal transition
 	}
 	for _, d := range a.decisions {
-		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" {
+		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" && d.Cause != CauseAgentMayRun {
 			return conflict(RuleDecisionOpen, "run %s cannot resume: decision %s (%s) is still open", run.ID, d.ID, d.Cause)
 		}
 	}

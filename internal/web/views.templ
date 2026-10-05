@@ -366,7 +366,7 @@ templ decisionCard(d decisionRow, csrf string, stepUp bool) {
 				<input id={ "reason-" + d.ID } name="reason" type="text" maxlength="500"/>
 				<div class="actions">
 					for _, o := range d.Options {
-						<button name="option" value={ o } class={ optionClass(o) }>{ o }</button>
+						<button name="option" value={ o } class={ optionClass(o) }>{ optionLabel(o) }</button>
 					}
 				</div>
 			</form>
@@ -480,6 +480,13 @@ templ taskView(p taskPage) {
 				<a href={ templ.SafeURL(p.PRURL) } rel="noreferrer">pull request</a>
 			}
 		</p>
+		for _, n := range p.AgentMayRun {
+			<section class="card" aria-label="Agent stop warning">
+				<strong>Agent may still run</strong>
+				<p>Run { string(n.RunID) }, environment { string(n.EnvID) }, path { n.Path }</p>
+				<pre class="untrusted">{ n.Error }</pre>
+			</section>
+		}
 		if p.Usage != "" {
 			<p class="muted usage">{ p.Usage }</p>
 		}

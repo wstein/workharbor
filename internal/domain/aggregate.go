@@ -229,7 +229,7 @@ func (a *TaskAggregate) Resume(runID ID) error {
 		return err
 	}
 	for _, d := range a.decisions {
-		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" {
+		if d.RunID == run.ID && d.Status == DecisionOpen && d.Cause != "" && d.Cause != CauseAgentMayRun {
 			return conflict(RuleDecisionOpen, "run %s cannot resume: decision %s (%s) is still open", run.ID, d.ID, d.Cause)
 		}
 	}

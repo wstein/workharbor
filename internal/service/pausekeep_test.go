@@ -201,7 +201,7 @@ func TestASuspensionWhoseEnvironmentStopFailsToIsStoppedByTheNextPass(t *testing
 		t.Fatalf("suspend: %v", err)
 	}
 	r.svc.Wait()
-	if r.runState() != domain.RunPaused || r.svc.envStarted(r.env) || len(r.load().Decisions()) != 1 {
+	if r.runState() != domain.RunPaused || r.svc.envStarted(r.env) || len(r.load().Decisions()) != 2 {
 		t.Fatalf("run %s, started mark %v", r.runState(), r.svc.envStarted(r.env))
 	}
 	c.stopErr = nil

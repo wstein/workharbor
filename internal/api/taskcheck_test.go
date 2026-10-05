@@ -39,3 +39,14 @@ func TestTaskViewCarriesTheCheckReceiptAndTheFailedPublishSteps(t *testing.T) {
 		t.Errorf("an unchecked task shows a check: %s", plain)
 	}
 }
+
+func TestTaskViewCarriesAgentMayRun(t *testing.T) {
+	v := service.TaskView{AgentMayRun: []domain.AgentMayRun{{RunID: "r1", EnvID: "e1", Path: "budget", Error: "stop refused"}}}
+	raw, err := json.Marshal(taskOf(v))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"agent_may_run":[{"run_id":"r1","env_id":"e1","path":"budget","error":"stop refused"}]`) {
+		t.Fatalf("lost agent notice: %s", raw)
+	}
+}

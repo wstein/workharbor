@@ -251,3 +251,15 @@ func TestValidServerIsAPlainOrigin(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentMayRunNoticeUsesTheSharedNotificationPath(t *testing.T) {
+	raw, _ := json.Marshal(domain.DecisionRaised{ID: "notice", RunID: "r1", Kind: domain.DecisionQuestion, Cause: domain.CauseAgentMayRun})
+	got := FromEvents([]domain.Event{{TaskID: "t1", Kind: domain.EventDecisionRaised, Payload: raw}})
+	if len(got) != 1 || got[0].Kind != KindAgentMayRun || got[0].DecisionID != "notice" {
+		t.Fatalf("messages %+v", got)
+	}
+	th := Throttle{}
+	if !th.Allow(got[0]) || th.Allow(got[0]) {
+		t.Fatal("notice did not use shared deduplication")
+	}
+}

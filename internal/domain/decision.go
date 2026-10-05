@@ -45,6 +45,9 @@ const (
 	AnswerDeny  = "deny"
 )
 
+// AnswerSeen acknowledges a stop-failure notice without taking any action.
+const AnswerSeen = "seen"
+
 // The answers of the login, quota and failed-run questions (design §4.2).
 const (
 	AnswerResume        = "resume"
@@ -58,11 +61,13 @@ const (
 	AnswerStart = "start"
 )
 
-// DecisionCause says why a run blocked on a question that nothing waits on:
-// the run is already paused, so the question survives a pause and a restart.
+// DecisionCause says why the supervisor raised a question that no agent waits
+// on. These questions may belong to paused or terminal runs.
 type DecisionCause string
 
 const (
+	// CauseAgentMayRun is an enduring, non-blocking stop-failure notice.
+	CauseAgentMayRun    DecisionCause = "agent_may_run"
 	CauseAuthExpired    DecisionCause = "auth_expired"
 	CauseQuotaExhausted DecisionCause = "quota_exhausted"
 	CauseRunFailed      DecisionCause = "run_failed"
@@ -271,6 +276,9 @@ func raise(spec NewDecision) (*Decision, error) {
 		return nil, fmt.Errorf("%w: %q", ErrDecisionKind, spec.Kind)
 	}
 
+	if spec.Cause == CauseAgentMayRun && (spec.Kind != DecisionQuestion || spec.Blocking || spec.Timeout != 0 || len(spec.Options) != 1 || spec.Options[0] != AnswerSeen) {
+		return nil, invalid("an agent-may-run notice is a non-blocking question with Seen only and no deadline")
+	}
 	if egress := spec.Cause == CauseEgressRequest; egress != (spec.Host != "") ||
 		(egress && (spec.Kind != DecisionApproval || !spec.Blocking || !ValidHost(spec.Host))) {
 		return nil, ErrDecisionHost

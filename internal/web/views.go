@@ -157,6 +157,7 @@ type taskPage struct {
 	nav
 	ID, Repo, Issue, State, Agent, Branch, PRURL string
 	Live                                         bool
+	AgentMayRun                                  []domain.AgentMayRun
 	Runs                                         []string
 	Decisions                                    []decisionRow
 	Events                                       []eventRow
@@ -250,7 +251,7 @@ func runVerb(p taskPage) string {
 func taskPageOf(v service.TaskView) taskPage {
 	p := taskPage{
 		ID: string(v.Task.ID), Repo: v.Task.Repo, Issue: v.Task.Issue, State: string(v.Task.State), Agent: v.Agent,
-		Cancelable: !v.Task.State.Terminal(),
+		Cancelable: !v.Task.State.Terminal(), AgentMayRun: v.AgentMayRun,
 	}
 	for _, r := range v.Runs {
 		p.Runs = append(p.Runs, string(r.ID)+" "+string(r.State))
@@ -352,4 +353,11 @@ type openPage struct {
 	nav
 	ID, Repo, Issue, Path string
 	Warnings              []string // files in the copy an editor may run by itself: untrusted names
+}
+
+func optionLabel(option string) string {
+	if option == domain.AnswerSeen {
+		return "Seen"
+	}
+	return option
 }

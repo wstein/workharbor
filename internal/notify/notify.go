@@ -23,6 +23,7 @@ import (
 type Kind string
 
 const (
+	KindAgentMayRun    Kind = "agent_may_run"
 	KindQuestion       Kind = "question"
 	KindApproval       Kind = "approval"
 	KindReview         Kind = "review"
@@ -65,19 +66,21 @@ func Link(base string, m Message) string {
 
 // FromEvents picks the notifications out of the events a change recorded: a
 // new blocking Decision (a question, an approval or a review; a login or quota
-// question by its cause), and a run that ended or failed. A non-blocking
-// Decision notifies nobody.
+// question by its cause), the non-blocking agent-may-run notice, and a run
+// that ended or failed. Other non-blocking Decisions do not notify.
 func FromEvents(events []domain.Event) []Message {
 	var out []Message
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventDecisionRaised:
 			var p domain.DecisionRaised
-			if json.Unmarshal(e.Payload, &p) != nil || !p.Blocking {
+			if json.Unmarshal(e.Payload, &p) != nil || (!p.Blocking && p.Cause != domain.CauseAgentMayRun) {
 				continue
 			}
 			kind := Kind(p.Kind)
 			switch p.Cause {
+			case domain.CauseAgentMayRun:
+				kind = KindAgentMayRun
 			case domain.CauseAuthExpired:
 				kind = KindAuthExpired
 			case domain.CauseQuotaExhausted:

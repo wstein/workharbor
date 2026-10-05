@@ -103,10 +103,20 @@ func ownsAgent(st domain.RunState) bool {
 // an event on the task, with path as its path. A session that is not up yet is
 // stopped by attach, which then does the same; the hold goes with it.
 func (s *Service) stopAgent(ctx context.Context, task, run, env domain.ID, state, path string, human bool, release func()) error {
+	_, err := s.stopAgentWhenSaved(ctx, task, run, env, state, path, human, release, nil)
+	return err
+}
+
+// stopAgentWhenSaved delays only a deferred notice until kill-all has saved its
+// cancellation. An attached agent still stops before any task is cancelled.
+func (s *Service) stopAgentWhenSaved(ctx context.Context, task, run, env domain.ID, state, path string, human bool, release func(), saved <-chan struct{}) (pending bool, err error) {
 	ctx = context.WithoutCancel(ctx) // attach may run it after the call that asked has ended
 	notice := func(serr error, deferred bool) error {
 		err := s.stopEnvAfterAgent(ctx, task, env, state, serr)
 		if agentMayRun(err) && (!human || deferred) {
+			if saved != nil {
+				<-saved
+			}
 			return errors.Join(err, s.recordAgentMayRun(ctx, task, run, env, path, err))
 		}
 		return err
@@ -116,34 +126,31 @@ func (s *Service) stopAgent(ctx context.Context, task, run, env domain.ID, state
 	if sl == nil {
 		s.mu.Unlock()
 		release()
-		return nil
+		return false, nil
 	}
 	if sl.sess == nil {
 		sl.stopRequested = true
 		// No call waits for what attach finds, so it goes to the task as an event.
 		sl.after, sl.release = func(serr error) error { return notice(serr, true) }, release
 		s.mu.Unlock()
-		return nil
+		return true, nil
 	}
 	sess := sl.sess
 	s.mu.Unlock()
 	defer release()
 	if serr := sess.Stop(context.Background()); serr != nil {
-		return notice(serr, false)
+		return false, notice(serr, false)
 	}
-	return nil
+	return false, nil
 }
 
 // recordAgentMayRun saves the audit entry of an agent that may still run.
 func (s *Service) recordAgentMayRun(ctx context.Context, task, run, env domain.ID, path string, cause error) error {
-	saved, err := s.store.Append(ctx, domain.NewAgentMayRunEvent(task, domain.AgentMayRun{
-		RunID: run, EnvID: env, Path: path, Error: cause.Error(),
-	}, s.clock.Now()))
-	if err != nil {
+	id := s.cfg.NewID()
+	return s.update(ctx, task, func(a *domain.TaskAggregate) error {
+		_, err := a.RaiseAgentMayRun(id, domain.AgentMayRun{RunID: run, EnvID: env, Path: path, Error: cause.Error()}, s.clock.Now())
 		return err
-	}
-	s.publish(saved)
-	return nil
+	})
 }
 
 // agentNotices returns the runs of a task whose agent may still run.

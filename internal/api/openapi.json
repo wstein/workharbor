@@ -3010,6 +3010,33 @@
               "usage_line": {
                 "type": "string",
                 "description": "the task's usage line (design 5.7); absent when it has no usage"
+              },
+              "agent_may_run": {
+                "type": "array",
+                "description": "Recorded stop failures, including their run and untrusted error text.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "run_id",
+                    "env_id",
+                    "path",
+                    "error"
+                  ],
+                  "properties": {
+                    "run_id": {
+                      "type": "string"
+                    },
+                    "env_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -3345,6 +3372,13 @@
           },
           "problems": {
             "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "agent_stop_pending": {
+            "type": "array",
+            "description": "Tasks whose starting agent stop is deferred until the session attaches.",
             "items": {
               "type": "string"
             }

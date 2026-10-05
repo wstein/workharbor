@@ -32,3 +32,22 @@ func TestShowPrintsTheCheckReceiptAndTheFailedPublishSteps(t *testing.T) {
 		t.Errorf("a control character reached the terminal: %q", out)
 	}
 }
+
+func TestShowPrintsAgentMayRunWithRunAndEscapesErrors(t *testing.T) {
+	s := newStub(t)
+	withTasks(s)
+	s.reply("GET /v1/tasks/t-aaa111", 200, ok(`{"id":"t-aaa111","state":"cancelled","agent_may_run":[{"run_id":"r1","env_id":"e1","path":"kill-all","error":"stop \u001b refused"}]}`))
+	code, out, errOut := s.runCLI("", "show", "t-aaa111")
+	if code != 0 || errOut != "" || !strings.Contains(out, "agent may still run (run r1, environment e1, path kill-all): stop ? refused") || strings.ContainsRune(out, 0x1b) {
+		t.Fatalf("show: %d %q %q", code, out, errOut)
+	}
+}
+
+func TestKillAllPrintsStopWarningsForEachTask(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/kill-all", 200, ok(`{"cancelled":["t1","t2"],"agent_may_run":["t1"],"agent_stop_pending":["t2"],"tokens_revoked":0,"problems":[]}`))
+	code, out, errOut := s.runCLI("", "kill-all", "--yes")
+	if code != 0 || out != "t1\nt2\n" || !strings.Contains(errOut, "agent may still run: task t1") || !strings.Contains(errOut, "agent stop pending: task t2") {
+		t.Fatalf("kill-all: %d %q %q", code, out, errOut)
+	}
+}

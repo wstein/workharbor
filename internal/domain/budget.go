@@ -61,7 +61,7 @@ func (a *TaskAggregate) ExceedBudget(b BudgetBreach) error {
 		}
 	}
 	for _, d := range a.decisions {
-		if d.Status == DecisionOpen && d.move(DecisionSuperseded, time.Time{}) == nil {
+		if d.Status == DecisionOpen && d.Cause != CauseAgentMayRun && d.move(DecisionSuperseded, time.Time{}) == nil {
 			a.absorb(d)
 		}
 	}

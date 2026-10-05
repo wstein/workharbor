@@ -105,7 +105,15 @@ type publishAttemptView struct {
 	RetryAt   string `json:"retry_at,omitempty"`
 }
 
+type agentMayRunView struct {
+	RunID string `json:"run_id"`
+	EnvID string `json:"env_id"`
+	Path  string `json:"path"`
+	Error string `json:"error"`
+}
+
 type taskView struct {
+	AgentMayRun []agentMayRunView `json:"agent_may_run,omitempty"`
 	taskSummaryView
 	Runs      []runView      `json:"runs"`
 	Open      []decisionView `json:"open_decisions"`
@@ -125,6 +133,9 @@ func taskOf(v service.TaskView) taskView {
 			AgentID: string(v.Task.AgentID), Agent: v.Agent, CreatedAt: v.Task.CreatedAt,
 		},
 		Runs: make([]runView, 0, len(v.Runs)), Open: make([]decisionView, 0, len(v.Open)),
+	}
+	for _, n := range v.AgentMayRun {
+		out.AgentMayRun = append(out.AgentMayRun, agentMayRunView{string(n.RunID), string(n.EnvID), n.Path, n.Error})
 	}
 	for _, r := range v.Runs {
 		out.Runs = append(out.Runs, runView{ID: string(r.ID), AgentID: string(r.AgentID), EnvID: string(r.EnvID), State: string(r.State), SessionID: r.SessionID})

@@ -44,9 +44,11 @@ func newKillAll(s *state) *cobra.Command {
 				return err
 			}
 			var rep struct {
-				Cancelled     []string `json:"cancelled"`
-				TokensRevoked int      `json:"tokens_revoked"`
-				Problems      []string `json:"problems"`
+				AgentMayRun      []string `json:"agent_may_run"`
+				AgentStopPending []string `json:"agent_stop_pending"`
+				Cancelled        []string `json:"cancelled"`
+				TokensRevoked    int      `json:"tokens_revoked"`
+				Problems         []string `json:"problems"`
 			}
 			if err := json.Unmarshal(data, &rep); err != nil {
 				return fmt.Errorf("the answer is not a kill-all report: %w", err)
@@ -60,6 +62,12 @@ func newKillAll(s *state) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(s.env.Stderr, "cancelled %d task(s), revoked %d forge token(s)\n", len(rep.Cancelled), rep.TokensRevoked)
+			for _, id := range rep.AgentMayRun {
+				fmt.Fprintf(s.env.Stderr, "agent may still run: task %s\n", clean(id))
+			}
+			for _, id := range rep.AgentStopPending {
+				fmt.Fprintf(s.env.Stderr, "agent stop pending: task %s\n", clean(id))
+			}
 			if len(rep.Problems) > 0 {
 				for _, p := range rep.Problems {
 					fmt.Fprintln(s.env.Stderr, "problem:", clean(p))
