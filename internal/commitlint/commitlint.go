@@ -66,11 +66,12 @@ func Lint(msg string, opt Options) []string {
 		return []string{"empty commit message"}
 	}
 	subject := lines[0]
+	attributionProblems := agentCoauthorProblems(parseTrailers(lines), opt)
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
 			// These skip the message rules, never the one about origin: a bot's
 			// "Merge ..." must not carry a Signed-off-by either.
-			var problems []string
+			problems := attributionProblems
 			if signoffByBot(lines, opt) {
 				problems = append(problems, fmt.Sprintf("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author))
 			}
@@ -81,7 +82,7 @@ func Lint(msg string, opt Options) []string {
 		}
 	}
 
-	var problems []string
+	problems := attributionProblems
 	add := func(format string, args ...any) {
 		problems = append(problems, fmt.Sprintf(format, args...))
 	}
@@ -148,6 +149,26 @@ func Lint(msg string, opt Options) []string {
 		add("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author)
 	}
 	return problems
+}
+
+// agentCoauthorProblems uses the existing bot/agent author classification and
+// assistance trailers to identify commits subject to AI attribution rules. It
+// cannot infer assistance that is absent from both the author and trailers.
+func agentCoauthorProblems(trailers []trailer, opt Options) []string {
+	identified := botRe.MatchString(opt.Author)
+	coauthor := false
+	for _, t := range trailers {
+		if strings.EqualFold(t.key, "Assisted-by") {
+			identified = true
+		}
+		if strings.EqualFold(t.key, "Co-authored-by") {
+			coauthor = true
+		}
+	}
+	if identified && coauthor {
+		return []string{"Co-authored-by is not allowed on agent/tool-assisted commits; remove it and use Assisted-by: <tool>:<model-id> for AI assistance"}
+	}
+	return nil
 }
 
 // signoffByBot reports a Signed-off-by trailer on a commit whose author is a bot or

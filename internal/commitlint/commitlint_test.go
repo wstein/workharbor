@@ -121,3 +121,43 @@ func TestConventionalIsFinalAndRefusesAnUnsquashedCommit(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentCoauthorTrailers(t *testing.T) {
+	const human = "Werner Stein <claude@wstein.de>"
+	const agent = "Claude <noreply@anthropic.com>"
+	const coauthor = "Co-authored-by: Contributor <contributor@example.test>"
+	type testCase struct {
+		name, msg, author string
+		reject            bool
+	}
+	tests := []testCase{
+		{"human coauthor", "docs: a\n\n" + coauthor, human, false},
+		{"human assisted", "docs: a\n\nAssisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true},
+		{"agent author", "docs: a\n\n" + coauthor, agent, true},
+		{"mixed case", "docs: a\n\nCo-Authored-By: Claude <noreply@anthropic.com>", agent, true},
+		{"uppercase", "docs: a\n\nCO-AUTHORED-BY: Contributor <contributor@example.test>\nAssisted-by: codex:gpt-6.1-sol", human, true},
+		{"assistance case", "docs: a\n\nassisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true},
+		{"invalid assistance still identifies", "docs: a\n\nAssisted-by: codex\n" + coauthor, human, true},
+		{"body prose", "docs: a\n\nCo-authored-by: mentioned in body\nThis is prose.\n\nAssisted-by: codex:gpt-6.1-sol", agent, false},
+		{"earlier paragraph", "docs: a\n\n" + coauthor + "\n\nAssisted-by: codex:gpt-6.1-sol", human, false},
+		{"agent assistance alone", "docs: a\n\nAssisted-by: codex:gpt-6.1-sol", agent, false},
+		{"dependency bot", "build(deps): bump x\n\n" + coauthor, "dependabot[bot] <support@github.com>", true},
+	}
+	for _, subject := range []string{"Merge branch 'x'", `Revert "docs: a"`, "fixup! docs: a", "squash! docs: a", "amend! docs: a"} {
+		tests = append(tests, testCase{subject + " assisted", subject + "\n\nAssisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true})
+		tests = append(tests, testCase{subject + " agent", subject + "\n\n" + coauthor, agent, true})
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Lint(tc.msg, Options{Author: tc.author})
+			diagnostic := strings.Join(got, "\n")
+			rejected := strings.Contains(diagnostic, "Co-authored-by") && strings.Contains(diagnostic, "Assisted-by: <tool>:<model-id>")
+			if rejected != tc.reject {
+				t.Fatalf("attribution rejection=%v, want %v: %v", rejected, tc.reject, got)
+			}
+			if !tc.reject && len(got) != 0 {
+				t.Fatalf("expected valid, got %v", got)
+			}
+		})
+	}
+}
