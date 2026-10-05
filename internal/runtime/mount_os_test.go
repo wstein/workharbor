@@ -270,3 +270,108 @@ func TestStowStyleSymlinkedKeyOnTheRealFilesystem(t *testing.T) {
 		t.Errorf("an unrelated directory: %v", err)
 	}
 }
+
+// #58: use a synthetic home, never a human credential store.
+func TestCheckMountAddedHomeLocationsOnTheRealFilesystem(t *testing.T) {
+	home := realDir(t)
+	mkdirs(t, filepath.Join(home, ".config", "op"), filepath.Join(home, "Library", "Containers", "com.example.app"), filepath.Join(home, "project"))
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for link, target := range map[string]string{
+		"config-link": ".gitconfig", "op-link": ".config/op", "containers-link": "Library/Containers",
+	} {
+		symlink(t, filepath.Join(home, target), filepath.Join(home, "project", link))
+	}
+	for _, rel := range []string{
+		".config/op", ".config", "Library/Containers", "Library/Containers/com.example.app", "Library", ".gitconfig",
+		"project/config-link", "project/op-link", "project/containers-link",
+	} {
+		t.Run(rel, func(t *testing.T) { assertRealMountRejected(t, home, filepath.Join(home, rel), ReasonSecrets) })
+	}
+	if err := CheckMount(OSFS{}, home, filepath.Join(home, "project")); err != nil {
+		t.Fatalf("unrelated project rejected: %v", err)
+	}
+}
+
+func assertRealMountRejected(t *testing.T, home, source string, reason Reason) {
+	t.Helper()
+	resolved, err := ResolveMount(OSFS{}, home, source)
+	if !errors.Is(err, ErrForbiddenMount) || reasonOf(t, err) != reason || resolved != "" {
+		t.Fatalf("ResolveMount(%q) = (%q, %v), want forbidden %s", source, resolved, err, reason)
+	}
+	var rejection *MountError
+	if !errors.As(err, &rejection) {
+		t.Fatal("missing mount rejection")
+	}
+	want, err := filepath.EvalSymlinks(source)
+	if err != nil || rejection.Resolved != want {
+		t.Fatalf("rejected resolved path = %q, want %q (resolver error %v)", rejection.Resolved, want, err)
+	}
+}
+
+// System locations are projected into an owned temporary tree: these tests
+// exercise OSFS resolution and identity without inspecting system secrets or
+// requiring writable system directories. The literal production entries must
+// exist before projection; this is not evidence of a native runtime mount.
+// Do not run in parallel: the policy slices are restored before other tests.
+func TestCheckMountAddedSystemLocationsOnTheRealFilesystem(t *testing.T) {
+	base := realDir(t)
+	home := filepath.Join(base, "home")
+	mkdirs(t, home)
+	originalTrees, originalOutside := systemTrees, outsideHomeTrees
+	t.Cleanup(func() { systemTrees, outsideHomeTrees = originalTrees, originalOutside })
+	systemTrees = append([]string(nil), systemTrees...)
+	outsideHomeTrees = append([]string(nil), outsideHomeTrees...)
+	tests := []struct {
+		location, child string
+		outside         bool
+	}{
+		{"/Library/Keychains", "fixture.keychain", false},
+		{"/private/var/db", "dslocal", false},
+		{"/Volumes", "Backup/Users/synthetic", true},
+		{"/private/var/folders", "xx/T/other", true},
+	}
+	for _, tc := range tests {
+		tree := filepath.Join(base, "system", tc.location)
+		list := systemTrees
+		if tc.outside {
+			list = outsideHomeTrees
+		}
+		found := false
+		for i, location := range list {
+			if location == tc.location {
+				list[i] = tree
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("required production policy location missing: %s", tc.location)
+		}
+		mkdirs(t, filepath.Join(tree, tc.child))
+	}
+	for _, tc := range tests {
+		t.Run(tc.location, func(t *testing.T) {
+			tree := filepath.Join(base, "system", tc.location)
+			source := filepath.Join(tree, tc.child)
+			link := filepath.Join(home, "alias")
+			symlink(t, source, link)
+			t.Cleanup(func() {
+				if err := os.Remove(link); err != nil {
+					t.Error(err)
+				}
+			})
+			for _, path := range []string{tree, source, link} {
+				assertRealMountRejected(t, home, path, ReasonSystem)
+			}
+		})
+	}
+	// A home on a protected storage tree retains the documented exception.
+	homeOnVolume := filepath.Join(base, "system", "Volumes", "Home")
+	project := filepath.Join(homeOnVolume, "project")
+	mkdirs(t, project)
+	if err := CheckMount(OSFS{}, homeOnVolume, project); err != nil {
+		t.Fatalf("project inside home on volume rejected: %v", err)
+	}
+}
