@@ -18,7 +18,7 @@ func (read laneEvidenceFunc) ReadLaneMetadata(ctx context.Context) (LaneMetadata
 
 func laneMetadataFixture(t *testing.T) (skillset.Store, LaneMetadata) {
 	t.Helper()
-	cfg := lanePackageFixture(t)
+	cfg, _ := lanePackageFixture(t)
 	pin := cfg.Package
 	digest := strings.Repeat("c", 64)
 	return skillset.Store{Root: cfg.Store}, LaneMetadata{
