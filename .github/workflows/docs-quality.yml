@@ -57,5 +57,5 @@ jobs:
       - name: Build the documentation site
         working-directory: docs
         run: >-
-          go run -tags extended github.com/gohugoio/hugo@v0.167.0
+          go run -tags extended github.com/gohugoio/hugo@v0.165.0
           --gc --minify --panicOnWarning --destination ../_site
