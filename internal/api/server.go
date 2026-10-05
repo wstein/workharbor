@@ -331,7 +331,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 // orderly shutdown. `whr serve` uses it to put the web UI next to the API on one
 // listener (design §9.3).
 func (s *Server) ServeHandler(ctx context.Context, ln net.Listener, h http.Handler) error {
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	select {
@@ -891,7 +891,7 @@ func (s *Server) openCopy(w http.ResponseWriter, r *http.Request) {
 // ShellBackend is what the agent shell route needs. A backend without it answers
 // with a conflict.
 type ShellBackend interface {
-	ShellTarget(ctx context.Context, workspace string) (service.ShellTarget, error)
+	OpenShell(ctx context.Context, workspace, actor string) (service.ShellSession, error)
 }
 
 // workspaceShell answers where a shell in a workspace's environment is opened and
@@ -908,10 +908,47 @@ func (s *Server) workspaceShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NewConflict(domain.RuleEnvRunning, "this supervisor has no agent shell"))
 		return
 	}
-	t, err := sb.ShellTarget(r.Context(), string(name))
+	if r.Header.Get("Accept") != "application/x-ndjson" {
+		writeError(w, usageError{"the sign-in shell needs Accept: application/x-ndjson and a connection held until its child exits"})
+		return
+	}
+	session, err := sb.OpenShell(r.Context(), string(name), "api")
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	writeOK(w, http.StatusOK, shellView(t))
+	defer session.Release()
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(Envelope{SchemaVersion: SchemaVersion, OK: true, Data: shellView(session.Target)}); err != nil {
+		return
+	}
+	if err := rc.Flush(); err != nil {
+		return
+	}
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-session.Done:
+			return
+		case <-tick.C:
+			// Metadata-only liveness; no terminal stream is accepted or sent.
+			if err := rc.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				return
+			}
+			if _, err := io.WriteString(w, "{\"held\":true}\n"); err != nil {
+				return
+			}
+			if err := rc.Flush(); err != nil {
+				return
+			}
+		}
+	}
 }

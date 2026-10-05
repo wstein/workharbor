@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,8 +23,8 @@ func (r failingReader) Read([]byte) (int, error) {
 	return 0, errors.New("read")
 }
 
-// wsShellRun runs `whr ws shell` with a fake terminal and a fake exec, and a fake
-// container CLI on PATH. It returns what was exec'd.
+// wsShellRun runs `whr ws shell` with a fake terminal and a fake child, and a fake
+// container CLI on PATH. It returns what child was started.
 type execCall struct {
 	bin  string
 	argv []string
@@ -39,6 +41,7 @@ func wsShellRun(t *testing.T, s *stub, terminal bool, args ...string) (code int,
 	tty = newFakeTTY()
 	in := failingReader{t}
 	var out, eb bytes.Buffer
+	childScope, restored := false, false
 	env := Env{
 		Stdin: in, Stdout: &out, Stderr: &eb,
 		Getenv: func(k string) string {
@@ -48,9 +51,16 @@ func wsShellRun(t *testing.T, s *stub, terminal bool, args ...string) (code int,
 			return ""
 		},
 		NewClient: func(string) (*Client, error) { return NewClientFor(s.ts.URL, tok), nil },
-		Exec: func(bin string, argv, _ []string) error {
+		ShellSignals: func() func() {
+			childScope = true
+			return func() { childScope = false; restored = true }
+		},
+		ShellChild: func(_ context.Context, bin string, argv, _ []string) (int, error) {
+			if !childScope {
+				t.Error("command SIGINT cancellation was not suppressed for the child")
+			}
 			calls = append(calls, execCall{bin, argv})
-			return nil
+			return 0, nil
 		},
 	}
 	if terminal {
@@ -59,17 +69,20 @@ func wsShellRun(t *testing.T, s *stub, terminal bool, args ...string) (code int,
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	code = Execute(ctx, env, append([]string{"ws", "shell"}, args...))
+	if len(calls) != 0 && (!restored || childScope) {
+		t.Error("command signal scope was not restored after child exit")
+	}
 	return code, calls, eb.String(), tty
 }
 
 const shellReply = `{"env_id":"whr-abc","runtime":"apple-container","user":"1000:1000","dir":"/home/agent","env":["HOME=/home/agent","CLAUDE_CONFIG_DIR=/home/agent/.claude","HTTPS_PROXY=http://192.168.64.3:3128"],"cmd":["/bin/sh","-c","exec sh -i","whr-shell","/tools/bin"]}`
 
 // Nothing typed or written is logged or stored by whr: whr asks the supervisor one
-// question, then replaces itself with the runtime's exec with the inherited
+// question, then starts the runtime's child with the inherited
 // terminal, and never reads, raw-modes or writes it.
-func TestWsShellReplacesWhrWithTheRuntimesExecAndTouchesNoTerminalByte(t *testing.T) {
+func TestWsShellStartsTheRuntimesChildAndTouchesNoTerminalByte(t *testing.T) {
 	s := newStub(t)
-	s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(shellReply))
+	shellReplyHeld(s, shellReply)
 	code, calls, errOut, tty := wsShellRun(t, s, true, "docs-ws")
 	if code != 0 || len(calls) != 1 {
 		t.Fatalf("exit %d, %d exec calls, stderr %q", code, len(calls), errOut)
@@ -95,7 +108,7 @@ func TestWsShellReplacesWhrWithTheRuntimesExecAndTouchesNoTerminalByte(t *testin
 	total := len(s.req)
 	s.mu.Unlock()
 	if total != 1 {
-		t.Errorf("whr made %d API requests, want only the lookup: no relay, no upgrade", total)
+		t.Errorf("whr made %d API requests, want only the metadata hold: no terminal relay", total)
 	}
 	if tty.raw != 0 || tty.output() != "" {
 		t.Errorf("whr put the terminal in raw mode %d times or wrote %q to it", tty.raw, tty.output())
@@ -116,7 +129,7 @@ func TestWsShellIsRefusedBySupervisorAndExecsNothing(t *testing.T) {
 
 func TestWsShellNeedsATerminalBeforeItAsksAnything(t *testing.T) {
 	s := newStub(t)
-	s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(shellReply))
+	shellReplyHeld(s, shellReply)
 	code, calls, _, _ := wsShellRun(t, s, false, "docs-ws")
 	if code == 0 || len(calls) != 0 {
 		t.Errorf("exit %d, %d exec calls without a terminal", code, len(calls))
@@ -128,7 +141,7 @@ func TestWsShellNeedsATerminalBeforeItAsksAnything(t *testing.T) {
 
 func TestWsShellRefusesARuntimeItDoesNotKnow(t *testing.T) {
 	s := newStub(t)
-	s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(strings.Replace(shellReply, "apple-container", "docker", 1)))
+	shellReplyHeld(s, strings.Replace(shellReply, "apple-container", "docker", 1))
 	if code, calls, _, _ := wsShellRun(t, s, true, "docs-ws"); code == 0 || len(calls) != 0 {
 		t.Errorf("exit %d, %d exec calls for an unknown runtime", code, len(calls))
 	}
@@ -140,9 +153,63 @@ func TestWsShellRefusesAUserOrDirThatLooksLikeAnOption(t *testing.T) {
 		"dir":  strings.Replace(shellReply, `"/home/agent"`, `"-v"`, 1),
 	} {
 		s := newStub(t)
-		s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(reply))
+		shellReplyHeld(s, reply)
 		if code, calls, _, _ := wsShellRun(t, s, true, "docs-ws"); code == 0 || len(calls) != 0 {
 			t.Errorf("%s: exit %d, %d exec calls", name, code, len(calls))
 		}
+	}
+}
+
+func shellReplyHeld(s *stub, reply string) {
+	s.h["POST /v1/workspaces/docs-ws/shell"] = func(w http.ResponseWriter, r *http.Request, _ string) {
+		if r.Header.Get("Accept") != "application/x-ndjson" {
+			s.t.Error("missing lifetime hold request")
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, ok(reply))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}
+}
+
+func TestWsShellEndsTheChildWhenTheHoldEndsFirst(t *testing.T) {
+	s := newStub(t)
+	childStarted := make(chan struct{})
+	s.h["POST /v1/workspaces/docs-ws/shell"] = func(w http.ResponseWriter, _ *http.Request, _ string) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, ok(shellReply))
+		w.(http.Flusher).Flush()
+		<-childStarted // EOF while child runs
+	}
+	dir := t.TempDir()
+	//nolint:gosec // test executable must be executable
+	if err := os.WriteFile(filepath.Join(dir, "container"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	var out bytes.Buffer
+	ended := false
+	code := Execute(t.Context(), Env{
+		Stdin: failingReader{t}, Stdout: &out, Stderr: &out, Getenv: func(string) string { return "" },
+		TTY:       func() (TTY, error) { return newFakeTTY(), nil },
+		NewClient: func(string) (*Client, error) { return NewClientFor(s.ts.URL, tok), nil },
+		ShellChild: func(ctx context.Context, _ string, _, _ []string) (int, error) {
+			close(childStarted)
+			<-ctx.Done()
+			ended = true
+			return 0, ctx.Err()
+		},
+	}, []string{"ws", "shell", "docs-ws"})
+	if code == 0 || !ended || !strings.Contains(out.String(), "hold ended") {
+		t.Fatalf("exit %d, ended %v, output %q", code, ended, out.String())
+	}
+}
+
+func TestShellHoldRefusesAnOldSupervisorWithoutLifetimeProtocol(t *testing.T) {
+	s := newStub(t)
+	s.reply("POST /v1/workspaces/docs-ws/shell", 200, ok(shellReply))
+	code, calls, _, _ := wsShellRun(t, s, true, "docs-ws")
+	if code == 0 || len(calls) != 0 {
+		t.Fatalf("old supervisor started child: exit %d, calls %d", code, len(calls))
 	}
 }

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -39,13 +38,12 @@ func newWsShell(s *state) *cobra.Command {
 			"the variables that name another place to read terminfo, termcap, locale or startup files from are unset). " +
 			"Not blocked: the image's own /etc files, and any program you start in the shell, such as less or vim, which still reads " +
 			"~/.terminfo. This command asks the supervisor only " +
-			"which environment and variables to use, then replaces itself with the runtime's own interactive exec: " +
+			"which environment and variables to use, then starts the runtime's own interactive exec as its child: " +
 			"your terminal is attached to the environment directly, and nothing you type or the agent's CLI writes " +
 			"passes through whr, the supervisor, a file, a log or the web UI. whr adds no secret and types nothing for " +
 			"you. It is refused while a run of the workspace is unfinished. Preparation holds the environment through a stop, start " +
-			"and readiness check, including when already running, preserving its home/login volumes and proxy. This hold ends before " +
-			"the terminal opens: do " +
-			"not start a run while it is open. Provisional (issue #281).",
+			"and readiness check, including when already running, preserving its home/login volumes and proxy. The environment stays held " +
+			"while the shell is open: a run waits until you leave. If the hold connection ends, whr ends the shell child. Provisional (issue #282).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			open := s.env.TTY
@@ -59,14 +57,11 @@ func newWsShell(s *state) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, data, err := c.Do(cmd.Context(), "POST", "/v1/workspaces/"+url.PathEscape(args[0])+"/shell", nil, "")
+			t, held, closeHold, err := c.openSignInShell(cmd.Context(), "/v1/workspaces/"+url.PathEscape(args[0])+"/shell")
 			if err != nil {
 				return err
 			}
-			var t shellTarget
-			if err := json.Unmarshal(data, &t); err != nil {
-				return fmt.Errorf("the shell description is not what this whr expects: %w", err)
-			}
+			defer closeHold()
 			if t.Runtime != "apple-container" {
 				return fmt.Errorf("this whr cannot open a shell in a %q environment", clean(t.Runtime))
 			}
@@ -82,15 +77,31 @@ func newWsShell(s *state) *cobra.Command {
 				return err
 			}
 			fmt.Fprintln(s.env.Stderr, "whr: opening a shell in the environment of "+clean(args[0])+" as the agent's user; sign in with `claude auth login`, leave with exit")
-			run := s.env.Exec
+			run := s.env.ShellChild
 			if run == nil {
-				run = execReplace
+				run = runShellChild
 			}
-			// Past this call whr is gone, on success: the terminal is the runtime's.
-			if err := run(bin, argv, os.Environ()); err != nil {
+			if s.env.ShellSignals != nil {
+				restore := s.env.ShellSignals()
+				defer restore()
+			}
+			code, err := run(held, bin, argv, os.Environ())
+			if held.Err() != nil {
+				return fmt.Errorf("the sign-in shell hold ended: the runtime's child was ended")
+			}
+			if err != nil {
 				return fmt.Errorf("start the runtime's shell: %w", err)
+			}
+			if code != 0 {
+				return childExit{code}
 			}
 			return nil
 		},
 	}
 }
+
+// Preserve the runtime child's exit status through Execute.
+type childExit struct{ code int }
+
+func (e childExit) Error() string { return "" }
+func (e childExit) ExitCode() int { return e.code }

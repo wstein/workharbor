@@ -153,6 +153,9 @@ type Service struct {
 	// holds counts the holders of an environment's busy mark (HoldEnvironment),
 	// under rebuildMu.
 	holds map[domain.ID]int
+	// exclusiveHolds marks a sign-in shell for its whole lifetime. Counted
+	// operation holds cannot join it; admission and release use rebuildMu.
+	exclusiveHolds map[domain.ID]bool
 	// stopHolds counts the holders among holds that are an agent stop's
 	// (holdEnvBusy): a check's HoldEnvironment is refused while one is on.
 	stopHolds map[domain.ID]int

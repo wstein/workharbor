@@ -1010,9 +1010,9 @@
         ],
         "responses": {
           "200": {
-            "description": "the environment and the variables of a run; no secret, nothing stored",
+            "description": "First line: target envelope. Following lines: {\"held\":true} each second. Keep the response open until the runtime child exits; close it to release the environment hold. No terminal data.",
             "content": {
-              "application/json": {
+              "application/x-ndjson": {
                 "schema": {
                   "type": "object",
                   "required": [
@@ -1059,7 +1059,7 @@
             }
           }
         ],
-        "description": "Names the environment of the workspace and the variables of a run (the agent's home and auth directory, the egress proxy as for a run), after making sure the environment runs. It opens no terminal and carries none: the caller's own process runs the runtime's interactive exec, so what the human types and the agent's CLI writes never reach the supervisor (design 7.3, the sign-in shell). Refused (409) while a run of the workspace is unfinished, naming it. Nothing is stored and no secret is returned."
+        "description": "Requires Accept: application/x-ndjson. Restarts the idle environment and holds it through the response connection lifetime, excluding runs and rebuilds. The caller starts the runtime interactive exec as its child with fds 0 through 2 inherited directly; no terminal data crosses this API. The caller must end that child on EOF, lost connection, malformed heartbeat or no heartbeat for five seconds. Refused (409) while a run is unfinished. Opening records metadata only in the audit tier: workspace, environment, time and API caller. No secret is returned."
       }
     },
     "/v1/workspaces/{workspace}/open": {

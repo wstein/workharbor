@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -63,7 +64,7 @@ func TestShellRestartsTheWarmEnvironmentBeforeReturningATarget(t *testing.T) {
 			rt := &shellRestartRuntime{Adapter: r.rt.Adapter, fail: failure}
 			r.svc.rt = rt
 			r.svc.cfg.ReadyTimeout = 0
-			target, err := r.ws.ShellTarget(bg, ws.Name)
+			target, err := shellTargetForTest(bg, r.ws, ws.Name)
 			want := []string{"stop", "start", "ready"}
 			switch failure {
 			case "stop":
@@ -90,6 +91,9 @@ func TestShellRestartsTheWarmEnvironmentBeforeReturningATarget(t *testing.T) {
 				}
 			}
 			must(t, r.svc.checkNotHeld(ws.EnvID))
+			operation, err := r.svc.HoldEnvironment(bg, ws)
+			must(t, err) // failed preparation must release the exclusive marker too
+			operation()
 		})
 	}
 }
@@ -107,7 +111,7 @@ func TestShellPreparationExcludesRunAndRebuild(t *testing.T) {
 	}
 	finished := make(chan error, 1)
 	go func() {
-		_, err := r.ws.ShellTarget(bg, ws.Name)
+		_, err := shellTargetForTest(bg, r.ws, ws.Name)
 		finished <- err
 	}()
 	select {
@@ -142,7 +146,7 @@ func TestTheShellTargetIsTheEnvironmentAndTheVariablesOfARun(t *testing.T) {
 	t.Parallel()
 	r := shellRig(t)
 	w, _ := r.create("docs-ws")
-	got, err := r.ws.ShellTarget(bg, "docs-ws")
+	got, err := shellTargetForTest(bg, r.ws, "docs-ws")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +188,7 @@ func TestTheShellIsRefusedWhileARunIsUnfinishedAndNamesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r.ws.ShellTarget(bg, "docs-ws")
+	_, err = shellTargetForTest(bg, r.ws, "docs-ws")
 	var ce *domain.ConflictError
 	if !errors.As(err, &ce) || !strings.Contains(err.Error(), string(run)) {
 		t.Fatalf("err = %v, want a conflict that names run %s", err, run)
@@ -198,7 +202,7 @@ func TestShellRefusesAnInterruptedRunBeforeStoppingTheEnvironment(t *testing.T) 
 	interruptedRun(t, r, ws, agent, "r-int")
 	rt := &shellRestartRuntime{Adapter: r.rt.Adapter}
 	r.svc.rt = rt
-	_, err := r.ws.ShellTarget(bg, ws.Name)
+	_, err := shellTargetForTest(bg, r.ws, ws.Name)
 	var conflict *domain.ConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(err.Error(), "r-int") || len(rt.calls) != 0 {
 		t.Fatalf("interrupted run: err %v, calls %v", err, rt.calls)
@@ -210,12 +214,12 @@ func TestTheShellNeedsAConfigurationAndAWorkspace(t *testing.T) {
 	r := newWsRig(t)
 	r.create("docs-ws")
 	var ce *domain.ConflictError
-	if _, err := r.ws.ShellTarget(bg, "docs-ws"); !errors.As(err, &ce) {
+	if _, err := shellTargetForTest(bg, r.ws, "docs-ws"); !errors.As(err, &ce) {
 		t.Errorf("without a shell configuration: %v, want a conflict", err)
 	}
 	r.ws.cfg.Shell = &ShellConfig{Bin: "/tools/bin", Dir: "/home/agent"}
 	var nf *domain.NotFoundError
-	if _, err := r.ws.ShellTarget(bg, "nope"); !errors.As(err, &nf) {
+	if _, err := shellTargetForTest(bg, r.ws, "nope"); !errors.As(err, &nf) {
 		t.Errorf("an unknown workspace: %v, want not found", err)
 	}
 }
@@ -291,7 +295,7 @@ func TestShellRefusesUnsafeToolDirectories(t *testing.T) {
 	r := shellRig(t)
 	for _, bin := range []string{"", "bin", "/home/agent/bin", "/tools/../home/agent", "/tools/bin:", "/tools/bin::/bin", "/tools/bin\n"} {
 		r.ws.cfg.Shell.Bin = bin
-		target, err := r.ws.ShellTarget(bg, "unused")
+		target, err := shellTargetForTest(bg, r.ws, "unused")
 		var conflict *domain.ConflictError
 		if !errors.As(err, &conflict) || target.EnvID != "" {
 			t.Errorf("accepted %q: %+v, %v", bin, target, err)
@@ -331,4 +335,217 @@ func TestTheShFallbackHasTheSameCleanEnvironment(t *testing.T) {
 			t.Errorf("sh started without %q:\n%s", want, out)
 		}
 	}
+}
+
+// Preparation-only tests release as soon as the target is obtained.
+func shellTargetForTest(ctx context.Context, w *Workspaces, workspace string) (ShellTarget, error) {
+	s, err := w.OpenShell(ctx, workspace, "api")
+	if err != nil {
+		return ShellTarget{}, err
+	}
+	s.Release()
+	return s.Target, nil
+}
+
+func TestSignInShellHoldsOffRunAndRebuildUntilChildExits(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, agent := r.create("docs-ws")
+	shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	defer shell.Release()
+	// A fake child keeps the API holder alive until its exit. The fake runtime
+	// beneath StartTask must see the environment held throughout that lifetime.
+	childExit, holderReleased := make(chan struct{}), make(chan struct{})
+	go func() { <-childExit; shell.Release(); close(holderReleased) }()
+	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: agent.ID, Issue: "#7"})
+	var conflict *domain.ConflictError
+	if !errors.As(err, &conflict) || conflict.Rule != domain.RuleEnvBusy {
+		t.Fatalf("run beside shell: %v", err)
+	}
+	_, err = r.ws.Rebuild(bg, ws.Name, "api")
+	if !errors.As(err, &conflict) {
+		t.Fatalf("rebuild beside shell: %v", err)
+	}
+	close(childExit)
+	<-holderReleased
+	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: agent.ID, Issue: "#7"})
+	must(t, err)
+}
+
+func TestSignInShellOpeningRecordsMetadataOnly(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	defer shell.Release()
+	events, err := r.store.EventsSince(bg, domain.SupervisorStream, 0, 100)
+	must(t, err)
+	var found []domain.Event
+	for _, e := range events {
+		if e.Kind == domain.EventSignInShell {
+			found = append(found, e)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("audit events: %v", found)
+	}
+	e := found[0]
+	var payload map[string]string
+	must(t, json.Unmarshal(e.Payload, &payload))
+	if e.Tier != domain.TierAudit || e.At.IsZero() || len(payload) != 3 || payload["workspace"] != ws.Name || payload["env_id"] != string(ws.EnvID) || payload["actor"] != "api" {
+		t.Fatalf("metadata audit: %+v %v", e, payload)
+	}
+}
+
+func TestSupervisorShutdownEndsSignInShellHold(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	defer shell.Release()
+	r.svc.Shutdown()
+	select {
+	case <-shell.Done:
+	default:
+		t.Fatal("shutdown left shell hold live")
+	}
+}
+
+func TestASecondSignInShellDoesNotRestartTheFirst(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	rt := &shellRestartRuntime{Adapter: r.rt.Adapter}
+	r.svc.rt = rt
+	first, err := r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	defer first.Release()
+	before := len(rt.calls)
+	second, err := r.ws.OpenShell(bg, ws.Name, "api")
+	if err == nil {
+		second.Release()
+		t.Fatal("second shell was admitted")
+	}
+	if len(rt.calls) != before {
+		t.Fatalf("second shell restarted first: %v", rt.calls)
+	}
+}
+
+func TestSignInShellRejectsLaterOperationHold(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	defer shell.Release()
+	release, err := r.svc.HoldEnvironment(bg, ws)
+	if release != nil {
+		defer release()
+	}
+	var conflict *domain.ConflictError
+	if !errors.As(err, &conflict) || conflict.Rule != domain.RuleEnvBusy {
+		t.Fatalf("operation admitted beside sign-in shell: %v", err)
+	}
+}
+
+func TestSignInShellExcludesOperationHoldsDuringRestart(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	entered, proceed := make(chan struct{}), make(chan struct{})
+	rt := &shellRestartRuntime{Adapter: r.rt.Adapter, gate: func() { close(entered); <-proceed }}
+	r.svc.rt = rt
+	done := make(chan error, 1)
+	go func() {
+		shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+		if err == nil {
+			shell.Release()
+		}
+		done <- err
+	}()
+	<-entered
+	release, err := r.svc.HoldEnvironment(bg, ws)
+	if release != nil {
+		release()
+	}
+	close(proceed)
+	must(t, <-done)
+	var conflict *domain.ConflictError
+	if !errors.As(err, &conflict) || conflict.Rule != domain.RuleEnvBusy {
+		t.Fatalf("operation admitted during shell preparation: %v", err)
+	}
+}
+
+func TestOperationHoldPreventsSignInShellAndStillNests(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	first, err := r.svc.HoldEnvironment(bg, ws)
+	must(t, err)
+	defer first()
+	nested, err := r.svc.HoldEnvironment(bg, ws)
+	must(t, err)
+	defer nested()
+	shell, err := r.ws.OpenShell(bg, ws.Name, "api")
+	if err == nil {
+		shell.Release()
+		t.Fatal("shell admitted beside nested operation holds")
+	}
+	nested()
+	first()
+	shell, err = r.ws.OpenShell(bg, ws.Name, "api")
+	must(t, err)
+	shell.Release()
+	// A released exclusive hold leaves neither its marker nor a leaked count.
+	first, err = r.svc.HoldEnvironment(bg, ws)
+	must(t, err)
+	first()
+}
+
+func TestExclusiveAndOperationHoldsCannotBothWinConcurrentAdmission(t *testing.T) {
+	t.Parallel()
+	r := shellRig(t)
+	ws, _ := r.create("docs-ws")
+	type result struct {
+		release func()
+		err     error
+	}
+	for attempt := 0; attempt < 30; attempt++ {
+		start := make(chan struct{})
+		outcomes := make(chan result, 2)
+		for _, exclusive := range []bool{false, true} {
+			go func() {
+				<-start
+				release, err := r.svc.holdEnvironment(bg, ws, exclusive)
+				outcomes <- result{release, err}
+			}()
+		}
+		close(start)
+		first, second := <-outcomes, <-outcomes
+		successes := 0
+		for _, outcome := range []result{first, second} {
+			if outcome.err == nil {
+				successes++
+				outcome.release()
+			} else {
+				var conflict *domain.ConflictError
+				if !errors.As(outcome.err, &conflict) || conflict.Rule != domain.RuleEnvBusy {
+					t.Fatalf("unexpected admission error: %v", outcome.err)
+				}
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("concurrent shell/operation admitted %d holders", successes)
+		}
+		must(t, r.svc.checkNotHeld(ws.EnvID))
+	}
+	// Losing admissions and every exclusive release must also release their lease.
+	marked, leased := r.svc.markRebuilding(ws.ID)
+	if !marked || leased {
+		t.Fatalf("hold admission leaked a lease: marked=%v leased=%v", marked, leased)
+	}
+	r.svc.unmarkRebuilding(ws.ID)
 }

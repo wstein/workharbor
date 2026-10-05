@@ -96,12 +96,31 @@ func NewRepoChecker(s *Service, cfg CheckConfig) *RepoChecker { return &RepoChec
 // prepare may hold the environment around a check that holds it again. It is
 // refused while an agent stop (a cancel, a budget stop or kill-all) holds the
 // environment, whose fallback may stop it: those holds are counted apart.
+// An exclusive sign-in shell also refuses operation holds until it closes.
 func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (release func(), err error) {
+	return s.holdEnvironment(ctx, ws, false)
+}
+
+// holdEnvironment admits counted operation holds or one exclusive sign-in shell.
+// The exclusive marker and busy count are tested and set together, so neither
+// acquisition order can admit agent-controlled checks beside the human's login.
+func (s *Service) holdEnvironment(ctx context.Context, ws domain.Workspace, exclusive bool) (release func(), err error) {
 	lease, err := s.leaseEnvironment(ws)
 	if err != nil {
 		return nil, err
 	}
 	s.rebuildMu.Lock()
+	if s.exclusiveHolds[ws.EnvID] || (exclusive && s.holds[ws.EnvID] > 0) {
+		s.rebuildMu.Unlock()
+		lease()
+		return nil, domain.NewConflict(domain.RuleEnvBusy, "environment %s is busy: a sign-in shell needs an exclusive hold", ws.EnvID)
+	}
+	if exclusive {
+		if s.exclusiveHolds == nil {
+			s.exclusiveHolds = map[domain.ID]bool{}
+		}
+		s.exclusiveHolds[ws.EnvID] = true
+	}
 	if s.holds == nil {
 		s.holds = map[domain.ID]int{}
 	}
@@ -111,6 +130,9 @@ func (s *Service) HoldEnvironment(ctx context.Context, ws domain.Workspace) (rel
 	release = func() {
 		once.Do(func() {
 			s.rebuildMu.Lock()
+			if exclusive {
+				delete(s.exclusiveHolds, ws.EnvID)
+			}
 			if s.holds[ws.EnvID]--; s.holds[ws.EnvID] <= 0 {
 				delete(s.holds, ws.EnvID)
 			}

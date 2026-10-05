@@ -288,18 +288,18 @@ func (f *fake) RebuildWorkspace(_ context.Context, workspace, actor string) (ser
 	return service.RebuildResult{OldEnv: "env-1", NewEnv: "env-2", OldImage: "whr.invalid/whr-base/fedora:aaa", NewImage: "whr.invalid/whr-base/fedora:bbb", OldDigest: "sha256:aa", NewDigest: "sha256:bb"}, nil
 }
 
-func (f *fake) ShellTarget(_ context.Context, workspace string) (service.ShellTarget, error) {
+func (f *fake) OpenShell(_ context.Context, workspace, _ string) (service.ShellSession, error) {
 	switch workspace {
 	case "nope":
-		return service.ShellTarget{}, &domain.NotFoundError{Kind: "workspace", ID: "nope"}
+		return service.ShellSession{}, &domain.NotFoundError{Kind: "workspace", ID: "nope"}
 	case "busy":
-		return service.ShellTarget{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish, stop or fail it before you sign in")
+		return service.ShellSession{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish, stop or fail it before you sign in")
 	}
-	return service.ShellTarget{
+	return service.ShellSession{Release: func() {}, Target: service.ShellTarget{
 		EnvID: "env-1", Runtime: "apple-container", User: "1000:1000", Dir: "/home/agent",
 		Env: []string{"HOME=/home/agent", "CLAUDE_CONFIG_DIR=/home/agent/.claude", "HTTPS_PROXY=http://192.168.64.3:3128"},
 		Cmd: []string{"/bin/sh", "-c", "exec sh -i", "whr-shell", "/tools/profiles/p/bin"},
-	}, nil
+	}}, nil
 }
 
 func (f *fake) OpenCopy(_ context.Context, workspace, role string) (service.EditorCopy, error) {
@@ -632,7 +632,6 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"remove-workspace-busy":          {"DELETE", "/v1/workspaces/busy", ""},
 		"add-agent":                      {"POST", "/v1/workspaces/docs-ws/agents", `{"role":"runtime"}`},
 		"add-agent-unknown-workspace":    {"POST", "/v1/workspaces/nope/agents", `{"role":"runtime"}`},
-		"workspace-shell":                {"POST", "/v1/workspaces/docs-ws/shell", ""},
 		"workspace-shell-busy":           {"POST", "/v1/workspaces/busy/shell", ""},
 		"workspace-shell-unknown":        {"POST", "/v1/workspaces/nope/shell", ""},
 		"open-copy":                      {"POST", "/v1/workspaces/docs-ws/open", `{"role":"runtime"}`},
@@ -645,7 +644,13 @@ func TestTheEnvelopeAndItsExitCodes(t *testing.T) {
 		"remove-agent":                   {"DELETE", "/v1/workspaces/docs-ws/agents/runtime", ""},
 		"remove-agent-busy":              {"DELETE", "/v1/workspaces/docs-ws/agents/busy", ""},
 	} {
-		status, _, body := r.do(tc.method, tc.path, tc.body)
+		var status int
+		var body string
+		if strings.HasSuffix(tc.path, "/shell") {
+			status, _, body = r.do(tc.method, tc.path, tc.body, "Accept", "application/x-ndjson")
+		} else {
+			status, _, body = r.do(tc.method, tc.path, tc.body)
+		}
 		golden(t, name, status, body)
 	}
 
@@ -972,5 +977,79 @@ func TestTheUsageSummaryIsServedForAPeriod(t *testing.T) {
 		if status, _, body := r.do("GET", "/v1/usage?by="+by, ""); status != 200 {
 			t.Errorf("by %s: %d %s", by, status, body)
 		}
+	}
+}
+
+// A test backend exposes lifetime release and supervisor shutdown separately.
+type heldShellBackend struct {
+	*fake
+	released chan struct{}
+	stopped  chan struct{}
+}
+
+func (b *heldShellBackend) OpenShell(ctx context.Context, workspace, actor string) (service.ShellSession, error) {
+	session, err := b.fake.OpenShell(ctx, workspace, actor)
+	if err != nil {
+		return session, err
+	}
+	session.Release = func() { close(b.released) }
+	session.Done = b.stopped
+	return session, nil
+}
+
+func TestShellAPIHoldsUntilDisconnectOrSupervisorShutdown(t *testing.T) {
+	for _, mode := range []string{"disconnect", "shutdown"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newRig(t)
+			backend := &heldShellBackend{fake: r.be, released: make(chan struct{}), stopped: make(chan struct{})}
+			r.srv.be = backend
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, r.ts.URL+"/v1/workspaces/docs-ws/shell", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Accept", "application/x-ndjson")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			br := bufio.NewReader(resp.Body)
+			first, err := br.ReadString('\n')
+			if err != nil || resp.Header.Get("Content-Type") != "application/x-ndjson" {
+				t.Fatalf("target: %q %v", first, err)
+			}
+			golden(t, "workspace-shell", resp.StatusCode, first)
+			select {
+			case <-backend.released:
+				t.Fatal("hold ended before child exit")
+			default:
+			}
+			heartbeat, err := br.ReadString('\n')
+			if err != nil || heartbeat != "{\"held\":true}\n" {
+				t.Fatalf("heartbeat: %q %v", heartbeat, err)
+			}
+			if mode == "disconnect" {
+				_ = resp.Body.Close()
+			} else {
+				close(backend.stopped)
+				if _, err := br.ReadString('\n'); !errors.Is(err, io.EOF) {
+					t.Fatalf("shutdown left connection alive: %v", err)
+				}
+			}
+			select {
+			case <-backend.released:
+			case <-time.After(5 * time.Second):
+				t.Fatal("shell hold not released")
+			}
+		})
+	}
+}
+
+func TestShellAPIRefusesATargetWithoutALifetimeConnection(t *testing.T) {
+	r := newRig(t)
+	status, _, body := r.do("POST", "/v1/workspaces/docs-ws/shell", "")
+	if status != 400 || !strings.Contains(body, "application/x-ndjson") {
+		t.Fatalf("non-holding shell accepted: %d %s", status, body)
 	}
 }

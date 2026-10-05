@@ -33,10 +33,12 @@ type Env struct {
 	// SSH runs the ssh client with the arguments `whr ssh` builds and returns its
 	// exit code. Nil runs the ssh of this machine.
 	SSH func(ctx context.Context, args []string) (int, error)
-	// Exec replaces the whr process with a program and returns only if it cannot,
-	// for `whr ws shell`: the human's terminal is then the program's own. Nil
-	// really replaces the process.
-	Exec func(bin string, argv, env []string) error
+	// ShellSignals suppresses the binary's command-level SIGINT cancellation
+	// while the shell child is running; the returned function restores it.
+	ShellSignals func() func()
+	// ShellChild runs the runtime with inherited terminal descriptors only, waiting
+	// for its exit and ending it when ctx ends. Nil uses this machine's process.
+	ShellChild func(ctx context.Context, bin string, argv, env []string) (int, error)
 	// Executable returns the path of this binary, which ssh runs as its
 	// ProxyCommand. Nil uses os.Executable.
 	Executable func() (string, error)

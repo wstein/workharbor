@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -17,9 +18,9 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop, shellSignals := commandSignalContext()
 	defer stop()
-	code := execute(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	code := executeWithShellSignals(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, shellSignals)
 	stop()
 	os.Exit(code)
 }
@@ -31,11 +32,43 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return executeWithShellSignals(ctx, args, stdin, stdout, stderr, nil)
+}
+
+// commandSignalContext keeps ordinary command interruption while allowing the
+// sign-in shell's child to receive terminal interrupts without losing its hold.
+func commandSignalContext() (context.Context, context.CancelFunc, func() func()) {
+	ctx, cancel := context.WithCancel(context.Background())
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	var childActive atomic.Bool
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sig := <-signals:
+				if sig == syscall.SIGINT && childActive.Load() {
+					continue
+				}
+				cancel()
+			}
+		}
+	}()
+	stop := func() { signal.Stop(signals); cancel() }
+	scope := func() func() {
+		previous := childActive.Swap(true)
+		return func() { childActive.Store(previous) }
+	}
+	return ctx, stop, scope
+}
+
+func executeWithShellSignals(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, shellSignals func() func()) int {
 	if len(args) > 0 && args[0] == "--version" {
 		args = append([]string{"version"}, args[1:]...)
 	}
 	return cli.Execute(ctx, cli.Env{
-		Stdin: stdin, Stdout: stdout, Stderr: stderr, Getenv: os.Getenv,
+		Stdin: stdin, Stdout: stdout, Stderr: stderr, Getenv: os.Getenv, ShellSignals: shellSignals,
 		Extra: []*cobra.Command{versionCommand(stdout, stderr), toolsCommand(stdout, stderr), serveCommand(stderr)},
 	}, args)
 }

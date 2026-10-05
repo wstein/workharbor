@@ -70,62 +70,72 @@ type ShellTarget struct {
 // into the script.
 const shellScript = `PATH="$1:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; export PATH; unset TERMINFO TERMINFO_DIRS TERMCAP LOCPATH GCONV_PATH NLSPATH BASH_ENV CDPATH PROMPT_COMMAND; INPUTRC=/dev/null; HISTFILE=/dev/null; EDITRC=/dev/null; export INPUTRC HISTFILE EDITRC; if [ -x /bin/bash ]; then exec /bin/bash --noprofile --norc --noediting -i; fi; ENV=/dev/null; export ENV; exec /bin/sh -i`
 
-// ShellTarget finds a workspace's environment, restarts it even when warm and
-// returns what the human's terminal needs to open a shell in it as the agent's
-// user, to sign in to the agent (D40). It is refused while a run of the workspace
-// is unfinished (live or interrupted: the reconciler would resume it), under the
-// environment hold and restart lock. Preparation blocks run ownership and rebuilds
-// until stop, start and readiness succeed, keeping the existing mounts and proxy.
-// The hold ends before the target is returned; it does not cover the terminal:
-// the caller's process then replaces itself with the runtime's exec, so nothing
-// holds the environment (Service.HoldEnvironment would need a process that stays
-// and waits), and a run may start while the shell is open (review of #281, L1). It adds no secret, opens no terminal
-// and writes no terminal data: the caller replaces its own process with the runtime's
-// interactive exec.
-func (w *Workspaces) ShellTarget(ctx context.Context, workspace string) (ShellTarget, error) {
+// ShellSession holds the environment until Release, including through preparation.
+// Done ends when the supervisor stops; the caller must then end its child.
+type ShellSession struct {
+	Target  ShellTarget
+	Release func()
+	Done    <-chan struct{}
+}
+
+// OpenShell restarts the idle environment, records metadata only and returns a
+// target with a lifetime hold. It opens no terminal and carries no terminal data.
+func (w *Workspaces) OpenShell(ctx context.Context, workspace, actor string) (ShellSession, error) {
 	if w.cfg.Shell == nil {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "this supervisor has no agent shell")
+		return ShellSession{}, domain.NewConflict(domain.RuleEnvRunning, "this supervisor has no agent shell")
 	}
 	if !w.svc.rt.Capabilities().InteractiveExec {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the %s runtime does not report an interactive exec, so there is no agent shell", w.svc.rt.Name())
+		return ShellSession{}, domain.NewConflict(domain.RuleEnvRunning, "the %s runtime does not report an interactive exec, so there is no agent shell", w.svc.rt.Name())
 	}
 	if bin := w.cfg.Shell.Bin; !strings.HasPrefix(bin, "/tools/") || path.Clean(bin) != bin || strings.ContainsAny(bin, ":\x00\r\n") {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the agent shell needs an absolute CLI directory below the read-only /tools mount")
+		return ShellSession{}, domain.NewConflict(domain.RuleEnvRunning, "the agent shell needs an absolute CLI directory below the read-only /tools mount")
 	}
 	ws, err := w.svc.store.Workspace(ctx, workspace)
 	if err != nil {
-		return ShellTarget{}, err
+		return ShellSession{}, err
 	}
 	if ws.EnvID == "" {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
+		return ShellSession{}, domain.NewConflict(domain.RuleEnvRunning, "workspace %s has no environment", ws.Name)
 	}
 	if err := w.noRunLive(ctx, ws); err != nil {
-		return ShellTarget{}, err
+		return ShellSession{}, err
 	}
-	release, err := w.svc.HoldEnvironment(ctx, ws)
+	release, err := w.svc.holdEnvironment(ctx, ws, true)
 	if err != nil {
-		return ShellTarget{}, err
+		return ShellSession{}, err
 	}
-	defer release()
+	kept := false
+	defer func() {
+		if !kept {
+			release()
+		}
+	}()
 	current, err := w.svc.store.Workspace(ctx, string(ws.ID))
 	if err != nil {
-		return ShellTarget{}, err
+		return ShellSession{}, err
 	}
 	if current.EnvID != ws.EnvID {
-		return ShellTarget{}, domain.NewConflict(domain.RuleEnvRunning, "the environment of workspace %s changed while preparing the shell: try again", ws.Name)
+		return ShellSession{}, domain.NewConflict(domain.RuleEnvRunning, "the environment of workspace %s changed while preparing the shell: try again", ws.Name)
 	}
 	if err := w.restartForShell(ctx, ws); err != nil {
-		return ShellTarget{}, fmt.Errorf("make the environment of workspace %s ready: %w", ws.Name, err)
+		return ShellSession{}, fmt.Errorf("make the environment of workspace %s ready: %w", ws.Name, err)
 	}
 	env := append(append([]string(nil), w.cfg.Shell.Env...), w.svc.agentEnv(ctx, ws.EnvID)...)
-	return ShellTarget{
+	target := ShellTarget{
 		EnvID:   string(ws.EnvID),
 		Runtime: w.svc.rt.Name(),
 		User:    w.cfg.Spec(ws).User,
 		Dir:     w.cfg.Shell.Dir,
 		Env:     env,
 		Cmd:     []string{"/bin/sh", "-c", shellScript, "whr-shell", w.cfg.Shell.Bin},
-	}, nil
+	}
+	saved, err := w.svc.store.Append(ctx, domain.NewSignInShellEvent(domain.SignInShellOpened{Actor: actor, Workspace: ws.Name, EnvID: ws.EnvID}, w.svc.clock.Now()))
+	if err != nil {
+		return ShellSession{}, fmt.Errorf("audit the sign-in shell: %w", err)
+	}
+	w.svc.publish(saved)
+	kept = true
+	return ShellSession{Target: target, Release: release, Done: w.svc.bg.Done()}, nil
 }
 
 func (w *Workspaces) restartForShell(ctx context.Context, ws domain.Workspace) error {

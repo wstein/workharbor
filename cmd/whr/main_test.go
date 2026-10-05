@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +14,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/gittest"
@@ -301,5 +304,63 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
 		t.Error("an unmerged commit still installed whr")
+	}
+}
+
+func TestCommandSignalsRespectTheSignInShellChildScope(t *testing.T) {
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"ordinary interrupt", "child interrupt", "child terminate"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			child := exec.CommandContext(ctx, bin, "-test.run=^TestCommandSignalContextHelper$")
+			child.Env = []string{"WHR_TEST_SIGNALS=" + mode}
+			if out, err := child.CombinedOutput(); err != nil {
+				t.Fatalf("signal helper: %v %s", err, out)
+			}
+		})
+	}
+}
+
+func TestCommandSignalContextHelper(t *testing.T) {
+	mode := os.Getenv("WHR_TEST_SIGNALS")
+	if mode == "" {
+		return
+	}
+	ctx, stop, scope := commandSignalContext()
+	defer stop()
+	if mode == "ordinary interrupt" {
+		if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		restore := scope()
+		defer restore()
+		sig := syscall.SIGINT
+		if mode == "child terminate" {
+			sig = syscall.SIGTERM
+		}
+		if err := syscall.Kill(os.Getpid(), sig); err != nil {
+			t.Fatal(err)
+		}
+		if mode == "child interrupt" {
+			select {
+			case <-ctx.Done():
+				t.Fatal("child interrupt cancelled the hold")
+			case <-time.After(100 * time.Millisecond):
+			}
+			restore()
+			if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("ordinary interrupt or terminate did not cancel command")
 	}
 }
