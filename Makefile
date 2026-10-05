@@ -12,7 +12,7 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -207,9 +207,16 @@ generate:
 check-generated: generate
 	@git diff --exit-code -- 'internal/web/*_templ.go' >/dev/null || { echo "the generated templates are stale: run make generate and commit them" >&2; exit 1; }
 
-# Build the documentation site into _site (Hugo, pinned; fetches the Hextra module).
-docs:
-	cd docs && $(HUGO) --gc --minify --panicOnWarning --destination ../_site
+# Build the documentation and check the published canonical API contract.
+DOCS_DEST ?= $(CURDIR)/_site
+docs: docs-build
+	$(MAKE) docs-schema
+
+docs-build:
+	cd docs && $(HUGO) --gc --minify --panicOnWarning --destination "$(DOCS_DEST)"
+
+docs-schema:
+	cd scripts && go test docs_schema_test.go -count=1 -args -docs-site="$(DOCS_DEST)"
 
 # Serve the documentation site locally with live reload.
 docs-serve:

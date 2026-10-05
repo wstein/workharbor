@@ -1,0 +1,21 @@
+{{- $api := resources.Get "openapi.json" | transform.Unmarshal -}}
+<p><a href="{{ "openapi.json" | relURL }}">Download the OpenAPI {{ $api.openapi }} document</a>.</p>
+<h2 id="routes">Routes</h2>
+{{- range $path, $item := $api.paths }}
+<h3><code>{{ $path }}</code></h3>
+{{- range $method, $operation := $item }}
+{{- if in (slice "get" "post" "put" "patch" "delete" "head" "options" "trace") $method }}
+<h4><code>{{ upper $method }}</code> {{ $operation.summary }}</h4>
+{{- with $operation.description }}<p>{{ . }}</p>{{ end }}
+<details><summary>Parameters, request and responses</summary><pre><code>{{ $operation | jsonify (dict "indent" "  ") }}</code></pre></details>
+{{- end }}
+{{- end }}
+{{- end }}
+<h2 id="schemas">Schemas</h2>
+{{- range $name, $schema := $api.components.schemas }}
+<h3 id="schema-{{ $name }}"><code>{{ $name }}</code></h3>
+{{- with $schema.description }}<p>{{ . }}</p>{{ end }}
+<pre><code>{{ $schema | jsonify (dict "indent" "  ") }}</code></pre>
+{{- end }}
+<h2 id="authentication">Authentication</h2>
+<pre><code>{{ $api.components.securitySchemes | jsonify (dict "indent" "  ") }}</code></pre>
