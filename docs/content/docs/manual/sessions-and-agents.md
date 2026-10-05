@@ -80,16 +80,21 @@ make test          # go test ./...  (make test-short skips the slowest, for the 
 make race          # go test -race on the packages with goroutines of their own
 make fmt           # gofumpt + goimports (make fmt-check fails on unformatted sources)
 make lint          # golangci-lint (pinned; runs via go run)
-make check         # fmt-check, vet, lint, editorconfig, test, race: run before every commit
+make check-local   # fmt-check, lint, editorconfig, enabled hooks: before every commit
+make check         # full fmt/vet/lint/editorconfig/test/race suite: CI or explicit human request
 make check-ci      # what CI runs beyond make check: docs build, typos, lychee, gitleaks, actionlint
 make commitlint    # check this branch's commits against the commit rules
-make land          # from your worktree: check, then fast-forward main
+make land          # local checks, commit/range scans, affected templates, then fast-forward main
 make hooks         # enable hooks and the commit template (once per clone and worktree)
 make generate      # compile the web UI's templ templates (the generated files are committed)
 make docs          # build the Hugo site into _site (make docs-serve for live reload)
 make temp-ls       # list temporary containers, volumes, networks and images (LANE=<lane> to narrow)
 make temp-clean    # remove one lane's: LANE=<lane> is required
 ```
+
+For each work item, run focused behaviour and regression checks for the changed code and affected dependencies, including race checks where concurrency changes. For documentation, check the affected build, links and wording; for generated files, verify source and output together. Record commands, outcomes, scope and exact candidate SHA in the handoff. Independent review covers that exact SHA after a rewrite. Reuse successful unaffected evidence; repeat checks only for relevant changes, failures or unresolved concerns.
+
+`make land` runs local mechanical checks and scans the pinned candidate range for secrets; it checks generated templates when that range changes a template or its generated Go file. Focused test selection and evidence remain the author and reviewer's responsibility, not a receipt enforced by make. Full local `make check` and `make check-ci` suites require an explicit human request before push; hosted CI retains its full suites. Hooks always run and are never bypassed.
 
 The `Makefile` also has `install`, `install-release`, `changelog` and `editorconfig`. `make check-ci` needs `typos` and `lychee` (`brew install typos-cli lychee`).
 

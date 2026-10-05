@@ -72,7 +72,7 @@ proposals are preserved separately in [Pending policy proposal](pending-policy-p
 ### 5. Validate and hand over
 - Verify the extracted manifest, relevant file history, provenance, licence, secret scans, links and install/update/uninstall behaviour.
 - Exercise the workharbor workflow and a second minimal project example to demonstrate portability; do not claim unmeasured behaviour as verified.
-- Add focused meaningful tests for changed discovery/configuration/policy behaviour. Run `make check` before each workharbor commit and the required CI/commitlint checks for the final change. Never bypass hooks.
+- Add focused meaningful tests for changed discovery/configuration/policy behaviour. Run `make check-local` and focused checks before each workharbor commit; record scope, outcomes and exact candidate SHA for independent review. Full local suites require an explicit human request before push. Never bypass hooks.
 - Security-relevant changes receive independent wh/review at the authorized Opus-equivalent model strength (`gpt-6.1-sol`, medium). Authors never review their own changes. Rule changes remain wh/design's responsibility.
 - Werner controls publication, pushing, release and final cutover. Desk prepares and routes; dispatch starts workers only when routed. Board writes use `scripts/board-snapshot.sh` exclusively.
 
@@ -362,8 +362,8 @@ rg -n --hidden -g '!.git' \
 # Review removals from removal-manifest.txt one file at a time.
 # Do not run rm -rf .agents/.claude/docs or git rm on an entire guessed directory.
 make hooks
-make check
-make check-ci
+make check-local
+# Run focused behaviour/regression checks for this slice and record evidence.
 make commitlint
 ```
 

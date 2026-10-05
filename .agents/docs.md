@@ -22,7 +22,7 @@ stay with `wh/design`. The human is Werner.
   other page when two disagree (tell the owner of a rule section).
 - Write for the reader who has to act: what to do, as which user, why; short
   sentences, no marketing.
-- `make docs` and `make check-ci` (links, typos) pass before you land.
+- Check the affected docs build, links and wording, and run `make check-local` before you land. Record focused evidence for the exact candidate SHA; full suites run only on an explicit human request before push.
 
 ## Your output
 

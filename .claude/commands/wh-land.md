@@ -14,7 +14,7 @@ $ARGUMENTS (empty: the current branch). Never push.
     worktree of your lane landed first: AGENTS.md, A second worktree), resolve
     it and run the tests; any other conflict: stop and report, and do not
     resolve someone else's code by guessing.
-3. Note `git rev-parse main`, run `make land` and read its last lines:
+3. Record focused checks and scope/outcomes for the exact candidate SHA; after a rewrite, obtain independent review of that SHA. Full local suites run only on an explicit human request before push; do not repeat unaffected successful checks. Note `git rev-parse main`, run `make land` and read its last lines:
     - `land: main is now <sha>`: done; go to 4.
     - `main moved during the checks` or `is not on top of main`:
       `git rebase main`, then start again at 3 (noting `main` anew).
@@ -32,8 +32,6 @@ $ARGUMENTS (empty: the current branch). Never push.
       (AGENTS.md step 3). The first message came before the merge, so nothing
       landed. The second came after `land: main is now <sha>`: the land itself
       succeeded, so go on to 4 and report the repair as open.
-    - `Rejected status code: 50x` from github.com in the link check: not your
-      content; wait 60 seconds and run it again, at most 4 times, then report.
     - Anything else (tests, lint, commitlint, secrets): stop, fix it and fold
       the fix into the commit it belongs to (own unpushed commits only;
       AGENTS.md, Commits), then start again at 2. Never use `--no-verify`.

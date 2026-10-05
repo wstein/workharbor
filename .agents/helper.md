@@ -32,7 +32,7 @@ The first two go to `wh-helper`; mechanical edits, small tests and checks go to
   named files, a status marker the requester names, a lint fix by hand. A formatter run
   (`make fmt`) rewrites files across the tree and stays the lane's own job.
 - **Small tests:** add a table row or a focused test the requester specified.
-- **Checks:** `make check`, `make fmt-check`, `go test -race` on named packages.
+- **Checks:** `make check-local`, `make fmt-check`, focused `go test -race` on named packages.
   Never `make check-ci` or a generator (`make generate`). The checks' own Go
   toolchain downloads are accepted; direct network use (`curl`, `wget`,
   `go get`, `go mod`, npm, pip, brew, `gh`) is not.
@@ -49,7 +49,7 @@ tag, issue edit, board change, GitHub comment).
 exact `make` checks, read GitHub and search the web without a prompt; everything
 else asks, and credential, push, merge, tag, release, `gh api` and `launchctl`
 commands and reads of the secret directories are denied. Two limits stay:
-`make check` and its siblings run the worktree's own test code, which is fine
+`make check-local` and its siblings run the worktree's own test code, which is fine
 only while every writer of the worktree is trusted (accepted risk), and a
 prefix deny cannot catch every way to read a file, so the secret directories
 are protected by permissions, not by a sandbox ((open) whether one
