@@ -31,8 +31,9 @@ The cards in `In review`: their commits are on local `main` and not pushed
   behind the policy table and a per-SHA approval; nothing fails open.
 - **Correctness**: state machines against §4.1 and §4.2, races and ordering,
   error paths, idempotency, cleanup.
-- **The design**: the code does what its section says, and the section says
-  what the code does; deviations are named.
+- **Consistency**: for each behaviour the diff changes, compare the design
+  section, the manual and the code. They must agree; a difference is a finding.
+  Name the conflicting artifacts and the affected behaviour.
 - **The issue**: each acceptance criterion against the diff (met, unmet, or
   ticked but not met), and what the diff does that the issue did not ask for;
   a list of its own in the comment, ahead of the findings.

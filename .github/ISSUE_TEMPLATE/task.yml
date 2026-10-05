@@ -28,12 +28,33 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: One checkbox per criterion. Each must be checkable when the work is done; they are ticked after the closing commit is pushed (AGENTS.md).
+      description: One checkbox per measurable criterion, with an observable result or threshold. Tick each met criterion when closing out the work, before push (AGENTS.md).
       placeholder: |
         - [ ] ...
         - [ ] ...
     validations:
       required: true
+  - type: textarea
+    id: scenarios
+    attributes:
+      label: Acceptance scenarios
+      description: Optional for substantial work. Describe the starting conditions, action and observable result.
+      placeholder: |
+        Given ...
+        When ...
+        Then ...
+    validations:
+      required: false
+  - type: textarea
+    id: unknowns
+    attributes:
+      label: Explicit unknowns
+      description: Optional for substantial work. What is not known yet, and which investigation or measurement will resolve each unknown?
+      placeholder: |
+        Unknown: ...
+        How it will be found out: ...
+    validations:
+      required: false
   - type: textarea
     id: verification
     attributes:
