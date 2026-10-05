@@ -12,7 +12,7 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -152,6 +152,10 @@ editorconfig:
 
 check: fmt-check vet lint editorconfig test race
 
+# Local mechanical gates; focused behaviour/regression evidence is reviewed
+# separately for the exact candidate. Full CI aggregates remain unchanged.
+check-local: fmt-check lint editorconfig check-hooks
+
 # Check commits on this branch that are not on origin/main.
 commitlint:
 	go run ./cmd/commitlint --range origin/main..HEAD
@@ -174,8 +178,8 @@ release-prep: check-clean
 release-snapshot:
 	go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --config .config/goreleaser.yaml --snapshot --clean --skip=publish,sbom
 
-# Run what CI runs beyond make check, before a branch is merged or rebased into
-# main: the docs build, spelling (typos), links (lychee, online, as CI does;
+# Run what CI runs beyond make check; local full suites require an explicit
+# human request before push: the docs build, spelling (typos), links (lychee, online, as CI does;
 # links into this repository's main are checked against the local files, so
 # a file moved on local main does not fail before the push),
 # secrets (gitleaks over the history being merged, as CI scans it) and the
@@ -226,7 +230,7 @@ check-hooks:
 
 # Land the current branch on main, from a session's own worktree: refuse unless
 # the shared checkout is on main (a detached HEAD there once swallowed merges),
-# the branch is rebased onto main, and check, check-ci and commitlint pass; then
+# the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
 	@shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
@@ -239,7 +243,10 @@ land:
 	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
 	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
 	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
-	$(MAKE) -s check check-ci commitlint || exit 1; \
+	$(MAKE) -s check-local commitlint || exit 1; \
+	$(MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
+	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
+	if [ -n "$$generated" ]; then $(MAKE) -s check-generated || exit 1; fi; \
 	if [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ] || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ]; then \
 		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \

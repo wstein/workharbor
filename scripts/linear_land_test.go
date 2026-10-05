@@ -32,8 +32,12 @@ func TestLinearLand(t *testing.T) {
 		historical bool
 		move       bool
 		mergeLater bool
+		template   bool
+		failScan   bool
 	}{
 		{name: "linear descendant"},
+		{name: "affected template", template: true},
+		{name: "secret scan failure", failScan: true},
 		{name: "introduced merge", merge: true},
 		{name: "historical merge", historical: true},
 		{name: "topic moves during checks", move: true},
@@ -60,7 +64,9 @@ func TestLinearLand(t *testing.T) {
 				}
 			}
 			git(dir, "init", "-q", "-b", "main")
-			checks := "\n\n.PHONY: check check-ci commitlint\ncheck check-ci commitlint:\n"
+			checks := "\n\n.PHONY: check check-ci check-local commitlint secrets-range check-generated\n" +
+				"check check-ci:\n\t@echo forbidden-full-suite >&2; exit 1\n" +
+				"check-local commitlint check-generated:\n"
 			if tc.move {
 				mutation := "git commit --allow-empty -qm moved"
 				if tc.mergeLater {
@@ -68,7 +74,10 @@ func TestLinearLand(t *testing.T) {
 				}
 				checks += "\t@if [ ! -f checks-ran ]; then " + mutation + "; fi\n"
 			}
-			checks += "\t@echo checked >> checks-ran\n"
+			checks += "\t@echo $@ >> checks-ran\nsecrets-range:\n\t@echo secrets-range $(RANGE) $(TIP) >> checks-ran\n"
+			if tc.failScan {
+				checks += "\t@echo required-secret-scan-failed >&2; exit 1\n"
+			}
 			write(filepath.Join(dir, "Makefile"), []byte("land:\n"+recipe+checks))
 			if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o700); err != nil {
 				t.Fatal(err)
@@ -97,6 +106,13 @@ func TestLinearLand(t *testing.T) {
 			if tc.merge {
 				merge(topic)
 			} else {
+				if tc.template {
+					if err := os.MkdirAll(filepath.Join(topic, "internal", "web"), 0o700); err != nil {
+						t.Fatal(err)
+					}
+					write(filepath.Join(topic, "internal", "web", "fixture.templ"), []byte("template fixture\n"))
+					git(topic, "add", ".")
+				}
 				git(topic, "commit", "--allow-empty", "-qm", "linear")
 			}
 			if tc.mergeLater {
@@ -131,6 +147,13 @@ func TestLinearLand(t *testing.T) {
 				if got := git(dir, "rev-parse", "main"); got != base {
 					t.Fatalf("rejected candidate changed main to %s", got)
 				}
+			} else if tc.failScan {
+				if err == nil || !strings.Contains(string(out), "required-secret-scan-failed") {
+					t.Fatalf("want secret failure, got %v\n%s", err, out)
+				}
+				if got := git(dir, "rev-parse", "main"); got != base {
+					t.Fatalf("failed scan changed main to %s", got)
+				}
 			} else if tc.move {
 				if got := git(topic, "rev-parse", "HEAD"); got == candidate {
 					t.Fatal("checker did not move the topic")
@@ -148,8 +171,16 @@ func TestLinearLand(t *testing.T) {
 				if got := git(dir, "rev-parse", "main"); got != candidate {
 					t.Fatalf("main = %s, want %s", got, candidate)
 				}
-				if _, err := os.Stat(filepath.Join(topic, "checks-ran")); err != nil {
-					t.Fatalf("checks did not run: %v", err)
+				logged, err := os.ReadFile(filepath.Join(topic, "checks-ran")) //nolint:gosec // fixed gate log in an isolated test repository
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := "check-local\ncommitlint\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"
+				if tc.template {
+					want += "check-generated\n"
+				}
+				if string(logged) != want {
+					t.Fatalf("local gates = %q, want %q", logged, want)
 				}
 			}
 		})
