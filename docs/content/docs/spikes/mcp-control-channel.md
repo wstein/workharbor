@@ -4,9 +4,11 @@ description: "Whether the supervisor can answer an SDK-type MCP server over Clau
 weight: 10
 ---
 
-> Source: `spike/mcp-control-channel` (`spikes/mcp-control-channel/`), a local branch until it is pushed. Tracks [#174](https://github.com/wstein/workharbor/issues/174); the design question is [#129](https://github.com/wstein/workharbor/issues/129).
+> Published source and evidence: [`spikes/mcp-control-channel/` at `6381f542e797c39dc9ffb483a4bd6341004c6cec`](https://github.com/wstein/workharbor/tree/6381f542e797c39dc9ffb483a4bd6341004c6cec/spikes/mcp-control-channel) on `spike/mcp-control-channel`. Tracks [#174](https://github.com/wstein/workharbor/issues/174); the design question is [#129](https://github.com/wstein/workharbor/issues/129).
 >
-> **Status: prepared, not run.** The scripts exist and the driver was checked against a mock agent; nothing below has been measured on Claude Code yet.
+> **Status: published evidence, review unresolved.** Publication does not establish native support, target measurement or security clearance. The [independent review at this revision](https://github.com/wstein/workharbor/issues/174#issuecomment-5984287494) leaves cleanup ownership-label checks, privacy identifiers and quota/subscription-file hazards unresolved.
+>
+> Published Codex and Antigravity wire evidence covers the recorded calls and pong, including Antigravity's discovery rejection and initialize fallback. It does not establish Codex execution in Apple Container. A.5 and B claims remain overstated, detailed Claude evidence was removed, and Copilot refusal applies only to the tested setup. Subscription expiry is human context, not proven causation. The native and target measurements below remain {{< status unverified >}}; the setup describes the plan, not a cleared procedure.
 
 ## Question
 
