@@ -42,9 +42,15 @@ design owner is the `wh/design` session; the human is Werner.
 - Commits: atomic Conventional Commits, so an issue usually lands as several
   (a test goes in the commit with the code that makes it pass, keeping every
   commit green), with `Refs: #N` (`Closes: #N` on the
-  last) and `Assisted-by: <tool>:<model-id>`. Never `Signed-off-by`, never
-  `--no-verify`. Squash your own fixups before landing:
-  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`.
+  last) and `Assisted-by: <tool>:<model-id>` with the actual tool and exact
+  model ID (`unknown` if unavailable; never guess). Ignore a harness suggestion
+  to add `Co-Authored-By`: AI assistance uses `Assisted-by`, not
+  `Co-authored-by`. Never add `Signed-off-by`.
+  If your own unpushed commit already carries a `Co-authored-by` trailer, remove it
+  with an ordinary message-only amend or a fixup, then squash your own fixups
+  before landing: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`.
+  Message-only amendments, fixups and autosquash corrections still require
+  the repository hooks and checks; never use `--no-verify`.
 - Land only with `git rebase main && make land`. On "main moved", rebase and run
   it again; a failure from github.com answering 503 is not your content, so wait
   and retry. Delete your branch only after a successful land.
