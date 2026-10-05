@@ -235,15 +235,20 @@ land:
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
 		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
 	base="$$(git rev-parse main)"; \
-	git merge-base --is-ancestor "$$base" HEAD || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
+	candidate="$$(git rev-parse --verify HEAD^{commit})" || { echo "land: cannot read the candidate commit" >&2; exit 1; }; \
+	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
+	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
+	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
 	$(MAKE) -s check check-ci commitlint || exit 1; \
+	if [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ] || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ]; then \
+		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then echo "land: the shared checkout left main during the checks: stop and tell the human" >&2; exit 1; fi; \
 	scripts/index-state.sh "$$shared"; state=$$?; \
 	if [ "$$state" = 3 ]; then \
 		echo "land: the shared checkout's index is stale (every path that differs from HEAD equals HEAD in the tree): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; fi; \
 	if [ "$$state" != 0 ] && [ "$$state" != 4 ]; then echo "land: cannot read the shared checkout's index" >&2; exit 1; fi; \
-	git -C "$$shared" merge -q --ff-only "$$branch" || exit 1; \
+	git -C "$$shared" merge -q --ff-only "$$candidate" || exit 1; \
 	echo "land: main is now $$(git rev-parse --short main)"; \
 	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 
