@@ -5,8 +5,10 @@
 //	store/<hash8>-<name>-<version>-<platform>/bin/<name>
 //	profiles/<profile>/bin/<name> -> ../../../store/<entry>/bin/<name>
 //
-// A download is checked against a hash pinned in this repository and against the
-// vendor's own SHA-256 manifest; a mismatch is refused and nothing is stored.
+// Downloads must match hashes pinned in this repository. Claude Code also
+// requires its vendor manifest; archive formats rely on reviewed archive pins
+// whose provenance was checked externally when admitting them. A mismatch
+// stores nothing.
 // Adding a tool is a developer action, never an agent action.
 package toolstore
 
@@ -55,10 +57,12 @@ type Pin struct {
 	// Format names how the vendor releases the tool; empty is Claude Code's
 	// (a binary and a SHA-256 manifest). FormatAntigravity adds ArchiveURL and
 	// SHA512 (of the archive); BaseURL is then the manifest directory, which only
-	// the pin-update script reads.
-	Format     string `json:"format,omitempty"`
-	ArchiveURL string `json:"archive_url,omitempty"`
-	SHA512     string `json:"sha512,omitempty"`
+	// the pin-update script reads. FormatCodex uses ArchiveSHA256; its provenance
+	// is verified externally when admitting a pin, never by the supervisor.
+	Format        string `json:"format,omitempty"`
+	ArchiveURL    string `json:"archive_url,omitempty"`
+	SHA512        string `json:"sha512,omitempty"`
+	ArchiveSHA256 string `json:"archive_sha256,omitempty"` // Codex archive digest, independent of its signed binary
 }
 
 // Pins returns the pinned tools.
@@ -191,9 +195,8 @@ func (s *Store) client() *http.Client {
 	return &c
 }
 
-// Download fetches a pinned tool and adds it to the store. The file's SHA-256
-// must equal the pin and the vendor's manifest entry for the platform; either
-// mismatch is ErrChecksum and nothing is stored.
+// Download fetches a pinned tool and checks its format-specific hashes. It adds
+// it to the store only when the copied bytes match the pinned SHA-256.
 func (s *Store) Download(ctx context.Context, p Pin) (Entry, error) {
 	if err := checkNames(p.Name, p.Version, p.Platform); err != nil {
 		return Entry{}, err
@@ -203,6 +206,8 @@ func (s *Store) Download(ctx context.Context, p Pin) (Entry, error) {
 	}
 	switch p.Format {
 	case "":
+	case FormatCodex:
+		return s.downloadCodex(ctx, p)
 	case FormatAntigravity:
 		return s.downloadAntigravity(ctx, p)
 	default:

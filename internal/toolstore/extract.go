@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -37,7 +38,15 @@ func extractTarGzFile(archive, want string, maxBytes int64, dst string) error {
 		return fmt.Errorf("%w: %w", ErrArchive, err)
 	}
 	defer func() { _ = gz.Close() }()
-	tr := tar.NewReader(gz)
+	// Bound all decompressed bytes, including skipped files and tar metadata.
+	// Tar headers/padding get a fixed allowance; payloads share maxBytes.
+	const overhead = maxArchiveEntries*2048 + 1024
+	if maxBytes <= 0 || maxBytes > math.MaxInt64-overhead-1 {
+		return ErrTooLarge
+	}
+	expanded := &io.LimitedReader{R: gz, N: maxBytes + overhead + 1}
+	tr := tar.NewReader(expanded)
+	var total int64
 	found := false
 	for n := 0; ; n++ {
 		h, err := tr.Next()
@@ -50,6 +59,10 @@ func extractTarGzFile(archive, want string, maxBytes int64, dst string) error {
 		if n >= maxArchiveEntries {
 			return fmt.Errorf("%w: more than %d entries", ErrArchive, maxArchiveEntries)
 		}
+		if h.Size < 0 || h.Size > maxBytes-total {
+			return fmt.Errorf("%w: archive payload exceeds %d bytes", ErrTooLarge, maxBytes)
+		}
+		total += h.Size
 		name := strings.TrimPrefix(h.Name, "./")
 		if name == "" || path.IsAbs(h.Name) || strings.Contains(h.Name, "\\") || strings.ContainsRune(h.Name, 0) {
 			return fmt.Errorf("%w: entry name %q", ErrArchive, h.Name)
@@ -90,6 +103,14 @@ func extractTarGzFile(archive, want string, maxBytes int64, dst string) error {
 			return fmt.Errorf("%w: %q is larger than %d bytes", ErrTooLarge, want, maxBytes)
 		}
 		found = true
+	}
+	// Consume padding/trailing gzip data to check the gzip checksum and enforce
+	// the expansion cap even when tar ended before the compressed stream.
+	if _, err := io.Copy(io.Discard, expanded); err != nil {
+		return fmt.Errorf("%w: %w", ErrArchive, err)
+	}
+	if expanded.N == 0 {
+		return ErrTooLarge
 	}
 	if !found {
 		return fmt.Errorf("%w: no %q in the archive", ErrArchive, want)

@@ -192,7 +192,7 @@ func TestExtractTooManyEntries(t *testing.T) {
 	dir := t.TempDir()
 	arc := filepath.Join(dir, "a.tar.gz")
 	_ = os.WriteFile(arc, makeTarGz(t, es...), 0o600)
-	if err := extractTarGzFile(arc, "f0", 10, filepath.Join(dir, "o")); !errors.Is(err, ErrArchive) || !strings.Contains(err.Error(), "entries") {
+	if err := extractTarGzFile(arc, "f0", 100, filepath.Join(dir, "o")); !errors.Is(err, ErrArchive) || !strings.Contains(err.Error(), "entries") {
 		t.Fatalf("err = %v", err)
 	}
 }

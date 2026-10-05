@@ -33,6 +33,16 @@
       "format": "antigravity",
       "archive_url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.16-5594158052802560/linux-arm-musl/cli_linux_arm64_musl.tar.gz",
       "sha512": "3f5ef952365b58c358ed79e0bb61768b17afdfd8fd00ccfd39b06f50789c8c0069890cf88583e0edfa194c1ddd9640211f02a8daac58a41f9bd73bac786e414c"
+    },
+    {
+      "name": "codex",
+      "version": "0.159.2",
+      "platform": "linux-arm64-musl",
+      "base_url": "https://github.com/openai/codex/releases/download/rust-v0.159.2",
+      "sha256": "113aa5d5952a6fd3950a88323219747d0c91978ebee948509a540c8a460e59a3",
+      "format": "codex",
+      "archive_url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-aarch64-unknown-linux-musl.tar.gz",
+      "archive_sha256": "472ee4d49464a4f8792bbf0162bd9ac18d7036dbc00900a03e95f715887e930f"
     }
   ]
 }
