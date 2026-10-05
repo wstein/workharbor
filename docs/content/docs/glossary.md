@@ -125,10 +125,12 @@ Owner label
 
 The product is **workharbor**, lowercase, in prose, code, paths, URLs and packages; the command is `whr`. Only the wordmark (the logo, the banner and the social preview) sets it as WorkHarbor. Avoid Workharbor, Work Harbor and WorkHarbor in text, alt text and titles.
 
-`wh` and `whr` prefixes
-: `wh` names the workharbor development team and its local lanes (`wh/design`, `wh/desk`), the `wh-*` agent types and skills, and `whtmp-` temporary resources. `whr` names the product: its CLI, helper binaries (`whr-shim`, `whr-proxy`) and the `whr` account.
+`wh`, `whr` and `cb` prefixes
+: `wh` and `whr` belong to workharbor. The CLI is `whr`, its helper binaries include `whr-shim` and `whr-proxy`, its account is `whr`, and its temporary resources use `whtmp-`.
 
-: Avoid: `whr-<lane>` for a session or agent name.
+: `cb` belongs to crewbook, a separate tool. Its public skill is `crewbook` and its UI name is Crew Book.
+
+: Avoid: `wh` or `whr` for crewbook identities, and `cb` for workharbor identities.
 
 ## Marking claims
 
