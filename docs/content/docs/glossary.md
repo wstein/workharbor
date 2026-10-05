@@ -125,6 +125,11 @@ Owner label
 
 The product is **workharbor**, lowercase, in prose, code, paths, URLs and packages; the command is `whr`. Only the wordmark (the logo, the banner and the social preview) sets it as WorkHarbor. Avoid Workharbor, Work Harbor and WorkHarbor in text, alt text and titles.
 
+`wh` and `whr` prefixes
+: `wh` names the workharbor development team and its local lanes (`wh/design`, `wh/desk`), the `wh-*` agent types and skills, and `whtmp-` temporary resources. `whr` names the product: its CLI, helper binaries (`whr-shim`, `whr-proxy`) and the `whr` account.
+
+: Avoid: `whr-<lane>` for a session or agent name.
+
 ## Marking claims
 
 The docs mark how firm a claim is: {{< status verified >}} measured on the target setup, {{< status unverified >}} not measured (taken from documentation or the original sources, or not checked at all), {{< status decided >}} settled in the decision table, {{< status open >}} not decided yet. Measured results are on the [spike pages](spikes/_index.md).
