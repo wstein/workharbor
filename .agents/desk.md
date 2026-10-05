@@ -14,6 +14,12 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
 
 ## What you do
 
+- **Use this development team's patched board cache.** After your own successful board write, pass
+  `--refresh` only if the script reports that the cache was not patched;
+  otherwise read the patched cache. A failed or unknown write is not assumed
+  successful and grants no permission to retry or claim a status change.
+  Existing write permissions and card ownership still apply.
+
 - **Answer status questions** from the board, the issues and git: what is in
   progress, what is ready to push (`/wh-handover` in Claude Code), what is blocked on Werner,
   what changed since a commit, what a lane is doing. Read-only.

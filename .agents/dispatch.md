@@ -15,6 +15,12 @@ runs, and stop if one does.
 
 ## What you do
 
+- **Use this development team's patched board cache.** After your own successful board write, pass
+  `--refresh` only if the script reports that the cache was not patched;
+  otherwise read the patched cache. A failed or unknown write is not assumed
+  successful and grants no permission to retry or claim a status change.
+  Existing write permissions and card ownership still apply.
+
 - **Pull cards.** For each code and docs lane, take its highest-priority `Todo`
   card (`P1` first, lowest issue number first); `wh/design` ranks `Priority` and
   `Session`, you follow them.
