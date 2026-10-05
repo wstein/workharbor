@@ -75,8 +75,17 @@ Limits are 256 KiB for the manifest, 1,024 inventoried files, 1 MiB per resource
 files, checks ownership and filesystem identity, and refuses group/other write,
 special permission bits and executable resource bits. Installation copies into
 a temporary directory in the dedicated store, validates the copy, then renames
-it to `<store>/<inventory_sha256>`. An existing revision is validated, never
-overwritten. Every start/resume revalidates content. Store roots are canonical
+it to `<store>/<inventory_sha256>-<manifest_sha256>`. Each digest is exactly
+64 lowercase hexadecimal characters; the separator binds both digests
+unambiguously. Equal resource inventories with different binding or prerequisite
+manifests coexist as distinct immutable host revisions. The guest target remains
+`/skills/<inventory_sha256>` and mounts only the selected host revision.
+An existing revision is validated, never overwritten. When the new host revision
+directory is absent, loading may use a retained legacy `<store>/<inventory_sha256>`
+directory only after validating its manifest and resources against the exact
+trusted pin. A present but invalid new revision never falls back to legacy content.
+Installation does not move or remove legacy revisions. Every start/resume
+revalidates content. Store roots are canonical
 absolute paths outside repositories, workspace roots, tools and forbidden
 credential/vendor roots. Installed resources have mode `0400`.
 

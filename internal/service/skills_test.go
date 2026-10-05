@@ -91,7 +91,11 @@ func TestSkillPrerequisitesAndTamperingRefuseComposition(t *testing.T) {
 		t.Fatal("missing required policy input accepted")
 	}
 	project.Inputs = map[string]bool{"project_policy": true}
-	path := filepath.Join(selection.Store, selection.Package.InventorySHA256, "SKILL.md")
+	installed, err := (skillset.Store{Root: selection.Store}).Load(*selection.Package)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(installed.Directory, "SKILL.md")
 	if err := os.Chmod(path, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +203,11 @@ func TestAlternativeSelectionIsDurableAndTamperedResumeLaunchesNothing(t *testin
 	}
 	r.svc.Wait()
 	selection.Selection, selection.Package = "none", nil
-	filename := filepath.Join(selection.Store, recorded.InventorySHA256, "SKILL.md")
+	installed, err := (skillset.Store{Root: selection.Store}).Load(skillset.Pin{Identity: recorded.Identity, Source: recorded.Source, Commit: recorded.Commit, ManifestSHA256: recorded.ManifestSHA256, InventorySHA256: recorded.InventorySHA256, ContractVersion: recorded.ContractVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(installed.Directory, "SKILL.md")
 	if err := os.Chmod(filename, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf8"
+
+	"golang.org/x/sys/unix"
 )
 
 type Store struct {
@@ -112,19 +114,67 @@ func readText(root *os.Root, name string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readTextChecked(root, name, limit, before)
+}
+
+func openNoFollow(root *os.Root, name string, directory bool) (*os.File, error) {
+	parent, err := root.OpenFile(".", os.O_RDONLY|unix.O_NONBLOCK|unix.O_DIRECTORY, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	info, err := parent.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := secure(info, true); err != nil {
+		return nil, err
+	}
+	components := strings.Split(name, "/")
+	for index, component := range components {
+		isDirectory := directory || index < len(components)-1
+		flags := unix.O_RDONLY | unix.O_NONBLOCK | unix.O_NOFOLLOW | unix.O_CLOEXEC
+		if isDirectory {
+			flags |= unix.O_DIRECTORY
+		}
+		descriptor, err := unix.Openat(int(parent.Fd()), component, flags, 0)
+		if err != nil {
+			return nil, &os.PathError{Op: "openat", Path: name, Err: err}
+		}
+		file := os.NewFile(uintptr(descriptor), name)
+		if index == len(components)-1 {
+			return file, nil
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if err := secure(info, true); err != nil {
+			return nil, err
+		}
+		parent = file
+	}
+	return nil, errors.New("empty skill resource path")
+}
+
+func readTextChecked(root *os.Root, name string, limit int64, before fs.FileInfo) ([]byte, error) {
 	if err := secure(before, false); err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	if before.Size() > limit {
 		return nil, fmt.Errorf("%s exceeds skill resource limit", name)
 	}
-	file, err := root.Open(name)
+	file, err := openNoFollow(root, name, false)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 	opened, err := file.Stat()
 	if err != nil {
+		return nil, err
+	}
+	if err := secure(opened, false); err != nil {
 		return nil, err
 	}
 	if !os.SameFile(before, opened) {
@@ -257,13 +307,16 @@ func walkBounded(root *os.Root, visit func(string, fs.FileInfo) error) error {
 		if !info.IsDir() {
 			return nil
 		}
-		directory, err := root.Open(name)
+		directory, err := openNoFollow(root, name, true)
 		if err != nil {
 			return err
 		}
 		defer directory.Close()
 		opened, err := directory.Stat()
 		if err != nil {
+			return err
+		}
+		if err := secure(opened, true); err != nil {
 			return err
 		}
 		if !os.SameFile(info, opened) {
@@ -294,8 +347,18 @@ func (s Store) Load(pin Pin) (Package, error) {
 	if err := pin.Validate(); err != nil {
 		return Package{}, err
 	}
-	result, _, err := validate(filepath.Join(s.Root, pin.InventorySHA256), pin)
+	directory := s.revisionDirectory(pin)
+	if _, err := os.Lstat(directory); errors.Is(err, fs.ErrNotExist) {
+		directory = filepath.Join(s.Root, pin.InventorySHA256)
+	} else if err != nil {
+		return Package{}, err
+	}
+	result, _, err := validate(directory, pin)
 	return result, err
+}
+
+func (s Store) revisionDirectory(pin Pin) string {
+	return filepath.Join(s.Root, pin.InventorySHA256+"-"+pin.ManifestSHA256)
 }
 
 func (s Store) Install(source string, pin Pin) (Package, error) {
@@ -306,7 +369,7 @@ func (s Store) Install(source string, pin Pin) (Package, error) {
 	if err != nil {
 		return Package{}, err
 	}
-	target := filepath.Join(s.Root, pin.InventorySHA256)
+	target := s.revisionDirectory(pin)
 	if _, err := os.Lstat(target); err == nil {
 		return s.Load(pin)
 	} else if !errors.Is(err, fs.ErrNotExist) {
