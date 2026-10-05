@@ -9,7 +9,7 @@ type Phase string
 
 const (
 	PhaseHost Phase = "host" // `whr setup host`, as the administrator
-	PhaseUser Phase = "user" // `whr setup`, as whr in its desktop session
+	PhaseUser Phase = "user" // `whr setup`, as workharbor in its desktop session
 )
 
 // Cmd is one command a fix runs: an argument vector, never a shell string, so

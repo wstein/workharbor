@@ -97,11 +97,11 @@ func (r *setupRig) run(args ...string) (int, string, string) {
 	var out, errOut bytes.Buffer
 	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(k string) string {
 		if k == "HOME" {
-			return "/Users/whr"
+			return "/Users/workharbor"
 		}
 		return ""
 	}, Setup: r.env}
-	code := Execute(context.Background(), env, append(args, "--config", "/Users/whr/.config/whr/config.json", "--prefix", filepath.Dir(filepath.Dir(r.exe))))
+	code := Execute(context.Background(), env, append(args, "--config", "/Users/workharbor/.config/whr/config.json", "--prefix", filepath.Dir(filepath.Dir(r.exe))))
 	return code, out.String(), errOut.String()
 }
 
@@ -126,7 +126,7 @@ func TestTheHostPartRefusesRootAndTheWhrUser(t *testing.T) {
 	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "never runs as root") {
 		t.Errorf("root: exit %d, stderr %q", code, errOut)
 	}
-	r.env.User, r.env.UID = "whr", 502
+	r.env.User, r.env.UID = "workharbor", 502
 	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "workharbor's own standard account") {
 		t.Errorf("the whr user: exit %d, stderr %q", code, errOut)
 	}
@@ -134,7 +134,7 @@ func TestTheHostPartRefusesRootAndTheWhrUser(t *testing.T) {
 		t.Errorf("a refused run ran %v", r.host.ran)
 	}
 	// an administrator whr account may run the host part (D49)
-	r.host.outputs["dseditgroup -o checkmember -m whr admin"] = "yes whr is a member of admin"
+	r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "yes workharbor is a member of admin"
 	if code, _, errOut := r.run("setup", "host", "--dry-run"); code == exitcode.Usage && strings.Contains(errOut, "own standard account") {
 		t.Errorf("an administrator whr was refused: %q", errOut)
 	}
@@ -142,10 +142,10 @@ func TestTheHostPartRefusesRootAndTheWhrUser(t *testing.T) {
 
 func TestTheUserPartNeedsWhrInItsDesktopSession(t *testing.T) {
 	r := newSetupRig(t)
-	if code, _, errOut := r.run("setup"); code != exitcode.Usage || !strings.Contains(errOut, "it is for whr, and this is werner") {
+	if code, _, errOut := r.run("setup"); code != exitcode.Usage || !strings.Contains(errOut, "it is for workharbor, and this is werner") {
 		t.Errorf("another user: exit %d, stderr %q", code, errOut)
 	}
-	r.env.User, r.env.UID = "whr", 502
+	r.env.User, r.env.UID = "workharbor", 502
 	r.env.Manager = &launchd.Manager{R: aquaOnly{"Background"}, UID: 502, GOOS: "darwin"}
 	if code, _, errOut := r.run("setup"); code != exitcode.Usage || !strings.Contains(errOut, "desktop session") {
 		t.Errorf("over SSH: exit %d, stderr %q", code, errOut)
@@ -185,7 +185,7 @@ func TestADryRunPrintsEveryFixAndChangesNothing(t *testing.T) {
 	for _, want := range []string{
 		"$ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0",
 		"$ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
-		"$ sudo sysadminctl -addUser whr -fullName workharbor -password -",
+		"$ sudo sysadminctl -addUser workharbor -fullName workharbor -password -",
 		"$ sudo install -m 0644 -o root -g wheel",
 		"sudo fdesetup enable",
 	} {
@@ -270,8 +270,8 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if got := lines["power"][3]; got != "whr setup host --only power" {
 		t.Errorf("power fix %q", got)
 	}
-	// run as werner, not whr: the user phase says so, and says to run as whr
-	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "run `whr doctor` as whr") || f[3] != "whr setup --only config-base (run as whr)" {
+	// run as werner, not whr: the user phase says so, and says to run as workharbor
+	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "run `whr doctor` as workharbor") || f[3] != "whr setup --only config-base (run as workharbor)" {
 		t.Errorf("config-base: %q", f)
 	}
 	if f := lines["config"]; f[0] != "fail" || !strings.Contains(f[3], "whr setup") {
@@ -296,10 +296,10 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if _, out, _ := r.run("doctor", "--skip", "power"); !strings.Contains(out, "skipped\tpower\t") {
 		t.Errorf("--skip power: %q", out)
 	}
-	// as whr, the user phase is checked for real
-	r.env.User, r.env.UID = "whr", 502
+	// as workharbor, the user phase is checked for real
+	r.env.User, r.env.UID = "workharbor", 502
 	if _, out, _ := r.run("doctor"); strings.Contains(out, "this check describes the account") {
-		t.Errorf("as whr nothing is deferred: %q", out)
+		t.Errorf("as workharbor nothing is deferred: %q", out)
 	}
 }
 
@@ -309,8 +309,8 @@ func TestSetupAsksOnceMoreWhenAnAdministratorIsReachableFromAfar(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := newSetupRig(t)
-	r.env.User, r.env.UID = "whr", 502
-	r.host.outputs["dseditgroup -o checkmember -m whr admin"] = "yes whr is a member of admin"
+	r.env.User, r.env.UID = "workharbor", 502
+	r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "yes workharbor is a member of admin"
 	var out, errOut bytes.Buffer
 	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return "" }, Setup: r.env}
 	code := Execute(context.Background(), env, []string{"setup", "--config", cfg, "--prefix", filepath.Dir(filepath.Dir(r.exe))})

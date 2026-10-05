@@ -18,7 +18,7 @@ import (
 
 // SSHPrincipal is the one user a console certificate is valid for: the console's
 // own user.
-const SSHPrincipal = "whr"
+const SSHPrincipal = "workharbor"
 
 // sshLauncher is the in-guest program that runs sshd for one connection (package
 // console, whr-sshd).
@@ -146,7 +146,7 @@ func (c *Consoles) SSH(ctx context.Context, actor string) (SSHConn, error) {
 		c.sshConns--
 		c.mu.Unlock()
 	}
-	env := append([]string{"HOME=/home/whr", "WHR_SSH_CA=" + c.cfg.SSH.PublicKey()}, c.svc.agentEnv(ctx, domain.ID(cur.ID))...)
+	env := append([]string{"HOME=/home/workharbor", "WHR_SSH_CA=" + c.cfg.SSH.PublicKey()}, c.svc.agentEnv(ctx, domain.ID(cur.ID))...)
 	pr, pw := io.Pipe()
 	// The command outlives the request that started it only as far as the caller
 	// keeps the connection: Close cancels it.

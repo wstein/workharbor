@@ -6,10 +6,10 @@ HTTP OK (200)
     "env_id": "env-1",
     "runtime": "apple-container",
     "user": "1000:1000",
-    "dir": "/home/agent",
+    "dir": "/home/workharbor",
     "env": [
-      "HOME=/home/agent",
-      "CLAUDE_CONFIG_DIR=/home/agent/.claude",
+      "HOME=/home/workharbor",
+      "CLAUDE_CONFIG_DIR=/home/workharbor/.claude",
       "HTTPS_PROXY=http://192.168.64.3:3128"
     ],
     "cmd": [

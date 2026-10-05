@@ -37,7 +37,7 @@ const MediaAnalysisMaxCPU = 50.0
 const DefaultPrefix = "/opt/whr"
 
 // WhrUser is the standard user workharbor runs as.
-const WhrUser = "whr"
+const WhrUser = "workharbor"
 
 // DefaultBrewfile is the manual's Brewfile (step 5): the whole host software.
 const DefaultBrewfile = `brew "container"
@@ -143,7 +143,7 @@ func hostSteps(d Deps) []Check {
 	}
 	return []Check{
 		{
-			Name: "whr-user", Phase: PhaseHost, Step: 2, Title: "the standard user whr (manual step 2)",
+			Name: "whr-user", Phase: PhaseHost, Step: 2, Title: "the standard user workharbor (manual step 2)",
 			Run: func(ctx context.Context) (Status, string) {
 				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
 					if st, msg, ok := notHere(err); ok {

@@ -90,7 +90,7 @@ run wrapper git
 git config --global alias.hi '!echo hello'
 echo "human alias: $(git hi)"
 `
-	out, err := exec.CommandContext(ctx, "container", "run", "--rm", "--user", "1000:1000", "-e", "HOME=/home/whr", tag, "sh", "-c", script).Output() //nolint:gosec // tag and script are constants of this test
+	out, err := exec.CommandContext(ctx, "container", "run", "--rm", "--user", "1000:1000", "-e", "HOME=/home/workharbor", tag, "sh", "-c", script).Output() //nolint:gosec // tag and script are constants of this test
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}

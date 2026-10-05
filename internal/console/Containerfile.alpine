@@ -9,8 +9,8 @@ FROM docker.io/library/alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda91
 RUN apk add --no-cache \
         git zsh fish jq curl ripgrep tmux vim make less util-linux util-linux-misc procps-ng findutils ca-certificates \
         openssh-server openssh-client-default openssh-keygen \
-    && adduser -D -u 1000 -s /bin/zsh whr \
-    && sed -i 's/^whr:!:/whr:*:/' /etc/shadow
+    && adduser -D -u 1000 -s /bin/zsh workharbor \
+    && sed -i 's/^workharbor:!:/workharbor:*:/' /etc/shadow
 COPY whr-git /usr/local/bin/git
 RUN chmod 0755 /usr/local/bin/git
 # The console's sshd (issue #32): started by the supervisor as the console user, with

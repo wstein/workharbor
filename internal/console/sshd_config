@@ -8,7 +8,7 @@
 # else: no password, no authorized_keys, no keyboard-interactive. The public key
 # of the authority and the principal file are written by whr-sshd on each start.
 
-HostKey /home/whr/.whr-sshd/host_ed25519
+HostKey /home/workharbor/.whr-sshd/host_ed25519
 PidFile none
 
 AuthenticationMethods publickey
@@ -26,7 +26,7 @@ AuthorizedPrincipalsFile /tmp/whr-ssh-principals
 # own mode (1777) StrictModes would refuse; sshd runs as the console user, who owns
 # them.
 StrictModes no
-AllowUsers whr
+AllowUsers workharbor
 
 # A certificate carries permit-pty, and permit-port-forwarding when the client asked
 # for it; the server allows what a certificate grants and nothing it does not.

@@ -29,11 +29,11 @@ These are the design's guarantees. `whr serve` and the commands exist but have n
 - **Review before you approve.** "Ready to push?" shows the commits and the diff: approve only what you have read.
 - **Treat issue text from strangers as untrusted.** workharbor holds a run on an issue from an author who is not an owner, member or collaborator, and asks you first.
 - **Keep workharbor off the open network**: Tailscale or your router's VPN, never a port forward to workharbor itself ([host setup, step 7](host-setup.md#7-reach-it-from-your-phone)).
-- **Encrypt an external SSD** on its own, because FileVault does not cover it, and **keep `whr`'s session logged in** (no automatic log-out), because the supervisor and the container system run in it ([host setup, step 3](host-setup.md#3-filevault-and-restarts)).
+- **Encrypt an external SSD** on its own, because FileVault does not cover it, and **keep `workharbor`'s session logged in** (no automatic log-out), because the supervisor and the container system run in it ([host setup, step 3](host-setup.md#3-filevault-and-restarts)).
 
 ## Who can reach it
 
-- **The JSON API is on a host-only unix socket**, `api.sock` in `whr`'s state directory (directory `0700`, socket `0600`), reached only by the CLI as the `whr` user. **The forwarder carries the web UI alone**, and the forwarded listener serves no `/v1` route, so a leaked API token cannot answer a review, allow an egress host or enrol a passkey from the phone network. The web UI's own address must be a loopback one: `whr serve` refuses any other (D29, [design §7.5](../design/security.md#7-security)). *Implemented and tested: the server refuses to start if the socket is reachable by others. The forwarder and the `pf` rules are not measured yet ({{< status unverified >}}, issue #69).*
+- **The JSON API is on a host-only unix socket**, `api.sock` in `workharbor`'s state directory (directory `0700`, socket `0600`), reached only by the CLI as the `workharbor` user. **The forwarder carries the web UI alone**, and the forwarded listener serves no `/v1` route, so a leaked API token cannot answer a review, allow an egress host or enrol a passkey from the phone network. The web UI's own address must be a loopback one: `whr serve` refuses any other (D29, [design §7.5](../design/security.md#7-security)). *Implemented and tested: the server refuses to start if the socket is reachable by others. The forwarder and the `pf` rules are not measured yet ({{< status unverified >}}, issue #69).*
 - **The web UI listens on loopback only.** No guest reaches a loopback listener ({{< status verified >}} in [the host-reachability spike](../spikes/host-reachability.md), issue #69).
 
 ## Passkeys
@@ -55,7 +55,7 @@ A preview shows agent-written code in your browser ([design D33](../design/decis
 
 ## If your phone is lost
 
-1. On the host, as `whr`: `whr passkey ls`, then `whr passkey rm <id>`. This revokes the passkey and ends the web sessions it started.
+1. On the host, as `workharbor`: `whr passkey ls`, then `whr passkey rm <id>`. This revokes the passkey and ends the web sessions it started.
 2. If you hold another passkey, sign in with it and open `/devices` to check that no other session is listed, and sign out any that is.
 3. Enrol a new passkey on the host with `whr passkey add`; recovery is always you at the host. **If you revoked the last passkey, the web UI accepts the API token again** until you enrol a new one, so do step 3 at once and, if the token may be exposed, replace it.
 4. If the phone also held an agent's subscription login, revoke it at the vendor ([vendor terms](vendor-terms.md)); `whr kill-all` cannot do that.

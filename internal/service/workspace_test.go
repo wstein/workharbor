@@ -121,7 +121,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		NewID:   func() domain.ID { return r.id("d") },
 		Spec: func(domain.Task, domain.Run) agent.StartSpec {
 			s := spec()
-			s.Env = []string{"HOME=/home/agent"}
+			s.Env = []string{"HOME=/home/workharbor"}
 			if r.failAg {
 				s.Auth = "no-such-auth"
 			}
@@ -143,7 +143,7 @@ func newWsRigBlocking(t *testing.T, block bool) *wsRig {
 		Spec: func(w domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
 			if r.home {
-				spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-" + string(w.ID), Target: "/home/agent"})
+				spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-" + string(w.ID), Target: "/home/workharbor"})
 			}
 			if r.egress {
 				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"api.anthropic.com"}}
@@ -707,7 +707,7 @@ func TestAnAgentsToolsWriteTheirOutputToTheBuildVolumeNotTheCheckout(t *testing.
 		t.Fatalf("%d agents started", len(r.agent.Specs))
 	}
 	env := r.agent.Specs[0].Env
-	for _, want := range []string{"CARGO_TARGET_DIR=/var/whr/build/docs/cargo-target", "UV_PROJECT_ENVIRONMENT=/var/whr/build/docs/venv", "HOME=/home/agent"} {
+	for _, want := range []string{"CARGO_TARGET_DIR=/var/whr/build/docs/cargo-target", "UV_PROJECT_ENVIRONMENT=/var/whr/build/docs/venv", "HOME=/home/workharbor"} {
 		if !slices.Contains(env, want) {
 			t.Errorf("the agent's environment lacks %s: %v", want, env)
 		}

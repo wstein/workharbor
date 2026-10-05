@@ -19,7 +19,7 @@ func (r *wsRig) consoles() *Consoles {
 	return NewConsoles(r.svc, ConsoleConfig{
 		Spec: func([]domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
-			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-console-home", Target: "/home/whr"})
+			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-console-home", Target: "/home/workharbor"})
 			if r.egress {
 				spec.Egress = &runtime.Egress{Image: spec.Image, Proxy: r.rt.ProxyBinary, Allow: []string{"github.com"}}
 			}
@@ -189,7 +189,7 @@ func TestAShellStartsInTheWorkspaceWithTheClientsTerminalAndIsAudited(t *testing
 	if !reflect.DeepEqual(q.Cmd, []string{"/bin/zsh", "-l"}) || q.Dir != "/workspaces/ws/docs-ws" || q.Cols != 132 || q.Rows != 43 {
 		t.Errorf("request = %+v", q)
 	}
-	for _, want := range []string{"HOME=/home/whr", "USER=whr", "TERM=xterm-kitty", "WHR_CONSOLE=1"} {
+	for _, want := range []string{"HOME=/home/workharbor", "USER=workharbor", "TERM=xterm-kitty", "WHR_CONSOLE=1"} {
 		if !slices.Contains(q.Env, want) {
 			t.Errorf("env lacks %s: %v", want, q.Env)
 		}

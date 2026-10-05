@@ -42,7 +42,7 @@ func (r *wsRig) sshConsoles() (*Consoles, *sshca.CA) {
 	c := NewConsoles(r.svc, ConsoleConfig{
 		Spec: func([]domain.Workspace) runtime.Spec {
 			spec := r.rt.NewSpec()
-			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-console-home", Target: "/home/whr"})
+			spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-console-home", Target: "/home/workharbor"})
 			return spec
 		},
 		Prepare: r.rt.Prepare,
@@ -104,7 +104,7 @@ func TestACertificateIsIssuedForTheClientsKeyAndAudited(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Principal != "whr" || got.HostKey != testHostKey {
+	if got.Principal != "workharbor" || got.HostKey != testHostKey {
 		t.Errorf("got %+v", got)
 	}
 	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(got.Certificate))
@@ -112,7 +112,7 @@ func TestACertificateIsIssuedForTheClientsKeyAndAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	cert, ok := parsed.(*ssh.Certificate)
-	if !ok || cert.CertType != ssh.UserCert || len(cert.ValidPrincipals) != 1 || cert.ValidPrincipals[0] != "whr" {
+	if !ok || cert.CertType != ssh.UserCert || len(cert.ValidPrincipals) != 1 || cert.ValidPrincipals[0] != "workharbor" {
 		t.Fatalf("certificate = %#v", parsed)
 	}
 	if caKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ca.PublicKey())); err != nil || string(cert.SignatureKey.Marshal()) != string(caKey.Marshal()) {
@@ -202,7 +202,7 @@ func TestAnSSHConnectionCarriesBytesBothWaysAndEndsOnClose(t *testing.T) {
 	// The launcher got the authority's public key and nothing secret.
 	execs := r.fake.Execs()
 	last := execs[len(execs)-1]
-	if !slices.Contains(last.Req.Env, "WHR_SSH_CA="+ca.PublicKey()) || !slices.Contains(last.Req.Env, "HOME=/home/whr") {
+	if !slices.Contains(last.Req.Env, "WHR_SSH_CA="+ca.PublicKey()) || !slices.Contains(last.Req.Env, "HOME=/home/workharbor") {
 		t.Errorf("env = %v", last.Req.Env)
 	}
 	for _, e := range last.Req.Env {

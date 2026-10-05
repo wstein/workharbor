@@ -144,7 +144,7 @@ func TestTheAlpineConsoleUserIsNotLockedForSSHD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cf), "s/^whr:!:/whr:*:/") {
+	if !strings.Contains(string(cf), "s/^workharbor:!:/workharbor:*:/") {
 		t.Error("the account would be locked: sshd without PAM refuses it")
 	}
 }

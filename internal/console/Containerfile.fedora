@@ -8,7 +8,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
         git-core zsh fish jq curl ripgrep tmux vim-minimal make less util-linux util-linux-script procps-ng findutils ca-certificates openssh-server openssh-clients \
     && dnf clean all \
     && rm -rf /var/cache/dnf /var/log/dnf* \
-    && useradd -u 1000 -m -s /bin/zsh whr
+    && useradd -u 1000 -m -s /bin/zsh workharbor
 COPY whr-git /usr/local/bin/git
 RUN chmod 0755 /usr/local/bin/git
 # The console's sshd (issue #32): started by the supervisor as the console user, with

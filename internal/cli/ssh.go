@@ -218,7 +218,7 @@ func sshOptions(f sshFiles, proxy string) []string {
 		"-o", "ForwardAgent=no",
 		"-o", "IdentityAgent=none",
 		"-o", "ServerAliveInterval=30",
-		"-l", "whr",
+		"-l", "workharbor",
 	}
 }
 
@@ -282,7 +282,7 @@ func newSSH(s *state) *cobra.Command {
 		Use:   "ssh [-- command...]",
 		Short: "Open an SSH session in the console, with a certificate that lasts minutes",
 		Long: "SSH (issue #32) lands in the console, never on the host. Your key stays on this machine; each connection gets " +
-			"a certificate for it from the supervisor, valid for minutes and for the user whr only, and the console's host " +
+			"a certificate for it from the supervisor, valid for minutes and for the user workharbor only, and the console's host " +
 			"key is pinned from the supervisor, so nothing is trusted on first sight. The console listens on no port: ssh " +
 			"is carried over the API, with this command as its ProxyCommand. Port forwarding, which the editors' remote " +
 			"modes need, is off unless you pass --forward. --config prints a block for ~/.ssh/config, so that VS Code and " +
@@ -364,7 +364,7 @@ func sshConfig(s *state, f sshFiles, forward bool) error {
 		"Match host " + sshHost + " exec \"" + strings.ReplaceAll(refresh, "%", "%%") + "\"",
 		"Host " + sshHost,
 		"    HostName " + sshHost,
-		"    User whr",
+		"    User workharbor",
 		"    ProxyCommand " + pc,
 		"    IdentityFile " + paths[0],
 		"    CertificateFile " + paths[1],

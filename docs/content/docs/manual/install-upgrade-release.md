@@ -9,7 +9,7 @@ For the operator: the person who installs `whr` on the Mac mini and cuts release
 
 ## Where `whr` comes from
 
-The supervisor always runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34). The installer puts three files in a prefix that the `whr` user cannot write, so nothing running as `whr`, an agent's escape included, can replace the binary:
+The supervisor always runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34). The installer puts three files in a prefix that the `workharbor` user cannot write, so nothing running as `workharbor`, an agent's escape included, can replace the binary:
 
 | File | Role |
 | --- | --- |
@@ -19,7 +19,7 @@ The supervisor always runs an installed binary built by CI from a signed tag on 
 
 ## Before `v0.1.0`: a draft release
 
-Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its draft is never published. Install it as the **administrator**, not as `whr`:
+Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its draft is never published. Install it as the **administrator**, not as `workharbor`:
 
 ```bash
 make install-release VERSION=v0.1.0-alpha.1            # prefix /opt/whr
@@ -49,7 +49,7 @@ gh attestation verify <file> --repo wstein/workharbor --bundle whr_$tag.intoto.j
 
 Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-release` does both. The exact `gh` flags (`--source-ref`, `--source-digest`, `--deny-self-hosted-runners` included), the offline check with `--bundle` and whether OpenSSF Scorecard counts the attached bundle as a signature are {{< status unverified >}} until a real draft release has been checked (#180).
 
-Then, as `whr`, build the tool store with the guest launcher (the script prints the exact command):
+Then, as `workharbor`, build the tool store with the guest launcher (the script prints the exact command):
 
 ```bash
 /opt/whr/bin/whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64
@@ -146,7 +146,7 @@ The formula has `depends_on arch: :arm64`, so on an Intel Mac Homebrew stops wit
 
 ## Back up, upgrade and restore
 
-One procedure serves all three: stop, copy or replace, start. Run it as the `whr` user, from its desktop session ([Prepare the Mac mini](host-setup.md), step 2). The paths below are the defaults; where the configuration sets `state_dir` or other roots, use those.
+One procedure serves all three: stop, copy or replace, start. Run it as the `workharbor` user, from its desktop session ([Prepare the Mac mini](host-setup.md), step 2). The paths below are the defaults; where the configuration sets `state_dir` or other roots, use those.
 
 ### What to copy
 

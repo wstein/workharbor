@@ -26,7 +26,7 @@ const (
 )
 
 func certReply() string {
-	return ok(`{"certificate":"` + sshTestCert + `","host_key":"` + sshTestHost + `","principal":"whr","expires_at":"2026-10-02T12:10:00Z"}`)
+	return ok(`{"certificate":"` + sshTestCert + `","host_key":"` + sshTestHost + `","principal":"workharbor","expires_at":"2026-10-02T12:10:00Z"}`)
 }
 
 // runSSHCLI runs whr with a fake ssh and a private state directory.
@@ -61,7 +61,7 @@ func TestSSHConfigPrintsABlockAndAsksNothing(t *testing.T) {
 		t.Fatalf("code %d: %s", code, errOut)
 	}
 	for _, want := range []string{
-		"Host whr-console", "User whr", "ProxyCommand '/opt/whr bin/whr' ssh --proxy --forward",
+		"Host whr-console", "User workharbor", "ProxyCommand '/opt/whr bin/whr' ssh --proxy --forward",
 		"IdentityFile " + filepath.Join(dir, "id_ed25519"), "CertificateFile " + filepath.Join(dir, "id_ed25519-cert.pub"),
 		"UserKnownHostsFile " + filepath.Join(dir, "known_hosts"), "StrictHostKeyChecking yes", "IdentitiesOnly yes", "ForwardAgent no", "IdentityAgent none",
 		`Match host whr-console exec "'/opt/whr bin/whr' ssh --refresh --forward"`,
@@ -111,7 +111,7 @@ func TestSSHGetsACertificateForAKeyThatStaysHereAndRunsSSHWithOnlyThat(t *testin
 	joined := strings.Join(got, " ")
 	for _, want := range []string{
 		"-F /dev/null", "IdentitiesOnly=yes", "-i " + filepath.Join(dir, "id_ed25519"), "CertificateFile=" + filepath.Join(dir, "id_ed25519-cert.pub"),
-		"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "PasswordAuthentication=no", "ForwardAgent=no", "IdentityAgent=none", "-l whr",
+		"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "PasswordAuthentication=no", "ForwardAgent=no", "IdentityAgent=none", "-l workharbor",
 		"ProxyCommand='/opt/whr bin/whr' ssh --proxy",
 	} {
 		if !strings.Contains(joined, want) {
@@ -154,9 +154,9 @@ func TestSSHRefusesACertificateReplyThatIsNotOneLineOfAKey(t *testing.T) {
 	s := newStub(t)
 	s.reply("GET /v1/console", 200, ok(`{"env_id":"e","read_write":[],"reused":true}`))
 	for name, reply := range map[string]string{
-		"two lines in the certificate": ok(`{"certificate":"ssh-ed25519-cert-v01@openssh.com A\nProxyCommand evil","host_key":"` + sshTestHost + `","principal":"whr","expires_at":"x"}`),
-		"a host key of another type":   ok(`{"certificate":"` + sshTestCert + `","host_key":"ssh-rsa AAAA","principal":"whr","expires_at":"x"}`),
-		"no certificate":               ok(`{"certificate":"","host_key":"` + sshTestHost + `","principal":"whr","expires_at":"x"}`),
+		"two lines in the certificate": ok(`{"certificate":"ssh-ed25519-cert-v01@openssh.com A\nProxyCommand evil","host_key":"` + sshTestHost + `","principal":"workharbor","expires_at":"x"}`),
+		"a host key of another type":   ok(`{"certificate":"` + sshTestCert + `","host_key":"ssh-rsa AAAA","principal":"workharbor","expires_at":"x"}`),
+		"no certificate":               ok(`{"certificate":"","host_key":"` + sshTestHost + `","principal":"workharbor","expires_at":"x"}`),
 	} {
 		s.reply("POST /v1/console/ssh/certificate", 200, reply)
 		dir := filepath.Join(t.TempDir(), "ssh")
@@ -312,12 +312,12 @@ func (s *stub) signingStub(t *testing.T, ttl time.Duration) {
 			t.Error(err)
 			return
 		}
-		line, _, err := ca.Sign(pub, sshca.Request{Principal: "whr", KeyID: "t", TTL: ttl, Forwarding: req.Forwarding})
+		line, _, err := ca.Sign(pub, sshca.Request{Principal: "workharbor", KeyID: "t", TTL: ttl, Forwarding: req.Forwarding})
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		out, _ := json.Marshal(map[string]any{"certificate": strings.TrimSpace(string(line)), "host_key": sshTestHost, "principal": "whr", "expires_at": "x"})
+		out, _ := json.Marshal(map[string]any{"certificate": strings.TrimSpace(string(line)), "host_key": sshTestHost, "principal": "workharbor", "expires_at": "x"})
 		_, _ = io.WriteString(w, ok(string(out)))
 	}
 	s.mu.Unlock()

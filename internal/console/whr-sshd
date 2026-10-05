@@ -16,7 +16,7 @@
 set -eu
 
 umask 077
-home=${HOME:-/home/whr}
+home=${HOME:-/home/workharbor}
 dir=$home/.whr-sshd
 
 # put FILE writes standard input to FILE through a temporary file and a rename, so
@@ -64,7 +64,7 @@ esac
 
 ensure_key
 printf '%s\n' "$WHR_SSH_CA" | put /tmp/whr-ssh-ca.pub
-printf 'whr\n' | put /tmp/whr-ssh-principals
+printf 'workharbor\n' | put /tmp/whr-ssh-principals
 
 # The proxy variables, for the login shells sshd starts (see /etc/profile.d and
 # the zsh start file): only these names, quoted.

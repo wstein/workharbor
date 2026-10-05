@@ -138,7 +138,7 @@ func shellRig(t *testing.T) *wsRig {
 	t.Helper()
 	r := newWsRig(t)
 	r.egress = true
-	r.ws.cfg.Shell = &ShellConfig{Bin: "/tools/profiles/p/bin", Dir: "/home/agent", Env: []string{"HOME=/home/agent", "CLAUDE_CONFIG_DIR=/home/agent/.claude"}}
+	r.ws.cfg.Shell = &ShellConfig{Bin: "/tools/profiles/p/bin", Dir: "/home/workharbor", Env: []string{"HOME=/home/workharbor", "CLAUDE_CONFIG_DIR=/home/workharbor/.claude"}}
 	return r
 }
 
@@ -150,10 +150,10 @@ func TestTheShellTargetIsTheEnvironmentAndTheVariablesOfARun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.EnvID != string(w.EnvID) || got.Dir != "/home/agent" || got.Runtime != r.rt.Adapter.Name() {
+	if got.EnvID != string(w.EnvID) || got.Dir != "/home/workharbor" || got.Runtime != r.rt.Adapter.Name() {
 		t.Errorf("target = %+v", got)
 	}
-	for _, want := range []string{"HOME=/home/agent", "CLAUDE_CONFIG_DIR=/home/agent/.claude"} {
+	for _, want := range []string{"HOME=/home/workharbor", "CLAUDE_CONFIG_DIR=/home/workharbor/.claude"} {
 		if !slices.Contains(got.Env, want) {
 			t.Errorf("env %v lacks %s", got.Env, want)
 		}
@@ -217,7 +217,7 @@ func TestTheShellNeedsAConfigurationAndAWorkspace(t *testing.T) {
 	if _, err := shellTargetForTest(bg, r.ws, "docs-ws"); !errors.As(err, &ce) {
 		t.Errorf("without a shell configuration: %v, want a conflict", err)
 	}
-	r.ws.cfg.Shell = &ShellConfig{Bin: "/tools/bin", Dir: "/home/agent"}
+	r.ws.cfg.Shell = &ShellConfig{Bin: "/tools/bin", Dir: "/home/workharbor"}
 	var nf *domain.NotFoundError
 	if _, err := shellTargetForTest(bg, r.ws, "nope"); !errors.As(err, &nf) {
 		t.Errorf("an unknown workspace: %v, want not found", err)
@@ -272,7 +272,7 @@ func runShellScript(t *testing.T, name string, onlyStub bool) string {
 			t.Fatal(err)
 		}
 	}
-	path = hostile + ":.:/home/agent/bin::" + path
+	path = hostile + ":.:/home/workharbor/bin::" + path
 	script := strings.ReplaceAll(shellScript, "/bin/bash", filepath.Join(dir, "bash"))
 	script = strings.ReplaceAll(script, "exec /bin/sh -i", "exec "+filepath.Join(dir, "sh")+" -i")
 	cmd := exec.CommandContext(t.Context(), "/bin/sh", "-c", script, "whr-shell", "/tools/profiles/p/bin") //nolint:gosec // absolute image paths mapped to fixture paths
@@ -293,7 +293,7 @@ func runShellScript(t *testing.T, name string, onlyStub bool) string {
 func TestShellRefusesUnsafeToolDirectories(t *testing.T) {
 	t.Parallel()
 	r := shellRig(t)
-	for _, bin := range []string{"", "bin", "/home/agent/bin", "/tools/../home/agent", "/tools/bin:", "/tools/bin::/bin", "/tools/bin\n"} {
+	for _, bin := range []string{"", "bin", "/home/workharbor/bin", "/tools/../home/workharbor", "/tools/bin:", "/tools/bin::/bin", "/tools/bin\n"} {
 		r.ws.cfg.Shell.Bin = bin
 		target, err := shellTargetForTest(bg, r.ws, "unused")
 		var conflict *domain.ConflictError

@@ -41,7 +41,7 @@ const Owner = "whr"
 
 // GuestHome is the agent's home in the environment: a volume of its own, where
 // the human signs in (D40).
-const GuestHome = "/home/agent"
+const GuestHome = "/home/workharbor"
 
 // AgentConfigDir is the agent CLI's auth directory in the environment
 // (CLAUDE_CONFIG_DIR): a run and the sign-in shell both use it.
@@ -500,7 +500,7 @@ func Topics(git *hostgit.Git, c *config.Config, dir string) service.TopicsFunc {
 // GuestConsoleHome is the console user's home: a volume of its own, kept across
 // consoles, with the human's dotfiles and shell history. It holds no credential
 // of workharbor's and none of the agents' (D43).
-const GuestConsoleHome = "/home/whr"
+const GuestConsoleHome = "/home/workharbor"
 
 // WorkspacesMount is where the workspace roots are mounted in the console.
 const WorkspacesMount = "/workspaces"

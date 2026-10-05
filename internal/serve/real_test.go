@@ -41,6 +41,9 @@ func TestTheSpecOfAnEnvironmentIsHardenedAndPassesPrepare(t *testing.T) {
 	}
 	opts := SpecOptions{Owner: Owner, Env: config.Environment{Image: "whr.invalid/whr-base/fedora:abc123abc123"}.Resolved(), ToolStore: store, Proxy: proxy}
 	spec := opts.For(domain.Workspace{ID: "w1"})
+	if spec.Mounts[1].Target != "/home/workharbor" {
+		t.Fatalf("managed guest home mount = %q", spec.Mounts[1].Target)
+	}
 	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountBind, Source: ws, Target: "/ws"}) // what the service adds
 	if err := spec.Validate(); err != nil {
 		t.Fatalf("the spec is not valid: %v", err)
@@ -372,7 +375,7 @@ func TestTheConsoleSpecIsHardenedReadOnlyByDefaultAndHasNoSecrets(t *testing.T) 
 			t.Errorf("a workspace root is writable by default: %+v", m)
 		}
 	}
-	want := []string{"/workspaces/ws", "/workspaces/ws-2", GuestConsoleHome}
+	want := []string{"/workspaces/ws", "/workspaces/ws-2", "/home/workharbor"}
 	if strings.Join(targets, " ") != strings.Join(want, " ") {
 		t.Errorf("targets = %v, want %v (two roots with one base name must not share a target)", targets, want)
 	}

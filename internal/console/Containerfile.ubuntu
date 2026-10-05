@@ -9,7 +9,7 @@ RUN apt-get update \
         git zsh fish jq curl ripgrep tmux vim-tiny make less util-linux procps ca-certificates openssh-server openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && (id ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true) \
-    && useradd -u 1000 -m -s /bin/zsh whr
+    && useradd -u 1000 -m -s /bin/zsh workharbor
 COPY whr-git /usr/local/bin/git
 RUN chmod 0755 /usr/local/bin/git
 # The console's sshd (issue #32): started by the supervisor as the console user, with

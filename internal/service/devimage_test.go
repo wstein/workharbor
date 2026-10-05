@@ -144,7 +144,7 @@ func TestPostCreateRunsOnceBeforeTheAgent(t *testing.T) {
 		if q.Dir != a.Worktree {
 			t.Errorf("post-create ran in %q, want the agent's worktree %q", q.Dir, a.Worktree)
 		}
-		if !slices.Contains(q.Env, "HOME=/home/agent") {
+		if !slices.Contains(q.Env, "HOME=/home/workharbor") {
 			t.Errorf("post-create has not the agent's environment: %v", q.Env)
 		}
 	}

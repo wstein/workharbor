@@ -59,15 +59,36 @@ func steps(t *testing.T, d Deps) map[string]Check {
 }
 
 func hostDeps(r Runner) Deps {
-	return Deps{ConfigPath: "/Users/whr/.config/whr/config.json", Home: "/Users/whr", GOOS: "darwin", Runner: r, User: "werner", UID: 501, Prefix: "/nonexistent/opt/whr"}
+	return Deps{ConfigPath: "/Users/workharbor/.config/whr/config.json", Home: "/Users/workharbor", GOOS: "darwin", Runner: r, User: "werner", UID: 501, Prefix: "/nonexistent/opt/whr"}
 }
 
 func status(c Check) (Status, string) { return c.Run(context.Background()) }
 
+func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, account, want string
+	}{
+		{"default", "", "workharbor"},
+		{"existing account", "whr", "whr"},
+		{"custom account", "operator", "operator"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := hostDeps(scripted{
+				"dscl . -read /Users/" + tc.want + " UniqueID":        "UniqueID: 502",
+				"dseditgroup -o checkmember -m " + tc.want + " admin": "no " + tc.want + " is NOT a member of admin",
+			})
+			d.Account = tc.account
+			if got, detail := status(steps(t, d)["whr-user"]); got != OK {
+				t.Fatalf("account %q: %s %q", tc.want, got, detail)
+			}
+		})
+	}
+}
+
 func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	good := scripted{
-		"dscl . -read /Users/whr UniqueID":        "UniqueID: 502",
-		"dseditgroup -o checkmember -m whr admin": "no whr is NOT a member of admin",
+		"dscl . -read /Users/workharbor UniqueID":        "UniqueID: 502",
+		"dseditgroup -o checkmember -m workharbor admin": "no workharbor is NOT a member of admin",
 		"pmset -g": " sleep                0\n disksleep            0\n autorestart          1\n womp                 1\n powernap             0\n",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is enabled. (State = 1)",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Stealth mode enabled",
@@ -87,8 +108,8 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 
 	// each way to be wrong is a failure that says what is wrong
 	bad := scripted{
-		"dscl . -read /Users/whr UniqueID":        "UniqueID: 502",
-		"dseditgroup -o checkmember -m whr admin": "yes whr is a member of admin",
+		"dscl . -read /Users/workharbor UniqueID":        "UniqueID: 502",
+		"dseditgroup -o checkmember -m workharbor admin": "yes workharbor is a member of admin",
 		"pmset -g":        " sleep 10\n disksleep 10\n autorestart 0\n powernap 1\n",
 		"fdesetup status": "FileVault is Off.",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is disabled. (State = 0)",
@@ -199,7 +220,7 @@ func TestEveryFixIsArgvAndRootOwnedFilesGoThroughInstall(t *testing.T) {
 
 func TestSecretsAreGeneratedOrTypedAndWrittenPrivatelyWithoutOverwriting(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "whr")
-	d := Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "whr", UID: 502}
+	d := Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502}
 	st := steps(t, d)
 	ctx := context.Background()
 
@@ -285,7 +306,7 @@ func TestSecretsAreGeneratedOrTypedAndWrittenPrivatelyWithoutOverwriting(t *test
 func TestTheConfigurationIsWrittenInTwoStepsWithoutADropOfAnythingUnknown(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".config", "whr")
-	d := Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: home, GOOS: "darwin", Runner: scripted{}, User: "whr", UID: 502}
+	d := Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: home, GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502}
 	ctx := context.Background()
 	st := steps(t, d)
 	must := func(err error) {
@@ -510,7 +531,7 @@ func onDisk(dir, mount string) (string, string) {
 func TestMediaAnalysisFailsOnlyOnMeasuredCPU(t *testing.T) {
 	d := hostDeps(nil)
 	d.User = WhrUser
-	cache := "du -sk /Users/whr/Library/Caches/com.apple.mediaanalysisd"
+	cache := "du -sk /Users/workharbor/Library/Caches/com.apple.mediaanalysisd"
 	check := func(r scripted) (Status, string) {
 		d.Runner = r
 		return status(steps(t, d)["media-analysis"])
@@ -532,7 +553,7 @@ func TestMediaAnalysisFailsOnlyOnMeasuredCPU(t *testing.T) {
 	}
 	// run as another account, the whr user's cache is not read
 	d.User = "werner"
-	if st, detail := check(scripted{ps: " whr 3.0 0:10.00 " + bin + "\n", cache: "2048\tx"}); st != OK || strings.Contains(detail, "2 MiB") || !strings.Contains(detail, "run whr doctor as whr") {
+	if st, detail := check(scripted{ps: " whr 3.0 0:10.00 " + bin + "\n", cache: "2048\tx"}); st != OK || strings.Contains(detail, "2 MiB") || !strings.Contains(detail, "run whr doctor as workharbor") {
 		t.Errorf("another account: %s %q", st, detail)
 	}
 	d.User = WhrUser
@@ -672,7 +693,7 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		st := steps(t, hostDeps(r))
 		for _, name := range names {
 			got, detail := status(st[name])
-			if got != NotVerified || !strings.Contains(detail, "whr's own desktop session (Screen Sharing)") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
+			if got != NotVerified || !strings.Contains(detail, "workharbor's own desktop session (Screen Sharing)") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
 				t.Errorf("%s over %s = %s %q", name, session, got, detail)
 			}
 		}
@@ -725,7 +746,7 @@ func TestKernelCheckSeesAMissingKernelOnceTheSystemRuns(t *testing.T) {
 func TestDesktopOnlyDetailDependsOnTheTargetUser(t *testing.T) {
 	for _, c := range []struct{ user, account, want, not string }{
 		{"werner", "werner", "this desktop session", "Screen Sharing"},
-		{"werner", "", "whr's own desktop session (Screen Sharing)", "this desktop session"},
+		{"werner", "", "workharbor's own desktop session (Screen Sharing)", "this desktop session"},
 		{"werner", "other", "other's own desktop session", "this desktop session"},
 	} {
 		d := hostDeps(scripted{"launchctl managername": "Background"})
@@ -741,9 +762,9 @@ func TestDesktopOnlyDetailDependsOnTheTargetUser(t *testing.T) {
 func TestDesktopGuideDependsOnTheTargetUser(t *testing.T) {
 	for _, c := range []struct{ user, account, want, not string }{
 		{"werner", "werner", "this desktop session", "Screen Sharing"},
-		{"werner", "", "whr's own desktop session (Screen Sharing)", "this desktop session"},
+		{"werner", "", "workharbor's own desktop session (Screen Sharing)", "this desktop session"},
 		{"werner", "other", "other's own desktop session", "this desktop session"},
-		{"whr", "", "this desktop session", "Screen Sharing"},
+		{"workharbor", "", "this desktop session", "Screen Sharing"},
 	} {
 		d := hostDeps(scripted{})
 		d.User, d.Account = c.user, c.account

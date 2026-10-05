@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	adminKey   = "dseditgroup -o checkmember -m whr admin"
+	adminKey   = "dseditgroup -o checkmember -m workharbor admin"
 	groupKey   = "dscl . -read /Groups/admin GroupMembership"
-	isAdmin    = "yes whr is a member of admin"
-	notAdmin   = "no whr is NOT a member of admin"
-	oneOtherAd = "GroupMembership: root werner whr\n"
+	isAdmin    = "yes workharbor is a member of admin"
+	notAdmin   = "no workharbor is NOT a member of admin"
+	oneOtherAd = "GroupMembership: root werner workharbor\n"
 )
 
 // accountDeps writes a configuration with the given keys and returns deps over it.
@@ -114,8 +114,8 @@ func TestDropAdminRefusesWhenNoOtherAdministratorExists(t *testing.T) {
 		t.Errorf("another administrator exists: %s %q", got, detail)
 	}
 	for name, out := range map[string]string{
-		"only root and the account": "GroupMembership: root whr\\n",
-		"only the account":          "GroupMembership: whr\\n",
+		"only root and the account": "GroupMembership: root workharbor\\n",
+		"only the account":          "GroupMembership: workharbor\\n",
 		"unreadable":                "ERR:exit status 1",
 		"unknown format":            "something else",
 	} {
@@ -142,12 +142,12 @@ func TestDropAdminRunsOneDseditgroupAndSudoK(t *testing.T) {
 	if err != nil || len(cmds) != 2 || !cmds[0].Sudo || !cmds[1].Sudo {
 		t.Fatalf("commands = %+v, %v", cmds, err)
 	}
-	if strings.Join(cmds[0].Full(), " ") != "sudo dseditgroup -o edit -d whr -t user admin" || strings.Join(cmds[1].Full(), " ") != "sudo -k" {
+	if strings.Join(cmds[0].Full(), " ") != "sudo dseditgroup -o edit -d workharbor -t user admin" || strings.Join(cmds[1].Full(), " ") != "sudo -k" {
 		t.Errorf("commands = %v, %v", cmds[0].Full(), cmds[1].Full())
 	}
 	// the refusal is checked again after the confirmation
 	for name, d := range map[string]Deps{
-		"lock-out": accountDeps(t, scripted{adminKey: isAdmin, groupKey: "GroupMembership: root whr\n"}, nil),
+		"lock-out": accountDeps(t, scripted{adminKey: isAdmin, groupKey: "GroupMembership: root workharbor\n"}, nil),
 		"shared":   accountDeps(t, scripted{adminKey: isAdmin, groupKey: oneOtherAd}, map[string]any{"account": "shared"}),
 	} {
 		if cmds, err := steps(t, d)["drop-admin"].Fix.Build(t.Context(), nil); err == nil || cmds != nil {
@@ -191,7 +191,7 @@ func TestPrefixIsNeverOwnedByTheConfiguredAccount(t *testing.T) {
 func TestPrefixFixArgv(t *testing.T) {
 	d := hostDeps(scripted{})
 	d.Prefix = "/opt/whr"
-	d.User, d.Account = "whr", "whr"
+	d.User, d.Account = "workharbor", "workharbor"
 	if got := strings.Join(d.prefixInstallArgv(), " "); got != "install -d -o root -g wheel -m 755 /opt/whr" {
 		t.Errorf("same account: %s", got)
 	}
@@ -250,7 +250,7 @@ func TestAccountReviewFindings157(t *testing.T) {
 }
 
 func TestWhrUserIsNotVerifiedWhenTheAdminStatusIsUnreadable(t *testing.T) {
-	d := hostDeps(scripted{"dscl . -read /Users/whr UniqueID": "UniqueID: 502"})
+	d := hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "UniqueID: 502"})
 	if got, detail := status(steps(t, d)["whr-user"]); got != NotVerified {
 		t.Errorf("%s %q", got, detail)
 	}

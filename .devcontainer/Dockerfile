@@ -5,5 +5,5 @@ FROM golang:1.27.1-trixie@sha256:3b77fc618ec235a1ab412de7737f120dd507c57e8d87de4
 
 ENV GOTOOLCHAIN=local
 
-RUN useradd --create-home --uid 1000 --shell /bin/bash agent
-USER agent
+RUN useradd --create-home --uid 1000 --shell /bin/bash workharbor
+USER workharbor

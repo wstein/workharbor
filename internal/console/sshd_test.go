@@ -49,7 +49,7 @@ func TestTheConsolesSSHDTrustsTheAuthorityAndNothingElse(t *testing.T) {
 		"authorizedkeysfile":           "none",
 		"trustedusercakeys":            "/tmp/whr-ssh-ca.pub",
 		"authorizedprincipalsfile":     "/tmp/whr-ssh-principals",
-		"allowusers":                   "whr",
+		"allowusers":                   "workharbor",
 		"strictmodes":                  "no",
 		"allowagentforwarding":         "no",
 		"x11forwarding":                "no",
@@ -59,7 +59,7 @@ func TestTheConsolesSSHDTrustsTheAuthorityAndNothingElse(t *testing.T) {
 		"gatewayports":                 "no",
 		"permituserenvironment":        "no",
 		"permituserrc":                 "no",
-		"hostkey":                      "/home/whr/.whr-sshd/host_ed25519",
+		"hostkey":                      "/home/workharbor/.whr-sshd/host_ed25519",
 		"pidfile":                      "none",
 		"maxauthtries":                 "3",
 		"logingracetime":               "20",
@@ -111,7 +111,7 @@ func TestTheLauncherIsPOSIXShAndRefusesAnythingButAnAuthorityKey(t *testing.T) {
 	}
 }
 
-func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
+func TestAllConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
 	t.Parallel()
 	for _, d := range []baseimage.Distro{baseimage.Fedora, baseimage.Ubuntu, Alpine} {
 		cf, err := Containerfile(d)
@@ -119,6 +119,16 @@ func TestBothConsoleImagesInstallTheSSHServerAndTheFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(cf)
+		account := "useradd -u 1000 -m -s /bin/zsh workharbor"
+		if d == Alpine {
+			account = "adduser -D -u 1000 -s /bin/zsh workharbor"
+			if !strings.Contains(text, "sed -i 's/^workharbor:!:/workharbor:*:/' /etc/shadow") {
+				t.Error("Alpine must allow certificate login without a usable password")
+			}
+		}
+		if !strings.Contains(text, account) {
+			t.Errorf("%s: the Containerfile lacks the UID1000 console account: %q", d, account)
+		}
 		for _, want := range []string{"openssh-server", "COPY whr-sshd /usr/local/bin/whr-sshd", "COPY sshd_config /etc/whr/sshd_config", "/tmp/whr-proxy-vars"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: the Containerfile lacks %q", d, want)

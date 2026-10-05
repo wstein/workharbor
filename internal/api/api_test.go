@@ -296,8 +296,8 @@ func (f *fake) OpenShell(_ context.Context, workspace, _ string) (service.ShellS
 		return service.ShellSession{}, domain.NewConflict(domain.RuleAgentActive, "workspace busy has run r1 (running) of agent a1: finish, stop or fail it before you sign in")
 	}
 	return service.ShellSession{Release: func() {}, Target: service.ShellTarget{
-		EnvID: "env-1", Runtime: "apple-container", User: "1000:1000", Dir: "/home/agent",
-		Env: []string{"HOME=/home/agent", "CLAUDE_CONFIG_DIR=/home/agent/.claude", "HTTPS_PROXY=http://192.168.64.3:3128"},
+		EnvID: "env-1", Runtime: "apple-container", User: "1000:1000", Dir: "/home/workharbor",
+		Env: []string{"HOME=/home/workharbor", "CLAUDE_CONFIG_DIR=/home/workharbor/.claude", "HTTPS_PROXY=http://192.168.64.3:3128"},
 		Cmd: []string{"/bin/sh", "-c", "exec sh -i", "whr-shell", "/tools/profiles/p/bin"},
 	}}, nil
 }

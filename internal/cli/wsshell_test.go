@@ -75,7 +75,7 @@ func wsShellRun(t *testing.T, s *stub, terminal bool, args ...string) (code int,
 	return code, calls, eb.String(), tty
 }
 
-const shellReply = `{"env_id":"whr-abc","runtime":"apple-container","user":"1000:1000","dir":"/home/agent","env":["HOME=/home/agent","CLAUDE_CONFIG_DIR=/home/agent/.claude","HTTPS_PROXY=http://192.168.64.3:3128"],"cmd":["/bin/sh","-c","exec sh -i","whr-shell","/tools/bin"]}`
+const shellReply = `{"env_id":"whr-abc","runtime":"apple-container","user":"1000:1000","dir":"/home/workharbor","env":["HOME=/home/workharbor","CLAUDE_CONFIG_DIR=/home/workharbor/.claude","HTTPS_PROXY=http://192.168.64.3:3128"],"cmd":["/bin/sh","-c","exec sh -i","whr-shell","/tools/bin"]}`
 
 // Nothing typed or written is logged or stored by whr: whr asks the supervisor one
 // question, then starts the runtime's child with the inherited
@@ -88,12 +88,12 @@ func TestWsShellStartsTheRuntimesChildAndTouchesNoTerminalByte(t *testing.T) {
 		t.Fatalf("exit %d, %d exec calls, stderr %q", code, len(calls), errOut)
 	}
 	argv := calls[0].argv
-	for _, want := range []string{"exec", "-t", "-i", "-u", "1000:1000", "-w", "/home/agent", "whr-abc"} {
+	for _, want := range []string{"exec", "-t", "-i", "-u", "1000:1000", "-w", "/home/workharbor", "whr-abc"} {
 		if !slices.Contains(argv, want) {
 			t.Errorf("argv %q lacks %q", argv, want)
 		}
 	}
-	for _, want := range []string{"CLAUDE_CONFIG_DIR=/home/agent/.claude", "HTTPS_PROXY=http://192.168.64.3:3128", "TERM=xterm-256color"} {
+	for _, want := range []string{"CLAUDE_CONFIG_DIR=/home/workharbor/.claude", "HTTPS_PROXY=http://192.168.64.3:3128", "TERM=xterm-256color"} {
 		if !slices.Contains(argv, want) {
 			t.Errorf("argv %q lacks %q", argv, want)
 		}
@@ -150,7 +150,7 @@ func TestWsShellRefusesARuntimeItDoesNotKnow(t *testing.T) {
 func TestWsShellRefusesAUserOrDirThatLooksLikeAnOption(t *testing.T) {
 	for name, reply := range map[string]string{
 		"user": strings.Replace(shellReply, `"1000:1000"`, `"--privileged"`, 1),
-		"dir":  strings.Replace(shellReply, `"/home/agent"`, `"-v"`, 1),
+		"dir":  strings.Replace(shellReply, `"/home/workharbor"`, `"-v"`, 1),
 	} {
 		s := newStub(t)
 		shellReplyHeld(s, reply)

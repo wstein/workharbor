@@ -66,7 +66,7 @@ func (pipeAddr) String() string  { return "console" }
 // TestConsoleSSHLive runs the console's sshd (whr-sshd, from the console image:
 // set WHR_TEST_IMAGE to it) as the console's user in a hardened environment, and
 // connects to it over exec the way the supervisor carries a connection. A
-// certificate of the authority for the principal whr gets a shell as whr; a
+// certificate of the authority for the principal workharbor gets a shell as workharbor; a
 // certificate of another authority, a password and another principal do not;
 // without the forwarding permission nothing is forwarded.
 //
@@ -76,7 +76,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	spec := h.NewSpec()
-	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-sshhome", Target: "/home/whr"})
+	spec.Mounts = append(spec.Mounts, runtime.Mount{Kind: runtime.MountVolume, Source: "whtmp-conformance-sshhome", Target: "/home/workharbor"})
 	id, err := h.Adapter.Provision(ctx, mustPrepare(t, h, spec))
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	hostKeys := make(chan string, 6)
 	for range 6 {
 		go func() {
-			out, _, _ := run([]string{"HOME=/home/whr"}, "/usr/local/bin/whr-sshd", "hostkey")
+			out, _, _ := run([]string{"HOME=/home/workharbor"}, "/usr/local/bin/whr-sshd", "hostkey")
 			hostKeys <- out
 		}()
 	}
@@ -137,10 +137,10 @@ func TestConsoleSSHLive(t *testing.T) {
 			t.Errorf("concurrent first calls disagree: %q and %q", first, k)
 		}
 	}
-	if derived, _, code := run([]string{"HOME=/home/whr"}, "sh", "-c", "ssh-keygen -y -f /home/whr/.whr-sshd/host_ed25519"); code != 0 || !strings.HasPrefix(first, derived) {
+	if derived, _, code := run([]string{"HOME=/home/workharbor"}, "sh", "-c", "ssh-keygen -y -f /home/workharbor/.whr-sshd/host_ed25519"); code != 0 || !strings.HasPrefix(first, derived) {
 		t.Errorf("the public host key %q is not the private key's (%q)", first, derived)
 	}
-	hostLine, errOut, code := run([]string{"HOME=/home/whr"}, "/usr/local/bin/whr-sshd", "hostkey")
+	hostLine, errOut, code := run([]string{"HOME=/home/workharbor"}, "/usr/local/bin/whr-sshd", "hostkey")
 	if code != 0 {
 		t.Fatalf("hostkey: exit %d: %s", code, errOut)
 	}
@@ -148,7 +148,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the host key %q: %v", hostLine, err)
 	}
-	if again, _, _ := run([]string{"HOME=/home/whr"}, "/usr/local/bin/whr-sshd", "hostkey"); again != hostLine {
+	if again, _, _ := run([]string{"HOME=/home/workharbor"}, "/usr/local/bin/whr-sshd", "hostkey"); again != hostLine {
 		t.Error("the host key changed between two calls: the console would lose its identity")
 	}
 
@@ -171,7 +171,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	connect := func(auth ssh.AuthMethod, hk ssh.PublicKey) (*ssh.Client, *execConn, error) {
 		pr, pw := io.Pipe()
 		cctx, ccancel := context.WithCancel(ctx)
-		env := []string{"HOME=/home/whr", "WHR_SSH_CA=" + ca.PublicKey(), "HTTPS_PROXY=http://192.0.2.1:3128", "NO_PROXY=localhost"}
+		env := []string{"HOME=/home/workharbor", "WHR_SSH_CA=" + ca.PublicKey(), "HTTPS_PROXY=http://192.0.2.1:3128", "NO_PROXY=localhost"}
 		st, err := h.Adapter.Exec(cctx, id, runtime.ExecRequest{Cmd: []string{"/usr/local/bin/whr-sshd"}, Env: env, Stdin: pr})
 		if err != nil {
 			ccancel()
@@ -179,7 +179,7 @@ func TestConsoleSSHLive(t *testing.T) {
 		}
 		ec := &execConn{stdin: pw, st: st, cancel: ccancel}
 		sc, chans, reqs, err := ssh.NewClientConn(ec, "whr-console", &ssh.ClientConfig{
-			User: "whr", Auth: []ssh.AuthMethod{auth}, HostKeyCallback: ssh.FixedHostKey(hk), Timeout: 30 * time.Second,
+			User: "workharbor", Auth: []ssh.AuthMethod{auth}, HostKeyCallback: ssh.FixedHostKey(hk), Timeout: 30 * time.Second,
 		})
 		if err != nil {
 			_ = ec.Close()
@@ -188,9 +188,9 @@ func TestConsoleSSHLive(t *testing.T) {
 		return ssh.NewClient(sc, chans, reqs), ec, nil
 	}
 
-	// A certificate of the authority for whr: a shell as whr, with the proxy
+	// A certificate of the authority for workharbor: a shell as workharbor, with the proxy
 	// variables the supervisor passed on, in a read-only root.
-	client, ec, err := connect(ssh.PublicKeys(signed(ca, "whr", false)), hostKey)
+	client, ec, err := connect(ssh.PublicKeys(signed(ca, "workharbor", false)), hostKey)
 	if err != nil {
 		t.Fatalf("a good certificate was refused: %v\n%s", err, ec.logTxt.String())
 	}
@@ -203,7 +203,7 @@ func TestConsoleSSHLive(t *testing.T) {
 		t.Fatalf("session: %v: %s", err, outB)
 	}
 	text := string(outB)
-	for _, want := range []string{"whr\n", "/home/whr\n", "proxy=http://192.0.2.1:3128"} {
+	for _, want := range []string{"workharbor\n", "/home/workharbor\n", "proxy=http://192.0.2.1:3128"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the session lacks %q:\n%s", want, text)
 		}
@@ -220,7 +220,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	_ = client.Close()
 
 	// With the permission, loopback only.
-	fwd, ec2, err := connect(ssh.PublicKeys(signed(ca, "whr", true)), hostKey)
+	fwd, ec2, err := connect(ssh.PublicKeys(signed(ca, "workharbor", true)), hostKey)
 	if err != nil {
 		t.Fatalf("a certificate with forwarding: %v\n%s", err, ec2.logTxt.String())
 	}
@@ -234,7 +234,7 @@ func TestConsoleSSHLive(t *testing.T) {
 		auth ssh.AuthMethod
 		hk   ssh.PublicKey
 	}{
-		"a certificate of another authority": {ssh.PublicKeys(signed(other, "whr", false)), hostKey},
+		"a certificate of another authority": {ssh.PublicKeys(signed(other, "workharbor", false)), hostKey},
 		"another principal":                  {ssh.PublicKeys(signed(ca, "other", false)), hostKey},
 		"a bare key without a certificate":   {ssh.PublicKeys(clientSigner), hostKey},
 		"a password":                         {ssh.Password("whr"), hostKey},
@@ -255,7 +255,7 @@ func TestConsoleSSHLive(t *testing.T) {
 	// A client that does not know the host key refuses the console.
 	_, wrongHost := genKey(t)
 	wrongSigner, _ := ssh.NewSignerFromKey(wrongHost)
-	if bad, _, err := connect(ssh.PublicKeys(signed(ca, "whr", false)), wrongSigner.PublicKey()); err == nil {
+	if bad, _, err := connect(ssh.PublicKeys(signed(ca, "workharbor", false)), wrongSigner.PublicKey()); err == nil {
 		_ = bad.Close()
 		t.Error("a console with another host key was trusted")
 	}

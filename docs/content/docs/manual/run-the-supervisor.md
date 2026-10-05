@@ -32,18 +32,18 @@ writes it, `whr setup --managed` removes it) and the service behavior.
 
 Two wizards, each checking a step first, showing the exact commands of its fix and running them only after you answer `y`:
 
-- `whr setup host`, as your administrator account: the `whr` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), the workspace volume.
-- `whr setup`, as `whr` in its desktop session, not over SSH: the container system, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo), the base configuration.
+- `whr setup host`, as your administrator account: the `workharbor` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), the workspace volume.
+- `whr setup`, as `workharbor` in its desktop session, not over SSH: the container system, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo), the base configuration.
 
 `--dry-run` runs the read-only checks and prints every fix without running one. `--only <step>` and `--from <step>` choose steps. Secrets are written with mode `0600` and never printed.
 
 ## Run it: `whr serve` and `whr service`
 
-`whr serve` runs the supervisor: the reconciler, the JSON API and the web UI. The API listens **only** on a private unix socket, `api.sock` in `state_dir` (the directory must be a real directory owned by `whr` with mode `0700`); the web UI listens on the loopback address `listen`, which a forwarder such as `tailscale serve` carries to your phone. Only one `whr serve` can run per state directory.
+`whr serve` runs the supervisor: the reconciler, the JSON API and the web UI. The API listens **only** on a private unix socket, `api.sock` in `state_dir` (the directory must be a real directory owned by `workharbor` with mode `0700`); the web UI listens on the loopback address `listen`, which a forwarder such as `tailscale serve` carries to your phone. Only one `whr serve` can run per state directory.
 
 If a repository's workflow in the configuration (its preset or its integration branch) differs from the one recorded, `whr serve` stops: that is a policy change and must be confirmed. This also happens once after upgrading across migration 0016, see [Install, upgrade and release](install-upgrade-release.md). Start it once with `--accept-workflow-change`, or, with a passkey enrolled, start it normally and confirm the change on the web page *Changes* (it applies at the next start).
 
-`whr service install` writes a macOS LaunchAgent that starts the container system and then `whr serve`, kept alive, in the `whr` user's login session. `whr service status` says whether it is loaded; `whr service uninstall` removes it (the logs stay). The LaunchAgent needs a logged-in session: see the automatic log-out step in the host page.
+`whr service install` writes a macOS LaunchAgent that starts the container system and then `whr serve`, kept alive, in the `workharbor` user's login session. `whr service status` says whether it is loaded; `whr service uninstall` removes it (the logs stay). The LaunchAgent needs a logged-in session: see the automatic log-out step in the host page.
 
 ## Workspaces and agents
 

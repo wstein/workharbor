@@ -261,7 +261,7 @@ func (c *Consoles) Shell(ctx context.Context, req ShellRequest) (runtime.Termina
 		term = "xterm-256color"
 	}
 	env := append([]string{
-		"HOME=/home/whr", "USER=whr", "LOGNAME=whr", "SHELL=/bin/zsh", "LANG=C.UTF-8", "TERM=" + term, "WHR_CONSOLE=1",
+		"HOME=/home/workharbor", "USER=workharbor", "LOGNAME=workharbor", "SHELL=/bin/zsh", "LANG=C.UTF-8", "TERM=" + term, "WHR_CONSOLE=1",
 	}, c.svc.agentEnv(ctx, domain.ID(cur.ID))...)
 
 	c.mu.Lock()
