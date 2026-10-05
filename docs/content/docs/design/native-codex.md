@@ -116,23 +116,32 @@ including automatic dependency installation and provider/config overrides.
 Apply and verify the same restrictions on child creation and every resume.
 If a pinned CLI cannot provide this split and suppression, it is incompatible.
 
-Werner's approved Codex selections are:
+Workflow recommendations belong to crewbook or another selected external skill
+set. workharbor treats workflow names as opaque identifiers: it validates the
+explicit requested and resolved client/model/effort tuple against operator
+approval and generic capability constraints. A workflow name determines no
+model grade, child admission, approval authority, concurrency or tool privilege.
 
-| Role | Requested model | Reasoning effort |
+Werner previously approved the following selections for this repository's
+external development workflow. They record that guidance, not supervisor role
+semantics or authorization for a new invocation:
+
+| External development workflow | Requested model | Reasoning effort |
 | --- | --- | --- |
 | Authors and ordinary workers | sol6.1 | low |
 | Independent reviewers and design | sol6.1 | medium |
 | Helpers | luna | medium |
 
-Resolve these selections to exact native identifiers with the pinned CLI;
+Resolve each explicitly requested selection to exact native identifiers with
+the pinned CLI;
 the official native examples use `gpt-6.1-sol` and `gpt-6-luna`, but examples
 and model pages are not a compatibility or entitlement test. Persist requested
 and resolved identifiers, explicit effort, role source digest and effective
 native settings. No alias invention, default inheritance, automatic upgrade or
 silent fallback. Validate supported effort and complete an authorized target
 turn before claiming account access; catalog discovery alone is insufficient.
-This explicitly approved Codex reviewer/design substitution does not change
-other providers' bindings or authorize helpers to edit protected paths.
+The historical development-workflow substitution changes no other providers'
+bindings and grants no permission to edit protected paths.
 
 ### Approvals, subscription login and recovery
 

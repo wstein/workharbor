@@ -97,8 +97,11 @@ keys and loading mechanism. Generate only those measured keys; do not copy
 package TOML, search repository/home configuration or guess metadata keys.
 An incompatible client refuses that role even if the package decoder succeeds.
 
-D53's approved Codex requests remain sol6.1 low for authors/workers,
-sol6.1 medium for independent reviewers/design, and luna medium for helpers.
+Model and effort recommendations belong to the selected external skill set.
+The supervisor validates explicit operator-approved client/model/effort tuples;
+it never derives model grade, admission, approval authority, concurrency or
+capability privileges from a workflow name. D53 records the historically
+approved external development bindings, not authorization for a new invocation.
 Record requested and resolved identifiers separately. Resolve exact native IDs
 and supported efforts through the pinned client and authorized measurement;
 tool aliases, model examples and catalog listing alone are insufficient.
