@@ -48,7 +48,7 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 1. Run `make hooks` in every clone and worktree.
 2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
 3. Open `/wh-desk` and `/wh-dispatch` and check their models.
-4. Allow subagent starts without a prompt in the dispatch session only. The designated dispatcher may move cards for assigned work through `scripts/board-snapshot.sh move` without separate approval, retaining the ownership, status and review evidence required by `AGENTS.md`; actual host controls and the user’s authorized scope still apply. Leave other board writes (`ready`, `session`, `priority`, `add`) asking each time.
+4. Allow subagent starts without a prompt in the dispatch session only. The dispatcher's card moves are covered by [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit); do not add a settings allow for them. Leave other board writes (`ready`, `session`, `priority`, `add`) asking each time.
 
 ### Client capacity
 
@@ -93,7 +93,7 @@ scripts/board-snapshot.sh --refresh           # force a query
 scripts/board-snapshot.sh budget              # refreshes, their cost and the lowest GraphQL budget left, last 24 hours; no gh call (#186)
 ```
 
-For assigned work, the designated dispatcher (`wh/dispatch`) is the sole card writer and may use `move` without asking for approval for each move. Authors, reviewers and design report outcomes to it; it retains the ownership, status and review evidence required by `AGENTS.md`. Actual host controls and the user’s authorized scope still apply. Other writes (`session`, `priority`, `add`, `ready`) ask for permission each time. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is approved only by `wh/review` after its review comment and written by the designated dispatcher on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
+Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit): authors, reviewers, design and `wh/desk` report outcomes to the dispatcher. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is approved only by `wh/review` after its review comment and written by the designated dispatcher on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
 
 ## Rules of thumb
 

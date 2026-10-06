@@ -13,11 +13,8 @@
 #   board-snapshot.sh ready <number>...           set Ready to push (wh/dispatch for wh/review)
 #
 # Every write mode takes several issues (at most 50) in one call: one value
-# for all, one cache patch for the ones that succeeded. Under AGENTS.md, the
-# designated dispatcher (wh/dispatch) is the sole card writer and may move assigned work
-# without separate approval, retaining ownership, status and review evidence;
-# host controls and the user-authorized scope still apply. Other write modes
-# require permission. A failure on one issue is reported on stderr, the rest
+# for all, one cache patch for the ones that succeeded. Who may write, and what
+# asks for permission, is set in AGENTS.md (GitHub rate limit). A failure on one issue is reported on stderr, the rest
 # still run, and the exit status is 1 if any failed. Input is validated before any gh call.
 #
 # move sets only Todo, In progress, Blocked and In review: Ready to push
