@@ -35,7 +35,7 @@ make docs    # build the documentation site into _site
 3. Run `make check`. The hooks and CI run the same checks.
 4. Open a pull request and fill in the template. Pull requests are merged with **rebase merge**, so each commit lands on `main` as written, with its trailers; squash and merge commits are disabled.
 
-For open-ended questions and ideas, use [Discussions](https://github.com/wstein/workharbor/discussions). Issues labelled `design` concern the architecture and the design document.
+For open-ended questions and ideas, open an [issue](https://github.com/wstein/workharbor/issues/new/choose); GitHub Discussions is not enabled. Issues labelled `design` concern the architecture and the design document.
 
 ## Commit messages
 

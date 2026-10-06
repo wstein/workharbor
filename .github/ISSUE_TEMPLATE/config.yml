@@ -3,9 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/wstein/workharbor/security/advisories/new
     about: Please report security problems privately, not in a public issue.
-  - name: Ask a question or discuss an idea
-    url: https://github.com/wstein/workharbor/discussions
-    about: Open-ended design questions and ideas belong in Discussions; use an issue once there is concrete work.
   - name: Read the design and documentation
     url: https://wstein.github.io/workharbor/
     about: The design document records the architecture, decisions and open questions.
