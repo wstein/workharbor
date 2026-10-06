@@ -149,7 +149,7 @@ func TestClaudeSharedAllowExcludesBoardWrites(t *testing.T) {
 	// reach the board script by another spelling.
 	for _, rule := range settings.Permissions.Allow {
 		if !allowRuleHasKnownFirstWord(rule) {
-			t.Errorf("allow rule %s must be a tool rule from allowedToolRules or a Bash rule with a known literal first word (and, with a wildcard, a literal second word); see allowRuleHasKnownFirstWord", rule)
+			t.Errorf("allow rule %s must be a tool rule from allowedToolRules, an exact Bash rule with a known first word and an argument, or be listed in allowedWildcardRules; a new wildcard rule needs an edit to this security-relevant test and an Opus review", rule)
 		}
 	}
 }
@@ -170,18 +170,27 @@ var allowedBashFirstWords = []string{"git", "make", "gh", "df", "container", "sc
 // allowedToolRules are the bare non-Bash tool rules the committed file uses.
 var allowedToolRules = []string{"Grep", "Glob", "WebSearch"}
 
+// allowedWildcardRules are the only reviewed wildcard Bash rules in the shared
+// file. A new one needs an edit to this security-relevant test and an Opus
+// review.
+var allowedWildcardRules = []string{
+	"Bash(gh run list:*)",
+	"Bash(gh run view:*)",
+	"Bash(gh release list:*)",
+	"Bash(scripts/board-snapshot.sh card:*)",
+	"Bash(scripts/board-snapshot.sh queue:*)",
+}
+
 // allowRuleHasKnownFirstWord is a static guard on the rule text, not a
-// permission evaluator. It accepts a bare tool rule only from
-// allowedToolRules. A Bash(...) rule must start with a literal first word from
-// allowedBashFirstWords; a rule with a wildcard (a "*" or a trailing ":*") must
-// also have literal words before the wildcard (two, or three for gh) and a
-// second word that does not start with "-", so "git *", "gh api *" or
-// "make *" fail while "gh run list:*" passes.
-// Exact rules without a wildcard only need the known first word. This keeps
-// wrappers, interpreters, paths, quoting and wildcard-first rules out of the
-// shared file. It does not prove that a permitted command is harmless: a rule
-// with two literal words still allows whatever those words and their
-// arguments do.
+// permission evaluator. A bare tool rule must be in allowedToolRules. A Bash
+// rule containing "*" or ending in ":*" must be in allowedWildcardRules. Any
+// other Bash rule is exact: it must start with a literal first word from
+// allowedBashFirstWords and, except for the bare board script, carry at least
+// one argument word (so Bash(git) and Bash(make) fail). This keeps wrappers,
+// interpreters, paths, quoting and open-ended wildcard rules out of the shared
+// file. It does not prove that a permitted command is harmless: an exact rule
+// for git, make, gh or container still allows whatever that command does with
+// those exact arguments.
 func allowRuleHasKnownFirstWord(rule string) bool {
 	if !strings.HasPrefix(rule, "Bash") {
 		return slices.Contains(allowedToolRules, rule)
@@ -191,27 +200,14 @@ func allowRuleHasKnownFirstWord(rule string) bool {
 		return false
 	}
 	spec = strings.TrimSuffix(spec, ")")
-	wildcard := strings.Contains(spec, "*")
-	spec = strings.TrimSuffix(spec, ":*")
+	if strings.Contains(spec, "*") {
+		return slices.Contains(allowedWildcardRules, rule)
+	}
 	words := strings.Split(spec, " ")
 	if !slices.Contains(allowedBashFirstWords, words[0]) {
 		return false
 	}
-	if !wildcard {
-		return true
-	}
-	literal := words
-	for i, w := range words {
-		if strings.Contains(w, "*") {
-			literal = words[:i]
-			break
-		}
-	}
-	minWords := 2
-	if words[0] == "gh" {
-		minWords = 3 // "gh alias *" and "gh api *" reach shell aliases and arbitrary API calls
-	}
-	return len(literal) >= minWords && !strings.HasPrefix(literal[1], "-") && literal[1] != ""
+	return len(words) >= 2 || words[0] == "scripts/board-snapshot.sh"
 }
 
 func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
@@ -225,6 +221,11 @@ func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
 		"PowerShell", "Write", "Edit", "WebFetch", "Monitor", "mcp__github__*",
 		"Bash(git *)", "Bash(git:*)", "Bash(git -c *)", "Bash(gh *)", "Bash(gh:*)",
 		"Bash(gh alias *)", "Bash(gh api *)", "Bash(make *)", "Bash(container *)",
+		"Bash(gh api -X *)", "Bash(git config *)", "Bash(git rebase *)", "Bash(make test *)",
+		"Bash(make lint *)", "Bash(make check-local *)", "Bash(container run *)", "Bash(container exec:*)",
+		"Bash(gh alias set *)", "Bash(gh extension install *)", "Bash(git log *)", "Bash(git commit *)",
+		"Bash(gh run list *)", "Bash(gh api repos/wstein/workharbor/issues *)", `Bash(git "config" *)`,
+		"Bash(git)", "Bash(make)", "Bash(gh run list:* --x)",
 	} {
 		if allowRuleHasKnownFirstWord(rule) {
 			t.Errorf("rule %q must fail the first-word check", rule)
