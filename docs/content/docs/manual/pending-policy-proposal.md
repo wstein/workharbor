@@ -40,7 +40,7 @@ digest, manifest or self-written receipt proves human review.
     Explicit skill selection `none` remains independent: it still needs reviewed
     project policy and supervisor briefing, without package role/model/mount needs.
 
-Reason confirmation is required: .agents/design.md and the pinned wh-design
+Reason confirmation is required: .agents/design.md and the design subagent
 instructions reserve decisions changing security-control kind or product
 direction for Werner first. These choices determine the source of policy
 authority and whether deliberately empty projects can run. No existing review

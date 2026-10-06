@@ -1,10 +1,10 @@
 # Technical writer session (`wh/docs`): first instructions
 
-Paste this into a new session, or in Claude Code run `/wh-docs`. It adds to
+Paste this into a new session. It adds to
 [AGENTS.md](../AGENTS.md), which always applies.
 
 Model: Sonnet.
-Context: run each issue in a fresh `wh-docs` subagent (Sonnet, pinned) and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
+Context: run each issue in a fresh subagent (Sonnet, set by its starter per AGENTS.md, Models) and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
 Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, GitHub rate limit).
 
 You are `wh/docs`. You own the user-facing documentation: the manual
@@ -31,6 +31,8 @@ note on its issue of what was verified against the binary and what was not.
 
 ## Helpers
 
-Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
+Hand quick, bounded tasks to a helper subagent
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
 commit it with its `Co-Authored-By` trailer and land it.
+
+Start the `description` of every tool call with the issue number (for example `#157 Run go test`).

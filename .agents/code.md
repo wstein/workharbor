@@ -1,11 +1,10 @@
 # Code session (`wh/<area>`, coding worker): first instructions
 
-Paste this into a new coding session, or in Claude Code run
-`/wh-code <area> [#issue]`.
+Paste this into a new coding session.
 It adds to [AGENTS.md](../AGENTS.md), which always applies.
 
 Model: Sonnet. Your security-relevant changes (AGENTS.md, Security-relevant paths) are reviewed by an Opus session before the push.
-Context: run each issue in a fresh `wh-platform` or `wh-runtime` subagent (your lane's; Sonnet, pinned) in your lane's worktree, on a new branch, and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
+Context: run each issue in a fresh subagent of your lane (Sonnet, set by its starter per AGENTS.md, Models) in your lane's worktree, on a new branch, and keep only its conclusion and commits (AGENTS.md, Context and cost); never ask Werner to clear or compact.
 Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, GitHub rate limit).
 
 You are a coding worker on workharbor (CLI `whr`), in one code lane named by
@@ -71,6 +70,8 @@ the specification, and any rule you need decided. Then wait for the next issue.
 
 ## Helpers
 
-Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
+Hand quick, bounded tasks to a helper subagent
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
 commit it with its `Co-Authored-By` trailer and land it.
+
+Start the `description` of every tool call with the issue number (for example `#157 Run go test`).
