@@ -17,6 +17,7 @@ import (
 // setupHost is a Host that runs nothing: every command is recorded.
 type setupHost struct {
 	outputs map[string]string
+	errs    map[string]error // a command's own failure, instead of the generic exit status 1
 	read    []string
 	ran     []string
 	opened  []string
@@ -28,7 +29,19 @@ func (h *setupHost) Output(_ context.Context, argv ...string) ([]byte, error) {
 	if out, ok := h.outputs[strings.Join(argv, " ")]; ok {
 		return []byte(out), nil
 	}
+	if err, ok := h.errs[strings.Join(argv, " ")]; ok {
+		return nil, err
+	}
 	return nil, errors.New("exit status 1")
+}
+
+// dsclSays makes the fake dscl answer a read of the account's UniqueID with err,
+// so no test depends on the host's real directory service (Linux has no dscl).
+func (r *setupRig) dsclSays(account string, err error) {
+	if r.host.errs == nil {
+		r.host.errs = map[string]error{}
+	}
+	r.host.errs["dscl . -read /Users/"+account+" UniqueID"] = err
 }
 
 func (h *setupHost) Run(_ context.Context, c doctor.Cmd) error {
@@ -328,6 +341,7 @@ func TestAccountStepCanonicalAndLegacySelection(t *testing.T) {
 	for _, name := range []string{"workharbor-user", "whr-user", "whr-user,workharbor-user"} {
 		t.Run(name, func(t *testing.T) {
 			r := newSetupRig(t)
+			r.dsclSays("operator", errors.New("exit status 56"))
 			code, out, errOut := r.run("setup", "host", "--dry-run", "--only", name, "--user", "operator")
 			text := out + errOut
 			if code != 1 || !strings.Contains(text, "workharbor-user") || !strings.Contains(text, "sysadminctl -addUser operator") {
@@ -389,12 +403,23 @@ func TestAccountStepCompletionIsCanonical(t *testing.T) {
 
 func TestAccountStepLegacyFrom(t *testing.T) {
 	r := newSetupRig(t)
+	r.dsclSays("operator", errors.New("exit status 56"))
 	code, out, errOut := r.run("setup", "host", "--dry-run", "--from", "whr-user", "--only", "workharbor-user", "--user", "operator")
 	if code != 1 || !strings.Contains(out+errOut, "$ sudo sysadminctl -addUser operator") {
 		t.Fatalf("code %d: %s%s", code, out, errOut)
 	}
 	if len(r.host.ran) != 0 {
 		t.Fatal("dry run executed commands")
+	}
+}
+
+func TestAccountStepDsclErrorThatIsNotNotFoundIsNotVerified(t *testing.T) {
+	r := newSetupRig(t)
+	r.dsclSays("operator", errors.New("dscl: command not found"))
+	_, out, errOut := r.run("setup", "host", "--dry-run", "--only", "workharbor-user", "--user", "operator")
+	text := out + errOut
+	if !strings.Contains(text, "not_verified\tworkharbor-user\tdscl did not say whether operator exists: dscl: command not found") || strings.Contains(text, "there is no user") {
+		t.Fatalf("a dscl failure that is not a not-found must be not_verified: %s", text)
 	}
 }
 
