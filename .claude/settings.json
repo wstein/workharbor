@@ -22,10 +22,6 @@
       "Bash(make commitlint)",
       "Bash(make race)",
       "Bash(make temp-ls)",
-      "Bash(gh issue view:*)",
-      "Bash(gh issue list:*)",
-      "Bash(gh project item-list:*)",
-      "Bash(gh project field-list:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(gh release list:*)",
@@ -42,6 +38,9 @@
       "Bash(scripts/board-snapshot.sh queue:*)"
     ],
     "deny": [
+      "Bash(gh issue:*)",
+      "Bash(gh project:*)",
+      "Bash(gh api graphql:*)",
       "Bash(sudo:*)",
       "Bash(security:*)",
       "Bash(gh auth:*)",
