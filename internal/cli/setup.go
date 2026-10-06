@@ -211,6 +211,14 @@ func newSetup(st *state) *cobra.Command {
 		if cmd.Flags().Changed("prefix") {
 			resume = append(resume, "--prefix", prefix)
 		}
+		for i, name := range only {
+			if name == "whr-user" {
+				only[i] = "workharbor-user"
+			}
+		}
+		if from == "whr-user" {
+			from = "workharbor-user"
+		}
 		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr}
 		outs, err := setup.Run(ctx, steps, env.Host, so)
 		if err != nil {

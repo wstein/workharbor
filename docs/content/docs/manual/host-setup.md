@@ -51,7 +51,12 @@ Secrets are only ever generated or typed without echo, written `0600` with an ex
 sudo sysadminctl -addUser workharbor -fullName "workharbor" -password -
 ```
 
-The default service account is `workharbor`. Existing installations can keep their
+The default service account is `workharbor`. The host account step is named
+`workharbor-user`; its title, account-creation command and login guidance use
+the account selected with `--user`. Login guidance and doctor repair commands
+retain `--user` for a nondefault account. The old `whr-user` step name remains an
+input alias for `whr setup host --only`, `--from` and `whr doctor --skip`; output and
+completion use `workharbor-user`. Existing installations can keep their
 current nonroot account, including `whr`, by passing `--user <account>` to
 `whr setup` and `whr doctor` (for example, `whr doctor --user whr`). The selected
 account uses its actual host home directory. This change does not rename an

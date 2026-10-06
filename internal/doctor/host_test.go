@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -71,6 +72,7 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 		{"default", "", "workharbor"},
 		{"existing account", "whr", "whr"},
 		{"custom account", "operator", "operator"},
+		{"quoted account", "operator's", "operator's"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := hostDeps(scripted{
@@ -78,8 +80,33 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 				"dseditgroup -o checkmember -m " + tc.want + " admin": "no " + tc.want + " is NOT a member of admin",
 			})
 			d.Account = tc.account
-			if got, detail := status(steps(t, d)["whr-user"]); got != OK {
-				t.Fatalf("account %q: %s %q", tc.want, got, detail)
+			c := steps(t, d)["workharbor-user"]
+			if c.Run == nil {
+				t.Fatal("canonical workharbor-user step missing")
+			}
+			if c.Title != "the standard user "+tc.want+" (manual step 2)" {
+				t.Errorf("title = %q", c.Title)
+			}
+			if got, detail := status(c); got != OK || detail != tc.want+" exists and is a standard user" {
+				t.Errorf("success: %s %q", got, detail)
+			}
+			wantArgv := []string{"sysadminctl", "-addUser", tc.want, "-fullName", "workharbor", "-password", "-"}
+			if !c.Fix.Cmds[0].Sudo || !reflect.DeepEqual(c.Fix.Cmds[0].Argv, wantArgv) {
+				t.Errorf("creation command = %+v", c.Fix.Cmds[0])
+			}
+			if !strings.Contains(c.Fix.Guide, "Then log in as "+tc.want+" on the Mac") {
+				t.Errorf("guide = %q", c.Fix.Guide)
+			}
+			wantSetup := "whr setup"
+			if tc.want != "workharbor" {
+				wantSetup += " --user '" + strings.ReplaceAll(tc.want, "'", "'\"'\"'") + "'"
+			}
+			if !strings.Contains(c.Fix.Guide, "run `"+wantSetup+"` there") {
+				t.Errorf("setup command missing from guide %q", c.Fix.Guide)
+			}
+			d.Runner = scripted{}
+			if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail || detail != "there is no user "+tc.want {
+				t.Errorf("missing: %s %q", got, detail)
 			}
 		})
 	}
@@ -100,7 +127,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 		"/opt/homebrew/bin/brew list --pinned":                       "container\n",
 	}
 	st := steps(t, hostDeps(good))
-	for _, name := range []string{"whr-user", "power", "firewall", "filevault", "homebrew", "brew-packages", "brew-pin"} {
+	for _, name := range []string{"workharbor-user", "power", "firewall", "filevault", "homebrew", "brew-packages", "brew-pin"} {
 		if got, detail := status(st[name]); got != OK {
 			t.Errorf("%s = %s %q on a set-up Mac", name, got, detail)
 		}
@@ -129,10 +156,10 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 		}
 	}
 	// an administrator whr is a warning, not a failure (D49)
-	if got, detail := status(st["whr-user"]); got != Warn || !strings.Contains(detail, "administrator") {
+	if got, detail := status(st["workharbor-user"]); got != Warn || !strings.Contains(detail, "administrator") {
 		t.Errorf("an administrator whr = %s %q", got, detail)
 	}
-	if got, detail := status(steps(t, hostDeps(scripted{}))["whr-user"]); got != Fail || !strings.Contains(detail, "no user") {
+	if got, detail := status(steps(t, hostDeps(scripted{}))["workharbor-user"]); got != Fail || !strings.Contains(detail, "no user") {
 		t.Errorf("a missing user = %s %q", got, detail)
 	}
 }
@@ -205,7 +232,7 @@ func TestEveryFixIsArgvAndRootOwnedFilesGoThroughInstall(t *testing.T) {
 		t.Errorf("power fix = %q", got)
 	}
 	// the privileged commands of the host part are all separate argvs with Sudo set
-	for _, name := range []string{"whr-user", "power", "firewall", "prefix"} {
+	for _, name := range []string{"workharbor-user", "power", "firewall", "prefix"} {
 		for _, cmd := range steps(t, d)[name].Fix.Cmds {
 			if !cmd.Sudo {
 				t.Errorf("%s: a privileged command is not marked Sudo: %v", name, cmd.Argv)

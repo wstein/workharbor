@@ -251,7 +251,7 @@ func TestAccountReviewFindings157(t *testing.T) {
 
 func TestWhrUserIsNotVerifiedWhenTheAdminStatusIsUnreadable(t *testing.T) {
 	d := hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "UniqueID: 502"})
-	if got, detail := status(steps(t, d)["whr-user"]); got != NotVerified {
+	if got, detail := status(steps(t, d)["workharbor-user"]); got != NotVerified {
 		t.Errorf("%s %q", got, detail)
 	}
 }

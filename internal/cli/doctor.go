@@ -95,6 +95,9 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			skipped := map[string]bool{}
 			for _, n := range skip {
+				if n == "whr-user" {
+					n = "workharbor-user"
+				}
 				if !names[n] {
 					return usageError{fmt.Sprintf("--skip: no check named %q", n)}
 				}
@@ -112,6 +115,9 @@ func newDoctor(st *state) *cobra.Command {
 					if cmd.Flags().Changed("prefix") && strings.HasPrefix(rs[i].Fix, "whr setup ") {
 						rs[i].Fix += " --prefix " + shellArgument(prefix)
 					}
+				}
+				if whrUser != doctor.WhrUser && strings.HasPrefix(rs[i].Fix, "whr setup") {
+					rs[i].Fix += " --user " + shellArgument(whrUser)
 				}
 				if other && r.Fix != "" && r.Phase != doctor.PhaseHost {
 					rs[i].Fix += " (run as " + whrUser + ")"

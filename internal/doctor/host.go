@@ -137,13 +137,17 @@ func kv(out string) map[string]string {
 }
 
 func hostSteps(d Deps) []Check {
+	setupCommand := "whr setup"
+	if d.account() != WhrUser {
+		setupCommand += " --user '" + strings.ReplaceAll(d.account(), "'", "'\"'\"'") + "'"
+	}
 	brewfile := d.Brewing
 	if brewfile == "" {
 		brewfile = DefaultBrewfile
 	}
 	return []Check{
 		{
-			Name: "whr-user", Phase: PhaseHost, Step: 2, Title: "the standard user workharbor (manual step 2)",
+			Name: "workharbor-user", Phase: PhaseHost, Step: 2, Title: "the standard user " + d.account() + " (manual step 2)",
 			Run: func(ctx context.Context) (Status, string) {
 				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
 					if st, msg, ok := notHere(err); ok {
@@ -161,8 +165,8 @@ func hostSteps(d Deps) []Check {
 				return OK, d.account() + " exists and is a standard user"
 			},
 			Fix: &Fix{
-				Cmds:  []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", WhrUser, "-fullName", "workharbor", "-password", "-"}}},
-				Guide: "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + WhrUser + " on the Mac (or over Screen Sharing) and run `whr setup` there.",
+				Cmds:  []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "workharbor", "-password", "-"}}},
+				Guide: "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there.",
 			},
 		},
 

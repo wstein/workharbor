@@ -40,6 +40,7 @@ func (h *setupHost) Open(_ context.Context, t string) error {
 	h.opened = append(h.opened, t)
 	return nil
 }
+
 func (h *setupHost) Line(string) (string, error)   { h.asked++; return "", nil }
 func (h *setupHost) Secret(string) (string, error) { h.asked++; return "", nil }
 func (h *setupHost) Confirm(string) (bool, error)  { h.asked++; return false, nil }
@@ -320,5 +321,98 @@ func TestSetupAsksOnceMoreWhenAnAdministratorIsReachableFromAfar(t *testing.T) {
 	}
 	if len(r.host.ran) != 0 {
 		t.Errorf("a declined confirmation ran %v", r.host.ran)
+	}
+}
+
+func TestAccountStepCanonicalAndLegacySelection(t *testing.T) {
+	for _, name := range []string{"workharbor-user", "whr-user", "whr-user,workharbor-user"} {
+		t.Run(name, func(t *testing.T) {
+			r := newSetupRig(t)
+			code, out, errOut := r.run("setup", "host", "--dry-run", "--only", name, "--user", "operator")
+			text := out + errOut
+			if code != 1 || !strings.Contains(text, "workharbor-user") || !strings.Contains(text, "sysadminctl -addUser operator") {
+				t.Fatalf("code %d: %s", code, text)
+			}
+			if strings.Count(text, "$ sudo sysadminctl -addUser operator") != 1 {
+				t.Fatalf("account fix repeated or missing: %s", text)
+			}
+			if len(r.host.ran) != 0 {
+				t.Fatalf("dry run executed %v", r.host.ran)
+			}
+		})
+	}
+}
+
+func TestDoctorAccountStepCanonicalAndLegacySkip(t *testing.T) {
+	for _, name := range []string{"workharbor-user", "whr-user", "whr-user,workharbor-user"} {
+		t.Run(name, func(t *testing.T) {
+			r := newSetupRig(t)
+			_, out, errOut := r.run("doctor", "--skip", name)
+			if !strings.Contains(out, "skipped\tworkharbor-user\tskipped on request") {
+				t.Fatalf("out %q stderr %q", out, errOut)
+			}
+			for _, read := range r.host.read {
+				if strings.HasPrefix(read, "dscl . -read /Users/workharbor UniqueID") {
+					t.Fatalf("skipped account read: %s", read)
+				}
+			}
+			if !strings.Contains(out, "\tautologout\t") || strings.Contains(out, "skipped\tautologout\t") {
+				t.Fatalf("unrelated check skipped: %s", out)
+			}
+			if len(r.host.ran) != 0 {
+				t.Fatal("doctor executed a fix")
+			}
+		})
+	}
+}
+
+func TestAccountStepUnknownSelectionRejected(t *testing.T) {
+	for _, args := range [][]string{{"setup", "host", "--dry-run", "--only", "workharbor-user-unknown"}, {"doctor", "--skip", "workharbor-user-unknown"}} {
+		r := newSetupRig(t)
+		code, _, text := r.run(args...)
+		if code != exitcode.Usage || !strings.Contains(text, "workharbor-user-unknown") {
+			t.Fatalf("code %d: %s", code, text)
+		}
+		if len(r.host.ran) != 0 {
+			t.Fatalf("unknown selection ran commands: %v %v", r.host.read, r.host.ran)
+		}
+	}
+}
+
+func TestAccountStepCompletionIsCanonical(t *testing.T) {
+	r := newSetupRig(t)
+	out := r.runBare("__complete", "setup", "host", "--only", "")
+	if !strings.Contains(out, "workharbor-user\t") || strings.Contains(out, "\nwhr-user\t") {
+		t.Fatalf("completion %q", out)
+	}
+}
+
+func TestAccountStepLegacyFrom(t *testing.T) {
+	r := newSetupRig(t)
+	code, out, errOut := r.run("setup", "host", "--dry-run", "--from", "whr-user", "--only", "workharbor-user", "--user", "operator")
+	if code != 1 || !strings.Contains(out+errOut, "$ sudo sysadminctl -addUser operator") {
+		t.Fatalf("code %d: %s%s", code, out, errOut)
+	}
+	if len(r.host.ran) != 0 {
+		t.Fatal("dry run executed commands")
+	}
+}
+
+func TestDoctorRepairsKeepSelectedAccount(t *testing.T) {
+	for _, account := range []string{"workharbor", "whr", "operator", "operator's"} {
+		r := newSetupRig(t)
+		_, out, _ := r.run("doctor", "--user", account)
+		suffix := ""
+		if account != "workharbor" {
+			suffix = " --user " + shellArgument(account)
+		}
+		want := "whr setup host --only workharbor-user" + suffix
+		if !strings.Contains(out, want) {
+			t.Fatalf("repair lacks selected account %q: %s", account, out)
+		}
+		want = "whr setup --only config-dir" + suffix
+		if !strings.Contains(out, want) {
+			t.Fatalf("user repair lacks selected account %q: %s", account, out)
+		}
 	}
 }
