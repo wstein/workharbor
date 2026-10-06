@@ -1,0 +1,1 @@
+{"action":"decision","answer":{"mode":"option","value":"y"},"assurance":"none","at":"2026-10-06T10:00:00Z","by":"human","channel":"relay","evidence":[{"kind":"decision-log","ref":"crewbook/decisions.md#H97"}],"question":"Decision log as confirmation records","schema":"workharbor.confirmation","subject":{"issue":"wstein/crewbook#53","ref":"crewbook:H97"},"v":1}
