@@ -29,8 +29,8 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
   recommendation. Mark what is unverified. Questions for Werner follow
   AGENTS.md, Asking Werner: one numbered round, facts looked up by a helper.
 - **File issues** from the discussion: the problem, acceptance criteria, design
-  sections and dependencies, added to the board with a `Priority` and a lane
-  when the lane is obvious; otherwise leave the lane to `wh/design`. Labels
+  sections and dependencies, filed through REST; ask `wh/dispatch` (Werner when no dispatcher runs) to add it
+  to the board with a `Priority` and a lane when the lane is obvious; otherwise leave the lane to `wh/design`. Labels
   as in AGENTS.md, GitHub rate limit.
 - **Summarise a local review or report with durable evidence.** Post a short
   conclusion and a sanitized durable evidence link, following AGENTS.md,

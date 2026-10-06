@@ -19,7 +19,7 @@ The lane agents, the reviewers and the helpers are subagents that `wh/dispatch` 
 
 ## Shared and personal Claude Code settings
 
-The tracked `.claude/settings.json` shares project permissions without granting access to a maintainer’s external checkouts. Put personal paths and standing approvals in `.claude/settings.local.json`, which Git ignores, including when you create it by hand. Keep credentials out of both files.
+The tracked `.claude/settings.json` shares project permissions without granting access to a maintainer’s external checkouts. Put personal paths and standing approvals (never board writes: [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md), GitHub rate limit) in `.claude/settings.local.json`, which Git ignores, including when you create it by hand. Keep credentials out of both files.
 
 The [Claude Code permission grammar](https://code.claude.com/docs/en/permissions#read-and-edit) defines `~/` file rules from the current user’s home and `//` rules from the filesystem root. The shared sensitive-directory denies also match those directories outside the current home. Bash rules match command text; their wildcards do not resolve a home directory or provide process isolation. Native enforcement across macOS and Linux remains {{< status unverified >}}; static configuration checks do not complete the session-usage verification in #274.
 
