@@ -261,7 +261,7 @@ func TestScissorsOnlyCutInHookMode(t *testing.T) {
 	const human = "Werner Stein <claude@wstein.de>"
 	const bot = "Claude <noreply@anthropic.com>"
 	const cut = "# ------------------------ >8 ------------------------"
-	hidden := "fix: a\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>"
+	hidden := "fix: a\n\nRefs: #1\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n" + cut + "\n\nSigned-off-by: P <p@example.test>"
 	if got := Lint(hidden, Options{Author: bot}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
 		t.Errorf("stored scissors hid a signoff: %v", got)
 	}
@@ -413,7 +413,7 @@ func TestTrailerBeforeAStoredScissorsLineIsStillSeen(t *testing.T) {
 		t.Errorf("human: %v", got)
 	}
 	// and a trailer after the line is still seen in a stored message (F2), not in hook mode
-	after := "docs: a\n\nRefs: #1\n" + fullCut + "\n\nSigned-off-by: P <p@example.test>"
+	after := "docs: a\n\nRefs: #1\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n" + fullCut + "\n\nSigned-off-by: P <p@example.test>"
 	if got := Lint(after, Options{Author: bot, Final: true}); len(got) == 0 {
 		t.Error("stored scissors hid a trailer after the line")
 	}
@@ -509,7 +509,7 @@ func TestBotSignoffOutsideAGitTrailerBlock(t *testing.T) {
 
 // Only git's full cut line ends the trailers git reads in a stored message.
 func TestAPartialCutLineDoesNotHideTrailersFromGitsReading(t *testing.T) {
-	msg := "docs: a\n\nSigned-off-by: P <p@example.test>\n# ------------------------ >8\n\nprose"
+	msg := "docs: a\n\nSigned-off-by: P <p@example.test>\n# ------------------------ >8\n\nprose\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 	if got := Lint(msg, Options{Author: "Claude <noreply@anthropic.com>"}); len(got) != 0 {
 		t.Errorf("git reads the last paragraph, which holds no trailer: %v", got)
 	}
@@ -533,7 +533,7 @@ func TestALooseCutLineDoesNotHideTrailersBeforeAnExactOne(t *testing.T) {
 		}
 	}
 	// every line ended with CRLF: no line is git's exact cut line, so nothing is cut
-	crlf := strings.ReplaceAll("docs: a\n\nSigned-off-by: P <p@example.test>\n"+fullCut+"\n\nprose", "\n", "\r\n")
+	crlf := strings.ReplaceAll("docs: a\n\nSigned-off-by: P <p@example.test>\n"+fullCut+"\n\nprose\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>", "\n", "\r\n")
 	if got := Lint(crlf, Options{Author: bot}); len(got) != 0 {
 		t.Errorf("git reads the last paragraph of a CRLF message: %v", got)
 	}
@@ -559,6 +559,41 @@ func TestEveryTrailerOfABlockIsValidated(t *testing.T) {
 			if got := Lint("docs: a\n\n"+para, opt); len(got) == 0 {
 				t.Errorf("%+v: %q accepted", opt, para)
 			}
+		}
+	}
+}
+
+// A bot or agent author must carry an AI attribution coauthor that git reads
+// as a trailer; the dependency bots and human authors need none (#304).
+func TestBotAuthorNeedsAnAICoauthor(t *testing.T) {
+	const ai = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+	const person = "Co-Authored-By: Person <person@example.test>"
+	const want = "needs an AI Co-Authored-By"
+	bots := []string{"Claude <noreply@anthropic.com>", "ci-agent <agent@example.test>", "release-bot <bot@example.test>"}
+	for _, author := range bots {
+		for _, opt := range []Options{{Author: author}, {Author: author, Final: true}, {Author: author, Scissors: true}} {
+			for _, msg := range []string{"docs: a", "docs: a\n\nbody", "Merge branch 'x'", "docs: a\n\nSome prose, not a trailer: here"} {
+				if got := Lint(msg, opt); !strings.Contains(strings.Join(got, "\n"), want) {
+					t.Errorf("%s %q without coauthor: %v", author, msg, got)
+				}
+			}
+			if got := Lint("docs: a\n\nAssisted-by: Claude Code:claude-sonnet-5-5", opt); !strings.Contains(strings.Join(got, "\n"), want) {
+				t.Errorf("%s Assisted-by is not a coauthor: %v", author, got)
+			}
+			if got := Lint("docs: a\n\n"+person, opt); !strings.Contains(strings.Join(got, "\n"), want) {
+				t.Errorf("%s person is not an AI coauthor: %v", author, got)
+			}
+			if got := Lint("docs: a\n\nSee "+ai+" in prose\n\nmore text", opt); !strings.Contains(strings.Join(got, "\n"), want) {
+				t.Errorf("%s coauthor outside the final block: %v", author, got)
+			}
+			if got := Lint("docs: a\n\n"+ai, opt); len(got) != 0 {
+				t.Errorf("%s with AI coauthor: %v", author, got)
+			}
+		}
+	}
+	for _, author := range []string{"Werner Stein <claude@wstein.de>", "dependabot[bot] <support@github.com>", "renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>"} {
+		if got := Lint("docs: a", Options{Author: author}); strings.Contains(strings.Join(got, "\n"), want) {
+			t.Errorf("%s needs no AI coauthor: %v", author, got)
 		}
 	}
 }

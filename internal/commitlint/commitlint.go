@@ -182,7 +182,8 @@ func Lint(msg string, opt Options) []string {
 // of AI attribution on a human's commit; a bot or agent author takes none.
 // Reserved project addresses identify AI attribution; names alone may belong
 // to humans. The message cannot prove which model actually ran. Attribution is
-// validated where git reads a trailer block; a person coauthor on a bot's
+// validated where git reads a trailer block, and a bot or agent author must
+// have at least one valid AI coauthor in it; a person coauthor on a bot's
 // commit is refused on any line that has the shape of a trailer, so no
 // difference between git's reading and this one can hide it.
 func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
@@ -198,6 +199,7 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 	person := func(t trailer) {
 		add(fmt.Sprintf("Co-Authored-By %q is a person; a commit authored by %q (a bot or agent) takes only AI attribution coauthors", t.value, opt.Author))
 	}
+	hasAI := false
 	for _, sc := range scans {
 		for _, t := range sc.block {
 			if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
@@ -220,6 +222,7 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 			if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
 				add(fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the model name as exposed by the session or unknown", id.vendor, email))
 			}
+			hasAI = true
 		}
 		if !botAuthor {
 			continue
@@ -235,6 +238,9 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 			}
 			person(t)
 		}
+	}
+	if botAuthor && !hasAI {
+		add(fmt.Sprintf("a commit authored by %q (a bot or agent) needs an AI Co-Authored-By trailer: <tool> <model-id> <attribution-email>", opt.Author))
 	}
 	return problems
 }

@@ -28,7 +28,7 @@ func TestTheHookCutsAtScissorsAndARangeDoesNot(t *testing.T) {
 	// the hook: git commit cleanup has cut the message, so what follows is no trailer
 	dir := t.TempDir()
 	file := filepath.Join(dir, "COMMIT_EDITMSG")
-	if err := os.WriteFile(file, []byte("docs: a\n\nRefs: #1\n"+cut+"\n\nSigned-off-by: P <p@example.test>\n"), 0o600); err != nil {
+	if err := os.WriteFile(file, []byte("docs: a\n\nRefs: #1\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n"+cut+"\n\nSigned-off-by: P <p@example.test>\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := lintFile(file, bot); got != 0 {
@@ -59,8 +59,8 @@ func TestTheHookCutsAtScissorsAndARangeDoesNot(t *testing.T) {
 	run("init", "--quiet", "-b", "main")
 	run("commit", "--quiet", "--allow-empty", "-m", "docs: base")
 	for name, msg := range map[string]string{
-		"after":  "docs: a\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
-		"before": "docs: a\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"after":  "docs: a\n\nRefs: #1\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
+		"before": "docs: a\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
 	} {
 		run("commit", "--quiet", "--allow-empty", "--cleanup=verbatim", "--author="+bot, "-m", msg)
 		if got := lintRange("HEAD~1..HEAD"); got != 1 {
@@ -68,7 +68,7 @@ func TestTheHookCutsAtScissorsAndARangeDoesNot(t *testing.T) {
 		}
 		run("reset", "--quiet", "--hard", "HEAD~1")
 	}
-	run("commit", "--quiet", "--allow-empty", "--cleanup=verbatim", "--author="+bot, "-m", "docs: a\n\nRefs: #1\n"+cut+"\n\nno trailer")
+	run("commit", "--quiet", "--allow-empty", "--cleanup=verbatim", "--author="+bot, "-m", "docs: a\n\nRefs: #1\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n"+cut+"\n\nno trailer")
 	if got := lintRange("HEAD~1..HEAD"); got != 0 {
 		t.Errorf("range, nothing to refuse: exit %d, want 0", got)
 	}
