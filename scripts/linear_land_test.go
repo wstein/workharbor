@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -504,18 +505,18 @@ func TestLandIgnoresDryRunFlags(t *testing.T) {
 		{"GNUMAKEFLAGS=-n plain", []string{"GNUMAKEFLAGS=-n"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			r := newLandBranchRepo(t, false)
+			wt := r.topic("topic")
+			base := r.git(r.dir, "rev-parse", "main")
+			at := r.dir
+			if !slices.Contains(tc.args, "BRANCH=topic") {
+				at = wt // no BRANCH: land from the session worktree itself
+			}
 			if len(tc.env) > 0 && strings.HasPrefix(tc.env[0], "GNUMAKEFLAGS") {
 				// GNU make 3.81 (macOS) ignores GNUMAKEFLAGS and would really land.
 				if out, err := exec.CommandContext(t.Context(), "make", "--version").Output(); err != nil || strings.Contains(string(out), "GNU Make 3.") {
 					t.Skip("make does not support GNUMAKEFLAGS")
 				}
-			}
-			r := newLandBranchRepo(t, false)
-			wt := r.topic("topic")
-			base := r.git(r.dir, "rev-parse", "main")
-			at := r.dir
-			if tc.args[len(tc.args)-1] != "BRANCH=topic" {
-				at = wt
 			}
 			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
 			cmd.Dir = at
