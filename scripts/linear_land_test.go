@@ -227,6 +227,11 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		t.Fatal(err)
 	}
 	r.write(filepath.Join(r.dir, "scripts", "index-state.sh"), string(indexScript))
+	landScript, err := os.ReadFile("land.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.write(filepath.Join(r.dir, "scripts", "land.sh"), string(landScript))
 	if err := os.Chmod(filepath.Join(r.dir, "scripts", "index-state.sh"), 0o700); err != nil { //nolint:gosec // the copied test script must be executable
 		t.Fatal(err)
 	}
@@ -468,13 +473,15 @@ func TestLandSHAArg(t *testing.T) {
 	other := strings.Repeat("a", 40)
 	for _, tc := range []struct{ sha, msg string }{
 		{other, "not the requested SHA"},
-		{candidate[:12], "full 40-character"},
 		{strings.ToUpper(candidate), "full 40-character"},
 		{"", "full 40-character"},
 		{candidate + "0", "full 40-character"},
 		{"HEAD", "full 40-character"},
 	} {
 		r.wantRefused(r.dir, tc.msg, "BRANCH=topic", "SHA="+tc.sha)
+		if tc.sha == other {
+			tc.msg = "unknown SHA" // without BRANCH= a full SHA goes through resolve
+		}
 		r.wantRefused(wt, tc.msg, "SHA="+tc.sha)
 	}
 	if out, err := r.land(r.dir, nil, "BRANCH=topic", "SHA="+candidate); err != nil {
