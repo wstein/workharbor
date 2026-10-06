@@ -130,6 +130,10 @@ func TestPersonalSettingsAndPythonCachesIgnored(t *testing.T) {
 		{"nested/.claude/settings.local.json", true},
 		{".claude/settings.json", false},
 		{"nested/.claude/settings.json", false},
+		{"__pycache__/module.cpython-313.pyc", true},
+		{"nested/__pycache__/module.cpython-313.pyc", true},
+		{"module.pyc", false},
+		{"nested/module.pyc", false},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			cmd := gittest.Git(t.Context(), home, repo, nil, "check-ignore", "--no-index", tc.path)

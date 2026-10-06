@@ -16,3 +16,6 @@
 
 # Personal Claude Code settings; shared settings.json stays tracked.
 **/.claude/settings.local.json
+
+# Python bytecode cache directories at any depth.
+__pycache__/
