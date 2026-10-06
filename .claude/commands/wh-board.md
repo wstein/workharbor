@@ -1,11 +1,11 @@
 ---
 description: Check the project board against the issues and main, and list the drift
-argument-hint: "[--fix to correct your own lane's cards]"
+argument-hint: "[--fix to list drift for wh/dispatch]"
 ---
 
 Check project 6 against the issues and the repository. Read the board through
 the snapshot (`scripts/board-snapshot.sh`, at most one query per 5 minutes for
-all lanes; add `--refresh` only after you moved a card), never with
+all lanes; add `--refresh` only if the script reports the cache was not patched), never with
 `gh project item-list` yourself. Only `wh/design` runs this board-wide check
 (AGENTS.md, GitHub rate limit); other lanes check their own cards
 (`scripts/board-snapshot.sh card <number>`) and report drift to `wh/dispatch`. $ARGUMENTS
@@ -25,5 +25,5 @@ Report each drift with the issue number:
 - A card that is not on the board at all (`gh issue list --state open` minus the
   board).
 
-Without `--fix`, change nothing. With `--fix`, only list the drift for `wh/dispatch`
+Without `--fix`, change nothing. With `--fix`, which now only lists drift, list the drift for `wh/dispatch`
 (the sole card writer) to fix, and for `wh/design` where a rule is needed.
