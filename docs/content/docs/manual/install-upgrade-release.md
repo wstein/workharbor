@@ -9,7 +9,7 @@ For the operator: the person who installs `whr` on the Mac mini and cuts release
 
 ## Where `whr` comes from
 
-The supervisor always runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34). The installer puts three files in a prefix that the `workharbor` user cannot write, so nothing running as `workharbor`, an agent's escape included, can replace the binary:
+The managed dogfood or reference-host supervisor runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34). The installer puts three files in a prefix that the `workharbor` user cannot write, so nothing running as `workharbor`, an agent's escape included, can replace the binary:
 
 | File | Role |
 | --- | --- |
@@ -55,9 +55,41 @@ Then, as `workharbor`, build the tool store with the guest launcher (the script 
 /opt/whr/bin/whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64
 ```
 
-`make install` builds from the source tree of a clone of the repository instead. It refuses a dirty tree and a commit that is not on `origin/main`, and is for a developer's machine, not the supervisor.
+### Development installation from source
 
-For a development installation, `make install` defaults to `$HOME/.local`.
+{{< status decided >}} Werner's development-source exception (issue #299) lets
+ordinary `make install` build from the clean current local `main`, including a
+commit not yet published to `origin/main`. No extra install target or development
+flag is required. Before installing, obtain independent review of the exact
+commit you will build. The installer requires `HEAD` to equal `refs/heads/main`
+exactly and refuses a dirty tree or any different commit, including an older
+`main` commit, a topic commit or one ahead of local `main`. A detached checkout
+or a differently named branch at the identical current `main` commit passes;
+the branch label does not change the code being installed. Equality with a local
+ref cannot prove that a review took place. The
+installer neither fetches nor updates a remote-tracking ref to pass this check.
+This source route is for a developer's machine. The managed dogfood and reference
+host retain the signed release route above; a development install is not evidence
+that either host is ready.
+
+`make install` defaults to `$HOME/.local`. An explicit `PREFIX=/absolute/path`
+chooses another development prefix. The destination must be user-owned and
+writable, outside Git working trees and source checkouts. It refuses `/`, your
+home or a directory above your home, and the built-in managed prefixes
+`/opt/whr`, `/opt/homebrew` and `/usr/local`, including their descendants and
+resolved aliases. Resolve symlinks and the nearest existing parent before
+creating a missing prefix, and reject Git metadata as well as working trees,
+including private worktrees stored there. Check the actual binary destinations
+too: an existing symlink must not redirect a write into a refused directory.
+A refused destination is an error, never a fallback to another prefix. Use `make install-release` for a managed destination; its signature,
+checksum and attestation requirements remain in force.
+
+The source installer builds all three binaries with `GOWORK=off` and empty
+`GOFLAGS`, stamps the source commit, and removes the release-only
+`libexec/whr/VERSION` marker. These are developer-built binaries without release
+provenance. Implementation and live installation of the amended source gate are
+{{< status unverified >}} until #299 supplies its checked code and installation
+evidence.
 Select that installation explicitly when running setup or doctor (provisional;
 {{< status unverified >}} on the reference host):
 
