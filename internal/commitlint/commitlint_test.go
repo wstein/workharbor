@@ -447,7 +447,12 @@ func TestTrailerBlockFollowsGit(t *testing.T) {
 		{"spaced signoff is not recognised", "Signed-off-by : Q <q@example.test>\n" + prose(6) + bad, false},
 		{"continuation lines belong to the trailer above", "Signed-off-by: Q <q@example.test>\n" + cont + bad, true},
 		{"continuation lines under prose count against", "prose\n" + cont + "Refs: #1\n" + bad, false},
-		{"prose above a signoff is not in the block", prose(8) + "Signed-off-by: Q <q@example.test>\n" + bad, true},
+		{"prose above a signoff counts against the block", prose(8) + "Signed-off-by: Q <q@example.test>\n" + bad, false},
+		{"bad line above a final signoff", bad + "\nSigned-off-by: Q <q@example.test>", true},
+		{"bad line above a final cherry-pick line", bad + "\n(cherry picked from commit abc)", true},
+		{"bad line above signoff and prose", bad + "\nSigned-off-by: Q <q@example.test>\nprose", true},
+		{"prose after a continuation weighs one plus its lines", "Signed-off-by: Q <q@example.test>\nprose\n" + cont + bad, false},
+		{"a trailer ends the continuation count", "prose\nSigned-off-by: Q <q@example.test>\n" + cont + bad, true},
 		{"continuation with no line above", "\tc1\nRefs: #1\n" + bad, false},
 		{"carriage return line is blank", "prose\n\r\r\n" + bad, true},
 		{"carriage return continuation lines", "Signed-off-by: Q <q@example.test>\n" + strings.Repeat("\rc\n", 7) + bad, true},
@@ -507,5 +512,53 @@ func TestAPartialCutLineDoesNotHideTrailersFromGitsReading(t *testing.T) {
 	msg := "docs: a\n\nSigned-off-by: P <p@example.test>\n# ------------------------ >8\n\nprose"
 	if got := Lint(msg, Options{Author: "Claude <noreply@anthropic.com>"}); len(got) != 0 {
 		t.Errorf("git reads the last paragraph, which holds no trailer: %v", got)
+	}
+}
+
+// Git cuts at its exact full cut line only; a loose one (trailing space, tab,
+// carriage return) is text, so a trailer after it and before an exact line is
+// read by git.
+func TestALooseCutLineDoesNotHideTrailersBeforeAnExactOne(t *testing.T) {
+	const bot = "Claude <noreply@anthropic.com>"
+	for _, loose := range []string{fullCut + " ", fullCut + "\t", fullCut + "\r", fullCut + " \r", "# ------------------------ >8"} {
+		for _, line := range []string{"Signed-off-by: P <p@example.test>", "Co-Authored-By: Person <person@example.test>"} {
+			for _, subject := range []string{"docs: a", "Merge branch 'x'"} {
+				msg := subject + "\n\n" + loose + "\n" + line + "\n" + fullCut + "\n\nprose"
+				for _, opt := range []Options{{Author: bot}, {Author: bot, Final: true}} {
+					if got := Lint(msg, opt); len(got) == 0 {
+						t.Errorf("%+v: %q accepted", opt, msg)
+					}
+				}
+			}
+		}
+	}
+	// every line ended with CRLF: no line is git's exact cut line, so nothing is cut
+	crlf := strings.ReplaceAll("docs: a\n\nSigned-off-by: P <p@example.test>\n"+fullCut+"\n\nprose", "\n", "\r\n")
+	if got := Lint(crlf, Options{Author: bot}); len(got) != 0 {
+		t.Errorf("git reads the last paragraph of a CRLF message: %v", got)
+	}
+	// a problem found in both readings is reported once
+	got := Lint("docs: a\n\nCo-Authored-By: Person <person@example.test>\n"+fullCut+"\n\nCo-Authored-By: Person <person@example.test>", Options{Author: bot})
+	if n := strings.Count(strings.Join(got, "\n"), "is a person"); n != 1 {
+		t.Errorf("%d reports: %v", n, got)
+	}
+}
+
+// A line that makes the paragraph a trailer block makes every trailer of it
+// count, the ones above it included.
+func TestEveryTrailerOfABlockIsValidated(t *testing.T) {
+	const human = "Werner Stein <claude@wstein.de>"
+	for _, para := range []string{
+		"Co-Authored-By: Claude <noreply@anthropic.com>\nSigned-off-by: H <h@example.test>",
+		"Co-Authored-By: Codex gpt-6 <noreply@anthropic.com>\nSigned-off-by: H <h@example.test>",
+		"Assisted-by: nonsense\nSigned-off-by: H <h@example.test>",
+		"Assisted-by: nonsense\n(cherry picked from commit abc)",
+		"Refs: #1\nCo-Authored-By: Claude <noreply@anthropic.com>\nSigned-off-by: H <h@example.test>",
+	} {
+		for _, opt := range []Options{{Author: human}, {Author: human, Final: true}, {Author: human, Scissors: true}} {
+			if got := Lint("docs: a\n\n"+para, opt); len(got) == 0 {
+				t.Errorf("%+v: %q accepted", opt, para)
+			}
+		}
 	}
 }

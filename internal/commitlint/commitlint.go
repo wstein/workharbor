@@ -267,12 +267,13 @@ func clean(msg string, scissors bool) []string {
 }
 
 // cleanWith drops comment lines and everything from the first line cut says
-// to cut at; whitespace at the end of a line (git's blank, too: space, tab and
-// carriage return) is trimmed.
+// to cut at. cut sees the raw line: git cuts at its exact cut line only, so a
+// trailing space, tab or carriage return makes a line text. Whitespace at the
+// end of a line (git's blank, too: space, tab and carriage return) is trimmed.
 func cleanWith(msg string, cut func(line string) bool) []string {
 	var out []string
-	for _, l := range strings.Split(strings.ReplaceAll(msg, "\r\n", "\n"), "\n") {
-		if cut(strings.TrimRight(l, " \t\r")) || cut(l) {
+	for _, l := range strings.Split(msg, "\n") {
+		if cut(l) {
 			break
 		}
 		if strings.HasPrefix(l, "#") {
@@ -329,9 +330,10 @@ var gitPrefixes = []string{"Signed-off-by: ", "(cherry picked from commit "}
 // from its last line: a line starting with whitespace belongs to the line above
 // it; a line with a token, optional whitespace and a colon (the token may begin
 // with a digit or dash) is a trailer, as is a recognised cherry-pick line; any
-// other line is prose. It is a block when it holds trailers and no prose, or
-// when, at a recognised prefix, the trailers below are at least a quarter of
-// the prose below (git's 25% rule); lines above that point are not part of it.
+// other line is prose. The paragraph is a block, and every trailer of it
+// counts, when it holds trailers and no prose, or a recognised prefix and
+// trailers at least a quarter of the prose (git's 25% rule, applied once to
+// the whole paragraph).
 func scanFinalParagraph(lines []string) finalParagraph {
 	end := len(lines)
 	start := end
@@ -349,6 +351,7 @@ func scanFinalParagraph(lines []string) finalParagraph {
 	}
 	var read []trailer
 	var trailers, prose, pending int
+	var recognised bool
 	for i := end - 1; i >= start; i-- {
 		l := lines[i]
 		if strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") || strings.HasPrefix(l, "\r") {
@@ -356,11 +359,12 @@ func scanFinalParagraph(lines []string) finalParagraph {
 			continue
 		}
 		m := scanKeyRe.FindStringSubmatch(l)
-		recognised := false
+		prefixed := false
 		for _, p := range gitPrefixes {
-			recognised = recognised || strings.HasPrefix(l, p)
+			prefixed = prefixed || strings.HasPrefix(l, p)
 		}
-		if m != nil || recognised {
+		recognised = recognised || prefixed
+		if m != nil || prefixed {
 			trailers++
 			pending = 0
 			if m != nil {
@@ -370,13 +374,9 @@ func scanFinalParagraph(lines []string) finalParagraph {
 			prose += 1 + pending
 			pending = 0
 		}
-		if recognised && trailers*3 >= prose {
-			fp.block = reverse(read)
-			return fp
-		}
 	}
 	prose += pending // continuation lines with no line above them
-	if trailers > 0 && prose == 0 {
+	if trailers > 0 && (prose == 0 || recognised && trailers*3 >= prose) {
 		fp.block = reverse(read)
 	}
 	return fp

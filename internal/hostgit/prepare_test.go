@@ -383,8 +383,11 @@ func TestPrepareReadsStoredMessagesWithScissorsLines(t *testing.T) {
 	t.Parallel()
 	const cut = "# ------------------------ >8 ------------------------"
 	for name, msg := range map[string]string{
-		"after":  "docs: add c\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
-		"before": "docs: add c\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"after":                 "docs: add c\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
+		"before":                "docs: add c\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"loose then exact":      "docs: add c\n\n" + cut + " \nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"loose tab then exact":  "docs: add c\n\n" + cut + "\t\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"loose CRLF then exact": "docs: add c\n\n" + cut + "\r\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := newPrep(t)

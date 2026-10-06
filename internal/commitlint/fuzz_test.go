@@ -32,6 +32,7 @@ func FuzzLint(f *testing.F) {
 	f.Add("docs: a\n# ------------------------ >8", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n# ------------------------ >8\n\nCo-Authored-By: P <p@x.org>", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n\nSigned-off-by: P\n# ------------------------ >8 ------------------------\n\nx", "Claude <noreply@anthropic.com>", false)
+	f.Add("docs: a\n\n# ------------------------ >8 \nSigned-off-by: P\n# ------------------------ >8 ------------------------\n\nx", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n\nSigned-off-by:P", "Claude <noreply@anthropic.com>", false)
 	f.Fuzz(func(t *testing.T, msg, author string, final bool) {
 		opt := Options{Author: author, Final: final}
@@ -61,14 +62,18 @@ func FuzzLint(f *testing.F) {
 		if got := Lint(person, bot); len(got) == 0 {
 			t.Fatalf("a bot author's person coauthor was accepted after %q", msg)
 		}
-		// a trailer in front of git's full cut line counts, the text after it
-		// (a stored message keeps it) must not hide it, in either mode
-		if !strings.Contains(msg, "# ------------------------ >8") {
+		// git cuts a stored message at its exact full cut line only, and reads
+		// the trailers in front of it; a loose line (a trailing space, tab or
+		// carriage return, or fewer dashes) is text. Neither the text after the
+		// line nor a loose line before the trailer may hide it.
+		if !hasExactCut(msg) {
 			for _, trailer := range []string{"Signed-off-by: Someone <someone@example.org>", "Co-Authored-By: Someone <someone@example.org>"} {
-				before := msg + "\n\n" + trailer + "\n# ------------------------ >8 ------------------------\n\nafter"
-				for _, o := range []Options{bot, {Author: bot.Author, Final: final, Scissors: true}} {
-					if got := Lint(before, o); len(got) == 0 {
-						t.Fatalf("%+v: a trailer before the cut line was accepted after %q", o, msg)
+				for _, loose := range []string{"", "# ------------------------ >8 ------------------------ \n", "# ------------------------ >8 ------------------------\t\n", "# ------------------------ >8 ------------------------\r\n", "# ------------------------ >8\n"} {
+					before := msg + "\n\n" + loose + trailer + "\n# ------------------------ >8 ------------------------\n\nafter"
+					for _, o := range []Options{bot, {Author: bot.Author}} {
+						if got := Lint(before, o); len(got) == 0 {
+							t.Fatalf("%+v: a trailer before the cut line was accepted after %q (loose line %q)", o, msg, loose)
+						}
 					}
 				}
 			}
@@ -85,4 +90,15 @@ func FuzzLint(f *testing.F) {
 			}
 		}
 	})
+}
+
+// hasExactCut reports a line that is git's full cut line, where git stops
+// reading a stored message.
+func hasExactCut(msg string) bool {
+	for _, l := range strings.Split(msg, "\n") {
+		if l == gitCutLine {
+			return true
+		}
+	}
+	return false
 }
