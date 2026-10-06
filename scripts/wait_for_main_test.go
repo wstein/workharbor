@@ -42,7 +42,7 @@ func mainFixture(t *testing.T) (clone, pusher, first string) {
 // optional directory of wrappers first on PATH.
 func waitMain(t *testing.T, dir, sha string, env ...string) (string, error) {
 	t.Helper()
-	base := append(gittest.Env(t.TempDir()), "SHA="+sha, "WAIT_INTERVAL_SECONDS=1", "WAIT_TIMEOUT_SECONDS=5")
+	base := []string{"SHA=" + sha, "WAIT_INTERVAL_SECONDS=1", "WAIT_TIMEOUT_SECONDS=5"}
 	script, err := filepath.Abs("wait-for-main.sh")
 	if err != nil {
 		t.Fatal(err)

@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/wstein/workharbor/internal/gittest"
 )
 
 func verifyTag(t *testing.T, dir, tag, sha string) (string, error) {
@@ -14,7 +12,7 @@ func verifyTag(t *testing.T, dir, tag, sha string) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := append(gittest.Env(t.TempDir()), "TAG="+tag, "GITHUB_SHA="+sha)
+	env := []string{"TAG=" + tag, "GITHUB_SHA=" + sha}
 	return bash(t, env, "cd '"+dir+"' && "+script)
 }
 
