@@ -28,6 +28,8 @@ type Env struct {
 	Host Host
 	// Setup is the machine `whr setup` works on; zero means this one.
 	Setup SetupEnv
+	// Offboard is what `whr offboard host` reads of this machine; zero means this one.
+	Offboard OffboardEnv
 	// Extra are commands the binary adds, such as version, tools and serve.
 	Extra []*cobra.Command
 	// TTY is the user's terminal, for `whr console`. Nil means the terminal that
@@ -144,7 +146,7 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 		root.AddCommand(c)
 	}
 	for _, c := range []*cobra.Command{
-		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newPause(st), newResume(st), newPurge(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newPasskey(st), newPreview(st), newOpen(st), newKillAll(st), newUsage(st), newShow(st), newConsole(st), newSSH(st), newSetup(st),
+		newLs(st), newRun(st), newLogs(st), newSay(st), newCancel(st), newPause(st), newResume(st), newPurge(st), newInbox(st), newApprove(st, true), newApprove(st, false), newAnswer(st), newWs(st), newAgent(st), newDoctor(st), newGitHub(st), newService(st), newPasskey(st), newPreview(st), newOpen(st), newKillAll(st), newUsage(st), newShow(st), newConsole(st), newSSH(st), newSetup(st), newOffboard(st),
 	} {
 		add(c)
 	}

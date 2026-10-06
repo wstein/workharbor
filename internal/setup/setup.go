@@ -294,7 +294,7 @@ func showFix(ui render.Writer, f *doctor.Fix) {
 		ui.Action("run these commands")
 	}
 	for _, c := range f.Cmds {
-		ui.Command(quoteArgv(c.Full()))
+		ui.Command(QuoteArgv(c.Full()))
 	}
 	if hasCommands(f) && f.Open != "" {
 		ui.Action("this opens: " + f.Open)
@@ -314,7 +314,7 @@ func todoFor(title string, f *doctor.Fix) render.TodoItem {
 			it.Text += ": " + f.Desc
 		}
 		for _, c := range f.Cmds {
-			it.Commands = append(it.Commands, quoteArgv(c.Full()))
+			it.Commands = append(it.Commands, QuoteArgv(c.Full()))
 		}
 		if f.Guide != "" {
 			it.Text += ": " + oneLine(f.Guide)
@@ -400,7 +400,7 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 			if len(argv) == 0 {
 				argv = []string{"whr", "setup"}
 			}
-			next = quoteArgv(append(argv, "--user", useUser))
+			next = QuoteArgv(append(argv, "--user", useUser))
 		} else {
 			next = nextCommand(o, first, leftNames)
 		}
@@ -431,7 +431,7 @@ func nextCommand(o Options, first string, left []string) string {
 	} else {
 		argv = append(argv, "--from", first)
 	}
-	return quoteArgv(argv)
+	return QuoteArgv(argv)
 }
 
 func listOrNone(l []string) string {
@@ -441,12 +441,12 @@ func listOrNone(l []string) string {
 	return strings.Join(l, ", ")
 }
 
-// quoteArgv writes an argument vector so a human can read where each argument
+// QuoteArgv writes an argument vector so a human can read where each argument
 // begins; it is for display only. A control, bidirectional or separator
 // character is never printed raw (a newline would start a second command when
 // the line is pasted, an escape sequence would reach the terminal): the
 // argument is quoted with the visible escape textsafe.Escape gives it.
-func quoteArgv(argv []string) string {
+func QuoteArgv(argv []string) string {
 	parts := make([]string, len(argv))
 	for i, a := range argv {
 		if e := textsafe.Escape(a); e != a {
@@ -521,12 +521,12 @@ func apply(ctx context.Context, h Host, s doctor.Check, o Options, ui render.Wri
 			return false, err
 		}
 		for _, c := range cmds { // the real commands, shown before they run
-			ui.Command(quoteArgv(c.Full()))
+			ui.Command(QuoteArgv(c.Full()))
 		}
 	}
 	for _, c := range cmds {
 		if err := h.Run(ctx, c); err != nil {
-			return false, fmt.Errorf("%s failed: %w", quoteArgv(c.Full()), err)
+			return false, fmt.Errorf("%s failed: %w", QuoteArgv(c.Full()), err)
 		}
 	}
 	if f.Guide != "" && f.Open != "" {

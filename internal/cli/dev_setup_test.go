@@ -378,7 +378,7 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 }
 
 // shellWords splits a printed command the way a shell does for the quoting
-// quoteArgv writes: single quotes, with a quote inside them closed, escaped
+// QuoteArgv writes: single quotes, with a quote inside them closed, escaped
 // and opened again.
 func shellWords(s string) []string {
 	var words []string

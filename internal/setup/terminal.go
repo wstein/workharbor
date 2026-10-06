@@ -115,3 +115,9 @@ func (t Terminal) Show(text string) { fmt.Fprintln(t.Err, text) }
 func (t Terminal) Ask(question string, d render.Default) (render.Answer, error) {
 	return render.Ask(t.In, render.Writer{W: t.Err, S: t.Style}, question, d)
 }
+
+// AskWord asks for a typed word, for the most destructive steps: only the exact
+// word is yes, Enter and anything else is no, q quits.
+func (t Terminal) AskWord(question, word string) (render.Answer, error) {
+	return render.AskWord(t.In, render.Writer{W: t.Err, S: t.Style}, question, word)
+}

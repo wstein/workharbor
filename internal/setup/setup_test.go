@@ -482,9 +482,9 @@ func TestQuoteArgvEscapesWhatWouldBreakTheLine(t *testing.T) {
 		"space":   {"/tmp/x y", `'/tmp/x y'`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got := quoteArgv([]string{"whr", c.arg})
+			got := QuoteArgv([]string{"whr", c.arg})
 			if got != "whr "+c.want || strings.ContainsAny(got, "\n\r\x1b\u202e") {
-				t.Fatalf("quoteArgv = %q, want %q", got, "whr "+c.want)
+				t.Fatalf("QuoteArgv = %q, want %q", got, "whr "+c.want)
 			}
 		})
 	}

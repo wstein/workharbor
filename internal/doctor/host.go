@@ -70,11 +70,11 @@ func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
 
 var errNotHere = errors.New("this runs only on a Mac")
 
-// dsclNotFound reports whether a failed `dscl . -read` says the record is not
+// DSCLNotFound reports whether a failed `dscl . -read` says the record is not
 // there: exit status 56 (eDSRecordNotFound) or "does not exist" in what it said.
 // Any other failure (permissions, a directory-service error, an unknown format)
 // says nothing about the account.
-func dsclNotFound(err error) bool {
+func DSCLNotFound(err error) bool {
 	var ee *exec.ExitError
 	if errors.As(err, &ee) && ee.ExitCode() == 56 {
 		return true
@@ -105,7 +105,7 @@ func userStep(d Deps, setupCommand string) Check {
 				if st, msg, ok := notHere(err); ok {
 					return st, msg
 				}
-				if dsclNotFound(err) {
+				if DSCLNotFound(err) {
 					st, msg, found := d.missingUser(ctx, fix)
 					legacy = found
 					return st, msg
@@ -148,7 +148,7 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 		fix.Cmds = nil
 		fix.Guide = "Nothing is created, renamed or deleted. Run `whr setup host --user " + LegacyUser + "` and `whr doctor --user " + LegacyUser + "` to keep using the legacy account."
 		return Fail, missing + ", but the legacy account " + LegacyUser + " exists: run `whr setup host --user " + LegacyUser + "` or `whr doctor --user " + LegacyUser + "` to use it instead of creating a second account", true
-	case dsclNotFound(err):
+	case DSCLNotFound(err):
 		return Fail, missing, false
 	}
 	return NotVerified, "there is no user " + d.account() + ", and dscl did not say whether the legacy account " + LegacyUser + " exists: " + oneLine(err.Error()), false
