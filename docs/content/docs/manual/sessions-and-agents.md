@@ -35,14 +35,14 @@ A decision that loosens a Hard rule or a security control, changes release scope
 
 ## The review gate
 
-A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` with no open findings is the review note, and no separate `wh/review` session is needed. The session that started the reviewer, normally `wh/dispatch`, then sets `Ready to push` on its behalf, only for the reviewed sha and only when the comment has no open findings. The author never starts the review of its own change in its own context, and a dispatcher never reviews. A security-relevant change needs the Opus reviewer. You push only `Ready to push` work.
+A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` with no open findings is the review note, and no separate `wh/review` session is needed. The designated dispatcher then sets `Ready to push` on its behalf, only for the reviewed sha and only when the comment has no open findings. The author never starts the review of its own change in its own context, and a dispatcher never reviews. A security-relevant change needs the Opus reviewer. You push only `Ready to push` work.
 
 ## Setup steps
 
 1. Run `make hooks` in every clone and worktree.
 2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
 3. Open `/wh-desk` and `/wh-dispatch` and check their models.
-4. Allow subagent starts without a prompt in the dispatch session only. Leave the board writes (`scripts/board-snapshot.sh move`, `ready`, `session`, `priority`, `add`) asking each time.
+4. Allow subagent starts without a prompt in the dispatch session only. The designated dispatcher may move cards for assigned work through `scripts/board-snapshot.sh move` without separate approval, retaining the ownership, status and review evidence required by `AGENTS.md`; actual host controls and the user’s authorized scope still apply. Leave other board writes (`ready`, `session`, `priority`, `add`) asking each time.
 
 ## The project board
 
@@ -56,7 +56,7 @@ scripts/board-snapshot.sh --refresh           # force a query
 scripts/board-snapshot.sh budget              # refreshes, their cost and the lowest GraphQL budget left, last 24 hours; no gh call (#186)
 ```
 
-Every write (`move`, `session`, `priority`, `add`, `ready`) asks for permission each time. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is set only by `wh/review` after its review comment, or by `wh/dispatch` on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
+For assigned work, the designated dispatcher (`wh/dispatch`) is the sole card writer and may use `move` without asking for approval for each move. Authors, reviewers and design report outcomes to it; it retains the ownership, status and review evidence required by `AGENTS.md`. Actual host controls and the user’s authorized scope still apply. Other writes (`session`, `priority`, `add`, `ready`) ask for permission each time. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is approved only by `wh/review` after its review comment and written by the designated dispatcher on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
 
 ## Rules of thumb
 
@@ -100,7 +100,7 @@ The `Makefile` also has `install`, `install-release`, `changelog` and `editorcon
 
 ### Lanes
 
-The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research and issue drafts go to the read-only `wh-helper`; mechanical edits, small tests and checks go to `wh-helper-edit`. Board hygiene (`/wh-board`) stays with the lane, because it runs `scripts/board-snapshot.sh`. A helper is not a lane, and neither type edits a security-relevant path.
+The models and tasks of the lanes are in the two tables near the top of this page ([sessions](#sessions-to-keep-open), [subagents](#subagents-and-their-models)). Two lanes are not in them: `wh/review` (Opus) reviews independently before every push and is at least as strong as the author, and `wh/spikes` runs spikes on new tools on Antigravity (Gemini); `wh/review` reviews its results. A helper (`.agents/helper.md`, `/wh-delegate <task>`) does one quick task for a lane: find and report, web research and issue drafts go to the read-only `wh-helper`; mechanical edits, small tests and checks go to `wh-helper-edit`. Board writes stay with the designated dispatcher through `scripts/board-snapshot.sh`; the lane reports outcomes to it. A helper is not a lane, and neither type edits a security-relevant path.
 
 ### Commits
 

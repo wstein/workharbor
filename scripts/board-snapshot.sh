@@ -10,17 +10,20 @@
 #   board-snapshot.sh add <number>...             add each issue to the board
 #   board-snapshot.sh budget                      lowest remaining and total cost, last 24 hours (no gh call)
 #
-#   board-snapshot.sh ready <number>...           set Ready to push (wh/review, or wh/dispatch for it)
+#   board-snapshot.sh ready <number>...           set Ready to push (wh/dispatch for wh/review)
 #
-# Every write mode takes several issues (at most 50) in one call: one
-# permission prompt, one value for all, one cache patch for the ones that
-# succeeded. A failure on one issue is reported on stderr, the rest still run,
-# and the exit status is 1 if any failed. Input is validated before any gh call.
+# Every write mode takes several issues (at most 50) in one call: one value
+# for all, one cache patch for the ones that succeeded. Under AGENTS.md, the
+# designated dispatcher (wh/dispatch) is the sole card writer and may move assigned work
+# without separate approval, retaining ownership, status and review evidence;
+# host controls and the user-authorized scope still apply. Other write modes
+# require permission. A failure on one issue is reported on stderr, the rest
+# still run, and the exit status is 1 if any failed. Input is validated before any gh call.
 #
 # move sets only Todo, In progress, Blocked and In review: Ready to push
 # (wh/review) and Done (closing the issue, the human) are refused before any gh
-# call. `ready` sets Ready to push and is for wh/review only (the review gate,
-# AGENTS.md), or wh/dispatch on its behalf for the reviewed sha. Done is set by the human or by closing the issue.
+# call. `ready` sets Ready to push through wh/dispatch on behalf of wh/review
+# for the reviewed sha (the review gate, AGENTS.md). Done is set by the human or by closing the issue.
 #
 # Writes use the item-ID route, never `gh project item-edit --url`, whose
 # project-wide item lookup trips GitHub's secondary rate limit (#165): one call
