@@ -74,6 +74,13 @@ type Options struct {
 	// message (a range, the host's publish path) keeps such a line as text, and
 	// what follows stays visible to the rules.
 	Scissors bool
+	// GitTrailers, when GitRead is set, are the "Key: value" lines git itself
+	// reports as the trailers of a stored commit (git log
+	// --format=%(trailers:only)). A bot author's AI coauthor is then taken from
+	// them, since this package's scanner can differ from git's parser; the
+	// other rules keep reading the message.
+	GitTrailers []string
+	GitRead     bool
 }
 
 type trailer struct{ key, value string }
@@ -223,7 +230,7 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 			if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
 				add(fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the model name as exposed by the session or unknown", id.vendor, email))
 			}
-			if gitView {
+			if gitView && !opt.GitRead {
 				hasAI = true
 			}
 		}
@@ -242,10 +249,27 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 			person(t)
 		}
 	}
+	for _, l := range opt.GitTrailers {
+		if m := scanKeyRe.FindStringSubmatch(l); m != nil && strings.EqualFold(m[1], "Co-Authored-By") && isAICoauthor(m[2]) {
+			hasAI = true
+		}
+	}
 	if botAuthor && !hasAI {
 		add(fmt.Sprintf("a commit authored by %q (a bot or agent) needs an AI Co-Authored-By trailer: <tool> <model-id> <attribution-email>", opt.Author))
 	}
 	return problems
+}
+
+// isAICoauthor reports a Co-Authored-By value that is a well-formed AI
+// attribution on a reserved address.
+func isAICoauthor(value string) bool {
+	m := coauthorRe.FindStringSubmatch(strings.TrimSpace(value))
+	if m == nil {
+		return false
+	}
+	id, ok := aiIdentities[strings.ToLower(m[2])]
+	fields := strings.Fields(m[1])
+	return ok && strings.EqualFold(fields[0], id.vendor) && modelNameRe.MatchString(strings.Join(fields[1:], " "))
 }
 
 // signoffByBot reports a Signed-off-by line, in any shape git reads as a

@@ -75,7 +75,15 @@ func lintRange(revRange string) int {
 			fmt.Fprintln(os.Stderr, "commitlint:", err)
 			return 2
 		}
-		problems := commitlint.Lint(msg, rangeOptions(strings.TrimSpace(author)))
+		trailers, err := git("log", "-1", "--format=%(trailers:only=true,unfold=true)", sha)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "commitlint:", err)
+			return 2
+		}
+		opt := rangeOptions(strings.TrimSpace(author))
+		opt.GitRead = true
+		opt.GitTrailers = strings.Split(trailers, "\n")
+		problems := commitlint.Lint(msg, opt)
 		if report(sha[:min(len(sha), 10)], problems) != 0 {
 			status = 1
 		}

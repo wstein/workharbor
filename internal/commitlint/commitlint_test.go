@@ -612,3 +612,27 @@ func TestAICoauthorAfterTheCutLineDoesNotCount(t *testing.T) {
 		t.Errorf("coauthor before the cut line: %v", got)
 	}
 }
+
+// With the trailers git itself reports (a stored commit), a bot author's AI
+// coauthor comes from them and only from a well-formed AI Co-Authored-By.
+func TestBotAICoauthorFromGitsReportedTrailers(t *testing.T) {
+	const bot = "ci-agent <agent@example.test>"
+	const want = "needs an AI Co-Authored-By"
+	msg := "docs: a\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+	for name, tr := range map[string][]string{
+		"none":          nil,
+		"other key":     {"Refs: Claude Sonnet 5.5 <noreply@anthropic.com>"},
+		"person":        {"Co-Authored-By: Person <person@example.test>"},
+		"wrong vendor":  {"Co-Authored-By: Codex x <noreply@anthropic.com>"},
+		"no model name": {"Co-Authored-By: Claude <noreply@anthropic.com>"},
+	} {
+		got := Lint(msg, Options{Author: bot, GitRead: true, GitTrailers: tr})
+		if !strings.Contains(strings.Join(got, "\n"), want) {
+			t.Errorf("%s: %v", name, got)
+		}
+	}
+	tr := []string{"Refs: #1", "co-authored-by: Claude Sonnet 5.5 <noreply@anthropic.com>"}
+	if got := Lint(msg, Options{Author: bot, GitRead: true, GitTrailers: tr}); len(got) != 0 {
+		t.Errorf("git reports an AI coauthor: %v", got)
+	}
+}
