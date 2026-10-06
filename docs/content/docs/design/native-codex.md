@@ -91,7 +91,11 @@ canonical roles. No Claude-only file or command is a prerequisite for Codex.
 Role instructions cannot authorize child spawning outside supervisor admission.
 Record child ownership and exact bindings before execution; children inherit
 the same enforced ceiling, not the parent's authority to widen it. Cancellation
-and restart must account for every owned child. Authors never review themselves.
+and restart must account for every owned child. The selected external workflow
+and project contribution rules own reviewer eligibility and author/reviewer
+separation. workharbor records generic child identity and binding evidence and
+enforces admission and capability ceilings without assigning authority to a
+workflow name; human approval of the exact artifact remains a separate host gate.
 
 ### Trusted instructions, configuration and model binding
 

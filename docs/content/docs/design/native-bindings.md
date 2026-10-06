@@ -65,9 +65,13 @@ keys, null required arrays, duplicates, unsafe paths and over-limit content
 refuse; nothing is truncated. Retain v1 manifest/file/total size limits.
 
 The operator selects the root role in supervisor-owned configuration. The
-package cannot select the running role, worktree, project policy, reviewer
-eligibility or child admission. The root entrypoint supplies package-wide
-workflow text; the selected role adds its inventoried instructions. Both are
+package cannot select the running role, worktree, project policy or child
+admission. Reviewer eligibility and author/reviewer separation belong to the
+selected external workflow under the project's contribution rules; workharbor
+treats role names as opaque metadata. The host retains generic child identity,
+admission, capability ceilings, binding evidence and human artifact approval;
+workflow eligibility grants no host permission. The root entrypoint supplies
+package-wide workflow text; the selected role adds its inventoried instructions. Both are
 pinned and bounded. Role source identity is the manifest digest, role name and
 instruction digest. Its derived `role_source_sha256` is SHA-256 of these UTF-8
 bytes, each with a final LF:
