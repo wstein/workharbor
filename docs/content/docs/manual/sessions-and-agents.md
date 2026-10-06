@@ -52,15 +52,15 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 
 ### Client capacity
 
-For development sessions using [crewbook](../../glossary/#names), start with capacity for eight subagents. `wh/dispatch` is an always-on session in its own terminal (see the table above), not a subagent of `wh/desk`, so neither session counts. From the dispatch session the subagents are two authors, two independent reviewers, one design batch and two bounded helpers: seven slots, one of them spare. Eight leaves headroom for a second concurrent helper or reviewer, and a count from the desk session needs no more. This is a capacity recommendation, not a measured optimum or a request to fill every slot {{< status unverified >}}. The limits in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) still apply: at most two code workers, one editor per worktree, disjoint editing scopes and explicitly pinned role models. When actual capacity is lower, sequence work while preserving coordination and independent review.
+For development sessions using [crewbook](../../glossary/#names), start with capacity for eight subagents. `wh/dispatch` is an always-on session in its own terminal (see the table above), not a subagent of `wh/desk`, so neither session counts. From the dispatch session the subagents are two authors, two independent reviewers, one design batch and two bounded helpers: seven of the eight slots, leaving one spare for a third helper or reviewer. A count from the desk session needs no more. This is a capacity recommendation, not a measured optimum or a request to fill every slot {{< status unverified >}}. The limits in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) still apply: at most two code workers, one editor per worktree, disjoint editing scopes and explicitly pinned role models. When actual capacity is lower, sequence work while preserving coordination and independent review.
 
-**Codex.** For a fresh crewbook dispatch session from the repository (`wh/desk` takes the same command in its own terminal):
+**Codex.** For a fresh crewbook session from the repository:
 
 ```sh
 codex -m gpt-6.1-sol -c model_reasoning_effort="low" -c agents.max_concurrent_threads_per_session=8 '$crewbook'
 ```
 
-`$crewbook` invokes the crewbook skill by name in Codex (the skill's public name is `crewbook`, per the [glossary](../../glossary/#names)); the single quotes keep the shell from expanding `$crewbook` as a variable and pass the text literally. To persist just the capacity setting, add it to the existing `[agents]` table in user configuration; create that table only if it is absent:
+`$crewbook` invokes the crewbook skill by name in Codex (the skill's public name is `crewbook`, per the [glossary](../../glossary/#names)) {{< status unverified >}}; the single quotes keep the shell from expanding `$crewbook` as a variable and pass the text literally. The command sets no lane: the session becomes `wh/dispatch` or `wh/desk` when you paste [`.agents/dispatch.md`](https://github.com/wstein/workharbor/blob/main/.agents/dispatch.md) or [`.agents/desk.md`](https://github.com/wstein/workharbor/blob/main/.agents/desk.md) into it, as those prompts say (Claude Code has `/wh-dispatch` and `/wh-desk`). To persist just the capacity setting, add it to the existing `[agents]` table in user configuration; create that table only if it is absent:
 
 ```toml
 [agents]
@@ -69,7 +69,7 @@ max_concurrent_threads_per_session = 8
 
 The [official OpenAI configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) defines this as the limit on concurrently open spawned-agent threads, excluding the primary thread {{< status unverified >}}. Codex chooses the default when unset {{< status unverified >}}. `agents.max_threads` is the legacy alias {{< status unverified >}}. A completed agent's turn does not by itself establish that its thread has closed; use the host's reported capacity.
 
-**Claude Code.** For version 2.1.217 or later, start a session with:
+**Claude Code.** For version 2.1.217 or later {{< status unverified >}}, start a session with:
 
 ```sh
 CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=3 claude
@@ -79,7 +79,7 @@ The [official nesting documentation](https://code.claude.com/docs/en/sub-agents#
 
 The [official concurrency documentation](https://code.claude.com/docs/en/sub-agents#concurrent-subagent-limit) accepts a positive integer {{< status unverified >}} and gives a default of 20 {{< status unverified >}}. It counts running subagents and blocks new Agent-tool starts at the limit {{< status unverified >}}. `/subtask` forks occupy slots but bypass the cap; resuming finished subagents can exceed it {{< status unverified >}}. Ultracode sessions are exempt, and workflows and agent teams have separate limits {{< status unverified >}}. Keep the existing role model pins; this setting changes capacity only.
 
-**Antigravity (`agy`).** The [official subagent documentation](https://www.antigravity.google/docs/subagents/) describes parallel subagents and the `/agents` panel for inspecting their states {{< status unverified >}}. Inspect available capacity in the actual host and sequence work as needed. That source establishes no equivalent numerical concurrency setting; its nesting depth of ten is not a concurrency limit. Native role bindings and production support for this workflow remain {{< status unverified >}}.
+**Antigravity (`agy`).** The [official subagent documentation](https://www.antigravity.google/docs/subagents/) describes parallel subagents and the `/agents` panel for inspecting their states {{< status unverified >}}. Inspect available capacity in the actual host and sequence work as needed. That source establishes no equivalent numerical concurrency setting {{< status unverified >}}; its nesting depth of ten is not a concurrency limit {{< status unverified >}}. Native role bindings and production support for this workflow remain {{< status unverified >}}.
 
 ## The project board
 
