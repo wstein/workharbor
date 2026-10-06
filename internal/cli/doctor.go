@@ -11,6 +11,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -25,6 +26,8 @@ func newDoctor(st *state) *cobra.Command {
 		skip    []string
 		whrUser string
 		prefix  string
+		plain   bool
+		verbose bool
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -40,7 +43,9 @@ func newDoctor(st *state) *cobra.Command {
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
 			}
-			env, err := st.env.Setup.resolve(st)
+			style := st.style(st.env.Stderr, plain)
+			ui := render.Writer{W: st.env.Stderr, S: style}
+			env, err := st.env.Setup.resolve(st, style)
 			if err != nil {
 				return err
 			}
@@ -57,9 +62,13 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			switch {
 			case remembered:
+				ui.Rule()
 				fmt.Fprintln(st.env.Stderr, rememberedWarning(path))
+				ui.Rule()
 			case dev:
+				ui.Rule()
 				fmt.Fprintln(st.env.Stderr, developmentWarning)
+				ui.Rule()
 			}
 			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
@@ -128,13 +137,13 @@ func newDoctor(st *state) *cobra.Command {
 					return err
 				}
 			} else {
-				printDoctor(st.env.Stdout, rs)
-			}
-			for _, r := range rs {
-				if r.Fix != "" {
-					fmt.Fprintf(st.env.Stderr, "%s: %s\n  → %s\n", r.Check, clean(strings.TrimSpace(r.Detail)), clean(r.Fix))
+				// stdout is data: the tab-separated lines, unchanged, unless stdout is
+				// a terminal, where the readable report on stderr says the same
+				if !st.isTTY(st.env.Stdout) {
+					printDoctor(st.env.Stdout, rs)
 				}
 			}
+			printDoctorHuman(ui, rs, verbose)
 			unknown, warned := 0, 0
 			for _, r := range rs {
 				switch r.Status {
@@ -153,6 +162,8 @@ func newDoctor(st *state) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dev, "dev", false, "check a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
+	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
 	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")

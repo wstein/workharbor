@@ -230,7 +230,8 @@ func dropAdmin(d Deps) Check {
 			return Warn, acct + " is an administrator; " + others[0] + " can stay one"
 		},
 		Fix: &Fix{
-			Cmds: drop,
+			Irreversible: true,
+			Cmds:         drop,
 			Build: func(ctx context.Context, _ Prompter) ([]Cmd, error) {
 				// the same refusals again, after the confirmation
 				if c, err := d.accountConfig(); err != nil || c.shared {

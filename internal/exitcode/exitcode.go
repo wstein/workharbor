@@ -12,6 +12,7 @@ const (
 	Conflict   = 5
 	NeedsHuman = 6
 	Timeout    = 7
+	Quit       = 8 // the person answered q in `whr setup`: stopped cleanly, not a failure
 	TaskFailed = 10
 )
 

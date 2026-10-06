@@ -132,7 +132,7 @@ func TestAFixIsShownThenRunsAfterAYesAndTheCheckRunsAgain(t *testing.T) {
 	s.Fix = &wrapped
 	outs, out, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost})
 	// shown before it ran, as argument vectors
-	for _, want := range []string{"does: make the directory", "$ echo 'has space' 'it'\\''s'", "$ sudo pmset -a sleep 0", "$ sudo -v"} {
+	for _, want := range []string{"make the directory", "$ echo 'has space' 'it'\\''s'", "$ sudo pmset -a sleep 0", "$ sudo -v"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("the fix was not shown: lacks %q\n%s", want, errOut)
 		}

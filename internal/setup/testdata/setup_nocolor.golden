@@ -1,0 +1,41 @@
+Legend (colour is only decoration: the words are always printed)
+ + ok     checked and fine
+ x FAIL   checked and wrong
+ ? ?      not verified: nothing measured it
+ ! WARN   works, weaker than recommended
+ - skip   left out, or not offered
+| ACTION  something you must do or answer
+|   $ a command you can copy
+
+-- Step 1 of 4 - title of autologout --
+ + ok     key not set: the system default applies (default off)
+
+-- Step 2 of 4 - title of workharbor-user --
+ x FAIL   there is no user workharbor
+| ACTION  run this command
+|   $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
+| ACTION  what happens next: Then log in as workharbor and run `whr setup`.
+ - skip   dry run: nothing is run
+
+-- Step 3 of 4 - title of tailscale --
+ ? ?      tailscale did not answer
+ ? ?      whr has no fix for this step
+
+-- Step 4 of 4 - title of power --
+ x FAIL   sleep is on
+| ACTION  Open System Settings and turn the toggle off.
+| ACTION  this opens: x-apple.systempreferences:x
+ - skip   dry run: nothing is run
+------------------------------------------------------------
+Summary: 1 ok, 2 FAIL, 1 not verified (?), 0 WARN, 0 skipped (dry run: nothing was changed)
+  done: autologout
+  left: workharbor-user (fail), tailscale (not_verified), power (fail)
+  next: whr setup host --from workharbor-user
+
+What you need to do now
+  1. title of workharbor-user: Then log in as workharbor and run `whr setup`.
+     $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
+  2. title of tailscale: whr has no fix for this step; see the manual
+  3. title of power: Open System Settings and turn the toggle off.
+  4. Then go on with the steps that are left
+     $ whr setup host --from workharbor-user

@@ -294,7 +294,7 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if f := lines["egress"]; f[3] != "" {
 		t.Errorf("a check no step fixes names no command: %q", f)
 	}
-	if !strings.Contains(errOut, "→ whr setup host --only power") {
+	if !strings.Contains(errOut, "$ whr setup host --only power") {
 		t.Errorf("stderr lacks the fix: %q", errOut)
 	}
 	// read-only: nothing ran, nothing opened, nobody asked, no sudo among the reads
@@ -349,7 +349,9 @@ func TestAccountStepCanonicalAndLegacySelection(t *testing.T) {
 			if code != 1 || !strings.Contains(text, "workharbor-user") || !strings.Contains(text, "sysadminctl -addUser operator") {
 				t.Fatalf("code %d: %s", code, text)
 			}
-			if strings.Count(text, "$ sudo sysadminctl -addUser operator") != 1 {
+			// once in the step, and once more in the closing "What you need to do now"
+			body, todo, found := strings.Cut(text, "What you need to do now")
+			if !found || strings.Count(body, "$ sudo sysadminctl -addUser operator") != 1 || strings.Count(todo, "$ sudo sysadminctl -addUser operator") != 1 {
 				t.Fatalf("account fix repeated or missing: %s", text)
 			}
 			if len(r.host.ran) != 0 {
@@ -456,5 +458,31 @@ func TestSetupHostNextPointsAtLegacyUserWhr(t *testing.T) {
 	}
 	if strings.Contains(text, "--user whr --user") {
 		t.Errorf("double --user:\n%s", text)
+	}
+}
+
+// The --json document of `whr doctor` is a contract: the human rendering (#320)
+// must not change one byte of it. The golden file was recorded before the
+// rendering existed; the temporary directory of the rig is replaced by a name.
+func TestDoctorJSONIsByteIdentical(t *testing.T) {
+	r := newSetupRig(t)
+	r.env.IsTerminal = func() bool { return false }
+	_, out, _ := r.run("doctor", "--json", "--user", "operator")
+	out = strings.ReplaceAll(out, filepath.Dir(filepath.Dir(filepath.Dir(r.exe))), "<tmp>")
+	p := filepath.Join("testdata", "doctor_json.golden")
+	if os.Getenv("WHR_UPDATE_GOLDEN") != "" {
+		if err := os.MkdirAll("testdata", 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(out), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(p) //nolint:gosec // a golden file of this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != out {
+		t.Errorf("--json output changed:\n%s", out)
 	}
 }

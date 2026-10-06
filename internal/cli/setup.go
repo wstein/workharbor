@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/render"
 	rt "github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/setup"
 	"github.com/wstein/workharbor/internal/textsafe"
@@ -43,7 +45,7 @@ func installedPrefixes(prefix string) []string {
 	return out
 }
 
-func (e SetupEnv) resolve(st *state) (SetupEnv, error) {
+func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 	if e.GOOS == "" {
 		e.GOOS = runtime.GOOS
 	}
@@ -61,7 +63,7 @@ func (e SetupEnv) resolve(st *state) (SetupEnv, error) {
 		e.Executable = os.Executable
 	}
 	if e.Host == nil {
-		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin}
+		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style}
 	}
 	return e, nil
 }
@@ -79,6 +81,8 @@ func newSetup(st *state) *cobra.Command {
 		from     string
 		whrUser  string
 		prefix   string
+		plain    bool
+		verbose  bool
 		doctorOn = func(env SetupEnv, path string) []doctor.Check {
 			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
@@ -95,7 +99,9 @@ func newSetup(st *state) *cobra.Command {
 		return DefaultConfigPath(st.env.Getenv)
 	}
 	run := func(cmd *cobra.Command, phase doctor.Phase) error {
-		env, err := st.env.Setup.resolve(st)
+		style := st.style(st.env.Stderr, plain)
+		ui := render.Writer{W: st.env.Stderr, S: style}
+		env, err := st.env.Setup.resolve(st, style)
 		if err != nil {
 			return err
 		}
@@ -119,11 +125,16 @@ func newSetup(st *state) *cobra.Command {
 		} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
 			return err
 		}
+		// a rule sets the development warning apart from the steps (#320)
 		switch {
 		case remembered:
+			ui.Rule()
 			fmt.Fprintln(st.env.Stderr, rememberedWarning(configPath()))
+			ui.Rule()
 		case dev:
+			ui.Rule()
 			fmt.Fprintln(st.env.Stderr, developmentWarning)
+			ui.Rule()
 		}
 		ctx := cmd.Context()
 		if phase == doctor.PhaseHost {
@@ -186,9 +197,14 @@ func newSetup(st *state) *cobra.Command {
 				continue
 			}
 			if stt, detail := c.Run(ctx); stt == doctor.Fail && !dryRun {
-				fmt.Fprintf(st.env.Stderr, "account: %s\n", clean(strings.TrimSpace(detail)))
-				ok, err := env.Host.Confirm("Go on without a dedicated standard account, knowing this?")
-				if err != nil || !ok {
+				ui.Report(render.LevelFail, "account: "+clean(strings.TrimSpace(detail)))
+				// accepting a risk is not undoable by running it again: Enter is no
+				a, err := setup.Ask(env.Host, "Go on without a dedicated standard account, knowing this?", render.DefaultNo)
+				if err == nil && a == render.Quit {
+					ui.Report(render.LevelSkipped, "stopped at your request, nothing was run")
+					return quitError{}
+				}
+				if err != nil || a != render.Yes {
 					return usageError{"stopped: set up a dedicated standard account, or remove the remote access from the configuration"}
 				}
 			} else if stt == doctor.Fail {
@@ -219,8 +235,13 @@ func newSetup(st *state) *cobra.Command {
 		if from == "whr-user" {
 			from = "workharbor-user"
 		}
-		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr}
+		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose}
 		outs, err := setup.Run(ctx, steps, env.Host, so)
+		var quit *setup.QuitError
+		if errors.As(err, &quit) {
+			printQuit(ui, quit)
+			return quitError{}
+		}
 		if err != nil {
 			return usageError{err.Error()}
 		}
@@ -256,6 +277,8 @@ func newSetup(st *state) *cobra.Command {
 		f.BoolVar(&dev, "dev", false, "use a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 		f.BoolVar(&managed, "managed", false, "leave development mode: remove development_prefix from the configuration (`--only development-key` does only that), then check the managed prefix; not with --dev")
 		f.BoolVar(&dryRun, "dry-run", false, "run the read-only checks for real and print every fix without running any")
+		f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal; also no fzf")
+		f.BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a step ran")
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
 		f.StringVar(&from, "from", "", "start at this step")
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")

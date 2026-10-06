@@ -18,6 +18,9 @@ type Env struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
+	// IsTTY says whether a stream is a terminal, for colour and the readable
+	// report. Nil asks the file.
+	IsTTY func(io.Writer) bool
 	// NewClient builds the API client from the configuration file path. Nil
 	// uses NewClient.
 	NewClient func(configPath string) (*Client, error)

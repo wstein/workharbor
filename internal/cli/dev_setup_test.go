@@ -370,7 +370,7 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 			if strings.Contains(again, "no step") || strings.Contains(again, "this part runs as another user") || strings.Contains(again, "not an installed binary") {
 				t.Fatalf("the suggested command %q is refused:\n%s", next, again)
 			}
-			if !strings.Contains(again, "summary") {
+			if !strings.Contains(again, "Summary:") {
 				t.Fatalf("the suggested command %q did not run:\n%s", next, again)
 			}
 		})

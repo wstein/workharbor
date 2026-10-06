@@ -499,11 +499,15 @@ func TestAutomaticLogOutIsOffWhenTheKeyIsAbsentOrZero(t *testing.T) {
 		want   Status
 		detail string
 	}{
-		"not set (defaults says so)": {scripted{autologoutKey: "ERR:exit status 1: The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist"}, OK, "not set"},
-		"defaults fails otherwise":   {scripted{autologoutKey: "ERR:signal: killed"}, NotVerified, "not known"},
-		"no answer at all":           {scripted{}, NotVerified, "not known"},
-		"zero":                       {scripted{autologoutKey: "0\n"}, OK, "off"},
-		"ten minutes":                {scripted{autologoutKey: "600\n"}, Fail, "after 600 seconds"},
+		"not set (defaults says so)":     {scripted{autologoutKey: "ERR:exit status 1: The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist"}, OK, "not set"},
+		"absent key, as macOS words it":  {scripted{autologoutKey: "ERR:exit status 1: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'"}, OK, "key not set: the system default applies (default off)"},
+		"another key is not this one":    {scripted{autologoutKey: "ERR:exit status 1: Could not find key 'com.apple.other' in domain 'kCFPreferencesAnyApplication'"}, NotVerified, "not known"},
+		"another domain is not this one": {scripted{autologoutKey: "ERR:exit status 1: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'x'"}, NotVerified, "not known"},
+		"defaults fails otherwise":       {scripted{autologoutKey: "ERR:signal: killed"}, NotVerified, "not known"},
+		"permission error":               {scripted{autologoutKey: "ERR:exit status 1: Could not read the plist: permission denied"}, NotVerified, "not known"},
+		"no answer at all":               {scripted{}, NotVerified, "not known"},
+		"zero":                           {scripted{autologoutKey: "0\n"}, OK, "off"},
+		"ten minutes":                    {scripted{autologoutKey: "600\n"}, Fail, "after 600 seconds"},
 	} {
 		got, detail := status(steps(t, hostDeps(tc.out))["autologout"])
 		if got != tc.want || !strings.Contains(detail, tc.detail) {

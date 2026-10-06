@@ -44,7 +44,7 @@ Avoid `review` as a verb (ambiguous). Task refs accept a short ID, a prefix or `
 
 ### 9.2 Scripting contract
 
-- **Exit codes:** 0 ok · 1 error · 2 usage · 3 not found · 4 auth · 5 conflict/wrong state · 6 needs human input (`whr wait`) · 7 timeout · 10 task failed.
+- **Exit codes:** 0 ok · 1 error · 2 usage · 3 not found · 4 auth · 5 conflict/wrong state · 6 needs human input (`whr wait`) · 7 timeout · 8 quit (`whr setup`: the person answered q) · 10 task failed.
 - `--json` returns a stable envelope with `schema_version`; `--jsonl` for streams.
 - Streams via SSE, resumable with `--since <event-id>`.
 - `Idempotency-Key` on mutations; `--dry-run` for destructive actions.

@@ -18,6 +18,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/textsafe"
 )
 
@@ -34,6 +35,54 @@ type Host interface {
 	Open(ctx context.Context, target string) error
 }
 
+// Asker is what a Host adds to ask [Y/n/q] questions: Enter takes the default
+// of the step's class, q quits. A Host without it is asked through Confirm,
+// whose answer is only yes or no.
+type Asker interface {
+	Ask(question string, d render.Default) (render.Answer, error)
+}
+
+// Ask asks through the Host's Asker, or through Confirm when it has none.
+func Ask(h Host, question string, d render.Default) (render.Answer, error) {
+	if a, ok := h.(Asker); ok {
+		return a.Ask(question, d)
+	}
+	ok, err := h.Confirm(question)
+	if err != nil || !ok {
+		return render.No, err
+	}
+	return render.Yes, nil
+}
+
+// QuitError is returned by Run when the person answered q. It says where to go
+// on; the command maps it to its own exit code, which is not a failure's.
+type QuitError struct {
+	Step   string
+	Resume string // the command that goes on, for the hint
+}
+
+func (e *QuitError) Error() string {
+	return fmt.Sprintf("stopped at step %s; to go on, run: %s", e.Step, e.Resume)
+}
+
+// Is makes errors.Is(err, render.ErrQuit) true.
+func (e *QuitError) Is(target error) bool { return target == render.ErrQuit }
+
+// Level is the report level of a status.
+func Level(st doctor.Status) render.Level {
+	switch st {
+	case doctor.OK:
+		return render.LevelOK
+	case doctor.Fail:
+		return render.LevelFail
+	case doctor.Warn:
+		return render.LevelWarn
+	case doctor.Skipped:
+		return render.LevelSkipped
+	}
+	return render.LevelNotVerified
+}
+
 // Options say what to run.
 type Options struct {
 	Phase  doctor.Phase
@@ -46,6 +95,10 @@ type Options struct {
 	Resume []string
 	// Out gets the data (one line per step), Err the human text.
 	Out, Err io.Writer
+	// Style says how Err is drawn (colour and symbols only on a terminal); the
+	// zero value is plain ASCII. Verbose adds the raw text of the tools.
+	Style   render.Style
+	Verbose bool
 }
 
 // Outcome is what became of one step.
@@ -58,6 +111,8 @@ type Outcome struct {
 	// UseUser is the account the step says to use instead of the requested one
 	// (the legacy account): the next command names it.
 	UseUser string
+	// Todo is what the person has to do for a step that is left.
+	Todo render.TodoItem
 }
 
 // Select returns the steps to run: those of the phase, from --from on, or only
@@ -117,26 +172,38 @@ func contains(list []string, v string) bool {
 
 // Run runs the selected steps in order. A step whose check passes does nothing.
 // With DryRun the checks still run, for real, and the fixes are only printed.
+// Each step prints its header, one report line (the reason once), and for a fix
+// the ACTION and the commands; the raw text of a tool only with Verbose. When
+// the person answers q, Run returns what it did so far and a *QuitError.
 func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcome, error) {
 	chosen, err := Select(steps, o)
 	if err != nil {
 		return nil, err
 	}
+	ui := render.Writer{W: o.Err, S: o.Style}
+	if len(chosen) > 0 {
+		ui.Legend()
+	}
 	var outs []Outcome
 	sudoReady := false
 	provided := map[string]bool{} // services a step has brought up or found running
-	for _, s := range chosen {
+	for i, s := range chosen {
 		if err := ctx.Err(); err != nil {
 			return outs, err
 		}
+		title := s.Title
+		if title == "" {
+			title = s.Name
+		}
+		ui.Header(i+1, len(chosen), title)
 		st, detail := s.Run(ctx)
 		fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
+		report(ui, o, st, detail)
 		out := Outcome{Step: s.Name, Status: st, Detail: detail}
 		if s.UseUser != nil {
 			out.UseUser = s.UseUser(st)
 		}
 		if st == doctor.Warn && !s.FixOnWarn || st == doctor.Skipped {
-			fmt.Fprintf(o.Err, "%s: %s\n", s.Name, oneLine(detail))
 			outs = append(outs, out)
 			continue
 		}
@@ -144,32 +211,41 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			if s.Provides != "" {
 				provided[s.Provides] = true
 			}
-			fmt.Fprintf(o.Err, "%s: already done: %s\n", s.Name, oneLine(detail))
 			outs = append(outs, out)
 			continue
 		}
+		out.Todo = todoFor(title, s.Fix)
 		if s.Fix == nil {
-			fmt.Fprintf(o.Err, "%s: %s: %s\n  this step has no fix\n", s.Name, s.Title, oneLine(detail))
+			ui.Report(render.LevelNotVerified, "whr has no fix for this step")
 			outs = append(outs, out)
 			continue
 		}
-		fmt.Fprintf(o.Err, "\n%s: %s\n  %s\n", s.Name, s.Title, oneLine(detail))
-		show(o.Err, s.Fix)
+		showFix(ui, s.Fix)
 		if s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs) {
-			fmt.Fprintf(o.Err, "  not run: it needs %s, which no step before it brought up\n", s.Needs)
+			ui.Report(render.LevelSkipped, fmt.Sprintf("not run: it needs %s, which no step before it brought up", s.Needs))
 			out.Asked = true
 			outs = append(outs, out)
 			continue
 		}
 		if o.DryRun {
-			fmt.Fprintln(o.Err, "  (dry run: nothing is run)")
+			if f := s.Fix; f.Guide != "" && hasCommands(f) {
+				ui.Action("what happens next: " + oneLine(f.Guide))
+			}
+			ui.Report(render.LevelSkipped, "dry run: nothing is run")
 			out.Asked = true
 			outs = append(outs, out)
 			continue
 		}
-		fixed, err := apply(ctx, h, s, o, &sudoReady)
+		fixed, err := apply(ctx, h, s, o, ui, &sudoReady)
+		if errors.Is(err, render.ErrQuit) {
+			return outs, &QuitError{Step: s.Name, Resume: nextCommand(o, s.Name, names(chosen[i:]))}
+		}
 		if err != nil {
-			fmt.Fprintf(o.Err, "  %s: %v\n", s.Name, err)
+			reason, tool := render.SplitTool(oneLine(err.Error()))
+			ui.Report(render.LevelFail, reason)
+			if o.Verbose && tool != "" {
+				ui.Tool(tool)
+			}
 		}
 		out.Asked = !fixed
 		if fixed {
@@ -180,10 +256,71 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				provided[s.Provides] = true
 			}
 			fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
+			report(ui, o, st, detail)
 		}
 		outs = append(outs, out)
 	}
 	return outs, nil
+}
+
+// report prints a step's result once: its reason, and the raw text of the tool
+// behind it only with --verbose.
+func report(ui render.Writer, o Options, st doctor.Status, detail string) {
+	reason, tool := render.SplitTool(oneLine(detail))
+	ui.Report(Level(st), reason)
+	if o.Verbose && tool != "" {
+		ui.Tool(tool)
+	}
+}
+
+func hasCommands(f *doctor.Fix) bool {
+	return f.Do != nil || f.Build != nil || len(f.Cmds) > 0
+}
+
+// showFix prints what a fix does as ACTION lines and the exact commands as
+// copyable ones. A guided fix (no command) shows its guide as the ACTION.
+func showFix(ui render.Writer, f *doctor.Fix) {
+	switch {
+	case !hasCommands(f):
+		ui.Action(oneLine(f.Guide))
+		if f.Open != "" {
+			ui.Action("this opens: " + f.Open)
+		}
+	case f.Desc != "":
+		ui.Action(f.Desc)
+	case len(f.Cmds) == 1:
+		ui.Action("run this command")
+	default:
+		ui.Action("run these commands")
+	}
+	for _, c := range f.Cmds {
+		ui.Command(quoteArgv(c.Full()))
+	}
+	if hasCommands(f) && f.Open != "" {
+		ui.Action("this opens: " + f.Open)
+	}
+}
+
+// todoFor is what the person has to do for a step that is left.
+func todoFor(title string, f *doctor.Fix) render.TodoItem {
+	it := render.TodoItem{Text: title}
+	switch {
+	case f == nil:
+		it.Text += ": whr has no fix for this step; see the manual"
+	case !hasCommands(f):
+		it.Text += ": " + oneLine(f.Guide)
+	default:
+		if f.Desc != "" {
+			it.Text += ": " + f.Desc
+		}
+		for _, c := range f.Cmds {
+			it.Commands = append(it.Commands, quoteArgv(c.Full()))
+		}
+		if f.Guide != "" {
+			it.Text += ": " + oneLine(f.Guide)
+		}
+	}
+	return it
 }
 
 // providedElsewhere reports whether a step that the run did not select provides
@@ -209,22 +346,36 @@ func names(cs []doctor.Check) []string {
 	return out
 }
 
-// Summary writes what a run did, in a few lines for the human: the steps that
-// are done, the ones that are left with why, and the command that goes on. A
-// step that is optional or was left alone by a warn counts as done only when it
-// passed. It writes nothing for an empty run.
+// Summary writes what a run did, for the human: a one-line count, the steps
+// that are done, the ones that are left with why, the command that goes on, and
+// a numbered list of what to do now. A step that is optional or was left alone
+// by a warn counts as done only when it passed. It writes nothing for an empty
+// run.
 func Summary(w io.Writer, outs []Outcome, o Options) {
-	dryRun := o.DryRun
 	var done, left, leftNames []string
+	var todo []render.TodoItem
+	var counts render.Counts
 	first, useUser := "", ""
 	for _, out := range outs {
 		switch out.Status {
 		case doctor.OK:
+			counts.OK++
 			done = append(done, out.Step)
-		case doctor.Warn, doctor.Skipped:
+		case doctor.Warn:
+			counts.Warn++
+		case doctor.Skipped:
+			counts.Skipped++
 		default:
+			if out.Status == doctor.Fail {
+				counts.Fail++
+			} else {
+				counts.NotVerified++
+			}
 			left = append(left, out.Step+" ("+string(out.Status)+")")
 			leftNames = append(leftNames, out.Step)
+			if out.Todo.Text != "" {
+				todo = append(todo, out.Todo)
+			}
 			if first == "" {
 				first, useUser = out.Step, out.UseUser
 			}
@@ -233,28 +384,35 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 	if len(outs) == 0 {
 		return
 	}
-	prefix := "summary"
-	if dryRun {
-		prefix = "summary (dry run: nothing was changed)"
+	ui := render.Writer{W: w, S: o.Style}
+	ui.Rule()
+	line := render.Summary(o.Style, counts)
+	if o.DryRun {
+		line = strings.TrimSuffix(line, "\n") + " (dry run: nothing was changed)\n"
 	}
-	fmt.Fprintf(w, "%s:\n  done: %s\n", prefix, listOrNone(done))
+	fmt.Fprint(w, line)
+	fmt.Fprintf(w, "  done: %s\n", listOrNone(done))
 	fmt.Fprintf(w, "  left: %s\n", listOrNone(left))
 	if first != "" {
+		next := ""
 		if useUser != "" {
 			argv := append([]string(nil), o.Resume...)
 			if len(argv) == 0 {
 				argv = []string{"whr", "setup"}
 			}
-			fmt.Fprintf(w, "  next: %s\n", quoteArgv(append(argv, "--user", useUser)))
+			next = quoteArgv(append(argv, "--user", useUser))
 		} else {
-			fmt.Fprintf(w, "  next: %s\n", nextCommand(o, first, leftNames))
+			next = nextCommand(o, first, leftNames)
 		}
+		fmt.Fprintf(w, "  next: %s\n", next)
+		todo = append(todo, render.TodoItem{Text: "Then go on with the steps that are left", Commands: []string{next}})
 	}
 	for _, out := range outs {
 		if out.Step == "container-kernel" && out.Status != doctor.OK {
 			fmt.Fprintln(w, "  no Linux kernel is installed or verified: containers cannot boot until the container-kernel step passes")
 		}
 	}
+	ui.Todo(todo)
 }
 
 // nextCommand is the command that goes on: the phase and the flags of this run
@@ -283,23 +441,6 @@ func listOrNone(l []string) string {
 	return strings.Join(l, ", ")
 }
 
-// show prints a fix: what it does and the exact commands, as argument vectors
-// written out for reading. They are never run through a shell.
-func show(w io.Writer, f *doctor.Fix) {
-	if f.Desc != "" {
-		fmt.Fprintf(w, "  does: %s\n", f.Desc)
-	}
-	for _, c := range f.Cmds {
-		fmt.Fprintf(w, "  $ %s\n", quoteArgv(c.Full()))
-	}
-	if f.Guide != "" {
-		fmt.Fprintf(w, "  %s\n", f.Guide)
-	}
-	if f.Open != "" {
-		fmt.Fprintf(w, "  opens: %s\n", f.Open)
-	}
-}
-
 // quoteArgv writes an argument vector so a human can read where each argument
 // begins; it is for display only. A control, bidirectional or separator
 // character is never printed raw (a newline would start a second command when
@@ -320,30 +461,49 @@ func quoteArgv(argv []string) string {
 }
 
 // apply asks, then runs the fix. It returns whether a fix ran (so the check is
-// worth running again) and what stopped it.
-func apply(ctx context.Context, h Host, s doctor.Check, o Options, sudoReady *bool) (bool, error) {
+// worth running again) and what stopped it; render.ErrQuit when the person
+// answered q.
+func apply(ctx context.Context, h Host, s doctor.Check, o Options, ui render.Writer, sudoReady *bool) (bool, error) {
 	f := s.Fix
-	if f.Do == nil && f.Build == nil && len(f.Cmds) == 0 { // guided: for what a command line cannot do
+	yes := func(question string, d render.Default) (bool, error) {
+		a, err := Ask(h, question, d)
+		if err != nil {
+			return false, err
+		}
+		if a == render.Quit {
+			return false, render.ErrQuit
+		}
+		return a == render.Yes, nil
+	}
+	if !hasCommands(f) { // guided: for what a command line cannot do
 		if f.Open != "" {
-			if ok, err := h.Confirm("Open it now?"); err != nil {
+			if ok, err := yes("Open it now?", render.DefaultYes); err != nil {
 				return false, err
 			} else if ok {
 				if err := h.Open(ctx, f.Open); err != nil {
-					fmt.Fprintf(o.Err, "  could not open it: %v\n", err)
+					ui.Report(render.LevelFail, "could not open it: "+oneLine(err.Error()))
 				}
 			}
 		}
-		done, err := h.Confirm("Done with this step? The check runs again")
+		done, err := yes("Done with this step? The check runs again.", render.DefaultYes)
 		return done && err == nil, err
 	}
-	ok, err := h.Confirm("Run this?")
+	d := render.DefaultYes
+	if f.Irreversible { // it cannot be undone: Enter is no
+		d = render.DefaultNo
+	}
+	ok, err := yes("Ready to run this?", d)
 	if err != nil || !ok {
 		return false, err
+	}
+	if f.Guide != "" {
+		ui.Action("what happens next: " + oneLine(f.Guide))
 	}
 	if o.Phase == doctor.PhaseHost && !*sudoReady && usesSudo(f) {
 		// One sudo -v, no background refresh: root stays reachable only while the
 		// human is here, and sudo asks again if it expires.
-		fmt.Fprintf(o.Err, "  $ sudo -v   (once, so the commands above ask for your password only once; no background refresh)\n")
+		ui.Action("sudo asks for your password once, so the commands above need it only once (no background refresh)")
+		ui.Command("sudo -v")
 		if err := h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
 			return false, fmt.Errorf("sudo did not accept the password: %w", err)
 		}
@@ -361,7 +521,7 @@ func apply(ctx context.Context, h Host, s doctor.Check, o Options, sudoReady *bo
 			return false, err
 		}
 		for _, c := range cmds { // the real commands, shown before they run
-			fmt.Fprintf(o.Err, "  $ %s\n", quoteArgv(c.Full()))
+			ui.Command(quoteArgv(c.Full()))
 		}
 	}
 	for _, c := range cmds {
@@ -370,7 +530,9 @@ func apply(ctx context.Context, h Host, s doctor.Check, o Options, sudoReady *bo
 		}
 	}
 	if f.Guide != "" && f.Open != "" {
-		if ok, _ := h.Confirm("Open the page that helps with the rest?"); ok {
+		if ok, err := yes("Open the page that helps with the rest?", render.DefaultYes); err != nil {
+			return true, err
+		} else if ok {
 			_ = h.Open(ctx, f.Open)
 		}
 	}

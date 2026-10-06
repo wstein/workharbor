@@ -257,6 +257,13 @@ func hostSteps(d Deps) []Check {
 					if strings.Contains(err.Error(), "does not exist") {
 						return OK, "automatic log-out is not set"
 					}
+					// the key is absent in the way macOS 26 words it (one observed
+					// data point, unverified elsewhere): the system default applies,
+					// which is off. Only this exact message; anything else stays
+					// not verified.
+					if strings.Contains(err.Error(), "Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'") {
+						return OK, "key not set: the system default applies (default off)"
+					}
 					return NotVerified, "defaults did not answer, so the setting is not known: " + oneLine(err.Error())
 				}
 				delay := strings.TrimSpace(out)

@@ -61,7 +61,7 @@ func between(doc, start, end string) (string, bool) {
 var exitCodes = map[string]int{
 	"ok": exitcode.OK, "error": exitcode.Error, "usage": exitcode.Usage, "not found": exitcode.NotFound,
 	"auth": exitcode.Auth, "conflict/wrong state": exitcode.Conflict, "needs human input": exitcode.NeedsHuman,
-	"timeout": exitcode.Timeout, "task failed": exitcode.TaskFailed,
+	"timeout": exitcode.Timeout, "quit": exitcode.Quit, "task failed": exitcode.TaskFailed,
 }
 
 var exitEntry = regexp.MustCompile(`(\d+) ([a-z][a-z /]*[a-z])(?: \([^)]*\))?`)

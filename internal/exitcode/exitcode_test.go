@@ -35,11 +35,11 @@ func TestCodesAreStable(t *testing.T) {
 	// These numbers are part of the scripting contract (design §9.2).
 	want := map[string]int{
 		"OK": 0, "Error": 1, "Usage": 2, "NotFound": 3, "Auth": 4,
-		"Conflict": 5, "NeedsHuman": 6, "Timeout": 7, "TaskFailed": 10,
+		"Conflict": 5, "NeedsHuman": 6, "Timeout": 7, "Quit": 8, "TaskFailed": 10,
 	}
 	got := map[string]int{
 		"OK": OK, "Error": Error, "Usage": Usage, "NotFound": NotFound, "Auth": Auth,
-		"Conflict": Conflict, "NeedsHuman": NeedsHuman, "Timeout": Timeout, "TaskFailed": TaskFailed,
+		"Conflict": Conflict, "NeedsHuman": NeedsHuman, "Timeout": Timeout, "Quit": Quit, "TaskFailed": TaskFailed,
 	}
 	for name, code := range want {
 		if got[name] != code {

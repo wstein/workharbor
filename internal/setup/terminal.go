@@ -14,6 +14,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/wstein/workharbor/internal/doctor"
+	"github.com/wstein/workharbor/internal/render"
 )
 
 // Terminal is the real Host: a person at a terminal. Prompts go to Err (stdout is
@@ -24,6 +25,8 @@ type Terminal struct {
 	Err io.Writer
 	// Stdin is the terminal a secret is read from; it must be a terminal.
 	Stdin *os.File
+	// Style draws the prompts and the output of commands (zero: plain ASCII).
+	Style render.Style
 }
 
 // Output implements doctor.Runner.
@@ -43,7 +46,11 @@ func (Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 	argv := c.Full()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // the fixes the steps list, shown before they run
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, t.Err, t.Err
+	// what the tool says is set apart from whr's own text, line by line, with
+	// nothing held back, so a prompt of the tool appears at once
+	tw := render.NewToolWriter(t.Err, t.Style)
+	defer tw.End()
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, tw, tw
 	return cmd.Run()
 }
 
@@ -91,3 +98,8 @@ func (t Terminal) Confirm(question string) (bool, error) {
 
 // Show implements doctor.Prompter.
 func (t Terminal) Show(text string) { fmt.Fprintln(t.Err, text) }
+
+// Ask implements Asker: [Y/n/q] or [y/N/q] by the default, as an ACTION line.
+func (t Terminal) Ask(question string, d render.Default) (render.Answer, error) {
+	return render.Ask(t.In, render.Writer{W: t.Err, S: t.Style}, question, d)
+}
