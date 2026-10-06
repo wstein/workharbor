@@ -91,7 +91,7 @@ func Lint(msg string, opt Options) []string {
 	if block {
 		attributed = scan
 	}
-	attributionProblems := attributionProblemsFor(attributed)
+	attributionProblems := attributionProblemsFor(attributed, opt)
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
 			// These skip the message rules, never the one about origin: a bot's
@@ -171,9 +171,11 @@ func Lint(msg string, opt Options) []string {
 
 // attributionProblemsFor validates both legacy assistance and current coauthor
 // trailers, including on subject-exempt commits. Human coauthors are independent
-// of AI attribution. Reserved project addresses identify AI attribution; names
-// alone may belong to humans. The message cannot prove which model actually ran.
-func attributionProblemsFor(trailers []trailer) []string {
+// of AI attribution on a human's commit; a bot or agent author takes none.
+// Reserved project addresses identify AI attribution; names alone may belong
+// to humans. The message cannot prove which model actually ran.
+func attributionProblemsFor(trailers []trailer, opt Options) []string {
+	botAuthor := botRe.MatchString(opt.Author) && !depBotRe.MatchString(opt.Author)
 	var problems []string
 	for _, t := range trailers {
 		if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
@@ -191,7 +193,10 @@ func attributionProblemsFor(trailers []trailer) []string {
 		fields := strings.Fields(name)
 		id, ok := aiIdentities[email]
 		if !ok {
-			continue // Other identities may be legitimate human coauthors.
+			if botAuthor {
+				problems = append(problems, fmt.Sprintf("Co-Authored-By %q is a person; a commit authored by %q (a bot or agent) takes only AI attribution coauthors", t.value, opt.Author))
+			}
+			continue // Other identities may be legitimate human coauthors of a human's commit.
 		}
 		if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
 			problems = append(problems, fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the exact exposed model or unknown", id.vendor, email))

@@ -287,18 +287,20 @@ func TestAttributionAndSignoffCases(t *testing.T) {
 	const human = "Werner Stein <claude@wstein.de>"
 	const person = "Co-Authored-By: Person <person@example.test>"
 	const ai = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
-	for _, author := range []string{"Claude <noreply@anthropic.com>", "ci-agent <agent@example.test>", "dependabot[bot] <support@github.com>"} {
-		if got := Lint("docs: a\n\n"+ai+"\n"+person, Options{Author: author}); len(got) != 0 {
-			t.Errorf("%s with human coauthor: %v", author, got)
-		}
+	// a human author keeps a human coauthor next to an AI line (H7)
+	if got := Lint("docs: a\n\n"+ai+"\n"+person, Options{Author: human}); len(got) != 0 {
+		t.Errorf("human author with AI and person coauthors: %v", got)
 	}
 	if got := Lint("build(deps): bump x\n\n"+person+"\nSigned-off-by: dependabot[bot] <support@github.com>", Options{Author: "dependabot[bot] <support@github.com>"}); len(got) != 0 {
 		t.Errorf("dependabot with person coauthor: %v", got)
 	}
 	for _, p := range []string{"Merge ", "Revert ", "fixup! ", "squash! ", "amend! "} {
-		msg := p + "x\n\n" + person
+		msg := p + "x\n\n" + ai
 		if got := Lint(msg, Options{Author: "ci-agent <agent@example.test>"}); len(got) != 0 {
-			t.Errorf("%q bot with person coauthor: %v", p, got)
+			t.Errorf("%q bot with AI coauthor: %v", p, got)
+		}
+		if got := Lint(p+"x\n\n"+person, Options{Author: "ci-agent <agent@example.test>"}); len(got) == 0 {
+			t.Errorf("%q bot with person coauthor accepted", p)
 		}
 		if got := Lint(msg+"\nSigned-off-by: P <p@example.test>", Options{Author: "ci-agent <agent@example.test>"}); len(got) == 0 {
 			t.Errorf("%q bot signoff accepted", p)
@@ -343,6 +345,42 @@ func TestAntigravityIdentityAndMessages(t *testing.T) {
 		got := Lint("docs: a\n\nCo-Authored-By: Alice <"+addr+">", Options{Author: "W <w@x.de>"})
 		if !strings.Contains(strings.Join(got, "\n"), want) {
 			t.Errorf("%s: want %q in %v", addr, want, got)
+		}
+	}
+}
+
+// A bot or agent author takes no person as coauthor: only AI attribution on a
+// reserved address. A human author keeps human coauthors (AGENTS.md).
+func TestBotAuthorsTakeNoPersonCoauthors(t *testing.T) {
+	const person = "Co-Authored-By: Person <person@example.test>"
+	const ai = "Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>"
+	bots := []string{
+		"Claude <noreply@anthropic.com>", "Codex <noreply@openai.com>", "Antigravity <noreply@google.com>",
+		"ci-agent <agent@example.test>", "release-bot <bot@example.test>", "github-actions[bot] <a@users.noreply.github.com>",
+	}
+	for _, author := range bots {
+		for _, subject := range []string{"docs: a", "feat: a\n\nRefs: #1", "Merge branch 'x'", "fixup! docs: a"} {
+			for _, line := range []string{person, "co-authored-by : Person <person@example.test>", "Co-Authored-By:Person <person@example.test>", "Co-Authored-By: Claude Martin <claude@example.test>", "Co-Authored-By: Alice <alice@google.com>"} {
+				sep := "\n\n"
+				if strings.Contains(subject, "Refs") {
+					sep = "\n"
+				}
+				got := Lint(subject+sep+ai+"\n"+line, Options{Author: author})
+				if !strings.Contains(strings.Join(got, "\n"), "person") {
+					t.Errorf("%s: %q accepted: %v", author, line, got)
+				}
+				if got := Lint(subject+sep+line, Options{Author: author, Scissors: true}); len(got) == 0 {
+					t.Errorf("%s: %q accepted in hook mode", author, line)
+				}
+			}
+			if got := Lint(subject+"\n\n"+ai, Options{Author: author}); len(got) != 0 && !strings.Contains(subject, "feat") {
+				t.Errorf("%s: AI coauthor alone: %v", author, got)
+			}
+		}
+	}
+	for _, author := range []string{"Werner Stein <claude@wstein.de>", "dependabot[bot] <support@github.com>", "renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>"} {
+		if got := Lint("docs: a\n\n"+ai+"\n"+person, Options{Author: author}); len(got) != 0 {
+			t.Errorf("%s: %v", author, got)
 		}
 	}
 }

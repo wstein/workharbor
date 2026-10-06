@@ -30,6 +30,7 @@ func FuzzLint(f *testing.F) {
 	}
 	f.Add("docs: a", "Claude <noreply@anthropic.com>", true)
 	f.Add("docs: a\n# ------------------------ >8", "Claude <noreply@anthropic.com>", false)
+	f.Add("docs: a\n# ------------------------ >8\n\nCo-Authored-By: P <p@x.org>", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n\nSigned-off-by:P", "Claude <noreply@anthropic.com>", false)
 	f.Fuzz(func(t *testing.T, msg, author string, final bool) {
 		opt := Options{Author: author, Final: final}
@@ -54,12 +55,20 @@ func FuzzLint(f *testing.F) {
 		if got := Lint(signed, bot); len(got) == 0 {
 			t.Fatalf("a bot author's Signed-off-by was accepted after %q", msg)
 		}
+		// a bot or agent author never takes a person as coauthor
+		person := msg + "\n\nCo-Authored-By: Someone <someone@example.org>"
+		if got := Lint(person, bot); len(got) == 0 {
+			t.Fatalf("a bot author's person coauthor was accepted after %q", msg)
+		}
 		// hook mode cuts at a scissors line at the start of a line, as git commit
 		// does; only then may the sign-off be hidden
 		bot.Scissors = true
 		if !strings.HasPrefix(msg, "# ------------------------ >8") && !strings.Contains(msg, "\n# ------------------------ >8") {
 			if got := Lint(signed, bot); len(got) == 0 {
 				t.Fatalf("a bot author's Signed-off-by was accepted in hook mode after %q", msg)
+			}
+			if got := Lint(person, bot); len(got) == 0 {
+				t.Fatalf("a bot author's person coauthor was accepted in hook mode after %q", msg)
 			}
 		}
 	})
