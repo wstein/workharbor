@@ -423,7 +423,7 @@ sig=$({ head; printf 'gpgsig -----BEGIN PGP SIGNATURE-----\n \n FAKEKEY\n -----E
 git update-ref refs/heads/mt "$mt" && git update-ref refs/heads/sig "$sig" &&
 '` + root + `' "" refs/heads/mt >mt.out && '` + root + `' "" refs/heads/sig >sig.out &&
 grep -q FAKEKEY mt.out && grep -q FAKEKEY sig.out`
-	got, err := bash(t, gittest.Env(t.TempDir()), "cd "+repo+" && "+script)
+	got, err := bash(t, nil, "cd "+repo+" && "+script)
 	if err != nil {
 		t.Fatalf("a commit header hides FAKEKEY from the scan: %v\n%s", err, got)
 	}
@@ -451,7 +451,7 @@ echo "log: $(git log --format=%B refs/heads/rep)" &&
 echo "nul: $(git log --format=%B refs/heads/nul | tr '\0' ' ' | grep -c FAKEKEY || true)" &&
 '` + root + `' "" refs/heads/nul | tr '\0' '\n' >nul.out &&
 '` + root + `' "" refs/heads/rep >rep.out; grep -q FAKEKEY nul.out && grep -q FAKEKEY rep.out`
-	got, err := bash(t, gittest.Env(t.TempDir()), "cd "+repo+" && "+script)
+	got, err := bash(t, nil, "cd "+repo+" && "+script)
 	if err != nil {
 		t.Fatalf("a message hides FAKEKEY from the scan: %v\n%s", err, got)
 	}
