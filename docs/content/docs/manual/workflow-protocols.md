@@ -60,7 +60,7 @@ Agents should choose a small, complete solution after understanding the actual f
 ### Scope and boundaries
 Werner approved this adaptation after the team review. Keep reusable guidance in crewbook, using cb-* identities and ordinary GFM. Executable tools, runtime provisioning and policy enforcement stay in workharbor. Do not install upstream plugins, lifecycle hooks, proxies or global settings. Guidance remains subordinate to the consuming project's instructions and supervisor policy.
 
-Use focused atomic Conventional Commits, verified wstein author/committer identity and required Assisted-by trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
+Use focused atomic Conventional Commits, verified wstein author/committer identity and required Co-Authored-By trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
 
 ### Inspiration
 https://github.com/DietrichGebert/ponytail/blob/main/skills/ponytail/SKILL.md
@@ -99,7 +99,7 @@ A small symptom patch can leave sibling callers broken. Add bounded root-cause c
 ### Scope and boundaries
 Werner approved this adaptation after the team review. Keep reusable guidance in crewbook, using cb-* identities and ordinary GFM. Executable tools, runtime provisioning and policy enforcement stay in workharbor. Do not install upstream plugins, lifecycle hooks, proxies or global settings. Guidance remains subordinate to the consuming project's instructions and supervisor policy.
 
-Use focused atomic Conventional Commits, verified wstein author/committer identity and required Assisted-by trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
+Use focused atomic Conventional Commits, verified wstein author/committer identity and required Co-Authored-By trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
 
 ### Inspiration
 https://github.com/DietrichGebert/ponytail/blob/main/AGENTS.md
@@ -131,7 +131,7 @@ Make reports easy to act on while retaining the evidence needed for human oversi
 ### Scope and boundaries
 Werner approved this adaptation after the team review. Keep reusable guidance in crewbook, using cb-* identities and ordinary GFM. Executable tools, runtime provisioning and policy enforcement stay in workharbor. Do not install upstream plugins, lifecycle hooks, proxies or global settings. Guidance remains subordinate to the consuming project's instructions and supervisor policy.
 
-Use focused atomic Conventional Commits, verified wstein author/committer identity and required Assisted-by trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
+Use focused atomic Conventional Commits, verified wstein author/committer identity and required Co-Authored-By trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
 
 ### Inspiration
 https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman/SKILL.md
@@ -172,7 +172,7 @@ Establish whether the approved guidance improves our workflows before broad roll
 ### Scope and boundaries
 Werner approved this adaptation after the team review. Keep reusable guidance in crewbook, using cb-* identities and ordinary GFM. Executable tools, runtime provisioning and policy enforcement stay in workharbor. Do not install upstream plugins, lifecycle hooks, proxies or global settings. Guidance remains subordinate to the consuming project's instructions and supervisor policy.
 
-Use focused atomic Conventional Commits, verified wstein author/committer identity and required Assisted-by trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
+Use focused atomic Conventional Commits, verified wstein author/committer identity and required Co-Authored-By trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
 
 ### Inspiration
 https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-06-18-agentic.md
@@ -215,7 +215,7 @@ Keep deliberate simplifications visible without creating speculative debt paperw
 ### Scope and boundaries
 Werner approved this adaptation after the team review. Keep reusable guidance in crewbook, using cb-* identities and ordinary GFM. Executable tools, runtime provisioning and policy enforcement stay in workharbor. Do not install upstream plugins, lifecycle hooks, proxies or global settings. Guidance remains subordinate to the consuming project's instructions and supervisor policy.
 
-Use focused atomic Conventional Commits, verified wstein author/committer identity and required Assisted-by trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
+Use focused atomic Conventional Commits, verified wstein author/committer identity and required Co-Authored-By trailers. Apply required checks and independent review; no push is authorized by this work item. Record upstream inspiration and pin source revisions if text is copied, retaining applicable notices.
 
 ### Inspiration
 https://github.com/DietrichGebert/ponytail/blob/main/AGENTS.md
@@ -258,7 +258,7 @@ Review record: https://github.com/wstein/workharbor/issues/281#issuecomment-5980
 ### Scope and boundary
 Crewbook owns reusable dispatcher instructions and lifecycle examples, following [crewbook #4](https://github.com/wstein/crewbook/issues/4) and the approved simplicity/precise-handover guidance in [crewbook #11](https://github.com/wstein/crewbook/issues/11)-[crewbook #13](https://github.com/wstein/crewbook/issues/13). Executable board, runtime, event notification and enforcement tools remain in workharbor; any needed host implementation gets an explicit file boundary before work begins. No new daemon, timer, autonomous backlog runner, credential access or push is authorized. Preserve D40's human-start requirement. New related work items remain in crewbook.
 
-Use focused atomic Conventional Commits and verified wstein author/committer identity, required Assisted-by trailers/checks and independent review. Dispatch/design should assign the priority and lane; this coordination improvement must not preempt the explicitly prioritized Codex implementation.
+Use focused atomic Conventional Commits and verified wstein author/committer identity, required Co-Authored-By trailers/checks and independent review. Dispatch/design should assign the priority and lane; this coordination improvement must not preempt the explicitly prioritized Codex implementation.
 
 
 #### Research-informed acceptance additions

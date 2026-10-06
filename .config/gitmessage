@@ -5,7 +5,8 @@
 # Trailers (delete what does not apply):
 # Refs: #<issue>                  required for feat, fix, perf and refactor
 # Closes: #<issue>                closes the issue when merged into the default branch
-# Assisted-by: <tool>:<model-id>  e.g. Claude Code:claude-sonnet-5-5
+# Co-Authored-By: <tool> <model-id> <attribution-email>
+# e.g. Codex gpt-6.1-sol <noreply@openai.com> (use your actual model; see AGENTS.md)
 # Whr-Task: <task-id>             set by whr when it commits for an agent run
 # Whr-Run: <run-id>
 #

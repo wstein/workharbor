@@ -21,9 +21,11 @@ var (
 
 	// <tool>:<model-id> with optional [extra tools], e.g.
 	// "Claude Code:claude-sonnet-5-5 [gopls]".
-	assistedRe = regexp.MustCompile(`^[^:\s][^:]*:[A-Za-z0-9][A-Za-z0-9._/+-]*(?: \[[^\]]+\])*$`)
-	idRe       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-	botRe      = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@anthropic\.com`)
+	assistedRe  = regexp.MustCompile(`^[^:\s][^:]*:[A-Za-z0-9][A-Za-z0-9._/+-]*(?: \[[^\]]+\])*$`)
+	coauthorRe  = regexp.MustCompile(`^([^<>\s][^<>]*?) <([^<>\s@]+@[^<>\s@]+)>$`)
+	modelNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/+ -]*$`)
+	idRe        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+	botRe       = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@(?:anthropic|openai)\.com`)
 
 	// depBotRe matches the dependency-update bots, whose generated messages
 	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
@@ -66,7 +68,7 @@ func Lint(msg string, opt Options) []string {
 		return []string{"empty commit message"}
 	}
 	subject := lines[0]
-	attributionProblems := agentCoauthorProblems(parseTrailers(lines), opt)
+	attributionProblems := attributionProblemsFor(parseTrailers(lines))
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
 			// These skip the message rules, never the one about origin: a bot's
@@ -100,18 +102,13 @@ func Lint(msg string, opt Options) []string {
 	}
 
 	trailers := parseTrailers(lines)
-	var issues, assisted, tasks, runs, signoffs, changelogs int
+	var issues, tasks, runs, signoffs, changelogs int
 	for _, t := range trailers {
 		switch {
 		case issueKeys[t.key]:
 			issues++
 			if !issueValue.MatchString(t.value) {
 				add("%s: %q is not an issue reference; use #123 or owner/repo#123", t.key, t.value)
-			}
-		case t.key == "Assisted-by":
-			assisted++
-			if !assistedRe.MatchString(t.value) {
-				add("Assisted-by: %q must be <tool>:<model-id>, e.g. 'Claude Code:claude-sonnet-5-5'", t.value)
 			}
 		case t.key == "Whr-Task":
 			tasks++
@@ -123,7 +120,7 @@ func Lint(msg string, opt Options) []string {
 			if !idRe.MatchString(t.value) {
 				add("Whr-Run: %q is not a valid id", t.value)
 			}
-		case t.key == "Signed-off-by":
+		case strings.EqualFold(t.key, "Signed-off-by"):
 			signoffs++
 		case t.key == "Changelog":
 			changelogs++
@@ -151,24 +148,40 @@ func Lint(msg string, opt Options) []string {
 	return problems
 }
 
-// agentCoauthorProblems uses the existing bot/agent author classification and
-// assistance trailers to identify commits subject to AI attribution rules. It
-// cannot infer assistance that is absent from both the author and trailers.
-func agentCoauthorProblems(trailers []trailer, opt Options) []string {
-	identified := botRe.MatchString(opt.Author)
-	coauthor := false
+// attributionProblemsFor validates both legacy assistance and current coauthor
+// trailers, including on subject-exempt commits. Human coauthors are independent
+// of AI attribution. Reserved project addresses identify AI attribution; names
+// alone may belong to humans. The message cannot prove which model actually ran.
+func attributionProblemsFor(trailers []trailer) []string {
+	var problems []string
 	for _, t := range trailers {
-		if strings.EqualFold(t.key, "Assisted-by") {
-			identified = true
+		if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
+			problems = append(problems, fmt.Sprintf("Assisted-by: %q must be <tool>:<model-id>", t.value))
 		}
-		if strings.EqualFold(t.key, "Co-authored-by") {
-			coauthor = true
+		if !strings.EqualFold(t.key, "Co-Authored-By") {
+			continue
+		}
+		m := coauthorRe.FindStringSubmatch(t.value)
+		if m == nil {
+			problems = append(problems, "Co-Authored-By must be Name <email>; AI attribution requires <tool> <model-id> <attribution-email>")
+			continue
+		}
+		name, email := m[1], strings.ToLower(m[2])
+		fields := strings.Fields(name)
+		var vendor, want string
+		switch email {
+		case "noreply@anthropic.com":
+			vendor, want = "claude", "noreply@anthropic.com"
+		case "noreply@openai.com":
+			vendor, want = "codex", "noreply@openai.com"
+		default:
+			continue // Other identities may be legitimate human coauthors.
+		}
+		if strings.ToLower(fields[0]) != vendor || email != want || len(fields) < 2 || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
+			problems = append(problems, fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the exact exposed model or unknown", vendor, want))
 		}
 	}
-	if identified && coauthor {
-		return []string{"Co-authored-by is not allowed on agent/tool-assisted commits; remove it and use Assisted-by: <tool>:<model-id> for AI assistance"}
-	}
-	return nil
+	return problems
 }
 
 // signoffByBot reports a Signed-off-by trailer on a commit whose author is a bot or
@@ -178,7 +191,7 @@ func signoffByBot(lines []string, opt Options) bool {
 		return false
 	}
 	for _, t := range parseTrailers(lines) {
-		if t.key == "Signed-off-by" {
+		if strings.EqualFold(t.key, "Signed-off-by") {
 			return true
 		}
 	}

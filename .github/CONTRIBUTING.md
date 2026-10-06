@@ -47,14 +47,16 @@ feat(domain): add run interrupted state
 Why the change was made.
 
 Refs: #12
-Assisted-by: Claude Code:claude-sonnet-5-5
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ```
 
 - `Refs: #N` or `Closes: #N` is required for `feat`, `fix`, `perf` and `refactor`.
-- `Assisted-by: <tool>:<model-id>` discloses AI assistance (see below).
+- `Co-Authored-By: <tool> <model-id> <attribution-email>` discloses AI assistance (see below).
 - `Signed-off-by` is for humans only.
 - One commit per finished logical change, not per attempt: iterate in your working tree and commit once the result is final. Amend or fixup your own unpushed commits instead of adding "fix previous commit" commits.
 - Do not bypass the hooks with `--no-verify`.
+
+Use the actual model exposed by the session (`unknown` if unavailable), never a guessed model. The example applies only when that is the actual model. [AGENTS.md](../AGENTS.md) defines the attribution identities, preserves legitimate human coauthors and accepts validated historical `Assisted-by` trailers without rewriting history.
 
 ## Releases
 
@@ -73,7 +75,7 @@ To test the pipeline before a tag, run the `release` workflow by hand (a snapsho
 AI tools are welcome, including coding agents. You remain responsible for everything you submit:
 
 - review and understand every line before you open the pull request
-- disclose the tool and model with an `Assisted-by` trailer
+- disclose the actual tool and exact exposed model (or `unknown`) with a `Co-Authored-By` trailer
 - never add `Signed-off-by` on behalf of an agent
 - do not submit work you could not explain or that you have not run
 

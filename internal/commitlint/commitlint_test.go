@@ -122,42 +122,67 @@ func TestConventionalIsFinalAndRefusesAnUnsquashedCommit(t *testing.T) {
 	}
 }
 
-func TestAgentCoauthorTrailers(t *testing.T) {
+func TestCoauthorAttribution(t *testing.T) {
 	const human = "Werner Stein <claude@wstein.de>"
-	const agent = "Claude <noreply@anthropic.com>"
-	const coauthor = "Co-authored-by: Contributor <contributor@example.test>"
-	type testCase struct {
-		name, msg, author string
-		reject            bool
+	const contributor = "Co-Authored-By: Contributor <contributor@example.test>"
+	tests := []struct{ name, trailers, want string }{
+		{"human", contributor, ""},
+		{"legacy and human", "Assisted-by: codex:gpt-6.1-sol\n" + contributor, ""},
+		{"legacy invalid", "assisted-by: codex", "Assisted-by"},
+		{"claude display model", "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>", ""},
+		{"claude exact model", "Co-Authored-By: Claude claude-sonnet-5-5 <noreply@anthropic.com>", ""},
+		{"codex", "Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>", ""},
+		{"unknown", "Co-Authored-By: Codex unknown <noreply@openai.com>", ""},
+		{"case insensitive", "CO-AUTHORED-BY: Codex gpt-6.1-sol <noreply@openai.com>", ""},
+		{"multiple tools and human", "Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n" + contributor, ""},
+		{"missing model", "Co-Authored-By: Claude <noreply@anthropic.com>", "Co-Authored-By"},
+		{"codex missing model", "Co-Authored-By: Codex <noreply@openai.com>", "Co-Authored-By"},
+		{"wrong address", "Co-Authored-By: Codex gpt-6.1-sol <noreply@anthropic.com>", "Co-Authored-By"},
+		{"human named Claude", "Co-Authored-By: Claude Martin <claude@example.test>", ""},
+		{"missing vendor", "Co-Authored-By: gpt-6.1-sol <noreply@openai.com>", "Co-Authored-By"},
+		{"malformed", "Co-Authored-By: Codex gpt-6.1-sol", "Co-Authored-By"},
+		{"invalid model", "Co-Authored-By: Codex ??? <noreply@openai.com>", "Co-Authored-By"},
 	}
-	tests := []testCase{
-		{"human coauthor", "docs: a\n\n" + coauthor, human, false},
-		{"human assisted", "docs: a\n\nAssisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true},
-		{"agent author", "docs: a\n\n" + coauthor, agent, true},
-		{"mixed case", "docs: a\n\nCo-Authored-By: Claude <noreply@anthropic.com>", agent, true},
-		{"uppercase", "docs: a\n\nCO-AUTHORED-BY: Contributor <contributor@example.test>\nAssisted-by: codex:gpt-6.1-sol", human, true},
-		{"assistance case", "docs: a\n\nassisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true},
-		{"invalid assistance still identifies", "docs: a\n\nAssisted-by: codex\n" + coauthor, human, true},
-		{"body prose", "docs: a\n\nCo-authored-by: mentioned in body\nThis is prose.\n\nAssisted-by: codex:gpt-6.1-sol", agent, false},
-		{"earlier paragraph", "docs: a\n\n" + coauthor + "\n\nAssisted-by: codex:gpt-6.1-sol", human, false},
-		{"agent assistance alone", "docs: a\n\nAssisted-by: codex:gpt-6.1-sol", agent, false},
-		{"dependency bot", "build(deps): bump x\n\n" + coauthor, "dependabot[bot] <support@github.com>", true},
+	for _, subject := range []string{"docs: a", "Merge branch 'x'", `Revert "docs: a"`, "fixup! docs: a", "squash! docs: a", "amend! docs: a"} {
+		for _, tc := range tests {
+			t.Run(subject+"/"+tc.name, func(t *testing.T) {
+				got := Lint(subject+"\n\n"+tc.trailers, Options{Author: human})
+				if tc.want == "" && len(got) != 0 || tc.want != "" && !strings.Contains(strings.Join(got, "\n"), tc.want) {
+					t.Fatalf("want %q, got %v", tc.want, got)
+				}
+			})
+		}
 	}
-	for _, subject := range []string{"Merge branch 'x'", `Revert "docs: a"`, "fixup! docs: a", "squash! docs: a", "amend! docs: a"} {
-		tests = append(tests, testCase{subject + " assisted", subject + "\n\nAssisted-by: codex:gpt-6.1-sol\n" + coauthor, human, true})
-		tests = append(tests, testCase{subject + " agent", subject + "\n\n" + coauthor, agent, true})
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := Lint(tc.msg, Options{Author: tc.author})
-			diagnostic := strings.Join(got, "\n")
-			rejected := strings.Contains(diagnostic, "Co-authored-by") && strings.Contains(diagnostic, "Assisted-by: <tool>:<model-id>")
-			if rejected != tc.reject {
-				t.Fatalf("attribution rejection=%v, want %v: %v", rejected, tc.reject, got)
+}
+
+func TestCoauthorsPreserveHumanOnlySignoff(t *testing.T) {
+	for _, author := range []string{"Claude <noreply@anthropic.com>", "Codex <noreply@openai.com>", "ci-agent <agent@example.test>"} {
+		for _, subject := range []string{"docs: a", "Merge branch 'x'"} {
+			msg := subject + "\n\nCo-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>"
+			if got := Lint(msg, Options{Author: author}); len(got) != 0 {
+				t.Fatalf("agent coauthor: %v", got)
 			}
-			if !tc.reject && len(got) != 0 {
-				t.Fatalf("expected valid, got %v", got)
+			for _, key := range []string{"Signed-off-by", "SIGNED-OFF-BY"} {
+				if got := Lint(msg+"\n"+key+": Someone <someone@example.test>", Options{Author: author}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+					t.Fatalf("agent signoff accepted: %v", got)
+				}
 			}
-		})
+		}
+	}
+	msg := "docs: a\n\nCo-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>\nSigned-off-by: Human <human@example.test>"
+	if got := Lint(msg, Options{Author: "Human <human@example.test>"}); len(got) != 0 {
+		t.Fatalf("human signoff: %v", got)
+	}
+}
+
+func TestAttributionOnlyReadsFinalTrailerBlock(t *testing.T) {
+	for _, msg := range []string{
+		"docs: a\n\nCo-Authored-By: Claude\nThis is body prose.",
+		"docs: a\n\nCo-Authored-By: Claude\n\nRefs: #301",
+		"docs: a\n\nAssisted-by: missing model\n\nRefs: #301",
+	} {
+		if got := Lint(msg, Options{Author: "Human <human@example.test>"}); len(got) != 0 {
+			t.Fatalf("body treated as attribution: %v", got)
+		}
 	}
 }

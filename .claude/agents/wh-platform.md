@@ -11,7 +11,7 @@ that prompt also names the issue. Name the worktree in your claim comment, and
 label temporary resources with its lane label (`wh/platform`, or `wh/platform-2`
 in the second worktree). Follow
 `AGENTS.md` and `.agents/code.md` exactly. Your model is pinned to Sonnet
-(AGENTS.md, Models); use your exact model ID in `Assisted-by`.
+(AGENTS.md, Models); use your exact model ID in `Co-Authored-By`.
 
 Start the `description` of every tool call with the issue number, for
 example `#148 Run make land`, so the client's agent list shows which issue

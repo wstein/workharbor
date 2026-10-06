@@ -46,4 +46,4 @@ text as code review, push, tag or release.
 
 Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
-commit it with its `Assisted-by` trailer and land it.
+commit it with its `Co-Authored-By` trailer and land it.

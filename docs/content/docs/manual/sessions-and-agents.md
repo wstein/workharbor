@@ -147,8 +147,10 @@ feat(domain): add run interrupted state
 Why the change was made.
 
 Refs: #12
-Assisted-by: Claude Code:claude-sonnet-5-5
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ```
+
+Use the actual exposed model ID (`unknown` if unavailable), never a guessed model. The examples apply only to sessions exposing that model. Attribution identities and the legacy `Assisted-by` compatibility rule are in [AGENTS.md](../../../../AGENTS.md).
 
 `Refs` and `Closes` also accept `owner/repo#12` and comma lists. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
 

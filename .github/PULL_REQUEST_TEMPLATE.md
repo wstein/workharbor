@@ -8,7 +8,7 @@
 - [ ] `make check` passes
 - [ ] Commits follow Conventional Commits with the required trailers
 - [ ] Tests, docs or the design document are updated where behaviour or decisions changed
-- [ ] AI assistance is disclosed with `Assisted-by` and I have reviewed every change
+- [ ] AI assistance is disclosed with `Co-Authored-By` and I have reviewed every change
 - [ ] No secrets, tokens or personal data are included
 
 ## Notes for the reviewer

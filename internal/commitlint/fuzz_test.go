@@ -16,6 +16,7 @@ func FuzzLint(f *testing.F) {
 		"feat(domain): add state\n\nRefs: #12",
 		"fix: a\n\nRefs: 12",
 		"docs: a\n\nAssisted-by: Claude Code:claude-sonnet-5-5 [gopls]",
+		"docs: a\n\nCo-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>",
 		"docs: a\n\nWhr-Task: t-1\nWhr-Run: r_2",
 		"fixup! feat: x",
 		"Merge branch 'x'",

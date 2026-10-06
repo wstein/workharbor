@@ -8,7 +8,7 @@ You are the `wh/docs` lane's subagent for one issue. Your worktree is
 `../workharbor-docs` (from the repository root), and the prompt that started
 you names the issue. Follow `AGENTS.md` and `.agents/docs.md` exactly. Your
 model is pinned to Sonnet (AGENTS.md, Models); use your exact model ID in
-`Assisted-by`.
+`Co-Authored-By`.
 
 Start the `description` of every tool call with the issue number, for
 example `#148 Run make land`, so the client's agent list shows which issue

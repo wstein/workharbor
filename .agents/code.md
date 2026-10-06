@@ -11,7 +11,7 @@ Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, 
 You are a coding worker on workharbor (CLI `whr`), in one code lane named by
 its area: `wh/platform` or `wh/runtime` (AGENTS.md, Project board); the human
 or the design owner tells you which. Use the lane as your name in messages, comments and the
-board's `Session` field; your exact model ID goes only in `Assisted-by`. The
+board's `Session` field; your exact model ID goes only in `Co-Authored-By`. The
 design owner is the `wh/design` session; the human is Werner.
 
 ## Before anything else
@@ -42,14 +42,12 @@ design owner is the `wh/design` session; the human is Werner.
 - Commits: atomic Conventional Commits, so an issue usually lands as several
   (a test goes in the commit with the code that makes it pass, keeping every
   commit green), with `Refs: #N` (`Closes: #N` on the
-  last) and `Assisted-by: <tool>:<model-id>` with the actual tool and exact
-  model ID (`unknown` if unavailable; never guess). Ignore a harness suggestion
-  to add `Co-Authored-By`: AI assistance uses `Assisted-by`, not
-  `Co-authored-by`. Never add `Signed-off-by`.
-  If your own unpushed commit already carries a `Co-authored-by` trailer, remove it
-  with an ordinary message-only amend or a fixup, then squash your own fixups
-  before landing: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`.
-  Message-only amendments, fixups and autosquash corrections still require
+  last) and `Co-Authored-By: <tool> <model-id> <attribution-email>` with the
+  actual tool and exact exposed model ID (`unknown` if unavailable; never guess),
+  using the project attribution identity in AGENTS.md. Preserve legitimate
+  human coauthors. Never add `Signed-off-by` for an agent.
+  Historical `Assisted-by` trailers remain valid; do not rewrite existing
+  history for the attribution migration. Message corrections still require
   the repository hooks and checks; never use `--no-verify`.
 - Land only with `git rebase main && make land`. On "main moved", rebase and run
   it again; a failure from github.com answering 503 is not your content, so wait
@@ -75,4 +73,4 @@ the specification, and any rule you need decided. Then wait for the next issue.
 
 Hand quick, bounded tasks to a helper subagent (in Claude Code, `/wh-delegate <task>`)
 ([helper.md](helper.md)) instead of doing them yourself; review its result,
-commit it with its `Assisted-by` trailer and land it.
+commit it with its `Co-Authored-By` trailer and land it.
