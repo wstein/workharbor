@@ -250,18 +250,39 @@ check-hooks:
 		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
 	fi
 
-# Land the current branch on main, from a session's own worktree: refuse unless
+# Land the current branch on main, from a session's own worktree (BRANCH=<name>
+# from any checkout: land the worktree that has it checked out; SHA=<full sha>:
+# refuse unless the candidate is that commit; see the manual): refuse unless
 # the shared checkout is on main (a detached HEAD there once swallowed merges),
 # the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
-	@shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
+	@want=""; \
+	if [ "$(origin SHA)" = "command line" ]; then \
+		case "$$SHA" in ""|*[!0-9a-f]*) echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1;; esac; \
+		if [ "$${#SHA}" != 40 ]; then echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1; fi; want="$$SHA"; fi; \
+	if [ "$(origin BRANCH)" = "command line" ]; then \
+		wb="$$BRANCH"; \
+		case "$$wb" in "") echo "land: BRANCH is empty" >&2; exit 1;; main) echo "land: BRANCH=main: never land main" >&2; exit 1;; -*) echo "land: BRANCH must not start with a dash" >&2; exit 1;; esac; \
+		git check-ref-format "refs/heads/$$wb" || { echo "land: BRANCH is not a valid branch name (give the short name, not refs/heads/...)" >&2; exit 1; }; \
+		if [ "$$(git rev-parse --is-bare-repository)" != false ]; then echo "land: run it from a checkout, not a bare repository" >&2; exit 1; fi; \
+		found="$$(git worktree list --porcelain -z | tr '\n\0' '\001\n' | awk -v ref="refs/heads/$$wb" 'function flush() { if (isbr) print (prun ? "P " : "W ") cur; isbr = 0; prun = 0 } /^worktree / { cur = substr($$0, 10) } $$0 == "branch " ref { isbr = 1 } /^prunable/ { prun = 1 } /^$$/ { flush() } END { flush() }')" || { echo "land: cannot list the worktrees" >&2; exit 1; }; \
+		if [ -z "$$found" ]; then echo "land: no worktree has $$wb checked out: check it out in a worktree first (never in the shared checkout)" >&2; exit 1; fi; \
+		if [ "$$(printf '%s\n' "$$found" | wc -l | tr -d ' ')" != 1 ]; then echo "land: $$wb is checked out in more than one worktree: stop and tell the human" >&2; exit 1; fi; \
+		case "$$found" in "P "*) echo "land: the worktree of $$wb is prunable (its directory is gone): stop and tell the human" >&2; exit 1;; esac; \
+		wt="$$(printf '%s' "$${found#W }" | tr '\001' '\n')"; \
+		[ -d "$$wt" ] || { echo "land: the worktree of $$wb is missing" >&2; exit 1; }; \
+		cd "$$wt" || exit 1; \
+		if [ "$$(git symbolic-ref -q --short HEAD)" != "$$wb" ]; then echo "land: the worktree $$wt does not have $$wb checked out" >&2; exit 1; fi; \
+	fi; \
+	shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
 	branch="$$(git symbolic-ref -q --short HEAD)" || { echo "land: check out the branch to land first" >&2; exit 1; }; \
 	if [ "$$branch" = main ]; then echo "land: run it on a topic branch in your own worktree, not on main" >&2; exit 1; fi; \
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
 		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
 	base="$$(git rev-parse main)"; \
 	candidate="$$(git rev-parse --verify HEAD^{commit})" || { echo "land: cannot read the candidate commit" >&2; exit 1; }; \
+	if [ -n "$$want" ] && [ "$$candidate" != "$$want" ]; then echo "land: the candidate is $$candidate, not the requested SHA $$want: refusing" >&2; exit 1; fi; \
 	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
 	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
 	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
