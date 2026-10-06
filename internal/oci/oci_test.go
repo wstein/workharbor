@@ -140,13 +140,16 @@ func TestParseRef(t *testing.T) {
 		"localhost:5000/a:v1":                             {Registry: "localhost:5000", Repo: "a", Tag: "v1"},
 		"ghcr.io/a/b@sha256:" + strings.Repeat("a", 64):   {Registry: "ghcr.io", Repo: "a/b", Digest: "sha256:" + strings.Repeat("a", 64)},
 		"ghcr.io/a/b:1@sha256:" + strings.Repeat("b", 64): {Registry: "ghcr.io", Repo: "a/b", Tag: "1", Digest: "sha256:" + strings.Repeat("b", 64)},
+		// A tag may hold dots anywhere after its first character (OCI distribution spec); it is one
+		// path segment, never a traversal. FuzzParseRef found "0/0:0..".
+		"0/0:0..": {Registry: "0", Repo: "0", Tag: "0.."},
 	}
 	for s, want := range good {
 		if got, err := ParseRef(s); err != nil || got != want {
 			t.Errorf("ParseRef(%q) = %+v, %v; want %+v", s, got, err, want)
 		}
 	}
-	for _, s := range []string{"", "node", "ghcr.io/a/b", "ghcr.io/a/b:", "ghcr.io/A_/b:1", "ghcr.io/../b:1", "ghcr.io/a b/c:1", "-x/a:1", "ghcr.io/a/b:1@sha256:zz", "ghcr.io/a//b:1", "ghcr.io/a/b:1?x", "ghcr.io/a/b:/x", "https://ghcr.io/a:1", "ghcr.io\\a/b:1"} {
+	for _, s := range []string{"", "node", "ghcr.io/a/b", "ghcr.io/a/b:", "ghcr.io/A_/b:1", "ghcr.io/../b:1", "ghcr.io/a b/c:1", "-x/a:1", "ghcr.io/a/b:1@sha256:zz", "ghcr.io/a//b:1", "ghcr.io/a/b:1?x", "ghcr.io/a/b:/x", "https://ghcr.io/a:1", "ghcr.io\\a/b:1", "a..b/x:1", ".a/x:1", "a./x:1"} {
 		if _, err := ParseRef(s); !errors.Is(err, ErrBadRef) {
 			t.Errorf("ParseRef(%q) = %v, want ErrBadRef", s, err)
 		}

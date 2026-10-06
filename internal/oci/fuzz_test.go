@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -66,9 +67,23 @@ func FuzzParseRef(f *testing.F) {
 		if err != nil || again != r {
 			t.Fatalf("%q does not round-trip: %+v %v", s, again, err)
 		}
-		for _, bad := range []string{"..", "//", " ", "\\", "?", "#", "@@"} {
-			if bytes.Contains([]byte(r.Registry+r.Repo+r.Tag), []byte(bad)) {
-				t.Fatalf("%q was accepted with %q in it", s, bad)
+		// Check each field alone: joining them makes a false ".." out of "0", "0" and "0..".
+		// A dot-dot is a traversal only as a whole path segment, and a tag is one segment
+		// that starts with a letter, digit or underscore, so it may hold dots later on.
+		for name, field := range map[string]string{"registry": r.Registry, "repo": r.Repo, "tag": r.Tag} {
+			for _, bad := range []string{"//", " ", "\\", "?", "#", "@", "/"} {
+				if name == "repo" && bad == "/" {
+					continue
+				}
+				if strings.Contains(field, bad) {
+					t.Fatalf("%q was accepted with %q in its %s", s, bad, name)
+				}
+			}
+			if name != "tag" && strings.Contains(field, "..") {
+				t.Fatalf("%q was accepted with .. in its %s", s, name)
+			}
+			if name == "tag" && (field == "." || field == "..") {
+				t.Fatalf("%q was accepted with a dot segment as its tag", s)
 			}
 		}
 	})
