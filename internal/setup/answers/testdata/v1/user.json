@@ -1,0 +1,19 @@
+{
+  "schema": "workharbor.setup-answers",
+  "v": 1,
+  "whr": "v0.1.0@abc1234",
+  "phase": "user",
+  "account": "workharbor",
+  "answers": [
+    {
+      "step": "api-token",
+      "fix": "80f32a0c79aa9b845842e0005c17943e6ac2ba303d353e5507998a4b6cfcdf7b",
+      "answer": "run"
+    },
+    {
+      "step": "config-dir",
+      "fix": "4019903714cf7834085dbb8447192e21c7c2c6d7569e9ee90713af86e2c14f9e",
+      "answer": "skip"
+    }
+  ]
+}
