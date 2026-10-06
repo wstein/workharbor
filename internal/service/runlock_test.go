@@ -73,6 +73,7 @@ func TestAResumeIsNotStalledByARecoveryThatIsLaunching(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	must(t, r.svc.Pause(bg, "t1"))
+	r.agent.Block() // the launched agent keeps running; an unscripted fake finishes at once and stops the run
 	h := r.holdLaunch()
 	rec := async(func() error { var rep Report; return r.svc.recover(bg, "t1", "r1", &rep) })
 	waitFor(t, h.entered, "the recovery to reach its launch")
@@ -87,7 +88,6 @@ func TestAResumeIsNotStalledByARecoveryThatIsLaunching(t *testing.T) {
 	if r.runState() != domain.RunRunning {
 		t.Errorf("run %s, want running", r.runState())
 	}
-	r.svc.Wait()
 }
 
 // A resume whose launch blocks does not stall the reconciler's recovery of the
@@ -123,6 +123,7 @@ func TestAnAnswerThatIsLaunchingStallsNeitherResumeNorRecovery(t *testing.T) {
 	must(t, err)
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
+	r.agent.Block() // the answer's agent keeps running, so the run stays running and attached
 	h := r.holdLaunch()
 	ans := async(func() error {
 		return r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now})
@@ -140,5 +141,4 @@ func TestAnAnswerThatIsLaunchingStallsNeitherResumeNorRecovery(t *testing.T) {
 	if r.runState() != domain.RunRunning || !r.svc.attached("r1") {
 		t.Errorf("run %s, attached %v", r.runState(), r.svc.attached("r1"))
 	}
-	r.svc.Wait()
 }
