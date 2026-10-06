@@ -27,6 +27,11 @@ var (
 	idRe        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 	botRe       = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@(?:anthropic|openai)\.com`)
 
+	// scanKeyRe is git's own reading of a trailer line: a token, optional
+	// whitespace, a colon, optional whitespace and the value. It is looser than
+	// trailerRe, so a spaced or tabbed key cannot hide a line from the rules.
+	scanKeyRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9-]*)[ \t]*:[ \t]*(.*)$`)
+
 	// depBotRe matches the dependency-update bots, whose generated messages
 	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
 	depBotRe = regexp.MustCompile(`(?i)^\s*(?:dependabot|renovate)(?:\[bot\])?\b`)
@@ -56,6 +61,11 @@ type Options struct {
 	// (git rebase -i --autosquash). The commit-msg hook leaves it false, since
 	// git commit --fixup is how such a commit is made.
 	Final bool
+	// Scissors cuts the message at a "# ------------------------ >8" line, as
+	// git commit does while it cleans up the message the hook sees. A stored
+	// message (a range, the host's publish path) keeps such a line as text, and
+	// what follows stays visible to the rules.
+	Scissors bool
 }
 
 type trailer struct{ key, value string }
@@ -63,18 +73,23 @@ type trailer struct{ key, value string }
 // Lint returns one problem per violated rule; an empty result means the
 // message is acceptable.
 func Lint(msg string, opt Options) []string {
-	lines := clean(msg)
+	lines := clean(msg, opt.Scissors)
 	if len(lines) == 0 {
 		return []string{"empty commit message"}
 	}
 	subject := lines[0]
-	attributionProblems := attributionProblemsFor(parseTrailers(lines))
+	scan, block := scanFinalParagraph(lines)
+	var attributed []trailer
+	if block {
+		attributed = scan
+	}
+	attributionProblems := attributionProblemsFor(attributed)
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
 			// These skip the message rules, never the one about origin: a bot's
 			// "Merge ..." must not carry a Signed-off-by either.
 			problems := attributionProblems
-			if signoffByBot(lines, opt) {
+			if signoffByBot(scan, opt) {
 				problems = append(problems, fmt.Sprintf("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author))
 			}
 			if opt.Final && p != "Merge " && p != "Revert " {
@@ -102,7 +117,7 @@ func Lint(msg string, opt Options) []string {
 	}
 
 	trailers := parseTrailers(lines)
-	var issues, tasks, runs, signoffs, changelogs int
+	var issues, tasks, runs, changelogs int
 	for _, t := range trailers {
 		switch {
 		case issueKeys[t.key]:
@@ -120,8 +135,6 @@ func Lint(msg string, opt Options) []string {
 			if !idRe.MatchString(t.value) {
 				add("Whr-Run: %q is not a valid id", t.value)
 			}
-		case strings.EqualFold(t.key, "Signed-off-by"):
-			signoffs++
 		case t.key == "Changelog":
 			changelogs++
 			if t.value != "skip" && t.value != "highlight" {
@@ -142,7 +155,7 @@ func Lint(msg string, opt Options) []string {
 	if runs > 0 && tasks == 0 {
 		add("Whr-Run requires a Whr-Task trailer")
 	}
-	if signoffs > 0 && botRe.MatchString(opt.Author) && !depBot {
+	if signoffByBot(scan, opt) {
 		add("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author)
 	}
 	return problems
@@ -184,13 +197,14 @@ func attributionProblemsFor(trailers []trailer) []string {
 	return problems
 }
 
-// signoffByBot reports a Signed-off-by trailer on a commit whose author is a bot or
-// an agent (the dependency bots are exempt).
-func signoffByBot(lines []string, opt Options) bool {
+// signoffByBot reports a Signed-off-by line, in any shape git reads as a
+// trailer, on a commit whose author is a bot or an agent (the dependency bots
+// are exempt).
+func signoffByBot(scan []trailer, opt Options) bool {
 	if !botRe.MatchString(opt.Author) || depBotRe.MatchString(opt.Author) {
 		return false
 	}
-	for _, t := range parseTrailers(lines) {
+	for _, t := range scan {
 		if strings.EqualFold(t.key, "Signed-off-by") {
 			return true
 		}
@@ -198,12 +212,13 @@ func signoffByBot(lines []string, opt Options) bool {
 	return false
 }
 
-// clean drops git's comment lines and the scissors section, then trims
-// trailing blank lines.
-func clean(msg string) []string {
+// clean drops git's comment lines and, when scissors is set (the commit-msg
+// hook, where git has cleaned the message up the same way), the scissors
+// section, then trims trailing blank lines.
+func clean(msg string, scissors bool) []string {
 	var out []string
 	for _, l := range strings.Split(strings.ReplaceAll(msg, "\r\n", "\n"), "\n") {
-		if strings.HasPrefix(l, "# ------------------------ >8") {
+		if scissors && strings.HasPrefix(l, "# ------------------------ >8") {
 			break
 		}
 		if strings.HasPrefix(l, "#") {
@@ -243,4 +258,37 @@ func parseTrailers(lines []string) []trailer {
 		out = append(out, trailer{key: m[1], value: strings.TrimSpace(m[2])})
 	}
 	return out
+}
+
+// scanFinalParagraph reads the final paragraph the way git's trailer parser
+// does, leniently: every line that is not a continuation and has the shape
+// "Key <ws>: value" is returned. block says git would treat the paragraph as a
+// trailer block: every line is a trailer line, or there is a Signed-off-by line
+// and trailer lines are at least a quarter of the others (git's 25% rule).
+func scanFinalParagraph(lines []string) (found []trailer, block bool) {
+	end := len(lines)
+	start := end
+	for start > 1 && lines[start-1] != "" {
+		start--
+	}
+	if start <= 1 || start >= end {
+		return nil, false
+	}
+	var other int
+	var signed bool
+	for _, l := range lines[start:end] {
+		if strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") {
+			continue
+		}
+		m := scanKeyRe.FindStringSubmatch(l)
+		if m == nil {
+			other++
+			continue
+		}
+		found = append(found, trailer{key: m[1], value: strings.TrimSpace(m[2])})
+		if strings.EqualFold(m[1], "Signed-off-by") {
+			signed = true
+		}
+	}
+	return found, other == 0 || signed && len(found)*3 >= other
 }

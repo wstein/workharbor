@@ -32,7 +32,7 @@ func run() int {
 			fmt.Fprintln(os.Stderr, "commitlint:", err)
 			return 2
 		}
-		return report("commit message", commitlint.Lint(string(msg), commitlint.Options{Author: *author}))
+		return report("commit message", commitlint.Lint(string(msg), commitlint.Options{Author: *author, Scissors: true}))
 	case *revRange != "":
 		return lintRange(*revRange)
 	default:

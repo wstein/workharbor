@@ -12,7 +12,7 @@ import (
 // fixup!, squash! or amend! commit is refused; Lint adds this repository's own rules (the length, the
 // trailers) and is the `workharbor` choice.
 func Conventional(msg string) []string {
-	lines := clean(msg)
+	lines := clean(msg, false)
 	if len(lines) == 0 {
 		return []string{"empty commit message"}
 	}

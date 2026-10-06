@@ -44,7 +44,6 @@ func TestLint(t *testing.T) {
 		{"merge exempt", "Merge branch 'x'", human, ""},
 		{"fixup exempt", "fixup! feat: a", human, ""},
 		{"comments ignored", "docs: a\n\n# Refs: nothing\n# comment", human, ""},
-		{"scissors cut", "docs: a\n# ------------------------ >8 ------------------------\ndiff --git", human, ""},
 		{"body not trailers", "docs: a\n\nsome body\nRefs: #1 in prose", human, ""},
 		{"breaking footer", "feat!: drop api\n\nBREAKING CHANGE: gone\nRefs: #7", human, ""},
 		{"changelog skip", "feat: tiny\n\nRefs: #1\nChangelog: skip", human, ""},
@@ -183,6 +182,139 @@ func TestAttributionOnlyReadsFinalTrailerBlock(t *testing.T) {
 	} {
 		if got := Lint(msg, Options{Author: "Human <human@example.test>"}); len(got) != 0 {
 			t.Fatalf("body treated as attribution: %v", got)
+		}
+	}
+}
+
+// Git reads "Key : value", "Key:value" and "Key:\tvalue" as trailers, so the
+// linter must see them too (commitlint reads only "Key: value" for Refs and the
+// like, but never lets a looser shape hide a sign-off or an AI line).
+func TestLenientTrailerShapesAreSeen(t *testing.T) {
+	const bot = "Claude <noreply@anthropic.com>"
+	const human = "Werner Stein <claude@wstein.de>"
+	for _, sig := range []string{
+		"Signed-off-by : P <p@example.test>",
+		"Signed-off-by\t: P <p@example.test>",
+		"Signed-off-by:P <p@example.test>",
+		"Signed-off-by:\tP <p@example.test>",
+		"signed-off-by :P <p@example.test>",
+	} {
+		for _, msg := range []string{
+			"docs: a\n\n" + sig,
+			"docs: a\n\nRefs: #1\n" + sig,
+			"Merge branch 'x'\n\n" + sig,
+		} {
+			if got := Lint(msg, Options{Author: bot}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+				t.Errorf("bot signoff %q accepted: %v", msg, got)
+			}
+			if got := Lint(msg, Options{Author: human}); len(got) != 0 {
+				t.Errorf("human signoff %q: %v", msg, got)
+			}
+		}
+	}
+	// git's 25% rule: a recognised Signed-off-by with prose lines is a trailer block
+	prose := "docs: a\n\nSigned-off-by: P <p@example.test>\nsome prose\nmore prose"
+	if got := Lint(prose, Options{Author: bot}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+		t.Errorf("bot signoff with prose accepted: %v", got)
+	}
+	// ... and the same shapes cannot hide an invalid AI line
+	for _, line := range []string{
+		"Co-authored-by : Claude <noreply@anthropic.com>",
+		"Co-Authored-By : Claude <noreply@anthropic.com>",
+		"Co-Authored-By:Claude <noreply@anthropic.com>",
+		"Co-Authored-By:\tCodex <noreply@openai.com>",
+		"Assisted-by : x",
+		"Assisted-by:x",
+	} {
+		for _, msg := range []string{"docs: a\n\n" + line, "docs: a\n\nRefs: #1\n" + line, "Merge branch 'x'\n\n" + line} {
+			if got := Lint(msg, Options{Author: human}); len(got) == 0 {
+				t.Errorf("invalid attribution %q accepted", msg)
+			}
+		}
+	}
+	// valid spaced AI lines stay valid
+	for _, line := range []string{
+		"Co-Authored-By : Claude Sonnet 5.5 <noreply@anthropic.com>",
+		"Co-Authored-By:Claude Sonnet 5.5 <noreply@anthropic.com>",
+		"Co-authored-by : Person <person@example.test>",
+	} {
+		if got := Lint("docs: a\n\n"+line, Options{Author: human}); len(got) != 0 {
+			t.Errorf("%q: %v", line, got)
+		}
+	}
+	// prose is not a trailer block without a recognised Signed-off-by
+	if got := Lint("docs: a\n\nAssisted-by : x\nprose line", Options{Author: human}); len(got) != 0 {
+		t.Errorf("prose paragraph read as trailers: %v", got)
+	}
+}
+
+// Scissors cut a message only in hook mode (git commit cleanup); a stored
+// message keeps everything after such a line.
+func TestScissorsOnlyCutInHookMode(t *testing.T) {
+	const human = "Werner Stein <claude@wstein.de>"
+	const bot = "Claude <noreply@anthropic.com>"
+	const cut = "# ------------------------ >8 ------------------------"
+	hidden := "fix: a\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>"
+	if got := Lint(hidden, Options{Author: bot}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+		t.Errorf("stored scissors hid a signoff: %v", got)
+	}
+	if got := Lint(hidden, Options{Author: bot, Scissors: true}); len(got) != 0 {
+		t.Errorf("hook mode must cut at scissors: %v", got)
+	}
+	bad := "docs: a\n" + cut + "\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+	if got := Lint(bad, Options{Author: human}); len(got) == 0 {
+		t.Error("stored scissors hid an invalid AI line")
+	}
+	if got := Lint(bad, Options{Author: human, Scissors: true}); len(got) != 0 {
+		t.Errorf("hook mode: %v", got)
+	}
+	if got := Conventional("docs: a\n" + cut + "\ndiff --git"); len(got) == 0 {
+		t.Error("conventional is a stored-message check and must not cut at scissors")
+	}
+	if got := Lint("docs: a\n"+cut+"\ndiff --git", Options{Author: human, Scissors: true}); len(got) != 0 {
+		t.Errorf("hook mode cut: %v", got)
+	}
+}
+
+// Gaps the mutation review found.
+func TestAttributionAndSignoffCases(t *testing.T) {
+	const human = "Werner Stein <claude@wstein.de>"
+	const person = "Co-Authored-By: Person <person@example.test>"
+	const ai = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+	for _, author := range []string{"Claude <noreply@anthropic.com>", "ci-agent <agent@example.test>", "dependabot[bot] <support@github.com>"} {
+		if got := Lint("docs: a\n\n"+ai+"\n"+person, Options{Author: author}); len(got) != 0 {
+			t.Errorf("%s with human coauthor: %v", author, got)
+		}
+	}
+	if got := Lint("build(deps): bump x\n\n"+person+"\nSigned-off-by: dependabot[bot] <support@github.com>", Options{Author: "dependabot[bot] <support@github.com>"}); len(got) != 0 {
+		t.Errorf("dependabot with person coauthor: %v", got)
+	}
+	for _, p := range []string{"Merge ", "Revert ", "fixup! ", "squash! ", "amend! "} {
+		msg := p + "x\n\n" + person
+		if got := Lint(msg, Options{Author: "ci-agent <agent@example.test>"}); len(got) != 0 {
+			t.Errorf("%q bot with person coauthor: %v", p, got)
+		}
+		if got := Lint(msg+"\nSigned-off-by: P <p@example.test>", Options{Author: "ci-agent <agent@example.test>"}); len(got) == 0 {
+			t.Errorf("%q bot signoff accepted", p)
+		}
+	}
+	for _, key := range []string{"Co-Authored-By", "co-authored-by", "CO-AUTHORED-BY", "Co-authored-by"} {
+		if got := Lint("docs: a\n\n"+key+": Claude <noreply@anthropic.com>", Options{Author: human}); len(got) == 0 {
+			t.Errorf("%s: invalid AI line accepted", key)
+		}
+		if got := Lint("docs: a\n\n"+key+": Claude Sonnet 5.5 <noreply@anthropic.com>", Options{Author: human}); len(got) != 0 {
+			t.Errorf("%s: %v", key, got)
+		}
+	}
+	for _, email := range []string{"NOREPLY@ANTHROPIC.COM", "NoReply@Anthropic.com"} {
+		if got := Lint("docs: a\n\nCo-Authored-By: Claude <"+email+">", Options{Author: human}); len(got) == 0 {
+			t.Errorf("%s: invalid AI line accepted", email)
+		}
+		if got := Lint("docs: a\n\nCo-Authored-By: Codex Sonnet <"+email+">", Options{Author: human}); len(got) == 0 {
+			t.Errorf("%s: wrong vendor accepted", email)
+		}
+		if got := Lint("docs: a\n\nCo-Authored-By: Claude Sonnet 5.5 <"+email+">", Options{Author: human}); len(got) != 0 {
+			t.Errorf("%s: %v", email, got)
 		}
 	}
 }
