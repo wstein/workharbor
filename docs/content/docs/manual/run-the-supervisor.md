@@ -91,3 +91,21 @@ A preview is agent-written code in your browser: it has an origin of its own, bu
 `whr console [workspace]` opens a shell in an environment without an agent, with every workspace mounted read-only (`--write` mounts the named one read-write). `--status` says whether it is open and `--close` closes it. See the design (D43) for what it can reach.
 
 `whr ssh [-- command...]` opens an SSH session in the console with a certificate that lasts minutes; your key stays on your machine and the console listens on no port. Turning it on is described in [Prepare the Mac mini](host-setup.md) (the `ssh-ca` step). `whr ssh --config` prints a `~/.ssh/config` block for editors; `--forward` allows port forwarding.
+
+
+### A certificate from the browser
+
+The authenticated **Console SSH** page (`/console/ssh`) accepts one public key
+of at most 4096 bytes. Open the console on the host and enrol a passkey first.
+Keep the private key on your device. Port forwarding is off unless you select
+it explicitly. Issuing a certificate requires a fresh passkey assertion for
+that console, key and forwarding choice; a replaced console requires a new
+request. The page returns the certificate, pinned host public key, principal
+and expiry for copying into your SSH client. It keeps no browser storage copy.
+
+This completes the browser certificate source path of issue #112, not remote
+SSH access: VPN/forwarder reachability (#69), remote client configuration and
+T16 verification remain {{< status open >}}. The handler and shared service
+are checked with local Go tests; a remote connection from a phone or tablet is
+{{< status unverified >}}. Revisit when those prerequisites are available and
+run the remote client verification before claiming remote SSH support.

@@ -136,6 +136,20 @@
     });
   }
 
+  function consoleSSH(button) {
+    var key = document.getElementById("console-public-key").value;
+    var forwarding = document.getElementById("console-forwarding").checked;
+    document.getElementById("console-certificate-result").value = "";
+    return post("/console/ssh/begin", { public_key: key, forwarding: forwarding }).then(function (r) {
+      return get(r.options).then(function (c) {
+        return post("/console/ssh/finish", asserted(c), { "X-Ceremony": r.ceremony });
+      });
+    }).then(function (r) {
+      document.getElementById("console-certificate-result").value = r.certificate + "\n\nPinned host public key:\n" + r.host_key + "\n\nPrincipal: " + r.principal + "\nExpires: " + r.expires_at;
+      say(button, "Certificate issued. Copy it to your SSH client and pin the host public key.");
+    });
+  }
+
   document.addEventListener("click", function (e) {
     var button = e.target.closest("[data-passkey], [data-stepup]");
     if (!button) {
@@ -146,7 +160,7 @@
       say(button, "This browser has no passkey support.");
       return;
     }
-    var run = button.dataset.passkey === "enrol" ? enrol : button.dataset.passkey === "login" ? login : stepUp;
+    var run = button.dataset.passkey === "console-ssh" ? consoleSSH : button.dataset.passkey === "enrol" ? enrol : button.dataset.passkey === "login" ? login : stepUp;
     button.disabled = true;
     run(button).catch(function (err) {
       say(button, err && err.message ? err.message : "The passkey was not used.");

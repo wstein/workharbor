@@ -254,3 +254,18 @@ func TestTheConsoleServesAtMostEightSSHConnections(t *testing.T) {
 		return c.sshConns == 0
 	})
 }
+
+func TestCertificateExpectedConsoleRefusesReplacement(t *testing.T) {
+	r := newWsRig(t)
+	c, _ := r.sshConsoles()
+	cur, err := c.Open(bg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.SSHCertificate(bg, SSHRequest{PublicKey: clientPub(t), ExpectedConsole: "another-console"}); err == nil {
+		t.Fatal("replacement accepted")
+	}
+	if _, err := c.SSHCertificate(bg, SSHRequest{PublicKey: clientPub(t), ExpectedConsole: cur.EnvID}); err != nil {
+		t.Fatal(err)
+	}
+}

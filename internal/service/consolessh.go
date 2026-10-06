@@ -33,9 +33,10 @@ var ErrNoSSH = domain.NewConflict(domain.RuleEnvRunning, "SSH access is not set 
 
 // SSHRequest is a certificate to issue for a client's key.
 type SSHRequest struct {
-	PublicKey  string // the client's public key, one authorized_keys line
-	Forwarding bool   // allow port forwarding, which the editors' remote modes need
-	Actor      string // who asked, for the audit entry
+	ExpectedConsole string // optional environment identity approved by the web assertion
+	PublicKey       string // the client's public key, one authorized_keys line
+	Forwarding      bool   // allow port forwarding, which the editors' remote modes need
+	Actor           string // who asked, for the audit entry
 }
 
 // SSHCertificate is what the client needs to connect: the certificate for its key
@@ -56,6 +57,9 @@ func (c *Consoles) SSHCertificate(ctx context.Context, req SSHRequest) (SSHCerti
 	cur, err := c.running(ctx)
 	if err != nil {
 		return SSHCertificate{}, err
+	}
+	if req.ExpectedConsole != "" && req.ExpectedConsole != cur.ID {
+		return SSHCertificate{}, domain.NewConflict(domain.RuleEnvRunning, "the console changed: request a new certificate")
 	}
 	pub, _, _, rest, err := ssh.ParseAuthorizedKey([]byte(req.PublicKey))
 	if err != nil || len(strings.TrimSpace(string(rest))) != 0 {

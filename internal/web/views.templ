@@ -42,6 +42,7 @@ templ layout(n nav, title string) {
 							}
 						</a>
 						<a href="/changes" data-shortcut="c" class={ tab(n.Active, "changes") }>Changes</a>
+						<a href="/console/ssh" class={ tab(n.Active, "console") }>Console SSH</a>
 						<a href="/devices" data-shortcut="d" class={ tab(n.Active, "devices") }>Devices</a>
 					</nav>
 					<form method="post" action="/logout" hx-boost="false">
@@ -693,5 +694,27 @@ templ openView(p openPage) {
 			</ul>
 		}
 		<p><a href={ templ.SafeURL("/tasks/" + p.ID) }>Back to the task</a></p>
+	}
+}
+
+
+templ consoleCertificateView(p consoleCertificatePage) {
+	@layout(p.nav, "Console SSH") {
+		<h1>Console SSH certificate</h1>
+		<article>
+			<p>Paste your SSH public key. Keep the private key on your device. Open the console on the host first.</p>
+			if p.Available {
+				<label for="console-public-key">Public key (one line, at most 4096 bytes)</label>
+				<textarea id="console-public-key" maxlength="4096" autocomplete="off" spellcheck="false"></textarea>
+				<label><input id="console-forwarding" type="checkbox"/>Allow port forwarding for this certificate</label>
+				<button type="button" data-passkey="console-ssh">Issue certificate with passkey</button>
+				<p data-passkey-status role="status" hidden></p>
+				<label for="console-certificate-result">Certificate and pinned host public key</label>
+				<textarea id="console-certificate-result" readonly autocomplete="off" spellcheck="false"></textarea>
+				<noscript>This action needs JavaScript and a passkey.</noscript>
+			} else {
+				<p>Enrol a passkey and configure console SSH on the host to issue certificates here.</p>
+			}
+		</article>
 	}
 }
