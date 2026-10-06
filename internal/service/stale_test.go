@@ -66,8 +66,8 @@ func TestALostRunsEnvironmentIsStoppedOnceThenStartedThenRelaunched(t *testing.T
 	if len(rep.Resumed) != 1 || len(rep.Interrupted) != 1 || len(rep.Errors) != 0 {
 		t.Fatalf("report = %+v", rep)
 	}
-	if c.stops.Load() != 1 || c.starts.Load() != 1 || r.runState() != domain.RunRunning || r.envState() != domain.EnvRunning {
-		t.Errorf("stops %d, starts %d, run %s, env %s", c.stops.Load(), c.starts.Load(), r.runState(), r.envState())
+	if c.stops.Load() != 1 || c.starts.Load() != 1 || r.runState() != domain.RunRunning || !r.svc.attached("r1") || r.envState() != domain.EnvRunning {
+		t.Errorf("stops %d, starts %d, run %s, attached %v, env %s", c.stops.Load(), c.starts.Load(), r.runState(), r.svc.attached("r1"), r.envState())
 	}
 
 	// The run is lost again (its session ends): this process started the
@@ -251,10 +251,11 @@ func TestAnInterruptedRunKeepsAnotherTaskOutOfItsEnvironment(t *testing.T) {
 
 	// I's answer resumes it after one stop and start; nothing else lives there.
 	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}
+	r.agent.Block() // the first run's block was used by its launch; an unscripted relaunch finishes at once and stops the run
 	must(t, r.svc.AnswerDecision(bg, "login1", ans))
 	run, _ := mustRun(t, r.store, task1, run1)
-	if run.State != domain.RunRunning || c.stops.Load() != 1 || c.starts.Load() != 1 {
-		t.Errorf("run %s, stops %d, starts %d", run.State, c.stops.Load(), c.starts.Load())
+	if run.State != domain.RunRunning || !r.svc.attached(run1) || c.stops.Load() != 1 || c.starts.Load() != 1 {
+		t.Errorf("run %s, attached %v, stops %d, starts %d", run.State, r.svc.attached(run1), c.stops.Load(), c.starts.Load())
 	}
 }
 
@@ -325,6 +326,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 	}
 
 	c.stopErr = nil
+	r.agent.Block() // each launch below gets its own blocking session
 	task2, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#3"})
 	must(t, err)
 	if c.stops.Load() != 2 || c.starts.Load() != 1 || len(r.agent.Specs) != launched+1 {
@@ -334,6 +336,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 	_, _ = r.svc.Reconcile(bg)
 	must(t, r.svc.Cancel(bg, task2))
 	r.svc.Wait()
+	r.agent.Block()
 	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#4"}); err != nil {
 		t.Fatal(err)
 	}
