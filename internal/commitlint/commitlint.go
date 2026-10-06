@@ -25,7 +25,7 @@ var (
 	coauthorRe  = regexp.MustCompile(`^([^<>\s][^<>]*?) <([^<>\s@]+@[^<>\s@]+)>$`)
 	modelNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/+ -]*$`)
 	idRe        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-	botRe       = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@(?:anthropic|openai)\.com`)
+	botRe       = regexp.MustCompile(`(?i)\[bot\]|\b(?:bot|agent)\b|noreply@(?:anthropic|openai|google)\.com`)
 
 	// scanKeyRe is git's own reading of a trailer line: a token, optional
 	// whitespace, a colon, optional whitespace and the value. It is looser than
@@ -36,6 +36,14 @@ var (
 	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
 	depBotRe = regexp.MustCompile(`(?i)^\s*(?:dependabot|renovate)(?:\[bot\])?\b`)
 )
+
+// aiIdentities are the project's reserved attribution addresses and the first
+// word of the name that goes with each.
+var aiIdentities = map[string]struct{ vendor string }{
+	"noreply@anthropic.com": {"Claude"},
+	"noreply@openai.com":    {"Codex"},
+	"noreply@google.com":    {"Antigravity"},
+}
 
 // issueKeys are the trailer tokens that reference an issue.
 var issueKeys = map[string]bool{
@@ -181,17 +189,12 @@ func attributionProblemsFor(trailers []trailer) []string {
 		}
 		name, email := m[1], strings.ToLower(m[2])
 		fields := strings.Fields(name)
-		var vendor, want string
-		switch email {
-		case "noreply@anthropic.com":
-			vendor, want = "claude", "noreply@anthropic.com"
-		case "noreply@openai.com":
-			vendor, want = "codex", "noreply@openai.com"
-		default:
+		id, ok := aiIdentities[email]
+		if !ok {
 			continue // Other identities may be legitimate human coauthors.
 		}
-		if strings.ToLower(fields[0]) != vendor || email != want || len(fields) < 2 || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
-			problems = append(problems, fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the exact exposed model or unknown", vendor, want))
+		if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
+			problems = append(problems, fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the exact exposed model or unknown", id.vendor, email))
 		}
 	}
 	return problems

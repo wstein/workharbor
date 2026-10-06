@@ -131,6 +131,12 @@ func TestCoauthorAttribution(t *testing.T) {
 		{"claude display model", "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>", ""},
 		{"claude exact model", "Co-Authored-By: Claude claude-sonnet-5-5 <noreply@anthropic.com>", ""},
 		{"codex", "Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>", ""},
+		{"antigravity", "Co-Authored-By: Antigravity Gemini 3.8 Flash <noreply@google.com>", ""},
+		{"antigravity upper address", "Co-Authored-By: Antigravity Gemini 3.8 Flash <NoReply@Google.com>", ""},
+		{"antigravity missing model", "Co-Authored-By: Antigravity <noreply@google.com>", "Co-Authored-By"},
+		{"antigravity wrong vendor", "Co-Authored-By: Alice <noreply@google.com>", "Co-Authored-By"},
+		{"antigravity on the wrong address", "Co-Authored-By: Antigravity Gemini <noreply@openai.com>", "Co-Authored-By"},
+		{"human at google", "Co-Authored-By: Alice <alice@google.com>", ""},
 		{"unknown", "Co-Authored-By: Codex unknown <noreply@openai.com>", ""},
 		{"case insensitive", "CO-AUTHORED-BY: Codex gpt-6.1-sol <noreply@openai.com>", ""},
 		{"multiple tools and human", "Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n" + contributor, ""},
@@ -315,6 +321,28 @@ func TestAttributionAndSignoffCases(t *testing.T) {
 		}
 		if got := Lint("docs: a\n\nCo-Authored-By: Claude Sonnet 5.5 <"+email+">", Options{Author: human}); len(got) != 0 {
 			t.Errorf("%s: %v", email, got)
+		}
+	}
+}
+
+func TestAntigravityIdentityAndMessages(t *testing.T) {
+	const ag = "Co-Authored-By: Antigravity Gemini 3.8 Flash <noreply@google.com>"
+	for _, author := range []string{"Antigravity <noreply@google.com>", "Antigravity Gemini <noreply@google.com>"} {
+		if got := Lint("docs: a\n\n"+ag, Options{Author: author}); len(got) != 0 {
+			t.Errorf("%s: %v", author, got)
+		}
+		if got := Lint("docs: a\n\n"+ag+"\nSigned-off-by: P <p@example.test>", Options{Author: author}); !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+			t.Errorf("%s signoff accepted: %v", author, got)
+		}
+	}
+	for addr, want := range map[string]string{
+		"noreply@anthropic.com": "Claude <model-id> <noreply@anthropic.com>",
+		"noreply@openai.com":    "Codex <model-id> <noreply@openai.com>",
+		"noreply@google.com":    "Antigravity <model-id> <noreply@google.com>",
+	} {
+		got := Lint("docs: a\n\nCo-Authored-By: Alice <"+addr+">", Options{Author: "W <w@x.de>"})
+		if !strings.Contains(strings.Join(got, "\n"), want) {
+			t.Errorf("%s: want %q in %v", addr, want, got)
 		}
 	}
 }
