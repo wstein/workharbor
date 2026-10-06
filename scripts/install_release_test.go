@@ -18,7 +18,18 @@ import (
 func bash(t *testing.T, env []string, script string) (string, error) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), "bash", "-c", script) //nolint:gosec // a test script
-	cmd.Env = gittest.Env(t.TempDir(), env...)
+	hasHome := false
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "HOME=") {
+			hasHome = true
+			break
+		}
+	}
+	if hasHome {
+		cmd.Env = env
+	} else {
+		cmd.Env = gittest.Env(t.TempDir(), env...)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
