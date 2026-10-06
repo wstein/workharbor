@@ -216,3 +216,14 @@ func emptyHome() string {
 	}
 	return dir
 }
+
+// AICoauthor is the attribution the commit rules require of a commit authored
+// by a bot or an agent (internal/commitlint, #304). Tests that commit as, or
+// lint as, whr-bot end their messages with it.
+const AICoauthor = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+
+// BotMessage returns msg as a bot-authored commit message: the AI coauthor
+// trailer in its own last paragraph.
+func BotMessage(msg string) string {
+	return strings.TrimRight(msg, "\n") + "\n\n" + AICoauthor
+}

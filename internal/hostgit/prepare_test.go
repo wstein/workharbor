@@ -79,7 +79,7 @@ func (p *prep) commitFile(name, msg string) {
 		p.t.Fatal(err)
 	}
 	mustGit(p.t, p.env, p.topic, "add", name)
-	mustGit(p.t, p.env, p.topic, "commit", "--quiet", "-m", msg)
+	mustGit(p.t, p.env, p.topic, "commit", "--quiet", "-m", gittest.BotMessage(msg))
 }
 
 func (p *prep) fetch() {
@@ -197,7 +197,7 @@ func TestPrepareReportsAConflictAndKeepsTheBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustGit(t, p.env, p.topic, "add", "file.txt")
-	mustGit(t, p.env, p.topic, "commit", "--quiet", "-m", "docs: change file")
+	mustGit(t, p.env, p.topic, "commit", "--quiet", "-m", gittest.BotMessage("docs: change file"))
 	p.forge.commit(2) // rewrites file.txt
 	if err := p.cache.Refresh(ctx, "main"); err != nil {
 		t.Fatal(err)

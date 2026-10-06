@@ -108,7 +108,7 @@ func newPubRig(t *testing.T, opts ...rigOption) *pubRig {
 	plainGit(t, pr.home, pr.checkout, "checkout", "--quiet", "-b", "agent/topic")
 	must(t, os.WriteFile(filepath.Join(pr.checkout, "a.txt"), []byte("a\n"), 0o600))
 	plainGit(t, pr.home, pr.checkout, "add", "a.txt")
-	plainGit(t, pr.home, pr.checkout, "commit", "--quiet", "-m", "docs: add a")
+	plainGit(t, pr.home, pr.checkout, "commit", "--quiet", "-m", gittest.BotMessage("docs: add a"))
 
 	g, err := hostgit.New(hostgit.WithWorkspaceRoot(root))
 	must(t, err)
@@ -274,7 +274,7 @@ func (p *pubRig) rework(id domain.ID, file string) {
 	must(p.t, err)
 	must(p.t, os.WriteFile(filepath.Join(p.checkout, file), []byte(file+"\n"), 0o600))
 	plainGit(p.t, p.home, p.checkout, "add", file)
-	plainGit(p.t, p.home, p.checkout, "commit", "--quiet", "-m", "docs: add "+file)
+	plainGit(p.t, p.home, p.checkout, "commit", "--quiet", "-m", gittest.BotMessage("docs: add "+file))
 }
 
 // #79: after a push, the next round extends the pushed commit instead of

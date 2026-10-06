@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/forge/forgetest"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/service"
 )
@@ -153,7 +154,7 @@ func TestLintForReadsAStoredMessageWithScissorsLines(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if got := lint("docs: a\n\nRefs: #1\n" + cut + "\n\ndiff --git"); len(got) != 0 {
+	if got := lint("docs: a\n\nRefs: #1\n" + gittest.AICoauthor + "\n" + cut + "\n\ndiff --git"); len(got) != 0 {
 		t.Errorf("a scissors line with no trailer after it: %v", got)
 	}
 	if got := LintFor(config.CommitLintConventional, bot)("docs: a\n\n" + cut + "\n\nfixup! x"); len(got) != 0 {

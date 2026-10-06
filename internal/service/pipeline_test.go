@@ -14,6 +14,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
@@ -407,7 +408,7 @@ func TestAnApprovalDoesNotCoverANewerRevision(t *testing.T) {
 	// is prepared, and the earlier approval must not cover it.
 	must(t, os.WriteFile(filepath.Join(f.checkout, "b.txt"), []byte("b\n"), 0o600))
 	plainGit(t, f.home, f.checkout, "add", "b.txt")
-	plainGit(t, f.home, f.checkout, "commit", "--quiet", "-m", "docs: add b")
+	plainGit(t, f.home, f.checkout, "commit", "--quiet", "-m", gittest.BotMessage("docs: add b"))
 	f.startRun2()
 	f.finishRun2()
 	f.svc.Wait()
