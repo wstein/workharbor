@@ -80,7 +80,7 @@ func TestLinearLand(t *testing.T) {
 			if tc.failScan {
 				checks += "\t@echo required-secret-scan-failed >&2; exit 1\n"
 			}
-			write(filepath.Join(dir, "Makefile"), []byte("LAND_MAKE := $(MAKE)\n"+clean+"land:\n"+recipe+checks))
+			write(filepath.Join(dir, "Makefile"), []byte(clean+"land:\n"+recipe+checks))
 			if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -222,7 +222,7 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		checks += "\t@if [ ! -f checks-ran ]; then git update-ref refs/heads/main \"$$(git commit-tree -p main -m moved main^{tree})\"; fi\n"
 	}
 	checks += "\t@echo $@ >> checks-ran\nsecrets-range:\n\t@echo secrets-range $(RANGE) $(TIP) >> checks-ran\n"
-	r.write(filepath.Join(r.dir, "Makefile"), "LAND_MAKE := $(MAKE)\n"+clean+"land:\n"+recipe+checks)
+	r.write(filepath.Join(r.dir, "Makefile"), clean+"land:\n"+recipe+checks)
 	if err := os.Mkdir(filepath.Join(r.dir, "scripts"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,16 @@ func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
 	}{
 		{"make -i, failing check-local", failingCheck, nil, []string{"-i"}},
 		{"MAKEFLAGS=i, failing check-local", failingCheck, []string{"MAKEFLAGS=i"}, nil},
+		// Belt and braces: make 3.81 ignores MFLAGS in the environment, make 4 may not.
 		{"MFLAGS=-i, failing check-local", failingCheck, []string{"MFLAGS=-i"}, nil},
+		{"LAND_CLEAN=true arg", failingCheck, nil, []string{"LAND_CLEAN=true"}},
+		{"LAND_CLEAN=true in MAKEFLAGS", failingCheck, []string{"MAKEFLAGS=LAND_CLEAN=true"}, nil},
+		{"LAND_CLEAN=true with -e", failingCheck, []string{"LAND_CLEAN=true"}, []string{"-e"}},
+		{"LAND_MAKE=true arg", failingCheck, nil, []string{"LAND_MAKE=true"}},
+		{"LAND_MAKE=true with -e", failingCheck, []string{"LAND_MAKE=true"}, []string{"-e"}},
+		{"MAKE=true arg", failingCheck, nil, []string{"MAKE=true"}},
+		{"MAKE=true with -e", failingCheck, []string{"MAKE=true"}, []string{"-e"}},
+		{"MAKEFILES", finding, []string{"MAKEFILES=evil.mk"}, nil},
 		{"--ignore-errors", failingCheck, nil, []string{"--ignore-errors"}},
 		{"GITLEAKS_FOUND=0, finding", finding, nil, []string{"GITLEAKS_FOUND=0"}},
 		{"GITLEAKS_FOUND=0 in MAKEFLAGS", finding, []string{"MAKEFLAGS=GITLEAKS_FOUND=0"}, nil},
@@ -577,6 +586,11 @@ func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
 			cmd.Dir = wt
 			cmd.Env = append(r.env(), tc.env...)
+			if slices.Contains(tc.env, "MAKEFILES=evil.mk") {
+				evil := filepath.Join(t.TempDir(), "evil.mk")
+				r.write(evil, "override GITLEAKS_FOUND := 0\n")
+				cmd.Env = append(r.env(), "MAKEFILES="+evil)
+			}
 			out, err := cmd.CombinedOutput()
 			if got := r.git(r.dir, "rev-parse", "main"); got != base {
 				t.Fatalf("main moved to %s despite a failing check\n%s", got, out)
@@ -590,15 +604,18 @@ func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
 	}
 }
 
-// landCleanLine returns the real LAND_CLEAN definition, so that mutating its
+// landCleanLine returns the real LAND_MAKE and LAND_CLEAN definitions, so that mutating its
 // flags is caught by the tests.
 func landCleanLine(t *testing.T, makefile []byte) string {
 	t.Helper()
+	var out string
 	for line := range strings.SplitSeq(string(makefile), "\n") {
-		if strings.HasPrefix(line, "LAND_CLEAN :=") {
-			return line + "\n"
+		if strings.Contains(line, "LAND_CLEAN :=") || strings.Contains(line, "LAND_MAKE :=") {
+			out += line + "\n"
 		}
 	}
-	t.Fatal("LAND_CLEAN missing")
-	return ""
+	if strings.Count(out, ":=") != 2 {
+		t.Fatal("LAND_MAKE or LAND_CLEAN missing")
+	}
+	return out
 }

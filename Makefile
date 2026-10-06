@@ -252,10 +252,11 @@ check-hooks:
 
 # The sub-makes of land go through LAND_MAKE: the recipe line must not contain
 # $(MAKE) itself, or make -n, -t and -q would run it for real (merge included).
-LAND_MAKE := $(MAKE)
+override LAND_MAKE := $(MAKE)
 # They also run without the caller's MAKEFLAGS: -i or a command-line override such
-# as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass.
-LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
+# as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass. Both are
+# override variables so that no command-line or -e setting replaces them.
+override LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
 
 # Land the current branch on main, from a session's own worktree (BRANCH=<name>
 # from any checkout: land the worktree that has it checked out; SHA=<full sha>:
@@ -264,7 +265,8 @@ LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
 # the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
-	@want=""; wb=""; \
+	@if [ "$(origin MAKE)" != default ] || [ -n "$(MAKEFILES)" ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
+	want=""; wb=""; \
 	if [ "$(origin SHA)" = "command line" ]; then \
 		case "$$SHA" in ""|*[!0-9a-f]*) echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1;; esac; \
 		if [ "$${#SHA}" != 40 ]; then echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1; fi; want="$$SHA"; fi; \
