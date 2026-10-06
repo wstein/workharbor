@@ -12,9 +12,9 @@ import (
 // DigestPrefix is the domain separator hashed before the digest input.
 const DigestPrefix = "workharbor-setup-fix-v1\x00"
 
-// irreversible lists the steps whose effect cannot be undone; until the step
-// model has a class for it (issue #320), the list is fixed here. Such a step
-// is never answered from a file.
+// irreversible lists steps that are never answered from a file by name, in
+// addition to the step model's own Fix.Irreversible, which Eligible also checks:
+// a belt for a step whose fix forgets to say so.
 var irreversible = map[string]bool{"drop-admin": true}
 
 // digestInput is what a fix digest covers. Its fields are declared in
@@ -55,7 +55,7 @@ func FixDigest(c doctor.Check) string {
 // Eligible reports whether a step may be answered from a file. It is pure.
 // Only a user-phase step with something to run qualifies: never a host step,
 // a guided step (text for the human), a step whose preview shows sudo, or an
-// irreversible one. The preview is all it sees: a Build function may return
+// irreversible one (Fix.Irreversible, or by name). The preview is all it sees: a Build function may return
 // other commands (sudo included) and UseUser may name another account, and
 // neither is covered by FixDigest, so the runner must refuse sudo from Build
 // when the decision came from a file.
@@ -67,7 +67,7 @@ func Eligible(c doctor.Check) (ok bool, reason string) {
 		return false, "the step has no fix"
 	case c.Fix.Do == nil && c.Fix.Build == nil && len(c.Fix.Cmds) == 0:
 		return false, "the step is guided: the human does it"
-	case irreversible[c.Name]:
+	case c.Fix.Irreversible, irreversible[c.Name]:
 		return false, "the step is irreversible and is always asked"
 	}
 	for _, cmd := range c.Fix.Cmds {

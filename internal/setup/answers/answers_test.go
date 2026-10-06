@@ -369,3 +369,59 @@ func TestBuildsWithoutAKnownCommitHaveNoIdentity(t *testing.T) {
 		t.Fatalf("%q %v", id, err)
 	}
 }
+
+// No t.Parallel: the umask is process-wide. A umask that removes the owner's
+// write bit would leave the temporary file 0400 had Save not forced the mode.
+func TestSavedFileIs0600UnderARestrictiveUmask(t *testing.T) {
+	fakeIdentity(t, "v0.1.0@abc1234", nil)
+	path := filepath.Join(t.TempDir(), "a.json")
+	old := syscall.Umask(0o277)
+	defer syscall.Umask(old)
+	if err := Save(path, sample(), sampleChecks()); err != nil {
+		t.Fatal(err)
+	}
+	fi, _ := os.Stat(path)
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %o", fi.Mode().Perm())
+	}
+}
+
+func TestAFixThatSaysIrreversibleIsNeverAnswered(t *testing.T) {
+	do := func(context.Context, doctor.Prompter) error { return nil }
+	c := doctor.Check{Name: "forget-it", Phase: doctor.PhaseUser, Fix: &doctor.Fix{Do: do, Desc: "x", Irreversible: true}}
+	if ok, _ := Eligible(c); ok {
+		t.Fatal("an irreversible fix is eligible")
+	}
+	f := File{Answers: []Entry{{Step: "forget-it", Fix: FixDigest(c), Answer: Run}}}
+	if _, ok := f.Lookup(c); ok {
+		t.Fatal("an irreversible fix got an answer")
+	}
+	c.Fix.Irreversible = false
+	if ok, _ := Eligible(c); !ok {
+		t.Fatal("the same fix without the mark is eligible")
+	}
+}
+
+func TestLoadRawReturnsTheBytesThatWereDecoded(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.json")
+	if err := os.WriteFile(p, []byte(goodJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, data, _, err := LoadRaw(p, os.Getuid())
+	if err != nil || string(data) != goodJSON || len(f.Answers) != 1 {
+		t.Fatalf("%v %q %+v", err, data, f)
+	}
+}
+
+func TestSaveAsBindsTheGivenIdentity(t *testing.T) {
+	fakeIdentity(t, "", ErrNoBuildIdentity) // Save would refuse; SaveAs takes the identity it is given
+	path := filepath.Join(t.TempDir(), "a.json")
+	if err := SaveAs("v9.9.9@feed123", path, sample(), sampleChecks()); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path) //nolint:gosec // a test path
+	if !strings.Contains(string(data), `"whr": "v9.9.9@feed123"`) {
+		t.Fatalf("%s", data)
+	}
+}

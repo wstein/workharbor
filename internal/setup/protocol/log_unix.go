@@ -59,7 +59,8 @@ func Path(home string) string {
 type Log struct {
 	mu       sync.Mutex
 	f        *os.File
-	w        io.Writer // the file; a test wraps it to count writes
+	w        io.Writer    // the file; a test wraps it to count writes
+	sync     func() error // fsync of the file; a test makes it fail
 	clock    func() time.Time
 	whr      string
 	runID    string
@@ -106,7 +107,7 @@ func Open(home string, clock func() time.Time, rnd io.Reader) (*Log, error) {
 		}
 		return nil, err
 	}
-	l := &Log{f: f, w: f, clock: clock, whr: identity()}
+	l := &Log{f: f, w: f, sync: f.Sync, clock: clock, whr: identity()}
 	fail := func(err error) (*Log, error) {
 		_ = f.Close()
 		return nil, err
@@ -254,7 +255,7 @@ func (l *Log) Append(e Entry) error {
 		err = io.ErrShortWrite
 	}
 	if err == nil {
-		err = l.f.Sync()
+		err = l.sync()
 	}
 	if err != nil {
 		l.broken = err // the file may hold a torn line: write nothing more

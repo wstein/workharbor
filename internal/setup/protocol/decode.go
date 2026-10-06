@@ -135,27 +135,51 @@ func walkArray(dec *json.Decoder, depth int) error {
 // line lacks its newline reports ErrCutOff; a line a crash cut (and a later
 // run set apart with a newline) reports its decode error at that line.
 func Chain(data []byte) ([]Entry, error) {
+	out, faults := chain(data, false)
+	if len(faults) > 0 {
+		return out, faults[0]
+	}
+	return out, nil
+}
+
+// ChainResume reads a whole protocol file as Chain does but goes on after a
+// fault, for a history that must show what it can: a line that does not decode
+// is reported and skipped, and the next line is judged against the bytes of the
+// line it follows (a crash-cut line is what the next run's prev names). A line
+// that decodes but does not fit its run is reported and kept. It returns the
+// entries and every fault, each naming its line. Like Chain it proves nothing
+// against the user whose file it is.
+func ChainResume(data []byte) ([]Entry, []error) { return chain(data, true) }
+
+func chain(data []byte, resume bool) ([]Entry, []error) {
 	var out []Entry
+	var faults []error
 	var prevLine []byte
 	rest := data
 	for n := 1; len(rest) > 0; n++ {
 		i := bytes.IndexByte(rest, '\n')
 		if i < 0 {
-			return out, fmt.Errorf("line %d: %w", n, ErrCutOff)
+			return out, append(faults, fmt.Errorf("line %d: %w", n, ErrCutOff))
 		}
 		line := rest[:i]
 		rest = rest[i+1:]
 		e, err := Decode(line)
+		decoded := err == nil
+		if decoded {
+			err = checkLink(out, e, prevLine)
+		}
 		if err != nil {
-			return out, fmt.Errorf("line %d: %w", n, err)
+			faults = append(faults, fmt.Errorf("line %d: %w", n, err))
+			if !resume {
+				return out, faults
+			}
 		}
-		if err := checkLink(out, e, prevLine); err != nil {
-			return out, fmt.Errorf("line %d: %w", n, err)
+		if decoded {
+			out = append(out, e)
 		}
-		out = append(out, e)
 		prevLine = line
 	}
-	return out, nil
+	return out, faults
 }
 
 func checkLink(done []Entry, e Entry, prevLine []byte) error {

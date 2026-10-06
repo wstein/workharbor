@@ -57,53 +57,62 @@ func identityOf(info version.Info) (string, error) {
 // ErrNoBuildIdentity for a dirty build.
 func Identity() (string, error) { return identity() }
 
-// Load reads and decodes the answer file at path. The file is opened without
+// Load reads and decodes the answer file at path; see LoadRaw.
+func Load(path string, uid int) (f File, warnings []string, err error) {
+	f, _, warnings, err = LoadRaw(path, uid)
+	return f, warnings, err
+}
+
+// LoadRaw reads and decodes the answer file at path and also returns the bytes
+// it decoded, so a digest of the file is the digest of what was used. The file is opened without
 // following a symbolic link and judged by fstat of the open descriptor: it must
 // be a regular file owned by uid, not writable by group or others, and its path
 // must not lie in a git working tree. A file readable by group or others loads
 // with a warning. The caller compares File.Whr with Identity.
-func Load(path string, uid int) (f File, warnings []string, err error) {
+func LoadRaw(path string, uid int) (f File, data []byte, warnings []string, err error) {
 	if err := checkNotInGitTree(path); err != nil {
-		return File{}, nil, err
+		return File{}, nil, nil, err
 	}
 	fh, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0) //nolint:gosec // the path is the one the human named; it is judged by fstat
 	if err != nil {
 		if errors.Is(err, syscall.ELOOP) {
-			return File{}, nil, fmt.Errorf("%w: %s is a symbolic link", ErrUnsafeFile, path)
+			return File{}, nil, nil, fmt.Errorf("%w: %s is a symbolic link", ErrUnsafeFile, path)
 		}
-		return File{}, nil, err
+		return File{}, nil, nil, err
 	}
 	defer func() { _ = fh.Close() }()
 	si, err := fstat(fh)
 	if err != nil {
-		return File{}, nil, err
+		return File{}, nil, nil, err
 	}
 	switch {
 	case !si.Mode.IsRegular():
-		return File{}, nil, fmt.Errorf("%w: %s is not a regular file", ErrUnsafeFile, path)
+		return File{}, nil, nil, fmt.Errorf("%w: %s is not a regular file", ErrUnsafeFile, path)
 	case si.UID != uid:
-		return File{}, nil, fmt.Errorf("%w: %s belongs to another user", ErrUnsafeFile, path)
+		return File{}, nil, nil, fmt.Errorf("%w: %s belongs to another user", ErrUnsafeFile, path)
 	case si.Mode.Perm()&0o022 != 0:
-		return File{}, nil, fmt.Errorf("%w: %s has mode %04o; chmod 600", ErrWritableByOthers, path, si.Mode.Perm())
+		return File{}, nil, nil, fmt.Errorf("%w: %s has mode %04o; chmod 600", ErrWritableByOthers, path, si.Mode.Perm())
 	}
 	if si.Mode.Perm()&0o044 != 0 {
 		warnings = append(warnings, fmt.Sprintf("%s is readable by others (mode %04o); chmod 600", path, si.Mode.Perm()))
 	}
-	data, err := io.ReadAll(io.LimitReader(fh, MaxBytes+1))
+	data, err = io.ReadAll(io.LimitReader(fh, MaxBytes+1))
 	if err != nil {
-		return File{}, nil, err
+		return File{}, nil, nil, err
 	}
 	f, err = Decode(data)
 	if err != nil {
-		return File{}, nil, err
+		return File{}, nil, nil, err
 	}
-	return f, warnings, nil
+	return f, data, warnings, nil
 }
 
-// Save writes f to path atomically, after checking every entry against checks:
-// each must name an eligible step with its current digest (ErrIneligible).: a 0600 temporary file in the same directory
-// (created exclusively, mode forced regardless of umask), fsync, rename. The
-// build identity, schema and version are set here; a dirty build refuses. The
+// Save writes f to path atomically. Every entry is first checked against
+// checks: it must name an eligible step with its current digest (ErrIneligible).
+// The bytes go to a 0600 temporary file in the same directory (created
+// exclusively, mode forced regardless of umask), are synced and renamed over the
+// target. The build identity, schema and version are set here; a dirty build
+// refuses. See SaveAs for a given identity. The
 // parent must exist, except ~/.config/whr, which is created 0700. An existing
 // target must be a regular file of this user, not a link. A path inside a git
 // working tree is refused.
@@ -112,6 +121,12 @@ func Save(path string, f File, checks []doctor.Check) error {
 	if err != nil {
 		return err
 	}
+	return SaveAs(id, path, f, checks)
+}
+
+// SaveAs is Save for the build identity id, which the caller got from Identity
+// (or a test passes in): the file binds its answers to that build.
+func SaveAs(id, path string, f File, checks []doctor.Check) error {
 	f.Schema, f.V, f.Whr, f.Phase = Schema, Version, id, PhaseUser
 	data, err := Encode(f)
 	if err != nil {

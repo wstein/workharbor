@@ -62,14 +62,14 @@ func scenario(t *testing.T, home string, clock func() time.Time, rnd io.Reader) 
 func appendAll(t *testing.T, l *Log, home string) {
 	t.Helper()
 	start := base(EventRunStart)
-	start.Source = SourceInteractive
+	start.Source = SourceAnswers
 	start.Answers = hx("answer file bytes")
 	start.Flags = Flags([]string{"--only", "api-token", "--answers=" + filepath.Join(home, ".config/whr/a.json")}, home)
 	steps := []Entry{
 		start,
 		{Event: EventStepBefore, Step: "config-dir", Fix: hx("config-dir"), Answer: AnswerNone, Source: SourceNone, Status: "ok"},
 		{Event: EventStepAfter, Step: "config-dir", Outcome: OutAlreadyDone, Status: "ok"},
-		{Event: EventStepBefore, Step: "api-token", Fix: hx("api-token"), Answer: AnswerRun, Source: SourceInteractive, Status: "fail"},
+		{Event: EventStepBefore, Step: "api-token", Fix: hx("api-token"), Answer: AnswerRun, Source: SourceAnswers, Answers: hx("answer file bytes"), Status: "fail"},
 		{Event: EventStepAfter, Step: "api-token", Outcome: OutFixed, Status: "ok", Exit: exit(0), Ran: RanDigest([][]string{{"whr", "token"}})},
 		{Event: EventStepBefore, Step: "agent-key", Fix: hx("agent-key"), Answer: AnswerSkip, Source: SourceInteractive, Status: "fail"},
 		{Event: EventStepAfter, Step: "agent-key", Outcome: OutDeclined, Status: "fail"},
@@ -170,7 +170,7 @@ func TestDecodeRefusals(t *testing.T) {
 		{"unknown field", strings.Replace(good, `{"account"`, `{"zzz":"x","account"`, 1), ErrUnknownField},
 		{"free text field", strings.Replace(good, `{"account"`, `{"error":"boom","account"`, 1), ErrUnknownField},
 		{"unknown event", strings.Replace(good, `"run.start"`, `"run.begin"`, 1), ErrBadValue},
-		{"unknown source", strings.Replace(good, `"interactive"`, `"telepathy"`, 1), ErrBadValue},
+		{"unknown source", strings.Replace(good, `"source":"answers"`, `"source":"telepathy"`, 1), ErrBadValue},
 		{"unknown cmd", strings.Replace(good, `"setup"`, `"nuke"`, 1), ErrBadValue},
 		{"unknown phase", strings.Replace(good, `"user"`, `"root"`, 1), ErrBadValue},
 		{"non-UTC at", strings.Replace(good, at, `"at":"2026-10-06T11:00:01+01:00"`, 1), ErrBadValue},

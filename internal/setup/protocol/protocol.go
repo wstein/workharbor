@@ -44,6 +44,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/textsafe"
@@ -208,7 +209,7 @@ var (
 // common ones; required ones are marked in required.
 var fields = map[string]struct{ required, optional []string }{
 	EventRunStart:   {nil, []string{"answers", "flags", "source"}},
-	EventStepBefore: {[]string{"step", "fix", "answer", "source", "status"}, nil},
+	EventStepBefore: {[]string{"step", "fix", "answer", "source", "status"}, []string{"answers"}},
 	EventStepAfter:  {[]string{"step", "outcome", "status"}, []string{"exit", "ran"}},
 	EventRunEnd:     {[]string{"outcome"}, nil},
 }
@@ -289,6 +290,16 @@ func (e Entry) Validate() error {
 	case e.Exit != nil && (*e.Exit < 0 || *e.Exit > 255):
 		return bad("exit")
 	}
+	// A decision taken from an answers file names the file's digest, and only
+	// such a decision does; the host phase is never answered from a file.
+	if e.Event == EventRunStart || e.Event == EventStepBefore {
+		if (e.Source == SourceAnswers) != (e.Answers != "") {
+			return errors.Join(ErrBadEvent, errors.New("answers and source answers go together"))
+		}
+	}
+	if e.Phase == PhaseHost && (e.Source == SourceAnswers || e.Answers != "") {
+		return errors.Join(ErrBadEvent, errors.New("the host phase is never answered from a file"))
+	}
 	switch e.Event {
 	case EventStepAfter:
 		if !in(e.Outcome, stepOutcomes...) {
@@ -310,8 +321,16 @@ func validAt(s string) bool {
 	return err == nil
 }
 
+// validFlags holds flags to MaxFlags both as text and as the JSON string a line
+// carries: &, <, > and \ grow when escaped, and a line must stay under MaxLine.
 func validFlags(s string) bool {
-	return len(s) <= MaxFlags && textsafe.Escape(s) == s
+	return len(s) <= MaxFlags && textsafe.Escape(s) == s && jsonLen(s) <= MaxFlags
+}
+
+// jsonLen is the length of s as the content of a JSON string, as Encode writes it.
+func jsonLen(s string) int {
+	b, _ := json.Marshal(s) // a string always marshals
+	return len(b) - 2
 }
 
 // LineDigest is the value of prev for the line after line (line without its
@@ -361,7 +380,7 @@ func RedactHome(s, home string) string {
 
 // Flags renders the resume argument vector for run.start: the home directory
 // as ~ in each argument (also after an equals sign), control and bidi
-// characters escaped, joined by single spaces, cut to MaxFlags.
+// characters escaped, joined by single spaces, cut so that it fits MaxFlags as text and as escaped JSON.
 func Flags(argv []string, home string) string {
 	parts := make([]string, len(argv))
 	for i, a := range argv {
@@ -373,11 +392,14 @@ func Flags(argv []string, home string) string {
 		parts[i] = textsafe.Escape(a)
 	}
 	s := strings.Join(parts, " ")
+	// cut by what the line will hold, which is the escaped length, and never in
+	// the middle of a character
 	if len(s) > MaxFlags {
 		s = s[:MaxFlags]
-		for !validFlags(s) && len(s) > 0 {
-			s = s[:len(s)-1]
-		}
+	}
+	for len(s) > 0 && (!utf8.ValidString(s) || jsonLen(s) > MaxFlags) {
+		_, n := utf8.DecodeLastRuneInString(s)
+		s = s[:len(s)-n]
 	}
 	return s
 }
