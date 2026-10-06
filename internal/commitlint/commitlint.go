@@ -200,7 +200,8 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 		add(fmt.Sprintf("Co-Authored-By %q is a person; a commit authored by %q (a bot or agent) takes only AI attribution coauthors", t.value, opt.Author))
 	}
 	hasAI := false
-	for _, sc := range scans {
+	for i, sc := range scans {
+		gitView := i == len(scans)-1 // the last scan is what git reads
 		for _, t := range sc.block {
 			if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
 				add(fmt.Sprintf("Assisted-by: %q must be <tool>:<model-id>", t.value))
@@ -222,7 +223,9 @@ func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 			if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
 				add(fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the model name as exposed by the session or unknown", id.vendor, email))
 			}
-			hasAI = true
+			if gitView {
+				hasAI = true
+			}
 		}
 		if !botAuthor {
 			continue

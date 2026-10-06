@@ -597,3 +597,18 @@ func TestBotAuthorNeedsAnAICoauthor(t *testing.T) {
 		}
 	}
 }
+
+// An AI coauthor after git's full cut line is not a trailer git reads, so it
+// does not satisfy a bot author's need for one in a stored message (#304).
+func TestAICoauthorAfterTheCutLineDoesNotCount(t *testing.T) {
+	const bot = "ci-agent <agent@example.test>"
+	const ai = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+	msg := "docs: a\n\nprose\n" + fullCut + "\n\n" + ai
+	if got := Lint(msg, Options{Author: bot, Final: true}); !strings.Contains(strings.Join(got, "\n"), "needs an AI Co-Authored-By") {
+		t.Errorf("coauthor after the cut line counted: %v", got)
+	}
+	before := "docs: a\n\n" + ai + "\n" + fullCut + "\n\nprose"
+	if got := Lint(before, Options{Author: bot, Final: true}); len(got) != 0 {
+		t.Errorf("coauthor before the cut line: %v", got)
+	}
+}
