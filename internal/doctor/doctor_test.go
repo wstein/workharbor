@@ -403,3 +403,24 @@ func TestTheBotKeyCheck(t *testing.T) {
 		}
 	}
 }
+
+// A subscription value in the key file fails the configuration check with the
+// advice (never the value), and agent-login, which needs a valid configuration,
+// fails with it.
+func TestASubscriptionValueInTheKeyFileFailsConfigAndAgentLoginWithTheAdvice(t *testing.T) {
+	r := newRig(t)
+	if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte("ANTHROPIC_API_KEY={\"access_token\":\"SYNTHETIC-SECRET\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.write(t)
+	seen := map[string]Result{}
+	for _, res := range run(r.deps()) {
+		seen[res.Check] = res
+	}
+	if res := seen["config"]; res.Status != Fail || !strings.Contains(res.Detail, "Use an API key") || strings.Contains(res.Detail, "SECRET") {
+		t.Errorf("config: %+v", res)
+	}
+	if res := seen["agent-login"]; res.Status != Fail || strings.Contains(res.Detail, "SECRET") {
+		t.Errorf("agent-login: %+v", res)
+	}
+}

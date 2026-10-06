@@ -550,3 +550,17 @@ func TestAHeldTaskWhoseStartFailsBeforeARunIsCancelled(t *testing.T) {
 		t.Errorf("task = %s: nothing may be left queued with an answer that no longer holds", v.Task.State)
 	}
 }
+
+// AgentCredentials goes through the configuration's credential check, so a
+// subscription credential never becomes agent environment.
+func TestAgentCredentialsRefuseASubscriptionCredential(t *testing.T) {
+	t.Parallel()
+	f := filepath.Join(t.TempDir(), "agent.env")
+	if err := os.WriteFile(f, []byte("CLAUDE_CODE_OAUTH_TOKEN=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env, _, err := AgentCredentials(&config.Config{AgentAPIKeyEnvFile: f})
+	if err == nil || env != nil || strings.Contains(err.Error(), "=x") {
+		t.Errorf("env %v, err %v", env, err)
+	}
+}

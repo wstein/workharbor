@@ -970,8 +970,8 @@ func userSteps(d Deps) []Check {
 				}
 				return OK, envPath + " is a private file"
 			},
-			Fix: &Fix{Desc: "ask for the key without echo and write it to " + envPath + " (0600, never overwritten, never shown)", Do: func(_ context.Context, p Prompter) error {
-				key, err := p.Secret("Agent API key (ANTHROPIC_API_KEY, not echoed)")
+			Fix: &Fix{Desc: agentKeyPrompt + "; written to " + envPath + " (0600, never overwritten, never shown)", Do: func(_ context.Context, p Prompter) error {
+				key, err := p.Secret(agentKeyPrompt)
 				if err != nil {
 					return err
 				}
@@ -1576,3 +1576,7 @@ func (d Deps) homeOrDefault() string {
 	}
 	return "$HOME"
 }
+
+// agentKeyPrompt says what the agent-key step asks for: an API key, never a
+// subscription login (D40, issue #348).
+const agentKeyPrompt = "Agent API key from the vendor's console (ANTHROPIC_API_KEY; not a `claude setup-token` or login token; not echoed)"

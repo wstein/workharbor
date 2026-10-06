@@ -11,7 +11,8 @@
 //     are a conservative rule, not a vendor fact.
 //   - Values: the prefix of a `claude setup-token` or OAuth token is
 //     UNVERIFIED (spike #82 shows only "sk-ant-..." elided), so NO prefix is
-//     treated as a subscription shape: a real API key also starts "sk-ant-".
+//     treated as a subscription shape: the measured OAuth tokens
+//     also start "sk-ant-" (API key prefix not recorded; unverified).
 //     The only value shape refused is the credentials-file JSON documented in
 //     spike agent-signin (accessToken / refreshToken keys). Value-shape
 //     detection by token prefix needs a measurement that records no token.
@@ -29,7 +30,7 @@ import (
 
 var subscriptionName = regexp.MustCompile(`(?i)oauth|session|auth_token|access_token|refresh_token|setup_token|login_token`)
 
-var subscriptionJSONKey = regexp.MustCompile(`(?i)"?(access|refresh)token"?\s*[:=]`)
+var subscriptionJSONKey = regexp.MustCompile(`(?i)"?(access|refresh)_?token"?\s*[:=]`)
 
 // ErrSubscriptionName and ErrSubscriptionValue are returned by Check.
 var (
@@ -46,7 +47,7 @@ func Check(name, value string) error {
 	if Name(name) {
 		return ErrSubscriptionName
 	}
-	v := strings.TrimSpace(value)
+	v := strings.TrimSpace(strings.TrimLeft(value, "\uFEFF \t\r\n"))
 	if strings.HasPrefix(v, "{") || subscriptionJSONKey.MatchString(v) {
 		return ErrSubscriptionValue
 	}
@@ -54,4 +55,4 @@ func Check(name, value string) error {
 }
 
 // Advice is the English text shown with a refusal.
-const Advice = "API key, not a setup-token or login token: create an API key in the vendor's console (for Anthropic, the Console's API keys page) and use that; sign in inside the environment for a subscription"
+const Advice = "Use an API key, not a setup-token or login token: create an API key in the vendor's console (for Anthropic, the Console's API keys page) and use that, or leave the key unset and sign in inside the environment for a subscription."

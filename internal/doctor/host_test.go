@@ -33,6 +33,7 @@ type answers struct {
 	lines, secrets []string
 	confirm        bool
 	shown          []string
+	prompts        []string
 }
 
 func (a *answers) Line(string) (string, error) {
@@ -41,7 +42,8 @@ func (a *answers) Line(string) (string, error) {
 	return l, nil
 }
 
-func (a *answers) Secret(string) (string, error) {
+func (a *answers) Secret(prompt string) (string, error) {
+	a.prompts = append(a.prompts, prompt)
 	s := a.secrets[0]
 	a.secrets = a.secrets[1:]
 	return s, nil
@@ -1142,4 +1144,28 @@ type mutableRunner struct{ answers scripted }
 
 func (m *mutableRunner) Output(ctx context.Context, argv ...string) ([]byte, error) {
 	return m.answers.Output(ctx, argv...)
+}
+
+func TestTheAgentKeyStepSaysItAsksForAnAPIKeyNotALogin(t *testing.T) {
+	for _, s := range []string{"from the vendor's console", "ANTHROPIC_API_KEY", "not a `claude setup-token` or login token", "not echoed"} {
+		if !strings.Contains(agentKeyPrompt, s) {
+			t.Errorf("prompt lacks %q: %s", s, agentKeyPrompt)
+		}
+	}
+	dir := filepath.Join(t.TempDir(), "whr")
+	st := steps(t, Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502})
+	if !strings.Contains(st["agent-key"].Fix.Desc, agentKeyPrompt) {
+		t.Errorf("fix desc %q", st["agent-key"].Fix.Desc)
+	}
+	// short subscription-shaped input gets the credcheck message and the advice
+	for _, bad := range []string{"{", "{}", "\uFEFF{}"} {
+		pr := &answers{secrets: []string{bad}}
+		err := st["agent-key"].Fix.Do(context.Background(), pr)
+		if len(pr.prompts) != 1 || pr.prompts[0] != agentKeyPrompt {
+			t.Errorf("prompt passed to Secret = %q", pr.prompts)
+		}
+		if err == nil || !strings.Contains(err.Error(), "refused: "+"a value shaped like a subscription login") || !strings.Contains(err.Error(), "Use an API key") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
 }
