@@ -1,4 +1,17 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Monitor|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && go run ./cmd/ghguard"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Grep",
