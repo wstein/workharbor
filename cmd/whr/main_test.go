@@ -223,8 +223,9 @@ func TestToolsBuild(t *testing.T) {
 }
 
 // make install builds from the committed tree: it installs whr, the shim and
-// the proxy with the version stamp, and refuses a dirty tree and a commit that
-// is not on origin/main (D34).
+// the proxy with the version stamp. It accepts only a clean HEAD equal to the
+// current local main (with a development notice, since main may be unpublished)
+// and refuses a dirty tree and any other commit (D34, #299).
 func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	for _, tool := range []string{"make", "git", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -248,14 +249,15 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 	}
 	gitIn(t.TempDir(), "clone", "--quiet", "--local", root, clone)
 	// The clone's HEAD is whatever the checkout has, a topic branch included,
-	// so origin/main is pinned to it: this commit counts as merged.
-	gitIn(clone, "update-ref", "refs/remotes/origin/main", "HEAD")
+	// so local main is pinned to it: this commit is the current local main.
+	gitIn(clone, "checkout", "--quiet", "-B", "main")
 	prefix := t.TempDir()
-	install := func() ([]byte, error) {
+	installTo := func(prefix string) ([]byte, error) {
 		cmd := exec.CommandContext(t.Context(), "make", "-s", "install", "PREFIX="+prefix) //nolint:gosec // fixed arguments
 		cmd.Dir = clone
 		return cmd.CombinedOutput()
 	}
+	install := func() ([]byte, error) { return installTo(prefix) }
 
 	if out, err := install(); err != nil {
 		t.Fatalf("make install on a clean clone: %v\n%s", err, out)
@@ -292,18 +294,51 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 		t.Error("a dirty tree still installed whr")
 	}
 
-	// A clean commit that is not on origin/main is refused too.
-	gitIn(clone, "-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false",
-		"commit", "--quiet", "--allow-empty", "-m", "test: an unmerged commit")
 	if err := os.Remove(filepath.Join(clone, "stray.txt")); err != nil {
 		t.Fatal(err)
 	}
+	commit := func(msg string) {
+		gitIn(clone, "-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false",
+			"commit", "--quiet", "--allow-empty", "-m", msg)
+	}
+
+	// A clean commit ahead of local main (a topic branch) is refused.
+	gitIn(clone, "checkout", "--quiet", "-b", "topic")
+	commit("test: a topic commit")
 	msg, err = install()
-	if err == nil || !strings.Contains(string(msg), "not on origin/main") {
-		t.Fatalf("make install of an unmerged commit = %v\n%s", err, msg)
+	if err == nil || !strings.Contains(string(msg), "HEAD must equal the current local main commit") {
+		t.Fatalf("make install of a commit ahead of main = %v\n%s", err, msg)
 	}
 	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
-		t.Error("an unmerged commit still installed whr")
+		t.Error("a commit ahead of main still installed whr")
+	}
+
+	// So is an older commit that is not the tip of main.
+	gitIn(clone, "checkout", "--quiet", "main")
+	commit("test: a new main tip")
+	gitIn(clone, "checkout", "--quiet", "--detach", "HEAD~1")
+	msg, err = install()
+	if err == nil || !strings.Contains(string(msg), "HEAD must equal the current local main commit") {
+		t.Fatalf("make install of a non-tip commit = %v\n%s", err, msg)
+	}
+	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
+		t.Error("a non-tip commit still installed whr")
+	}
+
+	// A clean, unpublished local main tip installs, with a development notice.
+	gitIn(clone, "checkout", "--quiet", "main")
+	msg, err = install()
+	if err != nil || !strings.Contains(string(msg), "development installation") {
+		t.Fatalf("make install of the local main tip = %v, want success with a development notice\n%s", err, msg)
+	}
+	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err != nil {
+		t.Errorf("the local main tip was not installed: %v", err)
+	}
+
+	// An unsafe destination (inside the source checkout) is refused.
+	msg, err = installTo(clone)
+	if err == nil || !strings.Contains(string(msg), "outside the source checkout") {
+		t.Fatalf("make install into the checkout = %v\n%s", err, msg)
 	}
 }
 
