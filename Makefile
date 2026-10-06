@@ -18,24 +18,31 @@ GITLEAKS_FOUND := 42
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
 BIN ?= bin/whr
 VERSION_PKG := github.com/wstein/workharbor/internal/version
-GIT_COMMIT = $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
-GIT_VERSION = $(shell git describe --tags --match 'v[0-9]*' --abbrev=7 2>/dev/null | sed 's/-dirty$$//' || true)
-GIT_DIRTY = $(shell if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo true; else echo false; fi)
-BUILD_VERSION = $(or $(GIT_VERSION),v0.0.0-$(shell git rev-list --count HEAD 2>/dev/null || echo 0)-g$(GIT_COMMIT))
+VERSION_GIT = git
+GIT_COMMIT = $(shell $(VERSION_GIT) rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+GIT_VERSION = $(shell $(VERSION_GIT) describe --tags --match 'v[0-9]*' --abbrev=7 2>/dev/null | sed 's/-dirty$$//' || true)
+GIT_STATUS_FLAGS = --porcelain
+GIT_DIRTY = $(shell if [ -n "$$($(VERSION_GIT) status $(GIT_STATUS_FLAGS) 2>/dev/null)" ]; then echo true; else echo false; fi)
+BUILD_VERSION = $(or $(GIT_VERSION),v0.0.0-$(shell $(VERSION_GIT) rev-list --count HEAD 2>/dev/null || echo 0)-g$(GIT_COMMIT))
 BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Dirty=$(GIT_DIRTY) -X $(VERSION_PKG).Date=$(BUILD_DATE)
 
 # make install builds whr, the launcher whr-shim and the egress proxy whr-proxy
 # (both linux-arm64: the tool store and the sidecar) from the current commit,
 # with the version stamp, and installs them under PREFIX. It refuses a dirty
-# tree and a commit that is not on origin/main, so the supervisor always runs
-# approved, committed code (D34), and builds with GOWORK=off and no GOFLAGS, so
+# tree and HEAD differing from current local main. The operator obtains
+# independent review of that exact commit (D24, D34); Git equality cannot prove
+# approval. Unpublished main is accepted only for a development installation.
+# It builds with GOWORK=off and no GOFLAGS, so
 # a parent go.work or the environment cannot change what is built. The whr user
-# runs it with PREFIX=$$HOME/.local, or any PREFIX it can write. It removes
+# runs it with an existing user-owned PREFIX=$$HOME/.local, or an existing safe
+# development PREFIX outside Git checkouts and managed locations. It removes
 # libexec/whr/VERSION, which only install-release writes: after a source install
 # the version is unknown, and install-release then needs --allow-downgrade.
 PREFIX ?= $(HOME)/.local
 INSTALL_GO = GOWORK=off GOFLAGS= go
+# Quote operator-selected paths as shell data, including spaces and apostrophes.
+install-quote = '$(subst ','"'"',$(1))'
 
 check-clean:
 	@s=$$(git status --porcelain) || { echo "could not read the git status, so the tree is not known to be clean" >&2; exit 1; }; \
@@ -50,15 +57,23 @@ check-main:
 		exit 1; \
 	fi
 
-install: check-clean check-main
-	mkdir -p $(PREFIX)/bin $(PREFIX)/libexec/whr
-	rm -f $(PREFIX)/libexec/whr/VERSION
-	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/bin/whr ./cmd/whr
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-shim-linux-arm64 ./cmd/whr-shim
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PREFIX)/libexec/whr/whr-proxy-linux-arm64 ./cmd/whr-proxy
-	@echo "installed whr $$($(PREFIX)/bin/whr version), whr-shim and whr-proxy (linux-arm64) under $(PREFIX)"
-	@echo "development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual)"
-	@echo "next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64"
+.PHONY: check-install-source
+check-install-source:
+	@$(INSTALL_GO) run scripts/install-source.go $(call install-quote,$(PREFIX))
+
+# Stamp the guarded checkout even when the caller has inherited Git selectors
+# or configuration. Ordinary make build retains its existing behavior.
+install: VERSION_GIT = env -i PATH=$(call install-quote,$(PATH)) HOME=$(call install-quote,$(HOME)) GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0 GIT_NO_REPLACE_OBJECTS=1 git -c credential.helper= -c core.fsmonitor=false
+install: GIT_STATUS_FLAGS = --porcelain --untracked-files=all
+install: check-install-source
+	mkdir -p $(call install-quote,$(PREFIX)/bin) $(call install-quote,$(PREFIX)/libexec/whr)
+	rm -f $(call install-quote,$(PREFIX)/libexec/whr/VERSION)
+	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/bin/whr) ./cmd/whr
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/libexec/whr/whr-shim-linux-arm64) ./cmd/whr-shim
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/libexec/whr/whr-proxy-linux-arm64) ./cmd/whr-proxy
+	@version=$$($(call install-quote,$(PREFIX)/bin/whr) version) || exit $$?; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
+	@printf '%s\n' $(call install-quote,development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual))
+	@printf '%s\n' $(call install-quote,next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64)
 
 # Install a release, a dogfood draft included (D24, D34), as the administrator
 # into a prefix whr cannot write: make install-release VERSION=v0.1.0-alpha.1

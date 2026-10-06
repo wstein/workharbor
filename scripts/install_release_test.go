@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 func bash(t *testing.T, env []string, script string) (string, error) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), "bash", "-c", script) //nolint:gosec // a test script
-	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}, env...)
+	cmd.Env = gittest.Env(t.TempDir(), env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -219,7 +221,7 @@ func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("make -n install: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "rm -f /p/libexec/whr/VERSION") {
+	if !strings.Contains(out, "rm -f '/p/libexec/whr/VERSION'") {
 		t.Errorf("the install target does not remove the stale VERSION file:\n%s", out)
 	}
 }

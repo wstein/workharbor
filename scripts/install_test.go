@@ -1,0 +1,266 @@
+package scripts
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/wstein/workharbor/internal/gittest"
+)
+
+// Source install fixtures use a real isolated git repository and fake builds;
+// they never replace an installed supervisor or read the human's git settings.
+type sourceInstall struct {
+	home, repo, prefix string
+	env                []string
+}
+
+func (s sourceInstall) git(t *testing.T, args ...string) {
+	t.Helper()
+	cmd := gittest.Git(context.Background(), s.home, s.repo, gittest.Identity, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func (s sourceInstall) install(t *testing.T) (string, error) {
+	t.Helper()
+	cmd := exec.CommandContext(context.Background(), "make", "install", "PREFIX="+s.prefix) //nolint:gosec // fixture-controlled arguments, no shell
+	cmd.Dir, cmd.Env = s.repo, s.env
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func newSourceInstall(t *testing.T) sourceInstall {
+	t.Helper()
+	home, repo, bin := t.TempDir(), t.TempDir(), t.TempDir()
+	env := gittest.Env(home, gittest.Identity...)
+	git := func(args ...string) {
+		t.Helper()
+		cmd := gittest.Git(context.Background(), home, repo, gittest.Identity, args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-b", "main")
+	for _, name := range []string{"Makefile", "scripts/install-source.go"} {
+		data, err := os.ReadFile(filepath.Join("..", name)) //nolint:gosec // fixed repository source inventory
+		if err != nil {
+			t.Fatal(err)
+		}
+		dest := filepath.Join(repo, name)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, data, 0o600); err != nil { //nolint:gosec // fixed source names beneath the private fixture repository
+			t.Fatal(err)
+		}
+	}
+	git("add", ".")
+	git("commit", "-m", "fixture")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	git("commit", "--allow-empty", "-m", "reviewed local main")
+	prefix := filepath.Join(home, ".local")
+	if err := os.Mkdir(prefix, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	realGo, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := "#!/bin/sh\nif [ \"$1\" = run ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\ndest=$1\nif [ -d \"$dest\" ]; then dest=$dest/whr; fi\nprintf '#!/bin/sh\\necho fixture-version\\n' > \"$dest\"\nchmod 700 \"$dest\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
+		t.Fatal(err)
+	}
+	return sourceInstall{home: home, repo: repo, prefix: prefix, env: append(env, "PATH="+bin+":"+os.Getenv("PATH"), "GOCACHE="+t.TempDir())}
+}
+
+func TestSourceInstallUnpublishedMain(t *testing.T) {
+	s := newSourceInstall(t)
+	version := filepath.Join(s.prefix, "libexec", "whr", "VERSION")
+	if err := os.MkdirAll(filepath.Dir(version), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(version, []byte("old-release\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.install(t)
+	if err != nil {
+		t.Fatalf("clean unpublished main must install: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "development") {
+		t.Fatalf("development installation was not disclosed:\n%s", out)
+	}
+	for _, name := range []string{"bin/whr", "libexec/whr/whr-shim-linux-arm64", "libexec/whr/whr-proxy-linux-arm64"} {
+		if _, err := os.Stat(filepath.Join(s.prefix, name)); err != nil {
+			t.Errorf("missing %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(version); !os.IsNotExist(err) {
+		t.Fatalf("source install retained stale release VERSION: %v", err)
+	}
+}
+
+func TestSourceInstallDetachedMainDefaultPrefix(t *testing.T) {
+	s := newSourceInstall(t)
+	linked := t.TempDir()
+	s.git(t, "worktree", "add", "--detach", linked, "main")
+	s.repo = linked
+	cmd := exec.CommandContext(context.Background(), "make", "install")
+	cmd.Dir, cmd.Env = s.repo, s.env
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("detached current main with default existing HOME.local: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(s.prefix, "bin", "whr")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSourceInstallQuotesPrefixAndIgnoresGitSelectors(t *testing.T) {
+	s := newSourceInstall(t)
+	s.prefix = filepath.Join(s.home, "developer's `touch SHOULD_NOT_EXIST` prefix")
+	if err := os.Mkdir(s.prefix, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s.env = append(s.env, "GIT_DIR="+t.TempDir(), "GIT_WORK_TREE="+t.TempDir(), "GIT_INDEX_FILE="+filepath.Join(t.TempDir(), "index"))
+	s.git(t, "replace", "HEAD", "HEAD~1")
+	cmd := gittest.Git(context.Background(), s.home, s.repo, nil, "rev-parse", "--short=7", "HEAD")
+	head, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.install(t)
+	if err != nil {
+		t.Fatalf("safe literal prefix and inherited Git selectors: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, ".Commit="+strings.TrimSpace(string(head))) || !strings.Contains(out, ".Dirty=false") || !strings.Contains(out, ".Version=v0.0.0-2-g") {
+		t.Fatalf("stamp did not describe the guarded clean source:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(s.repo, "SHOULD_NOT_EXIST")); !os.IsNotExist(err) {
+		t.Fatalf("prefix executed shell text: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(s.prefix, "bin", "whr")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSourceInstallRejectsUnsafeInputs(t *testing.T) {
+	cache := t.TempDir()
+	for _, tc := range []struct {
+		name   string
+		want   string
+		change func(*testing.T, *sourceInstall)
+	}{
+		{"dirty", "dirty tree", func(t *testing.T, s *sourceInstall) {
+			if err := os.WriteFile(filepath.Join(s.repo, "dirty"), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"topic", "current local main", func(t *testing.T, s *sourceInstall) {
+			s.git(t, "switch", "-c", "topic")
+			s.git(t, "commit", "--allow-empty", "-m", "unmerged")
+		}},
+		{"outdated", "current local main", func(t *testing.T, s *sourceInstall) { s.git(t, "checkout", "--detach", "HEAD~1") }},
+		{"hidden-untracked", "dirty tree", func(t *testing.T, s *sourceInstall) {
+			s.git(t, "config", "status.showUntrackedFiles", "no")
+			if err := os.WriteFile(filepath.Join(s.repo, "source.go"), []byte("untracked source"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"alternate-worktree", "physical source checkout", func(t *testing.T, s *sourceInstall) {
+			alternate := t.TempDir()
+			for _, name := range []string{"Makefile", "scripts/install-source.go"} {
+				data, err := os.ReadFile(filepath.Join(s.repo, name)) //nolint:gosec // fixed source inventory in private fixture
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := filepath.Join(alternate, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, data, 0o600); err != nil { //nolint:gosec // fixed source names beneath private alternate fixture
+					t.Fatal(err)
+				}
+			}
+			s.git(t, "config", "core.worktree", alternate)
+			f, err := os.OpenFile(filepath.Join(s.repo, "Makefile"), os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.WriteString("\n# modified physical source\n"); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"checkout-prefix", "outside the source checkout", func(_ *testing.T, s *sourceInstall) { s.prefix = s.repo }},
+		{"metadata-prefix", "outside the source checkout", func(_ *testing.T, s *sourceInstall) { s.prefix = filepath.Join(s.repo, ".git") }},
+		{"home-prefix", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = s.home }},
+		{"home-ancestor", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = filepath.Dir(s.home) }},
+		{"root-prefix", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = "/" }},
+		{"managed-unpublished", "signed install-release", func(_ *testing.T, s *sourceInstall) { s.prefix = "/opt/whr" }},
+		{"managed-alias", "signed install-release", func(t *testing.T, s *sourceInstall) {
+			s.prefix = filepath.Join(s.home, "managed")
+			if err := os.Symlink("/usr/local", s.prefix); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"managed-descendant-alias", "signed install-release", func(t *testing.T, s *sourceInstall) {
+			if _, err := os.Stat("/usr/local/bin"); err != nil {
+				t.Skip("no existing managed descendant")
+			}
+			s.prefix = filepath.Join(s.home, "managed-bin")
+			if err := os.Symlink("/usr/local/bin", s.prefix); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"binary-directory", "regular single-link file", func(t *testing.T, s *sourceInstall) {
+			if err := os.MkdirAll(filepath.Join(s.prefix, "bin", "whr"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"version-directory", "regular single-link file", func(t *testing.T, s *sourceInstall) {
+			if err := os.MkdirAll(filepath.Join(s.prefix, "libexec", "whr", "VERSION"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"directory-file", "must be a directory", func(t *testing.T, s *sourceInstall) {
+			if err := os.WriteFile(filepath.Join(s.prefix, "bin"), []byte("existing"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"binary-redirection", "is a symlink", func(t *testing.T, s *sourceInstall) {
+			if err := os.Mkdir(filepath.Join(s.prefix, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(s.home, "outside"), filepath.Join(s.prefix, "bin", "whr")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSourceInstall(t)
+			s.env = append(s.env, "GOCACHE="+cache)
+			tc.change(t, &s)
+			binary := filepath.Join(s.home, ".local", "bin", "whr")
+			_, before := os.Lstat(binary)
+			out, err := s.install(t)
+			if err == nil {
+				t.Fatalf("unsafe install succeeded:\n%s", out)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Fatalf("wrong refusal, want %q:\n%s", tc.want, out)
+			}
+			if _, err := os.Lstat(binary); os.IsNotExist(before) && !os.IsNotExist(err) {
+				t.Fatalf("refused install changed destination: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(binary, "whr")); err == nil {
+				t.Fatal("refused install built a nested binary")
+			}
+		})
+	}
+}
