@@ -277,3 +277,10 @@ func TestOtherAdminsAreUnknownWhenDsclFailsForAMember(t *testing.T) {
 		t.Errorf("err = %v, want one carrying dscl's text", err)
 	}
 }
+
+func TestDropAdminIsIrreversible(t *testing.T) {
+	c := steps(t, accountDeps(t, scripted{adminKey: isAdmin, groupKey: oneOtherAd}, nil))["drop-admin"]
+	if c.Fix == nil || !c.Fix.Irreversible {
+		t.Error("drop-admin must be marked Irreversible: Enter is no")
+	}
+}

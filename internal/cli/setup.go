@@ -190,27 +190,6 @@ func newSetup(st *state) *cobra.Command {
 				}
 			}
 		}
-		// D49: without separation and with remote access, one explicit y that
-		// names the risk. Doctor fails on it too; nothing is enforced.
-		for _, c := range steps {
-			if c.Name != "account" {
-				continue
-			}
-			if stt, detail := c.Run(ctx); stt == doctor.Fail && !dryRun {
-				ui.Report(render.LevelFail, "account: "+clean(strings.TrimSpace(detail)))
-				// accepting a risk is not undoable by running it again: Enter is no
-				a, err := setup.Ask(env.Host, "Go on without a dedicated standard account, knowing this?", render.DefaultNo)
-				if err == nil && a == render.Quit {
-					ui.Report(render.LevelSkipped, "stopped at your request, nothing was run")
-					return quitError{}
-				}
-				if err != nil || a != render.Yes {
-					return usageError{"stopped: set up a dedicated standard account, or remove the remote access from the configuration"}
-				}
-			} else if stt == doctor.Fail {
-				fmt.Fprintf(st.env.Stderr, "note (dry run): account: %s\n", clean(strings.TrimSpace(detail)))
-			}
-		}
 		resume := []string{"whr", "setup"}
 		if phase == doctor.PhaseHost {
 			resume = append(resume, "host")
@@ -226,6 +205,28 @@ func newSetup(st *state) *cobra.Command {
 		}
 		if cmd.Flags().Changed("prefix") {
 			resume = append(resume, "--prefix", prefix)
+		}
+		// D49: without separation and with remote access, one explicit y that
+		// names the risk. Doctor fails on it too; nothing is enforced.
+		for _, c := range steps {
+			if c.Name != "account" {
+				continue
+			}
+			if stt, detail := c.Run(ctx); stt == doctor.Fail && !dryRun {
+				ui.Report(render.LevelFail, "account: "+clean(strings.TrimSpace(detail)))
+				// accepting a risk is not undoable by running it again: Enter is no
+				a, err := setup.Ask(env.Host, "Go on without a dedicated standard account, knowing this?", render.DefaultNo)
+				if err == nil && a == render.Quit {
+					ui.Report(render.LevelSkipped, "stopped at your request, nothing was run")
+					fmt.Fprintf(st.env.Stderr, "to start again, run: %s\n", strings.Join(resume, " "))
+					return quitError{}
+				}
+				if err != nil || a != render.Yes {
+					return usageError{"stopped: set up a dedicated standard account, or remove the remote access from the configuration"}
+				}
+			} else if stt == doctor.Fail {
+				fmt.Fprintf(st.env.Stderr, "note (dry run): account: %s\n", clean(strings.TrimSpace(detail)))
+			}
 		}
 		for i, name := range only {
 			if name == "whr-user" {

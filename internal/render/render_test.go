@@ -193,3 +193,18 @@ func TestToolWriterIndentsEveryLineAndNeverHoldsAPromptBack(t *testing.T) {
 		t.Errorf("a new block starts with its label: %q", b.String())
 	}
 }
+
+func TestToolWriterEndClosesAnOpenLine(t *testing.T) {
+	var b strings.Builder
+	tw := NewToolWriter(&b, Style{})
+	_, _ = tw.Write([]byte("no newline"))
+	tw.End()
+	if !strings.HasSuffix(b.String(), "no newline\n") {
+		t.Errorf("End did not add the newline: %q", b.String())
+	}
+	n := b.Len()
+	tw.End()
+	if b.Len() != n {
+		t.Errorf("a second End wrote: %q", b.String())
+	}
+}

@@ -198,3 +198,18 @@ func TestQuitExitsWithItsOwnCodeAndAResumeHint(t *testing.T) {
 		t.Errorf("quitting ran %v", h.ran)
 	}
 }
+
+func TestSetupDevWarningIsSetApartByARule(t *testing.T) {
+	r := newSetupRig(t)
+	_, _, errOut := r.runUI(uiOpts{}, "setup", "--dev", "--dry-run")
+	lines := strings.Split(errOut, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "warning: development installation") {
+			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+1], "-") != "" {
+				t.Errorf("the warning is not between rules:\n%s", errOut)
+			}
+			return
+		}
+	}
+	t.Errorf("no development warning:\n%s", errOut)
+}

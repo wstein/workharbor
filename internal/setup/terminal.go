@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
@@ -42,6 +43,10 @@ func (Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 	return out.Bytes(), err
 }
 
+// runWaitDelay is how long Run waits for the output pipes after the command
+// exited or the context ended.
+const runWaitDelay = 2 * time.Second
+
 // Run implements Host.
 func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 	argv := c.Full()
@@ -51,7 +56,14 @@ func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 	tw := render.NewToolWriter(t.Err, t.Style)
 	defer tw.End()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, tw, tw
-	return cmd.Run()
+	// a background child that keeps the pipe open must not stall Run
+	cmd.WaitDelay = runWaitDelay
+	err := cmd.Run()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// the command itself succeeded; a leftover child only held the pipe
+		return nil
+	}
+	return err
 }
 
 // Open implements Host. It runs `open`, so a URL or a System Settings pane opens

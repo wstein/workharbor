@@ -24,8 +24,8 @@ import (
 )
 
 // The setup steps beyond what `whr doctor` always checked (design D46, the manual's
-// host setup). Every command and every output format below is that of macOS 26's
-// own tools as documented, and none has been run against a fresh machine:
+// host setup). Every command and every output format below is that of the macOS version
+// you are running (unverified), as its own tools document it, and none has been run against a fresh machine:
 // all of it is unverified until the wizard has set up the reference Mac mini
 // (issue #73). The checks only read; the fixes are shown before they run.
 
