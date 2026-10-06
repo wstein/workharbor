@@ -112,6 +112,21 @@ func TestASubscriptionTokenIsRefused(t *testing.T) {
 	}
 }
 
+// #348: a credentials-file shaped value is refused under an API-key name, and
+// ANTHROPIC_AUTH_TOKEN is refused by name, without showing the value.
+func TestASubscriptionShapedValueIsRefused(t *testing.T) {
+	for _, line := range []string{`ANTHROPIC_API_KEY={"accessToken":"test-SECRET"}`, "ANTHROPIC_AUTH_TOKEN=test-SECRET"} {
+		r := newRig(t)
+		if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte(line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := r.parse(t)
+		if msg := problems(err); !strings.Contains(msg, "API key, not a setup-token") || strings.Contains(msg, "SECRET") {
+			t.Errorf("%s: problems = %q", line, msg)
+		}
+	}
+}
+
 func TestTheAPIKeyFileIsOptional(t *testing.T) {
 	r := newRig(t)
 	r.cfg.AgentAPIKeyEnvFile = ""

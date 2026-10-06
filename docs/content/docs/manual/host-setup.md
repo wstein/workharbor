@@ -275,7 +275,7 @@ chmod 600 ~/.config/whr/github-app.pem
 **The agent's login:**
 
 - **A subscription (Claude Pro or Max) is the default** and has no file: you sign in inside the environment with Claude Code's own login, and `whr` never sees it (design D40, [agent vendor terms](vendor-terms.md)). How that works from the console is being measured (issue #82); the first sign-in needs a Terminal in `workharbor`'s desktop session (step 2).
-- **An API key is optional.** Type it so that it is neither echoed nor kept in the shell history nor visible in the process list (`read -s` does not echo, and `printf` is a shell builtin):
+- **An API key is optional, and it must be an API key.** Create one in the vendor's console, not with `claude setup-token` and not a login token: `whr setup`, `whr doctor` and the configuration refuse a variable named like a subscription credential (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, any `*OAUTH*`, `*SESSION*`, `*ACCESS_TOKEN*`, `*REFRESH_TOKEN*`) and a value shaped like a credentials file (D40, issue #348). Detecting a setup-token by its value prefix is {{< status unverified >}}: the prefix has not been measured, and a real API key also starts with `sk-ant-`, so no prefix is refused; only names and the credentials-file shape are. Codex and Antigravity are covered by name only. Type the key so that it is neither echoed nor kept in the shell history nor visible in the process list (`read -s` does not echo, and `printf` is a shell builtin):
 
   ```bash
   umask 077; read -rs KEY; printf 'ANTHROPIC_API_KEY=%s\n' "$KEY" > ~/.config/whr/agent.env; unset KEY

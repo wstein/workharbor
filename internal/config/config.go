@@ -25,6 +25,7 @@ import (
 	"unicode"
 
 	"github.com/wstein/workharbor/internal/baseimage"
+	"github.com/wstein/workharbor/internal/credcheck"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/hostgit"
 	"github.com/wstein/workharbor/internal/notify"
@@ -946,12 +947,13 @@ func (c *Config) AgentAPIKey() ([]string, error) {
 		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		k, _, ok := strings.Cut(line, "=")
+		k, v, ok := strings.Cut(line, "=")
 		switch {
 		case !ok || !envKey.MatchString(k):
 			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d is not KEY=VALUE", i+1)
-		case subscriptionKey.MatchString(k):
-			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s, a subscription credential; whr never handles one, so sign in inside the environment instead (D40)", i+1, k)
+		}
+		if err := credcheck.Check(k, v); err != nil {
+			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s: %w; whr never handles a subscription credential (D40). %s", i+1, k, err, credcheck.Advice)
 		}
 		env = append(env, line)
 	}
@@ -960,10 +962,6 @@ func (c *Config) AgentAPIKey() ([]string, error) {
 	}
 	return env, nil
 }
-
-// subscriptionKey matches variable names that carry a consumer-plan sign-in,
-// such as CLAUDE_CODE_OAUTH_TOKEN, rather than an API key.
-var subscriptionKey = regexp.MustCompile(`(?i)oauth|session`)
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 

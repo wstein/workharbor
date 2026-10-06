@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/credcheck"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/toolstore"
@@ -976,7 +977,13 @@ func userSteps(d Deps) []Check {
 				}
 				key = strings.TrimSpace(key)
 				if len(key) < 20 || strings.ContainsAny(key, " \t\r\n=") {
+					if credcheck.Check("ANTHROPIC_API_KEY", key) != nil {
+						return errors.New("refused: " + credcheck.ErrSubscriptionValue.Error() + "; nothing was written. " + credcheck.Advice)
+					}
 					return errors.New("that does not look like an API key; nothing was written")
+				}
+				if err := credcheck.Check("ANTHROPIC_API_KEY", key); err != nil {
+					return errors.New("refused: " + err.Error() + "; nothing was written. " + credcheck.Advice)
 				}
 				return WriteSecret(envPath, []byte("ANTHROPIC_API_KEY="+key+"\n"))
 			}},

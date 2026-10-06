@@ -318,6 +318,16 @@ func TestSecretsAreGeneratedOrTypedAndWrittenPrivatelyWithoutOverwriting(t *test
 	if err := st["agent-key"].Fix.Do(ctx, &answers{secrets: []string{key}}); err == nil {
 		t.Error("an existing key file was overwritten")
 	}
+	for _, bad := range []string{`{"accessToken":"synthetic-value-0123456789"}`, `accessToken:synthetic-value-0123456789`} {
+		_ = os.Remove(env)
+		err := st["agent-key"].Fix.Do(ctx, &answers{secrets: []string{bad}})
+		if err == nil || !strings.Contains(err.Error(), "API key, not a setup-token") || strings.Contains(err.Error(), "synthetic") {
+			t.Errorf("%q: %v", bad, err)
+		}
+		if _, err := os.Stat(env); err == nil {
+			t.Errorf("%q left a file behind", bad)
+		}
+	}
 	for _, bad := range []string{"short", "has space in it 1234567890", "a=b1234567890123456789"} {
 		_ = os.Remove(env)
 		if err := st["agent-key"].Fix.Do(ctx, &answers{secrets: []string{bad}}); err == nil {
