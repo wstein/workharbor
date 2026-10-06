@@ -3,6 +3,10 @@
 # links in every run, 2 failed none (measured 2 October 2026, lychee 0.24.2).
 max_concurrency = 2
 timeout = 20
+# Check #anchor fragments in Markdown and HTML targets, so a renamed heading breaks
+# the job. Verified by a deliberately broken anchor failing (issue #318). Hugo's own
+# build is not known to catch missing anchors, so this is the only fragment check.
+include_fragments = "anchor-only"
 max_retries = 3
 retry_wait_time = 2
 # 429 and 503 mean rate limited or overloaded, not broken. An accepted status is
@@ -24,3 +28,8 @@ exclude = [
   # image in the README, so CI no longer catches it.
   '^https://img\.shields\.io/',
 ]
+# GitHub issue and PR comment anchors (#issuecomment-N) are resolved by JavaScript, so
+# the served HTML has no such id and include_fragments reports "Cannot find fragment"
+# for live comments (4 links, 6 October 2026). Drop the fragment and keep checking
+# that the issue or PR itself resolves; a deleted comment is not caught.
+remap = ['^(https://github\.com/[^/]+/[^/]+/(?:issues|pull)/[0-9]+)#issuecomment-[0-9]+$ $1']
