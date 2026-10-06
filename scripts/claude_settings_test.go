@@ -282,7 +282,8 @@ var allowedWildcardRules = []string{
 // other Bash rule is exact: it must start with a literal first word from
 // allowedBashFirstWords and, except for the bare board script, carry at least
 // one argument word (so Bash(git) and Bash(make) fail). This keeps wrappers,
-// interpreters, paths, quoting and open-ended wildcard rules out of the shared
+// interpreters, paths, quoting, shell metacharacters (; & | ` $ < >, newline),
+// empty argument words and open-ended wildcard rules out of the shared
 // file. It does not prove that a permitted command is harmless: an exact rule
 // for git, make, gh or container still allows whatever that command does with
 // those exact arguments.
@@ -298,7 +299,13 @@ func allowRuleHasKnownFirstWord(rule string) bool {
 	if strings.Contains(spec, "*") {
 		return slices.Contains(allowedWildcardRules, rule)
 	}
+	if strings.ContainsAny(spec, ";&|`$<>\n\r") {
+		return false
+	}
 	words := strings.Split(spec, " ")
+	if slices.Contains(words, "") {
+		return false
+	}
 	if !slices.Contains(allowedBashFirstWords, words[0]) {
 		return false
 	}
@@ -321,6 +328,11 @@ func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
 		"Bash(gh alias set *)", "Bash(gh extension install *)", "Bash(git log *)", "Bash(git commit *)",
 		"Bash(gh run list *)", "Bash(gh api repos/wstein/workharbor/issues *)", `Bash(git "config" *)`,
 		"Bash(git)", "Bash(make)", "Bash(gh run list:* --x)",
+		"Bash(git status; rm x)", "Bash(git status & x)", "Bash(git status | x)",
+		"Bash(git status `x`)", "Bash(git status $x)", "Bash(git status $(x))",
+		"Bash(git status < x)", "Bash(git status > x)", "Bash(git status\nrm x)",
+		"Bash(git status\rrm x)", "Bash(git )", "Bash(git  status)", "Bash(git status )",
+		"Bash(make check;x)", "Bash(gh api a&b)", "Bash(container ls|x)",
 	} {
 		if allowRuleHasKnownFirstWord(rule) {
 			t.Errorf("rule %q must fail the first-word check", rule)
