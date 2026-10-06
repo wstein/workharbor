@@ -90,8 +90,10 @@ type Deps struct {
 	ConfigPath string
 	Home       string
 	// RepoDir is the checkout `whr doctor` runs in; empty skips the lane-agents check.
-	RepoDir  string
-	FS       runtime.FS
+	RepoDir string
+	FS      runtime.FS
+	// SSHDFile overrides the sshd drop-in the ssh-keys-only check reads (tests).
+	SSHDFile string
 	LookPath func(string) (string, error)
 	// GitHub builds the App's client from the configuration; nil uses
 	// NewGitHub. Tests point it at a fake.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -874,3 +876,99 @@ func TestFileChecksFailOnlyOnAbsentNotOnUnreadable(t *testing.T) {
 		t.Errorf("absent prefix = %s", got)
 	}
 }
+
+// failing is a Runner whose every command fails with err.
+type failing struct{ err error }
+
+func (f failing) Output(context.Context, ...string) ([]byte, error) { return nil, f.err }
+
+func TestWhrUserFailsOnARealExitStatus56ButNotOnOtherRealExits(t *testing.T) {
+	realExit := func(code string) error {
+		err := exec.CommandContext(t.Context(), "sh", "-c", "echo boom >&2; exit "+code).Run() //nolint:gosec // a fixed test script, the code is a literal
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) {
+			t.Fatalf("not an exit error: %v", err)
+		}
+		return fmt.Errorf("%w: %s", ee, "boom") // as setup.Terminal wraps stderr
+	}
+	// the message carries no "56" text of its own: only the exit code can match
+	err := hidden{realExit("56")}
+	if got, detail := status(steps(t, hostDeps(failing{err}))["workharbor-user"]); got != Fail {
+		t.Errorf("exit 56 = %s %q", got, detail)
+	}
+	if got, detail := status(steps(t, hostDeps(failing{realExit("185")}))["workharbor-user"]); got != NotVerified || !strings.Contains(detail, "exit status 185") || !strings.Contains(detail, "boom") {
+		t.Errorf("exit 185 = %s %q", got, detail)
+	}
+}
+
+func TestWhrUserNotFoundByTextAlone(t *testing.T) {
+	d := hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:<dscl_cmd> DS Error: -14136 (eDSRecordNotFound)"})
+	if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail {
+		t.Errorf("%s %q", got, detail)
+	}
+}
+
+func lockedDir(t *testing.T) (locked, absent string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root reads everything")
+	}
+	base := t.TempDir()
+	locked = filepath.Join(base, "locked")
+	if err := os.Mkdir(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(base, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(base, 0o700) }) //nolint:gosec // a directory must be enterable again for cleanup
+	return locked, filepath.Join(t.TempDir(), "absent")
+}
+
+func TestUnreadablePathsAreNotVerifiedAndAbsentOnesFail(t *testing.T) {
+	locked, absent := lockedDir(t)
+	d := hostDeps(scripted{})
+	d.SSHDFile = locked
+	if got, detail := status(steps(t, d)["ssh-keys-only"]); got != NotVerified || !strings.Contains(detail, "permission denied") {
+		t.Errorf("ssh unreadable = %s %q", got, detail)
+	}
+	d.SSHDFile = absent
+	if got, _ := status(steps(t, d)["ssh-keys-only"]); got != Fail {
+		t.Errorf("ssh absent = %s", got)
+	}
+	d = hostDeps(scripted{})
+	d.ConfigPath = filepath.Join(locked, "config.json")
+	st := steps(t, d)
+	for _, name := range []string{"config-dir", "agent-key", "ssh-ca"} {
+		if got, detail := status(st[name]); got != NotVerified || !strings.Contains(detail, "permission denied") {
+			t.Errorf("%s unreadable = %s %q", name, got, detail)
+		}
+	}
+	d.ConfigPath = filepath.Join(absent, "config.json")
+	st = steps(t, d)
+	if got, _ := status(st["config-dir"]); got != Fail {
+		t.Errorf("config-dir absent = %s", got)
+	}
+	for _, name := range []string{"agent-key", "ssh-ca"} {
+		if got, _ := status(st[name]); got != OK {
+			t.Errorf("%s absent = %s", name, got)
+		}
+	}
+}
+
+func TestBrewPackagesNotVerifiedOnAnUnexpectedBrewError(t *testing.T) {
+	const k = "/opt/homebrew/bin/brew list --formula --versions "
+	if got, detail := status(steps(t, hostDeps(scripted{k + "container": "ERR:exit status 1"}))["brew-packages"]); got != Fail {
+		t.Errorf("not installed = %s %q", got, detail)
+	}
+	d := hostDeps(scripted{k + "container": "ERR:exit status 2: Error: cannot lock"})
+	if got, detail := status(steps(t, d)["brew-packages"]); got != NotVerified || !strings.Contains(detail, "cannot lock") {
+		t.Errorf("odd brew error = %s %q", got, detail)
+	}
+}
+
+// hidden keeps an error's chain but not its text.
+type hidden struct{ err error }
+
+func (h hidden) Error() string { return "dscl failed" }
+func (h hidden) Unwrap() error { return h.err }

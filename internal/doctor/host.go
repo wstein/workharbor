@@ -136,6 +136,15 @@ func (d Deps) prefix() string {
 	return DefaultPrefix
 }
 
+// sshdPath is the sshd drop-in the ssh-keys-only check reads; SSHDFile
+// overrides it for tests.
+func (d Deps) sshdPath() string {
+	if d.SSHDFile != "" {
+		return d.SSHDFile
+	}
+	return sshdFile
+}
+
 func (d Deps) configDir() string { return filepath.Dir(d.ConfigPath) }
 
 // kv reads "name value" lines, as `pmset -g` prints them.
@@ -448,17 +457,17 @@ func hostSteps(d Deps) []Check {
 				if d.GOOS != "darwin" {
 					return NotVerified, "not checked: " + errNotHere.Error()
 				}
-				b, err := os.ReadFile(sshdFile)
+				b, err := os.ReadFile(d.sshdPath())
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
-					return NotVerified, "could not read " + sshdFile + ": " + oneLine(err.Error())
+					return NotVerified, "could not read " + d.sshdPath() + ": " + oneLine(err.Error())
 				}
 				if err != nil {
-					return Fail, sshdFile + " is not there: password logins are not refused"
+					return Fail, d.sshdPath() + " is not there: password logins are not refused"
 				}
 				if !strings.Contains(string(b), "PasswordAuthentication no") || !strings.Contains(string(b), "KbdInteractiveAuthentication no") {
-					return Fail, sshdFile + " does not turn both password methods off"
+					return Fail, d.sshdPath() + " does not turn both password methods off"
 				}
-				return OK, "password logins are refused (" + sshdFile + ")"
+				return OK, "password logins are refused (" + d.sshdPath() + ")"
 			},
 			Fix: &Fix{
 				Desc:  "write the two settings to a private temporary file, then install it as root's",
@@ -517,6 +526,11 @@ func hostSteps(d Deps) []Check {
 						if st, msg, ok := notHere(err); ok {
 							return st, msg
 						}
+						// brew list exits 1 for a formula that is not installed;
+						// any other failure says nothing about the package
+						if err != nil && !strings.Contains(err.Error(), "exit status 1") {
+							return NotVerified, "brew did not say whether " + f + " is installed: " + oneLine(err.Error())
+						}
 						missing = append(missing, f)
 					}
 				}
@@ -572,8 +586,11 @@ func hostSteps(d Deps) []Check {
 				}
 				for _, p := range []string{d.prefix(), filepath.Join(d.prefix(), "bin"), filepath.Join(d.prefix(), "bin", "whr")} {
 					own, err := ownedBy(p, d.account())
-					if err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
 						continue // not installed yet
+					}
+					if err != nil {
+						return NotVerified, "could not read the owner of " + p + ": " + oneLine(err.Error())
 					}
 					// never the configured account, administrator or not: it could
 					// replace its own supervisor, and D24 would not come back after
@@ -703,8 +720,12 @@ func (d Deps) prefixInstallArgv() []string {
 // never own what runs the supervisor (D24, D49).
 func ownedBy(path, name string) (bool, error) {
 	u, err := user.Lookup(name)
-	if err != nil {
+	var unknown user.UnknownUserError
+	if errors.As(err, &unknown) {
 		return false, nil // no such user yet: nothing it could own
+	}
+	if err != nil {
+		return false, err
 	}
 	fi, err := os.Lstat(path)
 	if err != nil {
@@ -885,7 +906,9 @@ func userSteps(d Deps) []Check {
 		{
 			Name: "agent-key", Phase: PhaseUser, Step: 3, Title: "an agent API key (optional; a subscription needs none, D40)", Optional: true,
 			Run: func(context.Context) (Status, string) {
-				if _, err := os.Stat(envPath); err != nil {
+				if _, err := os.Stat(envPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return NotVerified, "could not read " + envPath + ": " + oneLine(err.Error())
+				} else if err != nil {
 					return OK, "no API key: the agent signs in inside the environment (subscription)"
 				}
 				if _, err := config.ReadSecret(envPath); err != nil {
@@ -909,7 +932,9 @@ func userSteps(d Deps) []Check {
 		{
 			Name: "ssh-ca", Phase: PhaseUser, Step: 3, Title: "the console's SSH certificate authority (optional; for whr ssh, issue #32)", Optional: true,
 			Run: func(context.Context) (Status, string) {
-				if _, err := os.Stat(caPath); err != nil {
+				if _, err := os.Stat(caPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return NotVerified, "could not read " + caPath + ": " + oneLine(err.Error())
+				} else if err != nil {
 					return OK, "no SSH authority: `whr ssh` is off"
 				}
 				if _, err := sshca.Load(caPath); err != nil {
