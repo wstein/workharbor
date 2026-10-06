@@ -12,7 +12,7 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range test-commitlint-consumers land temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -250,6 +250,19 @@ check-hooks:
 		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
 	fi
 
+# The packages that consume internal/commitlint (the commit-msg hook, hostgit's
+# commit checks, the serve and service fixtures that build commits). check-local
+# runs no tests, so a commitlint change that breaks a consumer reached CI (#329).
+# make land runs this on every landing, not only when internal/commitlint changes:
+# the consumers also break through their own changes, and a path trigger is one more
+# thing to get wrong; the timeout bounds a hang. GOENV=off GOFLAGS= pins the go
+# environment: a caller's GOFLAGS (-run=NONE, -exec=true, -skip) or a go env -w
+# file must not turn the gate into a pass.
+CONSUMER_PKGS := ./internal/commitlint ./cmd/commitlint ./internal/hostgit ./internal/serve ./internal/service
+CONSUMER_TEST_TIMEOUT := 300s
+test-commitlint-consumers:
+	GOENV=off GOFLAGS= go test -count=1 -timeout $(CONSUMER_TEST_TIMEOUT) $(CONSUMER_PKGS)
+
 # The sub-makes of land go through LAND_MAKE: the recipe line must not contain
 # $(MAKE) itself, or make -n, -t and -q would run it for real (merge included).
 override LAND_MAKE := $(MAKE)
@@ -315,6 +328,7 @@ land:
 	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
 	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
 	$(LAND_CLEAN) $(LAND_MAKE) -s check-local commitlint || exit 1; \
+	$(LAND_CLEAN) $(LAND_MAKE) -s test-commitlint-consumers || exit 1; \
 	$(LAND_CLEAN) $(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
 	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
 	if [ -n "$$generated" ]; then $(LAND_CLEAN) $(LAND_MAKE) -s check-generated || exit 1; fi; \

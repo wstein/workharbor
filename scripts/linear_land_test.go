@@ -66,9 +66,9 @@ func TestLinearLand(t *testing.T) {
 				}
 			}
 			git(dir, "init", "-q", "-b", "main")
-			checks := "\n\n.PHONY: check check-ci check-local commitlint secrets-range check-generated\n" +
+			checks := "\n\n.PHONY: check check-ci check-local commitlint test-commitlint-consumers secrets-range check-generated\n" +
 				"check check-ci:\n\t@echo forbidden-full-suite >&2; exit 1\n" +
-				"check-local commitlint check-generated:\n"
+				"check-local commitlint test-commitlint-consumers check-generated:\n"
 			if tc.move {
 				mutation := "git commit --allow-empty -qm moved"
 				if tc.mergeLater {
@@ -177,7 +177,7 @@ func TestLinearLand(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				want := "check-local\ncommitlint\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"
+				want := "check-local\ncommitlint\ntest-commitlint-consumers\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"
 				if tc.template {
 					want += "check-generated\n"
 				}
@@ -216,8 +216,8 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 	}
 	r := &landBranchRepo{t: t, dir: t.TempDir(), home: t.TempDir(), recipe: recipe}
 	r.git(r.dir, "init", "-q", "-b", "main")
-	checks := "\n\n.PHONY: check-local commitlint secrets-range check-generated\n" +
-		"check-local commitlint check-generated:\n"
+	checks := "\n\n.PHONY: check-local commitlint test-commitlint-consumers secrets-range check-generated\n" +
+		"check-local commitlint test-commitlint-consumers check-generated:\n"
 	if moveMain {
 		checks += "\t@if [ ! -f checks-ran ]; then git update-ref refs/heads/main \"$$(git commit-tree -p main -m moved main^{tree})\"; fi\n"
 	}
@@ -317,7 +317,7 @@ func TestLandBranchArg(t *testing.T) {
 		if err != nil {
 			t.Fatalf("checks did not run in the branch's worktree: %v", err)
 		}
-		if want := "check-local\ncommitlint\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"; string(logged) != want {
+		if want := "check-local\ncommitlint\ntest-commitlint-consumers\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"; string(logged) != want {
 			t.Fatalf("local gates = %q, want %q", logged, want)
 		}
 		if _, err := os.Stat(filepath.Join(r.dir, "checks-ran")); !os.IsNotExist(err) {
@@ -553,7 +553,7 @@ func (r *landBranchRepo) stubChecks(checks string) {
 	if !ok {
 		r.t.Fatal("stub checks missing")
 	}
-	r.write(path, head+"\n\n.PHONY: check-local commitlint secrets-range check-generated\n"+checks)
+	r.write(path, head+"\n\n.PHONY: check-local commitlint test-commitlint-consumers secrets-range check-generated\n"+checks)
 	r.git(r.dir, "commit", "-qam", "stub checks")
 }
 
@@ -561,8 +561,8 @@ func (r *landBranchRepo) stubChecks(checks string) {
 // overrides: -i must not turn a failing check into a pass (L7), and
 // GITLEAKS_FOUND=0 must not turn a secret finding into a pass (L8).
 func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
-	failingCheck := "check-local:\n\t@echo check-local failed >&2; exit 1\ncommitlint check-generated:\n\t@:\nsecrets-range:\n\t@:\n"
-	finding := "GITLEAKS_FOUND := 42\ncheck-local commitlint check-generated:\n\t@:\nsecrets-range:\n\t@echo finding >&2; [ \"$(GITLEAKS_FOUND)\" != 42 ]\n"
+	failingCheck := "check-local:\n\t@echo check-local failed >&2; exit 1\ncommitlint test-commitlint-consumers check-generated:\n\t@:\nsecrets-range:\n\t@:\n"
+	finding := "GITLEAKS_FOUND := 42\ncheck-local commitlint test-commitlint-consumers check-generated:\n\t@:\nsecrets-range:\n\t@echo finding >&2; [ \"$(GITLEAKS_FOUND)\" != 42 ]\n"
 	for _, tc := range []struct {
 		name   string
 		checks string

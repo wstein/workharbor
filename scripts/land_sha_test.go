@@ -436,7 +436,7 @@ func TestLandShortSHAKeepsGuards(t *testing.T) {
 			{[]string{"LAND_MAKE=true"}, []string{"-e"}},
 		} {
 			r := newLandBranchRepo(t, false)
-			r.stubChecks("check-local:\n\t@echo check-local failed >&2; exit 1\ncommitlint check-generated secrets-range:\n\t@:\n")
+			r.stubChecks("check-local:\n\t@echo check-local failed >&2; exit 1\ncommitlint test-commitlint-consumers check-generated secrets-range:\n\t@:\n")
 			sha := r.detachedTopic()
 			r.stamp(sha, "ok", sha)
 			base := r.git(r.dir, "rev-parse", "main")
@@ -453,9 +453,9 @@ func TestLandShortSHAKeepsGuards(t *testing.T) {
 		}
 	})
 	t.Run("check failure cleans the temporary worktree", func(t *testing.T) {
-		for _, failing := range []string{"check-local", "commitlint", "secrets-range"} {
+		for _, failing := range []string{"check-local", "commitlint", "test-commitlint-consumers", "secrets-range"} {
 			r := newLandBranchRepo(t, false)
-			r.stubChecks("check-local commitlint check-generated secrets-range:\n\t@:\n" + failing + ":\n\t@echo " + failing + " failed >&2; exit 1\n")
+			r.stubChecks("check-local commitlint test-commitlint-consumers check-generated secrets-range:\n\t@:\n" + failing + ":\n\t@echo " + failing + " failed >&2; exit 1\n")
 			sha := r.detachedTopic()
 			r.stamp(sha, "ok", sha)
 			r.wantTTYRefused(r.dir, "y\n", failing+" failed", nil, "SHA="+sha[:9])
@@ -466,7 +466,7 @@ func TestLandShortSHAKeepsGuards(t *testing.T) {
 			t.Skip("root removes anything")
 		}
 		r := newLandBranchRepo(t, false)
-		r.stubChecks("check-local:\n\t@mkdir locked && touch locked/f && chmod 555 locked\ncommitlint check-generated secrets-range:\n\t@:\n")
+		r.stubChecks("check-local:\n\t@mkdir locked && touch locked/f && chmod 555 locked\ncommitlint test-commitlint-consumers check-generated secrets-range:\n\t@:\n")
 		sha := r.detachedTopic()
 		r.stamp(sha, "ok", sha)
 		tmp := t.TempDir()
@@ -494,7 +494,7 @@ func TestLandShortSHAKeepsGuards(t *testing.T) {
 	})
 	t.Run("interrupt cleans the temporary worktree", func(t *testing.T) {
 		r := newLandBranchRepo(t, false)
-		r.stubChecks("check-local:\n\t@touch started; sleep 60\ncommitlint check-generated secrets-range:\n\t@:\n")
+		r.stubChecks("check-local:\n\t@touch started; sleep 60\ncommitlint test-commitlint-consumers check-generated secrets-range:\n\t@:\n")
 		sha := r.detachedTopic()
 		r.stamp(sha, "ok", sha)
 		base := r.git(r.dir, "rev-parse", "main")
@@ -578,7 +578,7 @@ func TestLandShortSHAKeepsGuards(t *testing.T) {
 		r.wantNoTemp(tmp)
 
 		r = newLandBranchRepo(t, false)
-		r.stubChecks("check-local:\n\t@git update-ref refs/heads/topic \"$$(git commit-tree -p topic -m moved topic^{tree})\"\ncommitlint check-generated secrets-range:\n\t@:\n")
+		r.stubChecks("check-local:\n\t@git update-ref refs/heads/topic \"$$(git commit-tree -p topic -m moved topic^{tree})\"\ncommitlint test-commitlint-consumers check-generated secrets-range:\n\t@:\n")
 		sha = r.detachedTopic()
 		r.stamp(sha, "ok", sha)
 		r.wantTTYRefused(r.dir, "y\n", "candidate moved during the checks", nil, "SHA="+sha[:9])
