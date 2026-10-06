@@ -67,6 +67,9 @@ func (d Deps) otherAdmins(ctx context.Context) ([]string, error) {
 		// existing, non-root account counts
 		id, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+m, "UniqueID")
 		f := strings.Fields(id)
+		if err != nil && !dsclNotFound(err) {
+			return nil, errors.New("dscl could not read " + m + ", so the other administrators are not known: " + oneLine(err.Error()))
+		}
 		if err != nil || len(f) < 2 || f[0] != "UniqueID:" || f[1] == "0" {
 			continue
 		}

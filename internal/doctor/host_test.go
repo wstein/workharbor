@@ -104,7 +104,7 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 			if !strings.Contains(c.Fix.Guide, "run `"+wantSetup+"` there") {
 				t.Errorf("setup command missing from guide %q", c.Fix.Guide)
 			}
-			d.Runner = scripted{}
+			d.Runner = scripted{"dscl . -read /Users/" + tc.want + " UniqueID": "ERR:exit status 56"}
 			if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail || detail != "there is no user "+tc.want {
 				t.Errorf("missing: %s %q", got, detail)
 			}
@@ -159,7 +159,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	if got, detail := status(st["workharbor-user"]); got != Warn || !strings.Contains(detail, "administrator") {
 		t.Errorf("an administrator whr = %s %q", got, detail)
 	}
-	if got, detail := status(steps(t, hostDeps(scripted{}))["workharbor-user"]); got != Fail || !strings.Contains(detail, "no user") {
+	if got, detail := status(steps(t, hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:exit status 56"}))["workharbor-user"]); got != Fail || !strings.Contains(detail, "no user") {
 		t.Errorf("a missing user = %s %q", got, detail)
 	}
 }
@@ -823,5 +823,54 @@ func TestNoStepNeedsAServiceALaterStepStarts(t *testing.T) {
 	}
 	if needed == 0 {
 		t.Error("no step declares a need: the test checks nothing")
+	}
+}
+
+func TestWhrUserFailsOnlyOnARecognizableNotFound(t *testing.T) {
+	const key = "dscl . -read /Users/workharbor UniqueID"
+	for _, msg := range []string{
+		"exit status 56",
+		"exit status 56: <dscl_cmd> DS Error: -14136 (eDSRecordNotFound)",
+		"exit status 1: <dscl_cmd> DS Error: Record does not exist",
+	} {
+		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg}))["workharbor-user"])
+		if got != Fail || detail != "there is no user workharbor" {
+			t.Errorf("%q = %s %q, want fail", msg, got, detail)
+		}
+	}
+	for _, msg := range []string{
+		"exit status 1: Operation not permitted",
+		"exit status 2: eDSServiceNotAvailable",
+		"exit status 70: odd output",
+		"exit status 1",
+	} {
+		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg}))["workharbor-user"])
+		if got != NotVerified || !strings.Contains(detail, msg) || strings.Contains(detail, "there is no user") {
+			t.Errorf("%q = %s %q, want not_verified carrying the error", msg, got, detail)
+		}
+	}
+}
+
+func TestFileChecksFailOnlyOnAbsentNotOnUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads everything")
+	}
+	base := t.TempDir()
+	locked := filepath.Join(base, "locked")
+	if err := os.Mkdir(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(base, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(base, 0o700) }) //nolint:gosec // a directory must be enterable again for cleanup
+	d := hostDeps(scripted{})
+	d.Prefix = locked
+	if got, detail := status(steps(t, d)["prefix"]); got != NotVerified || !strings.Contains(detail, "permission denied") {
+		t.Errorf("unreadable prefix = %s %q", got, detail)
+	}
+	d.Prefix = filepath.Join(t.TempDir(), "absent")
+	if got, _ := status(steps(t, d)["prefix"]); got != Fail {
+		t.Errorf("absent prefix = %s", got)
 	}
 }

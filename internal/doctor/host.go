@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"regexp"
@@ -68,6 +69,19 @@ func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
 }
 
 var errNotHere = errors.New("this runs only on a Mac")
+
+// dsclNotFound reports whether a failed `dscl . -read` says the record is not
+// there: exit status 56 (eDSRecordNotFound) or "does not exist" in what it said.
+// Any other failure (permissions, a directory-service error, an unknown format)
+// says nothing about the account.
+func dsclNotFound(err error) bool {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 56 {
+		return true
+	}
+	m := err.Error()
+	return strings.Contains(m, "exit status 56") || strings.Contains(m, "does not exist") || strings.Contains(m, "eDSRecordNotFound")
+}
 
 // serviceContainerSystem is the service the container-start step brings up and
 // the steps after it need.
@@ -153,7 +167,10 @@ func hostSteps(d Deps) []Check {
 					if st, msg, ok := notHere(err); ok {
 						return st, msg
 					}
-					return Fail, "there is no user " + d.account()
+					if dsclNotFound(err) {
+						return Fail, "there is no user " + d.account()
+					}
+					return NotVerified, "dscl did not say whether " + d.account() + " exists: " + oneLine(err.Error())
 				}
 				admin, known := d.isAdmin(ctx)
 				if !known {
@@ -432,6 +449,9 @@ func hostSteps(d Deps) []Check {
 					return NotVerified, "not checked: " + errNotHere.Error()
 				}
 				b, err := os.ReadFile(sshdFile)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return NotVerified, "could not read " + sshdFile + ": " + oneLine(err.Error())
+				}
 				if err != nil {
 					return Fail, sshdFile + " is not there: password logins are not refused"
 				}
@@ -541,6 +561,9 @@ func hostSteps(d Deps) []Check {
 					return d.developmentPrefix(ctx)
 				}
 				fi, err := os.Stat(d.prefix())
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return NotVerified, "could not read " + d.prefix() + ": " + oneLine(err.Error())
+				}
 				if err != nil {
 					return Fail, d.prefix() + " does not exist"
 				}
@@ -823,6 +846,9 @@ func userSteps(d Deps) []Check {
 			Name: "config-dir", Phase: PhaseUser, Step: 4, Title: "the private configuration directory (manual step 12)",
 			Run: func(context.Context) (Status, string) {
 				fi, err := os.Stat(dir)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return NotVerified, "could not read " + dir + ": " + oneLine(err.Error())
+				}
 				if err != nil {
 					return Fail, dir + " does not exist"
 				}

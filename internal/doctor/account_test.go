@@ -267,3 +267,13 @@ func TestMediaAnalysisCacheIsReadAsTheConfiguredAccount(t *testing.T) {
 		t.Errorf("%q", detail)
 	}
 }
+
+func TestOtherAdminsAreUnknownWhenDsclFailsForAMember(t *testing.T) {
+	d := accountDeps(t, scripted{
+		groupKey:                             "GroupMembership: root werner ghost\n",
+		"dscl . -read /Users/ghost UniqueID": "ERR:exit status 1: Operation not permitted",
+	}, nil)
+	if _, err := d.otherAdmins(t.Context()); err == nil || !strings.Contains(err.Error(), "Operation not permitted") {
+		t.Errorf("err = %v, want one carrying dscl's text", err)
+	}
+}
