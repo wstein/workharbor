@@ -17,6 +17,10 @@ How to set up the sessions and subagents that build workharbor itself. This is a
 
 The lane agents, the reviewers and the helpers are subagents that `wh/dispatch` starts, not sessions of their own. Open `/wh-desk` and `/wh-dispatch` in two terminals and check the model in each. Ask `wh/desk` for status, not `wh/dispatch`.
 
+## Shared and personal Claude Code settings
+
+The [Claude Code permission grammar](https://code.claude.com/docs/en/permissions#read-and-edit) defines `~/` file rules from the current user’s home and `//` rules from the filesystem root. The shared sensitive-directory denies also match those directories outside the current home. Bash rules match command text; their wildcards do not resolve a home directory or provide process isolation. Native enforcement across macOS and Linux remains {{< status unverified >}}; static configuration checks do not complete the session-usage verification in #274.
+
 ## Subagents and their models
 
 Every subagent's model is pinned in `.claude/agents/` and never inherited from the session that starts it.
