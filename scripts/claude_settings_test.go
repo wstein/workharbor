@@ -149,7 +149,7 @@ func TestClaudeSharedAllowExcludesBoardWrites(t *testing.T) {
 	// reach the board script by another spelling.
 	for _, rule := range settings.Permissions.Allow {
 		if !allowRuleHasKnownFirstWord(rule) {
-			t.Errorf("allow rule %s must be a Bash rule starting with a literal first word from allowedBashFirstWords", rule)
+			t.Errorf("allow rule %s must be a tool rule from allowedToolRules or a Bash rule with a known literal first word (and, with a wildcard, a literal second word); see allowRuleHasKnownFirstWord", rule)
 		}
 	}
 }
@@ -167,22 +167,51 @@ var boardReadOnlyRoutes = []string{
 // rules start with. Add one only after review.
 var allowedBashFirstWords = []string{"git", "make", "gh", "df", "container", "scripts/board-snapshot.sh"}
 
-// allowRuleHasKnownFirstWord reports whether rule is either a non-Bash tool
-// rule without arguments (Grep, Glob, WebSearch) or a Bash(...) rule whose
-// first word is literally one of allowedBashFirstWords. A bare "Bash" rule and
-// anything wildcard-, path-, quote-, dot- or assignment-first fails.
+// allowedToolRules are the bare non-Bash tool rules the committed file uses.
+var allowedToolRules = []string{"Grep", "Glob", "WebSearch"}
+
+// allowRuleHasKnownFirstWord is a static guard on the rule text, not a
+// permission evaluator. It accepts a bare tool rule only from
+// allowedToolRules. A Bash(...) rule must start with a literal first word from
+// allowedBashFirstWords; a rule with a wildcard (a "*" or a trailing ":*") must
+// also have literal words before the wildcard (two, or three for gh) and a
+// second word that does not start with "-", so "git *", "gh api *" or
+// "make *" fail while "gh run list:*" passes.
+// Exact rules without a wildcard only need the known first word. This keeps
+// wrappers, interpreters, paths, quoting and wildcard-first rules out of the
+// shared file. It does not prove that a permitted command is harmless: a rule
+// with two literal words still allows whatever those words and their
+// arguments do.
 func allowRuleHasKnownFirstWord(rule string) bool {
 	if !strings.HasPrefix(rule, "Bash") {
-		return !strings.Contains(rule, "(")
+		return slices.Contains(allowedToolRules, rule)
 	}
 	spec, ok := strings.CutPrefix(rule, "Bash(")
 	if !ok || !strings.HasSuffix(rule, ")") {
 		return false
 	}
 	spec = strings.TrimSuffix(spec, ")")
-	word, _, _ := strings.Cut(spec, " ")
-	word, _, _ = strings.Cut(word, ":")
-	return slices.Contains(allowedBashFirstWords, word)
+	wildcard := strings.Contains(spec, "*")
+	spec = strings.TrimSuffix(spec, ":*")
+	words := strings.Split(spec, " ")
+	if !slices.Contains(allowedBashFirstWords, words[0]) {
+		return false
+	}
+	if !wildcard {
+		return true
+	}
+	literal := words
+	for i, w := range words {
+		if strings.Contains(w, "*") {
+			literal = words[:i]
+			break
+		}
+	}
+	minWords := 2
+	if words[0] == "gh" {
+		minWords = 3 // "gh alias *" and "gh api *" reach shell aliases and arbitrary API calls
+	}
+	return len(literal) >= minWords && !strings.HasPrefix(literal[1], "-") && literal[1] != ""
 }
 
 func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
@@ -193,6 +222,9 @@ func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
 		`Bash("scripts/*)`, "Bash(scripts/./*)", "Bash(scripts//*)",
 		"Bash(scripts/board-snap* move 42 Done)", "Bash(scripts/board*:*)", "Bash(*/board-snapshot.sh:*)",
 		"Bash(", "Bash()",
+		"PowerShell", "Write", "Edit", "WebFetch", "Monitor", "mcp__github__*",
+		"Bash(git *)", "Bash(git:*)", "Bash(git -c *)", "Bash(gh *)", "Bash(gh:*)",
+		"Bash(gh alias *)", "Bash(gh api *)", "Bash(make *)", "Bash(container *)",
 	} {
 		if allowRuleHasKnownFirstWord(rule) {
 			t.Errorf("rule %q must fail the first-word check", rule)
@@ -201,6 +233,8 @@ func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
 	for _, rule := range []string{
 		"Grep", "Glob", "WebSearch", "Bash(git status)", "Bash(make check)", "Bash(gh run list:*)",
 		"Bash(df -h)", "Bash(container ls --all)", "Bash(scripts/board-snapshot.sh queue:*)",
+		"Bash(scripts/board-snapshot.sh card:*)", "Bash(gh run view:*)", "Bash(gh release list:*)",
+		"Bash(scripts/board-snapshot.sh --refresh)",
 	} {
 		if !allowRuleHasKnownFirstWord(rule) {
 			t.Errorf("rule %q must pass the first-word check", rule)
