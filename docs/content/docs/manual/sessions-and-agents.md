@@ -50,6 +50,37 @@ A `wh-reviewer` or `wh-docs-reviewer` subagent is `wh/review`: its comment `Revi
 3. Open `/wh-desk` and `/wh-dispatch` and check their models.
 4. Allow subagent starts without a prompt in the dispatch session only. The designated dispatcher may move cards for assigned work through `scripts/board-snapshot.sh move` without separate approval, retaining the ownership, status and review evidence required by `AGENTS.md`; actual host controls and the user’s authorized scope still apply. Leave other board writes (`ready`, `session`, `priority`, `add`) asking each time.
 
+### Client capacity
+
+For development sessions using Crew Book, start with capacity for eight subagents: one dispatcher, two authors, two independent reviewers, one design batch and two bounded helpers. The primary desk session is excluded. This is a capacity recommendation, not a measured optimum or a request to fill every slot {{< status unverified >}}. The limits in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) still apply: at most two code workers, one editor per worktree, disjoint editing scopes and explicitly pinned role models. When actual capacity is lower, sequence work while preserving coordination and independent review.
+
+**Codex.** For a fresh Crew Book desk session from the repository:
+
+```sh
+codex -m gpt-6.1-sol -c model_reasoning_effort="low" -c agents.max_concurrent_threads_per_session=8 '$crewbook'
+```
+
+The quotes preserve the literal skill invocation. To persist just the capacity setting, add it to the existing `[agents]` table in user configuration; create that table only if it is absent:
+
+```toml
+[agents]
+max_concurrent_threads_per_session = 8
+```
+
+The [official OpenAI configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) defines this as the limit on concurrently open spawned-agent threads, excluding the primary thread; Codex chooses the default when unset. `agents.max_threads` is the legacy alias {{< status unverified >}}. A completed agent's turn does not by itself establish that its thread has closed; use the host's reported capacity.
+
+**Claude Code.** For version 2.1.217 or later, start a session with:
+
+```sh
+CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=3 claude
+```
+
+The [official nesting documentation](https://code.claude.com/docs/en/sub-agents#let-subagents-spawn-their-own-subagents) defines spawn depth as subagent layers below the main conversation. Three layers support desk → dispatcher → author → bounded helper. Versions 2.1.217–2.1.218 default to one layer; 2.1.219 and later default to three {{< status unverified >}}. The explicit depth setting makes the example work with either default. It does not replace pinned tool restrictions, permissions or repository controls.
+
+The [official concurrency documentation](https://code.claude.com/docs/en/sub-agents#concurrent-subagent-limit) accepts a positive integer and gives a default of 20. It counts running subagents and blocks new Agent-tool starts at the limit. `/subtask` forks occupy slots but bypass the cap; resuming finished subagents can exceed it. Ultracode sessions are exempt, and workflows and agent teams have separate limits {{< status unverified >}}. Keep the existing role model pins; this setting changes capacity only.
+
+**Antigravity (`agy`).** The [official subagent documentation](https://www.antigravity.google/docs/subagents/) describes parallel subagents and the `/agents` panel for inspecting their states {{< status unverified >}}. Inspect available capacity in the actual host and sequence work as needed. That source establishes no equivalent numerical concurrency setting; its nesting depth of ten is not a concurrency limit. Native role bindings and production support for this workflow remain {{< status unverified >}}.
+
 ## The project board
 
 The sessions share one GitHub token, and a board query is the expensive call, so they read and write the board only through `scripts/board-snapshot.sh` (needs `bash`, `jq` and a logged-in `gh`; it holds no token). Never run `gh project item-list` or `gh project item-edit` yourself. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit, Who sets which status); the script's header comment lists every mode.
