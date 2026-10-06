@@ -1,6 +1,7 @@
 package commitlint
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -382,5 +383,129 @@ func TestBotAuthorsTakeNoPersonCoauthors(t *testing.T) {
 		if got := Lint("docs: a\n\n"+ai+"\n"+person, Options{Author: author}); len(got) != 0 {
 			t.Errorf("%s: %v", author, got)
 		}
+	}
+}
+
+const fullCut = "# ------------------------ >8 ------------------------"
+
+// Git cuts a stored message at its full cut line when it reads trailers, so a
+// trailer before the line counts even though the text after it is kept.
+func TestTrailerBeforeAStoredScissorsLineIsStillSeen(t *testing.T) {
+	const bot = "Claude <noreply@anthropic.com>"
+	const human = "Werner Stein <claude@wstein.de>"
+	for _, line := range []string{
+		"Signed-off-by: P <p@example.test>",
+		"Co-Authored-By: Person <person@example.test>",
+		"Co-Authored-By: Claude <noreply@anthropic.com>",
+	} {
+		for _, subject := range []string{"docs: a", "Merge branch 'x'", "fixup! docs: a"} {
+			msg := subject + "\n\n" + line + "\n" + fullCut + "\n\nprose after"
+			for _, opt := range []Options{{Author: bot}, {Author: bot, Final: true}, {Author: bot, Scissors: true}} {
+				if got := Lint(msg, opt); len(got) == 0 {
+					t.Errorf("%+v: %q accepted", opt, msg)
+				}
+			}
+		}
+	}
+	// a human author keeps Signed-off-by and a person before the line
+	msg := "docs: a\n\nSigned-off-by: P <p@example.test>\nCo-Authored-By: Person <person@example.test>\n" + fullCut + "\n\nprose after"
+	if got := Lint(msg, Options{Author: human}); len(got) != 0 {
+		t.Errorf("human: %v", got)
+	}
+	// and a trailer after the line is still seen in a stored message (F2), not in hook mode
+	after := "docs: a\n\nRefs: #1\n" + fullCut + "\n\nSigned-off-by: P <p@example.test>"
+	if got := Lint(after, Options{Author: bot, Final: true}); len(got) == 0 {
+		t.Error("stored scissors hid a trailer after the line")
+	}
+	if got := Lint(after, Options{Author: bot, Scissors: true}); len(got) != 0 {
+		t.Errorf("hook mode: %v", got)
+	}
+}
+
+// Git's own trailer-block rules decide when an invalid AI line is read.
+func TestTrailerBlockFollowsGit(t *testing.T) {
+	const human = "Werner Stein <claude@wstein.de>"
+	prose := func(n int) string {
+		var b strings.Builder
+		for i := 1; i <= n; i++ {
+			fmt.Fprintf(&b, "prose %d\n", i)
+		}
+		return b.String()
+	}
+	const bad = "Assisted-by : x" // invalid whenever it is read as a trailer
+	cont := "  c1\n  c2\n  c3\n  c4\n  c5\n  c6\n  c7\n"
+	tests := []struct {
+		name, para string
+		read       bool
+	}{
+		{"signoff and six prose lines", "Signed-off-by: Q <q@example.test>\n" + prose(6) + bad, true},
+		{"signoff and seven prose lines", "Signed-off-by: Q <q@example.test>\n" + prose(7) + bad, false},
+		{"signoff and one prose line", "Signed-off-by: Q <q@example.test>\n" + prose(1) + bad, true},
+		{"cherry pick line and six prose lines", "(cherry picked from commit abc)\n" + prose(6) + bad, true},
+		{"cherry pick line and seven prose lines", "(cherry picked from commit abc)\n" + prose(7) + bad, false},
+		{"lowercase signoff is not recognised", "signed-off-by: Q <q@example.test>\n" + prose(6) + bad, false},
+		{"spaced signoff is not recognised", "Signed-off-by : Q <q@example.test>\n" + prose(6) + bad, false},
+		{"continuation lines belong to the trailer above", "Signed-off-by: Q <q@example.test>\n" + cont + bad, true},
+		{"continuation lines under prose count against", "prose\n" + cont + "Refs: #1\n" + bad, false},
+		{"prose above a signoff is not in the block", prose(8) + "Signed-off-by: Q <q@example.test>\n" + bad, true},
+		{"continuation with no line above", "\tc1\nRefs: #1\n" + bad, false},
+		{"carriage return line is blank", "prose\n\r\r\n" + bad, true},
+		{"carriage return continuation lines", "Signed-off-by: Q <q@example.test>\n" + strings.Repeat("\rc\n", 7) + bad, true},
+		{"digit token", "1x: y\n" + bad, true},
+		{"dash token", "-x: y\n" + bad, true},
+		{"no recognised prefix and one prose line", "prose\n" + bad, false},
+	}
+	for _, tc := range tests {
+		got := Lint("docs: a\n\n"+tc.para, Options{Author: human})
+		if tc.read != (len(got) != 0) {
+			t.Errorf("%s: read=%v, got %v", tc.name, tc.read, got)
+		}
+	}
+}
+
+// A bot or agent author takes no person coauthor in any shape git reads.
+func TestBotAuthorPersonCoauthorShapesGitReads(t *testing.T) {
+	const person = "Co-Authored-By: Person <person@example.test>"
+	for _, author := range []string{"ci-agent <agent@example.test>", "Claude <noreply@anthropic.com>"} {
+		for name, para := range map[string]string{
+			"cherry pick and three prose lines": "(cherry picked from commit abc)\nl1\nl2\nl3\n" + person,
+			"digit token":                       "1x: y\n" + person,
+			"dash token":                        "-x: y\n" + person,
+			"leading carriage return":           "l1\nl2\nl3\n\r" + person,
+			"carriage return line":              "l1\n\r\r\n" + person,
+			"carriage return after prose":       "l1\r\n\r\r\nl2\r\n" + person,
+			"prose around it":                   "l1\n" + person + "\nl2",
+			"spaced key":                        "co-authored-by : Person <person@example.test>",
+			"no space":                          "Co-Authored-By:Person <person@example.test>",
+			"indented":                          "Refs: #1\n  " + person,
+		} {
+			for _, subject := range []string{"docs: a", "Merge branch 'x'"} {
+				for _, opt := range []Options{{Author: author}, {Author: author, Scissors: true}} {
+					if got := Lint(subject+"\n\n"+para, opt); len(got) == 0 {
+						t.Errorf("%s/%s/%+v: accepted", author, name, opt)
+					}
+				}
+			}
+		}
+	}
+	// a human author may keep the person
+	if got := Lint("docs: a\n\nl1\nl2\n\r"+person, Options{Author: "Werner Stein <claude@wstein.de>"}); len(got) != 0 {
+		t.Errorf("human: %v", got)
+	}
+}
+
+// A signed-off line git does not read as a trailer still counts against a bot.
+func TestBotSignoffOutsideAGitTrailerBlock(t *testing.T) {
+	got := Lint("docs: a\n\nSigned-off-by : P <p@example.test>\nprose", Options{Author: "Claude <noreply@anthropic.com>"})
+	if !strings.Contains(strings.Join(got, "\n"), "Signed-off-by") {
+		t.Errorf("accepted: %v", got)
+	}
+}
+
+// Only git's full cut line ends the trailers git reads in a stored message.
+func TestAPartialCutLineDoesNotHideTrailersFromGitsReading(t *testing.T) {
+	msg := "docs: a\n\nSigned-off-by: P <p@example.test>\n# ------------------------ >8\n\nprose"
+	if got := Lint(msg, Options{Author: "Claude <noreply@anthropic.com>"}); len(got) != 0 {
+		t.Errorf("git reads the last paragraph, which holds no trailer: %v", got)
 	}
 }

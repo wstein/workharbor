@@ -30,7 +30,7 @@ var (
 	// scanKeyRe is git's own reading of a trailer line: a token, optional
 	// whitespace, a colon, optional whitespace and the value. It is looser than
 	// trailerRe, so a spaced or tabbed key cannot hide a line from the rules.
-	scanKeyRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9-]*)[ \t]*:[ \t]*(.*)$`)
+	scanKeyRe = regexp.MustCompile(`^([A-Za-z0-9-]+)[ \t]*:[ \t]*(.*)$`)
 
 	// depBotRe matches the dependency-update bots, whose generated messages
 	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
@@ -86,18 +86,26 @@ func Lint(msg string, opt Options) []string {
 		return []string{"empty commit message"}
 	}
 	subject := lines[0]
-	scan, block := scanFinalParagraph(lines)
-	var attributed []trailer
-	if block {
-		attributed = scan
+	// What git reads as trailers: in a stored message also what precedes its
+	// full cut line, because git cuts there when it reads trailers, while the
+	// rest of the message stays text for every other rule.
+	views := [][]string{lines}
+	if !opt.Scissors {
+		if cut := cleanWith(msg, func(l string) bool { return l == gitCutLine }); len(cut) != len(lines) {
+			views = append(views, cut)
+		}
 	}
-	attributionProblems := attributionProblemsFor(attributed, opt)
+	var scans []finalParagraph
+	for _, v := range views {
+		scans = append(scans, scanFinalParagraph(v))
+	}
+	attributionProblems := attributionProblemsFor(scans, opt)
 	for _, p := range exemptPrefixes {
 		if strings.HasPrefix(subject, p) {
 			// These skip the message rules, never the one about origin: a bot's
 			// "Merge ..." must not carry a Signed-off-by either.
 			problems := attributionProblems
-			if signoffByBot(scan, opt) {
+			if signoffByBot(scans, opt) {
 				problems = append(problems, fmt.Sprintf("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author))
 			}
 			if opt.Final && p != "Merge " && p != "Revert " {
@@ -163,7 +171,7 @@ func Lint(msg string, opt Options) []string {
 	if runs > 0 && tasks == 0 {
 		add("Whr-Run requires a Whr-Task trailer")
 	}
-	if signoffByBot(scan, opt) {
+	if signoffByBot(scans, opt) {
 		add("Signed-off-by certifies human origin; remove it from commits authored by %q", opt.Author)
 	}
 	return problems
@@ -173,33 +181,59 @@ func Lint(msg string, opt Options) []string {
 // trailers, including on subject-exempt commits. Human coauthors are independent
 // of AI attribution on a human's commit; a bot or agent author takes none.
 // Reserved project addresses identify AI attribution; names alone may belong
-// to humans. The message cannot prove which model actually ran.
-func attributionProblemsFor(trailers []trailer, opt Options) []string {
+// to humans. The message cannot prove which model actually ran. Attribution is
+// validated where git reads a trailer block; a person coauthor on a bot's
+// commit is refused on any line that has the shape of a trailer, so no
+// difference between git's reading and this one can hide it.
+func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
 	botAuthor := botRe.MatchString(opt.Author) && !depBotRe.MatchString(opt.Author)
 	var problems []string
-	for _, t := range trailers {
-		if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
-			problems = append(problems, fmt.Sprintf("Assisted-by: %q must be <tool>:<model-id>", t.value))
+	seen := map[string]bool{}
+	add := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			problems = append(problems, p)
 		}
-		if !strings.EqualFold(t.key, "Co-Authored-By") {
-			continue
-		}
-		m := coauthorRe.FindStringSubmatch(t.value)
-		if m == nil {
-			problems = append(problems, "Co-Authored-By must be Name <email>; AI attribution requires <tool> <model-id> <attribution-email>")
-			continue
-		}
-		name, email := m[1], strings.ToLower(m[2])
-		fields := strings.Fields(name)
-		id, ok := aiIdentities[email]
-		if !ok {
-			if botAuthor {
-				problems = append(problems, fmt.Sprintf("Co-Authored-By %q is a person; a commit authored by %q (a bot or agent) takes only AI attribution coauthors", t.value, opt.Author))
+	}
+	person := func(t trailer) {
+		add(fmt.Sprintf("Co-Authored-By %q is a person; a commit authored by %q (a bot or agent) takes only AI attribution coauthors", t.value, opt.Author))
+	}
+	for _, sc := range scans {
+		for _, t := range sc.block {
+			if strings.EqualFold(t.key, "Assisted-by") && !assistedRe.MatchString(t.value) {
+				add(fmt.Sprintf("Assisted-by: %q must be <tool>:<model-id>", t.value))
 			}
-			continue // Other identities may be legitimate human coauthors of a human's commit.
+			if !strings.EqualFold(t.key, "Co-Authored-By") {
+				continue
+			}
+			m := coauthorRe.FindStringSubmatch(t.value)
+			if m == nil {
+				add("Co-Authored-By must be Name <email>; AI attribution requires <tool> <model-id> <attribution-email>")
+				continue
+			}
+			name, email := m[1], strings.ToLower(m[2])
+			fields := strings.Fields(name)
+			id, ok := aiIdentities[email]
+			if !ok {
+				continue // Other identities may be legitimate human coauthors of a human's commit.
+			}
+			if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
+				add(fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the model name as exposed by the session or unknown", id.vendor, email))
+			}
 		}
-		if !strings.EqualFold(fields[0], id.vendor) || !modelNameRe.MatchString(strings.Join(fields[1:], " ")) {
-			problems = append(problems, fmt.Sprintf("Co-Authored-By AI attribution requires %s <model-id> <%s>; use the exact exposed model or unknown", id.vendor, email))
+		if !botAuthor {
+			continue
+		}
+		for _, t := range sc.all {
+			if !strings.EqualFold(t.key, "Co-Authored-By") {
+				continue
+			}
+			if m := coauthorRe.FindStringSubmatch(t.value); m != nil {
+				if _, ok := aiIdentities[strings.ToLower(m[2])]; ok {
+					continue
+				}
+			}
+			person(t)
 		}
 	}
 	return problems
@@ -208,31 +242,43 @@ func attributionProblemsFor(trailers []trailer, opt Options) []string {
 // signoffByBot reports a Signed-off-by line, in any shape git reads as a
 // trailer, on a commit whose author is a bot or an agent (the dependency bots
 // are exempt).
-func signoffByBot(scan []trailer, opt Options) bool {
+func signoffByBot(scans []finalParagraph, opt Options) bool {
 	if !botRe.MatchString(opt.Author) || depBotRe.MatchString(opt.Author) {
 		return false
 	}
-	for _, t := range scan {
-		if strings.EqualFold(t.key, "Signed-off-by") {
-			return true
+	for _, sc := range scans {
+		for _, t := range sc.all {
+			if strings.EqualFold(t.key, "Signed-off-by") {
+				return true
+			}
 		}
 	}
 	return false
 }
 
+// gitCutLine is the line git's own scissors cleanup cuts at.
+const gitCutLine = "# ------------------------ >8 ------------------------"
+
 // clean drops git's comment lines and, when scissors is set (the commit-msg
 // hook, where git has cleaned the message up the same way), the scissors
 // section, then trims trailing blank lines.
 func clean(msg string, scissors bool) []string {
+	return cleanWith(msg, func(l string) bool { return scissors && strings.HasPrefix(l, "# ------------------------ >8") })
+}
+
+// cleanWith drops comment lines and everything from the first line cut says
+// to cut at; whitespace at the end of a line (git's blank, too: space, tab and
+// carriage return) is trimmed.
+func cleanWith(msg string, cut func(line string) bool) []string {
 	var out []string
 	for _, l := range strings.Split(strings.ReplaceAll(msg, "\r\n", "\n"), "\n") {
-		if scissors && strings.HasPrefix(l, "# ------------------------ >8") {
+		if cut(strings.TrimRight(l, " \t\r")) || cut(l) {
 			break
 		}
 		if strings.HasPrefix(l, "#") {
 			continue
 		}
-		out = append(out, strings.TrimRight(l, " \t"))
+		out = append(out, strings.TrimRight(l, " \t\r"))
 	}
 	for len(out) > 0 && out[len(out)-1] == "" {
 		out = out[:len(out)-1]
@@ -268,35 +314,77 @@ func parseTrailers(lines []string) []trailer {
 	return out
 }
 
-// scanFinalParagraph reads the final paragraph the way git's trailer parser
-// does, leniently: every line that is not a continuation and has the shape
-// "Key <ws>: value" is returned. block says git would treat the paragraph as a
-// trailer block: every line is a trailer line, or there is a Signed-off-by line
-// and trailer lines are at least a quarter of the others (git's 25% rule).
-func scanFinalParagraph(lines []string) (found []trailer, block bool) {
+// finalParagraph is the last paragraph of a message as git's trailer parser
+// reads it. all holds every line of it that has the shape "Key <ws>: value",
+// whatever git makes of the paragraph, with leading whitespace dropped, so a
+// line git folds into the one above is seen too. block holds the trailers git
+// reads: none unless git takes the paragraph for a trailer block.
+type finalParagraph struct{ all, block []trailer }
+
+// Git's recognised prefixes: a line starting with one of them makes the
+// paragraph a trailer block even when prose shares it.
+var gitPrefixes = []string{"Signed-off-by: ", "(cherry picked from commit "}
+
+// scanFinalParagraph reads the final paragraph the way git does, walking up
+// from its last line: a line starting with whitespace belongs to the line above
+// it; a line with a token, optional whitespace and a colon (the token may begin
+// with a digit or dash) is a trailer, as is a recognised cherry-pick line; any
+// other line is prose. It is a block when it holds trailers and no prose, or
+// when, at a recognised prefix, the trailers below are at least a quarter of
+// the prose below (git's 25% rule); lines above that point are not part of it.
+func scanFinalParagraph(lines []string) finalParagraph {
 	end := len(lines)
 	start := end
 	for start > 1 && lines[start-1] != "" {
 		start--
 	}
 	if start <= 1 || start >= end {
-		return nil, false
+		return finalParagraph{}
 	}
-	var other int
-	var signed bool
+	var fp finalParagraph
 	for _, l := range lines[start:end] {
-		if strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") {
+		if m := scanKeyRe.FindStringSubmatch(strings.TrimLeft(l, " \t\r")); m != nil {
+			fp.all = append(fp.all, trailer{key: m[1], value: strings.TrimSpace(m[2])})
+		}
+	}
+	var read []trailer
+	var trailers, prose, pending int
+	for i := end - 1; i >= start; i-- {
+		l := lines[i]
+		if strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") || strings.HasPrefix(l, "\r") {
+			pending++
 			continue
 		}
 		m := scanKeyRe.FindStringSubmatch(l)
-		if m == nil {
-			other++
-			continue
+		recognised := false
+		for _, p := range gitPrefixes {
+			recognised = recognised || strings.HasPrefix(l, p)
 		}
-		found = append(found, trailer{key: m[1], value: strings.TrimSpace(m[2])})
-		if strings.EqualFold(m[1], "Signed-off-by") {
-			signed = true
+		if m != nil || recognised {
+			trailers++
+			pending = 0
+			if m != nil {
+				read = append(read, trailer{key: m[1], value: strings.TrimSpace(m[2])})
+			}
+		} else {
+			prose += 1 + pending
+			pending = 0
+		}
+		if recognised && trailers*3 >= prose {
+			fp.block = reverse(read)
+			return fp
 		}
 	}
-	return found, other == 0 || signed && len(found)*3 >= other
+	prose += pending // continuation lines with no line above them
+	if trailers > 0 && prose == 0 {
+		fp.block = reverse(read)
+	}
+	return fp
+}
+
+func reverse(ts []trailer) []trailer {
+	for i, j := 0, len(ts)-1; i < j; i, j = i+1, j-1 {
+		ts[i], ts[j] = ts[j], ts[i]
+	}
+	return ts
 }

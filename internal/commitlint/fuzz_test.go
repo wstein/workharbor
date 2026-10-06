@@ -31,6 +31,7 @@ func FuzzLint(f *testing.F) {
 	f.Add("docs: a", "Claude <noreply@anthropic.com>", true)
 	f.Add("docs: a\n# ------------------------ >8", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n# ------------------------ >8\n\nCo-Authored-By: P <p@x.org>", "Claude <noreply@anthropic.com>", false)
+	f.Add("docs: a\n\nSigned-off-by: P\n# ------------------------ >8 ------------------------\n\nx", "Claude <noreply@anthropic.com>", false)
 	f.Add("docs: a\n\nSigned-off-by:P", "Claude <noreply@anthropic.com>", false)
 	f.Fuzz(func(t *testing.T, msg, author string, final bool) {
 		opt := Options{Author: author, Final: final}
@@ -59,6 +60,18 @@ func FuzzLint(f *testing.F) {
 		person := msg + "\n\nCo-Authored-By: Someone <someone@example.org>"
 		if got := Lint(person, bot); len(got) == 0 {
 			t.Fatalf("a bot author's person coauthor was accepted after %q", msg)
+		}
+		// a trailer in front of git's full cut line counts, the text after it
+		// (a stored message keeps it) must not hide it, in either mode
+		if !strings.Contains(msg, "# ------------------------ >8") {
+			for _, trailer := range []string{"Signed-off-by: Someone <someone@example.org>", "Co-Authored-By: Someone <someone@example.org>"} {
+				before := msg + "\n\n" + trailer + "\n# ------------------------ >8 ------------------------\n\nafter"
+				for _, o := range []Options{bot, {Author: bot.Author, Final: final, Scissors: true}} {
+					if got := Lint(before, o); len(got) == 0 {
+						t.Fatalf("%+v: a trailer before the cut line was accepted after %q", o, msg)
+					}
+				}
+			}
 		}
 		// hook mode cuts at a scissors line at the start of a line, as git commit
 		// does; only then may the sign-off be hidden

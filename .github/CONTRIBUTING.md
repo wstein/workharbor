@@ -75,7 +75,7 @@ To test the pipeline before a tag, run the `release` workflow by hand (a snapsho
 AI tools are welcome, including coding agents. You remain responsible for everything you submit:
 
 - review and understand every line before you open the pull request
-- disclose the actual tool and exact exposed model (or `unknown`) with a `Co-Authored-By` trailer
+- disclose the actual tool and the model name as exposed by the session (or `unknown`) with a `Co-Authored-By` trailer
 - never add `Signed-off-by` on behalf of an agent
 - do not submit work you could not explain or that you have not run
 

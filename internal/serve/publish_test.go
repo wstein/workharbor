@@ -125,3 +125,33 @@ func TestPublishForWiresTheCommitterTheGuardAndTheWorkflow(t *testing.T) {
 		t.Errorf("a failed identity read = %v", err)
 	}
 }
+
+// The host reads a stored message: a scissors line is text there, so what
+// follows it stays visible, and git still reads the trailers before the full
+// cut line.
+func TestLintForReadsAStoredMessageWithScissorsLines(t *testing.T) {
+	t.Parallel()
+	const bot = "whr-bot <bot@example.test>"
+	const cut = "# ------------------------ >8 ------------------------"
+	lint := LintFor(config.CommitLintWorkharbor, bot)
+	for name, msg := range map[string]string{
+		"signoff after the line":    "docs: a\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
+		"signoff before the line":   "docs: a\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"person before the line":    "docs: a\n\nCo-Authored-By: P <p@example.test>\n" + cut + "\n\nprose",
+		"merge, signoff before":     "Merge branch 'x'\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+		"signoff before a partial":  "docs: a\n\nSigned-off-by: P <p@example.test>\n# ------------------------ >8\n\nprose\n\nSigned-off-by: Q <q@example.test>",
+		"signoff without a space":   "docs: a\n\nSigned-off-by:P <p@example.test>",
+		"spaced signoff key":        "docs: a\n\nSigned-off-by : P <p@example.test>",
+		"signoff next to two prose": "docs: a\n\nSigned-off-by: P <p@example.test>\nprose\nprose",
+	} {
+		if got := lint(msg); len(got) == 0 {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if got := lint("docs: a\n\nRefs: #1\n" + cut + "\n\ndiff --git"); len(got) != 0 {
+		t.Errorf("a scissors line with no trailer after it: %v", got)
+	}
+	if got := LintFor(config.CommitLintConventional, bot)("docs: a\n\n" + cut + "\n\nfixup! x"); len(got) != 0 {
+		t.Errorf("conventional: %v", got)
+	}
+}

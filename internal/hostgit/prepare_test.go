@@ -376,3 +376,28 @@ func TestPrepareRefusesATopicWithNoNewCommit(t *testing.T) {
 		t.Fatalf("Prepare = %+v, %v, want ErrNoCommits", got, err)
 	}
 }
+
+// The message Prepare lints is a stored one: a bot's Signed-off-by is caught
+// whether it sits before or after a scissors line in it.
+func TestPrepareReadsStoredMessagesWithScissorsLines(t *testing.T) {
+	t.Parallel()
+	const cut = "# ------------------------ >8 ------------------------"
+	for name, msg := range map[string]string{
+		"after":  "docs: add c\n\nRefs: #1\n" + cut + "\n\nSigned-off-by: P <p@example.test>",
+		"before": "docs: add c\n\nSigned-off-by: P <p@example.test>\n" + cut + "\n\nprose",
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := newPrep(t)
+			if err := os.WriteFile(filepath.Join(p.topic, "c.txt"), []byte("c\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			mustGit(t, p.env, p.topic, "add", "c.txt")
+			mustGit(t, p.env, p.topic, "commit", "--quiet", "--cleanup=verbatim", "-m", msg)
+			p.fetch()
+			_, err := p.repo.Prepare(context.Background(), p.spec())
+			if !errors.Is(err, ErrLint) || !strings.Contains(err.Error(), "Signed-off-by") {
+				t.Fatalf("Prepare = %v, want ErrLint naming Signed-off-by", err)
+			}
+		})
+	}
+}
