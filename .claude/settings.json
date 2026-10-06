@@ -39,6 +39,8 @@
       "Bash(gh issue:*)",
       "Bash(gh project:*)",
       "Bash(gh api graphql:*)",
+      "Bash(gh api * graphql)",
+      "Bash(gh api * graphql *)",
       "Bash(sudo:*)",
       "Bash(security:*)",
       "Bash(gh auth:*)",

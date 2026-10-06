@@ -51,6 +51,101 @@ func TestClaudeForgePermissions(t *testing.T) {
 	}
 }
 
+// ghAPIGraphQLDenyRules cover `gh api` with flags before the graphql endpoint
+// (#302). Pattern form: space-star wildcard rules, where `*` matches any
+// character sequence. Static model only; runtime enforcement is UNVERIFIED
+// unless the #274 probe covers the spelling. A prefix pattern cannot cover:
+// `gh -R x api graphql`, env prefixes (`FOO=1 gh api ...`), quoted or
+// concatenated endpoints, shell aliases/functions, `bash -c '...'` wrappers,
+// and a non-endpoint token spelled `graphql` inside an argument (over-block).
+var ghAPIGraphQLDenyRules = []string{
+	"Bash(gh api * graphql)",
+	"Bash(gh api * graphql *)",
+}
+
+// globMatch models `*` as any sequence; enough for the rules above.
+func globMatch(pattern, s string) bool {
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return pattern == s
+	}
+	if !strings.HasPrefix(s, parts[0]) {
+		return false
+	}
+	s = s[len(parts[0]):]
+	for _, mid := range parts[1 : len(parts)-1] {
+		i := strings.Index(s, mid)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(mid):]
+	}
+	return strings.HasSuffix(s, parts[len(parts)-1])
+}
+
+func TestClaudeGhAPIGraphQLFlagDeny(t *testing.T) {
+	data, err := os.ReadFile("../.claude/settings.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range ghAPIGraphQLDenyRules {
+		if !slices.Contains(settings.Permissions.Deny, rule) {
+			t.Errorf("missing deny rule %s", rule)
+		}
+	}
+	denied := func(cmd string) bool {
+		for _, r := range settings.Permissions.Deny {
+			if strings.HasPrefix(r, "Bash(gh api") && strings.HasSuffix(r, ")") {
+				pat := strings.TrimSuffix(strings.TrimPrefix(r, "Bash("), ")")
+				if strings.HasSuffix(pat, ":*") {
+					if strings.HasPrefix(cmd, strings.TrimSuffix(pat, ":*")) {
+						return true
+					}
+				} else if globMatch(pat, cmd) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, cmd := range []string{
+		"gh api graphql",
+		"gh api graphql -f query=x",
+		"gh api -X POST graphql",
+		"gh api --method POST graphql -f query=x",
+		"gh api -f query=x graphql",
+		"gh api -H 'X: y' graphql",
+		"gh api --hostname h graphql",
+	} {
+		if !denied(cmd) {
+			t.Errorf("not denied: %s", cmd)
+		}
+	}
+	for _, cmd := range []string{
+		"gh api repos/x/graphql",
+		"gh api repos/wstein/workharbor/rulesets",
+		"gh api repos/wstein/workharbor/code-scanning/alerts",
+	} {
+		if denied(cmd) {
+			t.Errorf("needlessly denied: %s", cmd)
+		}
+	}
+	for _, rule := range settings.Permissions.Allow {
+		if strings.Contains(rule, "graphql") {
+			t.Errorf("allow rule mentions graphql: %s", rule)
+		}
+	}
+}
+
 // This is a static configuration contract, not a Claude permission evaluator.
 // No fixture opens a home directory or invokes a credential command.
 func TestClaudePortablePermissions(t *testing.T) {
