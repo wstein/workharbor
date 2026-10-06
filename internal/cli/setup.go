@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -18,6 +19,8 @@ import (
 	"github.com/wstein/workharbor/internal/render"
 	rt "github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/setup"
+	"github.com/wstein/workharbor/internal/setup/answers"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 	"github.com/wstein/workharbor/internal/textsafe"
 )
 
@@ -31,6 +34,11 @@ type SetupEnv struct {
 	IsTerminal func() bool
 	Executable func() (string, error)
 	Manager    *launchd.Manager
+	// Identity is the build identity answer files are bound to; nil is
+	// answers.Identity. OpenLog opens the setup protocol of the account whose
+	// home directory is given; nil is protocol.Open. A test replaces both.
+	Identity func() (string, error)
+	OpenLog  func(home string) (*protocol.Log, error)
 }
 
 // installedPrefixes are the admin-owned places a whr may be installed (D24): the
@@ -74,16 +82,19 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 // session. Each step is a check with an optional fix, shown before it runs.
 func newSetup(st *state) *cobra.Command {
 	var (
-		dryRun   bool
-		dev      bool
-		managed  bool
-		only     []string
-		from     string
-		whrUser  string
-		prefix   string
-		plain    bool
-		verbose  bool
-		doctorOn = func(env SetupEnv, path string) []doctor.Check {
+		dryRun  bool
+		dev     bool
+		managed bool
+		only    []string
+		from    string
+		whrUser string
+		prefix  string
+		plain   bool
+		verbose bool
+		// issue #337: the answer file, saving one, and asking nothing
+		answersPath, savePath string
+		unattended            bool
+		doctorOn              = func(env SetupEnv, path string) []doctor.Check {
 			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
@@ -128,11 +139,22 @@ func newSetup(st *state) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if !dryRun && !env.IsTerminal() {
-			return usageError{"whr setup asks you questions and runs commands after your answer, so it needs a terminal: run it in one, or add --dry-run to see what it would do"}
+		if phase == doctor.PhaseHost && (answersPath != "" || savePath != "" || unattended) {
+			return usageError{"whr setup host is never answered from a file and never unattended: it changes the host with sudo, and you confirm each step yourself (--answers, --save-answers and --unattended are for `whr setup`)"}
 		}
-		if err := plainFlag("--user", whrUser); err != nil {
-			return err
+		if unattended && answersPath == "" {
+			return usageError{"--unattended needs --answers FILE: it asks nothing, and only a file can answer"}
+		}
+		if savePath != "" && dryRun {
+			return usageError{"--save-answers saves what you answer, and a dry run asks nothing"}
+		}
+		if !dryRun && !unattended && !env.IsTerminal() {
+			return usageError{"whr setup asks you questions and runs commands after your answer, so it needs a terminal: run it in one, add --dry-run to see what it would do, or give --answers FILE with --unattended"}
+		}
+		for name, v := range map[string]string{"--user": whrUser, "--answers": answersPath, "--save-answers": savePath} {
+			if err := plainFlag(name, v); err != nil {
+				return err
+			}
 		}
 		if dev && managed {
 			return usageError{"--dev and --managed cannot be combined: --dev remembers a development installation, --managed removes the memory"}
@@ -230,6 +252,12 @@ func newSetup(st *state) *cobra.Command {
 		if cmd.Flags().Changed("prefix") {
 			resume = append(resume, "--prefix", prefix)
 		}
+		if answersPath != "" {
+			resume = append(resume, "--answers", answersPath)
+		}
+		if unattended {
+			resume = append(resume, "--unattended")
+		}
 		// D49: without separation and with remote access, one explicit y that
 		// names the risk. Doctor fails on it too; nothing is enforced.
 		for _, c := range steps {
@@ -260,18 +288,60 @@ func newSetup(st *state) *cobra.Command {
 		if from == "whr-user" {
 			from = "workharbor-user"
 		}
-		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose}
+		so := setup.Options{
+			Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose,
+			Unattended: unattended, Account: env.User, Home: st.env.Getenv("HOME"),
+		}
+		if answersPath != "" {
+			f, digest, err := loadAnswers(env, answersPath, st.env.Stderr)
+			if err != nil {
+				return usageError{err.Error()}
+			}
+			if f != nil {
+				so.Answers, so.AnswersDigest = f, digest
+			}
+		}
+		if !dryRun {
+			open := env.OpenLog
+			if open == nil {
+				open = func(home string) (*protocol.Log, error) { return protocol.Open(home, nil, nil) }
+			}
+			lg, err := open(so.Home)
+			if err != nil {
+				return fmt.Errorf("cannot open the setup protocol, so nothing is run: %w", err)
+			}
+			defer func() { _ = lg.Close() }()
+			for _, w := range lg.Warnings() {
+				fmt.Fprintf(st.env.Stderr, "note: %s\n", clean(w))
+			}
+			so.Log = lg
+		}
 		outs, err := setup.Run(ctx, steps, env.Host, so)
 		reportOutcomes = outs
 		var quit *setup.QuitError
-		if errors.As(err, &quit) {
+		isQuit := errors.As(err, &quit)
+		if err != nil && !isQuit {
+			return runFailure(err)
+		}
+		var saveErr error
+		if savePath != "" {
+			saveErr = saveAnswers(env, savePath, steps, outs, st.env.Stderr)
+		}
+		if isQuit {
 			printQuit(ui, quit)
+			if saveErr != nil {
+				fmt.Fprintf(st.env.Stderr, "whr: %s\n", clean(saveErr.Error()))
+			}
 			return quitError{}
 		}
-		if err != nil {
-			return usageError{err.Error()}
-		}
 		setup.Summary(st.env.Stderr, outs, so)
+		if saveErr != nil {
+			fmt.Fprintf(st.env.Stderr, "whr: %s\n", clean(saveErr.Error()))
+			return quietError{}
+		}
+		if left := needsPerson(outs); unattended && len(left) > 0 {
+			return needsHumanError{"unattended: " + strings.Join(left, ", ") + " need a person (the answers file does not decide them); run `whr setup` in a terminal"}
+		}
 		if managed {
 			// leaving development mode: the key is gone (or was refused above), and
 			// the managed prefix is what the installation now relies on
@@ -308,6 +378,9 @@ func newSetup(st *state) *cobra.Command {
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
 		f.StringVar(&from, "from", "", "start at this step")
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
+		f.StringVar(&answersPath, "answers", "", "answer the questions of the steps this file decides (user part only; host steps, sudo and guided steps are always asked)")
+		f.StringVar(&savePath, "save-answers", "", "save your run/skip answers of this run to this file (0600; never a password, token or key)")
+		f.BoolVar(&unattended, "unattended", false, "ask nothing: run what --answers decides, leave the rest for you and exit 6 (user part only)")
 		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
 		names := func(phase doctor.Phase) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
@@ -380,4 +453,85 @@ func setupPrefixes(prefix string, dev bool) []string {
 		return []string{prefix}
 	}
 	return installedPrefixes(prefix)
+}
+
+// runFailure is the error of a run that stopped: a usage error when the wizard
+// refused the command line, the plain error when the protocol could not be
+// written.
+func runFailure(err error) error {
+	if errors.Is(err, setup.ErrUnattended) || strings.HasPrefix(err.Error(), "setup protocol:") {
+		return err
+	}
+	return usageError{err.Error()}
+}
+
+// needsPerson names the steps an unattended run left for a person.
+func needsPerson(outs []setup.Outcome) []string {
+	var left []string
+	for _, o := range outs {
+		if o.NeedsHuman {
+			left = append(left, o.Step)
+		}
+	}
+	return left
+}
+
+// loadAnswers reads the answer file the person named and says whether it may
+// be used: only a file of this build (its identity) and of the running account
+// answers; anything else is noted and every step is asked. The digest is of
+// the bytes that were read.
+func loadAnswers(env SetupEnv, path string, errW io.Writer) (*answers.File, string, error) {
+	f, data, warnings, err := answers.LoadRaw(path, os.Getuid())
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot use the answers file: %w", err)
+	}
+	for _, w := range warnings {
+		fmt.Fprintf(errW, "warning: %s\n", clean(w))
+	}
+	identity := env.Identity
+	if identity == nil {
+		identity = answers.Identity
+	}
+	id, err := identity()
+	switch {
+	case err != nil:
+		fmt.Fprintf(errW, "note: the answers file is not used, every step is asked: %s\n", clean(err.Error()))
+		return nil, "", nil
+	case f.Whr != id:
+		fmt.Fprintf(errW, "note: the answers file is not used, every step is asked: it was saved by %s and this is %s\n", clean(f.Whr), clean(id))
+		return nil, "", nil
+	case f.Account != env.User:
+		fmt.Fprintf(errW, "note: the answers file is not used, every step is asked: it is for the account %s and this is %s\n", clean(f.Account), clean(env.User))
+		return nil, "", nil
+	}
+	return &f, protocol.AnswersDigest(data), nil
+}
+
+// saveAnswers writes the run/skip decisions of this run, from the person or the
+// file, bound to this build and account.
+func saveAnswers(env SetupEnv, path string, steps []doctor.Check, outs []setup.Outcome, errW io.Writer) error {
+	var f answers.File
+	f.Account = env.User
+	for _, o := range outs {
+		if o.Decision != "" {
+			f.Answers = append(f.Answers, answers.Entry{Step: o.Step, Fix: o.Fix, Answer: o.Decision})
+		}
+	}
+	if len(f.Answers) == 0 {
+		fmt.Fprintln(errW, "note: no answers to save: only your run or skip answers to a step that a file may decide are kept")
+		return nil
+	}
+	identity := env.Identity
+	if identity == nil {
+		identity = answers.Identity
+	}
+	id, err := identity()
+	if err != nil {
+		return fmt.Errorf("answers not saved: %w", err)
+	}
+	if err := answers.SaveAs(id, path, f, steps); err != nil {
+		return fmt.Errorf("answers not saved: %w", err)
+	}
+	fmt.Fprintf(errW, "saved %d answers to %s\n", len(f.Answers), clean(path))
+	return nil
 }

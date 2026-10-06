@@ -12,6 +12,7 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
 // setupHost is a Host that runs nothing: every command is recorded.
@@ -73,6 +74,7 @@ type setupRig struct {
 	host *setupHost
 	env  SetupEnv
 	exe  string
+	home string // where the setup protocol of the rig is written
 }
 
 func newSetupRig(t *testing.T) *setupRig {
@@ -89,8 +91,10 @@ func newSetupRig(t *testing.T) *setupRig {
 		t.Fatal(err)
 	}
 	r := &setupRig{t: t, host: &setupHost{outputs: map[string]string{}}, exe: exe}
+	r.home = filepath.Join(dir, "home")
 	r.env = SetupEnv{
-		Host: r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
+		OpenLog: func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
+		Host:    r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
 		Executable: func() (string, error) { return exe, nil },
 		Manager:    &launchd.Manager{R: aquaOnly{"Aqua"}, UID: 501, GOOS: "darwin"},
 	}

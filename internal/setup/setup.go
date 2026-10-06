@@ -13,12 +13,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup/answers"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 	"github.com/wstein/workharbor/internal/textsafe"
 )
 
@@ -99,6 +102,29 @@ type Options struct {
 	// zero value is plain ASCII. Verbose adds the raw text of the tools.
 	Style   render.Style
 	Verbose bool
+
+	// Answers is the answer file of a user-phase run (issue #337); nil asks
+	// every step. A host-phase run never uses one, whatever it is given: the
+	// file answers only the outer "Ready to run this?" question of an eligible
+	// step (answers.Eligible), never a prompt a fix asks. AnswersDigest is the
+	// digest of the file's bytes (protocol.AnswersDigest).
+	Answers       *answers.File
+	AnswersDigest string
+	// Unattended asks nothing: a step the file does not answer is left for a
+	// person (Outcome.NeedsHuman), and a fix that would ask a value fails. The
+	// command refuses it for the host phase.
+	Unattended bool
+	// Log gets the setup protocol of the run; nil writes none. A failure to
+	// write it stops the run (a dry run writes none). Account is the account
+	// running it and Home its home directory, shown as ~ in the logged flags.
+	Log     Recorder
+	Account string
+	Home    string
+}
+
+// Recorder is where the setup protocol is written: *protocol.Log.
+type Recorder interface {
+	Append(e protocol.Entry) error
 }
 
 // Outcome is what became of one step.
@@ -113,6 +139,13 @@ type Outcome struct {
 	UseUser string
 	// Todo is what the person has to do for a step that is left.
 	Todo render.TodoItem
+	// NeedsHuman: an unattended run left the step for a person to do.
+	NeedsHuman bool
+	// Decision is the answer (answers.Run or answers.Skip) the run took for the
+	// step's outer prompt, from the person or from the answers file, and Fix the
+	// digest of its fix: what --save-answers saves. Both are empty when the step
+	// was not decided that way, or was asked again.
+	Decision, Fix string
 }
 
 // Select returns the steps to run: those of the phase, from --from on, or only
@@ -174,22 +207,41 @@ func contains(list []string, v string) bool {
 // With DryRun the checks still run, for real, and the fixes are only printed.
 // Each step prints its header, one report line (the reason once), and for a fix
 // the ACTION and the commands; the raw text of a tool only with Verbose. When
-// the person answers q, Run returns what it did so far and a *QuitError.
+// the person answers q, Run returns what it did so far and a *QuitError. With
+// o.Log it writes the setup protocol: run.start, per step step.before (before
+// its fix runs) and step.after, run.end; a failed write stops the run.
 func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcome, error) {
 	chosen, err := Select(steps, o)
 	if err != nil {
 		return nil, err
 	}
+	if o.Phase == doctor.PhaseHost {
+		o.Answers, o.AnswersDigest = nil, "" // the host phase is never answered from a file
+	}
+	if o.DryRun {
+		o.Log = nil // nothing is changed, so nothing is recorded
+	}
 	ui := render.Writer{W: o.Err, S: o.Style}
 	if len(chosen) > 0 {
 		ui.Legend()
 	}
+	rc := &recorder{log: o.Log, account: o.Account, phase: o.Phase}
+	start := protocol.Entry{Event: protocol.EventRunStart, Source: protocol.SourceInteractive, Flags: protocol.Flags(o.Resume, o.Home)}
+	if o.Answers != nil {
+		start.Source, start.Answers = protocol.SourceAnswers, o.AnswersDigest
+	}
+	if err := rc.add(start); err != nil {
+		return nil, err
+	}
+	rn := &runner{h: h, p: h, o: o, ui: ui, rc: rc}
+	if o.Unattended {
+		rn.p = noPrompt{h}
+	}
 	var outs []Outcome
-	sudoReady := false
 	provided := map[string]bool{} // services a step has brought up or found running
 	for i, s := range chosen {
 		if err := ctx.Err(); err != nil {
-			return outs, err
+			return rc.finish(outs, protocol.RunInterrupted, err)
 		}
 		title := s.Title
 		if title == "" {
@@ -203,8 +255,23 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		if s.UseUser != nil {
 			out.UseUser = s.UseUser(st)
 		}
+		after := func(outcome string, exit *int, ran [][]string) error {
+			e := protocol.Entry{Event: protocol.EventStepAfter, Step: s.Name, Outcome: outcome, Status: string(out.Status), Exit: exit}
+			if ran != nil {
+				e.Ran = protocol.RanDigest(ran)
+			}
+			return rc.add(e)
+		}
+		stop := func(err error) ([]Outcome, error) { return rc.finish(outs, protocol.RunError, err) }
 		if st == doctor.Warn && !s.FixOnWarn || st == doctor.Skipped {
 			outs = append(outs, out)
+			outcome := protocol.OutWarnAccepted
+			if st == doctor.Skipped {
+				outcome = protocol.OutSkipped
+			}
+			if err := after(outcome, nil, nil); err != nil {
+				return stop(err)
+			}
 			continue
 		}
 		if st == doctor.OK {
@@ -212,12 +279,18 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				provided[s.Provides] = true
 			}
 			outs = append(outs, out)
+			if err := after(protocol.OutAlreadyDone, nil, nil); err != nil {
+				return stop(err)
+			}
 			continue
 		}
 		out.Todo = todoFor(title, s.Fix)
 		if s.Fix == nil {
 			ui.Report(render.LevelNotVerified, "whr has no fix for this step")
 			outs = append(outs, out)
+			if err := after(protocol.OutNoFix, nil, nil); err != nil {
+				return stop(err)
+			}
 			continue
 		}
 		showFix(ui, s.Fix)
@@ -225,19 +298,32 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			ui.Report(render.LevelSkipped, fmt.Sprintf("not run: it needs %s, which no step before it brought up", s.Needs))
 			out.Asked = true
 			outs = append(outs, out)
+			if err := after(protocol.OutNotRun, nil, nil); err != nil {
+				return stop(err)
+			}
 			continue
 		}
 		if o.DryRun {
 			if f := s.Fix; f.Guide != "" && hasCommands(f) {
 				ui.Action("what happens next: " + oneLine(f.Guide))
 			}
-			ui.Report(render.LevelSkipped, "dry run: nothing is run")
+			ui.Report(render.LevelSkipped, "dry run: nothing is run"+rn.dryRunQuestion(s, out))
 			out.Asked = true
 			outs = append(outs, out)
 			continue
 		}
-		fixed, err := apply(ctx, h, s, o, ui, &sudoReady)
+		res, err := rn.apply(ctx, s, &out)
+		var fatal fatalError
+		if errors.As(err, &fatal) {
+			return stop(fatal.err)
+		}
 		if errors.Is(err, render.ErrQuit) {
+			if e := after(protocol.OutQuit, res.exit, res.ran); e != nil {
+				return stop(e)
+			}
+			if _, e := rc.finish(nil, protocol.RunQuit, nil); e != nil {
+				return outs, e
+			}
 			return outs, &QuitError{Step: s.Name, Resume: nextCommand(o, s.Name, names(chosen[i:]))}
 		}
 		if err != nil {
@@ -247,11 +333,20 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				ui.Tool(tool)
 			}
 		}
-		out.Asked = !fixed
-		if fixed {
+		out.Asked = !res.fixed
+		out.NeedsHuman = res.outcome == protocol.OutNeedsHuman
+		if res.decision != "" {
+			out.Decision, out.Fix = res.decision, answers.FixDigest(s)
+		}
+		outcome := res.outcome
+		if res.fixed {
 			st, detail = s.Run(ctx)
 			out.Status, out.Detail = st, detail
 			out.Fixed = st == doctor.OK
+			outcome = protocol.OutNotFixed
+			if out.Fixed {
+				outcome = protocol.OutFixed
+			}
 			if out.Fixed && s.Provides != "" {
 				provided[s.Provides] = true
 			}
@@ -259,8 +354,117 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			report(ui, o, st, detail)
 		}
 		outs = append(outs, out)
+		var ran [][]string
+		if res.fixed || outcome == protocol.OutFixFailed || outcome == protocol.OutInterrupted {
+			ran = res.ran
+			if ran == nil {
+				ran = [][]string{}
+			}
+		}
+		if err := after(outcome, res.exit, ran); err != nil {
+			return stop(err)
+		}
 	}
-	return outs, nil
+	end := protocol.RunDone
+	for _, out := range outs {
+		switch {
+		case out.NeedsHuman:
+			end = protocol.RunNeedsHuman
+		case (out.Status == doctor.Fail || out.Status == doctor.NotVerified) && end == protocol.RunDone:
+			end = protocol.RunLeft
+		}
+	}
+	return rc.finish(outs, end, nil)
+}
+
+// recorder writes the setup protocol; with no log it does nothing.
+type recorder struct {
+	log     Recorder
+	account string
+	phase   doctor.Phase
+}
+
+func (r *recorder) add(e protocol.Entry) error {
+	if r.log == nil {
+		return nil
+	}
+	e.Account, e.Cmd, e.Phase = r.account, protocol.CmdSetup, string(r.phase)
+	if err := r.log.Append(e); err != nil {
+		return fatalError{fmt.Errorf("setup protocol: %w", err)}
+	}
+	return nil
+}
+
+// finish writes run.end and returns outs with err, or with the failure to write
+// it when there is no other error. A log that is already broken is not written.
+func (r *recorder) finish(outs []Outcome, outcome string, err error) ([]Outcome, error) {
+	if r.log == nil || errors.Is(err, protocol.ErrBroken) {
+		return outs, unwrapFatal(err)
+	}
+	if e := r.add(protocol.Entry{Event: protocol.EventRunEnd, Outcome: outcome}); e != nil && err == nil {
+		err = e
+	}
+	return outs, unwrapFatal(err)
+}
+
+// fatalError is a failure of the protocol: the run stops, a step does not fail.
+type fatalError struct{ err error }
+
+func (e fatalError) Error() string { return e.err.Error() }
+func (e fatalError) Unwrap() error { return e.err }
+
+func unwrapFatal(err error) error {
+	var f fatalError
+	if errors.As(err, &f) {
+		return f.err
+	}
+	return err
+}
+
+// ErrUnattended is what a prompt answers in an unattended run.
+var ErrUnattended = errors.New("this needs a person, and --unattended asks nothing")
+
+// noPrompt is the Prompter of an unattended run: every question fails.
+type noPrompt struct{ Host }
+
+func (noPrompt) Line(string) (string, error)   { return "", ErrUnattended }
+func (noPrompt) Secret(string) (string, error) { return "", ErrUnattended }
+func (noPrompt) Confirm(string) (bool, error)  { return false, ErrUnattended }
+
+// runner is what applying a fix needs of one run.
+type runner struct {
+	h         Host
+	p         doctor.Prompter // what a fix's Build and Do ask through
+	o         Options
+	ui        render.Writer
+	rc        *recorder
+	sudoReady bool
+}
+
+// dryRunQuestion says, in a dry run with answers or --unattended, what would
+// become of the step's question.
+func (r *runner) dryRunQuestion(s doctor.Check, out Outcome) string {
+	if r.o.Answers == nil && !r.o.Unattended {
+		return ""
+	}
+	if r.o.Answers != nil && r.o.Phase == doctor.PhaseUser && out.UseUser == "" && hasCommands(s.Fix) {
+		if a, ok := r.o.Answers.Lookup(s); ok {
+			if a == answers.Skip {
+				return "; the answers file says skip: it would be skipped"
+			}
+			return "; the answers file says run: it would run without asking (commands that a builder returns and that use sudo are asked first)"
+		}
+	}
+	why := "the answers file has no matching answer (a new or changed command)"
+	if ok, reason := answers.Eligible(s); !ok {
+		why = reason
+	} else if r.o.Answers == nil {
+		why = "no answers file"
+	}
+	if r.o.Unattended {
+		return "; the question stays open and --unattended leaves the step for you: " + why
+	}
+	return "; the question stays open: " + why
 }
 
 // report prints a step's result once: its reason, and the raw text of the tool
@@ -460,83 +664,227 @@ func QuoteArgv(argv []string) string {
 	return strings.Join(parts, " ")
 }
 
-// apply asks, then runs the fix. It returns whether a fix ran (so the check is
-// worth running again) and what stopped it; render.ErrQuit when the person
-// answered q.
-func apply(ctx context.Context, h Host, s doctor.Check, o Options, ui render.Writer, sudoReady *bool) (bool, error) {
-	f := s.Fix
-	yes := func(question string, d render.Default) (bool, error) {
-		a, err := Ask(h, question, d)
-		if err != nil {
-			return false, err
+// applied is what apply did.
+type applied struct {
+	fixed   bool       // a fix ran, so the check is worth running again
+	outcome string     // the protocol outcome when it did not (declined, needs_human, fix_failed ...)
+	exit    *int       // the exit status of the last command, when one ran
+	ran     [][]string // the argument vectors that ran, sudo included
+	// decision is the answer of the outer prompt that --save-answers may keep:
+	// from the person or the file, and not one the wizard had to ask again.
+	decision string
+}
+
+// apply decides, then runs the fix. It returns what it did and what stopped it:
+// render.ErrQuit when the person answered q, a fatalError when the protocol
+// could not be written, any other error for a fix that failed.
+//
+// The answers file replaces only the outer "Ready to run this?" prompt of an
+// eligible user-phase step whose check just ran (Lookup is called here, after
+// s.Run and before any other Run); the prompts a fix asks and "Open it now?"
+// stay interactive. A decision from the file is not taken for a step that names
+// another account to use, and not for a sudo command a builder returns: those
+// are asked.
+func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res applied, err error) {
+	f, ui, o := s.Fix, r.ui, r.o
+	fix := answers.FixDigest(s)
+	before := func(answer, source string) error {
+		e := protocol.Entry{Event: protocol.EventStepBefore, Step: s.Name, Fix: fix, Answer: answer, Source: source, Status: string(out.Status)}
+		if source == protocol.SourceAnswers {
+			e.Answers = o.AnswersDigest
 		}
-		if a == render.Quit {
+		return r.rc.add(e)
+	}
+	defer func() {
+		if err != nil && res.outcome == "" && !errors.Is(err, render.ErrQuit) {
+			res.outcome = protocol.OutFixFailed
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				res.outcome = protocol.OutInterrupted
+			}
+		}
+	}()
+	// decide records an answer of the outer prompt and says whether to go on.
+	decide := func(a render.Answer, source string) (bool, error) {
+		switch a {
+		case render.Quit:
+			if err := before(protocol.AnswerQuit, source); err != nil {
+				return false, err
+			}
 			return false, render.ErrQuit
+		case render.No:
+			res.outcome = protocol.OutDeclined
+			return false, before(protocol.AnswerSkip, source)
 		}
-		return a == render.Yes, nil
+		return true, before(protocol.AnswerRun, source)
 	}
 	if !hasCommands(f) { // guided: for what a command line cannot do
-		if f.Open != "" {
-			if ok, err := yes("Open it now?", render.DefaultYes); err != nil {
+		if err := before(protocol.AnswerNone, protocol.SourceNone); err != nil {
+			return res, err
+		}
+		if o.Unattended {
+			res.outcome = protocol.OutNeedsHuman
+			ui.Report(render.LevelSkipped, "left for you: --unattended asks nothing")
+			return res, nil
+		}
+		yes := func(question string) (bool, error) {
+			a, err := Ask(r.h, question, render.DefaultYes)
+			if err != nil {
 				return false, err
+			}
+			if a == render.Quit {
+				return false, render.ErrQuit
+			}
+			return a == render.Yes, nil
+		}
+		if f.Open != "" {
+			if ok, err := yes("Open it now?"); err != nil {
+				return res, err
 			} else if ok {
-				if err := h.Open(ctx, f.Open); err != nil {
+				if err := r.h.Open(ctx, f.Open); err != nil {
 					ui.Report(render.LevelFail, "could not open it: "+oneLine(err.Error()))
 				}
 			}
 		}
-		done, err := yes("Done with this step? The check runs again.", render.DefaultYes)
-		return done && err == nil, err
+		done, err := yes("Done with this step? The check runs again.")
+		res.fixed = done && err == nil
+		if !res.fixed && err == nil {
+			res.outcome = protocol.OutDeclined
+		}
+		return res, err
 	}
 	d := render.DefaultYes
 	if f.Irreversible { // it cannot be undone: Enter is no
 		d = render.DefaultNo
 	}
-	ok, err := yes("Ready to run this?", d)
-	if err != nil || !ok {
-		return false, err
+	source := protocol.SourceInteractive
+	var ans string
+	if o.Phase == doctor.PhaseUser && o.Answers != nil && out.UseUser == "" {
+		if a, ok := o.Answers.Lookup(s); ok {
+			ans, source = a, protocol.SourceAnswers
+		}
+	}
+	switch {
+	case source == protocol.SourceAnswers:
+		if ans == answers.Skip {
+			res.outcome, res.decision = protocol.OutDeclined, ans
+			return res, before(protocol.AnswerSkip, source)
+		}
+		res.decision = ans
+		if err := before(protocol.AnswerRun, source); err != nil {
+			return res, err
+		}
+	case o.Unattended:
+		res.outcome = protocol.OutNeedsHuman
+		ui.Report(render.LevelSkipped, "left for you: no answer in the file, and --unattended asks nothing")
+		return res, before(protocol.AnswerNone, protocol.SourceNone)
+	default:
+		a, err := Ask(r.h, "Ready to run this?", d)
+		if err != nil {
+			res.outcome = protocol.OutNotRun
+			if e := before(protocol.AnswerNone, protocol.SourceNone); e != nil {
+				return res, e
+			}
+			return res, err
+		}
+		switch a {
+		case render.Yes:
+			res.decision = answers.Run
+		case render.No:
+			res.decision = answers.Skip
+		}
+		if ok, err := decide(a, source); err != nil || !ok {
+			return res, err
+		}
 	}
 	if f.Guide != "" {
 		ui.Action("what happens next: " + oneLine(f.Guide))
 	}
-	if o.Phase == doctor.PhaseHost && !*sudoReady && usesSudo(f) {
+	if o.Phase == doctor.PhaseHost && !r.sudoReady && usesSudo(f) && source != protocol.SourceAnswers {
 		// One sudo -v, no background refresh: root stays reachable only while the
 		// human is here, and sudo asks again if it expires.
 		ui.Action("sudo asks for your password once, so the commands above need it only once (no background refresh)")
 		ui.Command("sudo -v")
-		if err := h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
-			return false, fmt.Errorf("sudo did not accept the password: %w", err)
+		if err := r.h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
+			return res, fmt.Errorf("sudo did not accept the password: %w", err)
 		}
-		*sudoReady = true
+		r.sudoReady = true
 	}
 	if f.Do != nil {
-		if err := f.Do(ctx, h); err != nil {
-			return false, err
+		if err := f.Do(ctx, r.p); err != nil {
+			return res, err
 		}
 	}
 	cmds := f.Cmds
 	if f.Build != nil {
 		var err error
-		if cmds, err = f.Build(ctx, h); err != nil {
-			return false, err
+		if cmds, err = f.Build(ctx, r.p); err != nil {
+			return res, err
 		}
 		for _, c := range cmds { // the real commands, shown before they run
 			ui.Command(QuoteArgv(c.Full()))
 		}
+		if source == protocol.SourceAnswers && anySudo(cmds) {
+			// the digest does not cover what a builder returns: a file never
+			// decides sudo, so ask again
+			res.decision = ""
+			if o.Unattended {
+				res.outcome = protocol.OutNeedsHuman
+				ui.Report(render.LevelSkipped, "left for you: the commands use sudo, which no file decides, and --unattended asks nothing")
+				return res, nil
+			}
+			ui.Report(render.LevelSkipped, "the answers file does not decide commands that use sudo: you are asked")
+			a, err := Ask(r.h, "Ready to run these commands?", d)
+			if err != nil {
+				return res, err
+			}
+			if ok, err := decide(a, protocol.SourceInteractive); err != nil || !ok {
+				return res, err
+			}
+		}
 	}
 	for _, c := range cmds {
-		if err := h.Run(ctx, c); err != nil {
-			return false, fmt.Errorf("%s failed: %w", QuoteArgv(c.Full()), err)
+		res.ran = append(res.ran, append([]string(nil), c.Full()...))
+		if err := r.h.Run(ctx, c); err != nil {
+			res.exit = exitStatus(err)
+			return res, fmt.Errorf("%s failed: %w", QuoteArgv(c.Full()), err)
+		}
+		zero := 0
+		res.exit = &zero
+	}
+	res.fixed = true
+	if f.Guide != "" && f.Open != "" && !o.Unattended {
+		a, err := Ask(r.h, "Open the page that helps with the rest?", render.DefaultYes)
+		if err != nil {
+			return res, err
+		}
+		if a == render.Quit {
+			return res, render.ErrQuit
+		}
+		if a == render.Yes {
+			_ = r.h.Open(ctx, f.Open)
 		}
 	}
-	if f.Guide != "" && f.Open != "" {
-		if ok, err := yes("Open the page that helps with the rest?", render.DefaultYes); err != nil {
-			return true, err
-		} else if ok {
-			_ = h.Open(ctx, f.Open)
+	return res, nil
+}
+
+func anySudo(cmds []doctor.Cmd) bool {
+	for _, c := range cmds {
+		if c.Sudo {
+			return true
 		}
 	}
-	return true, nil
+	return false
+}
+
+// exitStatus is the exit status of a command that failed, nil when the error
+// carries none (it did not start, or a signal ended it).
+func exitStatus(err error) *int {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() >= 0 {
+		n := ee.ExitCode()
+		return &n
+	}
+	return nil
 }
 
 func usesSudo(f *doctor.Fix) bool {
