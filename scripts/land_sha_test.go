@@ -202,7 +202,7 @@ func TestLandShortSHA(t *testing.T) {
 		for _, tc := range []struct{ sha, msg string }{
 			{sha[:6], "7 to 40"},
 			{"", "7 to 40"},
-			{strings.ToUpper(sha[:9]), "7 to 40"},
+			{upperRefusalInput(sha), "7 to 40"},
 			{"topic", "7 to 40"},
 			{"HEAD", "7 to 40"},
 			{"abcdef1", "unknown SHA"},
@@ -605,5 +605,27 @@ func TestLandFullSHAResolves(t *testing.T) {
 	}
 	if got := r.git(r.dir, "rev-parse", "main"); got != sha {
 		t.Fatalf("main = %s, want %s", got, sha)
+	}
+}
+
+// upperRefusalInput returns a 9-character uppercase hex-looking SHA that is
+// guaranteed to differ from its lowercase form. strings.ToUpper(sha[:9]) alone
+// is a no-op when the random SHA prefix is all digits (CI run 37536740758),
+// which turned the "uppercase is refused" row into a valid SHA.
+func upperRefusalInput(sha string) string {
+	return strings.ToUpper("a" + sha[:8])
+}
+
+func TestUpperRefusalInputIsNeverDigitsOnly(t *testing.T) {
+	for _, sha := range []string{
+		"123456789012345678901234567890123456789a",
+		strings.Repeat("0", 40),
+		strings.Repeat("9", 40),
+		"abcdef0123456789abcdef0123456789abcdef01",
+	} {
+		got := upperRefusalInput(sha)
+		if got == strings.ToLower(got) || got != strings.ToUpper(got) || len(got) != 9 {
+			t.Errorf("upperRefusalInput(%q) = %q: not a 9-char uppercase string with a letter", sha, got)
+		}
 	}
 }
