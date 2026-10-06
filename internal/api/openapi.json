@@ -2811,6 +2811,25 @@
           },
           "session_id": {
             "type": "string"
+          },
+          "terminal_reason": {
+            "type": "string",
+            "enum": [
+              "agent_completion",
+              "human_cancellation",
+              "budget_breach",
+              "kill_all",
+              "lost_environment",
+              "failed_start",
+              "failed_resume",
+              "agent_failure"
+            ],
+            "description": "Immutable initiating terminal reason; absent for an unfinished run or unknown legacy reason. Cleanup warnings are separate."
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Supervisor elapsed lifetime high-water mark in milliseconds, including pause and downtime. Absent when duration bounds are unknown."
           }
         }
       },

@@ -154,6 +154,10 @@ func newUsage(s *state) *cobra.Command {
 // they, not the notional cost, limit the human; then one row per group and auth
 // mode, with the cost labelled as the agent's own report.
 func printUsage(w io.Writer, rep usageReport) error {
+	if len(rep.Rows) == 0 {
+		_, err := fmt.Fprintln(w, "usage: tokens unknown; cost unknown (no reports)")
+		return err
+	}
 	subscription := false
 	for _, r := range rep.Rows {
 		subscription = subscription || r.Notional
@@ -203,6 +207,12 @@ func printUsage(w io.Writer, rep usageReport) error {
 			cache = fmt.Sprintf("%.0f%%", *r.CacheShare*100)
 		}
 		var unknown []string
+		if r.TurnsWithoutTokens > 0 && r.TurnsWithoutTokens < r.Turns {
+			unknown = append(unknown, "partial token subtotal")
+		}
+		if r.TurnsWithoutCost > 0 && r.TurnsWithoutCost < r.Turns {
+			cost += " (partial)"
+		}
 		if r.TurnsWithoutTokens > 0 {
 			unknown = append(unknown, fmt.Sprintf("%d turn(s) without tokens", r.TurnsWithoutTokens))
 		}

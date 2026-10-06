@@ -547,6 +547,7 @@ func (w *Workspaces) saveStartingRun(ctx context.Context, ws domain.Workspace, a
 		if err := w.svc.checkNotHeld(ws.EnvID); err != nil { // read after the run check: see HoldEnvironment
 			return err
 		}
+		agg.StampRunBounds(w.svc.clock.Now())
 		saved, err = tx.SaveTask(ctx, agg)
 		return err
 	})
@@ -762,6 +763,10 @@ func unionHosts(a, b []string) []string {
 // brought up to date. It is the second half of launch: the run is saved, and the
 // egress requests, if any, are answered.
 func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws domain.Workspace, a domain.Agent, prompt string, sl *slot, env RepoEnvironment) error {
+	if err := w.svc.durationAdmission(ctx, task, run); err != nil {
+		w.svc.end(run, sl)
+		return err
+	}
 	agg, err := w.svc.store.LoadTask(ctx, task)
 	if err != nil {
 		w.svc.end(run, sl)
@@ -803,6 +808,10 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 	// The session outlives this start (the agent runs for hours): it gets a
 	// context that is never cancelled by Cancel of the start; Shutdown and a stop
 	// end it. A cancel that came while the agent was starting stops it at once.
+	if err := w.svc.durationAdmission(ctx, task, run); err != nil {
+		w.svc.end(run, sl)
+		return err
+	}
 	sess, err := w.svc.ag.Start(context.WithoutCancel(ctx), spec)
 	if err != nil {
 		return w.abortStart(ctx, task, run, sl, err)

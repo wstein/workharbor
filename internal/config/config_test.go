@@ -494,3 +494,24 @@ func mustFail(t *testing.T, r *rig) error {
 	}
 	return err
 }
+
+func TestDurationBudgetValidation(t *testing.T) {
+	for _, v := range []string{"", "0", "0s", "1ms", "1.5s", "24h"} {
+		t.Run("valid="+v, func(t *testing.T) {
+			r := newRig(t)
+			r.cfg.Budgets.PerRun.MaxDuration = v
+			if _, err := r.parse(t); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for _, v := range []string{"-1s", "oops", "1ns", "1.0001ms", "999999999999999999999h"} {
+		t.Run("invalid="+v, func(t *testing.T) {
+			r := newRig(t)
+			r.cfg.Budgets.PerTask.MaxDuration = v
+			if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "max_duration") {
+				t.Fatalf("invalid duration accepted: %v", err)
+			}
+		})
+	}
+}

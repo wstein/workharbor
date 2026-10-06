@@ -99,9 +99,22 @@ func usageRowOf(r service.UsageRow, key string, link string) usageRowView {
 	if r.TurnsWithoutToken == r.Turns {
 		in, out = "-", "-"
 	}
+	if r.TurnsWithoutToken > 0 && r.TurnsWithoutToken < r.Turns {
+		in += " (partial)"
+		out += " (partial)"
+		label += fmt.Sprintf("; %d turns without tokens", r.TurnsWithoutToken)
+	}
+	if r.TurnsWithoutCost > 0 && r.TurnsWithoutCost < r.Turns {
+		cost += " (partial)"
+		label += fmt.Sprintf("; %d turns without cost", r.TurnsWithoutCost)
+	}
+	cacheRead, cacheWrite := service.Compact(r.Tokens.CacheRead), service.Compact(r.Tokens.CacheWrite)
+	if r.TurnsWithoutToken == r.Turns {
+		cacheRead, cacheWrite = "-", "-"
+	}
 	return usageRowView{
 		Key: key, Auth: r.Auth, Turns: fmt.Sprint(r.Turns), Runs: fmt.Sprint(r.Runs), In: in, Out: out,
-		CacheRead: service.Compact(r.Tokens.CacheRead), CacheWrite: service.Compact(r.Tokens.CacheWrite), Cache: cache,
+		CacheRead: cacheRead, CacheWrite: cacheWrite, Cache: cache,
 		Cost: cost, Label: label, APITime: duration(r.APIMillis), WallTime: duration(r.WallMillis), Link: link,
 	}
 }

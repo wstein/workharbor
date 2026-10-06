@@ -73,7 +73,7 @@ func (s *Service) KillAll(ctx context.Context, actor string) (KillReport, error)
 		}
 	}
 	for _, t := range tasks {
-		if err := s.cancel(ctx, t.ID, stopped[t.ID]); err != nil {
+		if err := s.cancelReason(ctx, t.ID, stopped[t.ID], "kill_all"); err != nil {
 			rep.Problems = append(rep.Problems, fmt.Sprintf("cancel task %s: %v", t.ID, err))
 			continue
 		}

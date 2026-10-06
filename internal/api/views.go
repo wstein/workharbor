@@ -33,11 +33,13 @@ func summaries(in []store.TaskSummary) []taskSummaryView {
 }
 
 type runView struct {
-	ID        string `json:"id"`
-	AgentID   string `json:"agent_id,omitempty"`
-	EnvID     string `json:"env_id"`
-	State     string `json:"state"`
-	SessionID string `json:"session_id,omitempty"`
+	TerminalReason string `json:"terminal_reason,omitempty"`
+	DurationMillis *int64 `json:"duration_ms,omitempty"`
+	ID             string `json:"id"`
+	AgentID        string `json:"agent_id,omitempty"`
+	EnvID          string `json:"env_id"`
+	State          string `json:"state"`
+	SessionID      string `json:"session_id,omitempty"`
 }
 
 type decisionView struct {
@@ -138,7 +140,12 @@ func taskOf(v service.TaskView) taskView {
 		out.AgentMayRun = append(out.AgentMayRun, agentMayRunView{string(n.RunID), string(n.EnvID), n.Path, n.Error})
 	}
 	for _, r := range v.Runs {
-		out.Runs = append(out.Runs, runView{ID: string(r.ID), AgentID: string(r.AgentID), EnvID: string(r.EnvID), State: string(r.State), SessionID: r.SessionID})
+		var elapsed *int64
+		if !r.AdmittedAt.IsZero() {
+			n := r.DurationMillis
+			elapsed = &n
+		}
+		out.Runs = append(out.Runs, runView{TerminalReason: r.TerminalReason, DurationMillis: elapsed, ID: string(r.ID), AgentID: string(r.AgentID), EnvID: string(r.EnvID), State: string(r.State), SessionID: r.SessionID})
 	}
 	for _, d := range v.Open {
 		out.Open = append(out.Open, decisionOf(d))

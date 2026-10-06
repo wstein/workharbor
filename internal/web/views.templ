@@ -219,7 +219,7 @@ templ usageSection(c *usageCard) {
 			}
 		}
 		if len(c.Total) == 0 {
-			<p class="muted">No agent reported usage in this period.</p>
+			<p class="muted">Tokens and cost unknown: no agent reported usage in this period.</p>
 		} else {
 			<div class="scroll">
 				<table class="usage">
@@ -480,6 +480,9 @@ templ taskView(p taskPage) {
 				<a href={ templ.SafeURL(p.PRURL) } rel="noreferrer">pull request</a>
 			}
 		</p>
+		for _, r := range p.Runs {
+			<p class="muted">Run { r }</p>
+		}
 		for _, n := range p.AgentMayRun {
 			<section class="card" aria-label="Agent stop warning">
 				<strong>Agent may still run</strong>

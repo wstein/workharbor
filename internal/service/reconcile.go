@@ -34,6 +34,7 @@ type Report struct {
 // Container addresses are read for nothing and never stored.
 func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 	var rep Report
+	rep.Errors = append(rep.Errors, s.sweepDurations(ctx)...)
 	infos, err := s.rt.List(ctx, s.cfg.Owner)
 	if err != nil {
 		return rep, fmt.Errorf("reconcile: list environments: %w", err)
@@ -188,6 +189,9 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 	if !ok || (r.State != domain.RunInterrupted && r.State != domain.RunPaused) {
 		return nil
 	}
+	if err := s.durationAdmission(ctx, task, run); err != nil {
+		return err
+	}
 	// A workspace being rebuilt has its environment replaced: the old one is not
 	// started for this run. The next pass takes it up, in the new one or not.
 	if s.rebuilding(r.WorkspaceID) {
@@ -282,6 +286,10 @@ var errAttemptsUsedUp = errors.New("the run's launch attempts are used up")
 // counted; when the attempts are used up errAttemptsUsedUp is returned and the
 // caller fails the run. A session the agent forgot is ErrNoSession.
 func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) error {
+	if err := s.durationAdmission(ctx, task, run); err != nil {
+		s.end(run, sl)
+		return err
+	}
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
 		s.end(run, sl)
@@ -320,6 +328,10 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 	}
 	// The session outlives the call that starts it: an answer to a Decision comes
 	// in on a request that ends long before the agent does.
+	if err := s.durationAdmission(ctx, task, run); err != nil {
+		s.end(run, sl)
+		return err
+	}
 	sess, err := s.ag.Resume(context.WithoutCancel(ctx), spec, r.SessionID)
 	if err != nil {
 		s.end(run, sl)
@@ -388,7 +400,12 @@ func (s *Service) failRun(ctx context.Context, task, run domain.ID, rep *Report)
 				return err
 			}
 		}
-		_, err := a.FailRun(run, s.cfg.NewID(), s.clock.Now())
+		var err error
+		if env, ok := a.Environment(r.EnvID); !ok || env.State == domain.EnvDeleted {
+			_, err = a.FailRunLostEnvironment(run, s.cfg.NewID(), s.clock.Now())
+		} else {
+			_, err = a.FailRun(run, s.cfg.NewID(), s.clock.Now())
+		}
 		return err
 	})
 	if err == nil {

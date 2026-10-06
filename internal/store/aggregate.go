@@ -60,6 +60,7 @@ func boolInt(b bool) int {
 // events are forgotten; the returned events carry their sequence numbers.
 func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain.Event, error) {
 	rd := tx.s.redactor
+	agg.StampRunBounds(tx.s.now())
 	snap := agg.Snapshot()
 	t := &snap.Task
 	expected := t.Version
@@ -116,8 +117,8 @@ func (tx *Tx) SaveTask(ctx context.Context, agg *domain.TaskAggregate) ([]domain
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, ord, skills) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.AgentID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i, string(skills)); err != nil {
+		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, ord, skills, admitted_at, ended_at, duration_ms, duration_at, terminal_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(r.ID), string(t.ID), string(r.WorkspaceID), string(r.AgentID), string(r.EnvID), string(r.State), r.SessionID, r.ResumeAttempts, i, string(skills), toNano(r.AdmittedAt), toNano(r.EndedAt), r.DurationMillis, toNano(r.DurationAt), r.TerminalReason); err != nil {
 			return nil, fmt.Errorf("store: save run %s: %w", r.ID, err)
 		}
 	}
@@ -187,7 +188,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
 
-	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, skills FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
+	runs, err := tx.tx.QueryContext(ctx, `SELECT id, workspace_id, agent_id, env_id, state, session_id, resume_attempts, skills, admitted_at, ended_at, duration_ms, duration_at, terminal_reason FROM runs WHERE task_id = ? ORDER BY ord`, string(id))
 	if err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
 	}
@@ -195,7 +196,8 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 		var r domain.Run
 		var rid, ws, ag, env, st string
 		var skills string
-		if err := runs.Scan(&rid, &ws, &ag, &env, &st, &r.SessionID, &r.ResumeAttempts, &skills); err != nil {
+		var admitted, ended, measured int64
+		if err := runs.Scan(&rid, &ws, &ag, &env, &st, &r.SessionID, &r.ResumeAttempts, &skills, &admitted, &ended, &r.DurationMillis, &measured, &r.TerminalReason); err != nil {
 			_ = runs.Close()
 			return nil, fmt.Errorf("store: load task %s: %w", id, err)
 		}
@@ -208,6 +210,7 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 			return nil, errors.New("store: unknown or absent run skill provenance marker")
 		}
 		r.ID, r.TaskID, r.WorkspaceID, r.AgentID, r.EnvID, r.State = domain.ID(rid), id, domain.ID(ws), domain.ID(ag), domain.ID(env), domain.RunState(st)
+		r.AdmittedAt, r.EndedAt, r.DurationAt = fromNano(admitted), fromNano(ended), fromNano(measured)
 		snap.Runs = append(snap.Runs, r)
 	}
 	if err := runs.Close(); err != nil {
@@ -246,6 +249,9 @@ func (tx *Tx) LoadTask(ctx context.Context, id domain.ID) (*domain.TaskAggregate
 	}
 	if err := decs.Close(); err != nil {
 		return nil, fmt.Errorf("store: load task %s: %w", id, err)
+	}
+	if err := tx.restoreLegacyBounds(ctx, &snap); err != nil {
+		return nil, err
 	}
 	agg, err := domain.Restore(snap)
 	if err != nil {
@@ -414,6 +420,9 @@ func (s *Store) RespondDecision(ctx context.Context, id domain.ID, r domain.Resp
 			return err
 		}
 		respond = agg.Answer(id, r)
+		if !r.At.IsZero() {
+			agg.StampRunBounds(r.At)
+		}
 		if len(agg.PendingEvents()) == 0 {
 			return nil // nothing changed, so nothing to save
 		}

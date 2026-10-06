@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -49,5 +51,19 @@ func TestKillAllPrintsStopWarningsForEachTask(t *testing.T) {
 	code, out, errOut := s.runCLI("", "kill-all", "--yes")
 	if code != 0 || out != "t1\nt2\n" || !strings.Contains(errOut, "agent may still run: task t1") || !strings.Contains(errOut, "agent stop pending: task t2") {
 		t.Fatalf("kill-all: %d %q %q", code, out, errOut)
+	}
+}
+
+func TestShowIncludesInitiatingTerminalReason(t *testing.T) {
+	var c taskCard
+	if err := json.Unmarshal([]byte(`{"id":"t1","state":"failed","runs":[{"id":"r1","state":"stopped","terminal_reason":"budget_breach"}]}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	if err := printCard(&b, c); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "reason budget_breach") {
+		t.Fatalf("terminal reason omitted: %s", b.String())
 	}
 }

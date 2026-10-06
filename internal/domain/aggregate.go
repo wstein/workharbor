@@ -82,10 +82,17 @@ func (a *TaskAggregate) record(kind EventKind, payload any) {
 
 func (a *TaskAggregate) moveRun(run *Run, to RunState) error {
 	from := run.State
+	if to.Terminal() && run.State.CanTransition(to) && run.TerminalReason == "" {
+		if to == RunStopped {
+			run.TerminalReason = "agent_completion"
+		} else {
+			run.TerminalReason = "agent_failure"
+		}
+	}
 	if err := run.transition(to); err != nil {
 		return err
 	}
-	a.record(EventRunState, StateChanged{Object: "run", ID: run.ID, From: string(from), To: string(to)})
+	a.record(EventRunState, StateChanged{Object: "run", ID: run.ID, From: string(from), To: string(to), Reason: run.TerminalReason})
 	return nil
 }
 
@@ -184,6 +191,8 @@ func (a *TaskAggregate) StartRun(r Run) error {
 	if run.Skills.Mode == "" {
 		run.Skills.Mode = "legacy"
 	}
+	run.AdmittedAt, run.EndedAt, run.DurationAt = time.Time{}, time.Time{}, time.Time{}
+	run.DurationMillis, run.TerminalReason = 0, ""
 	run.State = RunStarting
 	a.runs = append(a.runs, run)
 	a.record(EventRunStarted, RunStarted{RunID: run.ID, EnvID: run.EnvID})

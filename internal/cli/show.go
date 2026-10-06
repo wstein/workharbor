@@ -15,8 +15,10 @@ import (
 type taskCard struct {
 	taskRow
 	Runs []struct {
-		ID    string `json:"id"`
-		State string `json:"state"`
+		ID             string `json:"id"`
+		State          string `json:"state"`
+		TerminalReason string `json:"terminal_reason"`
+		DurationMillis *int64 `json:"duration_ms"`
 	} `json:"runs"`
 	Open      []decisionRow `json:"open_decisions"`
 	Candidate *struct {
@@ -86,6 +88,15 @@ func newShow(s *state) *cobra.Command {
 func printCard(w io.Writer, c taskCard) error {
 	p := func(format string, a ...any) { fmt.Fprintf(w, format+"\n", a...) }
 	p("Task:     %s  %s %s  (%s)", clean(c.ID), clean(c.Repo), clean(c.Issue), clean(c.State))
+	for _, r := range c.Runs {
+		reason := r.TerminalReason
+		if reason == "" && (r.State == "stopped" || r.State == "failed") {
+			reason = "unknown"
+		}
+		if reason != "" {
+			p("Run:      %s %s; reason %s", clean(r.ID), clean(r.State), clean(reason))
+		}
+	}
 	if a := agentName(c.taskRow); a != "" {
 		p("Agent:    %s", clean(a))
 	}
@@ -146,7 +157,7 @@ func printCard(w io.Writer, c taskCard) error {
 	if c.UsageLine != "" {
 		p("Usage:    %s", clean(c.UsageLine))
 	} else {
-		p("Usage:    none reported")
+		p("Usage:    tokens and cost unknown (none reported)")
 	}
 	if len(c.Open) == 0 {
 		p("Decisions: none open")

@@ -25,8 +25,9 @@ type BudgetMetric string
 // The metrics of a budget: every token the agent reported for the turns (input,
 // output, cache read and cache write), and the cost the agent reported.
 const (
-	BudgetTokens BudgetMetric = "tokens"
-	BudgetCost   BudgetMetric = "cost" // millionths of a US dollar
+	BudgetTokens   BudgetMetric = "tokens"
+	BudgetDuration BudgetMetric = "duration" // supervisor milliseconds
+	BudgetCost     BudgetMetric = "cost"     // millionths of a US dollar
 )
 
 // BudgetBreach is a budget reached: the payload of both budget events. A turn
@@ -55,6 +56,7 @@ func (a *TaskAggregate) ExceedBudget(b BudgetBreach) error {
 	}
 	for _, run := range a.runs {
 		if !run.State.Terminal() {
+			run.TerminalReason = "budget_breach"
 			if err := a.moveRun(run, RunStopped); err != nil {
 				return err
 			}

@@ -173,8 +173,8 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("Compact(%d) = %s", n, got)
 		}
 	}
-	if FormatUsageLine(UsageReport{}) != "" {
-		t.Error("no usage, no line")
+	if !strings.Contains(FormatUsageLine(UsageReport{}), "unknown") {
+		t.Error("no usage must show unknown")
 	}
 }
 

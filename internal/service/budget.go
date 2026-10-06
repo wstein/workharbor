@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/store"
@@ -11,8 +12,9 @@ import (
 
 // Limit is a budget of one scope. A zero field is no limit.
 type Limit struct {
-	MaxTokens       int64 // every token the agent reported: input, output, cache read and cache write
-	MaxCostMicroUSD int64 // the cost the agent reported, in millionths of a US dollar
+	MaxDuration     time.Duration // supervisor wall time; zero disables the limit
+	MaxTokens       int64         // every token the agent reported: input, output, cache read and cache write
+	MaxCostMicroUSD int64         // the cost the agent reported, in millionths of a US dollar
 }
 
 // Budgets are the per-run and per-task limits of design §7.4. A soft
@@ -39,7 +41,7 @@ func (b Budgets) soft() int64 {
 }
 
 // counters are the totals a budget is compared with.
-type counters struct{ tokens, cost int64 }
+type counters struct{ tokens, cost, duration int64 }
 
 func total(rows []store.UsageRow) counters {
 	var c counters
@@ -57,18 +59,48 @@ func total(rows []store.UsageRow) counters {
 // already recorded and the run goes on.
 func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
 	b := s.cfg.Budgets
+	agg, err := s.store.LoadTask(ctx, task)
+	if err != nil {
+		s.report(err)
+		return
+	}
+	r, ok := agg.Run(run)
+	if !ok || r.State.Terminal() || agg.Task().State.Terminal() {
+		return
+	}
+	if b.PerRun.MaxDuration > 0 || b.PerTask.MaxDuration > 0 {
+		if err := s.update(ctx, task, func(a *domain.TaskAggregate) error { return s.accountDuration(a) }); err != nil {
+			s.report(err)
+			return
+		}
+		agg, err = s.store.LoadTask(ctx, task)
+		if err != nil {
+			s.report(err)
+			return
+		}
+		r, _ = agg.Run(run)
+	}
 	if b == (Budgets{}) {
 		return
 	}
 	runRows, err := s.store.UsageTotals(ctx, store.UsageFilter{TaskID: task, RunID: run}, store.GroupAll)
 	if err != nil {
 		s.report(fmt.Errorf("budget: %w", err))
-		return
+		if b.PerRun.MaxDuration <= 0 && b.PerTask.MaxDuration <= 0 {
+			return
+		}
 	}
 	taskRows, err := s.store.UsageTotals(ctx, store.UsageFilter{TaskID: task}, store.GroupAll)
 	if err != nil {
 		s.report(fmt.Errorf("budget: %w", err))
-		return
+		if b.PerRun.MaxDuration <= 0 && b.PerTask.MaxDuration <= 0 {
+			return
+		}
+	}
+	runCounts, taskCounts := total(runRows), total(taskRows)
+	runCounts.duration = r.DurationMillis
+	for _, rr := range agg.Runs() {
+		taskCounts.duration = domain.SatAdd(taskCounts.duration, rr.DurationMillis)
 	}
 	checks := []struct {
 		scope  domain.BudgetScope
@@ -76,8 +108,8 @@ func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
 		limit  Limit
 		counts counters
 	}{
-		{domain.BudgetRun, run, b.PerRun, total(runRows)},
-		{domain.BudgetTask, "", b.PerTask, total(taskRows)},
+		{domain.BudgetRun, run, b.PerRun, runCounts},
+		{domain.BudgetTask, "", b.PerTask, taskCounts},
 	}
 	var warnings []domain.BudgetBreach
 	for _, c := range checks {
@@ -87,6 +119,7 @@ func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
 		}{
 			{domain.BudgetTokens, c.limit.MaxTokens, c.counts.tokens},
 			{domain.BudgetCost, c.limit.MaxCostMicroUSD, c.counts.cost},
+			{domain.BudgetDuration, c.limit.MaxDuration.Milliseconds(), c.counts.duration},
 		} {
 			if m.limit <= 0 {
 				continue
@@ -96,13 +129,13 @@ func (s *Service) checkBudgets(ctx context.Context, task, run domain.ID) {
 				s.exceed(ctx, task, run, breach)
 				return // the task is over; nothing else to warn about
 			}
-			if m.used*100 >= m.limit*b.soft() {
+			if m.used >= (m.limit/100)*b.soft()+(m.limit%100*b.soft()+99)/100 {
 				warnings = append(warnings, breach)
 			}
 		}
 	}
 	for _, w := range warnings {
-		s.warn(ctx, task, w)
+		s.warnRun(ctx, task, run, w)
 	}
 }
 
@@ -113,6 +146,9 @@ func (s *Service) exceed(ctx context.Context, task, run domain.ID, b domain.Budg
 	err := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		hold.set("")
 		env = ""
+		if r, ok := a.Run(run); !ok || r.State.Terminal() {
+			return domain.NewConflict(domain.RuleRunLive, "budget event belongs to an ended run")
+		}
 		if r, ok := a.Run(run); ok && ownsAgent(r.State) {
 			env = r.EnvID
 			hold.set(env)
@@ -122,6 +158,8 @@ func (s *Service) exceed(ctx context.Context, task, run domain.ID, b domain.Budg
 	var conflict *domain.ConflictError
 	switch {
 	case err == nil:
+		s.cancelStart(run)    // preparation belongs to the ended run, not a successor
+		s.dropEgressWait(run) // no answer may launch an ended run
 		// The environment is busy until the stop and its fallback have ended (#238).
 		s.report(s.stopAgent(ctx, task, run, env, "failed (a budget was reached)", "budget", false, hold.take()))
 	case errors.As(err, &conflict):
@@ -134,16 +172,8 @@ func (s *Service) exceed(ctx context.Context, task, run domain.ID, b domain.Budg
 }
 
 // warn records a soft threshold once and notifies it.
-func (s *Service) warn(ctx context.Context, task domain.ID, b domain.BudgetBreach) {
-	done, err := s.store.BudgetWarned(ctx, task, b)
-	if err != nil {
-		s.report(err)
-		return
-	}
-	if done {
-		return
-	}
-	saved, err := s.store.Append(ctx, domain.NewBudgetWarned(task, b, s.clock.Now()))
+func (s *Service) warnRun(ctx context.Context, task, run domain.ID, b domain.BudgetBreach) {
+	saved, err := s.store.AppendBudgetWarning(ctx, task, run, b, s.clock.Now())
 	if err != nil {
 		s.report(fmt.Errorf("budget: %w", err))
 		return

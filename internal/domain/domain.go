@@ -83,6 +83,12 @@ type Run struct {
 	// ResumeAttempts counts launches of the agent that failed since the run
 	// last ran; it resets when the run is running again (design §5.3).
 	ResumeAttempts int
+	// Lifetime is supervisor wall time, including pauses and downtime.
+	AdmittedAt     time.Time
+	EndedAt        time.Time
+	DurationMillis int64
+	DurationAt     time.Time
+	TerminalReason string
 }
 
 // Environment is the container or VM backing a run or workspace.

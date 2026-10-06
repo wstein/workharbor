@@ -186,16 +186,18 @@ func (s *Service) UsageLine(ctx context.Context, task domain.ID) (string, error)
 // reported figure, and a balance is shown when the agent reported one.
 func FormatUsageLine(rep UsageReport) string {
 	if len(rep.Rows) == 0 {
-		return ""
+		return "usage: tokens unknown; cost unknown (no reports)"
 	}
-	var turns, in, out, unknown int64
+	var turns, in, out, unknown, withoutTokens, knownCost int64
 	var reported int64
 	subscription := false
 	for _, r := range rep.Rows {
 		turns += r.Turns
 		in = domain.SatAdd(in, r.Tokens.Input, r.Tokens.CacheRead, r.Tokens.CacheWrite)
 		out += r.Tokens.Output
+		knownCost += r.Turns - r.TurnsWithoutCost
 		unknown += r.TurnsWithoutCost
+		withoutTokens += r.TurnsWithoutToken
 		reported += r.ReportedMicroUSD
 		subscription = subscription || r.Notional
 	}
@@ -205,10 +207,19 @@ func FormatUsageLine(rep UsageReport) string {
 			parts = append(parts, fmt.Sprintf("%s %.0f%%", strings.ReplaceAll(w.Name, "_", "-"), w.Utilization*100))
 		}
 	}
-	parts = append(parts, fmt.Sprintf("%d turns, %s in, %s out", turns, Compact(in), Compact(out)))
+	tokenLine := fmt.Sprintf("%d turns, %s in, %s out", turns, Compact(in), Compact(out))
+	if withoutTokens == turns {
+		tokenLine = fmt.Sprintf("%d turns, tokens unknown", turns)
+	} else if withoutTokens > 0 {
+		tokenLine += fmt.Sprintf(" (partial; %d turns without tokens)", withoutTokens)
+	}
+	parts = append(parts, tokenLine)
 	c := "cost not reported"
-	if reported > 0 || unknown == 0 {
+	if reported > 0 || knownCost > 0 {
 		c = FormatMicroUSD(reported) + " reported"
+		if unknown > 0 {
+			c += fmt.Sprintf(" (partial; %d turns without cost)", unknown)
+		}
 	}
 	if subscription {
 		c += ", notional (subscription)"

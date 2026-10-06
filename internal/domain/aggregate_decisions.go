@@ -220,6 +220,15 @@ func (a *TaskAggregate) SuspendRun(runID ID, cause DecisionCause, resetAt time.T
 // FailRun ends a run as failed and opens the blocking Decision that asks the
 // human to retry or cancel (design §4.1): a failed run does not fail its task.
 func (a *TaskAggregate) FailRun(runID, decisionID ID, now time.Time) (Decision, error) {
+	return a.failRunReason(runID, decisionID, now, "")
+}
+
+// FailRunLostEnvironment records that execution cannot continue in its lost environment.
+func (a *TaskAggregate) FailRunLostEnvironment(runID, decisionID ID, now time.Time) (Decision, error) {
+	return a.failRunReason(runID, decisionID, now, "lost_environment")
+}
+
+func (a *TaskAggregate) failRunReason(runID, decisionID ID, now time.Time, reason string) (Decision, error) {
 	run, err := a.run(runID)
 	if err != nil {
 		return Decision{}, err
@@ -236,6 +245,16 @@ func (a *TaskAggregate) FailRun(runID, decisionID ID, now time.Time) (Decision, 
 	})
 	if err != nil {
 		return Decision{}, err
+	}
+	if run.State == RunStarting || run.State == RunInterrupted {
+		if run.ResumeAttempts > 0 || run.SessionID != "" {
+			run.TerminalReason = "failed_resume"
+		} else {
+			run.TerminalReason = "failed_start"
+		}
+	}
+	if reason != "" {
+		run.TerminalReason = reason
 	}
 	if err := a.moveRun(run, RunFailed); err != nil {
 		return Decision{}, err
@@ -400,12 +419,19 @@ func (a *TaskAggregate) RecordSession(runID ID, sessionID string) error {
 // Cancel stops the task's live run, supersedes every open Decision (a review
 // Decision too) and cancels the task. A task that is already over cannot be
 // cancelled.
-func (a *TaskAggregate) Cancel() error {
+func (a *TaskAggregate) Cancel() error { return a.CancelWithReason("human_cancellation") }
+
+// CancelWithReason preserves the initiating cancellation reason.
+func (a *TaskAggregate) CancelWithReason(reason string) error {
+	if reason != "human_cancellation" && reason != "kill_all" {
+		return invalid("unknown terminal cancellation reason")
+	}
 	if !a.task.State.CanTransition(TaskCancelled) {
 		return a.task.transition(TaskCancelled) // reports the illegal transition
 	}
 	for _, run := range a.runs {
 		if !run.State.Terminal() {
+			run.TerminalReason = reason
 			if err := a.moveRun(run, RunStopped); err != nil {
 				return err
 			}

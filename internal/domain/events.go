@@ -76,6 +76,7 @@ type StateChanged struct {
 	ID     ID     `json:"id"`
 	From   string `json:"from"`
 	To     string `json:"to"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // RunStarted is the payload of EventRunStarted.

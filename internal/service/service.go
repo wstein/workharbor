@@ -113,9 +113,11 @@ type Service struct {
 	clock Clock
 	cfg   Config
 
-	wg       sync.WaitGroup
-	mu       sync.Mutex
-	sessions map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
+	wg               sync.WaitGroup
+	mu               sync.Mutex
+	durationChecking map[domain.ID]bool
+	durationAnchors  map[domain.ID]durationAnchor
+	sessions         map[domain.ID]*slot // by run: the sessions the service owns, and launches in progress
 	// starts are the agent starts in progress, by run: at most one each, detached
 	// from the request that began it and cancelled by Cancel and Shutdown.
 	starts map[domain.ID]*startJob
@@ -335,6 +337,7 @@ func (s *Service) update(ctx context.Context, task domain.ID, fn func(*domain.Ta
 		}
 		fnErr := fn(agg)
 		if len(agg.PendingEvents()) > 0 {
+			agg.StampRunBounds(s.clock.Now())
 			var saved []domain.Event
 			if saved, err = s.store.SaveTask(ctx, agg); err != nil {
 				if errors.Is(err, store.ErrStale) {
@@ -570,6 +573,9 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	var sl *slot
 	unlock := func() {}
 	if resumes {
+		if err := s.durationAdmission(ctx, row.TaskID, row.RunID); err != nil {
+			return err
+		}
 		// An environment this process did not start is stopped and started first;
 		// a failed stop launches nothing and leaves the answer open (#216).
 		if err := s.freshenForResume(ctx, row.TaskID, row.RunID, true); err != nil {
@@ -675,6 +681,10 @@ func (s *Service) Cancel(ctx context.Context, task domain.ID) error {
 
 // cancel is Cancel; agentStopped says kill-all has stopped the agent already.
 func (s *Service) cancel(ctx context.Context, task domain.ID, agentStopped bool) error {
+	return s.cancelReason(ctx, task, agentStopped, "human_cancellation")
+}
+
+func (s *Service) cancelReason(ctx context.Context, task domain.ID, agentStopped bool, reason string) error {
 	var live, env domain.ID
 	var leftover domain.ID // the environment of a paused or interrupted run, which may hold its agent
 	hold := &stopHold{s: s}
@@ -691,7 +701,7 @@ func (s *Service) cancel(ctx context.Context, task domain.ID, agentStopped bool)
 				hold.set(env)
 			}
 		}
-		return a.Cancel()
+		return a.CancelWithReason(reason)
 	})
 	if err != nil {
 		hold.drop()

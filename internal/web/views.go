@@ -254,7 +254,15 @@ func taskPageOf(v service.TaskView) taskPage {
 		Cancelable: !v.Task.State.Terminal(), AgentMayRun: v.AgentMayRun,
 	}
 	for _, r := range v.Runs {
-		p.Runs = append(p.Runs, string(r.ID)+" "+string(r.State))
+		line := string(r.ID) + " " + string(r.State)
+		if r.State.Terminal() {
+			reason := r.TerminalReason
+			if reason == "" {
+				reason = "unknown"
+			}
+			line += "; reason " + reason
+		}
+		p.Runs = append(p.Runs, line)
 		if r.State == domain.RunRunning || r.State == domain.RunStarting {
 			p.Live = true
 		}

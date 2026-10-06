@@ -138,7 +138,7 @@ func TestTheCardOnAnAPIKeyAndInAnEmptyPeriod(t *testing.T) {
 	b := r.browser()
 	b.signIn()
 	_, page := b.do("GET", "/?period=today", nil)
-	if !strings.Contains(page, "No agent reported usage in this period") {
+	if !strings.Contains(page, "Tokens and cost unknown: no agent reported usage in this period") {
 		t.Errorf("an empty period:\n%s", page)
 	}
 	_, page = b.do("GET", "/?period=all", nil)

@@ -391,3 +391,29 @@ func codeTemplate(where string) string {
 	COALESCE(SUM(json_extract(CAST(payload AS TEXT), '$.removed')), 0)
 	FROM events WHERE {WHERE}`, "{WHERE}", where, 1)
 }
+
+// AppendBudgetWarning atomically deduplicates a warning and binds it to the
+// unfinished run that produced the reading. No late timer warns a successor.
+func (s *Store) AppendBudgetWarning(ctx context.Context, task, run domain.ID, b domain.BudgetBreach, at time.Time) ([]domain.Event, error) {
+	var saved []domain.Event
+	err := s.Update(ctx, func(tx *Tx) error {
+		a, err := tx.LoadTask(ctx, task)
+		if err != nil {
+			return err
+		}
+		r, ok := a.Run(run)
+		if !ok || r.State.Terminal() || a.Task().State.Terminal() {
+			return nil
+		}
+		var n int
+		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE task_id=? AND kind='budget.warned' AND json_extract(CAST(payload AS TEXT),'$.scope')=? AND json_extract(CAST(payload AS TEXT),'$.metric')=? AND COALESCE(json_extract(CAST(payload AS TEXT),'$.run_id'),'')=?`, string(task), string(b.Scope), string(b.Metric), string(b.RunID)).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		saved, err = tx.Append(ctx, domain.NewBudgetWarned(task, b, at))
+		return err
+	})
+	return saved, err
+}

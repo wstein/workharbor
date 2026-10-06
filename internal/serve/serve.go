@@ -164,6 +164,10 @@ func Run(ctx context.Context, d Deps) error {
 	scfg := serviceConfig(d, logf)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
+	durationCtx, stopDuration := context.WithCancel(ctx)
+	durationDone := make(chan struct{})
+	go func() { defer close(durationDone); svc.RunDurationBudgets(durationCtx) }()
+	defer func() { stopDuration(); <-durationDone }()
 	held, err := applyWorkflows(ctx, d, logf)
 	if err != nil {
 		return err
@@ -436,7 +440,8 @@ func addBoard(scfg *service.Config, d Deps) {
 // millionths of a dollar, so no float reaches a comparison with a total.
 func Budgets(b config.Budgets) service.Budgets {
 	limit := func(l config.BudgetLimit) service.Limit {
-		return service.Limit{MaxTokens: l.MaxTokens, MaxCostMicroUSD: int64(math.Round(l.MaxCostUSD * 1e6))}
+		duration, _ := time.ParseDuration(l.MaxDuration) // configuration validation has already checked it
+		return service.Limit{MaxDuration: duration, MaxTokens: l.MaxTokens, MaxCostMicroUSD: int64(math.Round(l.MaxCostUSD * 1e6))}
 	}
 	return service.Budgets{PerRun: limit(b.PerRun), PerTask: limit(b.PerTask), SoftPercent: b.SoftPercent}
 }
