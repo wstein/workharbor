@@ -253,6 +253,9 @@ check-hooks:
 # The sub-makes of land go through LAND_MAKE: the recipe line must not contain
 # $(MAKE) itself, or make -n, -t and -q would run it for real (merge included).
 LAND_MAKE := $(MAKE)
+# They also run without the caller's MAKEFLAGS: -i or a command-line override such
+# as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass.
+LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
 
 # Land the current branch on main, from a session's own worktree (BRANCH=<name>
 # from any checkout: land the worktree that has it checked out; SHA=<full sha>:
@@ -291,10 +294,10 @@ land:
 	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
 	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
 	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
-	$(LAND_MAKE) -s check-local commitlint || exit 1; \
-	$(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
+	$(LAND_CLEAN) $(LAND_MAKE) -s check-local commitlint || exit 1; \
+	$(LAND_CLEAN) $(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
 	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
-	if [ -n "$$generated" ]; then $(LAND_MAKE) -s check-generated || exit 1; fi; \
+	if [ -n "$$generated" ]; then $(LAND_CLEAN) $(LAND_MAKE) -s check-generated || exit 1; fi; \
 	if [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ] || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ]; then \
 		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \

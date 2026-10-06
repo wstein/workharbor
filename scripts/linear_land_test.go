@@ -23,6 +23,7 @@ func TestLinearLand(t *testing.T) {
 		t.Fatal("land target missing")
 	}
 	recipe, _, _ = strings.Cut(recipe, "\n\n")
+	clean := landCleanLine(t, makefile)
 	indexScript, err := os.ReadFile("index-state.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +80,7 @@ func TestLinearLand(t *testing.T) {
 			if tc.failScan {
 				checks += "\t@echo required-secret-scan-failed >&2; exit 1\n"
 			}
-			write(filepath.Join(dir, "Makefile"), []byte("LAND_MAKE := $(MAKE)\nland:\n"+recipe+checks))
+			write(filepath.Join(dir, "Makefile"), []byte("LAND_MAKE := $(MAKE)\n"+clean+"land:\n"+recipe+checks))
 			if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -208,6 +209,7 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		t.Fatal("land target missing")
 	}
 	recipe, _, _ = strings.Cut(recipe, "\n\n")
+	clean := landCleanLine(t, makefile)
 	indexScript, err := os.ReadFile("index-state.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -220,7 +222,7 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		checks += "\t@if [ ! -f checks-ran ]; then git update-ref refs/heads/main \"$$(git commit-tree -p main -m moved main^{tree})\"; fi\n"
 	}
 	checks += "\t@echo $@ >> checks-ran\nsecrets-range:\n\t@echo secrets-range $(RANGE) $(TIP) >> checks-ran\n"
-	r.write(filepath.Join(r.dir, "Makefile"), "LAND_MAKE := $(MAKE)\nland:\n"+recipe+checks)
+	r.write(filepath.Join(r.dir, "Makefile"), "LAND_MAKE := $(MAKE)\n"+clean+"land:\n"+recipe+checks)
 	if err := os.Mkdir(filepath.Join(r.dir, "scripts"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -530,4 +532,73 @@ func TestLandIgnoresDryRunFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stubChecks replaces the stub check targets of the land test Makefile.
+func (r *landBranchRepo) stubChecks(checks string) {
+	r.t.Helper()
+	path := filepath.Join(r.dir, "Makefile")
+	data, err := os.ReadFile(path) //nolint:gosec // fixed file in an isolated test repository
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	head, _, ok := strings.Cut(string(data), "\n\n.PHONY:")
+	if !ok {
+		r.t.Fatal("stub checks missing")
+	}
+	r.write(path, head+"\n\n.PHONY: check-local commitlint secrets-range check-generated\n"+checks)
+	r.git(r.dir, "commit", "-qam", "stub checks")
+}
+
+// The sub-makes of land must not inherit the caller's MAKEFLAGS or command-line
+// overrides: -i must not turn a failing check into a pass (L7), and
+// GITLEAKS_FOUND=0 must not turn a secret finding into a pass (L8).
+func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
+	failingCheck := "check-local:\n\t@echo check-local failed >&2; exit 1\ncommitlint check-generated:\n\t@:\nsecrets-range:\n\t@:\n"
+	finding := "GITLEAKS_FOUND := 42\ncheck-local commitlint check-generated:\n\t@:\nsecrets-range:\n\t@echo finding >&2; [ \"$(GITLEAKS_FOUND)\" != 42 ]\n"
+	for _, tc := range []struct {
+		name   string
+		checks string
+		env    []string
+		args   []string
+	}{
+		{"make -i, failing check-local", failingCheck, nil, []string{"-i"}},
+		{"MAKEFLAGS=i, failing check-local", failingCheck, []string{"MAKEFLAGS=i"}, nil},
+		{"MFLAGS=-i, failing check-local", failingCheck, []string{"MFLAGS=-i"}, nil},
+		{"--ignore-errors", failingCheck, nil, []string{"--ignore-errors"}},
+		{"GITLEAKS_FOUND=0, finding", finding, nil, []string{"GITLEAKS_FOUND=0"}},
+		{"GITLEAKS_FOUND=0 in MAKEFLAGS", finding, []string{"MAKEFLAGS=GITLEAKS_FOUND=0"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newLandBranchRepo(t, false)
+			r.stubChecks(tc.checks)
+			wt := r.topic("topic")
+			base := r.git(r.dir, "rev-parse", "main")
+			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
+			cmd.Dir = wt
+			cmd.Env = append(r.env(), tc.env...)
+			out, err := cmd.CombinedOutput()
+			if got := r.git(r.dir, "rev-parse", "main"); got != base {
+				t.Fatalf("main moved to %s despite a failing check\n%s", got, out)
+			}
+			// Under -i the calling make itself ignores the recipe's failure and exits 0;
+			// that is outside the recipe's reach: main unchanged is what counts.
+			if err == nil && !slices.Contains(tc.args, "-i") && !slices.Contains(tc.args, "--ignore-errors") && !slices.Contains(tc.env, "MAKEFLAGS=i") {
+				t.Fatalf("land exited 0 despite a failing check\n%s", out)
+			}
+		})
+	}
+}
+
+// landCleanLine returns the real LAND_CLEAN definition, so that mutating its
+// flags is caught by the tests.
+func landCleanLine(t *testing.T, makefile []byte) string {
+	t.Helper()
+	for line := range strings.SplitSeq(string(makefile), "\n") {
+		if strings.HasPrefix(line, "LAND_CLEAN :=") {
+			return line + "\n"
+		}
+	}
+	t.Fatal("LAND_CLEAN missing")
+	return ""
 }
