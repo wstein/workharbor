@@ -7,8 +7,8 @@ Delegate this to a helper subagent: $ARGUMENTS
 
 Only a task of the kinds in `.agents/helper.md` (find and report, web research,
 issue drafts, mechanical edits, small tests, checks); never a security-relevant path
-(AGENTS.md lists them), a design choice or anything outward. Board hygiene
-(`/wh-board`) is not delegated: the lane runs it itself.
+(AGENTS.md lists them), a design choice or anything outward. Board checks
+(`/wh-board`) are not delegated: the lane runs them itself; card writes go through `wh/dispatch`.
 
 1. Pick the type: a lookup (find and report, web research, issue drafts) goes to
     `wh-helper`, which is read-only; a named edit, a small test or a check that

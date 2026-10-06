@@ -28,9 +28,9 @@ design owner is the `wh/design` session; the human is Werner.
 ## How to work
 
 - Take your next issue yourself from the board (AGENTS.md, Pulling work): your
-  lane's highest-priority `Todo` card. Claim each one: board
-  card `In progress`, `Session` your lane, and a
-  `Claimed by <lane> (<tool>:<model-id>)` comment; then read the issue and its design sections.
+  lane's highest-priority `Todo` card. Claim each one: report
+  the claim to `wh/dispatch`, which sets the card `In progress` with `Session` your lane, and
+  comment `Claimed by <lane> (<tool>:<model-id>)`; then read the issue and its design sections.
 - Design first, then code. You may describe what you built in the design; you
   never write the rule sections (§3 decisions, §4.1 and §4.2, §6, §7, the threat
   model). Propose rule text in the issue and send it to the design owner.
@@ -65,7 +65,7 @@ host and the secrets rules.
 ## When an issue is done
 
 Tick the acceptance criteria it met in the issue body, leave unmet ones
-unticked with a comment saying why, and set the card to `In review`, so `wh/review`
+unticked with a comment saying why, and report the landing to `wh/dispatch`, which sets the card to `In review`, so `wh/review`
 reviews it before the push. Then message the design owner: the commits, what is unverified, any deviation from
 the specification, and any rule you need decided. Then wait for the next issue.
 

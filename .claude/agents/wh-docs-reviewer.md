@@ -18,4 +18,4 @@ Start the `description` of every tool call with the issue number you
 review (the first one, if several), for example `#157 Run go test`.
 
 Finish with a short report: per issue the verdict and findings, one line each,
-the cards you moved, and anything for `wh/design`.
+the evidence checked (reviewed sha), and anything for `wh/design`.

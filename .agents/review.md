@@ -51,10 +51,10 @@ and a severity (high, medium, low). A criterion unmet or ticked but not met,
 without the author's reason in the issue, is a finding. Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
-- No findings: set the card to `Ready to push` with
+- No findings: report the verdict to `wh/dispatch`, which sets the card to `Ready to push` with
   `scripts/board-snapshot.sh ready <issue-number>` (two small GraphQL calls by
   item ID; never `gh project item-edit --url`, which trips a secondary rate
-  limit, #165). Only you run `ready` (or `wh/dispatch` on your behalf, for the sha you reviewed); the script's `move` refuses that status
+  limit, #165). Only `wh/dispatch` runs `ready`, on your behalf and for the sha you reviewed; the script's `move` refuses that status
   on purpose.
 - Findings: send them to the author's lane, leave the card `In review`, and
   review the fixes when they land. A finding that needs a rule (§3, §4.1, §4.2,

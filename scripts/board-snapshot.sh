@@ -151,7 +151,7 @@ move | session | priority | add | ready)
     case $value in
     "Todo" | "In progress" | "Blocked" | "In review") ;;
     "Ready to push" | "Done")
-      die "move does not set \"$value\": Ready to push is set by board-snapshot.sh ready <number> ... (wh/review, or wh/dispatch on its behalf for the reviewed sha) and Done by closing the issue or by the human" ;;
+      die "move does not set \"$value\": Ready to push is set by board-snapshot.sh ready <number> ... (approved by wh/review, written by wh/dispatch for the reviewed sha) and Done by closing the issue or by the human" ;;
     *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;

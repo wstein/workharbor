@@ -16,8 +16,8 @@ Model: Haiku. A helper never edits a security-relevant path (AGENTS.md, Security
 ## Use cases
 
 The first two go to `wh-helper`; mechanical edits, small tests and checks go to
-`wh-helper-edit`. Board hygiene is the lane's own: `/wh-board` runs
-`scripts/board-snapshot.sh`, which a helper does not run.
+`wh-helper-edit`. Board checks stay with the lane: `/wh-board` runs
+`scripts/board-snapshot.sh`, which a helper does not run, and card writes go through `wh/dispatch`.
 
 - **Find and report:** grep the code or docs, list where something is used,
   collect unticked criteria or unverified markers, summarise a CI log or a

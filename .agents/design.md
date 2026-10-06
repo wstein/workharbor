@@ -25,7 +25,7 @@ branch per change (AGENTS.md, Working on an issue).
   decision rows and rule text; reserve the D-row in an issue first, open the
   implementation issue in the same step (labelled as in AGENTS.md, GitHub
   rate limit), and cite spike evidence.
-- **Rank.** Keep `Priority` and `Session` current on the board so `wh/dispatch`
+- **Rank.** Decide `Priority` and `Session` (`wh/dispatch` writes them on your behalf) so `wh/dispatch`
   and each lane pull the next issue; step in only for a rule to decide first or
   lanes that would collide. You read the board through
   `scripts/board-snapshot.sh` (#132).

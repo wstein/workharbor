@@ -8,7 +8,7 @@ the snapshot (`scripts/board-snapshot.sh`, at most one query per 5 minutes for
 all lanes; add `--refresh` only after you moved a card), never with
 `gh project item-list` yourself. Only `wh/design` runs this board-wide check
 (AGENTS.md, GitHub rate limit); other lanes check their own cards
-(`scripts/board-snapshot.sh card <number>`). $ARGUMENTS
+(`scripts/board-snapshot.sh card <number>`) and report drift to `wh/dispatch`. $ARGUMENTS
 
 Report each drift with the issue number:
 
@@ -25,6 +25,5 @@ Report each drift with the issue number:
 - A card that is not on the board at all (`gh issue list --state open` minus the
   board).
 
-Without `--fix`, change nothing. With `--fix`, correct only cards of your own
-lane (AGENTS.md: move your own cards only) and list the rest for their lane or
-`wh/design`.
+Without `--fix`, change nothing. With `--fix`, only list the drift for `wh/dispatch`
+(the sole card writer) to fix, and for `wh/design` where a rule is needed.

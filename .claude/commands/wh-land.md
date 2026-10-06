@@ -49,5 +49,5 @@ $ARGUMENTS (empty: the current branch). Never push.
 4. Only after a successful land: `git switch --detach main`, then
     `git branch -d <branch>` (`-D` only after `git merge-base --is-ancestor
     <branch> main` confirms it is in).
-5. Set the card of each issue to `In review`, and report the landed commits
-    (`git log --oneline <old main>..main`) to `wh/design`.
+5. Report the landed commits (`git log --oneline <old main>..main`) to
+    `wh/dispatch`, which sets the card of each issue to `In review`, and to `wh/design`.
