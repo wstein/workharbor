@@ -1,0 +1,195 @@
+package render
+
+import (
+	"bytes"
+	"flag"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+var update = flag.Bool("update", false, "rewrite the golden files")
+
+var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// scene is one run of the vocabulary: the fixed example of issue #320.
+func scene(s Style) string {
+	var b bytes.Buffer
+	w := Writer{W: &b, S: s}
+	w.Legend()
+	w.Header(2, 14, `standard user "workharbor"`)
+	w.Report(LevelFail, `there is no user workharbor`)
+	w.Action("create the account")
+	w.Command("sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -")
+	w.Tool("2026-10-06 10:00:00.1 sysadminctl[1:2] Creating user record")
+	w.Rule()
+	w.Header(3, 14, "no automatic log-out")
+	w.Report(LevelOK, "key not set: the system default applies (default off)")
+	w.Report(LevelNotVerified, "tailscale did not answer")
+	w.Report(LevelWarn, "weaker than recommended")
+	w.Report(LevelSkipped, "left out")
+	w.Question("Ready to create the account?", DefaultYes)
+	b.WriteString("\n")
+	w.Summary(Counts{OK: 1, Fail: 1, NotVerified: 1, Warn: 1, Skipped: 1})
+	w.Todo([]TodoItem{{Text: "create the account", Commands: []string{"sudo sysadminctl -addUser workharbor"}}, {Text: "log in as workharbor and run whr setup"}})
+	return b.String()
+}
+
+func golden(t *testing.T, name, got string) {
+	t.Helper()
+	p := filepath.Join("testdata", name+".golden")
+	if *update {
+		if err := os.WriteFile(p, []byte(got), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(p) //nolint:gosec // a golden file of this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != got {
+		t.Errorf("%s differs from its golden file; got:\n%s", name, got)
+	}
+}
+
+func TestGoldenTTYWithColour(t *testing.T) {
+	golden(t, "tty", scene(Detect(true, "", false)))
+}
+
+func TestGoldenNonTTYIsPlainASCII(t *testing.T) {
+	got := scene(Detect(false, "", false))
+	golden(t, "plain", got)
+	if strings.Contains(got, "\x1b") {
+		t.Error("escape sequence in plain output")
+	}
+	for _, r := range got {
+		if r > 127 {
+			t.Fatalf("non-ASCII rune %q in plain output", r)
+		}
+	}
+}
+
+func TestGoldenNoColorIsPlain(t *testing.T) {
+	got := scene(Detect(true, "1", false))
+	golden(t, "nocolor", got)
+	if got != scene(Detect(false, "", false)) {
+		t.Error("NO_COLOR on a terminal differs from non-terminal output")
+	}
+	if Detect(true, "", true) != Detect(false, "", false) {
+		t.Error("--plain is not plain")
+	}
+}
+
+func TestEveryColourHasATextLabel(t *testing.T) {
+	if len(Palette) == 0 {
+		t.Fatal("empty palette")
+	}
+	s := Detect(true, "", false)
+	for role, c := range Palette {
+		if c.Label == "" || c.SGR == "" {
+			t.Errorf("role %v has no label or no colour: %+v", role, c)
+		}
+		// the same text in colour and plain: nothing depends on the colour
+		plain := Detect(false, "", false)
+		for _, out := range []string{renderRole(s, role), renderRole(plain, role)} {
+			if !strings.Contains(ansi.ReplaceAllString(out, ""), c.Label) {
+				t.Errorf("role %v: label %q missing from %q", role, c.Label, out)
+			}
+		}
+	}
+	// every escape sequence in the TTY scene is one of the palette's
+	known := map[string]bool{"\x1b[0m": true}
+	for _, c := range Palette {
+		known["\x1b["+c.SGR+"m"] = true
+	}
+	for _, seq := range ansi.FindAllString(scene(s), -1) {
+		if !known[seq] {
+			t.Errorf("colour %q is not in the palette, so it has no label", seq)
+		}
+	}
+}
+
+func TestStrippedColourEqualsPlainLayoutOfLabels(t *testing.T) {
+	// colour never changes the words, only decorates them
+	c := ansi.ReplaceAllString(scene(Detect(true, "", false)), "")
+	for _, word := range []string{"ACTION", "FAIL", "ok", "WARN", "Step 2 of 14", "What you need to do now"} {
+		if !strings.Contains(c, word) {
+			t.Errorf("%q missing in the TTY scene without colour", word)
+		}
+	}
+}
+
+func TestToolOutputIsIndentedApart(t *testing.T) {
+	var b bytes.Buffer
+	Writer{W: &b, S: Detect(false, "", false)}.Tool("a\n\nb")
+	if b.String() != "    tool output:\n    | a\n    | b\n" {
+		t.Errorf("tool block = %q", b.String())
+	}
+}
+
+func TestMultilineReportIndentsTheContinuation(t *testing.T) {
+	got := Report(Detect(false, "", false), LevelFail, "one\ntwo")
+	if got != " x FAIL   one\n          two\n" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// renderRole renders the smallest output that uses a palette role.
+func renderRole(s Style, r Role) string {
+	switch r {
+	case RoleOK:
+		return Report(s, LevelOK, "x")
+	case RoleFail:
+		return Report(s, LevelFail, "x")
+	case RoleNotVerified:
+		return Report(s, LevelNotVerified, "x")
+	case RoleWarn:
+		return Report(s, LevelWarn, "x")
+	case RoleSkipped:
+		return Report(s, LevelSkipped, "x")
+	case RoleAction:
+		return Action(s, "x")
+	case RoleCommand:
+		return Command(s, "x")
+	case RoleTool:
+		return ToolOutput(s, "x")
+	case RoleHeader:
+		return Header(s, 1, 2, "x")
+	case RoleTodo:
+		return Todo(s, []TodoItem{{Text: "x"}})
+	}
+	return ""
+}
+
+func TestSplitToolSeparatesWhrsReasonFromTheToolsRawText(t *testing.T) {
+	for in, want := range map[string][2]string{
+		"defaults did not answer, so the setting is not known: exit status 1: Could not find key 'x'": {"defaults did not answer, so the setting is not known", "exit status 1: Could not find key 'x'"},
+		"dscl did not say whether operator exists: exit status 1":                                     {"dscl did not say whether operator exists", "exit status 1"},
+		"killed: signal: killed": {"killed", "signal: killed"},
+		"the file is missing":    {"the file is missing", ""},
+	} {
+		if r, tool := SplitTool(in); r != want[0] || tool != want[1] {
+			t.Errorf("%q = %q, %q; want %q", in, r, tool, want)
+		}
+	}
+}
+
+func TestToolWriterIndentsEveryLineAndNeverHoldsAPromptBack(t *testing.T) {
+	var b bytes.Buffer
+	w := NewToolWriter(&b, Detect(false, "", false))
+	_, _ = w.Write([]byte("2026 log one\nPass"))
+	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Pass" {
+		t.Errorf("a partial line (a prompt) must appear at once: %q", got)
+	}
+	_, _ = w.Write([]byte("word: \nnext\n"))
+	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Password: \n    | next\n" {
+		t.Errorf("got %q", got)
+	}
+	w.End()
+	_, _ = w.Write([]byte("again\n"))
+	if !strings.HasSuffix(b.String(), "    tool output:\n    | again\n") {
+		t.Errorf("a new block starts with its label: %q", b.String())
+	}
+}

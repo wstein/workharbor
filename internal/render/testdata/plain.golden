@@ -1,0 +1,29 @@
+Legend (colour is only decoration: the words are always printed)
+ + ok     checked and fine
+ x FAIL   checked and wrong
+ ? ?      not verified: nothing measured it
+ ! WARN   works, weaker than recommended
+ - skip   left out, or not offered
+| ACTION  something you must do or answer
+|   $ a command you can copy
+
+-- Step 2 of 14 - standard user "workharbor" --
+ x FAIL   there is no user workharbor
+| ACTION  create the account
+|   $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
+    tool output:
+    | 2026-10-06 10:00:00.1 sysadminctl[1:2] Creating user record
+------------------------------------------------------------
+
+-- Step 3 of 14 - no automatic log-out --
+ + ok     key not set: the system default applies (default off)
+ ? ?      tailscale did not answer
+ ! WARN   weaker than recommended
+ - skip   left out
+| ACTION  Ready to create the account? [Y/n/q] 
+Summary: 1 ok, 1 FAIL, 1 not verified (?), 1 WARN, 1 skipped
+
+What you need to do now
+  1. create the account
+     $ sudo sysadminctl -addUser workharbor
+  2. log in as workharbor and run whr setup

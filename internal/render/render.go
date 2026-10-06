@@ -1,0 +1,348 @@
+// Package render is the one vocabulary for what `whr setup` and `whr doctor`
+// print for a human, and for the web status page and the mock to reuse
+// (issues #320, #322, #323). It has three kinds of text with fixed rendering:
+//
+//   - a report says what whr checked: a symbol, a status word (ok, FAIL, ?,
+//     WARN, skip) and one reason line;
+//   - an ACTION is anything the person must do or answer, behind a bar and the
+//     fixed label ACTION;
+//   - a command is text to copy, indented behind the same bar after a "$".
+//
+// Every function here is pure: it takes a Style and returns text. Colour is only
+// decoration: every colour in Palette has a text label that is always printed,
+// so nothing depends on colour alone. Colour and non-ASCII symbols appear only
+// on a terminal without NO_COLOR and without --plain (Detect). There is no
+// cursor control and no dependency: output stays safe for pipes, agents and sudo
+// prompts. The layout was not tested in the author's own terminal (fsh).
+package render
+
+import (
+	"fmt"
+	"io"
+	"regexp"
+	"strings"
+)
+
+// Level is the outcome a report line shows.
+type Level int
+
+// The levels, in the order of the legend.
+const (
+	LevelOK Level = iota
+	LevelFail
+	LevelNotVerified
+	LevelWarn
+	LevelSkipped
+)
+
+// Role is something that may be coloured. Each has an entry in Palette.
+type Role int
+
+// The roles.
+const (
+	RoleOK Role = iota
+	RoleFail
+	RoleNotVerified
+	RoleWarn
+	RoleSkipped
+	RoleAction
+	RoleCommand
+	RoleTool
+	RoleHeader
+	RoleTodo
+)
+
+// Colour is a role's SGR code and the text label that always accompanies it.
+type Colour struct {
+	SGR   string
+	Label string
+}
+
+// Palette maps each role to its colour and its text label. The pairs are chosen
+// to stay apart for the common colour blindnesses (blue and orange, not red and
+// green), and red is never used without the symbol and the word FAIL.
+var Palette = map[Role]Colour{
+	RoleOK:          {"34", "ok"},
+	RoleFail:        {"1;31", "FAIL"},
+	RoleNotVerified: {"35", "?"},
+	RoleWarn:        {"33", "WARN"},
+	RoleSkipped:     {"2", "skip"},
+	RoleAction:      {"1;33", "ACTION"},
+	RoleCommand:     {"36", "$"},
+	RoleTool:        {"2", "tool output"},
+	RoleHeader:      {"1", "Step"},
+	RoleTodo:        {"1", "What you need to do now"},
+}
+
+// Style says how to draw. The zero value is plain ASCII.
+type Style struct {
+	Color   bool // ANSI colour
+	Unicode bool // ✓ ✗ ▌ ─ instead of + x | -
+}
+
+// Detect chooses the style: colour and symbols only when the output is a
+// terminal, NO_COLOR is empty (no.color.org: any non-empty value turns colour
+// off) and --plain is not given.
+func Detect(tty bool, noColor string, plain bool) Style {
+	on := tty && noColor == "" && !plain
+	return Style{Color: on, Unicode: on}
+}
+
+func (s Style) paint(r Role, text string) string {
+	if !s.Color || text == "" {
+		return text
+	}
+	return "\x1b[" + Palette[r].SGR + "m" + text + "\x1b[0m"
+}
+
+func (s Style) bar() string {
+	if s.Unicode {
+		return "▌"
+	}
+	return "|"
+}
+
+var levelRole = map[Level]Role{LevelOK: RoleOK, LevelFail: RoleFail, LevelNotVerified: RoleNotVerified, LevelWarn: RoleWarn, LevelSkipped: RoleSkipped}
+
+func (s Style) symbol(l Level) string {
+	uni := map[Level]string{LevelOK: "✓", LevelFail: "✗", LevelNotVerified: "?", LevelWarn: "▲", LevelSkipped: "–"}
+	asc := map[Level]string{LevelOK: "+", LevelFail: "x", LevelNotVerified: "?", LevelWarn: "!", LevelSkipped: "-"}
+	if s.Unicode {
+		return uni[l]
+	}
+	return asc[l]
+}
+
+func indent(text, pad string) string {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	return strings.Join(lines, "\n"+pad)
+}
+
+// Report is one report line: " <symbol> <WORD>  <text>". The word is padded so
+// the text aligns. Further lines of text are indented under it.
+func Report(s Style, l Level, text string) string {
+	role := levelRole[l]
+	word := Palette[role].Label
+	pad := strings.Repeat(" ", 5-len([]rune(word)))
+	head := s.paint(role, s.symbol(l)+" "+word)
+	return " " + head + pad + "  " + indent(text, strings.Repeat(" ", 10)) + "\n"
+}
+
+// Action is a line the person must act on: a bar and the label ACTION.
+func Action(s Style, text string) string {
+	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(text, "          ") + "\n"
+}
+
+// Command is text to copy, behind the action bar and a "$".
+func Command(s Style, cmd string) string {
+	return s.paint(RoleAction, s.bar()) + "   " + s.paint(RoleCommand, "$ "+cmd) + "\n"
+}
+
+// Question is an ACTION line without its newline, for a prompt that waits.
+func Question(s Style, text string) string {
+	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + text + " "
+}
+
+// ToolOutput sets what an outside tool printed apart: a label line, then each
+// line indented behind a marker. It is empty for empty text.
+func ToolOutput(s Style, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	mark := "|"
+	if s.Unicode {
+		mark = "│"
+	}
+	var b strings.Builder
+	b.WriteString("    " + s.paint(RoleTool, "tool output:") + "\n")
+	for _, l := range strings.Split(text, "\n") {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		b.WriteString("    " + s.paint(RoleTool, mark+" "+strings.TrimRight(l, " \t\r")) + "\n")
+	}
+	return b.String()
+}
+
+var toolText = regexp.MustCompile(`(?:: |^)((?:exit status \d+|signal: \w+)(?:: .*)?)$`)
+
+// SplitTool separates whr's own reason from the raw text of the tool a check
+// ran, which the checks append after the tool's exit status ("...: exit status
+// 1: <what it said>"). The raw text is shown only with --verbose.
+func SplitTool(detail string) (reason, tool string) {
+	m := toolText.FindStringSubmatchIndex(detail)
+	if m == nil {
+		return detail, ""
+	}
+	return strings.TrimRight(detail[:m[0]], " :"), detail[m[2]:m[3]]
+}
+
+// ToolWriter indents the live output of a command behind a marker, under one
+// label, without holding anything back: a prompt without a newline appears at
+// once. It is for commands that run with the terminal attached.
+type ToolWriter struct {
+	w       io.Writer
+	s       Style
+	started bool
+	atStart bool
+}
+
+// NewToolWriter returns a ToolWriter on w.
+func NewToolWriter(w io.Writer, s Style) *ToolWriter { return &ToolWriter{w: w, s: s, atStart: true} }
+
+// Write implements io.Writer.
+func (t *ToolWriter) Write(p []byte) (int, error) {
+	mark := "|"
+	if t.s.Unicode {
+		mark = "│"
+	}
+	for _, seg := range strings.SplitAfter(string(p), "\n") {
+		if seg == "" {
+			continue
+		}
+		var out string
+		if !t.started {
+			out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
+			t.started = true
+		}
+		if t.atStart {
+			out += "    " + t.s.paint(RoleTool, mark) + " "
+		}
+		out += strings.TrimRight(seg, "\r")
+		if strings.HasSuffix(seg, "\n") && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		t.atStart = strings.HasSuffix(seg, "\n")
+		if _, err := io.WriteString(t.w, out); err != nil {
+			return 0, err
+		}
+	}
+	return len(p), nil
+}
+
+// End closes the block: the next write starts a new one with its label.
+func (t *ToolWriter) End() {
+	if t.started && !t.atStart {
+		_, _ = io.WriteString(t.w, "\n")
+	}
+	t.started, t.atStart = false, true
+}
+
+// Header is the step header: "Step n of N: title" between rules.
+func Header(s Style, n, total int, title string) string {
+	dash := "-"
+	if s.Unicode {
+		dash = "─"
+	}
+	return s.paint(RoleHeader, fmt.Sprintf("%s%s Step %d of %d %s %s %s%s", dash, dash, n, total, dash, title, dash, dash)) + "\n"
+}
+
+// Section is the title of a group of reports, such as the host steps.
+func Section(s Style, title string) string {
+	dash := "="
+	if s.Unicode {
+		dash = "━"
+	}
+	return s.paint(RoleHeader, dash+dash+" "+title+" "+dash+dash) + "\n"
+}
+
+// Rule separates one part of the output from the next.
+func Rule(s Style) string {
+	dash := "-"
+	if s.Unicode {
+		dash = "─"
+	}
+	return strings.Repeat(dash, 60) + "\n"
+}
+
+// Legend says what the symbols, words and bars mean. It is the report and
+// action lines themselves, so the legend cannot drift from the output.
+func Legend(s Style) string {
+	return "Legend (colour is only decoration: the words are always printed)\n" +
+		Report(s, LevelOK, "checked and fine") +
+		Report(s, LevelFail, "checked and wrong") +
+		Report(s, LevelNotVerified, "not verified: nothing measured it") +
+		Report(s, LevelWarn, "works, weaker than recommended") +
+		Report(s, LevelSkipped, "left out, or not offered") +
+		Action(s, "something you must do or answer") +
+		Command(s, "a command you can copy")
+}
+
+// Counts is how many steps ended in each level.
+type Counts struct{ OK, Fail, NotVerified, Warn, Skipped int }
+
+// Summary is the one-line summary at the end.
+func Summary(_ Style, c Counts) string {
+	return fmt.Sprintf("Summary: %d ok, %d FAIL, %d not verified (?), %d WARN, %d skipped\n", c.OK, c.Fail, c.NotVerified, c.Warn, c.Skipped)
+}
+
+// TodoItem is one thing the person must do, with an optional command.
+type TodoItem struct {
+	Text     string
+	Commands []string
+}
+
+// Todo is the numbered list "What you need to do now", for the end of a run. It
+// is empty for no items.
+func Todo(s Style, items []TodoItem) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(s.paint(RoleTodo, "What you need to do now") + "\n")
+	for i, it := range items {
+		fmt.Fprintf(&b, "  %d. %s\n", i+1, indent(it.Text, "     "))
+		for _, c := range it.Commands {
+			fmt.Fprintf(&b, "     %s\n", s.paint(RoleCommand, "$ "+c))
+		}
+	}
+	return b.String()
+}
+
+// Writer writes the kinds to a stream with one Style.
+type Writer struct {
+	W io.Writer
+	S Style
+}
+
+func (w Writer) put(text string) { _, _ = io.WriteString(w.W, text) }
+
+// Legend writes the legend.
+func (w Writer) Legend() { w.put(Legend(w.S)) }
+
+// Header writes a step header.
+func (w Writer) Header(n, total int, title string) { w.put("\n" + Header(w.S, n, total, title)) }
+
+// Report writes a report line.
+func (w Writer) Report(l Level, text string) { w.put(Report(w.S, l, text)) }
+
+// Action writes an ACTION line.
+func (w Writer) Action(text string) { w.put(Action(w.S, text)) }
+
+// Command writes a copyable command.
+func (w Writer) Command(cmd string) { w.put(Command(w.S, cmd)) }
+
+// Tool writes an outside tool's output apart from whr's own text.
+func (w Writer) Tool(text string) { w.put(ToolOutput(w.S, text)) }
+
+// Section writes a group title.
+func (w Writer) Section(title string) { w.put("\n" + Section(w.S, title)) }
+
+// Rule writes a separating rule.
+func (w Writer) Rule() { w.put(Rule(w.S)) }
+
+// Summary writes the one-line summary.
+func (w Writer) Summary(c Counts) { w.put(Summary(w.S, c)) }
+
+// Todo writes the closing numbered list.
+func (w Writer) Todo(items []TodoItem) {
+	if len(items) > 0 {
+		w.put("\n" + Todo(w.S, items))
+	}
+}
+
+// Question writes a prompt as an ACTION line, without a newline.
+func (w Writer) Question(text string, d Default) {
+	w.put(Question(w.S, text+" "+d.suffix()))
+}

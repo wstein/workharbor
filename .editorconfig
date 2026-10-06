@@ -32,3 +32,9 @@ insert_final_newline = unset
 [spikes/**/results/**]
 indent_style = unset
 indent_size = unset
+
+# Golden terminal output: its alignment is the thing under test.
+[internal/**/testdata/*.golden]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset
