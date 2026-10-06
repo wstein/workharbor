@@ -1,11 +1,15 @@
 package scripts_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 // TestClaudeForgePermissions checks the tracked configuration, not native
@@ -103,5 +107,44 @@ func TestClaudePortablePermissions(t *testing.T) {
 		if !slices.Contains(settings.Permissions.Deny, rule) {
 			t.Errorf("missing retained command/system deny %s", rule)
 		}
+	}
+}
+
+func TestPersonalSettingsAndPythonCachesIgnored(t *testing.T) {
+	repo, home := t.TempDir(), t.TempDir()
+	ignore, err := os.ReadFile("../.gitignore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), ignore, 0o600); err != nil { //nolint:gosec // fixed file in a private synthetic repository
+		t.Fatal(err)
+	}
+	if out, err := gittest.Git(t.Context(), home, repo, nil, "init").CombinedOutput(); err != nil {
+		t.Fatalf("init: %v: %s", err, out)
+	}
+	for _, tc := range []struct {
+		path    string
+		ignored bool
+	}{
+		{".claude/settings.local.json", true},
+		{"nested/.claude/settings.local.json", true},
+		{".claude/settings.json", false},
+		{"nested/.claude/settings.json", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			cmd := gittest.Git(t.Context(), home, repo, nil, "check-ignore", "--no-index", tc.path)
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			out, err := cmd.Output()
+			if tc.ignored {
+				if err != nil || strings.TrimSpace(string(out)) != tc.path {
+					t.Fatalf("want ignored: %v: stdout=%q stderr=%q", err, out, stderr.String())
+				}
+			} else if err == nil || len(out) != 0 {
+				t.Fatalf("non-ignored file must remain trackable: %v: stdout=%q stderr=%q", err, out, stderr.String())
+			} else if exit, ok := err.(interface{ ExitCode() int }); !ok || exit.ExitCode() != 1 {
+				t.Fatalf("check-ignore failed unexpectedly: %v: stderr=%q", err, stderr.String())
+			}
+		})
 	}
 }
