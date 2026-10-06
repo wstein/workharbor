@@ -63,6 +63,8 @@ account uses its actual host home directory. This change does not rename an
 account, move a home directory, change ownership or UID/GID, or migrate volumes,
 credentials or keys. Plan any existing-installation migration separately.
 
+To delete the account again, see [Remove the workharbor account](#remove-the-workharbor-account).
+
 ## 3. FileVault and restarts
 
 Keep **FileVault on**. That rules out automatic login, which is the right trade-off for a machine that holds agent logins.
@@ -315,3 +317,59 @@ The remaining steps run as the `workharbor` user: steps 2 and 3 from any `workha
     **What the agent and the console may reach (`environment.egress_allow`, `console.egress_allow`).** The agent environment reaches `api.anthropic.com` and nothing else by default; the console reaches `github.com`, `proxy.golang.org`, `sum.golang.org`, `registry.npmjs.org`, `pypi.org` and `files.pythonhosted.org`. An entry is **one exact host**: `github.com` admits `github.com` and not `api.github.com`, so a host you rely on is listed by name. A wildcard `*.example.com` (every subdomain, never the bare name) is allowed here, in your own configuration, and nowhere else: a repository's request for a host (its `devcontainer.json`, a lockfile) is one exact host that you answer as a Decision, and a request containing `*` is refused. To sign in to Claude Code with a subscription inside the environment (D40), the spike measured these hosts as the allowlist the flow needs: `claude.com`, `platform.claude.com`, `api.anthropic.com`, `auth.anthropic.com` and `statsig.anthropic.com` ({{< status verified >}} in [the sign-in spike](../spikes/agent-signin.md)); add them to `environment.egress_allow` before you sign in, and the same for the OpenAI hosts of Codex when that adapter exists. They are not in the default list, so the default allows no more than before.
     Add `"agent_api_key_env_file": "/Users/workharbor/.config/whr/agent.env"` only for an API key. `agent_allowed_tools` is required in the default `dontAsk` mode: only the tools listed there run, and the list above is an example to adapt. To approve each tool use yourself instead, set `"agent_permission_mode": "manual"` and remove the list: every prompt then arrives in `whr inbox` as an approval (`whr approve <id>` or `whr reject <id>`) and the agent waits for you for ten minutes before it is told no.
 4. **Start it and create a workspace.** In `workharbor`'s desktop session, because the supervisor talks to Apple Container's per-session services (step 2): `whr serve` checks the whole configuration at start and lists every problem. The web UI is on `listen` (`http://127.0.0.1:8787/`, or your forwarded HTTPS name) and the `whr` commands use the API socket in the state directory (keep `state_dir` short: a unix socket path is at most 100 bytes): sign in with the API token, then use the dashboard, the inbox and the task pages from a browser or the phone (design §9.3). In another terminal: `whr ws add <name> --path <empty folder below a workspace root> --repo <owner>/<repository> --role <role>` creates the workspace, seeds its agent clone and starts its environment; `whr agent add <workspace> <role>` adds an agent. Then `whr run <issue-url> --agent <workspace>/<role>`. To keep it running, let launchd do it (provisional command): `whr service install` writes `~/Library/LaunchAgents/io.github.wstein.workharbor.plist` (mode 0644, yours), loads it into `gui/<your uid>`, and from then on the job runs `container system start --disable-kernel-install`, then `whr serve`, and starts it again if it exits, at most every 30 seconds. It refuses to run outside the graphical session (a shell from SSH or `sudo` is in another domain), with a `whr` that sits in a git working tree (the job runs the installed binary, `/opt/whr/bin/whr` or `$(brew --prefix)/opt/whr/bin/whr`, never a build of a topic; run `whr service install` from it, or pass `--whr`), and with a configuration that `whr serve` would reject. Output goes to `~/Library/Logs/whr/whr.out.log` and `whr.err.log`, which launchd does not rotate. `whr service status` shows whether it is loaded and its pid, and `whr service uninstall` unloads it and removes the plist.
+
+## Remove the workharbor account
+
+Use this to delete the macOS user of workharbor (`workharbor` by default, written `<user>` below) that step 2 created with `sysadminctl -addUser`: the user, its home folder and its access. **Deleting a user is irreversible, and the home folder goes with it by default: back up first** (the repositories, `~/.config/whr`, the state in `~/.local/state/whr`, the workspaces' work) and check that the backup opens. `whr setup` changed host-wide settings that stay after the account is gone: the power settings (step 4), the log-out setting, the firewall and SSH settings (step 8) and what the Brewfile installed (step 5). Undo those by hand if you want them back. None of the commands below was run on macOS 26: every one is {{< status unverified >}}, so read each one before you run it, as the administrator, never as `workharbor`.
+
+1. **Inspect first.** Nothing here changes anything. Do not assume the name: the commands below write `<user>` for the account's real `RecordName`, which you use in every later command, and its home is `/Users/<user>`. The default name is `workharbor` (`WhrUser` in `internal/doctor/host.go`, decision D49); an account created before D49 may be named `whr` (home `/Users/whr`), and `whr setup host --user <name>` selects a non-default account (read, not run). A workharbor account is meant to be a standard user (the `workharbor-user` check passes only for that and warns for an administrator).
+    - `dscl . -list /Users UniqueID | sort -k2 -n` lists the names and IDs that exist {{< status unverified >}}.
+    - `dscl . -read /Users/<user> RecordName UniqueID PrimaryGroupID` confirms the account {{< status unverified >}}.
+    - `sudo ls -la /Users/<user>` lists what the home folder holds {{< status unverified >}}.
+    - `id <user>` shows the user and its groups; the groups to remove in step 3 come from this output {{< status unverified >}}.
+    - `sudo launchctl print user/$(id -u <user>)` lists what runs in its launchd domain {{< status unverified >}}.
+    - `ls /Library/LaunchDaemons /Library/LaunchAgents | grep -i <user>` finds a job of the account outside its home {{< status unverified >}}.
+    - `ls /etc/sudoers.d` shows a sudoers file that names it {{< status unverified >}}.
+    - `sudo fdesetup list` shows whether it is a FileVault user {{< status unverified >}}.
+    - `diskutil apfs list` shows the workspace volumes of step 3 {{< status unverified >}}.
+2. **Stop the sessions and processes.** First stop the containers and the service: in the account's session, `whr service uninstall` and `container system stop`. Then, as the administrator:
+    - `ps -u <user> -o pid,comm` shows what still runs for the account {{< status unverified >}}.
+    - Optional: `sudo launchctl bootout user/$(id -u <user>)` unloads its launchd domain {{< status unverified >}}; in one run by the user it printed nothing.
+    - Optional: log the account out at the login window or over Screen Sharing {{< status unverified >}}.
+
+    `sudo pkill -u <user>` is not needed: in the user's run, `sysadminctl -deleteUser` reported "Killing all processes for UID 502" itself, while an earlier `pkill` had reported "Operation not permitted" for six pids (observed once, cause not verified). Deleting the account while session processes still run may leave a remnant; that is {{< status unverified >}} too, so check with step 5.
+3. **Note the access, and any automatic login.** Delete normally removes the group memberships itself (step 5 shows what one run printed), so nothing has to be removed by hand first. Write down the groups that `id <user>` printed (for example `com.apple.access_ssh`, `com.apple.access_screensharing`, `com.apple.access_ftp`, `com.apple.access_remote_ae`, `admin`); `dseditgroup -o checkmember -m <user> admin` reads whether it is an administrator {{< status unverified >}}.
+    - `sudo defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser` shows whether automatic login names it; if it does, `sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser` removes the setting {{< status unverified >}}. Step 3 keeps automatic login off, so there is normally nothing to remove.
+4. **Delete the user.** `sudo sysadminctl -deleteUser <user>` deletes the account and, by default, its home folder; `-keepHome` keeps the folder {{< status unverified >}}. This is the irreversible step. Output observed once by the user for an account named `whr` (macOS version not recorded, not verified):
+
+    ```text
+    No clear text password or interactive option was specified (adduser, change/reset password will not allow user to use FDE) !
+    Killing all processes for UID 502
+    Removing whr's home at /Users/whr
+    Deleting Public share point for whr
+    Deleting record for whr
+    ```
+
+    The first line is a warning seen in that run; its meaning is not verified.
+5. **Verify.**
+    - `dscl . -read /Users/<user>` must fail with "does not exist", for the account name and for any alias record name {{< status unverified >}}.
+    - `id <user>` must fail with "no such user" {{< status unverified >}}.
+    - `ls /Users` and `ls "/Users/Deleted Users"` show what is left of the home folder {{< status unverified >}}. Remove a leftover only after `sudo ls -la` on it shows what it holds.
+    - `dscl . -read /Groups/<group> GroupMembership` for each group of step 3 must no longer list the name {{< status unverified >}}. Only if a group still does, remove the name with `sudo dseditgroup -o edit -d <user> -t user <group>` {{< status unverified >}}.
+
+    Observed once by the user after deleting `whr` (macOS version not recorded, not verified):
+
+    ```text
+    dscl . -read /Users/whr          eDSRecordNotFound (-14136)
+    dscl . -read /Users/workharbor   eDSRecordNotFound (-14136)
+    id whr                           no such user
+    id workharbor                    no such user
+    ls /Users                        Shared  werner
+    dscl . -read /Groups/com.apple.access_ssh GroupMembership   No such key: GroupMembership
+    (the same for access_screensharing, access_ftp, access_remote_ae)
+    dscl . -read /Groups/admin GroupMembership                  root werner _mbsetupuser
+    ```
+
+6. **Workspace volumes, only if their data should go too.** A volume of step 3 lives outside the home folder, so step 4 leaves it, and its files stay owned by a user that no longer exists, which shows as a bare number. Keep it if you plan to create `workharbor` again (a new account may get another user ID, and then ownership still does not match). To delete it: `diskutil apfs list` finds its identifier, then `sudo diskutil apfs deleteVolume <id>` erases it for good {{< status unverified >}}.
+
+After the account is gone, `whr setup host` and `whr doctor` report that there is no user `<user>` and name the `sysadminctl -addUser` command of step 2 as the fix; they never delete one. Today, with the user present, the `workharbor-user` check passes (`workharbor exists and is a standard user`, or a warning for an administrator) and offers no `addUser` fix; only a missing user, or an answer from `dscl` that is not clear, shows it. That is how the code reads (`internal/doctor/host.go`, issue #319); it was not run against a Mac ({{< status unverified >}}). A command that removes the account is a possible later idea, not planned.
