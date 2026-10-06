@@ -127,7 +127,11 @@ func TestClaudeSharedAllowExcludesBoardWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, verb := range []string{"move", "ready", "session", "priority", "add"} {
-		for _, prefix := range []string{"scripts/board-snapshot.sh", "./scripts/board-snapshot.sh"} {
+		for _, prefix := range []string{
+			"scripts/board-snapshot.sh", "./scripts/board-snapshot.sh",
+			"bash scripts/board-snapshot.sh", "sh scripts/board-snapshot.sh",
+			"scripts/board-snapshot.sh --refresh",
+		} {
 			command := prefix + " " + verb + " 1 x"
 			t.Run(command, func(t *testing.T) {
 				for _, rule := range settings.Permissions.Allow {
@@ -136,6 +140,18 @@ func TestClaudeSharedAllowExcludesBoardWrites(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+	// Any rule that mentions the script must be one of the known read-only routes.
+	readOnly := []string{
+		"Bash(scripts/board-snapshot.sh)",
+		"Bash(scripts/board-snapshot.sh --refresh)",
+		"Bash(scripts/board-snapshot.sh card:*)",
+		"Bash(scripts/board-snapshot.sh queue:*)",
+	}
+	for _, rule := range settings.Permissions.Allow {
+		if strings.Contains(rule, "board-snapshot") && !slices.Contains(readOnly, rule) {
+			t.Errorf("allow rule %s mentions board-snapshot but is not a known read-only route", rule)
 		}
 	}
 }
@@ -155,8 +171,9 @@ func allowRuleCoversBash(rule, command string) bool {
 	if !ok {
 		return false
 	}
+	// A trailing ":*" is the legacy spelling of " *"; "*" may appear anywhere.
 	if prefix, legacy := strings.CutSuffix(spec, ":*"); legacy {
-		return command == prefix || strings.HasPrefix(command, prefix+" ")
+		return command == prefix || wildcardMatch(prefix+" *", command)
 	}
 	return wildcardMatch(spec, command)
 }
@@ -183,7 +200,7 @@ func wildcardMatch(pattern, s string) bool {
 	return strings.HasSuffix(s, last)
 }
 
-func TestAllowRuleCoversBash(t *testing.T) {
+func TestClaudeAllowRuleCoversBash(t *testing.T) {
 	const move = "scripts/board-snapshot.sh move 1 Done"
 	for _, tc := range []struct {
 		rule string
@@ -195,6 +212,12 @@ func TestAllowRuleCoversBash(t *testing.T) {
 		{"Bash(scripts/board-snapshot.sh:*)", true},
 		{"Bash(scripts/board-snapshot.sh move:*)", true},
 		{"Bash(scripts/board-snapshot.sh *)", true},
+		{"Bash(scripts/*:*)", true},
+		{"Bash(*/board-snapshot.sh:*)", true},
+		{"Bash(*:*)", true},
+		{"Bash(scripts/board-snapshot.sh --refresh:*)", false},
+		{"Bash(scripts/board-snapshot.sh move 1 Done)", true},
+		{"Bash(scripts/board-snapshot.sh move 42 Done)", false},
 		{move, false},
 		{"Bash(" + move + ")", true},
 		{"Bash(scripts/board-snapshot.sh)", false},
@@ -249,5 +272,25 @@ func TestPersonalSettingsAndPythonCachesIgnored(t *testing.T) {
 				t.Fatalf("check-ignore failed unexpectedly: %v: stderr=%q", err, stderr.String())
 			}
 		})
+	}
+}
+
+func TestClaudeAllowRuleCoversInterpreterAndFlagFirst(t *testing.T) {
+	for _, tc := range []struct {
+		rule, command string
+		want          bool
+	}{
+		{"Bash(./scripts/*:*)", "./scripts/board-snapshot.sh move 1 Done", true},
+		{"Bash(bash:*)", "bash scripts/board-snapshot.sh move 1 Done", true},
+		{"Bash(bash scripts/*)", "bash scripts/board-snapshot.sh move 1 Done", true},
+		{"Bash(sh *)", "sh scripts/board-snapshot.sh move 1 Done", true},
+		{"Bash(scripts/board-snapshot.sh --refresh:*)", "scripts/board-snapshot.sh --refresh move 1 Done", true},
+		{"Bash(scripts/board-snapshot.sh move 42 Done)", "scripts/board-snapshot.sh move 42 Done", true},
+		{"Bash(scripts/board-snapshot.sh priority 7 P1)", "scripts/board-snapshot.sh priority 7 P1", true},
+		{"Bash(scripts/board-snapshot.sh card:*)", "bash scripts/board-snapshot.sh move 1 Done", false},
+	} {
+		if got := allowRuleCoversBash(tc.rule, tc.command); got != tc.want {
+			t.Errorf("allowRuleCoversBash(%q, %q) = %v, want %v", tc.rule, tc.command, got, tc.want)
+		}
 	}
 }
