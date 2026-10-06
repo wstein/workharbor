@@ -40,15 +40,11 @@ func TestClaudeForgePermissions(t *testing.T) {
 			}
 		})
 	}
-	for _, rule := range []string{
+	for _, rule := range append([]string{
 		"Bash(gh api repos/wstein/workharbor/code-scanning/alerts)",
 		"Bash(gh api repos/wstein/workharbor/dependabot/alerts)",
 		"Bash(gh api repos/wstein/workharbor/rulesets)",
-		"Bash(scripts/board-snapshot.sh)",
-		"Bash(scripts/board-snapshot.sh --refresh)",
-		"Bash(scripts/board-snapshot.sh card:*)",
-		"Bash(scripts/board-snapshot.sh queue:*)",
-	} {
+	}, boardReadOnlyRoutes...) {
 		if !slices.Contains(settings.Permissions.Allow, rule) {
 			t.Errorf("missing retained route %s", rule)
 		}
@@ -143,15 +139,71 @@ func TestClaudeSharedAllowExcludesBoardWrites(t *testing.T) {
 		}
 	}
 	// Any rule that mentions the script must be one of the known read-only routes.
-	readOnly := []string{
-		"Bash(scripts/board-snapshot.sh)",
-		"Bash(scripts/board-snapshot.sh --refresh)",
-		"Bash(scripts/board-snapshot.sh card:*)",
-		"Bash(scripts/board-snapshot.sh queue:*)",
-	}
 	for _, rule := range settings.Permissions.Allow {
-		if strings.Contains(rule, "board-snapshot") && !slices.Contains(readOnly, rule) {
-			t.Errorf("allow rule %s mentions board-snapshot but is not a known read-only route", rule)
+		if strings.Contains(rule, "board-snapshot") && !slices.Contains(boardReadOnlyRoutes, rule) {
+			t.Errorf("allow rule %s mentions board-snapshot but is not a known read-only route: review it, then add it to the shared boardReadOnlyRoutes list", rule)
+		}
+	}
+	// Structural check: every Bash allow rule starts with a literal, known
+	// first word, so no wrapper, interpreter, path or wildcard-first rule can
+	// reach the board script by another spelling.
+	for _, rule := range settings.Permissions.Allow {
+		if !allowRuleHasKnownFirstWord(rule) {
+			t.Errorf("allow rule %s must be a Bash rule starting with a literal first word from allowedBashFirstWords", rule)
+		}
+	}
+}
+
+// boardReadOnlyRoutes are the only shared allow rules that may mention the
+// board script.
+var boardReadOnlyRoutes = []string{
+	"Bash(scripts/board-snapshot.sh)",
+	"Bash(scripts/board-snapshot.sh --refresh)",
+	"Bash(scripts/board-snapshot.sh card:*)",
+	"Bash(scripts/board-snapshot.sh queue:*)",
+}
+
+// allowedBashFirstWords are the literal first words the committed Bash allow
+// rules start with. Add one only after review.
+var allowedBashFirstWords = []string{"git", "make", "gh", "df", "container", "scripts/board-snapshot.sh"}
+
+// allowRuleHasKnownFirstWord reports whether rule is either a non-Bash tool
+// rule without arguments (Grep, Glob, WebSearch) or a Bash(...) rule whose
+// first word is literally one of allowedBashFirstWords. A bare "Bash" rule and
+// anything wildcard-, path-, quote-, dot- or assignment-first fails.
+func allowRuleHasKnownFirstWord(rule string) bool {
+	if !strings.HasPrefix(rule, "Bash") {
+		return !strings.Contains(rule, "(")
+	}
+	spec, ok := strings.CutPrefix(rule, "Bash(")
+	if !ok || !strings.HasSuffix(rule, ")") {
+		return false
+	}
+	spec = strings.TrimSuffix(spec, ")")
+	word, _, _ := strings.Cut(spec, " ")
+	word, _, _ = strings.Cut(word, ":")
+	return slices.Contains(allowedBashFirstWords, word)
+}
+
+func TestClaudeAllowRuleHasKnownFirstWord(t *testing.T) {
+	for _, rule := range []string{
+		"Bash", "Bash(*)", "Bash(env:*)", "Bash(env *)", "Bash(bash -c *)", "Bash(sh -c:*)",
+		"Bash(zsh:*)", "Bash(exec:*)", "Bash(source:*)", "Bash(. scripts/*)", "Bash(/*)",
+		"Bash(/*:*)", "Bash(WHR_BOARD_SNAPSHOT=* scripts/*)", "Bash(*=* *)", "Bash('scripts/*)",
+		`Bash("scripts/*)`, "Bash(scripts/./*)", "Bash(scripts//*)",
+		"Bash(scripts/board-snap* move 42 Done)", "Bash(scripts/board*:*)", "Bash(*/board-snapshot.sh:*)",
+		"Bash(", "Bash()",
+	} {
+		if allowRuleHasKnownFirstWord(rule) {
+			t.Errorf("rule %q must fail the first-word check", rule)
+		}
+	}
+	for _, rule := range []string{
+		"Grep", "Glob", "WebSearch", "Bash(git status)", "Bash(make check)", "Bash(gh run list:*)",
+		"Bash(df -h)", "Bash(container ls --all)", "Bash(scripts/board-snapshot.sh queue:*)",
+	} {
+		if !allowRuleHasKnownFirstWord(rule) {
+			t.Errorf("rule %q must pass the first-word check", rule)
 		}
 	}
 }
