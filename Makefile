@@ -250,6 +250,10 @@ check-hooks:
 		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
 	fi
 
+# The sub-makes of land go through LAND_MAKE: the recipe line must not contain
+# $(MAKE) itself, or make -n, -t and -q would run it for real (merge included).
+LAND_MAKE := $(MAKE)
+
 # Land the current branch on main, from a session's own worktree (BRANCH=<name>
 # from any checkout: land the worktree that has it checked out; SHA=<full sha>:
 # refuse unless the candidate is that commit; see the manual): refuse unless
@@ -257,7 +261,7 @@ check-hooks:
 # the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
-	@want=""; \
+	@want=""; wb=""; \
 	if [ "$(origin SHA)" = "command line" ]; then \
 		case "$$SHA" in ""|*[!0-9a-f]*) echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1;; esac; \
 		if [ "$${#SHA}" != 40 ]; then echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1; fi; want="$$SHA"; fi; \
@@ -277,6 +281,7 @@ land:
 	fi; \
 	shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
 	branch="$$(git symbolic-ref -q --short HEAD)" || { echo "land: check out the branch to land first" >&2; exit 1; }; \
+	if [ -n "$$wb" ] && [ "$$branch" != "$$wb" ]; then echo "land: the worktree switched away from $$wb: stop and tell the human" >&2; exit 1; fi; \
 	if [ "$$branch" = main ]; then echo "land: run it on a topic branch in your own worktree, not on main" >&2; exit 1; fi; \
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
 		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
@@ -286,10 +291,10 @@ land:
 	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
 	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
 	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
-	$(MAKE) -s check-local commitlint || exit 1; \
-	$(MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
+	$(LAND_MAKE) -s check-local commitlint || exit 1; \
+	$(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
 	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
-	if [ -n "$$generated" ]; then $(MAKE) -s check-generated || exit 1; fi; \
+	if [ -n "$$generated" ]; then $(LAND_MAKE) -s check-generated || exit 1; fi; \
 	if [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ] || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ]; then \
 		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
 	if [ "$$(git rev-parse main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \

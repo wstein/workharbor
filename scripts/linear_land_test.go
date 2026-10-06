@@ -78,7 +78,7 @@ func TestLinearLand(t *testing.T) {
 			if tc.failScan {
 				checks += "\t@echo required-secret-scan-failed >&2; exit 1\n"
 			}
-			write(filepath.Join(dir, "Makefile"), []byte("land:\n"+recipe+checks))
+			write(filepath.Join(dir, "Makefile"), []byte("LAND_MAKE := $(MAKE)\nland:\n"+recipe+checks))
 			if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -219,7 +219,7 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		checks += "\t@if [ ! -f checks-ran ]; then git update-ref refs/heads/main \"$$(git commit-tree -p main -m moved main^{tree})\"; fi\n"
 	}
 	checks += "\t@echo $@ >> checks-ran\nsecrets-range:\n\t@echo secrets-range $(RANGE) $(TIP) >> checks-ran\n"
-	r.write(filepath.Join(r.dir, "Makefile"), "land:\n"+recipe+checks)
+	r.write(filepath.Join(r.dir, "Makefile"), "LAND_MAKE := $(MAKE)\nland:\n"+recipe+checks)
 	if err := os.Mkdir(filepath.Join(r.dir, "scripts"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -353,6 +353,11 @@ func TestLandBranchArg(t *testing.T) {
 			t.Fatalf("main = %s", got)
 		}
 	})
+	t.Run("a prefix of a branch name is not the branch", func(t *testing.T) {
+		r := newLandBranchRepo(t, false)
+		r.topic("topic")
+		r.wantRefused(r.dir, "no worktree has top checked out", "BRANCH=top")
+	})
 	t.Run("missing branch", func(t *testing.T) {
 		r := newLandBranchRepo(t, false)
 		r.topic("topic")
@@ -445,7 +450,7 @@ func TestLandBranchArg(t *testing.T) {
 		r.topic("topic")
 		bare := filepath.Join(t.TempDir(), "bare.git")
 		r.git(r.dir, "clone", "-q", "--bare", r.dir, bare)
-		r.write(filepath.Join(bare, "Makefile"), "land:\n"+r.recipe)
+		r.write(filepath.Join(bare, "Makefile"), "LAND_MAKE := $(MAKE)\nland:\n"+r.recipe)
 		out, err := r.land(bare, nil, "BRANCH=topic")
 		if err == nil || !strings.Contains(out, "not a bare repository") {
 			t.Fatalf("want refusal, got %v\n%s", err, out)
@@ -474,5 +479,54 @@ func TestLandSHAArg(t *testing.T) {
 	}
 	if got := r.git(r.dir, "rev-parse", "main"); got != candidate {
 		t.Fatalf("main = %s, want %s", got, candidate)
+	}
+}
+
+// make -n, -t, -q and MAKEFLAGS only print a recipe line that contains $(MAKE),
+// and the land recipe is one such line: its guards and the merge must never run
+// for real without the checks.
+func TestLandIgnoresDryRunFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  []string
+		args []string
+	}{
+		{"-n branch", nil, []string{"-n", "BRANCH=topic"}},
+		{"-n plain", nil, []string{"-n"}},
+		{"--dry-run", nil, []string{"--dry-run", "BRANCH=topic"}},
+		{"--just-print", nil, []string{"--just-print", "BRANCH=topic"}},
+		{"-t", nil, []string{"-t", "BRANCH=topic"}},
+		{"--touch", nil, []string{"--touch", "BRANCH=topic"}},
+		{"-q", nil, []string{"-q", "BRANCH=topic"}},
+		{"--question", nil, []string{"--question", "BRANCH=topic"}},
+		{"MAKEFLAGS=n", []string{"MAKEFLAGS=n"}, []string{"BRANCH=topic"}},
+		{"GNUMAKEFLAGS=-n", []string{"GNUMAKEFLAGS=-n"}, []string{"BRANCH=topic"}},
+		{"GNUMAKEFLAGS=-n plain", []string{"GNUMAKEFLAGS=-n"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.env) > 0 && strings.HasPrefix(tc.env[0], "GNUMAKEFLAGS") {
+				// GNU make 3.81 (macOS) ignores GNUMAKEFLAGS and would really land.
+				if out, err := exec.CommandContext(t.Context(), "make", "--version").Output(); err != nil || strings.Contains(string(out), "GNU Make 3.") {
+					t.Skip("make does not support GNUMAKEFLAGS")
+				}
+			}
+			r := newLandBranchRepo(t, false)
+			wt := r.topic("topic")
+			base := r.git(r.dir, "rev-parse", "main")
+			at := r.dir
+			if tc.args[len(tc.args)-1] != "BRANCH=topic" {
+				at = wt
+			}
+			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
+			cmd.Dir = at
+			cmd.Env = append(r.env(), tc.env...)
+			out, _ := cmd.CombinedOutput()
+			if got := r.git(r.dir, "rev-parse", "main"); got != base {
+				t.Fatalf("main moved to %s under %s without the checks\n%s", got, tc.name, out)
+			}
+			if _, err := os.Stat(filepath.Join(wt, "checks-ran")); !os.IsNotExist(err) {
+				t.Fatalf("checks marker present: %v", err)
+			}
+		})
 	}
 }
