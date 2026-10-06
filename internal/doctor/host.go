@@ -83,6 +83,77 @@ func dsclNotFound(err error) bool {
 	return strings.Contains(m, "exit status 56") || strings.Contains(m, "does not exist") || strings.Contains(m, "eDSRecordNotFound")
 }
 
+// LegacyUser is the account name before D49: an installation made then runs as
+// it, and the host steps recognise it without ever renaming or removing it.
+const LegacyUser = "whr"
+
+// userStep is the workharbor-user check. When the account is missing and only
+// the legacy account exists, it says so and points at `--user whr` instead of
+// offering a second account; it never creates, renames or deletes one. Its
+// Fix is the one the last Run left (the wizard shows it after the check).
+func userStep(d Deps, setupCommand string) Check {
+	create := []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "WorkHarbor", "-password", "-"}}}
+	createGuide := "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there."
+	fix := &Fix{Cmds: create, Guide: createGuide}
+	legacy := false // set by the last Run: only the Fail with a found whr
+	return Check{
+		Name: "workharbor-user", Phase: PhaseHost, Step: 2, Title: "the standard user " + d.account() + " (manual step 2)",
+		Run: func(ctx context.Context) (Status, string) {
+			fix.Cmds, fix.Guide = create, createGuide
+			legacy = false
+			if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
+				if st, msg, ok := notHere(err); ok {
+					return st, msg
+				}
+				if dsclNotFound(err) {
+					st, msg, found := d.missingUser(ctx, fix)
+					legacy = found
+					return st, msg
+				}
+				return NotVerified, "dscl did not say whether " + d.account() + " exists: " + oneLine(err.Error())
+			}
+			admin, known := d.isAdmin(ctx)
+			if !known {
+				return NotVerified, d.account() + " exists; dseditgroup did not say whether it is an administrator"
+			}
+			if admin {
+				return Warn, d.account() + " is an administrator: allowed, but a dedicated standard user is the recommended account (D49; see the account check and the drop-admin step)"
+			}
+			return OK, d.account() + " exists and is a standard user"
+		},
+		Fix: fix,
+		UseUser: func(Status) string {
+			if legacy {
+				return LegacyUser
+			}
+			return ""
+		},
+	}
+}
+
+// missingUser says what a missing account means: a legacy whr account that
+// exists is named, with the commands that use it (the Fix becomes guidance
+// only); only a real not-found of whr leaves the creation offered, and any
+// other answer is not verified.
+func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string, legacyFound bool) {
+	missing := "there is no user " + d.account()
+	// only the default account has a legacy name (#344): an account asked for
+	// by --user is created as asked
+	if d.account() != WhrUser {
+		return Fail, missing, false
+	}
+	_, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+LegacyUser, "UniqueID")
+	switch {
+	case err == nil:
+		fix.Cmds = nil
+		fix.Guide = "Nothing is created, renamed or deleted. Run `whr setup host --user " + LegacyUser + "` and `whr doctor --user " + LegacyUser + "` to keep using the legacy account."
+		return Fail, missing + ", but the legacy account " + LegacyUser + " exists: run `whr setup host --user " + LegacyUser + "` or `whr doctor --user " + LegacyUser + "` to use it instead of creating a second account", true
+	case dsclNotFound(err):
+		return Fail, missing, false
+	}
+	return NotVerified, "there is no user " + d.account() + ", and dscl did not say whether the legacy account " + LegacyUser + " exists: " + oneLine(err.Error()), false
+}
+
 // serviceContainerSystem is the service the container-start step brings up and
 // the steps after it need.
 const serviceContainerSystem = "container-system"
@@ -169,32 +240,7 @@ func hostSteps(d Deps) []Check {
 		brewfile = DefaultBrewfile
 	}
 	return []Check{
-		{
-			Name: "workharbor-user", Phase: PhaseHost, Step: 2, Title: "the standard user " + d.account() + " (manual step 2)",
-			Run: func(ctx context.Context) (Status, string) {
-				if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
-					if st, msg, ok := notHere(err); ok {
-						return st, msg
-					}
-					if dsclNotFound(err) {
-						return Fail, "there is no user " + d.account()
-					}
-					return NotVerified, "dscl did not say whether " + d.account() + " exists: " + oneLine(err.Error())
-				}
-				admin, known := d.isAdmin(ctx)
-				if !known {
-					return NotVerified, d.account() + " exists; dseditgroup did not say whether it is an administrator"
-				}
-				if admin {
-					return Warn, d.account() + " is an administrator: allowed, but a dedicated standard user is the recommended account (D49; see the account check and the drop-admin step)"
-				}
-				return OK, d.account() + " exists and is a standard user"
-			},
-			Fix: &Fix{
-				Cmds:  []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "workharbor", "-password", "-"}}},
-				Guide: "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there.",
-			},
-		},
+		userStep(d, setupCommand),
 
 		{
 			Name: "autologout", Phase: PhaseHost, Step: 2, Title: "no automatic log-out after inactivity (manual step 2)",

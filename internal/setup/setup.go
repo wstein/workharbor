@@ -55,6 +55,9 @@ type Outcome struct {
 	Detail string
 	Fixed  bool // a fix ran and the check passed afterwards
 	Asked  bool // a fix was offered and declined or left undone
+	// UseUser is the account the step says to use instead of the requested one
+	// (the legacy account): the next command names it.
+	UseUser string
 }
 
 // Select returns the steps to run: those of the phase, from --from on, or only
@@ -129,6 +132,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		st, detail := s.Run(ctx)
 		fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
 		out := Outcome{Step: s.Name, Status: st, Detail: detail}
+		if s.UseUser != nil {
+			out.UseUser = s.UseUser(st)
+		}
 		if st == doctor.Warn && !s.FixOnWarn || st == doctor.Skipped {
 			fmt.Fprintf(o.Err, "%s: %s\n", s.Name, oneLine(detail))
 			outs = append(outs, out)
@@ -210,7 +216,7 @@ func names(cs []doctor.Check) []string {
 func Summary(w io.Writer, outs []Outcome, o Options) {
 	dryRun := o.DryRun
 	var done, left, leftNames []string
-	first := ""
+	first, useUser := "", ""
 	for _, out := range outs {
 		switch out.Status {
 		case doctor.OK:
@@ -220,7 +226,7 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 			left = append(left, out.Step+" ("+string(out.Status)+")")
 			leftNames = append(leftNames, out.Step)
 			if first == "" {
-				first = out.Step
+				first, useUser = out.Step, out.UseUser
 			}
 		}
 	}
@@ -234,7 +240,15 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 	fmt.Fprintf(w, "%s:\n  done: %s\n", prefix, listOrNone(done))
 	fmt.Fprintf(w, "  left: %s\n", listOrNone(left))
 	if first != "" {
-		fmt.Fprintf(w, "  next: %s\n", nextCommand(o, first, leftNames))
+		if useUser != "" {
+			argv := append([]string(nil), o.Resume...)
+			if len(argv) == 0 {
+				argv = []string{"whr", "setup"}
+			}
+			fmt.Fprintf(w, "  next: %s\n", quoteArgv(append(argv, "--user", useUser)))
+		} else {
+			fmt.Fprintf(w, "  next: %s\n", nextCommand(o, first, leftNames))
+		}
 	}
 	for _, out := range outs {
 		if out.Step == "container-kernel" && out.Status != doctor.OK {

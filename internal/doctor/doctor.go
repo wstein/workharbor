@@ -63,6 +63,9 @@ type Check struct {
 	// Title says in a few words what the step is for.
 	Title string
 	Fix   *Fix
+	// UseUser, if set, names an account to run the setup commands as instead
+	// of the requested one, for the status the last Run returned ("" for none).
+	UseUser func(Status) string
 	// Needs names a service the step's check or fix cannot work without, and
 	// Provides one a successful fix of the step brings up. Setup refuses to run
 	// a fix whose service no earlier step provided and a test holds the order to
@@ -366,6 +369,11 @@ func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
 		r := Result{Check: c.Name, Step: c.Step, Status: st, Detail: detail, Phase: c.Phase}
 		if st == Fail || st == NotVerified || (st == Warn && c.FixOnWarn) {
 			r.Fix = c.FixCommand(detail)
+			if c.UseUser != nil {
+				if u := c.UseUser(st); u != "" {
+					r.Fix = "whr setup host --user " + u
+				}
+			}
 		}
 		out = append(out, r)
 	}

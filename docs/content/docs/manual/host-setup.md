@@ -48,8 +48,10 @@ Secrets are only ever generated or typed without echo, written `0600` with an ex
 
 ```bash
 # as the administrator; you are asked for a password
-sudo sysadminctl -addUser workharbor -fullName "workharbor" -password -
+sudo sysadminctl -addUser workharbor -fullName "WorkHarbor" -password -
 ```
+
+The record name (the short name) stays lowercase `workharbor`; only the full name shown at the login window is set as `WorkHarbor` ({{< status unverified >}} on macOS 26).
 
 The default service account is `workharbor`. The host account step is named
 `workharbor-user`; its title, account-creation command and login guidance use
@@ -58,7 +60,7 @@ retain `--user` for a nondefault account. The old `whr-user` step name remains a
 input alias for `whr setup host --only`, `--from` and `whr doctor --skip`; output and
 completion use `workharbor-user`. Existing installations can keep their
 current nonroot account, including `whr`, by passing `--user <account>` to
-`whr setup` and `whr doctor` (for example, `whr doctor --user whr`). The selected
+`whr setup` and `whr doctor` (for example, `whr doctor --user whr`, where `whr` is the legacy account name from before D49). When the `workharbor-user` check runs for the default account, finds no `workharbor` but does find a `whr` account, it says so and names `whr setup host --user whr` and `whr doctor --user whr` as the next step instead of offering `sysadminctl -addUser` for a second account (an account you name with `--user` is never redirected); it only counts `whr` as missing on a real "not found" answer from `dscl`, and any other answer stays not verified ({{< status unverified >}} on macOS 26). The selected
 account uses its actual host home directory. This change does not rename an
 account, move a home directory, change ownership or UID/GID, or migrate volumes,
 credentials or keys. Plan any existing-installation migration separately.
@@ -320,9 +322,9 @@ The remaining steps run as the `workharbor` user: steps 2 and 3 from any `workha
 
 ## Remove the workharbor account
 
-Use this to delete the macOS user of workharbor (`workharbor` by default, written `<user>` below) that step 2 created with `sysadminctl -addUser`: the user, its home folder and its access. **Deleting a user is irreversible, and the home folder goes with it by default: back up first** (the repositories, `~/.config/whr`, the state in `~/.local/state/whr`, the workspaces' work) and check that the backup opens. `whr setup` changed host-wide settings that stay after the account is gone: the power settings (step 4), the log-out setting, the firewall and SSH settings (step 8) and what the Brewfile installed (step 5). Undo those by hand if you want them back. None of the commands below was run on macOS 26: every one is {{< status unverified >}}, so read each one before you run it, as the administrator, never as `workharbor`.
+Use this to delete the macOS user of workharbor (`workharbor` by default, written `<user>` below; its record name is lowercase and its full name `WorkHarbor`) that step 2 created with `sysadminctl -addUser`: the user, its home folder and its access. **Deleting a user is irreversible, and the home folder goes with it by default: back up first** (the repositories, `~/.config/whr`, the state in `~/.local/state/whr`, the workspaces' work) and check that the backup opens. `whr setup` changed host-wide settings that stay after the account is gone: the power settings (step 4), the log-out setting, the firewall and SSH settings (step 8) and what the Brewfile installed (step 5). Undo those by hand if you want them back. None of the commands below was run on macOS 26: every one is {{< status unverified >}}, so read each one before you run it, as the administrator, never as `workharbor`.
 
-1. **Inspect first.** Nothing here changes anything. Do not assume the name: the commands below write `<user>` for the account's real `RecordName`, which you use in every later command, and its home is `/Users/<user>`. The default name is `workharbor` (`WhrUser` in `internal/doctor/host.go`, decision D49); an account created before D49 may be named `whr` (home `/Users/whr`), and `whr setup host --user <name>` selects a non-default account (read, not run). A workharbor account is meant to be a standard user (the `workharbor-user` check passes only for that and warns for an administrator).
+1. **Inspect first.** Nothing here changes anything. Do not assume the name: the commands below write `<user>` for the account's real `RecordName`, which you use in every later command, and its home is `/Users/<user>`. The default name is `workharbor` (`WhrUser` in `internal/doctor/host.go`, decision D49); an account created before D49 may be named `whr` (home `/Users/whr`, the legacy name), and `whr setup host --user <name>` selects a non-default account (read, not run). A workharbor account is meant to be a standard user (the `workharbor-user` check passes only for that and warns for an administrator).
     - `dscl . -list /Users UniqueID | sort -k2 -n` lists the names and IDs that exist {{< status unverified >}}.
     - `dscl . -read /Users/<user> RecordName UniqueID PrimaryGroupID` confirms the account {{< status unverified >}}.
     - `sudo ls -la /Users/<user>` lists what the home folder holds {{< status unverified >}}.

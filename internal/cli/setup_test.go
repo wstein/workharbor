@@ -199,7 +199,7 @@ func TestADryRunPrintsEveryFixAndChangesNothing(t *testing.T) {
 	for _, want := range []string{
 		"$ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0",
 		"$ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
-		"$ sudo sysadminctl -addUser workharbor -fullName workharbor -password -",
+		"$ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -",
 		"$ sudo install -m 0644 -o root -g wheel",
 		"sudo fdesetup enable",
 	} {
@@ -342,6 +342,8 @@ func TestAccountStepCanonicalAndLegacySelection(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			r := newSetupRig(t)
 			r.dsclSays("operator", errors.New("exit status 56"))
+			r.dsclSays("whr", errors.New("exit status 56"))
+			r.dsclSays("whr", errors.New("exit status 56"))
 			code, out, errOut := r.run("setup", "host", "--dry-run", "--only", name, "--user", "operator")
 			text := out + errOut
 			if code != 1 || !strings.Contains(text, "workharbor-user") || !strings.Contains(text, "sysadminctl -addUser operator") {
@@ -404,6 +406,7 @@ func TestAccountStepCompletionIsCanonical(t *testing.T) {
 func TestAccountStepLegacyFrom(t *testing.T) {
 	r := newSetupRig(t)
 	r.dsclSays("operator", errors.New("exit status 56"))
+	r.dsclSays("whr", errors.New("exit status 56"))
 	code, out, errOut := r.run("setup", "host", "--dry-run", "--from", "whr-user", "--only", "workharbor-user", "--user", "operator")
 	if code != 1 || !strings.Contains(out+errOut, "$ sudo sysadminctl -addUser operator") {
 		t.Fatalf("code %d: %s%s", code, out, errOut)
@@ -439,5 +442,19 @@ func TestDoctorRepairsKeepSelectedAccount(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("user repair lacks selected account %q: %s", account, out)
 		}
+	}
+}
+
+func TestSetupHostNextPointsAtLegacyUserWhr(t *testing.T) {
+	r := newSetupRig(t)
+	r.dsclSays("workharbor", errors.New("exit status 56"))
+	r.host.outputs["dscl . -read /Users/whr UniqueID"] = "UniqueID: 502"
+	_, out, errOut := r.run("setup", "host", "--dry-run", "--only", "workharbor-user")
+	text := out + errOut
+	if strings.Contains(text, "-addUser") || strings.Contains(text, "--only workharbor-user") || !strings.Contains(text, "next: whr setup host ") || !strings.Contains(text, " --user whr\n") {
+		t.Errorf("legacy next line wrong:\n%s", text)
+	}
+	if strings.Contains(text, "--user whr --user") {
+		t.Errorf("double --user:\n%s", text)
 	}
 }

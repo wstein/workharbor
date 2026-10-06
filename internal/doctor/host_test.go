@@ -92,7 +92,7 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 			if got, detail := status(c); got != OK || detail != tc.want+" exists and is a standard user" {
 				t.Errorf("success: %s %q", got, detail)
 			}
-			wantArgv := []string{"sysadminctl", "-addUser", tc.want, "-fullName", "workharbor", "-password", "-"}
+			wantArgv := []string{"sysadminctl", "-addUser", tc.want, "-fullName", "WorkHarbor", "-password", "-"}
 			if !c.Fix.Cmds[0].Sudo || !reflect.DeepEqual(c.Fix.Cmds[0].Argv, wantArgv) {
 				t.Errorf("creation command = %+v", c.Fix.Cmds[0])
 			}
@@ -106,7 +106,7 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 			if !strings.Contains(c.Fix.Guide, "run `"+wantSetup+"` there") {
 				t.Errorf("setup command missing from guide %q", c.Fix.Guide)
 			}
-			d.Runner = scripted{"dscl . -read /Users/" + tc.want + " UniqueID": "ERR:exit status 56"}
+			d.Runner = scripted{"dscl . -read /Users/" + tc.want + " UniqueID": "ERR:exit status 56", "dscl . -read /Users/whr UniqueID": "ERR:exit status 56"}
 			if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail || detail != "there is no user "+tc.want {
 				t.Errorf("missing: %s %q", got, detail)
 			}
@@ -161,7 +161,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 	if got, detail := status(st["workharbor-user"]); got != Warn || !strings.Contains(detail, "administrator") {
 		t.Errorf("an administrator whr = %s %q", got, detail)
 	}
-	if got, detail := status(steps(t, hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:exit status 56"}))["workharbor-user"]); got != Fail || !strings.Contains(detail, "no user") {
+	if got, detail := status(steps(t, hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:exit status 56", "dscl . -read /Users/whr UniqueID": "ERR:exit status 56"}))["workharbor-user"]); got != Fail || !strings.Contains(detail, "no user") {
 		t.Errorf("a missing user = %s %q", got, detail)
 	}
 }
@@ -835,7 +835,7 @@ func TestWhrUserFailsOnlyOnARecognizableNotFound(t *testing.T) {
 		"exit status 56: <dscl_cmd> DS Error: -14136 (eDSRecordNotFound)",
 		"exit status 1: <dscl_cmd> DS Error: Record does not exist",
 	} {
-		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg}))["workharbor-user"])
+		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg, dsclLegacy: "ERR:exit status 56"}))["workharbor-user"])
 		if got != Fail || detail != "there is no user workharbor" {
 			t.Errorf("%q = %s %q, want fail", msg, got, detail)
 		}
@@ -902,7 +902,7 @@ func TestWhrUserFailsOnARealExitStatus56ButNotOnOtherRealExits(t *testing.T) {
 }
 
 func TestWhrUserNotFoundByTextAlone(t *testing.T) {
-	d := hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:<dscl_cmd> DS Error: -14136 (eDSRecordNotFound)"})
+	d := hostDeps(scripted{"dscl . -read /Users/workharbor UniqueID": "ERR:<dscl_cmd> DS Error: -14136 (eDSRecordNotFound)", dsclLegacy: "ERR:exit status 56"})
 	if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail {
 		t.Errorf("%s %q", got, detail)
 	}
@@ -972,3 +972,160 @@ type hidden struct{ err error }
 
 func (h hidden) Error() string { return "dscl failed" }
 func (h hidden) Unwrap() error { return h.err }
+
+const (
+	dsclWorkharbor = "dscl . -read /Users/workharbor UniqueID"
+	dsclLegacy     = "dscl . -read /Users/whr UniqueID"
+)
+
+func TestMissingWorkharborWithLegacyWhrPointsAtUserWhr(t *testing.T) {
+	c := steps(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "UniqueID: 502"}))["workharbor-user"]
+	got, detail := status(c)
+	if got != Fail {
+		t.Errorf("status = %s, want fail", got)
+	}
+	for _, want := range []string{"there is no user workharbor", "legacy", "whr setup host --user whr", "whr doctor --user whr"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail %q lacks %q", detail, want)
+		}
+	}
+	if len(c.Fix.Cmds) != 0 {
+		t.Errorf("a second account is offered: %+v", c.Fix.Cmds)
+	}
+	for _, cmd := range c.Fix.Cmds {
+		if strings.Contains(strings.Join(cmd.Argv, " "), "addUser") {
+			t.Errorf("addUser offered: %+v", cmd)
+		}
+	}
+	if !strings.Contains(c.Fix.Guide, "--user whr") || strings.Contains(c.Fix.Guide, "sysadminctl") {
+		t.Errorf("guide = %q", c.Fix.Guide)
+	}
+}
+
+func TestMissingWorkharborOffersAddUserUnlessLegacyIsReallyThere(t *testing.T) {
+	for _, tc := range []struct {
+		name, legacy string
+		want         Status
+		addUser      bool
+	}{
+		{"neither exists", "ERR:exit status 56", Fail, true},
+		{"legacy not found by text", "ERR:exit status 1: Record does not exist", Fail, true},
+		{"legacy unreadable", "ERR:exit status 1: Operation not permitted", NotVerified, false},
+		{"legacy unknown failure", "ERR:exit status 70: odd output", NotVerified, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := steps(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: tc.legacy}))["workharbor-user"]
+			got, detail := status(c)
+			if got != tc.want {
+				t.Errorf("status = %s %q, want %s", got, detail, tc.want)
+			}
+			if strings.Contains(detail, "legacy") && !strings.Contains(detail, "not") {
+				t.Errorf("detail claims a legacy account: %q", detail)
+			}
+			if tc.addUser && (len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].Argv[1] != "-addUser" || detail != "there is no user workharbor") {
+				t.Errorf("addUser fix lost: %q %+v", detail, c.Fix.Cmds)
+			}
+			if !tc.addUser && strings.Contains(detail, "whr setup host --user whr") {
+				t.Errorf("points at whr without finding it: %q", detail)
+			}
+		})
+	}
+}
+
+type legacyCalls struct {
+	scripted
+	calls *[]string
+}
+
+func (r legacyCalls) Output(ctx context.Context, argv ...string) ([]byte, error) {
+	*r.calls = append(*r.calls, strings.Join(argv, " "))
+	return r.scripted.Output(ctx, argv...)
+}
+
+func TestLegacyIsNotLookedUpWhenTheRequestedAccountIsWhrOrExists(t *testing.T) {
+	var calls []string
+	d := hostDeps(legacyCalls{scripted{dsclLegacy: "ERR:exit status 56"}, &calls})
+	d.Account = "whr"
+	if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail || detail != "there is no user whr" {
+		t.Errorf("whr requested and missing = %s %q", got, detail)
+	}
+	if len(calls) != 1 {
+		t.Errorf("dscl calls = %v, want only the requested account", calls)
+	}
+	calls = nil
+	d = hostDeps(legacyCalls{scripted{dsclWorkharbor: "UniqueID: 503", "dseditgroup -o checkmember -m workharbor admin": "no workharbor is NOT a member of admin"}, &calls})
+	if got, _ := status(steps(t, d)["workharbor-user"]); got != OK {
+		t.Errorf("existing workharbor = %s", got)
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "/Users/whr ") {
+			t.Errorf("legacy looked up although workharbor exists: %v", calls)
+		}
+	}
+}
+
+func userResult(t *testing.T, d Deps) Result {
+	t.Helper()
+	for _, r := range Run(context.Background(), Steps(Checks(d), PhaseHost), nil) {
+		if r.Check == "workharbor-user" {
+			return r
+		}
+	}
+	t.Fatal("no workharbor-user result")
+	return Result{}
+}
+
+func TestLegacyFixCommandOnlyOnTheFoundCase(t *testing.T) {
+	found := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "UniqueID: 502"}))
+	if found.Status != Fail || found.Fix != "whr setup host --user whr" {
+		t.Errorf("legacy found = %s fix %q", found.Status, found.Fix)
+	}
+	unread := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "ERR:exit status 1: Operation not permitted"}))
+	if unread.Status != NotVerified || strings.Contains(unread.Fix, "--user whr") {
+		t.Errorf("legacy unreadable = %s fix %q", unread.Status, unread.Fix)
+	}
+	none := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "ERR:exit status 56"}))
+	if none.Fix != "whr setup host --only workharbor-user" {
+		t.Errorf("neither = %q", none.Fix)
+	}
+}
+
+func TestLegacyLookupIsOnlyForTheDefaultAccount(t *testing.T) {
+	var calls []string
+	d := hostDeps(legacyCalls{scripted{"dscl . -read /Users/operator UniqueID": "ERR:exit status 56", dsclLegacy: "UniqueID: 502"}, &calls})
+	d.Account = "operator"
+	c := steps(t, d)["workharbor-user"]
+	if got, detail := status(c); got != Fail || detail != "there is no user operator" {
+		t.Errorf("%s %q", got, detail)
+	}
+	if len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].Argv[1] != "-addUser" || len(calls) != 1 {
+		t.Errorf("addUser lost or whr read: %+v %v", c.Fix.Cmds, calls)
+	}
+}
+
+func TestTheLegacyFixResetsOnEveryRun(t *testing.T) {
+	legacy := &mutableRunner{answers: scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "UniqueID: 502"}}
+	c := steps(t, hostDeps(legacy))["workharbor-user"]
+	if _, _ = status(c); len(c.Fix.Cmds) != 0 || c.UseUser(Fail) != "whr" {
+		t.Fatalf("first run: %+v %q", c.Fix.Cmds, c.UseUser(Fail))
+	}
+	legacy.answers = scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "ERR:exit status 56"}
+	if got, detail := status(c); got != Fail || detail != "there is no user workharbor" {
+		t.Fatalf("second run: %s %q", got, detail)
+	}
+	if len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].Argv[1] != "-addUser" || !strings.Contains(c.Fix.Guide, "sysadminctl") || c.UseUser(Fail) != "" {
+		t.Errorf("fix not reset: %+v %q", c.Fix, c.UseUser(Fail))
+	}
+	legacy.answers = scripted{dsclLegacy: "UniqueID: 502", dsclWorkharbor: "ERR:exit status 56"}
+	status(c)
+	legacy.answers = scripted{dsclWorkharbor: "UniqueID: 503", "dseditgroup -o checkmember -m workharbor admin": "no workharbor is NOT a member of admin"}
+	if got, _ := status(c); got != OK || c.UseUser(OK) != "" {
+		t.Errorf("an existing account still redirects: %s %q", got, c.UseUser(OK))
+	}
+}
+
+type mutableRunner struct{ answers scripted }
+
+func (m *mutableRunner) Output(ctx context.Context, argv ...string) ([]byte, error) {
+	return m.answers.Output(ctx, argv...)
+}
