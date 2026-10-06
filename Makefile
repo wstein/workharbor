@@ -265,7 +265,7 @@ override LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
 # the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
-	@if [ "$(origin MAKE)" != default ] || [ -n "$(MAKEFILES)" ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
+	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
 	want=""; wb=""; \
 	if [ "$(origin SHA)" = "command line" ]; then \
 		case "$$SHA" in ""|*[!0-9a-f]*) echo "land: SHA must be the full 40-character lowercase hex commit id" >&2; exit 1;; esac; \
