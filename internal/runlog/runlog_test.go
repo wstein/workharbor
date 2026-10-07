@@ -197,3 +197,23 @@ func TestOpenRefusesADevice(t *testing.T) {
 		t.Errorf("refused for another reason than the file type: %v", err)
 	}
 }
+
+func TestOwnerOKRefusesRootOnAForeignFile(t *testing.T) {
+	for _, c := range []struct {
+		file, euid uint32
+		want       bool
+	}{{0, 0, true}, {1000, 0, false}, {1000, 1000, true}, {0, 1000, true}} {
+		if got := ownerOK(c.file, c.euid); got != c.want {
+			t.Errorf("ownerOK(%d, %d) = %v, want %v", c.file, c.euid, got, c.want)
+		}
+	}
+}
+
+func TestOpenAcceptsAnOwnFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "own.log")
+	l, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = l.Close()
+}

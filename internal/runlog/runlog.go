@@ -64,12 +64,20 @@ func Open(path string) (*Log, error) {
 		_ = f.Close()
 		return nil, errors.New("not a plain file with one name (a link or a device is refused)")
 	}
+	if st := fi.Sys().(*syscall.Stat_t); !ownerOK(st.Uid, uint32(os.Geteuid())) { //nolint:gosec // a uid fits
+		_ = f.Close()
+		return nil, errors.New("owned by another user (root writes only its own file)")
+	}
 	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
 		return nil, err
 	}
 	return &Log{f: f, path: path}, nil
 }
+
+// ownerOK is false for root writing a file somebody else owns: with an explicit
+// --log-file that would let another user steer what root appends to and chmods.
+func ownerOK(fileUID, euid uint32) bool { return euid != 0 || fileUID == euid }
 
 // Path is where the log is; empty for a nil log.
 func (l *Log) Path() string {
