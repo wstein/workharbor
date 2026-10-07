@@ -482,4 +482,10 @@ func TestNoFixNoteHasNoBadge(t *testing.T) {
 	if strings.Count(all, "unverified") != 1 {
 		t.Errorf("want one badge:\n%s", all)
 	}
+	// the note starts in the column of an ACTION line's text
+	action := render.Action(render.Style{}, "x")
+	col := strings.Index(action, "x")
+	if want := strings.Repeat(" ", col) + "whr has no fix for this step"; !strings.Contains(all, "\n"+want+"\n") {
+		t.Errorf("the note is not at column %d:\n%s", col, all)
+	}
 }

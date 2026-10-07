@@ -267,6 +267,10 @@ func contains(list []string, v string) bool {
 	return false
 }
 
+// noteIndent is the column of the text of an ACTION line, where a note under a
+// badge lines up with the lines that follow it (pinned by a test).
+const noteIndent = 10
+
 // Run runs the selected steps in order. A step whose check passes does nothing.
 // With DryRun the checks still run, for real, and the fixes are only printed.
 // Each step prints its header, one report line (the reason once), and for a fix
@@ -398,7 +402,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		}
 		out.Todo = todoFor(title, s.Fix)
 		if s.Fix == nil {
-			ui.Note(strings.Repeat(" ", 10) + "whr has no fix for this step") // a note under the badge, not a second badge
+			ui.Note(strings.Repeat(" ", noteIndent) + "whr has no fix for this step") // a note under the badge, not a second badge
 			outs = append(outs, out)
 			if err := after(protocol.OutNoFix, nil, nil); err != nil {
 				return stop(err)
