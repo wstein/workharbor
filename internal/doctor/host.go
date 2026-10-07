@@ -1458,7 +1458,23 @@ func configSummary(m map[string]any) string {
 		}
 	}
 	roots, _ := m["roots"].(map[string]any)
-	show := func(v any) string { return textsafe.Escape(strings.Trim(fmt.Sprint(v), "[]")) }
+	// a list shows its items joined, never through Trim, which would also eat
+	// a bracket that belongs to the last path
+	show := func(v any) string {
+		switch l := v.(type) {
+		case nil:
+			return ""
+		case []string:
+			return textsafe.Escape(strings.Join(l, ", "))
+		case []any:
+			items := make([]string, len(l))
+			for i, e := range l {
+				items[i] = fmt.Sprint(e)
+			}
+			return textsafe.Escape(strings.Join(items, ", "))
+		}
+		return textsafe.Escape(fmt.Sprint(v))
+	}
 	return strings.Join([]string{
 		"The configuration will have:",
 		"  repository:  " + textsafe.Escape(strings.Join(repos, ", ")),

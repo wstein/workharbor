@@ -281,3 +281,16 @@ func TestLargeAndExponentNumbersSurviveARewriteUnchanged(t *testing.T) {
 		t.Error("trailing data was accepted")
 	}
 }
+
+func TestTheSummaryShowsSeveralWorkspacesAndEndsWithTheLastPathIntact(t *testing.T) {
+	s := configSummary(map[string]any{"roots": map[string]any{
+		"workspaces": []any{"/a/one", "/b/two[1]"},
+		"tool_store": "/t/store",
+	}})
+	if !strings.Contains(s, "workspaces:  /a/one, /b/two[1]\n") || !strings.Contains(s, "tool store:  /t/store\n") {
+		t.Errorf("%q", s)
+	}
+	if s := configSummary(map[string]any{"roots": map[string]any{"workspaces": []string{"/x", "/y"}}}); !strings.Contains(s, "workspaces:  /x, /y\n") {
+		t.Errorf("%q", s)
+	}
+}
