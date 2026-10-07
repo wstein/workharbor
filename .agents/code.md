@@ -19,8 +19,9 @@ design owner is the `wh/design` session; the human is Werner.
     `docs/content/docs/design/_index.md`, then the sections your issue names.
 2. Work only in your own worktree: `../workharbor-<area>`, or the one the prompt
     that started you names (`../workharbor-platform-2`, AGENTS.md, A second
-    worktree). If `git worktree list` does not show it, create it once with
-    `git worktree add <worktree> --detach main` and run `make hooks` there,
+    worktree). Lanes do not create worktrees (the settings deny
+    `git worktree add`); the human creates it once with
+    `git worktree add <worktree> --detach main` and runs `make hooks` there,
     reused for every issue, each on its own new branch. Never touch the shared
     checkout or another session's worktree, and never switch branches there.
 

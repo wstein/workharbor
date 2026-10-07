@@ -56,7 +56,7 @@ A review subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` w
 ## Setup steps
 
 1. Run `make hooks` in every clone and worktree.
-2. Create the lane worktrees once, `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
+2. Create the lane worktrees once (lanes do not create worktrees themselves), `git worktree add ../workharbor-<role> --detach main`, for `platform`, `runtime`, `docs` and `verify`, and `../workharbor-platform-2` for a second platform issue at the same time.
 3. Open the `wh/desk` and `wh/dispatch` prompts and check their models.
 4. Allow subagent starts without a prompt in the dispatch session only. The dispatcher's card moves are covered by [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit); do not add a settings allow for them. Leave other board writes (`ready`, `session`, `priority`, `add`) asking each time.
 
@@ -205,4 +205,4 @@ After a successful human-confirmed `make land SHA=<sha>` (including `land-next` 
 
 The landing targets refuse caller-selected recipe shells, including a command-line `SHELL=/bin/sh` or `SHELL='/bin/sh -n'`. Leave the recipe shell to make; an inherited `SHELL` that make ignores remains supported. Landing check sub-makes use `/usr/bin/env` to clear make flags so an exported `env` function cannot swallow them. This narrows accidental or malicious check bypasses; it does not sandbox arbitrary shell code already supplied by the caller.
 
-Each lane's worktree is created once with `git worktree add <worktree> --detach main` and `make hooks` (the Setup steps above). In `wh/platform`'s second worktree, `workharbor.lane=wh/platform-2` keeps its temporary resources out of `make temp-clean LANE=wh/platform`.
+Each lane's worktree is created once by the human with `git worktree add <worktree> --detach main` and `make hooks` (the Setup steps above). In `wh/platform`'s second worktree, `workharbor.lane=wh/platform-2` keeps its temporary resources out of `make temp-clean LANE=wh/platform`.
