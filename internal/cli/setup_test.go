@@ -12,6 +12,8 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup"
 	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
@@ -489,5 +491,17 @@ func TestDoctorJSONIsByteIdentical(t *testing.T) {
 	}
 	if string(want) != out {
 		t.Errorf("--json output changed:\n%s", out)
+	}
+}
+
+func TestResolveWiresTheInterruptSignalHolder(t *testing.T) {
+	st := &state{env: &Env{Stdin: strings.NewReader(""), Stderr: &bytes.Buffer{}}}
+	e, err := SetupEnv{User: "werner", UID: 501, GOOS: "darwin"}.resolve(st, render.Style{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	term, ok := e.Host.(setup.Terminal)
+	if !ok || term.Sig == nil {
+		t.Errorf("Host %#v: want a setup.Terminal with Sig set", e.Host)
 	}
 }
