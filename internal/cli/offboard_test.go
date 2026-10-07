@@ -19,7 +19,10 @@ import (
 	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
-const offboardDelete = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
+const (
+	offboardPicture = "/usr/bin/sudo /bin/rm -rf -- /Library/User Pictures/Workharbor"
+	offboardDelete  = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
+)
 
 // offboardHost executes nothing: it records, and flips to the "after" answers
 // when the delete argv is run.
@@ -120,7 +123,7 @@ func (r *offboardRig) nothingRan(label string) {
 func TestOffboardDryRunIsTheDefault(t *testing.T) {
 	r := newOffboardRig(t)
 	code, out, errOut := r.run()
-	if code != exitcode.OK || !strings.Contains(out, "command\t"+offboardDelete+"\n") || !strings.Contains(errOut, "dry run: nothing was changed") {
+	if code != exitcode.OK || !strings.Contains(out, "command\t"+offboardDelete+"\n") || !strings.Contains(out, "command\t/usr/bin/sudo /bin/rm -rf -- '/Library/User Pictures/Workharbor'\n") || !strings.Contains(errOut, "dry run: nothing was changed") {
 		t.Errorf("exit %d\n%s\n%s", code, out, errOut)
 	}
 	r.nothingRan("dry run")
@@ -191,7 +194,7 @@ func TestOffboardDeleteAndTheTypedWord(t *testing.T) {
 	}
 	r = newOffboardRig(t)
 	code, out, errOut := r.run("--delete")
-	if code != exitcode.OK || strings.Join(r.host.ran, "|") != "/usr/bin/sudo -v|"+offboardDelete {
+	if code != exitcode.OK || strings.Join(r.host.ran, "|") != "/usr/bin/sudo -v|"+offboardDelete+"|"+offboardPicture {
 		t.Fatalf("exit %d ran %v\n%s\n%s", code, r.host.ran, out, errOut)
 	}
 	if !strings.Contains(out, "ok\tdscl\t") || strings.Contains(errOut, "log:") {
@@ -261,7 +264,7 @@ func TestOffboardRecordsProtocolAfterConfirmation(t *testing.T) {
 	if len(es) != 4 || es[0].Event != protocol.EventRunStart || es[1].Event != protocol.EventStepBefore ||
 		es[1].Step != "delete-user" || es[1].Answer != protocol.AnswerRun || es[1].Source != protocol.SourceInteractive ||
 		es[2].Event != protocol.EventStepAfter || es[2].Outcome != protocol.OutFixed || es[2].Exit == nil || *es[2].Exit != 0 ||
-		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}, {"/usr/bin/sudo", "/usr/sbin/sysadminctl", "-deleteUser", "workharbor", "-adminUser", "werner", "-adminPassword", "-"}}) ||
+		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}, {"/usr/bin/sudo", "/usr/sbin/sysadminctl", "-deleteUser", "workharbor", "-adminUser", "werner", "-adminPassword", "-"}, {"/usr/bin/sudo", "/bin/rm", "-rf", "--", "/Library/User Pictures/Workharbor"}}) ||
 		es[3].Event != protocol.EventRunEnd || es[3].Outcome != protocol.RunDone {
 		t.Fatalf("entries: %+v", es)
 	}

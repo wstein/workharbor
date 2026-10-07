@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	deleteArgv = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
-	sudoV      = "/usr/bin/sudo -v"
+	pictureArgv = "/usr/bin/sudo /bin/rm -rf -- /Library/User Pictures/Workharbor"
+	deleteArgv  = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
+	sudoV       = "/usr/bin/sudo -v"
 )
 
 // fakeHost never executes anything: it records every call and answers from
@@ -31,6 +32,7 @@ type fakeHost struct {
 	afterErrs     map[string]error
 	deleted       bool
 	failDelete    bool
+	failPicture   bool
 	answer        string
 	answerErr     error
 
@@ -63,6 +65,9 @@ func (h *fakeHost) Run(_ context.Context, c doctor.Cmd) error {
 	k := strings.Join(c.Full(), " ")
 	h.ran = append(h.ran, k)
 	if k == sudoV && h.failSudo {
+		return errors.New("exit status 1")
+	}
+	if k == pictureArgv && h.failPicture {
 		return errors.New("exit status 1")
 	}
 	if k == deleteArgv {
@@ -300,13 +305,22 @@ func TestTheTypedWord(t *testing.T) {
 	}
 }
 
+func TestAPictureThatCannotBeRemovedIsOnlyANote(t *testing.T) {
+	h := newHost()
+	h.failPicture = true
+	r := attempt(h, inv())
+	if r.code != 0 || !strings.Contains(r.stderr, "login picture /Library/User Pictures/Workharbor was not removed") {
+		t.Errorf("exit %d\n%s", r.code, r.stderr)
+	}
+}
+
 func TestTheHappyPath(t *testing.T) {
 	h := newHost()
 	r := attempt(h, inv())
 	if r.code != 0 {
 		t.Fatalf("exit %d\n%s\n%s", r.code, r.stdout, r.stderr)
 	}
-	if got := strings.Join(h.ran, "|"); got != sudoV+"|"+deleteArgv {
+	if got := strings.Join(h.ran, "|"); got != sudoV+"|"+deleteArgv+"|"+pictureArgv {
 		t.Errorf("ran %q", got)
 	}
 	if !h.ranBeforeLog {
@@ -514,7 +528,7 @@ func TestRecorderFailureBeforeAndAfterExecution(t *testing.T) {
 			f := Inspect(context.Background(), d, inv())
 			var out bytes.Buffer
 			lg := Log{Record: func(result string, _ int, ran [][]string) error {
-				if result == "ok" && len(ran) != 2 {
+				if result == "ok" && len(ran) != 3 {
 					t.Fatalf("attempted commands: %v", ran)
 				}
 				if result == failAt {

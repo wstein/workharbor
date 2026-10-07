@@ -82,6 +82,14 @@ func DeleteCmd(admin string) doctor.Cmd {
 	}
 }
 
+// PictureCmd removes the login picture that `whr setup host` installed outside
+// the home (#382); sysadminctl -deleteUser only removes the account record and
+// its home. The path is the constant directory of the setup step, never an
+// argument. UNVERIFIED on a real host, like every command here.
+func PictureCmd() doctor.Cmd {
+	return doctor.Cmd{Argv: []string{sudoBin, "/bin/rm", "-rf", "--", doctor.LoginPictureDir}}
+}
+
 func sudoCheckCmd() doctor.Cmd { return doctor.Cmd{Argv: []string{sudoBin, "-v"}} }
 
 // HomeInfo is what Lstat says about the home folder.
@@ -447,6 +455,7 @@ func Plan(o Out, f Facts) {
 	o.Data("groups", strings.Join(f.Groups, " "))
 	o.Data("admin", admin)
 	o.Data("command", setup.QuoteArgv(DeleteCmd(f.RunUser).Full()))
+	o.Data("command", setup.QuoteArgv(PictureCmd().Full()))
 	o.Note("note: sysadminctl %s", sysadminctlN)
 	for _, n := range f.Notes {
 		o.Note("note: %s", n)
@@ -527,6 +536,15 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		ran = append(ran, c.Full())
 		if err := h.Run(ctx, c); err != nil {
 			runErr = fmt.Errorf("%s failed: %w", setup.QuoteArgv(c.Full()), err)
+		} else {
+			// the login picture of the setup step lives outside the home; a
+			// failure here leaves a public logo behind and is only a note
+			pc := PictureCmd()
+			o.Command(pc)
+			ran = append(ran, pc.Full())
+			if err := h.Run(ctx, pc); err != nil {
+				o.Note("note: the login picture %s was not removed: %s", doctor.LoginPictureDir, oneLine(err.Error()))
+			}
 		}
 	}
 	code := exitcode.OK
