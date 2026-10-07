@@ -1071,7 +1071,7 @@ func userSteps(d Deps) []Check {
 			},
 			Fix: &Fix{Desc: agentKeyPrompt + "; written to " + envPath + " (0600, never overwritten, never shown)", Do: func(_ context.Context, p Prompter) error {
 				if _, err := os.Lstat(envPath); err == nil {
-					return errors.New(envPath + " already exists and is never overwritten; fix its mode or remove it, then run again")
+					return errors.New(envPath + " already exists and is never overwritten; fix its mode or content, or remove it, then run again")
 				}
 				key, err := p.Secret(agentKeyPrompt)
 				if err != nil {
