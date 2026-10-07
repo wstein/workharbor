@@ -347,6 +347,8 @@ func TestToolWriterPromptDetection(t *testing.T) {
 		"Falsches Passwort, Fehler:": false,
 		"Set the password":           false,
 		// an error word exempts its own sentence only
+		"Falsches Passwort:":                       false,
+		"Falsche Eingabe, Passwort:":               false,
 		"Enter passphrase for key 'a. b': ":        true,
 		"Incorrect password. Password:":            true,
 		"Sorry, try again! Enter your passphrase:": true,
