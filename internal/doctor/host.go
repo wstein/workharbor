@@ -103,12 +103,16 @@ var dsRecordNegated = regexp.MustCompile(`(?i)\b(not|isn'?t|never)\s+eDSRecordNo
 // The whole error text must be defaults's own message for this key: after an
 // optional exit status prefix, an optional header line that defaults prints
 // first (timestamp, defaults[pid:tid]; observed on macOS 26.6.2), then the
-// message. Any other extra text says something else.
+// message. Any other extra text says something else. VERIFIED on the desk Mac
+// (macOS 26): the absent key exits 1 and prints "Error: Could not find key
+// '...' in domain 'kCFPreferencesAnyApplication'." with "Error: " and a final
+// full stop. NOT VERIFIED: that an absent key means log-out is off on every
+// macOS version, and that a delay of 0 means off on the real host.
 const defaultsHeader = `(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ defaults\[\d+:\d+\] *\n)?`
 
 var (
-	autologoutUnset  = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `The domain/default pair of \(/Library/Preferences/\.GlobalPreferences, com\.apple\.autologout\.AutoLogOutDelay\) does not exist$`)
-	autologoutAbsent = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `Could not find key 'com\.apple\.autologout\.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'$`)
+	autologoutUnset  = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `(Error: )?The domain/default pair of \(/Library/Preferences/\.GlobalPreferences, com\.apple\.autologout\.AutoLogOutDelay\) does not exist\.?$`)
+	autologoutAbsent = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `(Error: )?Could not find key 'com\.apple\.autologout\.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'\.?$`)
 	digitsOnly       = regexp.MustCompile(`^[0-9]+$`)
 )
 
