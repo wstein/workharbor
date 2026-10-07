@@ -574,8 +574,19 @@ if [ -n "$FAKE_GH_FAIL" ]; then echo "GraphQL: API rate limit exceeded" >&2; exi
 case "$*" in
 *"repoOwner="*) echo '{"data":{"repository":{"nameWithOwner":"wstein/crewbook"},"node":{"id":"PVT_crewbook","number":10,"url":"https://github.com/users/wstein/projects/10","owner":{"login":"wstein"}},"user":{"projectV2":{"id":"PVT_crewbook","number":10,"url":"https://github.com/users/wstein/projects/10","owner":{"login":"wstein"}}}}}'; exit 0 ;;
 *addProjectV2ItemById*) echo '{"data":{}}'; exit 0 ;;
-*updateProjectV2ItemFieldValue*) echo '{"data":{}}'; exit 0 ;;
-*projectItems*) if [ -n "$FAKE_NOITEM" ] || case "$*" in *"n=99"*) true ;; *) false ;; esac; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi; echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_x","project":{"id":"PVT_kwHNjWrOAZVCuA"}}]}}}}}'; exit 0 ;;
+*updateProjectV2ItemFieldValue*)
+	for a in "$@"; do case "$a" in i=PVTI_*) item=${a#i=PVTI_} ;; o=*) opt=${a#o=} ;; f=*) fld=${a#f=} ;; esac; done
+	if [ -z "$FAKE_NOAPPLY" ] && [ "$fld" = F_status ]; then
+		case "$opt" in O_todo) st=Todo ;; O_ip) st="In progress" ;; O_bl) st=Blocked ;; O_ir) st="In review" ;; O_rp) st="Ready to push" ;; esac
+		printf '%s' "$st" > "` + b.bin + `/cur.$item"
+	fi
+	echo '{"data":{}}'; exit 0 ;;
+*projectItems*)
+	for a in "$@"; do case "$a" in n=*) number=${a#n=} ;; esac; done
+	if [ -n "$FAKE_NOITEM" ] || [ "$number" = 99 ]; then echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}'; exit 0; fi
+	status=null
+	if [ -f "` + b.bin + `/cur.$number" ]; then status="{\"name\":\"$(cat "` + b.bin + `/cur.$number")\"}"; fi
+	echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_'$number'","project":{"id":"PVT_kwHNjWrOAZVCuA"},"status":'"$status"'}]}}}}}'; exit 0 ;;
 *"fields(first"*) echo '{"data":{"node":{"id":"PVT_kwHNjWrOAZVCuA","fields":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
 *"items(first"*)
 	cur=first
@@ -859,12 +870,13 @@ func TestBoardSnapshotMovePatchesCache(t *testing.T) {
 		t.Fatalf("card = %q", got)
 	}
 	l := b.lines(t)
-	// 1 refresh, 1 field-ID query (cached), then lookup + mutation per write.
-	if len(l) != 1+1+3*2 {
-		t.Fatalf("gh calls = %d, want 8: %q", len(l), l)
+	// 1 refresh, 1 field-ID query (cached), then lookup + mutation per write
+	// (a move adds one read-back lookup).
+	if len(l) != 1+1+3+2+2 {
+		t.Fatalf("gh calls = %d, want 9: %q", len(l), l)
 	}
 	joined := strings.Join(l, "\n")
-	for _, w := range []string{"-f f=F_status -f o=O_ir", "-f f=F_sess -f o=O_s1", "-f f=F_prio -f o=O_p3", "-f i=PVTI_x", "-F n=20"} {
+	for _, w := range []string{"-f f=F_status -f o=O_ir", "-f f=F_sess -f o=O_s1", "-f f=F_prio -f o=O_p3", "-f i=PVTI_20", "-F n=20"} {
 		if !strings.Contains(joined, w) {
 			t.Fatalf("missing %q in %q", w, l)
 		}
@@ -945,8 +957,8 @@ func TestBoardSnapshotMoveWithoutCacheWritesOnly(t *testing.T) {
 	if _, err := os.Stat(b.snap); err == nil {
 		t.Fatal("a move created a cache")
 	}
-	if len(b.lines(t)) != 3 {
-		t.Fatalf("gh calls = %q, want fields, lookup and mutation", b.lines(t))
+	if len(b.lines(t)) != 4 {
+		t.Fatalf("gh calls = %q, want fields, lookup, mutation and read-back", b.lines(t))
 	}
 	// A stale cache is not patched either.
 	if _, _, err := b.run(t); err != nil {
@@ -1098,8 +1110,8 @@ func TestBoardSnapshotStaleLockTakeoverConcurrent(t *testing.T) {
 			t.Errorf("card %s = %q, want Blocked (a write was lost)", n, got)
 		}
 	}
-	if got := len(b.lines(t)); got < 1+2*len(nums) || got > 1+3*len(nums) {
-		t.Errorf("gh calls = %d, want %d to %d", got, 1+2*len(nums), 1+3*len(nums))
+	if got := len(b.lines(t)); got < 1+3*len(nums) || got > 1+4*len(nums) {
+		t.Errorf("gh calls = %d, want %d to %d", got, 1+3*len(nums), 1+4*len(nums))
 	}
 }
 
@@ -1133,9 +1145,10 @@ func TestBoardSnapshotWritesNeverUseURLRouteAndCacheFields(t *testing.T) {
 			t.Fatalf("move: %v %s", err, se)
 		}
 	}
-	// Two writes: one field query (cached next to the snapshot), two lookups, two mutations.
-	if got := len(b.lines(t)); got != 5 {
-		t.Fatalf("gh calls = %d, want 5: %q", got, b.lines(t))
+	// Two moves: one field query (cached next to the snapshot), a lookup, a
+	// mutation and a read-back each.
+	if got := len(b.lines(t)); got != 7 {
+		t.Fatalf("gh calls = %d, want 7: %q", got, b.lines(t))
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(b.snap), "board-fields.json")); err != nil {
 		t.Fatal(err)
@@ -1322,5 +1335,49 @@ func TestBoardSnapshotWarnsFromQueryRemaining(t *testing.T) {
 	_, se, err := b.runEnv(t, []string{"TZ=UTC"})
 	if err != nil || !strings.Contains(se, "500 of 5000") || !strings.Contains(se, "resets at 12:00") {
 		t.Fatalf("err %v, stderr %q; want the warning from the query's value", err, se)
+	}
+}
+
+func (b board) mutations(t *testing.T) int {
+	t.Helper()
+	n := 0
+	for _, l := range b.lines(t) {
+		if strings.Contains(l, "updateProjectV2ItemFieldValue") {
+			n++
+		}
+	}
+	return n
+}
+
+func TestBoardSnapshotMoveReadsBackAndIsIdempotent(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	so, se, err := b.run(t, "move", "20", "Blocked")
+	if err != nil || strings.TrimSpace(so) != "#20 -> Blocked" {
+		t.Fatalf("move: %v %q %s", err, so, se)
+	}
+	lines := b.lines(t)
+	if len(lines) != 4 || !strings.Contains(lines[3], "issue(number") {
+		t.Fatalf("want a fresh single-card read after the write: %q", lines)
+	}
+	base := b.calls(t)
+	so, _, err = b.run(t, "move", "20", "Blocked")
+	if err != nil || strings.TrimSpace(so) != "#20 already Blocked" || b.mutations(t) != 1 || b.calls(t) != base+1 {
+		t.Fatalf("repeat: %v %q mutations %d calls %d", err, so, b.mutations(t), b.calls(t)-base)
+	}
+}
+
+func TestBoardSnapshotMoveReadBackMismatchFails(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	_, se, err := b.runEnv(t, []string{"FAKE_NOAPPLY=1"}, "move", "20", "Blocked")
+	if err == nil || !strings.Contains(se, "read-back") || !strings.Contains(se, "#20") {
+		t.Fatalf("err %v, stderr %q; want a read-back failure", err, se)
+	}
+	if got := b.card(t, "20"); !strings.Contains(got, "\tTodo\t") {
+		t.Fatalf("the cache was patched after a mismatch: %q", got)
 	}
 }

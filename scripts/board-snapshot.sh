@@ -17,6 +17,8 @@
 # asks for permission, is set in AGENTS.md (GitHub rate limit). A failure on one issue is reported on stderr, the rest
 # still run, and the exit status is 1 if any failed. Input is validated before any gh call.
 #
+# move reads each card back after the write (a fresh query of that one card) and
+# exits 1 on a mismatch; a card already at the status gets no write ("already").
 # move sets only Todo, In progress, Blocked and In review: Ready to push
 # (wh/review) and Done (closing the issue, the human) are refused before any gh
 # call. `ready` sets Ready to push through wh/dispatch on behalf of wh/review
@@ -593,6 +595,16 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
   exit 0
 fi
 
+# lookup_item finds the issue's project item and its Status (item, cur).
+lookup_item() {
+  local info
+  info=$(gh api graphql -f query='query($n:Int!,$owner:String!,$repo:String!){repository(owner:$owner,name:$repo){issue(number:$n){projectItems(first:100){pageInfo{hasNextPage} nodes{id project{id} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' -f owner="${repository%%/*}" -f repo="${repository#*/}" -F n="$1") || {
+    echo "board-snapshot: #$1: GitHub refused the lookup" >&2; return 1; }
+  item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
+  cur=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .status.name][0] // empty')
+  [ -n "$item" ] || { echo "board-snapshot: #$1: not on the board (use: board-snapshot.sh add $1)" >&2; return 1; }
+}
+
 case $mode in
 move | session | priority | add | ready)
   rate_warn
@@ -622,13 +634,23 @@ move | session | priority | add | ready)
         echo "board-snapshot: #$n: GitHub refused the add" >&2; failed=1; continue; }
       done_json=$(printf '%s' "$done_json" | jq -c --argjson n "$n" --arg t "$title" '. + [{n: $n, title: $t}]')
     else
-      info=$(gh api graphql -f query='query($n:Int!,$owner:String!,$repo:String!){repository(owner:$owner,name:$repo){issue(number:$n){projectItems(first:100){pageInfo{hasNextPage} nodes{id project{id}}}}}}' -f owner="${repository%%/*}" -f repo="${repository#*/}" -F n="$n") || {
-        echo "board-snapshot: #$n: GitHub refused the lookup" >&2; failed=1; continue; }
-      item=$(printf '%s' "$info" | jq -r --arg p "$project" '[.data.repository.issue.projectItems.nodes[]? | select(.project.id == $p) | .id][0] // empty')
-      [ -n "$item" ] || { echo "board-snapshot: #$n: not on the board (use: board-snapshot.sh add $n)" >&2; failed=1; continue; }
+      lookup_item "$n" || { failed=1; continue; }
+      # move is idempotent: no write when the card already has the status.
+      if [ "$mode" = move ] && [ "$cur" = "$value" ]; then
+        echo "#$n already $value"
+        continue
+      fi
       gh api graphql -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}' \
         -f p="$project" -f i="$item" -f f="$fid" -f o="$oid" >/dev/null || {
         echo "board-snapshot: #$n: GitHub refused the write" >&2; failed=1; continue; }
+      if [ "$mode" = move ]; then
+        # Read the one card back with a fresh query; a mismatch fails the move.
+        lookup_item "$n" || { failed=1; continue; }
+        if [ "$cur" != "$value" ]; then
+          echo "board-snapshot: #$n: read-back shows \"${cur:-no status}\", wanted \"$value\"" >&2; failed=1; continue
+        fi
+        echo "#$n -> $value"
+      fi
       done_nums+=("$n")
     fi
   done
