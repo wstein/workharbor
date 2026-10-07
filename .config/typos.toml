@@ -22,7 +22,7 @@ intoto = "intoto" # the in-toto attestation file name (.intoto.jsonl)
 
 [default]
 extend-ignore-re = [
-  "\\(ba\\|z\\|da\\|k\\|c\\|tc\\|fi\\)\\?sh", # ghguard shellWord: the sh/bash/zsh/dash/... alternation
+  "\\(a\\|ba\\|z\\|da\\|k\\|c\\|tc\\|fi\\)\\?sh", # ghguard shellWord: the sh/bash/zsh/dash/... alternation
   "caf\\\\u00e9",                             # confirm record fixtures: the escaped e-acute of "café"
   "grap\\[h\\]ql",                          # ghguard test fixture: deliberate regex-evasion string
 ]
