@@ -76,12 +76,34 @@ var errNotHere = errors.New("this runs only on a Mac")
 // Any other failure (permissions, a directory-service error, an unknown format)
 // says nothing about the account.
 func DSCLNotFound(err error) bool {
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && ee.ExitCode() == 56 {
-		return true
+	if err == nil {
+		return false
 	}
 	m := err.Error()
-	return strings.Contains(m, "exit status 56") || strings.Contains(m, "does not exist") || strings.Contains(m, "eDSRecordNotFound")
+	return commandExitIs(err, 56) || strings.Contains(m, "does not exist") || strings.Contains(m, "eDSRecordNotFound")
+}
+
+// commandExitIs prefers the real process status. The exact textual fallback
+// supports Runners that expose only an error string, including scripted checks.
+func commandExitIs(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode() == code
+	}
+	status := "exit status " + strconv.Itoa(code)
+	message := err.Error()
+	return message == status || strings.HasPrefix(message, status+":")
+}
+
+// dsclFailure preserves stdout as well as the wrapped status and stderr.
+func dsclFailure(out string, err error) error {
+	if err == nil || strings.TrimSpace(out) == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, strings.TrimSpace(out))
 }
 
 // LegacyUser is the account name before D49: an installation made then runs as
@@ -102,7 +124,8 @@ func userStep(d Deps, setupCommand string) Check {
 		Run: func(ctx context.Context) (Status, string) {
 			fix.Cmds, fix.Guide = create, createGuide
 			legacy = false
-			if _, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
+			if out, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
+				err = dsclFailure(out, err)
 				if st, msg, ok := notHere(err); ok {
 					return st, msg
 				}
@@ -143,7 +166,8 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 	if d.account() != WhrUser {
 		return Fail, missing, false
 	}
-	_, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+LegacyUser, "UniqueID")
+	out, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+LegacyUser, "UniqueID")
+	err = dsclFailure(out, err)
 	switch {
 	case err == nil:
 		fix.Cmds = nil
@@ -584,7 +608,7 @@ func hostSteps(d Deps) []Check {
 						}
 						// brew list exits 1 for a formula that is not installed;
 						// any other failure says nothing about the package
-						if err != nil && !strings.Contains(err.Error(), "exit status 1") {
+						if err != nil && !commandExitIs(err, 1) {
 							return NotVerified, "brew did not say whether " + f + " is installed: " + oneLine(err.Error())
 						}
 						missing = append(missing, f)
