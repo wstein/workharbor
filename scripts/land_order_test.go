@@ -225,6 +225,18 @@ func TestLandVerbatimAndNotClear(t *testing.T) {
 			t.Fatalf("want accepted: %v\n%s", err, out)
 		}
 	})
+	for _, ptr := range []string{"land", "landing"} {
+		t.Run("out of order refused on "+ptr, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			wt, _ := r.orderCommit("topic", "one\n")
+			tip := r.orderMore(wt, "CLAUDE.md", "two\n")
+			r.clearBy(tip, sonnet)
+			r.git(r.dir, "branch", ptr, tip)
+			if out, err := r.previewOrder(tip); err == nil || !strings.Contains(out, "is on "+ptr+", but") || !strings.Contains(out, "landing order") {
+				t.Fatalf("want landing-order refusal on %s: %v\n%s", ptr, err, out)
+			}
+		})
+	}
 	t.Run("lookalike opus tip model on new content refuses", func(t *testing.T) {
 		r := newLandQueueRepo(t)
 		_, sha := r.orderCommit("topic", "rule\n")
@@ -278,6 +290,12 @@ func TestLandLandingPointerSelection(t *testing.T) {
 		{"landing and one original land the original", []string{"orig", "landing"}, false},
 		{"only landing works", []string{"landing"}, false},
 		{"two real branches plus landing refuse", []string{"a", "b", "landing"}, true},
+		{"land and one original land the original", []string{"orig", "land"}, false},
+		{"only land works", []string{"land"}, false},
+		{"two real branches plus land refuse", []string{"a", "b", "land"}, true},
+		{"both pointers and one original land the original", []string{"orig", "land", "landing"}, false},
+		{"both pointers alone are one landing", []string{"land", "landing"}, false},
+		{"two real branches plus both pointers refuse", []string{"a", "b", "land", "landing"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, sha := mk(t, tc.names...)

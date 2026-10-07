@@ -199,9 +199,12 @@ if [ -z "$branches" ]; then
   fi
   die "no local branch has $full as its tip"
 fi
-# The branch named exactly `landing` is excluded from the "several branches" check; when only `landing` points at the SHA it is the branch (#365).
-others="$(printf '%s\n' "$branches" | grep -vx landing || true)"
-[ -z "$others" ] || branches="$others"
+# The pointer is `land`; `landing` is its deprecated name, accepted for one release (#376).
+# A branch named exactly like a pointer is excluded from the "several branches" check; when only
+# pointers point at the SHA, `land` wins over `landing` and is the branch (#365).
+others="$(printf '%s\n' "$branches" | grep -vxE 'land|landing' || true)"
+if [ -n "$others" ]; then branches="$others"
+else branches="$(printf '%s\n' "$branches" | grep -x land || printf '%s\n' "$branches")"; fi
 if [ "$command" = inspect ]; then
   branches="${3:-}"
   [ "$(git rev-parse --verify "refs/heads/$branches^{commit}")" = "$full" ] || die "queue branch moved"
@@ -267,8 +270,8 @@ EOT
 # a CLEAR. No model is involved. A commit with its own NOT CLEAR line, or one equal to
 # an original whose note says NOT CLEAR, is never covered. A tip with a CLEAR of the
 # needed tier is covered entirely: a linear tip contains its earlier commits, also on
-# `landing`. A carve-out tip with a lower tier (Sonnet) passes only when EVERY commit
-# of main..tip is covered; otherwise it needs Opus (on `landing`: landing order).
+# the pointer. A carve-out tip with a lower tier (Sonnet) passes only when EVERY commit
+# of main..tip is covered; otherwise it needs Opus (on the pointer: landing order).
 need=any
 [ "$class" = carve-out ] && need=opus
 cr="$(printf '\r')"
@@ -314,8 +317,12 @@ allcov() {
 }
 if [ "$stamp" = matched ] && [ "$class" = carve-out ] && ! printf '%s\n' "$clear" | grep -Eq "$opus_re" && ! allcov; then
   stamp=mismatch
-  if git rev-parse -q --verify refs/heads/landing >/dev/null && git merge-base --is-ancestor "$full" refs/heads/landing; then
-    [ "$command" = inspect ] || die "$full is on landing, but a commit of main..$full has no required CLEAR or equivalent original (landing order): refusing"
+  onptr=""
+  for ptr in land landing; do
+    if git rev-parse -q --verify "refs/heads/$ptr" >/dev/null && git merge-base --is-ancestor "$full" "refs/heads/$ptr"; then onptr=$ptr; fi
+  done
+  if [ -n "$onptr" ]; then
+    [ "$command" = inspect ] || die "$full is on $onptr, but a commit of main..$full has no required CLEAR or equivalent original (landing order): refusing"
   else
     [ "$command" = inspect ] || die "security-relevant change: no CLEAR line from an Opus model: refusing"
   fi
