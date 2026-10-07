@@ -326,6 +326,9 @@ func TestTerminalPauseTakesEnterAndQ(t *testing.T) {
 	if err := (Terminal{In: bufio.NewReader(strings.NewReader("q\n")), Err: &errb}).Pause(); !errors.Is(err, render.ErrQuit) {
 		t.Errorf("q: %v", err)
 	}
+	if err := (Terminal{In: bufio.NewReader(strings.NewReader("Quit\n")), Err: &errb}).Pause(); !errors.Is(err, render.ErrQuit) {
+		t.Errorf("quit: %v", err)
+	}
 	if err := (Terminal{In: bufio.NewReader(strings.NewReader("")), Err: &errb}).Pause(); err != nil {
 		t.Errorf("closed input must not block or fail: %v", err)
 	}

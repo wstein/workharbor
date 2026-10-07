@@ -307,12 +307,12 @@ func (t Terminal) AskWord(question, word string) (render.Answer, error) {
 	return render.AskWord(t.In, render.Writer{W: t.Err, S: t.Style}, question, word)
 }
 
-// Pause implements Pauser: Enter goes on, q quits. A closed input goes on, so a
+// Pause implements Pauser: Enter goes on, q or quit quits. A closed input goes on, so a
 // run never blocks on it.
 func (t Terminal) Pause() error {
 	fmt.Fprintln(t.Err, "\nPress Enter to continue (q to quit)")
 	s, _ := t.In.ReadString('\n')
-	if strings.EqualFold(strings.TrimSpace(s), "q") {
+	if s = strings.TrimSpace(s); strings.EqualFold(s, "q") || strings.EqualFold(s, "quit") {
 		return render.ErrQuit
 	}
 	return nil
