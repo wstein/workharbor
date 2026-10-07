@@ -603,3 +603,15 @@ func TestCorruptTailMessageIsPlain(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestAccountNamesFollowMacOSShortNames(t *testing.T) {
+	for name, ok := range map[string]bool{
+		"workharbor": true, "Werner": true, "aBc": true, "9abc": true, "john.doe": true, "_svc": true,
+		"-rf": false, "bad name": false, "..": false, "a/b": false,
+		strings.Repeat("a", 32): true, strings.Repeat("a", 33): false,
+	} {
+		if got := accountRE.MatchString(name); got != ok {
+			t.Errorf("account %q: accepted=%v, want %v", name, got, ok)
+		}
+	}
+}

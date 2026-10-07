@@ -185,7 +185,7 @@ var (
 	hex64RE   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	runRE     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	stepRE    = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
-	accountRE = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	accountRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,31}$`)
 	whrRE     = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9]{1,64}(\+dirty)?$`)
 	atRE      = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
 )

@@ -425,3 +425,16 @@ func TestSaveAsBindsTheGivenIdentity(t *testing.T) {
 		t.Fatalf("%s", data)
 	}
 }
+
+func TestAccountNamesFollowMacOSShortNames(t *testing.T) {
+	for name, ok := range map[string]bool{
+		"workharbor": true, "Werner": true, "aBc": true, "9abc": true, "john.doe": true, "A_b-c9": true, "_svc": true,
+		"-rf": false, "": false, "bad name": false, "a/b": false, "a:b": false,
+		strings.Repeat("a", 32): true, strings.Repeat("a", 33): false, "..": false,
+	} {
+		err := File{V: Version, Schema: Schema, Phase: PhaseUser, Account: name, Whr: "v0.1.0@abc1234"}.Validate()
+		if bad := errors.Is(err, ErrBadAccount); bad == ok {
+			t.Errorf("account %q: accepted=%v, error %v", name, !bad, err)
+		}
+	}
+}
