@@ -128,9 +128,7 @@ func newSetup(st *state) *cobra.Command {
 			if cmd.Flags().Changed("prefix") {
 				repair.Prefix = prefix
 			}
-			if phase == doctor.PhaseHost && notWhr {
-				repair.RunAs = whrUser // the host phase names user-phase steps too
-			}
+			repair.RunAs = reportRunAs(phase, notWhr, whrUser)
 			presentation := setupPresentation(reportSteps, reportOutcomes, phase, repair)
 			if runErr != nil && presentation.OK {
 				detail := oneLineError(runErr)
@@ -608,4 +606,14 @@ func recordAccountStop(lg *protocol.Log, account string, phase doctor.Phase, res
 		}
 	}
 	return nil
+}
+
+// reportRunAs is the account a user-phase fix in the report is for: the host
+// phase names user-phase steps too, and when the administrator (not whr's own
+// account) runs it, those fixes are run as whr's account.
+func reportRunAs(phase doctor.Phase, notWhr bool, whrUser string) string {
+	if phase == doctor.PhaseHost && notWhr {
+		return whrUser
+	}
+	return ""
 }
