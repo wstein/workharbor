@@ -46,6 +46,7 @@ const (
 
 var readTools = map[string]string{
 	"dscl": "/usr/bin/dscl", "id": "/usr/bin/id", "stat": "/usr/bin/stat", "dseditgroup": "/usr/sbin/dseditgroup",
+	"du": "/usr/bin/du",
 }
 
 // absRunner runs the read-only tools by absolute path.
@@ -114,7 +115,13 @@ type Facts struct {
 
 	Home      HomeInfo
 	HomeState string // "present", "missing" or an error text
-	Notes     []string
+
+	// HomeSizeKiB is what du says about the home folder, on its own volume. It
+	// is shown in the plan only: it changes while the plan is read, so the
+	// recheck before the delete ignores it.
+	HomeSizeKiB   int64
+	HomeSizeKnown bool
+	Notes         []string
 }
 
 // Refusal is one guard that says no, with the exit code it carries.
@@ -281,6 +288,12 @@ func Inspect(ctx context.Context, d Deps, in Invocation) Facts {
 	switch hi, err := d.Stat(f.HomeDir); {
 	case err == nil:
 		f.Home, f.HomeState = hi, "present"
+		if hi.Dir && !hi.Symlink {
+			f.HomeSizeKiB, f.HomeSizeKnown = homeSize(ctx, d, f.HomeDir)
+			if !f.HomeSizeKnown {
+				f.Notes = append(f.Notes, "the home size could not be read: the plan cannot say how much is removed")
+			}
+		}
 	case errors.Is(err, fs.ErrNotExist):
 		f.HomeState = "missing"
 		f.Notes = append(f.Notes, "the home folder does not exist: nothing of it is removed")
@@ -288,6 +301,25 @@ func Inspect(ctx context.Context, d Deps, in Invocation) Facts {
 		f.HomeState = oneLine(err.Error())
 	}
 	return f
+}
+
+// homeSize asks du for the size in KiB; -x stays on the home's own volume.
+func homeSize(ctx context.Context, d Deps, home string) (int64, bool) {
+	b, err := rd(d).Output(ctx, "du", "-skx", home)
+	if err != nil {
+		return 0, false
+	}
+	return parseDU(string(b), home)
+}
+
+// parseDU accepts exactly one line, "<digits><TAB><home>".
+func parseDU(out, home string) (int64, bool) {
+	kib, path, ok := strings.Cut(strings.TrimSuffix(out, "\n"), "\t")
+	if !ok || path != home || kib == "" || strings.Trim(kib, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(kib, 10, 64)
+	return n, err == nil
 }
 
 // Plan prints exactly what would be removed.
@@ -302,6 +334,11 @@ func Plan(o Out, f Facts) {
 	o.Data("account", f.Account)
 	o.Data("uid", strconv.Itoa(f.UID))
 	o.Data("home", f.HomeDir)
+	size := "unknown"
+	if f.HomeSizeKnown {
+		size = strconv.FormatInt(f.HomeSizeKiB, 10) + " KiB"
+	}
+	o.Data("home-size", size)
 	o.Data("groups", strings.Join(f.Groups, " "))
 	o.Data("admin", admin)
 	o.Data("command", setup.QuoteArgv(DeleteCmd().Full()))
@@ -354,6 +391,9 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		o.Note("whr: the account changed since the plan: nothing was changed")
 		return exitcode.Conflict
 	}
+	f.HomeSizeKiB, f2.HomeSizeKiB = 0, 0
+	f.HomeSizeKnown, f2.HomeSizeKnown = false, false
+	f.Notes, f2.Notes = withoutSizeNote(f.Notes), withoutSizeNote(f2.Notes)
 	if !reflect.DeepEqual(f, f2) {
 		o.Refusal(Refusal{"recheck", exitcode.Conflict, "the account differs from the plan you were shown"})
 		o.Note("whr: the account changed since the plan: nothing was changed")
@@ -518,3 +558,13 @@ func contains(l []string, v string) bool {
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func withoutSizeNote(notes []string) []string {
+	var out []string
+	for _, n := range notes {
+		if !strings.HasPrefix(n, "the home size could not be read") {
+			out = append(out, n)
+		}
+	}
+	return out
+}

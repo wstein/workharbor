@@ -534,3 +534,100 @@ func TestRecorderFailureBeforeAndAfterExecution(t *testing.T) {
 		})
 	}
 }
+
+func TestThePlanShowsTheHomeSize(t *testing.T) {
+	plan := func(h *fakeHost) (string, string) {
+		f := Inspect(context.Background(), h.deps(), inv())
+		var so, se bytes.Buffer
+		Plan(Out{Out: &so, Err: &se}, f)
+		return so.String(), se.String()
+	}
+	h := newHost()
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "2048\t/Users/workharbor\n"
+	so, _ := plan(h)
+	if !strings.Contains(so, "home-size\t2048 KiB\n") {
+		t.Errorf("no size:\n%s", so)
+	}
+	// An unreadable size is said, never guessed.
+	so, se := plan(newHost())
+	if !strings.Contains(so, "home-size\tunknown\n") || !strings.Contains(se, "home size could not be read") {
+		t.Errorf("unknown size not said:\n%s\n%s", so, se)
+	}
+	// A garbled answer is unknown too.
+	h = newHost()
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "lots\n"
+	if so, _ := plan(h); !strings.Contains(so, "home-size\tunknown\n") {
+		t.Errorf("garbled size taken:\n%s", so)
+	}
+	// A missing home has nothing to measure and is not measured.
+	h = newHost()
+	h.afterHome, h.deleted = false, true
+	f := Inspect(context.Background(), h.deps(), inv())
+	for _, r := range h.reads {
+		if strings.Contains(r, "du ") {
+			t.Errorf("measured a missing home: %s", r)
+		}
+	}
+	_ = f
+}
+
+func TestTheSizeIsNotPartOfTheRecheck(t *testing.T) {
+	h := newHost()
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "2048\t/Users/workharbor\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "4096\t/Users/workharbor\n"
+	h.answer = "workharbor"
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.OK {
+		t.Errorf("a growing home blocked the delete: %d\n%s", c, se.String())
+	}
+}
+
+func TestOnlyOneExactDULineIsASize(t *testing.T) {
+	for out, ok := range map[string]bool{
+		"2048\t/Users/workharbor\n":                    true,
+		"0\t/Users/workharbor\n":                       true,
+		"+7\t/Users/workharbor\n":                      false,
+		"-5\t/Users/workharbor\n":                      false,
+		"7\t/Users/workharbor\n8\t/Users/workharbor\n": false,
+		"7\t/Users/other\n":                            false,
+		"\t/Users/workharbor\n":                        false,
+		"99999999999999999999\t/Users/workharbor\n":    false,
+	} {
+		if _, got := parseDU(out, "/Users/workharbor"); got != ok {
+			t.Errorf("%q: %v, want %v", out, got, ok)
+		}
+	}
+}
+
+func TestTheSizeNoteAloneIsIgnoredByTheRecheck(t *testing.T) {
+	a := []string{"x", "the home size could not be read: y"}
+	if got := withoutSizeNote(a); len(got) != 1 || got[0] != "x" {
+		t.Errorf("%v", got)
+	}
+	h := newHost()
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "1\t/Users/workharbor\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	f.Notes = append(f.Notes, "another note")
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.Conflict {
+		t.Errorf("other note drift did not block: %d", c)
+	}
+}
+
+func TestASizeThatBecomesUnreadableDoesNotBlock(t *testing.T) {
+	h := newHost()
+	h.before["/usr/bin/du -skx /Users/workharbor"] = "1\t/Users/workharbor\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	delete(h.before, "/usr/bin/du -skx /Users/workharbor")
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.OK {
+		t.Errorf("blocked: %d\n%s", c, se.String())
+	}
+}
