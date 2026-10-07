@@ -81,6 +81,17 @@ var Palette = map[Role]Colour{
 type Style struct {
 	Color   bool // ANSI colour
 	Unicode bool // ✓ ✗ ▌ ─ instead of + x | -
+	// Width is the columns to wrap at: the terminal width capped at 80. Zero
+	// (not a terminal, or unknown) means 80.
+	Width int
+}
+
+// cols is the width to wrap at.
+func (s Style) cols() int {
+	if s.Width > 0 && s.Width < wrapWidth {
+		return s.Width
+	}
+	return wrapWidth
 }
 
 // Detect chooses the style: colour and symbols only when the output is a
@@ -100,6 +111,7 @@ type Env struct {
 	NoColorFlag bool   // --no-color
 	ColorAlways bool   // --color=always
 	Plain       bool   // --plain
+	Cols        int    // terminal columns; 0 when unknown
 }
 
 // DetectEnv is Detect with the rest of the rules. --no-color and --plain win;
@@ -109,7 +121,11 @@ type Env struct {
 func DetectEnv(e Env) Style {
 	auto := e.TTY && e.Term != "dumb" && e.NoColor == "" && !e.Plain && !e.NoColorFlag
 	force := (e.ColorAlways || (e.ForceColor != "" && e.ForceColor != "0")) && !e.Plain && !e.NoColorFlag
-	return Style{Color: auto || force, Unicode: auto}
+	st := Style{Color: auto || force, Unicode: auto}
+	if e.TTY && e.Cols > 0 && e.Cols < wrapWidth {
+		st.Width = e.Cols
+	}
+	return st
 }
 
 func (s Style) paint(r Role, text string) string {
@@ -145,8 +161,11 @@ var padded = regexp.MustCompile(`^\S+ {2,}`)
 
 // wrap breaks each line of text at spaces so that padWidth plus the line stays
 // within wrapWidth columns.
-func wrap(text string, padWidth int) string {
-	room := wrapWidth - padWidth
+func wrap(text string, padWidth int) string { return wrapAt(text, padWidth, wrapWidth) }
+
+// wrapAt is wrap for a given total width.
+func wrapAt(text string, padWidth, width int) string {
+	room := width - padWidth
 	var out []string
 	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		if utf8.RuneCountInString(line) <= room {
@@ -191,22 +210,52 @@ func Report(s Style, l Level, text string) string {
 	word := Palette[role].Label
 	pad := strings.Repeat(" ", 5-len([]rune(word)))
 	head := s.paint(role, s.symbol(l)+" "+word)
-	return " " + head + pad + "  " + indent(wrap(text, 12), strings.Repeat(" ", 10)) + "\n"
+	return " " + head + pad + "  " + indent(wrapAt(text, 12, s.cols()), strings.Repeat(" ", 10)) + "\n"
 }
 
 // Action is a line the person must act on: a bar and the label ACTION.
 func Action(s Style, text string) string {
-	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(wrap(text, 10), "          ") + "\n"
+	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(wrapAt(text, 10, s.cols()), "          ") + "\n"
 }
 
 // Command is text to copy, behind the action bar and a "$".
+//
+// A command is never wrapped, so a copy gets it whole. One that does not fit
+// goes on its own line behind a line that says so.
 func Command(s Style, cmd string) string {
-	return s.paint(RoleAction, s.bar()) + "   " + s.paint(RoleCommand, "$ "+cmd) + "\n"
+	line := s.paint(RoleAction, s.bar()) + "   " + s.paint(RoleCommand, "$ "+cmd) + "\n"
+	if utf8.RuneCountInString(cmd)+6 > s.cols() {
+		line = s.paint(RoleAction, s.bar()) + "   (one long line, copy it whole)\n" + line
+	}
+	return line
+}
+
+// Cmd is Command under the name of the other typed helpers.
+func Cmd(s Style, cmd string) string { return Command(s, cmd) }
+
+// KV is a key and its value, two spaces apart; a long value wraps with the
+// continuation aligned to the value column.
+func KV(s Style, key, value string) string {
+	head := key + "  "
+	pad := utf8.RuneCountInString(head)
+	lines := strings.Split(wrapAt(value, pad, s.cols()), "\n")
+	return head + strings.Join(lines, "\n"+strings.Repeat(" ", pad)) + "\n"
+}
+
+var notePrefix = regexp.MustCompile(`^\s*(?:[a-z]+(?: \([a-z ]+\))?: )?`)
+
+// Note is a line of human text. A leading label ("note: ", "whr: ") is the
+// prefix; a continuation is indented by its width.
+func Note(s Style, text string) string {
+	head := notePrefix.FindString(text)
+	pad := utf8.RuneCountInString(head)
+	lines := strings.Split(wrapAt(text[len(head):], pad, s.cols()), "\n")
+	return head + strings.Join(lines, "\n"+strings.Repeat(" ", pad)) + "\n"
 }
 
 // Question is an ACTION line without its newline, for a prompt that waits.
 func Question(s Style, text string) string {
-	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + text + " "
+	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(wrapAt(text, 10, s.cols()), "          ") + " "
 }
 
 // ToolOutput sets what an outside tool printed apart: a label line, then each
@@ -460,6 +509,12 @@ func (w Writer) Report(l Level, text string) { w.put(Report(w.S, l, text)) }
 
 // Action writes an ACTION line.
 func (w Writer) Action(text string) { w.put(Action(w.S, text)) }
+
+// KV writes a key and its value.
+func (w Writer) KV(key, value string) { w.put(KV(w.S, key, value)) }
+
+// Note writes a line of human text.
+func (w Writer) Note(text string) { w.put(Note(w.S, text)) }
 
 // Command writes a copyable command.
 func (w Writer) Command(cmd string) { w.put(Command(w.S, cmd)) }
