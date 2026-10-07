@@ -104,7 +104,7 @@ func TestWidthCheckExemptsCommandLines(t *testing.T) {
 	if p := widthProblems("x", "  "+cmd, 80, 90); len(p) != 0 {
 		t.Errorf("an indented command line must pass: %v", p)
 	}
-	if p := widthProblems("x", strings.TrimPrefix(cmd, "$ "), 80, 90); len(p) != 2-1 {
+	if p := widthProblems("x", strings.TrimPrefix(cmd, "$ "), 80, 90); len(p) != 1 {
 		t.Errorf("prose over the limit must fail: %v", p)
 	}
 }
