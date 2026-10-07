@@ -270,9 +270,7 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 		cmd.Stdin = strings.NewReader(pw + "\n")
 		// Ctrl-\ (SIGQUIT) would end whr at once, with echo still off: catch it
 		// while the child runs; the child dies of it and the restore runs.
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGQUIT)
-		defer signal.Stop(quit)
+		defer catchQuit()()
 		if t.Stdin != nil {
 			defer echoOff(int(t.Stdin.Fd()))() //nolint:gosec // a file descriptor of this process
 		}
@@ -301,6 +299,14 @@ func escapeLines(s string) string {
 		lines[i] = textsafe.Escape(strings.TrimSuffix(ln, "\r"))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// catchQuit makes whr survive Ctrl-\ (SIGQUIT) until the returned function runs,
+// which restores the default. It is for the times the terminal's echo is off.
+func catchQuit() (stop func()) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGQUIT)
+	return func() { signal.Stop(quit) }
 }
 
 // exitCodeOf is the exit status in an error from a command: 0 for none, -1
@@ -389,6 +395,9 @@ func (t Terminal) Secret(question string) (string, error) {
 		return "", errors.New("a secret is only read from a terminal, without echo")
 	}
 	fmt.Fprint(t.Err, render.Question(t.Style, question+":"))
+	// Ctrl-\ (SIGQUIT) during the read would end whr with echo still off: catch
+	// it, so the read ends normally and term restores the terminal
+	defer catchQuit()()
 	b, err := term.ReadPassword(int(t.Stdin.Fd())) //nolint:gosec // a file descriptor of this process
 	fmt.Fprintln(t.Err)
 	return string(b), err
