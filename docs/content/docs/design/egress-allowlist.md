@@ -7,11 +7,11 @@ toc: true
 
 ## Host egress allowlist for agent processes (#361)
 
-{{< status open >}} Design only; no rule is generated or checked yet. It adds a host layer under the egress proxy of §7: the proxy limits what an environment reaches, this limits what an agent user's process on the host reaches if it bypasses the proxy.
+{{< status open >}} Design only; no rule is generated or checked yet. It adds a host layer under the egress proxy of §7.2: the proxy limits what an environment reaches, this limits what an agent user's process on the host reaches if it bypasses the proxy.
 
-**Threat addressed.** A process running as an agent user on the host (a native agent, §5.9, or an escaped child) opens connections to any destination. The allowlist limits agent users to known destinations, so exfiltration to an arbitrary server and reaching the LAN or cloud-metadata addresses fail at the host.
+**Threat addressed.** A host-side process of a dedicated agent account (an account setup would create; none exists today, and `workharbor`, the supervisor's account, is not one) opens connections to any destination. The allowlist limits agent users to known destinations, so exfiltration to an arbitrary server and reaching the LAN or cloud-metadata addresses fail at the host.
 
-**Not covered.** Anything sent to an allowed destination (including a forge or model API account the agent controls), domain fronting, a compromised allowed host, traffic of non-agent users, and the supervisor itself. It filters by destination only: no deep packet inspection and no TLS interception.
+**Not covered.** Anything sent to an allowed destination (including a forge or model API account the agent controls), domain fronting, a compromised allowed host, traffic of non-agent users, and the supervisor itself. Guest and VM traffic and the `whr-proxy` sidecar are forwarded or NAT'd, so a uid-scoped `user` or `meta skuid` rule does not match them; the guest path stays with the §7.2 proxy. It filters by destination only: no deep packet inspection and no TLS interception.
 
 ### Allowed destinations (one list)
 
@@ -47,7 +47,7 @@ table inet whr_agents {
 }
 ```
 
-The addresses are documentation examples. Agent users are listed by the supervisor's configuration.
+The addresses are documentation examples. Loopback and the host's DNS resolver must also be allowed for the agent uid (for example `pass out quick on lo0` and `iif lo accept`, and the resolver on port 53), or the sketches drop them. Agent users are listed by the supervisor's configuration.
 
 ### Setup and offboard
 
