@@ -21,6 +21,8 @@ import (
 	"io"
 	"regexp"
 	"strings"
+
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Level is the outcome a report line shows.
@@ -209,8 +211,13 @@ func (t *ToolWriter) Write(p []byte) (int, error) {
 		if t.atStart {
 			out += "    " + t.s.paint(RoleTool, mark) + " "
 		}
-		out += strings.TrimRight(seg, "\r")
-		if strings.HasSuffix(seg, "\n") && !strings.HasSuffix(out, "\n") {
+		// Tool output is untrusted: an escape sequence or a bare carriage
+		// return would act on the terminal, so every control is shown escaped.
+		// The line ending (LF or CRLF) is the one thing kept, as LF.
+		body := strings.TrimSuffix(seg, "\n")
+		body = strings.TrimSuffix(body, "\r")
+		out += textsafe.Escape(body)
+		if strings.HasSuffix(seg, "\n") {
 			out += "\n"
 		}
 		t.atStart = strings.HasSuffix(seg, "\n")

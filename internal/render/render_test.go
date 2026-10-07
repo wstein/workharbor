@@ -208,3 +208,19 @@ func TestToolWriterEndClosesAnOpenLine(t *testing.T) {
 		t.Errorf("a second End wrote: %q", b.String())
 	}
 }
+
+func TestToolWriterEscapesControlBytes(t *testing.T) {
+	var b strings.Builder
+	tw := NewToolWriter(&b, Style{})
+	_, _ = tw.Write([]byte("a\x1b[2Jb\rc\u009bd\te\r\nnext\x07\n"))
+	got := b.String()
+	for _, r := range got {
+		if r == 0x1b || r == '\r' || r == 0x07 || (r >= 0x80 && r <= 0x9f) {
+			t.Fatalf("a control byte reached the output: %q", got)
+		}
+	}
+	want := "    tool output:\n    | a\\x1b[2Jb\\rc\\u009bd\te\n    | next\\x07\n"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
