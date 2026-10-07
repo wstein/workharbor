@@ -8,8 +8,10 @@ toc: true
 ## 5.12 Per-client API credentials (proposal)
 
 {{< status open >}} Design note for [#364](https://github.com/wstein/workharbor/issues/364),
-a follow-up to [#357](https://github.com/wstein/workharbor/issues/357). Nothing
-here is implemented. Implementation starts only after Werner approves the note.
+a follow-up to [#357](https://github.com/wstein/workharbor/issues/357). The
+first slice is implemented: the `api_clients` configuration, per-client audit
+actors and the `api-clients` doctor check. The rest of this note, including the
+open questions below, is still a proposal.
 
 ### Threat addressed
 
