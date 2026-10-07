@@ -366,3 +366,26 @@ func TestAccountRiskQuitIsRecordedBeforeEngineStarts(t *testing.T) {
 		t.Fatalf("entries %+v", entries)
 	}
 }
+
+func TestAccountRiskQuitHintQuotesItsArguments(t *testing.T) {
+	r := answersRig(t, false)
+	r.env.Host = quitRiskHost{r.host}
+	r.host.outputs["dseditgroup -o checkmember -m werner admin"] = "yes werner is a member of admin"
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"account":"shared","public_url":"https://whr.example.ts.net"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prefix := filepath.Join(t.TempDir(), "my prefix")
+	if err := os.Symlink(filepath.Dir(filepath.Dir(r.exe)), prefix); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return r.home }, Setup: r.env}
+	code := Execute(context.Background(), env, []string{"setup", "--user", "werner", "--only", "container-start", "--config", configPath, "--prefix", prefix})
+	if code != exitcode.Quit {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "'"+prefix+"'") {
+		t.Errorf("the restart hint does not quote the argument with a space:\n%s", errOut.String())
+	}
+}

@@ -299,7 +299,7 @@ func newSetup(st *state) *cobra.Command {
 						return err
 					}
 					ui.Report(render.LevelSkipped, "stopped at your request, nothing was run")
-					fmt.Fprintf(st.env.Stderr, "to start again, run: %s\n", strings.Join(resume, " "))
+					fmt.Fprintf(st.env.Stderr, "to start again, run: %s\n", setup.QuoteArgv(resume))
 					return quitError{}
 				}
 				if err != nil || a != render.Yes {
