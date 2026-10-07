@@ -3,7 +3,8 @@
 // encoding and a domain-separated digest. See issue #333 for the design.
 //
 // The CLI record has assurance "local": an honest log, not proof against an
-// agent running as the same user. Only a passkey record binds the answer.
+// agent running as the same user. Assurance is self-asserted; binding the
+// answer requires a verified passkey assertion through a trusted consumer flow.
 package confirm
 
 import (
@@ -154,7 +155,9 @@ func DigestOf(canonical []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// Validate checks every v1 rule. A record that fails is not a confirmation.
+// Validate checks v1 record fields, not extension value encodability or
+// cryptographic assurance. Success does not imply approval; deny and yn:no
+// are valid answers. Consumers must check the answer and operation binding.
 func (r Record) Validate() error {
 	if r.V != Version {
 		return fmt.Errorf("%w: %d", ErrUnknownVersion, r.V)

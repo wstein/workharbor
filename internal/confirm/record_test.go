@@ -3,17 +3,19 @@ package confirm
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// The fixtures are the canonical bytes from the #333 design; the digests are
-// the ones pinned there.
+// The original fixtures and digests are pinned by #333; decision-controls
+// additionally pins control escapes and a supplementary rune with low surrogate dfff.
 var fixtures = []struct{ name, digest string }{
 	{"land-cli", "e384bb14aa73efed070d8a421d4ee3216ba04b666a323a2d8063ff097993e57e"},
 	{"decision-relay", "ada2e2d9f9217c11d3c460a2690d0b4e32ad4e9a547aa0129ea7607bfad3b6c8"},
+	{"decision-controls", "749023a6ce9588491548af6939b40742718ed51e7d0762e549592fcd358ec497"},
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -297,6 +299,113 @@ func TestDecodeSyntaxReason(t *testing.T) {
 			_, err := Decode(tt.in)
 			if !errors.Is(err, ErrSyntax) || !strings.Contains(err.Error(), tt.msg) {
 				t.Fatalf("got %v, want %q", err, tt.msg)
+			}
+		})
+	}
+}
+
+// Depth counts edges from the root, as in the strict decoder. An ext value
+// starts at depth two; the leaf at depth sixteen is accepted.
+func TestNestingBoundary(t *testing.T) {
+	for _, kind := range []string{"array", "object"} {
+		for _, leafDepth := range []int{16, 17} {
+			t.Run(fmt.Sprintf("%s/%d", kind, leafDepth), func(t *testing.T) {
+				var v any = int64(1)
+				raw := "1"
+				for depth := 2; depth < leafDepth; depth++ {
+					if kind == "array" {
+						v = []any{v}
+						raw = "[" + raw + "]"
+					} else {
+						v = map[string]any{"x": v}
+						raw = `{"x":` + raw + "}"
+					}
+				}
+				r, err := Decode(readFixture(t, "decision-relay"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.Ext = map[string]any{"test.depth": v}
+				encoded, encodeErr := Encode(r)
+				input := rep(t, "decision-relay", `"question":`, `"ext":{"test.depth":`+raw+`},"question":`)
+				_, decodeErr := Decode(input)
+				p := parser{b: input}
+				_, parseErr := p.value(0)
+				if leafDepth == 16 {
+					if encodeErr != nil || decodeErr != nil || parseErr != nil {
+						t.Fatalf("boundary: encode %v, decode %v", encodeErr, decodeErr)
+					}
+					if !bytes.Equal(encoded, input) {
+						t.Fatal("encoding differs from independent nested input")
+					}
+				} else {
+					for _, err := range []error{encodeErr, decodeErr, parseErr} {
+						if !errors.Is(err, ErrSyntax) || !strings.Contains(err.Error(), "nesting too deep") {
+							t.Fatalf("got %v, want depth rejection", err)
+						}
+					}
+					if encoded != nil {
+						t.Fatal("failed encode returned bytes")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestEncodeRejectsCycles(t *testing.T) {
+	m := map[string]any{}
+	m["test.cycle"] = m
+	a := make([]any, 1)
+	a[0] = a
+	for name, ext := range map[string]map[string]any{"map": m, "slice": {"test.cycle": a}} {
+		t.Run(name, func(t *testing.T) {
+			r := Record{Ext: ext}
+			if b, err := Encode(r); b != nil || !errors.Is(err, ErrSyntax) || !strings.Contains(err.Error(), "nesting too deep") {
+				t.Fatalf("Encode: bytes %q, error %v", b, err)
+			}
+			if digest, err := r.Digest(); digest != "" || !errors.Is(err, ErrSyntax) {
+				t.Fatalf("Digest: %q, %v", digest, err)
+			}
+		})
+	}
+}
+
+func TestControlsGolden(t *testing.T) {
+	raw := readFixture(t, "decision-controls")
+	r, err := Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Question != "Line one\nLine two\t\b\f\r\x1b\U0001F7FF" {
+		t.Fatalf("question %q", r.Question)
+	}
+	for _, escape := range []string{`\u000a`, `\u0009`, `\u0008`, `\u000c`, `\u000d`} {
+		short := map[string]string{`\u000a`: `\n`, `\u0009`: `\t`, `\u0008`: `\b`, `\u000c`: `\f`, `\u000d`: `\r`}[escape]
+		_, err := Decode(bytes.Replace(raw, []byte(escape), []byte(short), 1))
+		if !errors.Is(err, ErrNotCanonical) {
+			t.Fatalf("short %s: %v", short, err)
+		}
+	}
+}
+
+func TestEmptySubjectAllActions(t *testing.T) {
+	for _, action := range []string{ActionLand, ActionPush, ActionChangeConfirm, ActionTokensRevoke, ActionDecision} {
+		t.Run(action, func(t *testing.T) {
+			r, err := Decode(readFixture(t, "decision-relay"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Action, r.Subject = action, Subject{}
+			if err := r.Validate(); !errors.Is(err, ErrBadSubject) {
+				t.Fatalf("Validate: %v", err)
+			}
+			raw, err := Encode(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Decode(raw); !errors.Is(err, ErrBadSubject) {
+				t.Fatalf("Decode: %v", err)
 			}
 		})
 	}

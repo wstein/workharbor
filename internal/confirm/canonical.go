@@ -10,7 +10,8 @@ import (
 
 // Encode returns the canonical bytes of r: UTF-8 JSON, bytewise-sorted keys,
 // no whitespace, \uXXXX escapes for non-ASCII, integers only, no null, empty
-// optionals omitted. It does not validate r.
+// optionals omitted. It does not validate r. It rejects values beyond the
+// decoder's nesting limit, including cyclic extension maps and slices.
 func Encode(r Record) ([]byte, error) {
 	m := map[string]any{
 		"v":         int64(r.V),
@@ -37,7 +38,7 @@ func Encode(r Record) ([]byte, error) {
 		m["ext"] = r.Ext
 	}
 	var b bytes.Buffer
-	if err := writeValue(&b, m); err != nil {
+	if err := writeValue(&b, m, 0); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
@@ -83,11 +84,14 @@ func evidenceMap(e Evidence) map[string]any {
 
 func encodeEvidence(e Evidence) []byte {
 	var b bytes.Buffer
-	_ = writeValue(&b, evidenceMap(e))
+	_ = writeValue(&b, evidenceMap(e), 0)
 	return b.Bytes()
 }
 
-func writeValue(b *bytes.Buffer, v any) error {
+func writeValue(b *bytes.Buffer, v any, depth int) error {
+	if depth > maxDepth {
+		return fmt.Errorf("%w: nesting too deep", ErrSyntax)
+	}
 	switch x := v.(type) {
 	case string:
 		return writeString(b, x)
@@ -103,7 +107,7 @@ func writeValue(b *bytes.Buffer, v any) error {
 			if i > 0 {
 				b.WriteByte(',')
 			}
-			if err := writeValue(b, e); err != nil {
+			if err := writeValue(b, e, depth+1); err != nil {
 				return err
 			}
 		}
@@ -123,7 +127,7 @@ func writeValue(b *bytes.Buffer, v any) error {
 				return err
 			}
 			b.WriteByte(':')
-			if err := writeValue(b, x[k]); err != nil {
+			if err := writeValue(b, x[k], depth+1); err != nil {
 				return err
 			}
 		}
