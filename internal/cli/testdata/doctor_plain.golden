@@ -18,7 +18,7 @@ Legend (colour is only decoration: the words are always printed)
  ? ?      workspace-volume     needs a valid configuration: the workspace
           roots are read from it, and it is not written yet
 | ACTION  to fix workspace-volume, run
-|   $ whr setup --only config-base --user 'operator'
+|   $ whr setup --only config-base --user 'operator' (run as operator)
  ? ?      power                pmset did not answer
 | ACTION  to fix power, run
 |   $ whr setup host --only power --user 'operator'
@@ -28,7 +28,7 @@ Legend (colour is only decoration: the words are always printed)
  ? ?      spotlight            needs a valid configuration: the workspace
           roots are read from it, and it is not written yet
 | ACTION  to fix spotlight, run
-|   $ whr setup --only config-base --user 'operator'
+|   $ whr setup --only config-base --user 'operator' (run as operator)
  ? ?      firewall             socketfilterfw did not answer
 | ACTION  to fix firewall, run
 |   $ whr setup host --only firewall --user 'operator'
@@ -190,14 +190,14 @@ What you need to do now
      $ whr setup host --only autologout --user 'operator'
   3. workspace-volume: needs a valid configuration: the workspace roots are read
      from it, and it is not written yet
-     $ whr setup --only config-base --user 'operator'
+     $ whr setup --only config-base --user 'operator' (run as operator)
   4. power: pmset did not answer
      $ whr setup host --only power --user 'operator'
   5. media-analysis: ps did not answer
      $ whr setup host --only media-analysis --user 'operator'
   6. spotlight: needs a valid configuration: the workspace roots are read from
      it, and it is not written yet
-     $ whr setup --only config-base --user 'operator'
+     $ whr setup --only config-base --user 'operator' (run as operator)
   7. firewall: socketfilterfw did not answer
      $ whr setup host --only firewall --user 'operator'
   8. ssh-keys-only: /etc/ssh/sshd_config.d/100-whr.conf is not there: password

@@ -119,7 +119,7 @@ func newSetup(st *state) *cobra.Command {
 		dev = st.dev
 		var reportSteps []doctor.Check
 		var reportOutcomes []setup.Outcome
-		var remembered bool
+		var remembered, notWhr bool // notWhr: the administrator, not whr's account, runs this
 		defer func() {
 			if dryRun {
 				return
@@ -127,6 +127,9 @@ func newSetup(st *state) *cobra.Command {
 			repair := repairContext{Dev: dev && !remembered, Managed: managed, Account: whrUser}
 			if cmd.Flags().Changed("prefix") {
 				repair.Prefix = prefix
+			}
+			if phase == doctor.PhaseHost && notWhr {
+				repair.RunAs = whrUser // the host phase names user-phase steps too
 			}
 			presentation := setupPresentation(reportSteps, reportOutcomes, phase, repair)
 			if runErr != nil && presentation.OK {
@@ -146,6 +149,7 @@ func newSetup(st *state) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		notWhr = env.User != whrUser
 		if phase == doctor.PhaseHost && (answersPath != "" || savePath != "" || unattended) {
 			return usageError{"whr setup host is never answered from a file and never unattended: it changes the host with sudo, and you confirm each step yourself (--answers, --save-answers and --unattended are for `whr setup`)"}
 		}

@@ -128,7 +128,7 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			for i, r := range rs {
 				context := repair
-				if other && r.Fix != "" && r.Phase != doctor.PhaseHost {
+				if other { // command adds it to the fixes that are for whr's account only
 					context.RunAs = whrUser
 				}
 				rs[i].Fix = context.command(r.Fix)

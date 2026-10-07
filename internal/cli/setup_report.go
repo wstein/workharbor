@@ -94,7 +94,9 @@ func (c repairContext) command(fix string) string {
 	if c.Account != "" && c.Account != doctor.WhrUser {
 		fix += " --user " + shellArgument(c.Account)
 	}
-	if c.RunAs != "" {
+	// a fix of the user phase runs as whr's account, whatever check names it; a
+	// `whr setup host` fix is the administrator's
+	if c.RunAs != "" && !strings.HasPrefix(fix, "whr setup host") {
 		fix += " (run as " + c.RunAs + ")"
 	}
 	return fix
