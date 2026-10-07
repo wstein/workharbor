@@ -165,7 +165,7 @@ func (t Terminal) output(ctx context.Context, argv ...string) ([]byte, error) {
 	}
 	err = t.interruptOr(ctx, err)
 	code := exitCodeOf(err)
-	t.Log.CommandAnswer(argv, code, out.String()+errb.String(), "", doctor.ExpectedAnswer(argv, code))
+	t.Log.CommandAnswer(argv, code, out.String()+errb.String(), "", doctor.ExpectedAnswer(argv, code, errb.String()))
 	if err != nil && errb.Len() > 0 {
 		// what the command said is what tells "not set" from "could not read"
 		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
@@ -399,12 +399,14 @@ func (t Terminal) Show(text string) { fmt.Fprintln(t.Err, text) }
 
 // Ask implements Asker: [Y/n/q] or [y/N/q] by the default, as an ACTION line.
 func (t Terminal) Ask(question string, d render.Default) (render.Answer, error) {
+	defer t.Probes.Reset() // the person may have acted while the question was open
 	return render.Ask(t.In, render.Writer{W: t.Err, S: t.Style}, question, d)
 }
 
 // AskWord asks for a typed word, for the most destructive steps: only the exact
 // word is yes, Enter and anything else is no, q quits.
 func (t Terminal) AskWord(question, word string) (render.Answer, error) {
+	defer t.Probes.Reset() // a look after the typed word must read the system afresh
 	return render.AskWord(t.In, render.Writer{W: t.Err, S: t.Style}, question, word)
 }
 
@@ -415,6 +417,7 @@ func (t Terminal) Pause() error { return t.PauseContext(context.Background()) }
 // PauseContext implements ContextPauser: like Pause, but it returns the
 // context's error as soon as the context ends, without waiting for Enter.
 func (t Terminal) PauseContext(ctx context.Context) error {
+	defer t.Probes.Reset()
 	fmt.Fprintln(t.Err, "\nPress Enter to continue (q to quit)")
 	line := make(chan string, 1)
 	go func() { s, _ := t.In.ReadString('\n'); line <- s }()

@@ -135,8 +135,8 @@ func commandExitIs(err error, code int) bool {
 // commands whose checks treat that exit as a normal answer and not as an error
 // ("" otherwise): dseditgroup -o checkmember exits 67 for "not a member" and
 // dscl -read exits 56 for "no such record" (both read from the checks above);
-// defaults exits 1 for an absent autologout key.
-func ExpectedAnswer(argv []string, exit int) string {
+// defaults exits 1 for an absent autologout key, but only when stderr says so.
+func ExpectedAnswer(argv []string, exit int, stderr string) string {
 	if len(argv) < 2 {
 		return ""
 	}
@@ -145,7 +145,7 @@ func ExpectedAnswer(argv []string, exit int) string {
 		return "not a member"
 	case argv[0] == "dscl" && contains(argv, "-read") && exit == 56:
 		return "no such record"
-	case argv[0] == "defaults" && argv[1] == "read" && exit == 1 && contains(argv, "com.apple.autologout.AutoLogOutDelay"):
+	case argv[0] == "defaults" && argv[1] == "read" && exit == 1 && contains(argv, "com.apple.autologout.AutoLogOutDelay") && autologoutAbsent.MatchString(strings.TrimSpace(stderr)):
 		return "key not set"
 	}
 	return ""

@@ -59,3 +59,19 @@ func TestASymlinkedHomeIsNotMeasured(t *testing.T) {
 		t.Errorf("size known")
 	}
 }
+
+// The look after the typed word is a second, complete read of the machine: the
+// runner is asked every fact again (the terminal forgets its remembered
+// answers when a question is answered).
+func TestTheLookAfterTheTypedWordReadsEverythingAgain(t *testing.T) {
+	h := newHost()
+	f := Inspect(context.Background(), h.deps(), inv())
+	first := len(h.reads)
+	h.answer = Word
+	var so, se bytes.Buffer
+	h.log = &se
+	_ = Execute(context.Background(), h, h.deps(), f, Log{W: &se, Now: time.Now, Whr: "t"}, Out{Out: &so, Err: &se})
+	if first == 0 || len(h.reads) < 2*first {
+		t.Errorf("first look read %d facts, all reads %d: the second look did not read afresh", first, len(h.reads))
+	}
+}
