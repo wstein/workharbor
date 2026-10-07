@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
@@ -168,5 +170,20 @@ func TestOutputIsLogged(t *testing.T) {
 	_ = lg.Close()
 	if got := readFile(t, lp); !strings.Contains(got, "exit 2") || !strings.Contains(got, "seen") {
 		t.Fatalf("log %q", got)
+	}
+}
+
+// Ctrl-\ during a secret command must not end whr (and leave echo off): the
+// signal is caught while the command runs.
+func TestRunOnceSurvivesSIGQUITDuringASecretCommand(t *testing.T) {
+	var b strings.Builder
+	h := Terminal{Err: &b}
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = syscall.Kill(os.Getpid(), syscall.SIGQUIT)
+	}()
+	err := h.runOnce(context.Background(), doctor.Cmd{Argv: []string{"/bin/sleep", "0.5"}, SecretPrompt: "pw"}, "marker-value", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

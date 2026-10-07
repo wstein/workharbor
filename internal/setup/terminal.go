@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -203,6 +204,11 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 		// its input. Echo stays off on the terminal while it runs, in case it
 		// opens /dev/tty itself; its prompt for a secret is dropped by tw.
 		cmd.Stdin = strings.NewReader(pw + "\n")
+		// Ctrl-\ (SIGQUIT) would end whr at once, with echo still off: catch it
+		// while the child runs; the child dies of it and the restore runs.
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGQUIT)
+		defer signal.Stop(quit)
 		if t.Stdin != nil {
 			defer echoOff(int(t.Stdin.Fd()))() //nolint:gosec // a file descriptor of this process
 		}
