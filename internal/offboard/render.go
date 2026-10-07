@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
@@ -38,11 +39,17 @@ func (o Out) Data(fields ...string) {
 	for i, f := range fields {
 		fields[i] = plain(f)
 	}
-	fmt.Fprintln(o.Out, strings.Join(fields, "\t"))
+	line := strings.Join(fields, "\t")
+	if o.Style.Unicode && len(fields) == 2 && utf8.RuneCountInString(line) > 80 {
+		line = strings.TrimRight(render.KV(o.Style, fields[0], fields[1]), "\n")
+	}
+	fmt.Fprintln(o.Out, line)
 }
 
-// Note writes a line of human text.
-func (o Out) Note(format string, a ...any) { fmt.Fprintf(o.Err, format+"\n", a...) }
+// Note writes human text, wrapped with the continuation behind its label.
+func (o Out) Note(format string, a ...any) {
+	o.ui().Note(fmt.Sprintf(format, a...))
+}
 
 // Action says what a step does before it runs.
 func (o Out) Action(text string) { o.ui().Action(plain(text)) }

@@ -36,7 +36,7 @@ const Unverified = "macOS commands are unverified on macOS 26 (#346)"
 
 const (
 	deletedUsers = "/Users/Deleted Users"
-	sysadminctlN = "also removes its Public share point and kills its processes (observed once, unverified)"
+	sysadminctlN = "also removes its Public share, kills processes (unverified)"
 )
 
 // The commands run by absolute path, so a PATH of the session cannot swap them.
@@ -642,7 +642,8 @@ func Verify(ctx context.Context, d Deps, f Facts, o Out) bool {
 		switch rest, isList := strings.CutPrefix(text, "GroupMembership:"); {
 		case isList && contains(strings.Fields(rest), name):
 			say(Fail, "group:"+g, name+" is still a member")
-			o.Note("  fix (shown, never run): sudo dseditgroup -o edit -d %s -t user %s", name, g)
+			o.Note("  fix (shown, never run):")
+			o.ui().Command(fmt.Sprintf("sudo dseditgroup -o edit -d %s -t user %s", name, g))
 		case isList:
 			say(OK, "group:"+g, "not a member")
 		case strings.Contains(text, "No such key") || (err != nil && (strings.Contains(err.Error(), "No such key") || doctor.DSCLNotFound(err))):

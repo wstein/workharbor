@@ -106,3 +106,26 @@ func TestPickerEnterTakesTheDefaultAndQQuits(t *testing.T) {
 		t.Errorf("out of range then 1 = %d %v", got, err)
 	}
 }
+
+// A typed-word prompt wraps within 80 columns and no line ends in a comma,
+// so a wrap never leaves "Type "word" to go on," dangling (#377).
+func TestTypedWordPromptWrapsWithoutADanglingComma(t *testing.T) {
+	q := "This deletes the macOS account workharbor and its home folder /Users/workharbor. It cannot be undone. Delete the account workharbor?"
+	_, out, w := asker("q\n")
+	r := bufio.NewReader(strings.NewReader("q\n"))
+	if _, err := AskWord(r, w, q, "workharbor"); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), " \n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected a wrapped prompt: %q", out.String())
+	}
+	for _, l := range lines {
+		if len([]rune(l)) > 80 || strings.HasSuffix(l, ",") {
+			t.Errorf("bad line %q", l)
+		}
+	}
+	if !strings.Contains(out.String(), `(q quits):`) {
+		t.Errorf("prompt: %q", out.String())
+	}
+}

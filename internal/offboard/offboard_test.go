@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
@@ -367,7 +368,7 @@ func TestADryRunRunsNothing(t *testing.T) {
 			t.Errorf("plan lacks %q:\n%s", want, so.String())
 		}
 	}
-	if !strings.Contains(se.String(), "sysadminctl also removes its Public share point and kills its processes (observed once, unverified)") {
+	if !strings.Contains(se.String(), "sysadminctl also removes its Public share, kills processes (unverified)") {
 		t.Errorf("no fixed note: %s", se.String())
 	}
 }
@@ -791,5 +792,51 @@ func TestSudoKeepsItsOwnEchoOffPrompt(t *testing.T) {
 	c := DeleteCmd("admin")
 	if c.SecretPrompt == "" || c.Argv[len(c.Argv)-1] != "-" {
 		t.Errorf("the delete command must take its password from stdin: %v", c.Argv)
+	}
+}
+
+// A long groups row wraps with a hanging indent on a terminal; piped, it stays
+// the one tab-separated line; the sysadminctl note fits and stays unverified.
+func TestLongGroupsRowWrapsOnATerminalOnly(t *testing.T) {
+	h := newHost()
+	in := inv()
+	in.Delete, in.Terminal = false, false
+	f := Inspect(context.Background(), h.deps(), in)
+	f.Groups = strings.Fields("staff everyone localaccounts com.apple.sharepoint.group.3 _lpoperator _lpadmin _appserverusr _appserveradm admin com.apple.access_ssh")
+	want := "groups\t" + strings.Join(f.Groups, " ") + "\n"
+	var so, se bytes.Buffer
+	Plan(Out{Out: &so, Err: &se}, f)
+	if !strings.Contains(so.String(), want) {
+		t.Errorf("piped groups line changed:\n%s", so.String())
+	}
+	so.Reset()
+	se.Reset()
+	Plan(Out{Out: &so, Err: &se, Style: render.Style{Unicode: true}}, f)
+	var rows []string
+	for _, l := range strings.Split(so.String(), "\n") {
+		if strings.HasPrefix(l, "groups") || (len(rows) > 0 && strings.HasPrefix(l, "        ")) {
+			rows = append(rows, l)
+		} else if len(rows) > 0 {
+			break
+		}
+	}
+	if len(rows) < 2 {
+		t.Fatalf("groups did not wrap:\n%s", so.String())
+	}
+	for _, l := range rows {
+		if n := utf8.RuneCountInString(l); n > 80 {
+			t.Errorf("%d wide: %q", n, l)
+		}
+	}
+	if strings.Join(strings.Fields(strings.Join(rows, " ")), " ") != "groups "+strings.Join(f.Groups, " ") {
+		t.Errorf("wrapping lost or reordered groups:\n%s", strings.Join(rows, "\n"))
+	}
+	for _, l := range strings.Split(se.String(), "\n") {
+		if utf8.RuneCountInString(l) > 80 {
+			t.Errorf("note over 80: %q", l)
+		}
+	}
+	if !strings.Contains(se.String(), "unverified") {
+		t.Errorf("the note lost its unverified marker: %s", se.String())
 	}
 }

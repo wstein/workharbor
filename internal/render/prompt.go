@@ -80,7 +80,7 @@ func Ask(in *bufio.Reader, w Writer, question string, d Default) (Answer, error)
 // AskWord asks for a typed word, for the most destructive steps. Only the exact
 // word is yes; Enter and anything else is no; q quits.
 func AskWord(in *bufio.Reader, w Writer, question, word string) (Answer, error) {
-	w.put(Question(w.S, fmt.Sprintf("%s Type %q to go on, or q to quit:", question, word)))
+	w.put(Question(w.S, fmt.Sprintf("%s Type %q to go on (q quits):", question, word)))
 	s, err := readLine(in)
 	if err != nil {
 		return No, err
