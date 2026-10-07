@@ -64,3 +64,17 @@ func TestAdviceSaysUseAnAPIKey(t *testing.T) {
 		t.Errorf("%q", Advice)
 	}
 }
+
+func TestASubscriptionNameOutranksAnEmptyValue(t *testing.T) {
+	if err := Check("CLAUDE_CODE_OAUTH_TOKEN", ""); !errors.Is(err, ErrSubscriptionName) {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestAnEmptyOrBlankValueIsRefused(t *testing.T) {
+	for _, v := range []string{"", " ", "\t", "\uFEFF", " \r\n "} {
+		if err := Check("ANTHROPIC_API_KEY", v); !errors.Is(err, ErrEmptyValue) {
+			t.Errorf("%q: %v", v, err)
+		}
+	}
+}

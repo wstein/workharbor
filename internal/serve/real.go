@@ -257,7 +257,7 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 	}
 	for i, e := range agentEnv {
 		_, v, _ := strings.Cut(e, "=")
-		if v == "" {
+		if v == "" { // AgentAPIKey refuses an empty value; other callers may still pass one
 			continue
 		}
 		if !rd.Add(v) {

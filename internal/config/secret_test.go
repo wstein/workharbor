@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/credcheck"
 )
 
 func TestSecretsMayNotLieInsideAnyRoot(t *testing.T) {
@@ -124,6 +126,31 @@ func TestASubscriptionShapedValueIsRefused(t *testing.T) {
 		if msg := problems(err); !strings.Contains(msg, "API key, not a setup-token") || strings.Contains(msg, "SECRET") {
 			t.Errorf("%s: problems = %q", line, msg)
 		}
+	}
+}
+
+func TestAnEmptyAPIKeyValueIsRefused(t *testing.T) {
+	for _, line := range []string{"ANTHROPIC_API_KEY=", "ANTHROPIC_API_KEY=   "} {
+		r := newRig(t)
+		if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte(line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := r.parse(t)
+		if msg := problems(err); !strings.Contains(msg, "ANTHROPIC_API_KEY") || !strings.Contains(msg, "empty value") || !strings.Contains(msg, "write the API key after the =") || !strings.Contains(msg, "remove agent_api_key_env_file from the configuration") || strings.Contains(msg, "D40") || strings.Contains(msg, credcheck.Advice) {
+			t.Errorf("%q: problems = %q", line, msg)
+		}
+	}
+}
+
+// A subscription name outranks an empty value: the D40 text stays.
+func TestASubscriptionNameWithAnEmptyValueKeepsTheD40Refusal(t *testing.T) {
+	r := newRig(t)
+	if err := os.WriteFile(r.cfg.AgentAPIKeyEnvFile, []byte("CLAUDE_CODE_OAUTH_TOKEN=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := r.parse(t)
+	if msg := problems(err); !strings.Contains(msg, "D40") || !strings.Contains(msg, "subscription credential") || strings.Contains(msg, "empty value") {
+		t.Errorf("problems = %q", msg)
 	}
 }
 

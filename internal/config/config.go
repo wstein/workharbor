@@ -933,7 +933,8 @@ func ReadSecret(path string) ([]byte, error) {
 // lines starting with '#' ignored. The entries go to the agent's process
 // environment through the runtime's env file, never a command line. With no
 // file it returns nothing. A subscription credential is refused: whr never
-// reads, stores or relays one (D40); errors name the line, never its value.
+// reads, stores or relays one (D40); an empty or blank value is refused;
+// errors name the line, never its value.
 func (c *Config) AgentAPIKey() ([]string, error) {
 	if c.AgentAPIKeyEnvFile == "" {
 		return nil, nil
@@ -952,7 +953,9 @@ func (c *Config) AgentAPIKey() ([]string, error) {
 		case !ok || !envKey.MatchString(k):
 			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d is not KEY=VALUE", i+1)
 		}
-		if err := credcheck.Check(k, v); err != nil {
+		if err := credcheck.Check(k, v); errors.Is(err, credcheck.ErrEmptyValue) {
+			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s to an empty value; write the API key after the = in %s, or delete the file and remove agent_api_key_env_file from the configuration to use a subscription login", i+1, k, c.AgentAPIKeyEnvFile)
+		} else if err != nil {
 			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s: %w; whr never handles a subscription credential (D40). %s", i+1, k, err, credcheck.Advice)
 		}
 		env = append(env, line)

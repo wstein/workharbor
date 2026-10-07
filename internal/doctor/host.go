@@ -1002,7 +1002,9 @@ func userSteps(d Deps) []Check {
 					return err
 				}
 				key = strings.TrimSpace(key)
-				if err := credcheck.Check("ANTHROPIC_API_KEY", key); err != nil {
+				if err := credcheck.Check("ANTHROPIC_API_KEY", key); errors.Is(err, credcheck.ErrEmptyValue) {
+					return errors.New("no key entered; nothing was written")
+				} else if err != nil {
 					return errors.New("refused: " + err.Error() + "; nothing was written. " + credcheck.Advice)
 				}
 				if len(key) < 20 || strings.ContainsAny(key, " \t\r\n=") {

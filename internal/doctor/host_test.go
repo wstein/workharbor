@@ -332,6 +332,16 @@ func TestSecretsAreGeneratedOrTypedAndWrittenPrivatelyWithoutOverwriting(t *test
 			t.Errorf("%q left a file behind", bad)
 		}
 	}
+	for _, empty := range []string{"", "   "} {
+		_ = os.Remove(env)
+		err := st["agent-key"].Fix.Do(ctx, &answers{secrets: []string{empty}})
+		if err == nil || !strings.Contains(err.Error(), "no key entered") || strings.Contains(err.Error(), "setup-token") {
+			t.Errorf("%q: %v", empty, err)
+		}
+		if _, err := os.Stat(env); err == nil {
+			t.Errorf("%q left a file behind", empty)
+		}
+	}
 	for _, bad := range []string{"short", "has space in it 1234567890", "a=b1234567890123456789"} {
 		_ = os.Remove(env)
 		if err := st["agent-key"].Fix.Do(ctx, &answers{secrets: []string{bad}}); err == nil {
@@ -1213,6 +1223,18 @@ func TestTheAgentKeyStepValidatesExistingFileContents(t *testing.T) {
 				t.Error("validation exposed a synthetic credential value")
 			}
 		})
+	}
+}
+
+func TestTheAgentKeyStepFailsAnEmptyValueWithAnActionableStep(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "agent.env"), []byte("ANTHROPIC_API_KEY=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	check := steps(t, Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502})["agent-key"]
+	got, detail := status(check)
+	if got != Fail || !strings.Contains(detail, "write the API key after the =") || !strings.Contains(detail, "remove agent_api_key_env_file from the configuration") || strings.Contains(detail, "D40") || strings.Contains(detail, "setup-token") {
+		t.Errorf("status %s, detail %q", got, detail)
 	}
 }
 

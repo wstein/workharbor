@@ -32,22 +32,29 @@ var subscriptionName = regexp.MustCompile(`(?i)oauth|session|auth_token|access_t
 
 var subscriptionJSONKey = regexp.MustCompile(`(?i)"?(access|refresh)_?token"?\s*[:=]`)
 
-// ErrSubscriptionName and ErrSubscriptionValue are returned by Check.
+// ErrSubscriptionName, ErrSubscriptionValue and ErrEmptyValue are returned by
+// Check.
 var (
 	ErrSubscriptionName  = errors.New("a subscription or login credential name")
 	ErrSubscriptionValue = errors.New("a value shaped like a subscription login, not an API key")
+	ErrEmptyValue        = errors.New("an empty value")
 )
 
 // Name reports whether the variable name is a known subscription credential.
 func Name(name string) bool { return subscriptionName.MatchString(name) }
 
-// Check refuses a subscription credential name or value. The value never
-// appears in the error.
+// Check refuses a subscription credential name, an empty or whitespace-only
+// value, or a subscription-shaped value. The value check stays shape-only: a
+// zero-width, NUL or quoted-empty value still passes. The value never appears
+// in the error.
 func Check(name, value string) error {
 	if Name(name) {
 		return ErrSubscriptionName
 	}
 	v := strings.TrimSpace(strings.TrimLeft(value, "\uFEFF \t\r\n"))
+	if v == "" {
+		return ErrEmptyValue
+	}
 	if strings.HasPrefix(v, "{") || subscriptionJSONKey.MatchString(v) {
 		return ErrSubscriptionValue
 	}
