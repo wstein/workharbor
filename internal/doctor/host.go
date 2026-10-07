@@ -72,16 +72,27 @@ func (d Deps) output(ctx context.Context, argv ...string) (string, error) {
 var errNotHere = errors.New("this runs only on a Mac")
 
 // DSCLNotFound reports whether a failed `dscl . -read` says the record is not
-// there: exit status 56 (eDSRecordNotFound) or "does not exist" in what it said.
-// Any other failure (permissions, a directory-service error, an unknown format)
+// there: exit status 56 or the directory service's own record error,
+// eDSRecordNotFound. Loose wording such as "does not exist" is not enough, and
+// any other failure (permissions, a directory-service error, an unknown format)
 // says nothing about the account.
 func DSCLNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
 	m := err.Error()
-	return commandExitIs(err, 56) || strings.Contains(m, "does not exist") || strings.Contains(m, "eDSRecordNotFound")
+	return commandExitIs(err, 56) || (dsRecordNotFound.MatchString(m) && !dsRecordNegated.MatchString(m))
 }
+
+// dsRecordNotFound matches the error name as a whole token. Free text that
+// merely mentions it (a sentence about what it is not) cannot be told apart
+// from the real message, so the real process status, exit 56, stays primary.
+var dsRecordNotFound = regexp.MustCompile(`(^|[^A-Za-z0-9_])eDSRecordNotFound($|[^A-Za-z0-9_])`)
+
+// dsRecordNegated spots the name after "not " ("is not eDSRecordNotFound"). Other
+// free text that mentions the name still matches: exit status 56 is the
+// reliable signal, and offboard relies on this same function.
+var dsRecordNegated = regexp.MustCompile(`(?i)\b(not|isn'?t|never)\s+eDSRecordNotFound`)
 
 // commandExitIs prefers the real process status. The exact textual fallback
 // supports Runners that expose only an error string, including scripted checks.

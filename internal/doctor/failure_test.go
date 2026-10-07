@@ -34,7 +34,8 @@ func TestAccountFailureClassificationWithFakeDSCL(t *testing.T) {
 		detail     string
 	}{
 		{"not found exit", "exit 56", Fail, "no user"},
-		{"not found stdout", "echo 'record does not exist'; exit 70", Fail, "no user"},
+		{"not found stdout", "echo 'DS Error: -14136 (eDSRecordNotFound)'; exit 70", Fail, "no user"},
+		{"loose wording stdout", "echo 'record does not exist'; exit 70", NotVerified, "record does not exist"},
 		{"permission", "echo 'permission denied' >&2; exit 1", NotVerified, "exit status 1: permission denied"},
 		{"unexpected stdout", "echo 'directory service unavailable'; exit 70", NotVerified, "directory service unavailable"},
 	} {
@@ -102,7 +103,8 @@ func TestLegacyLookupRetainsStdoutAndUncertainty(t *testing.T) {
 		want   Status
 		detail string
 	}{
-		{"echo 'record does not exist'; exit 70", Fail, "no user"},
+		{"echo 'eDSRecordNotFound'; exit 70", Fail, "no user"},
+		{"echo 'record does not exist'; exit 70", NotVerified, "record does not exist"},
 		{"echo 'directory service unavailable'; exit 70", NotVerified, "directory service unavailable"},
 	} {
 		t.Run(tc.detail, func(t *testing.T) {

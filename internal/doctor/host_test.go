@@ -861,7 +861,6 @@ func TestWhrUserFailsOnlyOnARecognizableNotFound(t *testing.T) {
 	for _, msg := range []string{
 		"exit status 56",
 		"exit status 56: <dscl_cmd> DS Error: -14136 (eDSRecordNotFound)",
-		"exit status 1: <dscl_cmd> DS Error: Record does not exist",
 	} {
 		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg, dsclLegacy: "ERR:exit status 56"}))["workharbor-user"])
 		if got != Fail || detail != "there is no user workharbor" {
@@ -873,6 +872,11 @@ func TestWhrUserFailsOnlyOnARecognizableNotFound(t *testing.T) {
 		"exit status 2: eDSServiceNotAvailable",
 		"exit status 70: odd output",
 		"exit status 1",
+		"exit status 1: <dscl_cmd> DS Error: Record does not exist",
+		"exit status 1: the record does not exist",
+		"exit status 1: xeDSRecordNotFoundx",
+		"exit status 1: eDSRecordNotFoundish",
+		"exit status 1: permission denied (not eDSRecordNotFound)",
 	} {
 		got, detail := status(steps(t, hostDeps(scripted{key: "ERR:" + msg}))["workharbor-user"])
 		if got != NotVerified || !strings.Contains(detail, msg) || strings.Contains(detail, "there is no user") {
@@ -1037,7 +1041,8 @@ func TestMissingWorkharborOffersAddUserOnlyWhenLegacyIsAbsent(t *testing.T) {
 		addUser      bool
 	}{
 		{"neither exists", "ERR:exit status 56", Fail, true},
-		{"legacy not found by text", "ERR:exit status 1: Record does not exist", Fail, true},
+		{"legacy not found by record error", "ERR:exit status 1: DS Error: -14136 (eDSRecordNotFound)", Fail, true},
+		{"legacy loose wording is not a not-found", "ERR:exit status 1: Record does not exist", NotVerified, false},
 		{"legacy unreadable", "ERR:exit status 1: Operation not permitted", NotVerified, false},
 		{"legacy unknown failure", "ERR:exit status 70: odd output", NotVerified, false},
 	} {
