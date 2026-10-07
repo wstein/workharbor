@@ -586,7 +586,13 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		"git notes --ref=review copy a b",
 		"git notes --ref=review merge x",
 		"git notes --ref=review prune",
-		"git notes --ref=review append -f -m x HEAD",
+		"git notes --ref=review append -F f",
+		"git notes --ref=review append -m x -F p",
+		"git notes --ref=review append -m x --fil=p",
+		"git notes --ref=review append -m x -C obj",
+		"git notes --ref=review append -m x -c obj",
+		"git notes --ref=review append -m x --reuse-message=obj",
+		"git notes --ref=review append -m x --reedit-message obj",
 		"git notes --ref=confirm append -m x HEAD",
 		"git notes --ref=refs/notes/review append -m x HEAD",
 		"git notes --ref review add -m x HEAD",
@@ -601,7 +607,7 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 	}
 	// Deny beats allow: the append must be allowed and not denied, and nothing
 	// else on the review ref may be allowed.
-	for _, cmd := range []string{"git notes --ref=review append -m verdict", "git notes --ref=review append -m verdict HEAD"} {
+	for _, cmd := range []string{"git notes --ref=review append -m verdict", "git notes --ref=review append -m verdict HEAD", `git notes --ref=review append -m "CLEAR abc123 role=reviewer model=x"`} {
 		if !matches(settings.Permissions.Allow, cmd) || matches(settings.Permissions.Deny, cmd) {
 			t.Errorf("review append not usable: %s", cmd)
 		}
