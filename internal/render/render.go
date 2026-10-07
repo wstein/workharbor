@@ -225,6 +225,12 @@ func Action(s Style, text string) string {
 	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(wrapAt(text, 10, s.cols()), "          ") + "\n"
 }
 
+// Plan is Action for a dry run: the same bar, the word PLAN, because nothing
+// is asked or run yet.
+func Plan(s Style, text string) string {
+	return s.paint(RoleAction, s.bar()+" PLAN") + "    " + indent(wrapAt(text, 10, s.cols()), "          ") + "\n"
+}
+
 // Command is text to copy, behind the action bar and a "$".
 //
 // A command is never wrapped, so a copy gets it whole. One that does not fit
@@ -552,6 +558,9 @@ func (w Writer) Report(l Level, text string) { w.put(Report(w.S, l, text)) }
 
 // Action writes an ACTION line.
 func (w Writer) Action(text string) { w.put(Action(w.S, text)) }
+
+// Plan writes a PLAN line.
+func (w Writer) Plan(text string) { w.put(Plan(w.S, text)) }
 
 // KV writes a key and its value.
 func (w Writer) KV(key, value string) { w.put(KV(w.S, key, value)) }

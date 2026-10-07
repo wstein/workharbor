@@ -14,9 +14,9 @@ preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
 
 -- Step 2 of 4 - title of workharbor-user --
  x FAIL   there is no user workharbor
-| ACTION  run this command
+| PLAN    run this command
 |   $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
-| ACTION  what happens next: Then log in as workharbor and run `whr setup`.
+| PLAN    what happens next: Then log in as workharbor and run `whr setup`.
  - skip   dry run: nothing is run
 
 -- Step 3 of 4 - title of tailscale --

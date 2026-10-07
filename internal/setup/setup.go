@@ -405,7 +405,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			}
 			continue
 		}
-		showFix(ui, s.Fix)
+		showFix(ui, s.Fix, o.DryRun)
 		needsMissing := s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs)
 		if needsMissing {
 			if err := Interrupted(ctx, h); err != nil { // the check was cut short: "not provided" means nothing, so resume must run this step
@@ -430,7 +430,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		}
 		if o.DryRun {
 			if f := s.Fix; f.Guide != "" && hasCommands(f) {
-				ui.Action("what happens next: " + oneLine(f.Guide))
+				ui.Plan("what happens next: " + oneLine(f.Guide))
 			}
 			ui.Report(render.LevelSkipped, "dry run: nothing is run"+rn.dryRunQuestion(s, out))
 			out.Asked = true
@@ -668,7 +668,11 @@ func hasCommands(f *doctor.Fix) bool {
 
 // showFix prints what a fix does as ACTION lines and the exact commands as
 // copyable ones. A guided fix (no command) shows its guide as the ACTION.
-func showFix(ui render.Writer, f *doctor.Fix) {
+func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
+	plan := ui.Action
+	if dry { // a command that is only planned is not an action yet
+		plan = ui.Plan
+	}
 	switch {
 	case !hasCommands(f):
 		ui.Action(oneLine(f.Guide))
@@ -676,11 +680,11 @@ func showFix(ui render.Writer, f *doctor.Fix) {
 			ui.Action("this opens:\n" + f.Open)
 		}
 	case f.Desc != "":
-		ui.Action(f.Desc)
+		plan(f.Desc)
 	case len(f.Cmds) == 1:
-		ui.Action("run this command")
+		plan("run this command")
 	default:
-		ui.Action("run these commands")
+		plan("run these commands")
 	}
 	for _, c := range f.Cmds {
 		ui.Command(QuoteArgv(c.Full()))

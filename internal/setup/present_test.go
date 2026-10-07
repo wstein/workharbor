@@ -453,3 +453,17 @@ func TestRunUsesPauseContextAndStopsWhenTheContextEnds(t *testing.T) {
 		t.Error("Run called Pause although the host is a ContextPauser")
 	}
 }
+
+// A dry run labels the commands PLAN; a real run keeps ACTION.
+func TestShowFixLabelsPlanInADryRun(t *testing.T) {
+	fix := &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"echo", "hi"}}}}
+	for _, dry := range []bool{true, false} {
+		var b bytes.Buffer
+		showFix(render.Writer{W: &b}, fix, dry)
+		got := b.String()
+		if dry != (strings.Contains(got, "PLAN") && !strings.Contains(got, "ACTION")) ||
+			!dry != (strings.Contains(got, "ACTION") && !strings.Contains(got, "PLAN")) {
+			t.Errorf("dry=%v:\n%s", dry, got)
+		}
+	}
+}
