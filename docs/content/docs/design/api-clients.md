@@ -113,7 +113,7 @@ mirrors `checkSecretInfo` (`internal/config/config.go`), so every finding is Fai
 
 | Finding | Severity |
 | --- | --- |
-| File missing, unreadable, a link, not a regular file, or empty | Fail |
+| File missing, unreadable, a link, not a regular file, empty, or larger than 64 KiB | Fail |
 | Mode is anything other than exactly `0600` | Fail |
 | Owner is not the current account | Fail |
 | Hard-link count above 1 | Fail |
