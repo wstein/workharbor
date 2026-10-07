@@ -31,20 +31,18 @@ func TestFinalBlockHasEverySection(t *testing.T) {
 	}
 }
 
-func TestAskAutoSkipsOnlyUndoableSteps(t *testing.T) {
-	in, out, w := asker("n\n")
-	a, err := AskAuto(in, w, "Go on?", DefaultYes, true)
-	if err != nil || a != Yes || strings.Contains(out.String(), "[Y/n/q]") {
-		t.Errorf("undoable with --yes: %v %v %q", a, err, out.String())
+func TestAutoYesAnswersOnlyUndoableSteps(t *testing.T) {
+	_, out, w := asker("")
+	a, ok := AutoYes(w, "Go on?", DefaultYes, true)
+	if !ok || a != Yes || !strings.Contains(out.String(), "yes: Go on?") {
+		t.Errorf("undoable with --yes: %v %v %q", a, ok, out.String())
 	}
-	in, out, w = asker("\n")
-	a, _ = AskAuto(in, w, "Delete?", DefaultNo, true)
-	if a != No || !strings.Contains(out.String(), "[y/N/q]") {
-		t.Errorf("destructive must still ask: %v %q", a, out.String())
+	_, out, w = asker("")
+	if a, ok = AutoYes(w, "Delete?", DefaultNo, true); ok || a != No || out.String() != "" {
+		t.Errorf("destructive must not be answered: %v %v %q", a, ok, out.String())
 	}
-	in, _, w = asker("n\n")
-	if a, _ = AskAuto(in, w, "Go on?", DefaultYes, false); a != No {
-		t.Errorf("without --yes it asks: %v", a)
+	if _, ok = AutoYes(w, "Go on?", DefaultYes, false); ok {
+		t.Error("without --yes nothing is answered")
 	}
 }
 

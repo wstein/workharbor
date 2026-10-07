@@ -1,7 +1,6 @@
 package render
 
 import (
-	"bufio"
 	"strings"
 )
 
@@ -59,14 +58,6 @@ func AutoYes(w Writer, question string, d Default, yes bool) (Answer, bool) {
 		return Yes, true
 	}
 	return No, false
-}
-
-// AskAuto is Ask for a run with --yes: see AutoYes.
-func AskAuto(in *bufio.Reader, w Writer, question string, d Default, yes bool) (Answer, error) {
-	if a, ok := AutoYes(w, question, d, yes); ok {
-		return a, nil
-	}
-	return Ask(in, w, question, d)
 }
 
 // Preflight is the one line before the first change: the tools that were found,
