@@ -193,7 +193,7 @@ The design is in `docs/content/docs/design/` (start at `_index.md`; §3 `decisio
 
 ### Landing and worktrees
 
-The pointer branch `land` is our develop: there is no other develop branch, and nobody commits on it; it only points at the tip of the stack being landed (`make land` itself is unchanged). `landing` is its deprecated name (#376): `scripts/land.sh` accepts both during the transition and removes `landing` after one release. Both names are ignored when counting the branches at a tip, `land` is preferred when both point at the SHA, and the landing-order refusal applies to either. Crewbook documents the same convention (wstein/crewbook#77).
+The pointer branch `land` is our develop: there is no other develop branch, and nobody commits on it; it only points at the tip of the stack being landed (`make land` itself is unchanged). `landing` is its deprecated name (#376): `scripts/land.sh` accepts both during the transition and drops its support for the name `landing` after one release; the script never removes the branch itself. Both names are ignored when counting the branches at a tip, `land` is preferred when both point at the SHA, and the landing-order refusal applies to either. Crewbook documents the same convention (wstein/crewbook#77).
 
 A session uses the explicit `make land BRANCH=<name>` form from its own worktree, subject to the landing policy (AGENTS.md, step 3). Before landing, your worktree is your own and `git status --short` is empty (commit or ask first; never stash someone else's work). Note `git rev-parse main`, run `make land BRANCH=<name>` and read its last lines:
 
