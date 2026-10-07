@@ -168,16 +168,11 @@ func (f funcRunner) Output(_ context.Context, argv ...string) ([]byte, error) {
 // No user: no step offered, and the fix itself refuses, so no dscl -create runs.
 func TestLoginPictureNeverCreatesARecord(t *testing.T) {
 	d := pictureDeps(t, nil)
-	var calls []string
-	d.Runner = funcRunner(func(argv ...string) (string, bool) {
-		calls = append(calls, strings.Join(argv, " "))
-		return "", false
-	})
 	d.Runner = scripted{readPicture: "ERR:exit status 56"}
 	if st, _ := status(steps(t, d)["login-picture"]); st != Skipped {
 		t.Errorf("no user: %s, want skipped", st)
 	}
-	calls = nil
+	var calls []string
 	d.Runner = funcRunner(func(argv ...string) (string, bool) {
 		calls = append(calls, strings.Join(argv, " "))
 		return "ERR", false
@@ -193,5 +188,34 @@ func TestLoginPictureNeverCreatesARecord(t *testing.T) {
 	}
 	if _, err := os.Stat(loginPictureTemp()); err == nil {
 		t.Error("the temp file was written for a missing user")
+	}
+}
+
+// The guard of the fix reads UniqueID, an attribute only a complete record has:
+// a stub record has Picture alone. Only a failure of that very read refuses.
+func TestLoginPictureGuardReadsUniqueID(t *testing.T) {
+	d := pictureDeps(t, nil)
+	var calls []string
+	failing := ""
+	d.Runner = funcRunner(func(argv ...string) (string, bool) {
+		k := strings.Join(argv, " ")
+		calls = append(calls, k)
+		if strings.HasSuffix(k, failing) && failing != "" {
+			return "ERR", false
+		}
+		return "UniqueID: 502\n", true
+	})
+	c := steps(t, d)["login-picture"]
+	failing = " UniqueID"
+	if err := c.Fix.Do(context.Background(), nil); err == nil {
+		t.Error("Do must refuse when UniqueID cannot be read")
+	}
+	failing = " Picture"
+	calls = nil
+	if err := c.Fix.Do(context.Background(), nil); err != nil {
+		t.Errorf("a failing Picture read must not matter to the guard: %v", err)
+	}
+	if len(calls) != 1 || !strings.HasSuffix(calls[0], "-read /Users/workharbor UniqueID") {
+		t.Errorf("guard calls %q, want the one UniqueID read", calls)
 	}
 }
