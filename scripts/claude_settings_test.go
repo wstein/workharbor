@@ -502,6 +502,7 @@ var laneGitDenyRules = []string{
 	"Bash(git notes merge:*)",
 	"Bash(git notes prune:*)",
 	"Bash(git notes copy:*)",
+	"Bash(git notes --ref*)",
 	"Bash(git update-ref:*)",
 	"Bash(git worktree add:*)",
 }
@@ -560,6 +561,9 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		"git notes merge origin",
 		"git notes prune",
 		"git notes copy a b",
+		"git notes --ref=review add -m x HEAD",
+		"git notes --ref review add -m x HEAD",
+		"git notes --ref=confirm add -f -m x HEAD",
 		"git update-ref refs/heads/main abc",
 		"git update-ref -d refs/heads/main",
 		"git worktree add ../x",

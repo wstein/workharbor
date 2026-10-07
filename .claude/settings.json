@@ -72,6 +72,7 @@
       "Bash(git notes merge:*)",
       "Bash(git notes prune:*)",
       "Bash(git notes copy:*)",
+      "Bash(git notes --ref*)",
       "Bash(git update-ref:*)",
       "Bash(git worktree add:*)",
       "Bash(gh release create:*)",
