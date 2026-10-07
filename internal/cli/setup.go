@@ -258,6 +258,22 @@ func newSetup(st *state) *cobra.Command {
 		if unattended {
 			resume = append(resume, "--unattended")
 		}
+		var setupLog *protocol.Log
+		if !dryRun {
+			open := env.OpenLog
+			if open == nil {
+				open = func(home string) (*protocol.Log, error) { return protocol.Open(home, nil, nil) }
+			}
+			lg, err := open(st.env.Getenv("HOME"))
+			if err != nil {
+				return fmt.Errorf("cannot open the setup protocol, so nothing is run: %w", err)
+			}
+			defer func() { _ = lg.Close() }()
+			for _, w := range lg.Warnings() {
+				fmt.Fprintf(st.env.Stderr, "note: %s\n", clean(w))
+			}
+			setupLog = lg
+		}
 		// D49: without separation and with remote access, one explicit y that
 		// names the risk. Doctor fails on it too; nothing is enforced.
 		for _, c := range steps {
@@ -266,9 +282,18 @@ func newSetup(st *state) *cobra.Command {
 			}
 			if stt, detail := c.Run(ctx); stt == doctor.Fail && !dryRun {
 				ui.Report(render.LevelFail, "account: "+clean(strings.TrimSpace(detail)))
+				if unattended {
+					if err := recordAccountStop(setupLog, env.User, phase, resume, st.env.Getenv("HOME"), c, protocol.AnswerNone, protocol.SourceNone, protocol.OutNeedsHuman, protocol.RunNeedsHuman); err != nil {
+						return err
+					}
+					return needsHumanError{"unattended: account risk needs your confirmation; run `whr setup` in a terminal"}
+				}
 				// accepting a risk is not undoable by running it again: Enter is no
 				a, err := setup.Ask(env.Host, "Go on without a dedicated standard account, knowing this?", render.DefaultNo)
 				if err == nil && a == render.Quit {
+					if err := recordAccountStop(setupLog, env.User, phase, resume, st.env.Getenv("HOME"), c, protocol.AnswerQuit, protocol.SourceInteractive, protocol.OutQuit, protocol.RunQuit); err != nil {
+						return err
+					}
 					ui.Report(render.LevelSkipped, "stopped at your request, nothing was run")
 					fmt.Fprintf(st.env.Stderr, "to start again, run: %s\n", strings.Join(resume, " "))
 					return quitError{}
@@ -301,21 +326,8 @@ func newSetup(st *state) *cobra.Command {
 				so.Answers, so.AnswersDigest = f, digest
 			}
 		}
-		if !dryRun {
-			open := env.OpenLog
-			if open == nil {
-				open = func(home string) (*protocol.Log, error) { return protocol.Open(home, nil, nil) }
-			}
-			lg, err := open(so.Home)
-			if err != nil {
-				return fmt.Errorf("cannot open the setup protocol, so nothing is run: %w", err)
-			}
-			defer func() { _ = lg.Close() }()
-			for _, w := range lg.Warnings() {
-				fmt.Fprintf(st.env.Stderr, "note: %s\n", clean(w))
-			}
-			so.Log = lg
-		}
+		so.Log = setupLog
+
 		outs, err := setup.Run(ctx, steps, env.Host, so)
 		reportOutcomes = outs
 		var quit *setup.QuitError
@@ -513,7 +525,14 @@ func saveAnswers(env SetupEnv, path string, steps []doctor.Check, outs []setup.O
 	var f answers.File
 	f.Account = env.User
 	for _, o := range outs {
-		if o.Decision != "" {
+		eligible := false
+		for _, c := range steps {
+			if c.Name == o.Step {
+				eligible, _ = answers.Eligible(c)
+				break
+			}
+		}
+		if o.Decision != "" && eligible {
 			f.Answers = append(f.Answers, answers.Entry{Step: o.Step, Fix: o.Fix, Answer: o.Decision})
 		}
 	}
@@ -533,5 +552,23 @@ func saveAnswers(env SetupEnv, path string, steps []doctor.Check, outs []setup.O
 		return fmt.Errorf("answers not saved: %w", err)
 	}
 	fmt.Fprintf(errW, "saved %d answers to %s\n", len(f.Answers), clean(path))
+	return nil
+}
+
+// recordAccountStop records a run stopped by the shared account-risk preflight,
+// before the phase-specific engine starts. It uses the existing step vocabulary.
+func recordAccountStop(lg *protocol.Log, account string, phase doctor.Phase, resume []string, home string, c doctor.Check, answer, source, outcome, end string) error {
+	entries := []protocol.Entry{
+		{Event: protocol.EventRunStart, Source: protocol.SourceInteractive, Flags: protocol.Flags(resume, home)},
+		{Event: protocol.EventStepBefore, Step: c.Name, Fix: answers.FixDigest(c), Status: string(doctor.Fail), Answer: answer, Source: source},
+		{Event: protocol.EventStepAfter, Step: c.Name, Status: string(doctor.Fail), Outcome: outcome},
+		{Event: protocol.EventRunEnd, Outcome: end},
+	}
+	for _, e := range entries {
+		e.Account, e.Cmd, e.Phase = account, protocol.CmdSetup, string(phase)
+		if err := lg.Append(e); err != nil {
+			return fmt.Errorf("setup protocol: %w", err)
+		}
+	}
 	return nil
 }

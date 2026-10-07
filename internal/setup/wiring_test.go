@@ -439,8 +439,8 @@ func TestUnattendedRefusesSudoFromABuilderAndAFixThatWouldAsk(t *testing.T) {
 		t.Errorf("sudo from a builder: %+v", outs[0])
 	}
 	for i, name := range []string{"asks", "do-asks"} {
-		if outs[i+1].Fixed || g.r.find(protocol.EventStepAfter, name)[0].Outcome != protocol.OutFixFailed {
-			t.Errorf("a fix that asks must fail unattended (%s): %+v", name, outs[i+1])
+		if outs[i+1].Fixed || !outs[i+1].NeedsHuman || g.r.find(protocol.EventStepAfter, name)[0].Outcome != protocol.OutNeedsHuman {
+			t.Errorf("a fix that asks needs a person unattended (%s): %+v", name, outs[i+1])
 		}
 	}
 }
@@ -531,5 +531,38 @@ func TestAUserStepWithSudoIsAskedEvenWhenTheFileHoldsItsDigest(t *testing.T) {
 	}
 	if len(g.h.asked) != 1 || len(g.h.ran) != 0 {
 		t.Fatalf("asked %v ran %v", g.h.asked, g.h.ran)
+	}
+}
+
+func TestGuidedQuitIsRecordedAsInteractive(t *testing.T) {
+	g := newRig()
+	c := g.check("guided", doctor.PhaseUser, &doctor.Fix{Guide: "do it yourself", Open: "https://example.com"})
+	g.h.asks = []render.Answer{render.Quit}
+	_, _, err := g.run(t, []doctor.Check{c}, g.opts(doctor.PhaseUser, nil))
+	if !errors.Is(err, render.ErrQuit) {
+		t.Fatalf("quit: %v", err)
+	}
+	b := g.r.find(protocol.EventStepBefore, "guided")
+	if len(b) != 2 || b[1].Source != protocol.SourceInteractive || b[1].Answer != protocol.AnswerQuit {
+		t.Fatalf("decisions: %+v", b)
+	}
+	if a := g.r.find(protocol.EventStepAfter, "guided"); len(a) != 1 || a[0].Outcome != protocol.OutQuit {
+		t.Fatalf("result: %+v", a)
+	}
+}
+
+func TestUnattendedMissingPrerequisiteNeedsHuman(t *testing.T) {
+	g := newRig()
+	c := g.check("kernel", doctor.PhaseUser, cmdFix(false, "install-kernel"))
+	c.Needs = "container-system"
+	c.Run = func(context.Context) (doctor.Status, string) { return doctor.NotVerified, "system not running" }
+	o := g.opts(doctor.PhaseUser, fileFor(c, answers.Run))
+	o.Unattended = true
+	outs, _, err := g.run(t, []doctor.Check{c}, o)
+	if err != nil || len(outs) != 1 || !outs[0].NeedsHuman || len(g.h.ran) != 0 || len(g.h.asked) != 0 {
+		t.Fatalf("outs %+v ran %v: %v", outs, g.h.ran, err)
+	}
+	if e := g.r.find(protocol.EventStepAfter, c.Name); len(e) != 1 || e[0].Outcome != protocol.OutNeedsHuman {
+		t.Fatalf("protocol %+v", e)
 	}
 }

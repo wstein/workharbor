@@ -297,8 +297,13 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		if s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs) {
 			ui.Report(render.LevelSkipped, fmt.Sprintf("not run: it needs %s, which no step before it brought up", s.Needs))
 			out.Asked = true
+			out.NeedsHuman = o.Unattended
 			outs = append(outs, out)
-			if err := after(protocol.OutNotRun, nil, nil); err != nil {
+			outcome := protocol.OutNotRun
+			if o.Unattended {
+				outcome = protocol.OutNeedsHuman
+			}
+			if err := after(outcome, nil, nil); err != nil {
 				return stop(err)
 			}
 			continue
@@ -698,6 +703,9 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	defer func() {
 		if err != nil && res.outcome == "" && !errors.Is(err, render.ErrQuit) {
 			res.outcome = protocol.OutFixFailed
+			if errors.Is(err, ErrUnattended) {
+				res.outcome = protocol.OutNeedsHuman
+			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				res.outcome = protocol.OutInterrupted
 			}
@@ -732,6 +740,9 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 				return false, err
 			}
 			if a == render.Quit {
+				if err := before(protocol.AnswerQuit, protocol.SourceInteractive); err != nil {
+					return false, err
+				}
 				return false, render.ErrQuit
 			}
 			return a == render.Yes, nil
@@ -858,6 +869,9 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			return res, err
 		}
 		if a == render.Quit {
+			if err := before(protocol.AnswerQuit, protocol.SourceInteractive); err != nil {
+				return res, err
+			}
 			return res, render.ErrQuit
 		}
 		if a == render.Yes {

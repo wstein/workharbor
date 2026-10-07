@@ -2,13 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup"
 	"github.com/wstein/workharbor/internal/setup/answers"
 	"github.com/wstein/workharbor/internal/setup/protocol"
 )
@@ -279,5 +283,86 @@ func TestNothingLikeACredentialIsStored(t *testing.T) {
 		if strings.Contains(strings.ToLower(string(data)), bad) || strings.Contains(strings.ToLower(string(log)), bad) {
 			t.Errorf("%q in a saved file", bad)
 		}
+	}
+}
+
+func TestUnattendedAccountRiskNeverAsksOrRuns(t *testing.T) {
+	r := answersRig(t, true)
+	r.env.IsTerminal = func() bool { return false }
+	r.host.outputs["dseditgroup -o checkmember -m werner admin"] = "yes werner is a member of admin"
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"account":"shared","public_url":"https://whr.example.ts.net"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return r.home }, Setup: r.env}
+	code := Execute(context.Background(), env, []string{"setup", "--user", "werner", "--only", "container-start", "--answers", answersFile(t), "--unattended", "--config", configPath, "--prefix", filepath.Dir(filepath.Dir(r.exe))})
+	if code != exitcode.NeedsHuman || r.host.asked != 0 || len(r.host.ran) != 0 || !strings.Contains(errOut.String(), "account risk needs your confirmation") {
+		t.Fatalf("exit %d asked %d ran %v: %s", code, r.host.asked, r.host.ran, errOut.String())
+	}
+}
+
+func TestSaveAnswersKeepsEligibleDecisionsInAMixedRun(t *testing.T) {
+	env := SetupEnv{User: "workharbor", Identity: func() (string, error) { return testID, nil }}
+	checks := []doctor.Check{
+		{Name: "normal", Phase: doctor.PhaseUser, Fix: &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"normal"}}}}},
+		{Name: "sudo", Phase: doctor.PhaseUser, Fix: &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"sudo-step"}, Sudo: true}}}},
+		{Name: "drop-admin", Phase: doctor.PhaseUser, Fix: &doctor.Fix{Irreversible: true, Cmds: []doctor.Cmd{{Argv: []string{"drop-admin"}}}}},
+	}
+	var outs []setup.Outcome
+	for _, c := range checks {
+		outs = append(outs, setup.Outcome{Step: c.Name, Decision: answers.Run, Fix: answers.FixDigest(c)})
+	}
+	path := answersFile(t)
+	if err := saveAnswers(env, path, checks, outs, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	f, _, err := answers.Load(path, os.Getuid())
+	if err != nil || len(f.Answers) != 1 || f.Answers[0].Step != "normal" {
+		t.Fatalf("saved %+v: %v", f, err)
+	}
+}
+
+func TestUnattendedKernelWithoutRunningSystemExits6(t *testing.T) {
+	r := answersRig(t, true)
+	path := answersFile(t)
+	if _, errOut := r.setup("--save-answers", path); !strings.Contains(errOut, "saved 1 answers") {
+		t.Fatal(errOut)
+	}
+	r.host.ran, r.host.asked = nil, 0
+	r.env.IsTerminal = func() bool { return false }
+	code, _, errOut := r.run("setup", "--user", "werner", "--only", "container-kernel", "--answers", path, "--unattended")
+	if code != exitcode.NeedsHuman || len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(errOut, "container-kernel need a person") {
+		t.Fatalf("exit %d ran %v asked %d: %s", code, r.host.ran, r.host.asked, errOut)
+	}
+}
+
+type quitRiskHost struct{ *setupHost }
+
+func (h quitRiskHost) Ask(string, render.Default) (render.Answer, error) {
+	h.asked++
+	return render.Quit, nil
+}
+
+func TestAccountRiskQuitIsRecordedBeforeEngineStarts(t *testing.T) {
+	r := answersRig(t, false)
+	r.env.Host = quitRiskHost{r.host}
+	r.host.outputs["dseditgroup -o checkmember -m werner admin"] = "yes werner is a member of admin"
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"account":"shared","public_url":"https://whr.example.ts.net"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return r.home }, Setup: r.env}
+	code := Execute(context.Background(), env, []string{"setup", "--user", "werner", "--only", "container-start", "--config", configPath, "--prefix", filepath.Dir(filepath.Dir(r.exe))})
+	if code != exitcode.Quit || len(r.host.ran) != 0 || r.host.asked != 1 {
+		t.Fatalf("exit %d asked %d ran %v: %s", code, r.host.asked, r.host.ran, errOut.String())
+	}
+	entries, err := protocol.Chain(readLog(t, r))
+	if err != nil || len(entries) != 4 {
+		t.Fatalf("entries %+v: %v", entries, err)
+	}
+	if entries[1].Source != protocol.SourceInteractive || entries[1].Answer != protocol.AnswerQuit || entries[2].Outcome != protocol.OutQuit || entries[3].Outcome != protocol.RunQuit {
+		t.Fatalf("entries %+v", entries)
 	}
 }
