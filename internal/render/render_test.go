@@ -328,7 +328,7 @@ func TestToolWriterDropsSecretPrompts(t *testing.T) {
 		if !strings.Contains(got, NeutralPromptLine) || !strings.Contains(got, "| hello\n") {
 			t.Errorf("%s: want the neutral line and the other output: %q", name, got)
 		}
-		if strings.Contains(got, "|\n") || strings.HasSuffix(got, "|\n\n") {
+		if strings.Contains(got, "| \n") {
 			t.Errorf("%s: stray empty line: %q", name, got)
 		}
 	}

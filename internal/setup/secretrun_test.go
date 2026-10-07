@@ -65,6 +65,9 @@ func TestRunNewPasswordRetriesOnlyOnPolicyRejection(t *testing.T) {
 		c := doctor.Cmd{Argv: []string{"/bin/sh", "-c", script, "sh", count}, SecretPrompt: "pw", SecretConfirm: true}
 		err := h.Run(context.Background(), c)
 		n, _ := os.ReadFile(count) //nolint:gosec // a path the test made
+		if strings.Contains(b.String(), "same-fake-value") {
+			t.Errorf("the secret reached the captured output: %q", b.String())
+		}
 		return strings.Count(string(n), "x"), b.String(), err
 	}
 	// first call rejects with 5402, the second succeeds

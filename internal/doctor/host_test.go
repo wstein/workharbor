@@ -1452,3 +1452,13 @@ func TestAgentKeyFixRefusesBeforeAskingWhenTheFileExists(t *testing.T) {
 		t.Error("the key was asked for although the file exists")
 	}
 }
+
+// Issue #378: the account is created with a password whr asks for itself,
+// twice and without echo; dropping either flag brings the tool's own echoing
+// prompt or the policy retry back out.
+func TestUserStepAsksForTheNewPasswordItself(t *testing.T) {
+	c := userStep(hostDeps(scripted{}), "whr setup")
+	if len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].SecretPrompt == "" || !c.Fix.Cmds[0].SecretConfirm {
+		t.Errorf("the -addUser command needs SecretPrompt and SecretConfirm: %+v", c.Fix.Cmds)
+	}
+}
