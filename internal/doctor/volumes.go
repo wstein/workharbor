@@ -23,10 +23,60 @@ type Volume struct {
 	Size     int64  // bytes
 	Free     int64  // bytes; -1 when diskutil did not say
 	Internal bool
+	// Encrypted and Owners are read from keys that exist on the boot volume; a
+	// key that is missing or not a boolean leaves them Unknown.
+	Encrypted Tri
+	Owners    Tri // Yes: ownership is honoured; No: "Ignore ownership" is on
+}
+
+// Tri is a yes/no answer that may not be known.
+type Tri int
+
+// The answers: Unknown is the zero value, so nothing is assumed.
+const (
+	Unknown Tri = iota
+	Yes
+	No
+)
+
+// triOf reads a boolean key; any other type or a missing key is Unknown.
+func triOf(m map[string]any, k string) Tri {
+	b, ok := m[k].(bool)
+	switch {
+	case !ok:
+		return Unknown
+	case b:
+		return Yes
+	}
+	return No
 }
 
 // APFS reports whether the volume is APFS.
 func (v Volume) APFS() bool { return strings.EqualFold(v.FS, "apfs") }
+
+// Usable says whether the workspaces may live on the volume. Only APFS keeps
+// Unix owners and modes the way the workspaces need; exFAT, FAT, NTFS and HFS+
+// do not, or macOS ignores ownership on them (an external one by default), so
+// every account could write there. The reason is for the human.
+func (v Volume) Usable() (bool, string) {
+	if v.APFS() {
+		return true, ""
+	}
+	return false, "no Unix owners or modes; ownership is ignored"
+}
+
+// Warnings are what is wrong but does not block: an unencrypted external APFS
+// volume (FileVault does not cover it) and ownership switched off.
+func (v Volume) Warnings() []string {
+	var w []string
+	if !v.Internal && v.APFS() && v.Encrypted == No {
+		w = append(w, "warning: this external volume is not encrypted, and FileVault does not\ncover it. See the manual, host setup, section 3 (FileVault and restarts).")
+	}
+	if v.Owners == No {
+		w = append(w, "warning: ownership is ignored on this volume, so any account could write\nthe workspaces. See the manual, host setup, section 3.")
+	}
+	return w
+}
 
 // maxVolumes bounds how many mount points are asked about.
 const maxVolumes = 32
@@ -86,6 +136,11 @@ func parseVolume(b []byte) (Volume, bool) {
 	num := func(k string) (int64, bool) { n, ok := m[k].(int64); return n, ok }
 	flag := func(k string) bool { f, _ := m[k].(bool); return f }
 	v := Volume{Name: str("VolumeName"), Mount: str("MountPoint"), FS: str("FilesystemType"), Free: -1, Internal: flag("Internal")}
+	// FileVault and GlobalPermissionsEnabled are the keys read on this Mac's
+	// boot volume (macOS 26: FileVault true, GlobalPermissionsEnabled true).
+	// Encryption and EncryptionThisVolumeProper also exist but are not read:
+	// their meaning on an external volume is not verified.
+	v.Encrypted, v.Owners = triOf(m, "FileVault"), triOf(m, "GlobalPermissionsEnabled")
 	v.Size, _ = num("TotalSize")
 	if v.APFS() {
 		if n, ok := num("APFSContainerFree"); ok {
@@ -163,7 +218,7 @@ func clip(s string, n int) string {
 	return string(r[:n-3]) + "..."
 }
 
-// label is the two lines that describe a volume in the choice, at most 76
+// label is the lines that describe a volume in the choice, at most 76
 // columns wide. Names come from disks and may hold escapes: they are escaped.
 func (v Volume) label(n int) string {
 	kind := "other (" + clip(textsafe.Escape(v.FS), 12) + ")"
@@ -174,8 +229,19 @@ func (v Volume) label(n int) string {
 	if v.Internal {
 		place = "internal"
 	}
-	return fmt.Sprintf("%3d) %s: %s, %s free, %s, %s\n     %s", n, clip(textsafe.Escape(v.Name), 24),
-		size(v.Size), size(v.Free), kind, place, clip(textsafe.Escape(v.Mount), 70))
+	enc := "unknown"
+	switch v.Encrypted {
+	case Yes:
+		enc = "yes"
+	case No:
+		enc = "no"
+	}
+	out := fmt.Sprintf("%3d) %s: %s, %s free, %s, %s\n     %s\n     encryption: %s", n, clip(textsafe.Escape(v.Name), 24),
+		size(v.Size), size(v.Free), kind, place, clip(textsafe.Escape(v.Mount), 70), enc)
+	if ok, why := v.Usable(); !ok {
+		out += "\n     not usable: " + why
+	}
+	return out
 }
 
 // workspacesIn is the folder for the workspaces on a volume: the Mac's own data
@@ -236,7 +302,7 @@ func (d Deps) chooseWorkspaces(ctx context.Context, p Prompter) (string, error) 
 		if defIdx == other {
 			return def, nil
 		}
-		return d.workspacesIn(vols[defIdx-1]), nil
+		return d.pick(p, vols[defIdx-1])
 	}
 	s, err := p.Line(fmt.Sprintf("Volume number [%d, q quits]", defIdx))
 	if err != nil {
@@ -255,5 +321,18 @@ func (d Deps) chooseWorkspaces(ctx context.Context, p Prompter) (string, error) 
 	if n == other {
 		return askFolder(p, def)
 	}
-	return d.workspacesIn(vols[n-1]), nil
+	return d.pick(p, vols[n-1])
+}
+
+// pick takes a volume: one that cannot hold the workspaces is refused, and the
+// warnings about it are shown. It is the one place a volume is taken, so
+// --yes cannot choose an unusable one either.
+func (d Deps) pick(p Prompter, v Volume) (string, error) {
+	if ok, why := v.Usable(); !ok {
+		return "", errors.New("that volume is not usable (" + why + "); nothing was written")
+	}
+	for _, w := range v.Warnings() {
+		p.Show(w)
+	}
+	return d.workspacesIn(v), nil
 }

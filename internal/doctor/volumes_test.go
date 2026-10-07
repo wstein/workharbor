@@ -135,7 +135,6 @@ func TestTheWorkspaceVolumeIsChosenByNumberWithADefault(t *testing.T) {
 	}{
 		"Enter is the data volume": {[]string{""}, "/Users/fake/workspaces"},
 		"2 is the store":           {[]string{"2"}, "/nix/workspaces"},
-		"3 is the external disk":   {[]string{" 3 "}, "/Volumes/Fake SSD/workspaces"},
 		"other path":               {[]string{"4", "/Volumes/else/ws/../ws"}, "/Volumes/else/ws"},
 		"other path default":       {[]string{"4", ""}, "/Users/fake/workspaces"},
 	} {
@@ -287,5 +286,84 @@ func TestPlistLimitsFailWithTheirOwnError(t *testing.T) {
 	}
 	if _, err := parsePlist([]byte("<plist>" + strings.Repeat("<array>", 24) + strings.Repeat("</array>", 24) + "</plist>")); err != nil {
 		t.Errorf("24 nested arrays are within the limit: %v", err)
+	}
+}
+
+// apfsSSD is the fixture's external disk as an APFS volume with the keys read
+// on the boot volume: FileVault and GlobalPermissionsEnabled.
+func apfsSSD(t *testing.T, extra string) string {
+	t.Helper()
+	return strings.Replace(strings.Replace(fixture(t, "info_ssd.plist"), "exfat", "apfs", 1),
+		"<key>Internal</key>", extra+"<key>Internal</key>", 1)
+}
+
+func TestOnlyAPFSVolumesCanBeChosenNotEvenWithYes(t *testing.T) {
+	ctx := context.Background()
+	d := chooser(t) // volume 3 is exFAT
+	a := &answers{lines: []string{"3"}}
+	got, err := d.chooseWorkspaces(ctx, a)
+	if err == nil || got != "" || !strings.Contains(err.Error(), "not usable") {
+		t.Errorf("exFAT chosen: %q, %v", got, err)
+	}
+	if !strings.Contains(strings.Join(a.shown, "\n"), "not usable: no Unix owners or modes") {
+		t.Errorf("the list does not say why:\n%v", a.shown)
+	}
+	// --yes takes the default; an unusable default is still refused
+	d.Yes = true
+	if _, err := d.pick(&answers{}, Volume{Name: "x", Mount: "/Volumes/x", FS: "msdos"}); err == nil {
+		t.Error("--yes picked a FAT volume")
+	}
+	for _, fs := range []string{"exfat", "msdos", "ntfs", "hfs"} {
+		if ok, _ := (Volume{FS: fs}).Usable(); ok {
+			t.Errorf("%s is usable", fs)
+		}
+	}
+}
+
+func TestEncryptionAndOwnershipAreReadFromVerifiedKeysOnly(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra      string
+		enc, owner Tri
+		warns      int
+	}{
+		"unencrypted, ownership ignored": {"<key>FileVault</key><false/><key>GlobalPermissionsEnabled</key><false/>", No, No, 2},
+		"encrypted, honoured":            {"<key>FileVault</key><true/><key>GlobalPermissionsEnabled</key><true/>", Yes, Yes, 0},
+		"keys missing":                   {"", Unknown, Unknown, 0},
+		"not booleans":                   {"<key>FileVault</key><string>Yes</string>", Unknown, Unknown, 0},
+		// Encryption is true on the boot volume but is not read: unverified outside it
+		"only Encryption": {"<key>Encryption</key><false/>", Unknown, Unknown, 0},
+	} {
+		v, ok := parseVolume([]byte(apfsSSD(t, tc.extra)))
+		if !ok || v.Encrypted != tc.enc || v.Owners != tc.owner || len(v.Warnings()) != tc.warns {
+			t.Errorf("%s: %+v warnings %v", name, v, v.Warnings())
+		}
+	}
+}
+
+func TestAnUnencryptedExternalAPFSVolumeWarnsAndIsStillChosen(t *testing.T) {
+	r := fakeDiskutil(t)
+	r["diskutil info -plist /Volumes/Fake SSD"] = apfsSSD(t, "<key>FileVault</key><false/><key>GlobalPermissionsEnabled</key><false/>")
+	d := Deps{GOOS: "darwin", Runner: r, Home: "/Users/fake"}
+	a := &answers{lines: []string{"3"}}
+	got, err := d.chooseWorkspaces(context.Background(), a)
+	if err != nil || got != "/Volumes/Fake SSD/workspaces" {
+		t.Fatalf("%q, %v", got, err)
+	}
+	shown := strings.Join(a.shown, "\n")
+	for _, want := range []string{"encryption: no", "not encrypted", "ownership is ignored", "FileVault and restarts"} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("missing %q:\n%s", want, shown)
+		}
+	}
+	for _, l := range strings.Split(shown, "\n") {
+		if utf8.RuneCountInString(l) > 80 {
+			t.Errorf("%d columns: %q", utf8.RuneCountInString(l), l)
+		}
+	}
+	// an unreadable state is shown as unknown and is not a warning
+	r["diskutil info -plist /Volumes/Fake SSD"] = apfsSSD(t, "")
+	a = &answers{lines: []string{"3"}}
+	if _, err := d.chooseWorkspaces(context.Background(), a); err != nil || !strings.Contains(strings.Join(a.shown, "\n"), "encryption: unknown") || strings.Contains(strings.Join(a.shown, "\n"), "warning") {
+		t.Errorf("%v %v", err, a.shown)
 	}
 }

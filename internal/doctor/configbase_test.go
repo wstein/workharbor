@@ -21,7 +21,7 @@ func configDeps(t *testing.T) (Deps, string) {
 	for k, v := range r {
 		r[k] = strings.ReplaceAll(v, "/Volumes/Fake SSD", disk)
 	}
-	r["diskutil info -plist "+disk] = r["diskutil info -plist /Volumes/Fake SSD"]
+	r["diskutil info -plist "+disk] = strings.Replace(r["diskutil info -plist /Volumes/Fake SSD"], "exfat", "apfs", 1)
 	d := Deps{GOOS: "darwin", Runner: r, Home: home, ConfigPath: filepath.Join(home, ".config", "whr", "config.json")}
 	return d, disk
 }
