@@ -108,28 +108,76 @@ func (t Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 // exited or the context ended.
 const runWaitDelay = 2 * time.Second
 
-// Run implements Host.
+// secretAttempts is how often a new password is asked for when the macOS
+// password policy rejects it.
+const secretAttempts = 3
+
+// policyRejected is sysadminctl's error code for a password the macOS password
+// policy refuses ("New account password error. (5402)", seen on a real host).
+const policyRejected = "(5402)"
+
+// ErrPasswordPolicy is the message for that rejection.
+var ErrPasswordPolicy = errors.New("password rejected by the macOS password policy: too short/simple")
+
+// Run implements Host. A command with a SecretPrompt gets its secret from
+// whr, see doctor.Cmd; with SecretConfirm it is a new password, asked twice and
+// asked again (up to three times) when the password policy rejects it. Any
+// other failure is not retried, and a third rejection stops the whole run.
 func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
+	if c.SecretPrompt == "" {
+		return t.runOnce(ctx, c, "", nil)
+	}
+	read := t.Secret
+	if t.readSecret != nil {
+		read = t.readSecret
+	}
+	for attempt := 1; ; attempt++ {
+		pw, err := read(c.SecretPrompt)
+		if err != nil {
+			return err
+		}
+		if c.SecretConfirm {
+			again, err := read("Type it again")
+			if err != nil {
+				return err
+			}
+			if again != pw {
+				fmt.Fprintln(t.Err, "the two passwords differ")
+				if attempt >= secretAttempts {
+					return fatalError{errors.New("the passwords did not match three times: nothing was created; run the step again")}
+				}
+				continue
+			}
+		}
+		var seen bytes.Buffer
+		err = t.runOnce(ctx, c, pw, &seen)
+		if err == nil || !c.SecretConfirm || !strings.Contains(seen.String(), policyRejected) {
+			return err
+		}
+		fmt.Fprintln(t.Err, ErrPasswordPolicy.Error())
+		if attempt >= secretAttempts {
+			return fatalError{fmt.Errorf("%w: no account was created after %d tries; choose a longer, less simple password and run the step again", ErrPasswordPolicy, attempt)}
+		}
+	}
+}
+
+func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *bytes.Buffer) error {
 	argv := c.Full()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // the fixes the steps list, shown before they run
 	// what the tool says is set apart from whr's own text, line by line, with
 	// nothing held back, so a prompt of the tool appears at once
 	tw := render.NewToolWriter(t.Err, t.Style)
 	defer tw.End()
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, tw, tw
+	var w io.Writer = tw
+	if seen != nil {
+		w = io.MultiWriter(tw, seen)
+	}
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, w, w
 	if c.SecretPrompt != "" {
 		// whr reads the secret itself, without echo, and hands it over on stdin:
 		// never argv, never the environment, and the child gets no terminal as
 		// its input. Echo stays off on the terminal while it runs, in case it
 		// opens /dev/tty itself; its prompt for a secret is dropped by tw.
-		read := t.Secret
-		if t.readSecret != nil {
-			read = t.readSecret
-		}
-		pw, err := read(c.SecretPrompt)
-		if err != nil {
-			return err
-		}
 		cmd.Stdin = strings.NewReader(pw + "\n")
 		if t.Stdin != nil {
 			defer echoOff(int(t.Stdin.Fd()))() //nolint:gosec // a file descriptor of this process

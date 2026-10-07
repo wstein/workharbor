@@ -143,8 +143,14 @@ const LegacyUser = "whr"
 // offering a second account; it never creates, renames or deletes one. Its
 // Fix is the one the last Run left (the wizard shows it after the check).
 func userStep(d Deps, setupCommand string) Check {
-	create := []Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "WorkHarbor", "-password", "-"}}}
-	createGuide := "sysadminctl asks you for the new user's password itself; whr never sees it. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there."
+	// whr asks for the new password itself, without echo, and writes it to
+	// sysadminctl's stdin (#378). UNVERIFIED: that "-password -" reads stdin, and
+	// whether sysadminctl also needs an administrator password here.
+	create := []Cmd{{
+		Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "WorkHarbor", "-password", "-"},
+		SecretPrompt: "New password for " + d.account() + " (not shown)", SecretConfirm: true,
+	}}
+	createGuide := "whr asks you for the new user's password without echo and hands it to sysadminctl on its input, never in the command line. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there."
 	fix := &Fix{Cmds: create, Guide: createGuide}
 	legacy := false // set by the last Run: only the Fail with a found whr
 	return Check{

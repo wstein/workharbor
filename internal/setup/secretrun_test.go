@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,4 +52,45 @@ func readFile(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// Issue #378: a rejected new password (5402) is asked again, three times at
+// most, with a stop after the third; any other failure is not retried.
+func TestRunNewPasswordRetriesOnlyOnPolicyRejection(t *testing.T) {
+	run := func(script string) (int, string, error) {
+		dir := t.TempDir()
+		count := filepath.Join(dir, "n")
+		var b strings.Builder
+		h := Terminal{Err: &b, readSecret: func(string) (string, error) { return "same-fake-value", nil }}
+		c := doctor.Cmd{Argv: []string{"/bin/sh", "-c", script, "sh", count}, SecretPrompt: "pw", SecretConfirm: true}
+		err := h.Run(context.Background(), c)
+		n, _ := os.ReadFile(count) //nolint:gosec // a path the test made
+		return strings.Count(string(n), "x"), b.String(), err
+	}
+	// first call rejects with 5402, the second succeeds
+	n, out, err := run(`echo x >> "$1"; if [ "$(wc -l < "$1")" -lt 2 ]; then echo "New account password error. (5402)" >&2; exit 1; fi`)
+	if err != nil || n != 2 || !strings.Contains(out, "password policy") {
+		t.Errorf("want a retry then success: n=%d err=%v out=%q", n, err, out)
+	}
+	// always rejected: three tries, then a fatal stop
+	n, _, err = run(`echo x >> "$1"; echo "(5402)" >&2; exit 1`)
+	var f fatalError
+	if n != 3 || !errors.As(err, &f) || !errors.Is(err, ErrPasswordPolicy) {
+		t.Errorf("want three tries and a fatal stop: n=%d err=%v", n, err)
+	}
+	// another failure: one try, not fatal
+	n, _, err = run(`echo x >> "$1"; echo "some other error" >&2; exit 1`)
+	if n != 1 || err == nil || errors.As(err, &f) {
+		t.Errorf("another error must not retry: n=%d err=%v", n, err)
+	}
+}
+
+func TestRunNewPasswordMismatchStopsAfterThree(t *testing.T) {
+	i := 0
+	h := Terminal{Err: &strings.Builder{}, readSecret: func(string) (string, error) { i++; return strings.Repeat("a", i), nil }}
+	err := h.Run(context.Background(), doctor.Cmd{Argv: []string{"/bin/false"}, SecretPrompt: "pw", SecretConfirm: true})
+	var f fatalError
+	if !errors.As(err, &f) {
+		t.Errorf("want a fatal stop, got %v", err)
+	}
 }

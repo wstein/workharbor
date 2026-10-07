@@ -26,6 +26,9 @@ type Cmd struct {
 	// never in Argv, the environment, a log or a report, and the command is not
 	// given the terminal as its input (issue #378).
 	SecretPrompt string
+	// SecretConfirm says the secret is a new password: it is asked twice, and
+	// asked again when the macOS password policy rejects it (error 5402).
+	SecretConfirm bool
 }
 
 // Full is the argument vector that is run, with sudo in front when it is needed.
