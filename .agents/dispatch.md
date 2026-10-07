@@ -21,6 +21,10 @@ runs, and stop if one does.
   successful and grants no permission to retry or claim a status change.
   Existing write permissions and card ownership still apply.
 
+- **Sync the board** with `scripts/board-snapshot.sh sync` at your start and after every hand-back
+  (`--dry-run` first when unsure; a real run asks for permission, and stops when the board query failed and only a stale snapshot is left); the rule table is in
+  [Board move and sync](../docs/content/docs/manual/sessions-and-agents.md#board-move-and-sync).
+  It never sets `In review`, `Ready to push` or `Done`: those stay your explicit commands.
 - **Pull cards.** For each code and docs lane, take its highest-priority `Todo`
   card (`P1` first, lowest issue number first); `wh/design` ranks `Priority` and
   `Session`, you follow them.

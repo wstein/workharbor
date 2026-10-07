@@ -105,6 +105,19 @@ scripts/board-snapshot.sh budget              # refreshes, their cost and the lo
 
 Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit): authors, reviewers, design and `wh/desk` report outcomes to the dispatcher. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is approved only by `wh/review` after its review comment and written by the designated dispatcher on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
 
+### Board move and sync
+
+`scripts/board-snapshot.sh move <n> <status>` reads the Status option id from the project field, writes the card, reads that one card back with a fresh query and exits 1 on a mismatch; a card already at the status gets no write. `scripts/board-snapshot.sh sync [--dry-run]` reconciles every open card and prints `#n old -> new (reason)` for each change; it calls `move` only where the status differs, so a second run changes nothing. Sync acts on positive evidence only and never lowers a card without it:
+
+| Signal | Effect |
+| --- | --- |
+| Registry block (`.git/crewbook/registry.md` of the shared checkout) whose name starts with the issue number (`## 51`, `## 53-docs`, `## #57`) and phase `blocked` (waiting on a decision, the human or another issue) | Move to `Blocked` |
+| Registry phase `start requested`, or a worktree on a branch `<type>/<n>-...` (author started), card `Todo` or without status | Move to `In progress` |
+| Card `In progress` with neither a worktree nor such a phase (idle) | Move to `Todo` |
+| Anything else, including phase `done` and no signal | Card unchanged |
+
+`In review` and `Ready to push` are never set or lowered by sync: the dispatcher moves a card to `In review` at landing and to `Ready to push` with `ready` only after the review. `Done` is never set; closed issues and `Done` cards are left alone. The registry is read up to its `Resume:` line; sync stops without changes when it is missing or unreadable. A reused worktree still on a stale `<n>-` branch counts as a signal, so detach an idle worktree. Call points: the dispatcher runs `sync` at its start and after every hand-back; run `sync --dry-run` first when unsure. Sync is a card write and follows the same permission rule as the other non-`move` writes, and the card-owner rule above.
+
 ## Rules of thumb
 
 - Code workers (issue subagents that edit) run at the same time, each in its own worktree (two may both be `wh/platform`, in `../workharbor-platform` and `../workharbor-platform-2`, when their issues touch no file in common), and only one editing subagent per worktree. There is no upper cap: the default is two (three with the human's approval), and the desk accepts whatever count the human demands (H164, H175).
