@@ -242,12 +242,12 @@ func TestLandConfirmationWriterFailure(t *testing.T) {
 }
 
 func TestLandConfirmationNoInventedAnswer(t *testing.T) {
-	for _, withBranch := range []bool{false, true} {
+	for _, withSHA := range []bool{false, true} {
 		r := newLandBranchRepo(t, false)
 		wt := r.topic("topic")
-		args := []string{}
-		if withBranch {
-			args = []string{"BRANCH=topic", "SHA=" + r.git(wt, "rev-parse", "HEAD")}
+		args := []string{"BRANCH=topic"}
+		if withSHA {
+			args = append(args, "SHA="+r.git(wt, "rev-parse", "HEAD"))
 		}
 		out, err := r.land(wt, nil, args...)
 		if err != nil {

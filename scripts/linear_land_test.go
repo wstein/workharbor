@@ -134,7 +134,7 @@ func TestLinearLand(t *testing.T) {
 					t.Fatalf("ff-only proof ended at %s, want %s", got, candidate)
 				}
 			}
-			cmd := exec.CommandContext(t.Context(), "make", "-s", "land")
+			cmd := exec.CommandContext(t.Context(), "make", "-s", "land", "BRANCH=topic")
 			cmd.Dir = topic
 			cmd.Env = gittest.Env(home, append(gittest.Identity,
 				"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=")...)
@@ -354,7 +354,7 @@ func TestLandBranchArg(t *testing.T) {
 		r := newLandBranchRepo(t, false)
 		wt := r.topic("topic")
 		candidate := r.git(wt, "rev-parse", "HEAD")
-		out, err := r.land(wt, []string{"BRANCH=nonexistent", "SHA=bad"})
+		out, err := r.land(wt, []string{"BRANCH=nonexistent", "SHA=bad"}, "BRANCH=topic")
 		if err != nil {
 			t.Fatalf("land: %v\n%s", err, out)
 		}
@@ -598,7 +598,7 @@ func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
 			r.stubChecks(tc.checks)
 			wt := r.topic("topic")
 			base := r.git(r.dir, "rev-parse", "main")
-			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
+			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s", "land", "BRANCH=topic"}, tc.args...)...) //nolint:gosec // fixed make target, test-controlled arguments, isolated repository
 			cmd.Dir = wt
 			cmd.Env = append(r.env(), tc.env...)
 			if slices.Contains(tc.env, "MAKEFILES=evil.mk") {

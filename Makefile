@@ -279,7 +279,8 @@ land-list land-next land-all land-preview:
 	case "$@" in land-preview) [ "$(origin SHA)" = "command line" ] || { echo "usage: make land-preview SHA=<sha>" >&2; exit 1; }; sh -c "$$lsh" land.sh preview "$$SHA";; \
 	*) sh -c "$$lsh" land.sh "$(patsubst land-%,%,$@)";; esac
 
-# Land the current branch on main, from a session's own worktree (BRANCH=<name>
+# No arguments starts the human wizard using main's resolver. Explicit BRANCH=<name>
+# lands a branch from a session's own worktree (BRANCH=<name>
 # from any checkout: land the worktree that has it checked out; SHA=<full sha>:
 # refuse unless the candidate is that commit; see the manual): refuse unless
 # the shared checkout is on main (a detached HEAD there once swallowed merges),
@@ -287,6 +288,9 @@ land-list land-next land-all land-preview:
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
 	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
+	if [ "$(origin SHA)" != "command line" ] && [ "$(origin BRANCH)" != "command line" ]; then \
+		lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || { echo "land: cannot read main resolver: refusing" >&2; exit 1; }; \
+		sh -c "$$lsh" land.sh wizard; exit $$?; fi; \
 	want=""; wb=""; \
 	short=""; det=""; tmp=""; \
 	if [ "$(origin SHA)" = "command line" ]; then \

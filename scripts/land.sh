@@ -2,7 +2,7 @@
 # Decision step of `make land SHA=<7+ hex>` (#315). The Makefile runs it from
 # main's blob (git show refs/heads/main:scripts/land.sh), never from a candidate's
 # or the caller's own checkout, so neither can change the decision about itself.
-# Usage: land.sh resolve|preview <hex>, or list|next|all.
+# Usage: land.sh resolve|preview <hex>, or wizard|list|next|all.
 # inspect <hex> <branch> is the read-only per-branch listing operation.
 # record <sha> <branch> <mode> <answer> <at> <review-object> <base> <class> <generated>
 # writes a local confirmation note after the fast-forward.
@@ -20,6 +20,75 @@ export GIT_NO_REPLACE_OBJECTS=1
 die() { echo "land: $*" >&2; exit 1; }
 command="${1:-}"
 case "$command" in
+wizard)
+  [ -t 0 ] && [ -t 2 ] || die "not a terminal: run make land in a terminal; use make land-list or make land-preview SHA=<sha> to inspect candidates"
+  shared="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" || die "cannot find the shared checkout"
+  [ "$(git -C "$shared" symbolic-ref -q HEAD)" = refs/heads/main ] || die "the shared checkout is not on main: ask the human to restore main there, then run make land again; no checkout was switched"
+  here="$(git rev-parse --show-toplevel)" || die "run make land from a checkout"
+  if [ "$here" != "$shared" ]; then
+    echo "land: you are in a worktree; landing uses the shared checkout's current-main recipe." >&2
+    printf 'land: use the shared checkout for this run? [y/N] ' >&2
+    read -r answer || die "no answer: run make land from the shared checkout"
+    case "$answer" in y | Y) cd "$shared" || die "cannot enter the shared checkout" ;;
+      *) die "cancelled: run make land from the shared checkout when ready; no checkout was switched" ;; esac
+  fi
+  # Match design §7.1 / internal/textsafe for new wizard display fields.
+  # Raw branch names remain in candidates for Git; only display copies change.
+  sanitize_display() {
+    python3 -c '
+import sys
+text = sys.stdin.buffer.read().decode("utf-8", "replace")
+def unsafe(c):
+    n = ord(c)
+    return ((n < 0x20 and n != 9) or 0x7f <= n <= 0x9f or
+            0x202a <= n <= 0x202e or 0x2066 <= n <= 0x2069 or
+            n in (0x061c, 0x200e, 0x200f, 0x2028, 0x2029))
+sys.stdout.write("".join("?" if unsafe(c) else c for c in text))
+'
+  }
+  lsh="$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || die "cannot read main's resolver"
+  queue="$(git for-each-ref --sort=refname --no-merged=refs/heads/main --format='%(objectname) %(refname:lstrip=2)' refs/heads/)" || die "cannot list candidates"
+  candidates=""; display_candidates=""; count=0
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    tip="${row%% *}"; branch="${row#* }"
+    git notes --ref=review show "$tip" >/dev/null 2>&1 || continue
+    count=$((count + 1))
+    candidates="${candidates}${count} ${row}
+"
+    title="$(git --no-pager show -s --format=%s "$tip")" || die "cannot read candidate title"
+    title="$(printf '%s' "$title" | sanitize_display)" || die "cannot sanitize candidate title: python3 is required"
+    display_branch="$(printf '%s' "$branch" | sanitize_display)" || die "cannot sanitize candidate branch: python3 is required"
+    display_candidates="${display_candidates}${count} ${tip} ${display_branch}
+"
+    printf '\nland: %s) %s — %s\n' "$count" "$display_branch" "$title" >&2
+    sh -c "$lsh" land.sh inspect "$tip" "$branch" || exit 1
+  done <<EOT
+$queue
+EOT
+  [ "$count" -gt 0 ] || die "no stamped candidates: obtain an independent review of the exact branch tip, then run make land again"
+  echo "land: checks run before landing: check-local, commitlint, consumer regressions, secrets-range; generated files when changed." >&2
+  echo "land: a matching review stamp is required; a displayed mismatch cannot land." >&2
+  printf 'land: choose a candidate number (q cancels' >&2
+  if command -v fzf >/dev/null 2>&1; then printf ', f opens fzf' >&2; fi
+  printf '): ' >&2
+  read -r choice || die "no selection: run make land again"
+  case "$choice" in q | Q | "") die "cancelled: no candidate selected" ;;
+    f) command -v fzf >/dev/null 2>&1 || die "fzf is unavailable: run make land again and choose a number"
+      selected="$(printf '%s' "$display_candidates" | fzf --prompt='Candidate> ')" || die "cancelled: no candidate selected"
+      choice="${selected%% *}" ;; esac
+  case "$choice" in *[!0-9]* | "" | 0*) die "invalid selection: run make land again and choose a displayed number" ;; esac
+  row="$(printf '%s' "$candidates" | awk -v n="$choice" '$1 == n {print; exit}')"
+  [ -n "$row" ] || die "invalid selection: run make land again and choose a displayed number"
+  row="${row#* }"; tip="${row%% *}"; branch="${row#* }"
+  [ "$(git rev-parse --verify "refs/heads/$branch^{commit}")" = "$tip" ] || die "selected SHA is stale: the branch moved; obtain review of its new tip and run make land again"
+  display_branch="$(printf '%s' "$branch" | sanitize_display)" || die "cannot sanitize candidate branch: python3 is required"
+  git merge-base --is-ancestor refs/heads/main "$tip" || die "$display_branch is not on top of main: in its worktree run git rebase main, obtain review of the new SHA, then run make land again"
+  echo "land: selected candidate summary; confirmation follows." >&2
+  # Do not pass BRANCH: the short form retains the review and human-answer gate.
+  env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u MAKEFILES make -s land SHA="$tip" || exit 1
+  echo "land: landed the selected candidate on local main. Push only after all intended commits are reviewed: git push origin main" >&2
+  exit 0 ;;
 record)
   [ "$#" = 10 ] || die "record requires the retained confirmation fields"
   full="$2"; branch="$3"; mode="$4"; answer="$5"; at="$6"

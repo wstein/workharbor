@@ -80,7 +80,7 @@ func (r *landBranchRepo) runTTY(cmd *exec.Cmd, input string) (string, error) {
 			_ = cmd.Process.Kill()
 			r.t.Fatalf("land never prompted\n%s", out.String())
 		case <-time.After(20 * time.Millisecond):
-			if s := out.String(); strings.Contains(s, "[y/N] ") || strings.Contains(s, "to land it: ") {
+			if s := out.String(); strings.Contains(s, "[y/N] ") || strings.Contains(s, "to land it: ") || strings.Contains(s, "q cancels") {
 				time.Sleep(100 * time.Millisecond)
 				_, _ = in.Write([]byte(input))
 				typed = true
