@@ -424,3 +424,32 @@ func TestPauseReturnsOnCancel(t *testing.T) {
 		t.Fatal("Pause kept waiting for Enter after the cancel")
 	}
 }
+
+// ctxPauseHost is a ContextPauser that waits for the context, as Terminal does:
+// Run must call PauseContext, never the plain Pause that would wait for Enter.
+type ctxPauseHost struct {
+	fakeHost
+	plainPause bool
+}
+
+func (p *ctxPauseHost) Pause() error { p.plainPause = true; return nil }
+
+func (p *ctxPauseHost) PauseContext(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestRunUsesPauseContextAndStopsWhenTheContextEnds(t *testing.T) {
+	ctx, cancel := context.WithTimeout(bg, 100*time.Millisecond)
+	defer cancel()
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Paged: true, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+	h := &ctxPauseHost{}
+	outs, err := Run(ctx, goldenSteps(), h, o)
+	var ie *InterruptedError
+	if !errors.As(err, &ie) || ie.When != BeforeStep || len(outs) != 0 {
+		t.Errorf("outs=%d err=%v", len(outs), err)
+	}
+	if h.plainPause {
+		t.Error("Run called Pause although the host is a ContextPauser")
+	}
+}
