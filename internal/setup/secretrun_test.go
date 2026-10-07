@@ -182,7 +182,7 @@ func TestRunOnceSurvivesSIGQUITDuringASecretCommand(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 		_ = syscall.Kill(os.Getpid(), syscall.SIGQUIT)
 	}()
-	err := h.runOnce(context.Background(), doctor.Cmd{Argv: []string{"/bin/sleep", "0.5"}, SecretPrompt: "pw"}, "marker-value", nil)
+	err := h.runOnce(context.Background(), doctor.Cmd{Argv: []string{"/bin/sleep", "2"}, SecretPrompt: "pw"}, "marker-value", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
