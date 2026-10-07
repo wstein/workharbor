@@ -21,6 +21,7 @@ running `git worktree add ../workharbor-review --detach main` and
 `make hooks`. Read AGENTS.md, then the design pages the
 change touches, `docs/content/docs/threat-model.md` and the review notes on its
 issue.
+The pointer branch `land` is our develop: nobody commits on it; `landing` is its deprecated name.
 
 ## What you review
 

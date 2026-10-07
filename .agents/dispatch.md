@@ -41,7 +41,7 @@ runs, and stop if one does.
   a time), and ask `wh/desk` first if Werner has a design session open.
   Apply its decisions from the issues; what it sends to Werner goes to
   `wh/desk`.
-- **Check the commit series before a review.** Read `git log --oneline <target>..<branch>` (`landing` when it is the target, else `main`) for subject, scope and fixup noise; no per-commit build or test, the single full run on the tip makes it green. A mixed or fixup commit goes back to the author before the review is started.
+- **Check the commit series before a review.** Read `git log --oneline <target>..<branch>` (`land` when it is the target, else `main`; the `land` pointer is our develop and nobody commits on it) for subject, scope and fixup noise; no per-commit build or test, the single full run on the tip makes it green. A mixed or fixup commit goes back to the author before the review is started.
 - **Start the review once per push**, narrow per fix commit: a reviewer subagent on Opus
   for code and the rule sections, on Sonnet for documentation
   outside the rule sections. That subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note (the reviewer also appends it to the local note, `git notes --ref=review append`; see `.agents/review.md`), and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.

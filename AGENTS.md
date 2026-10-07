@@ -18,14 +18,14 @@ In `internal/`, each package has a package comment: `service/` is the layer the 
 
 - Web UI: server-rendered Go with `templ`, htmx and SSE, embedded in the binary (D8). No Node toolchain, no SPA framework, no CSS framework. HTML handlers stay thin and call the same service layer as the JSON API; never duplicate business logic in a handler.
 - Go, standard library first. Add a dependency only when it is clearly justified, and say why in the commit message.
-- Add table-driven or small focused tests next to the code for domain logic and policy.
+- Add table-driven or small tests next to the code for domain logic and policy.
 - Keep packages under `internal/`; adapters depend on `domain`, never the reverse.
 - `whr` output: stdout is data, stderr is human text; exit codes come from `internal/exitcode`.
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
 - GitHub Actions: pin each to a full commit SHA with its version in a comment (`uses: owner/action@<sha> # vX.Y.Z`), keep job-level least-privilege `permissions`, never use `pull_request_target`, and pass event data to scripts through `env`, not `${{ }}` in `run`. Dependabot and Renovate commits are exempt from the subject length and `Signed-off-by` rules.
 - Terms: use the words of the [glossary](docs/content/docs/glossary.md) and avoid the ones it lists.
 - Name: the product is **workharbor**, lowercase, in prose, code, paths, URLs and packages, and the CLI is `whr`. Only the wordmark (logo, banner, social preview) sets it as **WorkHarbor**; never write WorkHarbor, Workharbor or Work Harbor in text. Logos, icons, banners and fonts follow [`assets/BRAND.md`](assets/BRAND.md).
-- README: a short landing page; detail goes in `docs/`, and provisional commands are marked provisional.
+- README: a short landing page; detail goes in `docs/`; provisional commands are marked.
 
 ## Hard rules
 
@@ -43,7 +43,7 @@ In `internal/`, each package has a package comment: `service/` is the layer the 
 
 Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` (72 characters at most), one logical change per commit, metadata in Git **trailers** in the last paragraph. `commitlint` enforces the rules.
 
-**One concern per commit.** feat, fix, docs and refactor are not mixed, and a change carries its test; the landing tip is green. Fold fixes into the commit they fix before review and after a round (fresh review of the new SHA); no fixup commits remain.
+**One concern per commit.** feat, fix, docs and refactor are not mixed, and a change carries its test; the tip on `land` is green (our develop, no commits on it). Fold fixes into the commit they fix before review and after a round (fresh review of the new SHA); no fixup commits.
 
 **Commit frequency.** One commit per finished change, not per attempt: iterate in the working tree. A file and what is generated from it (an SVG and its PNG, a source and its lockfile) go in one commit with the link fixes it caused. From the beta on, never rewrite pushed commits unless asked; only Werner force-pushes. Autosquash and pre-beta folds: [manual](docs/content/docs/manual/sessions-and-agents.md#commits).
 
