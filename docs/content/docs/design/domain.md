@@ -20,7 +20,7 @@ toc: true
 
 ### 4.1 State machines
 
-Task, run and environment each get their own small FSM with explicit legal transitions; these are specified before coding.
+Task, run and environment each get their own small FSM with explicit legal transitions; these are specified before coding. D57 (§6) additionally gates every subscription-agent send: a legal resume transition is not initiation authority. The automatic recovery and due-resume paths described here reflect the current implementation; #339 must replace their sends with alert Decisions and human approval.
 
 **Skill selection (D52, #283; to be built).** Before launch, a run records the resolved external skill selection or explicit `none`; every resume uses and validates that record, independently of changes to the configured default. Older runs get a legacy marker, not inferred crewbook provenance. Missing or incompatible recorded content fails launch through the existing start/resume handling. The [§5.8 contract](skill-sets.md) defines migration and audit fields; none of it changes the locks, environment ownership or legal transitions below.
 
@@ -140,6 +140,8 @@ Task, run and environment each get their own small FSM with explicit legal trans
 ### 4.2 Decision object
 
 Fields: ID, task, run (empty for a review Decision, which no live run raised), kind (`question | approval | review`), blocking flag, subject, input (untrusted, capped), commit SHA, options, status, created and answered timestamps, deadline, answer, reason and answering actor (issue #17). The inbox, `whr inbox`, notifications and the audit trail hang off it. "Awaiting guidance" is the state a task enters while a blocking Decision raised by a live run is open; review Decisions belong to `ready_for_review` (§4.1).
+
+**Agent initiation Decisions (D57, #339/#341; to be built).** [§6](security.md) requires a direct human interaction for every product request to a subscription agent. After an interruption or when a background path would start, resume or retry, the product alerts the human through a Decision and waits for approval through the existing approval/step-up path. Only a successful human answer authorizes that one send and obtains its single-use initiation marker. An expired, superseded or unanswered Decision never sends; an earlier start or answer cannot authorize a later restart. Exact cause, options, deadlines and transport eligibility remain open on #339. The existing auth/quota and egress behavior described below is the current implementation, not an exception to D57: reset-time scheduling becomes a reminder requiring a fresh human approval, and expiry of before-start requests must wait for an initiation Decision instead of launching.
 
 **Approvals are live and blocking.** Spike #1 showed the pattern with Claude Code: the agent's permission prompt is routed to the supervisor, which opens an `approval` Decision carrying the tool name and a capped copy of its input. The agent stays blocked until a human answers allow or deny, with an optional reason that is passed back to the agent. Rules:
 

@@ -7,6 +7,8 @@ toc: true
 
 workharbor runs the agent CLIs you already use: Claude Code with a Claude subscription, Codex with a ChatGPT plan, or either with an API key. A subscription is priced for one person using the vendor's own tools, so workharbor keeps to a few rules in that mode (design [D40](../design/decisions.md)). This page says what they are and where they come from. It is our reading, not legal advice: the vendors' own pages decide, and they change.
 
+**D57 guardrail (decided; implementation pending, #339/#341).** The [human-initiation rule](../design/security.md) requires every product start, resume, retry or message to a subscription agent to come from one direct human interaction. After an interruption the product alerts through a Decision and waits for approval; a timer, reset time, queued task or expired request never authorizes a send. The agent and its subagents may continue their own steps within a human-initiated request, and the Crewbook skill in the human's client session is outside this product rule. Vendor terms have not been checked for this rule; it is a guardrail, not a legal statement or a finding of conformity. The vendor summaries below remain {{< status unverified >}}.
+
 ## What the vendors say
 
 **Anthropic** ([Claude Code, legal and compliance](https://code.claude.com/docs/en/legal-and-compliance), read 1 October 2026) {{< status unverified >}}, in short:
