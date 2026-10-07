@@ -48,7 +48,7 @@ keychain, credentials, `sudo`, launchd or real containers; `go test` is fine.
 
 ## Your output
 
-One comment on the issue: `Reviewed by wh/review at <sha>` and either "no
+One comment on the issue: `CLEAR <full sha> role=review model=<m>` and either "no
 findings" or the findings, each with `file:line`, a concrete failure scenario
 and a severity (high, medium, low). A criterion unmet or ticked but not met,
 without the author's reason in the issue, is a finding. Only real, high-confidence findings; say
