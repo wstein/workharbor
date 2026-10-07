@@ -1463,3 +1463,37 @@ func TestUserStepAsksForTheNewPasswordItself(t *testing.T) {
 		t.Errorf("the -addUser command needs SecretPrompt and SecretConfirm: %+v", c.Fix.Cmds)
 	}
 }
+
+func TestConfigDependentHostChecksWaitForTheConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"workspace-volume", "spotlight"} {
+		check := func(content string, write bool) (Check, Status, string) {
+			d := hostDeps(scripted{})
+			d.ConfigPath = filepath.Join(dir, name+".json")
+			if write {
+				if err := os.WriteFile(d.ConfigPath, []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c := steps(t, d)[name]
+			st, detail := status(c)
+			return c, st, detail
+		}
+		c, st, detail := check("", false)
+		if st != NotVerified || !strings.HasPrefix(detail, needsConfig) || strings.Contains(detail, "no such file") || strings.Contains(detail, "open ") {
+			t.Errorf("%s, no configuration: %s %q", name, st, detail)
+		}
+		if got := c.FixCommand(detail); got != "whr setup --only config-base" {
+			t.Errorf("%s: next action %q", name, got)
+		}
+		if _, st, detail = check("{", true); st != NotVerified || !strings.HasPrefix(detail, needsConfig) || !strings.Contains(detail, "cannot be read") {
+			t.Errorf("%s, broken configuration: %s %q", name, st, detail)
+		}
+	}
+	// a valid configuration runs the check: no roots means the internal disk
+	d := writeRoots(t)
+	d.Runner = scripted{}
+	if st, detail := status(steps(t, d)["workspace-volume"]); st != OK {
+		t.Errorf("valid configuration: %s %q", st, detail)
+	}
+}

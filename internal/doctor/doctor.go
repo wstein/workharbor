@@ -329,6 +329,9 @@ const needsConfig = "needs a valid configuration"
 // --only <id>`; a shared check that cannot run without the configuration points
 // at `whr setup`. It only names the command.
 func (c Check) FixCommand(detail string) string {
+	if c.Phase == PhaseHost && strings.HasPrefix(detail, needsConfig) {
+		return "whr setup --only config-base"
+	}
 	switch c.Phase {
 	case PhaseHost:
 		if c.Fix != nil {

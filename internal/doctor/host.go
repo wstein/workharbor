@@ -1504,8 +1504,15 @@ func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
 	// Only the roots are read, and not through config.Load: this check says what is
 	// wrong with a volume even while the rest of the configuration is not valid yet.
 	raw, err := os.ReadFile(d.ConfigPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		// not a failure of the volume: the check cannot run yet. The doctor has no
+		// pending status; "needs a valid configuration" (not_verified) is its word
+		// for that, and FixCommand names the config-base step for it. The step
+		// itself is in the user phase, which runs after the host phase.
+		return nil, NotVerified, needsConfig + ": the workspace roots are read from it, and it is not written yet"
+	}
 	if err != nil {
-		return nil, NotVerified, "the workspace roots are not known until the configuration is written: " + oneLine(err.Error())
+		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read, " + oneLine(err.Error())
 	}
 	var cfg struct {
 		Roots struct {
@@ -1513,7 +1520,7 @@ func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
 		} `json:"roots"`
 	}
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, NotVerified, "the workspace roots could not be read from the configuration: " + oneLine(err.Error())
+		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read from it, " + oneLine(err.Error())
 	}
 	var vols []string
 	seen := map[string]bool{}
