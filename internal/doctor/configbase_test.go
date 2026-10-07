@@ -228,3 +228,26 @@ func TestTheSummaryEscapesWhatItShows(t *testing.T) {
 		t.Errorf("%q", s)
 	}
 }
+
+func TestAConfigHoldingOnlyNullIsRefusedWithoutAPanicOrAWrite(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.ConfigPath, []byte("null\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readConfigMap(d.ConfigPath); err == nil || !strings.Contains(err.Error(), "is not a JSON object") {
+		t.Errorf("readConfigMap: %v", err)
+	}
+	a := &answers{confirm: true, lines: []string{"wstein/workharbor", "", ""}}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err == nil || !strings.Contains(err.Error(), "is not a JSON object") {
+		t.Errorf("config-base: %v", err)
+	}
+	if raw, _ := os.ReadFile(d.ConfigPath); string(raw) != "null\n" {
+		t.Errorf("the file changed: %q", raw)
+	}
+	if _, err := os.Stat(d.ConfigPath + ".bak"); err == nil {
+		t.Error("a backup was written")
+	}
+}

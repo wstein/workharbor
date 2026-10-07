@@ -1320,6 +1320,9 @@ func readConfigMap(path string) (map[string]any, error) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, fmt.Errorf("%s is not JSON: %w", path, err)
 	}
+	if m == nil { // the file holds only null, which Unmarshal accepts into a nil map
+		return nil, fmt.Errorf("%s is not a JSON object", path)
+	}
 	return m, nil
 }
 
