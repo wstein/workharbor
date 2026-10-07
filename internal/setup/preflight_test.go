@@ -55,3 +55,32 @@ func TestNewSetupLinesFitIn80Columns(t *testing.T) {
 		}
 	}
 }
+
+func TestYesStillAsksGuidedStepsAndReadyToRun(t *testing.T) {
+	guided := &doctor.Fix{Guide: "Turn the toggle off."}
+	cmds := &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"true"}}}}
+	for name, tc := range map[string]struct {
+		fix  *doctor.Fix
+		want string // asked even with Yes
+	}{
+		"guided":  {guided, "Done with this step?"},
+		"command": {cmds, ""},
+	} {
+		h := &fakeHost{}
+		var out, errb bytes.Buffer
+		o := Options{Phase: doctor.PhaseHost, Yes: true, Out: &out, Err: &errb}
+		steps := []doctor.Check{fixStep("s", doctor.Fail, "bad", tc.fix)}
+		if _, err := Run(bg, steps, h, o); err != nil {
+			t.Fatal(name, err)
+		}
+		if tc.want != "" {
+			if len(h.asked) == 0 || !strings.Contains(h.asked[len(h.asked)-1], tc.want) {
+				t.Errorf("%s: --yes answered the person's own work: %v", name, h.asked)
+			}
+			continue
+		}
+		if len(h.asked) != 0 || !strings.Contains(errb.String(), "yes: Ready to run") {
+			t.Errorf("%s: --yes did not answer Ready to run: %v\n%s", name, h.asked, errb.String())
+		}
+	}
+}

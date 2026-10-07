@@ -903,8 +903,13 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			ui.Report(render.LevelSkipped, "left for you: --unattended asks nothing")
 			return res, nil
 		}
-		yes := func(question string) (bool, error) {
-			a, err := r.ask(question, render.DefaultYes)
+		// manual work is never answered by --yes: only the person knows it is done
+		yes := func(question string, manual bool) (bool, error) {
+			ask := r.ask
+			if manual {
+				ask = func(q string, d render.Default) (render.Answer, error) { return Ask(r.h, q, d) }
+			}
+			a, err := ask(question, render.DefaultYes)
 			if err != nil {
 				return false, err
 			}
@@ -917,7 +922,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			return a == render.Yes, nil
 		}
 		if f.Open != "" {
-			if ok, err := yes("Open it now?"); err != nil {
+			if ok, err := yes("Open it now?", false); err != nil {
 				return res, err
 			} else if ok {
 				if err := r.h.Open(ctx, f.Open); err != nil {
@@ -925,7 +930,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 				}
 			}
 		}
-		done, err := yes("Done with this step? The check runs again.")
+		done, err := yes("Done with this step? The check runs again.", true)
 		res.fixed = done && err == nil
 		if !res.fixed && err == nil {
 			res.outcome = protocol.OutDeclined
