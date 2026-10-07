@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -101,6 +102,85 @@ func TestSourceInstallUnpublishedMain(t *testing.T) {
 	}
 	if _, err := os.Stat(version); !os.IsNotExist(err) {
 		t.Fatalf("source install retained stale release VERSION: %v", err)
+	}
+}
+
+func envValue(env []string, key string) string {
+	v := ""
+	for _, e := range env {
+		if rest, ok := strings.CutPrefix(e, key+"="); ok {
+			v = rest
+		}
+	}
+	return v
+}
+
+func TestSourceInstallSignsAndReplacesByRename(t *testing.T) {
+	s := newSourceInstall(t)
+	bin := t.TempDir()
+	log := filepath.Join(bin, "codesign.log")
+	fake := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + log + "'\n"
+	if err := os.WriteFile(filepath.Join(bin, "codesign"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
+		t.Fatal(err)
+	}
+	s.env = append(s.env, "PATH="+bin+":"+envValue(s.env, "PATH"))
+	old := filepath.Join(s.prefix, "bin", "whr")
+	if err := os.MkdirAll(filepath.Dir(old), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte("#!/bin/sh\necho old\n"), 0o700); err != nil { //nolint:gosec // executable fixture
+		t.Fatal(err)
+	}
+	before, err := os.Stat(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := s.install(t); err != nil {
+		t.Fatalf("install: %v\n%s", err, out)
+	}
+	after, err := os.Stat(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, after) {
+		t.Error("whr was rewritten in place instead of replaced by rename")
+	}
+	signed, _ := os.ReadFile(log) //nolint:gosec // fixture path
+	if runtime.GOOS == "darwin" && !strings.Contains(string(signed), "--force --sign -") {
+		t.Errorf("darwin install did not ad-hoc sign whr: %q", signed)
+	}
+	if runtime.GOOS != "darwin" && len(signed) != 0 {
+		t.Errorf("non-darwin install called codesign: %q", signed)
+	}
+	for _, dir := range []string{"bin", "libexec/whr"} {
+		entries, err := os.ReadDir(filepath.Join(s.prefix, dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".whr-install.") {
+				t.Errorf("temporary %s left in %s", e.Name(), dir)
+			}
+		}
+	}
+}
+
+func TestSourceInstallSmokeFailureNamesCodesign(t *testing.T) {
+	s := newSourceInstall(t)
+	bin := t.TempDir()
+	// A go that builds a whr which exits non-zero, as a killed binary would.
+	realGo, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := "#!/bin/sh\nif [ \"$1\" = run ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\nprintf '#!/bin/sh\\nexit 137\\n' > \"$1\"\nchmod 700 \"$1\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
+		t.Fatal(err)
+	}
+	s.env = append(s.env, "PATH="+bin+":"+envValue(s.env, "PATH"))
+	out, err := s.install(t)
+	if err == nil || !strings.Contains(out, "codesign -v") || !strings.Contains(out, "xattr -l") {
+		t.Fatalf("a whr that does not run must fail naming codesign -v and xattr -l: %v\n%s", err, out)
 	}
 }
 

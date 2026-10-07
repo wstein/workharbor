@@ -68,10 +68,18 @@ install: GIT_STATUS_FLAGS = --porcelain --untracked-files=all
 install: check-install-source
 	mkdir -p $(call install-quote,$(PREFIX)/bin) $(call install-quote,$(PREFIX)/libexec/whr)
 	rm -f $(call install-quote,$(PREFIX)/libexec/whr/VERSION)
-	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/bin/whr) ./cmd/whr
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/libexec/whr/whr-shim-linux-arm64) ./cmd/whr-shim
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(call install-quote,$(PREFIX)/libexec/whr/whr-proxy-linux-arm64) ./cmd/whr-proxy
-	@version=$$($(call install-quote,$(PREFIX)/bin/whr) version) || exit $$?; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
+	set -e; \
+	bin=$(call install-quote,$(PREFIX)/bin); lib=$(call install-quote,$(PREFIX)/libexec/whr); \
+	tmp=$$(mktemp -d "$$bin/.whr-install.XXXXXX"); tmplib=$$(mktemp -d "$$lib/.whr-install.XXXXXX"); \
+	trap 'rm -rf "$$tmp" "$$tmplib"' EXIT; \
+	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o "$$tmp/whr" ./cmd/whr; \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o "$$tmplib/whr-shim-linux-arm64" ./cmd/whr-shim; \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o "$$tmplib/whr-proxy-linux-arm64" ./cmd/whr-proxy; \
+	if [ "$$(uname -s)" = Darwin ]; then codesign --force --sign - "$$tmp/whr"; fi; \
+	mv -f "$$tmp/whr" "$$bin/whr"; \
+	mv -f "$$tmplib/whr-shim-linux-arm64" "$$lib/whr-shim-linux-arm64"; \
+	mv -f "$$tmplib/whr-proxy-linux-arm64" "$$lib/whr-proxy-linux-arm64"
+	@version=$$($(call install-quote,$(PREFIX)/bin/whr) version) || { echo "the installed whr did not run (zsh shows 'killed' with no output when macOS rejects its signature): run codesign -v and xattr -l on $(PREFIX)/bin/whr, see the troubleshooting page, then rebuild with make install" >&2; exit 1; }; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
 	@printf '%s\n' $(call install-quote,development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual))
 	@printf '%s\n' $(call install-quote,next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64)
 
