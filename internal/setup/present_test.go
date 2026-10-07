@@ -9,9 +9,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
@@ -326,5 +328,31 @@ func TestTerminalPauseTakesEnterAndQ(t *testing.T) {
 	}
 	if err := (Terminal{In: bufio.NewReader(strings.NewReader("")), Err: &errb}).Pause(); err != nil {
 		t.Errorf("closed input must not block or fail: %v", err)
+	}
+}
+
+var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// A page is the legend, one step or the summary: none is longer than 25 lines,
+// and no line is wider than 90 runes.
+func TestGoldenPagesStayShort(t *testing.T) {
+	for _, name := range []string{"setup_tty", "setup_plain", "setup_nocolor"} {
+		b, err := os.ReadFile(filepath.Join("testdata", name+".golden")) //nolint:gosec // a golden file of this package
+		if err != nil {
+			t.Fatal(err)
+		}
+		page := 0
+		for _, line := range strings.Split(strings.TrimRight(string(b), "\n"), "\n") {
+			if strings.Contains(line, " Step ") && strings.HasPrefix(line, "-") || strings.HasPrefix(line, "\x1b") && strings.Contains(line, " Step ") {
+				page = 0
+			}
+			page++
+			if page > 25 {
+				t.Errorf("%s: a page is longer than 25 lines at %q", name, line)
+			}
+			if n := utf8.RuneCountInString(ansi.ReplaceAllString(line, "")); n > 90 {
+				t.Errorf("%s: %d runes wide: %q", name, n, line)
+			}
+		}
 	}
 }
