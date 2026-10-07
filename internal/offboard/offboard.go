@@ -557,8 +557,8 @@ func finalOf(f Facts, code int) render.Final {
 		fin.Changed = []string{"Deleted the account " + f.Account + " and its home folder."}
 		return fin
 	}
-	fin.Changed = []string{"Check the lines marked FAIL above: the delete may be partial."}
-	fin.Todo = []render.FinalTodo{{Text: "Look at the account again.", Cmd: "whr offboard host"}}
+	// a failure is explained once by the caller's failure summary (cause and
+	// next ACTION); a record failure must not claim a partial delete
 	return fin
 }
 

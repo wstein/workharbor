@@ -18,7 +18,7 @@ func TestFinalOfNamesChangeLogAndNextStep(t *testing.T) {
 		}
 	}
 	bad := render.FinalBlock(s, finalOf(f, exitcode.Error))
-	if !strings.Contains(bad, "ACTION") {
+	if bad != "" {
 		t.Errorf("failed run:\n%s", bad)
 	}
 }
