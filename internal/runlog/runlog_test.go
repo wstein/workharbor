@@ -1,0 +1,78 @@
+package runlog
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPathIsUnderTheStateDirPerRun(t *testing.T) {
+	now := time.Date(2026, 10, 7, 10, 15, 0, 0, time.UTC)
+	got := Path("", "/home/u", "setup", now)
+	if want := "/home/u/.local/state/whr/logs/setup-20261007T101500Z.log"; got != want {
+		t.Fatalf("path %q, want %q", got, want)
+	}
+	if got2 := Path("/s", "/home/u", "doctor", now); got2 != "/s/logs/doctor-20261007T101500Z.log" {
+		t.Fatalf("state_dir ignored: %q", got2)
+	}
+}
+
+func TestOpenModes(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "logs", "x.log")
+	l, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = l.Close() }()
+	for path, want := range map[string]os.FileMode{p: 0o600, filepath.Dir(p): 0o700} {
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != want {
+			t.Errorf("%s mode %v, want %v", path, fi.Mode().Perm(), want)
+		}
+	}
+}
+
+func TestCommandStepAndTail(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	l, _ := Open(p)
+	var stream strings.Builder
+	l.Stream = &stream
+	l.Command([]string{"tool", "-x"}, 3, "a\nb\n\nc\n", "")
+	l.Step("account", "fail", "could   not\ncreate")
+	_ = l.Close()
+	b, _ := os.ReadFile(p) //nolint:gosec // a test path
+	if want := "$ tool -x\nexit 3\na\nb\n\nc\nstep account: fail could not create\n"; string(b) != want {
+		t.Fatalf("log %q", b)
+	}
+	if stream.String() != string(b) {
+		t.Errorf("stream differs from file")
+	}
+	if got := l.Tail(2); got != "b\nc" {
+		t.Errorf("tail %q", got)
+	}
+}
+
+func TestNilLogDoesNothing(t *testing.T) {
+	var l *Log
+	l.Command(nil, 0, "x", "")
+	l.Step("a", "ok", "")
+	if l.Path() != "" || l.Tail(3) != "" || l.Close() != nil {
+		t.Fatal("nil log not inert")
+	}
+}
+
+func TestCommandMasksTheSecretValue(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	l, _ := Open(p)
+	l.Command([]string{"t"}, 1, "echoed MARKER-1234 here", "MARKER-1234")
+	_ = l.Close()
+	b, _ := os.ReadFile(p) //nolint:gosec // a test path
+	if strings.Contains(string(b), "MARKER-1234") || strings.Contains(l.Tail(5), "MARKER-1234") {
+		t.Fatal("secret in log")
+	}
+}
