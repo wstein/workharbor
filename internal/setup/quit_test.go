@@ -2,7 +2,10 @@ package setup
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -56,5 +59,38 @@ func TestCatchQuitStopRestoresTheDefault(t *testing.T) {
 	code, out := runQuitHelper(t, "restored")
 	if code != 2 || !strings.Contains(out, "SIGQUIT") {
 		t.Fatalf("after stop, SIGQUIT must end the program: exit %d\n%s", code, out)
+	}
+}
+
+// Terminal.Secret catches Ctrl-\ while it reads: the read goes on and returns
+// the typed value. Needs a pseudo terminal; skipped where there is none. The
+// value is random at test time.
+func TestSecretSurvivesSIGQUITWhileReading(t *testing.T) {
+	master, slave := openPty(t)
+	var raw [8]byte
+	_, _ = rand.Read(raw[:])
+	marker := "q" + hex.EncodeToString(raw[:])
+	type result struct {
+		v   string
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, err := Terminal{Stdin: slave, Err: io.Discard}.Secret("pw")
+		done <- result{v, err}
+	}()
+	time.Sleep(300 * time.Millisecond)
+	_ = syscall.Kill(os.Getpid(), syscall.SIGQUIT) // uncaught, this ends the test binary
+	time.Sleep(200 * time.Millisecond)
+	if _, err := master.WriteString(marker + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-done:
+		if r.err != nil || r.v != marker {
+			t.Fatalf("Secret = %q, %v", r.v, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Secret did not return")
 	}
 }

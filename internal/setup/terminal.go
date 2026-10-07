@@ -404,7 +404,8 @@ func (t Terminal) Secret(question string) (string, error) {
 	}
 	fmt.Fprint(t.Err, render.Question(t.Style, question+":"))
 	// Ctrl-\ (SIGQUIT) during the read would end whr with echo still off: catch
-	// it, so the read ends normally and term restores the terminal
+	// it, so the signal does nothing, the read goes on until Enter, and term
+	// restores the terminal when it ends
 	defer catchQuit()()
 	b, err := term.ReadPassword(int(t.Stdin.Fd())) //nolint:gosec // a file descriptor of this process
 	fmt.Fprintln(t.Err)
