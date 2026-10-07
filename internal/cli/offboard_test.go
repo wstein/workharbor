@@ -356,9 +356,21 @@ func TestOffboardRunLog(t *testing.T) {
 	if !strings.Contains(string(b), "step delete-user: fail") {
 		t.Errorf("log: %s", b)
 	}
-	for _, want := range []string{"cause", "the account was not removed", "log  " + p2} {
+	for _, want := range []string{"cause", "did not finish cleanly", "log  " + p2} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("failure output lacks %q:\n%s", want, errOut)
+		}
+	}
+}
+
+func TestOffboardCauseNamesTheRealCause(t *testing.T) {
+	for code, want := range map[int]string{
+		exitcode.Usage:    "nothing was removed",
+		exitcode.Conflict: "changed since the plan",
+		exitcode.Error:    "may be done",
+	} {
+		if got := offboardCause(code); !strings.Contains(got, want) || strings.Contains(got, "was not removed") {
+			t.Errorf("exit %d: %q lacks %q", code, got, want)
 		}
 	}
 }

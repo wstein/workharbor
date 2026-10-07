@@ -213,12 +213,26 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 		runLog.Step("delete-user", "ok", "the account was removed")
 	} else {
 		runLog.Step("delete-user", "fail", fmt.Sprintf("exit %d", code))
-		setup.FailureSummary(render.Writer{W: o.Err, S: o.Style}, runLog, fmt.Sprintf("the account was not removed (exit %d)", code), "check the account with `whr doctor`, then run `whr offboard host --delete` again")
+		setup.FailureSummary(render.Writer{W: o.Err, S: o.Style}, runLog, offboardCause(code), "check the account with `whr doctor`, then run `whr offboard host --delete` again")
 	}
 	if code != exitcode.OK {
 		return exitError{code}
 	}
 	return nil
+}
+
+// offboardCause names what a failed delete run means by its exit code. Only a
+// refusal before the delete changed nothing; an error may be a partial removal
+// (the command failed, the check afterwards found leftovers, or the record could
+// not be written), so it must not claim the account is still there.
+func offboardCause(code int) string {
+	switch code {
+	case exitcode.Usage:
+		return fmt.Sprintf("not confirmed: nothing was removed (exit %d)", code)
+	case exitcode.Conflict:
+		return fmt.Sprintf("the account changed since the plan: nothing was changed (exit %d)", code)
+	}
+	return fmt.Sprintf("removing the account did not finish cleanly, part of it may be done (exit %d)", code)
 }
 
 func prefixOf(e OffboardEnv, dev bool, home string) string {
