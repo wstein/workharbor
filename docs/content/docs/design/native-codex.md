@@ -193,7 +193,7 @@ or automatic retry. Unknown usage, costs and reset times remain unknown.
 
 Compose the real supervisor and CLI/API/UI through the same service methods
 after the adapter interface lands. Serialize overlapping service, serve,
-doctor and policy files; at most two code authors, with disjoint boundaries.
+doctor and policy files; two code authors by default (no upper cap), with disjoint boundaries.
 The P1 native-contract dependency supersedes the old after-#28 delay for these
 Codex portions of #241/#242; unrelated Copilot work retains its existing order.
 The historical advisory #227 is the routing record, not implementation evidence.
