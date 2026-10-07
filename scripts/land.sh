@@ -22,7 +22,10 @@ die() { echo "land: $*" >&2; exit 1; }
 # notes, titles). Raw values stay in variables for Git; only display copies change.
 # "sanitize_display text" keeps newlines for multi-line text.
 sanitize_display() {
-  command -v python3 >/dev/null 2>&1 || { LC_ALL=C tr -c '[:print:]\t\n' '?'; return; }
+  command -v python3 >/dev/null 2>&1 || {
+    if [ "$#" -gt 0 ]; then LC_ALL=C tr -c '[:print:]\t\n' '?'; else LC_ALL=C tr -c '[:print:]\t' '?'; fi
+    return
+  }
   python3 -I -c '
 import sys
 text = sys.stdin.buffer.read().decode("utf-8", "replace")
