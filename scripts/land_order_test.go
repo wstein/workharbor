@@ -12,14 +12,19 @@ func (r *landBranchRepo) orderCommit(branch, content string) (wt, sha string) {
 	r.t.Helper()
 	wt = filepath.Join(r.t.TempDir(), "wt")
 	r.git(r.dir, "worktree", "add", "-q", "-b", branch, wt, "main")
-	return wt, r.orderMore(wt, "AGENTS.md", content)
+	return wt, r.orderMsg(wt, "AGENTS.md", content, "change AGENTS.md on "+branch)
 }
 
 func (r *landBranchRepo) orderMore(wt, path, content string) string {
 	r.t.Helper()
+	return r.orderMsg(wt, path, content, "change "+path)
+}
+
+func (r *landBranchRepo) orderMsg(wt, path, content, msg string) string {
+	r.t.Helper()
 	r.write(filepath.Join(wt, path), content)
 	r.git(wt, "add", path)
-	r.git(wt, "commit", "-qm", "change "+path)
+	r.git(wt, "commit", "-qm", msg)
 	return r.git(wt, "rev-parse", "HEAD")
 }
 
@@ -144,6 +149,16 @@ func (r *landBranchRepo) rawNote(sha, text string) {
 	r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", text, sha)
 }
 
+// rawBlobNote stores text byte for byte as the review note (git notes -m would
+// strip a CR).
+func (r *landBranchRepo) rawBlobNote(sha, text string) {
+	r.t.Helper()
+	f := filepath.Join(r.t.TempDir(), "note")
+	r.write(f, text)
+	blob := r.git(r.dir, "hash-object", "-w", f)
+	r.git(r.dir, "notes", "--ref=review", "add", "-f", "-C", blob, sha)
+}
+
 func TestLandVerbatimAndNotClear(t *testing.T) {
 	const opus, sonnet = "claude-opus-4", "claude-sonnet-4"
 	copyOf := func(r *landBranchRepo, orig, edit string) string {
@@ -186,12 +201,14 @@ func TestLandVerbatimAndNotClear(t *testing.T) {
 	})
 	t.Run("own NOT CLEAR on a stack member beats an equivalent CLEAR", func(t *testing.T) {
 		r := newLandQueueRepo(t)
-		_, orig := r.orderCommit("orig", "one\n")
+		wtO, orig := r.orderCommit("orig", "one\n")
+		origB := r.orderMore(wtO, "CLAUDE.md", "two\n")
 		r.clearBy(orig, opus)
+		r.clearBy(origB, opus)
 		wt := filepath.Join(t.TempDir(), "wt")
 		r.git(r.dir, "worktree", "add", "-q", "-b", "landing", wt, "main")
 		a2 := r.orderPick(wt, orig, "")
-		b2 := r.orderMore(wt, "AGENTS.md", "two\n")
+		b2 := r.orderPick(wt, origB, "")
 		r.rawNote(a2, "NOT CLEAR "+a2+" role=review model="+opus)
 		r.clearBy(b2, sonnet)
 		if out, err := r.previewOrder(b2); err == nil {
@@ -220,13 +237,23 @@ func TestLandVerbatimAndNotClear(t *testing.T) {
 		r := newLandQueueRepo(t)
 		_, sha := r.orderCommit("topic", "rule\n")
 		line := "CLEAR " + sha + " role=review model=" + opus + "\r\n"
-		r.rawNote(sha, line)
+		r.rawBlobNote(sha, line)
 		if out, err := r.previewOrder(sha); err != nil {
 			t.Fatalf("CRLF CLEAR: %v\n%s", err, out)
 		}
-		r.rawNote(sha, line+"NOT CLEAR "+sha+"\r\n")
+		r.rawBlobNote(sha, line+"NOT CLEAR "+sha+"\r\n")
 		if out, err := r.previewOrder(sha); err == nil {
 			t.Fatalf("CR NOT CLEAR must refuse:\n%s", out)
+		}
+	})
+	t.Run("CRLF note of an equivalent original", func(t *testing.T) {
+		r := newLandQueueRepo(t)
+		_, orig := r.orderCommit("orig", "rule\n")
+		r.rawBlobNote(orig, "CLEAR "+orig+" role=review model="+opus+"\r\n")
+		tip := copyOf(r, orig, "")
+		r.clearBy(tip, sonnet)
+		if out, err := r.previewOrder(tip); err != nil || !strings.Contains(out, "covered by "+orig[:7]) {
+			t.Fatalf("want inherit from a CRLF original: %v\n%s", err, out)
 		}
 	})
 }
@@ -257,6 +284,9 @@ func TestLandLandingPointerSelection(t *testing.T) {
 			out, err := r.previewOrder(sha)
 			if tc.wantErr != (err != nil) {
 				t.Fatalf("err=%v\n%s", err, out)
+			}
+			if !tc.wantErr && !strings.Contains(out, "land: branch    "+tc.names[0]+"\n") {
+				t.Fatalf("want the original branch %q named:\n%s", tc.names[0], out)
 			}
 		})
 	}
