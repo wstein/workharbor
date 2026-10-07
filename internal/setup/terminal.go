@@ -33,6 +33,8 @@ type Terminal struct {
 	// Sig records that a command died of an interrupt, see Interrupts. Nil: not
 	// recorded, and only the context tells.
 	Sig *Interrupts
+	// readSecret replaces Secret in tests.
+	readSecret func(question string) (string, error)
 }
 
 // Interrupts is the sticky record that a command was ended by an interrupt.
@@ -115,6 +117,24 @@ func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 	tw := render.NewToolWriter(t.Err, t.Style)
 	defer tw.End()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, tw, tw
+	if c.SecretPrompt != "" {
+		// whr reads the secret itself, without echo, and hands it over on stdin:
+		// never argv, never the environment, and the child gets no terminal as
+		// its input. Echo stays off on the terminal while it runs, in case it
+		// opens /dev/tty itself; its prompt for a secret is dropped by tw.
+		read := t.Secret
+		if t.readSecret != nil {
+			read = t.readSecret
+		}
+		pw, err := read(c.SecretPrompt)
+		if err != nil {
+			return err
+		}
+		cmd.Stdin = strings.NewReader(pw + "\n")
+		if t.Stdin != nil {
+			defer echoOff(int(t.Stdin.Fd()))() //nolint:gosec // a file descriptor of this process
+		}
+	}
 	// a background child that keeps the pipe open must not stall Run
 	cmd.WaitDelay = runWaitDelay
 	err := cmd.Run()

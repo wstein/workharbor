@@ -62,8 +62,24 @@ func (r absRunner) Output(ctx context.Context, argv ...string) ([]byte, error) {
 
 // DeleteCmd is the one command that changes the machine. sudo is part of the
 // argv, not Cmd.Sudo, so that it is run by absolute path.
-func DeleteCmd() doctor.Cmd {
-	return doctor.Cmd{Argv: []string{sudoBin, sysadminctlBin, "-deleteUser", doctor.WhrUser}}
+//
+// sysadminctl's own usage text (run it with no arguments; verified on the
+// development Mac, macOS 26) says: "-deleteUser <user name> (interactive ||
+// -adminUser <administrator user name> -adminPassword <administrator password>)"
+// and "Pass '-' instead of password in commands above to request prompt".
+// Without these flags it printed a "User password:" prompt that echoed what was
+// typed (issue #378). whr therefore passes "-adminPassword -" and reads the
+// password itself, without echo, and writes it to sysadminctl's stdin.
+// UNVERIFIED (nothing here ran a deletion): that "-" makes sysadminctl read the
+// password from its stdin rather than from /dev/tty, and whether it then echoes;
+// there is no man page for sysadminctl on this host. The relay drops any prompt
+// for a secret and the terminal's echo is switched off while the command runs,
+// but a real run must confirm that the account is deleted and nothing is shown.
+func DeleteCmd(admin string) doctor.Cmd {
+	return doctor.Cmd{
+		Argv:         []string{sudoBin, sysadminctlBin, "-deleteUser", doctor.WhrUser, "-adminUser", admin, "-adminPassword", "-"},
+		SecretPrompt: "Password of " + admin + " for sysadminctl (not shown)",
+	}
 }
 
 func sudoCheckCmd() doctor.Cmd { return doctor.Cmd{Argv: []string{sudoBin, "-v"}} }
@@ -428,7 +444,7 @@ func Plan(o Out, f Facts) {
 	}
 	o.Data("groups", strings.Join(f.Groups, " "))
 	o.Data("admin", admin)
-	o.Data("command", setup.QuoteArgv(DeleteCmd().Full()))
+	o.Data("command", setup.QuoteArgv(DeleteCmd(f.RunUser).Full()))
 	o.Note("note: sysadminctl %s", sysadminctlN)
 	for _, n := range f.Notes {
 		o.Note("note: %s", n)
@@ -442,13 +458,14 @@ type Log struct {
 	W      io.Writer
 	Now    func() time.Time
 	Whr    string
+	Admin  string // the account sysadminctl authenticates as, set by Execute
 }
 
 func (l Log) line(result string, exit int, ran [][]string) error {
 	if l.Record != nil {
 		return l.Record(result, exit, ran)
 	}
-	sum := sha256.Sum256([]byte(strings.Join(DeleteCmd().Full(), "\x00")))
+	sum := sha256.Sum256([]byte(strings.Join(DeleteCmd(l.Admin).Full(), "\x00")))
 	fmt.Fprintf(l.W, "log: %s offboard.delete-user argv-sha256=%s source=interactive result=%s exit=%d whr=%s\n",
 		l.Now().UTC().Format(time.RFC3339), hex.EncodeToString(sum[:]), result, exit, l.Whr)
 	return nil
@@ -491,7 +508,8 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		o.Note("whr: the account changed since the plan: nothing was changed")
 		return exitcode.Conflict
 	}
-	c := DeleteCmd()
+	c := DeleteCmd(f.RunUser)
+	lg.Admin = f.RunUser
 	if err := lg.line("started", 0, nil); err != nil {
 		o.Note("whr: cannot record the offboard protocol: %s; nothing was removed", oneLine(err.Error()))
 		return exitcode.Error

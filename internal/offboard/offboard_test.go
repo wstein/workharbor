@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	deleteArgv = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor"
+	deleteArgv = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
 	sudoV      = "/usr/bin/sudo -v"
 )
 
@@ -776,5 +776,20 @@ func TestANonPlainHomeSaysWhyItWasNotRead(t *testing.T) {
 	f := Inspect(context.Background(), d, inv())
 	if len(f.Notes) == 0 || !strings.Contains(strings.Join(f.Notes, "|"), "not a plain directory") {
 		t.Errorf("notes %v", f.Notes)
+	}
+}
+
+// Issue #378: sudo asks for its own password on /dev/tty with echo off, which
+// holds only while whr runs it as `sudo -v` without -S (password from stdin) or
+// -A (askpass). The secret for sysadminctl never appears in argv.
+func TestSudoKeepsItsOwnEchoOffPrompt(t *testing.T) {
+	for _, a := range sudoCheckCmd().Full() {
+		if a == "-S" || a == "-A" || a == "-S-v" {
+			t.Errorf("sudo must prompt for itself, got %q", a)
+		}
+	}
+	c := DeleteCmd("admin")
+	if c.SecretPrompt == "" || c.Argv[len(c.Argv)-1] != "-" {
+		t.Errorf("the delete command must take its password from stdin: %v", c.Argv)
 	}
 }

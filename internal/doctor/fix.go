@@ -20,6 +20,12 @@ const (
 type Cmd struct {
 	Argv []string
 	Sudo bool
+	// SecretPrompt, if set, says the command reads one secret (a password) from
+	// its standard input. The host asks for it with that prompt, with terminal
+	// echo off, and writes it to the command's stdin as one line. The secret is
+	// never in Argv, the environment, a log or a report, and the command is not
+	// given the terminal as its input (issue #378).
+	SecretPrompt string
 }
 
 // Full is the argument vector that is run, with sudo in front when it is needed.

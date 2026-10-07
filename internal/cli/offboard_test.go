@@ -19,7 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
-const offboardDelete = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor"
+const offboardDelete = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor -adminUser werner -adminPassword -"
 
 // offboardHost executes nothing: it records, and flips to the "after" answers
 // when the delete argv is run.
@@ -261,7 +261,7 @@ func TestOffboardRecordsProtocolAfterConfirmation(t *testing.T) {
 	if len(es) != 4 || es[0].Event != protocol.EventRunStart || es[1].Event != protocol.EventStepBefore ||
 		es[1].Step != "delete-user" || es[1].Answer != protocol.AnswerRun || es[1].Source != protocol.SourceInteractive ||
 		es[2].Event != protocol.EventStepAfter || es[2].Outcome != protocol.OutFixed || es[2].Exit == nil || *es[2].Exit != 0 ||
-		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}, {"/usr/bin/sudo", "/usr/sbin/sysadminctl", "-deleteUser", "workharbor"}}) ||
+		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}, {"/usr/bin/sudo", "/usr/sbin/sysadminctl", "-deleteUser", "workharbor", "-adminUser", "werner", "-adminPassword", "-"}}) ||
 		es[3].Event != protocol.EventRunEnd || es[3].Outcome != protocol.RunDone {
 		t.Fatalf("entries: %+v", es)
 	}
