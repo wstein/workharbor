@@ -682,13 +682,18 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 	}
 	ui := render.Writer{W: w, S: o.Style}
 	ui.Rule()
-	line := render.Summary(o.Style, counts)
-	if o.DryRun {
-		line += "  (dry run: nothing was changed)\n"
+	line := fmt.Sprintf("Summary: %d ok, %d need action, %d not verified", counts.OK, counts.Fail, counts.NotVerified)
+	if counts.Warn > 0 {
+		line += fmt.Sprintf(", %d weaker than recommended", counts.Warn)
 	}
-	fmt.Fprint(w, line)
-	fmt.Fprintf(w, "  done: %s\n", wrapList(listOrNone(done), 8))
-	fmt.Fprintf(w, "  left: %s\n", wrapList(listOrNone(left), 8))
+	if o.DryRun {
+		line += " (dry run: nothing was changed)"
+	}
+	fmt.Fprintln(w, line)
+	if o.Verbose { // the step names and raw statuses are internal detail
+		fmt.Fprintf(w, "  done: %s\n", wrapList(listOrNone(done), 8))
+		fmt.Fprintf(w, "  left: %s\n", wrapList(listOrNone(left), 8))
+	}
 	if first != "" {
 		next := ""
 		if useUser != "" {

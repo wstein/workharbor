@@ -369,15 +369,15 @@ func TestSummaryNamesWhatIsDoneWhatIsLeftAndTheNextCommand(t *testing.T) {
 		{Step: "container-start", Status: doctor.OK},
 		{Step: "container-kernel", Status: doctor.Fail},
 		{Step: "config-base", Status: doctor.NotVerified},
-	}, Options{})
+	}, Options{Verbose: true})
 	got := b.String()
-	for _, want := range []string{"done: config-dir, container-start", "left: container-kernel (fail), config-base (not_verified)", "next: whr setup --from container-kernel", "no Linux kernel"} {
+	for _, want := range []string{"Summary: 2 ok, 1 need action, 1 not verified\n", "done: config-dir, container-start", "left: container-kernel (fail), config-base (not_verified)", "next: whr setup --from container-kernel", "no Linux kernel"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
 	}
 	b.Reset()
-	Summary(&b, []Outcome{{Step: "config-dir", Status: doctor.OK}}, Options{})
+	Summary(&b, []Outcome{{Step: "config-dir", Status: doctor.OK}}, Options{Verbose: true})
 	if strings.Contains(b.String(), "next:") || !strings.Contains(b.String(), "left: none") {
 		t.Errorf("a finished run: %s", b.String())
 	}
@@ -385,6 +385,18 @@ func TestSummaryNamesWhatIsDoneWhatIsLeftAndTheNextCommand(t *testing.T) {
 
 // The next command keeps the phase and the flags of the run, so it works where
 // the bare `whr setup --from <step>` is refused (#265).
+// Without --verbose the summary is one count line and the next step: no step
+// names with raw status tokens.
+func TestSummaryHidesInternalTokensWithoutVerbose(t *testing.T) {
+	var b bytes.Buffer
+	Summary(&b, []Outcome{{Step: "config-base", Status: doctor.NotVerified}}, Options{})
+	for _, bad := range []string{"not_verified", "left:", "done:"} {
+		if strings.Contains(b.String(), bad) {
+			t.Errorf("%q in\n%s", bad, b.String())
+		}
+	}
+}
+
 func TestSummaryNextCommandKeepsThePhaseAndFlags(t *testing.T) {
 	left := []Outcome{
 		{Step: "config-dir", Status: doctor.OK},
