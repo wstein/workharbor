@@ -6,6 +6,7 @@
 .DS_Store
 .env
 /_site/
+/.work/
 
 # Hugo
 /docs/public/
