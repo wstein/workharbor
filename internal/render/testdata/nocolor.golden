@@ -1,7 +1,7 @@
 Legend (colour is only decoration: the words are always printed)
  + ok     checked and fine
  x FAIL   checked and wrong
- ? ?      not verified: nothing measured it
+ ? unverified  not verified: nothing measured it
  ! WARN   works, weaker than recommended
  - skip   left out, or not offered
 | ACTION  something you must do or answer
@@ -17,7 +17,7 @@ Legend (colour is only decoration: the words are always printed)
 
 -- Step 3 of 14 - no automatic log-out --
  + ok     key not set: the system default applies (default off)
- ? ?      tailscale did not answer
+ ? unverified  tailscale did not answer
  ! WARN   weaker than recommended
  - skip   left out
 | ACTION  Ready to create the account? [Y/n/q] 

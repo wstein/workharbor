@@ -1,7 +1,7 @@
 Legend (colour is only decoration: the words are always printed)
  + ok     checked and fine
  x FAIL   checked and wrong
- ? ?      not verified: nothing measured it
+ ? unverified  not verified: nothing measured it
  ! WARN   works, weaker than recommended
  - skip   left out, or not offered
 | ACTION  something you must do or answer
@@ -20,8 +20,8 @@ preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
  - skip   dry run: nothing is run
 
 -- Step 3 of 4 - title of tailscale --
- ? ?      tailscale did not answer
- ? ?      whr has no fix for this step
+ ? unverified  tailscale did not answer
+ ? unverified  whr has no fix for this step
 
 -- Step 4 of 4 - title of power --
  x FAIL   sleep is on

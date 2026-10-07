@@ -365,3 +365,15 @@ func TestToolWriterPromptDetection(t *testing.T) {
 		}
 	}
 }
+
+func TestNotVerifiedShowsAWord(t *testing.T) {
+	for _, s := range []Style{{}, {Unicode: true}, {Unicode: true, Color: true}} {
+		got := ansiSeq.ReplaceAllString(Report(s, LevelNotVerified, "tailscale did not answer"), "")
+		if !strings.Contains(got, "? unverified  tailscale did not answer") {
+			t.Errorf("not verified label has no visible word: %q", got)
+		}
+		if !strings.Contains(ansiSeq.ReplaceAllString(Legend(s), ""), "? unverified") {
+			t.Errorf("legend lacks the word: %q", Legend(s))
+		}
+	}
+}

@@ -67,7 +67,7 @@ type Colour struct {
 var Palette = map[Role]Colour{
 	RoleOK:          {"34", "ok"},
 	RoleFail:        {"1;31", "FAIL"},
-	RoleNotVerified: {"35", "?"},
+	RoleNotVerified: {"35", "unverified"},
 	RoleWarn:        {"33", "WARN"},
 	RoleSkipped:     {"2", "skip"},
 	RoleAction:      {"1;33", "ACTION"},
@@ -214,9 +214,10 @@ func indent(text, pad string) string {
 func Report(s Style, l Level, text string) string {
 	role := levelRole[l]
 	word := Palette[role].Label
-	pad := strings.Repeat(" ", 5-len([]rune(word)))
+	pad := strings.Repeat(" ", max(0, 5-len([]rune(word))))
 	head := s.paint(role, s.symbol(l)+" "+word)
-	return " " + head + pad + "  " + indent(wrapAt(text, 12, s.cols()), strings.Repeat(" ", 10)) + "\n"
+	extra := max(0, len([]rune(word))-5) // a longer word pushes the text right
+	return " " + head + pad + "  " + indent(wrapAt(text, 12+extra, s.cols()), strings.Repeat(" ", 10+extra)) + "\n"
 }
 
 // Action is a line the person must act on: a bar and the label ACTION.
