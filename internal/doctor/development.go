@@ -111,7 +111,7 @@ func (d Deps) developmentKeyFix(prefix string) *Fix {
 			}
 			return err
 		}
-		if err := replaceFile(d.ConfigPath, append(updated, '\n')); err != nil {
+		if err := replaceWithBackup(p, d.ConfigPath, append(updated, '\n')); err != nil {
 			return err
 		}
 		if d.Managed {

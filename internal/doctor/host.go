@@ -20,6 +20,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/credcheck"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/sshca"
 	"github.com/wstein/workharbor/internal/toolstore"
 )
@@ -1381,7 +1382,7 @@ func addGitHub(d Deps, p Prompter) error {
 		}
 		return err
 	}
-	return replaceFile(d.ConfigPath, append(updated, '\n'))
+	return replaceWithBackup(p, d.ConfigPath, append(updated, '\n'))
 }
 
 // lineDiff shows the lines that were added and removed, one per line.
@@ -1431,6 +1432,24 @@ func replaceFile(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+// replaceWithBackup saves the file it replaces to <path>.bak (0600, so the
+// copy is as private as the original; its content is never shown), prints that
+// path, and then replaces the file. A file that does not exist yet has no backup.
+func replaceWithBackup(p Prompter, path string, data []byte) error {
+	old, err := os.ReadFile(filepath.Clean(path))
+	switch {
+	case err == nil:
+		bak := path + ".bak"
+		if err := os.WriteFile(filepath.Clean(bak), old, 0o600); err != nil { //nolint:gosec // beside the configuration
+			return errors.New("could not save the backup, so nothing was changed: " + err.Error())
+		}
+		p.Show(strings.TrimRight(render.Backup(render.Style{}, filepath.Base(path), bak), "\n"))
+	case !errors.Is(err, fs.ErrNotExist):
+		return err
+	}
+	return replaceFile(path, data)
 }
 
 var unknownFieldRE = regexp.MustCompile(`unknown field "([^"]+)"`)
