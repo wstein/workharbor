@@ -18,6 +18,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/runlog"
 )
 
 // Terminal is the real Host: a person at a terminal. Prompts go to Err (stdout is
@@ -33,6 +34,8 @@ type Terminal struct {
 	// Sig records that a command died of an interrupt, see Interrupts. Nil: not
 	// recorded, and only the context tells.
 	Sig *Interrupts
+	// Log records every command, its exit code and output (issue #379); nil: none.
+	Log *runlog.Log
 	// readSecret replaces Secret in tests.
 	readSecret func(question string) (string, error)
 }
@@ -97,6 +100,7 @@ func (t Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 		err = nil // the command itself succeeded; its output was read
 	}
 	err = t.interruptOr(ctx, err)
+	t.Log.Command(argv, exitCodeOf(err), out.String()+errb.String(), "")
 	if err != nil && errb.Len() > 0 {
 		// what the command said is what tells "not set" from "could not read"
 		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
@@ -184,6 +188,13 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 	if seen != nil {
 		w = io.MultiWriter(tw, seen)
 	}
+	// the log gets the same filtered text the terminal gets: a tool's prompt for
+	// a secret is dropped, and the secret value itself is masked
+	var logged bytes.Buffer
+	lw := render.NewToolWriter(&logged, render.Style{})
+	if t.Log != nil {
+		w = io.MultiWriter(w, lw)
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, w, w
 	if c.SecretPrompt != "" {
 		// whr reads the secret itself, without echo, and hands it over on stdin:
@@ -200,9 +211,28 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 	err := cmd.Run()
 	if errors.Is(err, exec.ErrWaitDelay) {
 		// the command itself succeeded; a leftover child only held the pipe
-		return nil
+		err = nil
+	} else {
+		err = t.interruptOr(ctx, err)
 	}
-	return t.interruptOr(ctx, err)
+	if t.Log != nil {
+		lw.End() // flush the held-back partial text
+		t.Log.Command(argv, exitCodeOf(err), logged.String(), pw)
+	}
+	return err
+}
+
+// exitCodeOf is the exit status in an error from a command: 0 for none, -1
+// when the command did not end with a status (not found, killed).
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() >= 0 {
+		return ee.ExitCode()
+	}
+	return -1
 }
 
 // interruptOr marks the error of a command that an interrupt ended, so the

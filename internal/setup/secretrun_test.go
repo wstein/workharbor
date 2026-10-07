@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/runlog"
 )
 
 // Issue #378: a command with a SecretPrompt gets the secret on stdin only. The
@@ -115,5 +117,53 @@ func TestRunNewPasswordShowsThePolicyHint(t *testing.T) {
 	}
 	if strings.Count(b.String(), "Four characters or more.") != 1 {
 		t.Errorf("want the hint once: %q", b.String())
+	}
+}
+
+// Issue #379: the run log gets the command, its exit code and the tool's output,
+// but never the secret: not in the file, not in the argv column, and not the
+// tool's own prompt for it.
+func TestRunLogNeverHoldsTheSecret(t *testing.T) {
+	var raw [24]byte
+	_, _ = rand.Read(raw[:])
+	marker := "fake-" + hex.EncodeToString(raw[:])
+	lp := filepath.Join(t.TempDir(), "logs", "run.log")
+	lg, err := runlog.Open(lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the child echoes what it read, as a careless tool would, and fails
+	script := `printf 'User password:'; IFS= read -r l; printf '\\n'; printf 'got %s\n' "$l"; echo oops >&2; exit 5`
+	h := Terminal{Err: io.Discard, Log: lg, readSecret: func(string) (string, error) { return marker, nil }}
+	c := doctor.Cmd{Argv: []string{"/bin/sh", "-c", script, "sh"}, SecretPrompt: "pw"}
+	if err := h.Run(context.Background(), c); err == nil {
+		t.Fatal("want the exit 5 failure")
+	}
+	_ = lg.Close()
+	got := readFile(t, lp)
+	if strings.Contains(got, marker) || strings.Contains(lg.Tail(20), marker) {
+		t.Fatalf("the secret reached the log: %q", got)
+	}
+	for _, want := range []string{"$ /bin/sh -c", "exit 5", "oops", "got ***"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("log lacks %q: %q", want, got)
+		}
+	}
+	if strings.Contains(got, "| User password") {
+		t.Errorf("the tool's secret prompt reached the log: %q", got)
+	}
+	if lg.Tail(2) == "" {
+		t.Error("no tail for the failure summary")
+	}
+}
+
+func TestOutputIsLogged(t *testing.T) {
+	lp := filepath.Join(t.TempDir(), "run.log")
+	lg, _ := runlog.Open(lp)
+	h := Terminal{Err: io.Discard, Log: lg}
+	_, _ = h.Output(context.Background(), "/bin/sh", "-c", "echo seen; exit 2")
+	_ = lg.Close()
+	if got := readFile(t, lp); !strings.Contains(got, "exit 2") || !strings.Contains(got, "seen") {
+		t.Fatalf("log %q", got)
 	}
 }
