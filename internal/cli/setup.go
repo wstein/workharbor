@@ -111,6 +111,7 @@ func newSetup(st *state) *cobra.Command {
 		return DefaultConfigPath(st.env.Getenv)
 	}
 	run := func(cmd *cobra.Command, phase doctor.Phase) (runErr error) {
+		dev = st.dev
 		var reportSteps []doctor.Check
 		var reportOutcomes []setup.Outcome
 		var remembered bool
@@ -398,7 +399,6 @@ func newSetup(st *state) *cobra.Command {
 	}
 	flags := func(c *cobra.Command) {
 		f := c.Flags()
-		f.BoolVar(&dev, "dev", false, "use a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 		f.BoolVar(&managed, "managed", false, "leave development mode: remove development_prefix from the configuration (`--only development-key` does only that), then check the managed prefix; not with --dev")
 		f.BoolVar(&dryRun, "dry-run", false, "run the read-only checks for real and print every fix without running any")
 		f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal; also no fzf")

@@ -55,6 +55,7 @@ type state struct {
 	env        *Env
 	configPath string
 	asJSON     bool
+	dev        bool
 	client     *Client
 }
 
@@ -124,6 +125,8 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err.Error()} })
 	root.PersistentFlags().StringVar(&st.configPath, "config", "", "the configuration file (default $WHR_CONFIG or ~/.config/whr/config.json)")
 	root.PersistentFlags().BoolVar(&st.asJSON, "json", false, "print the API's envelope (or one JSON event per line for logs -f) instead of text")
+
+	root.PersistentFlags().BoolVar(&st.dev, "dev", false, "use a development installation (default prefix: $HOME/.local; an explicit --prefix wins)")
 
 	// A command that ran owns its errors: only cobra's own refusal of the command
 	// line, which happens before any RunE, is a usage error. The mark goes on

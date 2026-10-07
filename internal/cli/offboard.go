@@ -107,7 +107,7 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	ctx := cmd.Context()
 	exe, exeErr := env.Executable()
 	if exeErr == nil {
-		exeErr = setup.CheckInstalled(exe, installedPrefixes(prefixOf(st.env.Offboard))...)
+		exeErr = setup.CheckInstalled(exe, installedPrefixes(prefixOf(st.env.Offboard, st.dev, st.env.Getenv("HOME")))...)
 	}
 	if exeErr != nil {
 		if in.Delete {
@@ -199,9 +199,12 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	return nil
 }
 
-func prefixOf(e OffboardEnv) string {
+func prefixOf(e OffboardEnv, dev bool, home string) string {
 	if e.Prefix != "" {
 		return e.Prefix
+	}
+	if dev && filepath.IsAbs(home) {
+		return filepath.Join(home, ".local")
 	}
 	return doctor.DefaultPrefix
 }

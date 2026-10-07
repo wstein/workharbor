@@ -40,6 +40,7 @@ func newDoctor(st *state) *cobra.Command {
 			if err := plainFlag("--user", whrUser); err != nil {
 				return err
 			}
+			dev = st.dev
 			path := st.configPath
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
@@ -168,7 +169,6 @@ func newDoctor(st *state) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&report, "report", false, "save a private, redacted setup report in the state directory")
-	cmd.Flags().BoolVar(&dev, "dev", false, "check a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
