@@ -12,7 +12,7 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range test-commitlint-consumers land temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range test-commitlint-consumers land land-list land-next land-all land-preview temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -270,6 +270,14 @@ override LAND_MAKE := $(MAKE)
 # as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass. Both are
 # override variables so that no command-line or -e setting replaces them.
 override LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
+
+# Queue order is lexical branch name; preview/list never confirm or land.
+# Decisions always use main's resolver, just like land SHA=.
+land-list land-next land-all land-preview:
+	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
+	lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || exit 1; \
+	case "$@" in land-preview) [ "$(origin SHA)" = "command line" ] || { echo "usage: make land-preview SHA=<sha>" >&2; exit 1; }; sh -c "$$lsh" land.sh preview "$$SHA";; \
+	*) sh -c "$$lsh" land.sh "$(patsubst land-%,%,$@)";; esac
 
 # Land the current branch on main, from a session's own worktree (BRANCH=<name>
 # from any checkout: land the worktree that has it checked out; SHA=<full sha>:
