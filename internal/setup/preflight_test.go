@@ -109,3 +109,24 @@ func TestToolFoundLooksForBrewAtTheManagedPrefixFirst(t *testing.T) {
 		t.Errorf("sudo: asked %v", asked)
 	}
 }
+
+// A Homebrew at the managed prefix counts as found in the preflight line even
+// when no brew is on PATH.
+func TestPreflightFindsTheManagedBrewOffPath(t *testing.T) {
+	old := lookPath
+	defer func() { lookPath = old }()
+	lookPath = func(name string) (string, error) {
+		if name == managedBrew {
+			return name, nil
+		}
+		return "", errors.New("not found")
+	}
+	var out, errb bytes.Buffer
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb}
+	if _, err := Run(bg, goldenSteps(), &fakeHost{}, o); err != nil {
+		t.Fatal(err)
+	}
+	if got := errb.String(); !strings.Contains(got, "found: brew") || !strings.Contains(got, "missing: sudo, container") {
+		t.Errorf("preflight:\n%s", got)
+	}
+}

@@ -236,3 +236,35 @@ func TestRunOnceMasksASecretWithControlCharactersInTheLog(t *testing.T) {
 		}
 	}
 }
+
+// --verbose: the output of a command is printed live by the Terminal and the
+// log streams only the argv and the exit code, so the output shows once; the
+// log file still holds it.
+func TestVerboseShowsCommandOutputOnce(t *testing.T) {
+	var raw [8]byte
+	_, _ = rand.Read(raw[:])
+	marker := "v" + hex.EncodeToString(raw[:])
+	lp := filepath.Join(t.TempDir(), "run.log")
+	lg, err := runlog.Open(lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var both strings.Builder
+	lg.Stream = &both
+	h := Terminal{Err: &both, Log: lg}
+	// the marker is an argument, so the argv line holds it too: count the
+	// lines that are the output itself
+	if err := h.Run(context.Background(), doctor.Cmd{Argv: []string{"/bin/sh", "-c", `echo "out-$1"`, "sh", marker}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = lg.Close()
+	if n := strings.Count(both.String(), "out-"+marker); n != 1 {
+		t.Errorf("output shown %d times, want once:\n%s", n, both.String())
+	}
+	if !strings.Contains(both.String(), "exit 0") {
+		t.Errorf("the stream lacks the exit code:\n%s", both.String())
+	}
+	if !strings.Contains(readFile(t, lp), "out-"+marker) {
+		t.Error("the log file lacks the output")
+	}
+}
