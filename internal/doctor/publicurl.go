@@ -50,7 +50,8 @@ func (d Deps) publicURLStep() Check {
 				}
 				return Fail, "public_url " + textsafe.Escape(raw) + ": " + oneLine(err.Error())
 			}
-			return OK, "public_url " + n + ", listening on loopback " + listen + "; " + d.firewallNote(ctx) + "; whether the forwarder serves the name to that port is not checked (it needs the network)"
+			_, port, _ := net.SplitHostPort(listen)
+			return OK, "public_url " + n + ", listening on loopback " + listen + "; " + d.firewallNote(ctx) + "; whether the forwarder serves the name to that port is not checked (it needs the network); `tailscale serve status` (read-only) shows it, and `tailscale serve --bg " + port + "` as workharbor creates it; never `tailscale funnel`"
 		},
 		Fix: &Fix{
 			Desc: "ask for whr's public name, show it normalised, and after a y add public_url to " + d.ConfigPath + " (written atomically, other keys kept)",

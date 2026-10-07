@@ -158,13 +158,14 @@ func TestGitHubAppCreateTakesThePublicNameFromTheConfigurationAndAddsHTTPS(t *te
 	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	_, port, _ := net.SplitHostPort(addr)
 	done, _, stderr := runCLIAsync("github", "app", "create", "--config", cfg, "--ttl", "1s", "--key-dir", dir)
 	<-done
 	out := stderr.String()
 	if !strings.Contains(out, "https://whr.example.test/github/app/new?state=") {
 		t.Errorf("the link does not use the normalised public name: %q", out)
 	}
-	if !strings.Contains(out, "If the link times out") {
+	if !strings.Contains(out, "If the link times out") || !strings.Contains(out, "tailscale serve --bg "+port) || !strings.Contains(out, "Do not use `tailscale funnel`") {
 		t.Errorf("no hint for a link that times out: %q", out)
 	}
 

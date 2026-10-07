@@ -121,6 +121,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 			if err != nil {
 				return usageError{err.Error()}
 			}
+			_, port, _ := net.SplitHostPort(listen)
 			var lc net.ListenConfig
 			ln, err := lc.Listen(cmd.Context(), "tcp", listen)
 			if err != nil {
@@ -139,7 +140,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 			if local {
 				fmt.Fprintln(st.env.Stderr, "This link points at the loopback listener: open it in a browser on this Mac. GitHub's redirect back to it is unverified.")
 			} else {
-				fmt.Fprintf(st.env.Stderr, "If the link times out, the name or the forwarder is at fault, not this command: whr waits on http://%s (loopback only). Check that the forwarder serves %s to that port, or use --local.\n", listen, clean(publicURL))
+				fmt.Fprintf(st.env.Stderr, "If the link times out, the name or the forwarder is at fault, not this command:\nwhr waits on http://%s (loopback only). As workharbor, run\n`tailscale serve status` (read-only) to see whether the name maps to that port;\n`tailscale serve --bg %s` creates the mapping. Do not use `tailscale funnel`.\nOr use --local on this Mac.\n", listen, port)
 			}
 
 			wctx, cancel := context.WithDeadline(cmd.Context(), exp)

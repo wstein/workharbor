@@ -44,6 +44,9 @@ func TestThePublicURLCheckSaysWhatItVerifiesAndWhatItDoesNot(t *testing.T) {
 		if got != tc.want || !strings.Contains(detail, tc.sub) {
 			t.Errorf("%s: %s %q, want %s containing %q", tc.name, got, detail, tc.want, tc.sub)
 		}
+		if tc.want == OK && !strings.Contains(detail, "tailscale serve --bg 8787") {
+			t.Errorf("%s: no remedy named: %q", tc.name, detail)
+		}
 		if tc.want == OK && !strings.Contains(detail, "not checked") {
 			t.Errorf("%s: an ok that does not say the forwarder is unchecked: %q", tc.name, detail)
 		}
