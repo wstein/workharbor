@@ -1018,7 +1018,7 @@ func TestMissingWorkharborWithLegacyWhrPointsAtUserWhr(t *testing.T) {
 	}
 }
 
-func TestMissingWorkharborOffersAddUserUnlessLegacyIsReallyThere(t *testing.T) {
+func TestMissingWorkharborOffersAddUserOnlyWhenLegacyIsAbsent(t *testing.T) {
 	for _, tc := range []struct {
 		name, legacy string
 		want         Status
@@ -1040,6 +1040,9 @@ func TestMissingWorkharborOffersAddUserUnlessLegacyIsReallyThere(t *testing.T) {
 			}
 			if tc.addUser && (len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].Argv[1] != "-addUser" || detail != "there is no user workharbor") {
 				t.Errorf("addUser fix lost: %q %+v", detail, c.Fix.Cmds)
+			}
+			if !tc.addUser && len(c.Fix.Cmds) != 0 {
+				t.Errorf("creation offered when legacy existence is unknown: %+v", c.Fix.Cmds)
 			}
 			if !tc.addUser && strings.Contains(detail, "whr setup host --user whr") {
 				t.Errorf("points at whr without finding it: %q", detail)

@@ -152,6 +152,8 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 	case DSCLNotFound(err):
 		return Fail, missing, false
 	}
+	fix.Cmds = nil
+	fix.Guide = "Inspect the legacy account lookup failure, then retry `whr setup host --only workharbor-user`. Account creation is unavailable until the lookup confirms that " + LegacyUser + " does not exist."
 	return NotVerified, "there is no user " + d.account() + ", and dscl did not say whether the legacy account " + LegacyUser + " exists: " + oneLine(err.Error()), false
 }
 

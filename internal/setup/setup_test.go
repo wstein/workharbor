@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -487,5 +488,37 @@ func TestQuoteArgvEscapesWhatWouldBreakTheLine(t *testing.T) {
 				t.Fatalf("QuoteArgv = %q, want %q", got, "whr "+c.want)
 			}
 		})
+	}
+}
+
+// Account lookup errors are fake: the wizard must neither offer nor execute
+// creation while the legacy account's existence remains unknown.
+type uncertainLegacyRunner struct{ failure string }
+
+func (r uncertainLegacyRunner) Output(_ context.Context, argv ...string) ([]byte, error) {
+	if strings.Join(argv, " ") == "dscl . -read /Users/workharbor UniqueID" {
+		return nil, errors.New("exit status 56")
+	}
+	return nil, errors.New(r.failure)
+}
+
+func TestUncertainLegacyAccountNeverOffersOrRunsCreation(t *testing.T) {
+	for _, failure := range []string{"exit status 1: Operation not permitted", "exit status 70: odd output"} {
+		for _, dry := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/dry=%t", failure, dry), func(t *testing.T) {
+				checks := doctor.Checks(doctor.Deps{GOOS: "darwin", Runner: uncertainLegacyRunner{failure}})
+				h := &fakeHost{answers: []string{"y", "y"}}
+				outs, out, errOut := run(t, h, checks, Options{Phase: doctor.PhaseHost, Only: []string{"workharbor-user"}, DryRun: dry})
+				if len(outs) != 1 || outs[0].Status != doctor.NotVerified || outs[0].Fixed {
+					t.Fatalf("outcomes: %+v", outs)
+				}
+				if len(h.ran) != 0 || strings.Contains(out+errOut+strings.Join(h.shown, "\n"), "addUser") {
+					t.Fatalf("creation offered or executed: ran %v output %q %q shown %v", h.ran, out, errOut, h.shown)
+				}
+				if !strings.Contains(errOut, "Inspect the legacy account lookup failure") || !strings.Contains(errOut, "retry") {
+					t.Errorf("missing recovery guidance: %q", errOut)
+				}
+			})
+		}
 	}
 }
