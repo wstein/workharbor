@@ -459,6 +459,8 @@ type Log struct {
 	Now    func() time.Time
 	Whr    string
 	Admin  string // the account sysadminctl authenticates as, set by Execute
+	// Path is the per-run log (#379), named in the closing summary.
+	Path string
 }
 
 func (l Log) line(result string, exit int, ran [][]string) error {
@@ -477,7 +479,7 @@ func (l Log) line(result string, exit int, ran [][]string) error {
 // program in an administrator's session could feed it through a pty, and sudo's
 // authentication is the real barrier.
 func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) int {
-	o.Action("This deletes the macOS account " + f.Account + " and its home folder " + f.HomeDir + ". It cannot be undone.")
+	o.Action("This deletes the macOS account " + f.Account + " and its home folder " + f.HomeDir + ". It cannot be undone. No backup is made: copy what you need first.")
 	// A quit (q) is "not confirmed", exit 2, like any answer that is not the word:
 	// nothing was changed, and a script cannot tell a quit from a refusal.
 	a, err := askWord(h, "Delete the account "+f.Account+"?")
@@ -543,8 +545,21 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		o.Note("whr: cannot record the offboard result: %s", oneLine(err.Error()))
 		code = exitcode.Error
 	}
+	o.ui().Final(finalOf(f, code, lg.Path))
 	o.Note("%s", Unverified)
 	return code
+}
+
+// finalOf is the closing summary of a delete run.
+func finalOf(f Facts, code int, logPath string) render.Final {
+	fin := render.Final{LogPath: logPath}
+	if code == exitcode.OK {
+		fin.Changed = []string{"Deleted the account " + f.Account + " and its home folder."}
+		return fin
+	}
+	fin.Changed = []string{"Check the lines marked FAIL above: the delete may be partial."}
+	fin.Todo = []render.FinalTodo{{Text: "Look at the account again.", Cmd: "whr offboard host"}}
+	return fin
 }
 
 // WordAsker is a Host that can ask for a typed word (the terminal does, through
