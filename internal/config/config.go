@@ -701,7 +701,7 @@ func (c *Config) Validate() error {
 		secrets["agent_api_key_env_file"] = c.AgentAPIKeyEnvFile
 	}
 	for i, cl := range c.APIClients {
-		secrets[fmt.Sprintf("api_clients[%d].token_file", i)] = cl.TokenFile
+		secrets[fmt.Sprintf("api_clients[%d].token_file (client %q)", i, cl.Name)] = cl.TokenFile
 	}
 	if c.BotSigningKeyFile != "" {
 		secrets["bot_signing_key_file"] = c.BotSigningKeyFile
@@ -758,7 +758,7 @@ func (c *Config) Validate() error {
 	if len(problems) == 0 {
 		return nil
 	}
-	sort.Strings(problems)
+	sort.Slice(problems, func(i, j int) bool { return naturalLess(problems[i], problems[j]) })
 	return &Error{Problems: problems}
 }
 
@@ -767,8 +767,42 @@ func sortedKeys[V any](m map[string]V) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool { return naturalLess(keys[i], keys[j]) })
 	return keys
+}
+
+// naturalLess orders strings with a run of digits by its number, so
+// api_clients[2] comes before api_clients[10].
+func naturalLess(a, b string) bool {
+	for a != "" && b != "" {
+		if isDigit(a[0]) && isDigit(b[0]) {
+			na, nb := digitRun(a), digitRun(b)
+			ta, tb := strings.TrimLeft(a[:na], "0"), strings.TrimLeft(b[:nb], "0")
+			if len(ta) != len(tb) {
+				return len(ta) < len(tb)
+			}
+			if ta != tb {
+				return ta < tb
+			}
+			a, b = a[na:], b[nb:]
+			continue
+		}
+		if a[0] != b[0] {
+			return a[0] < b[0]
+		}
+		a, b = a[1:], b[1:]
+	}
+	return len(a) < len(b)
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+func digitRun(s string) int {
+	n := 0
+	for n < len(s) && isDigit(s[n]) {
+		n++
+	}
+	return n
 }
 
 // within reports whether path is dir or lies below it. It compares directories

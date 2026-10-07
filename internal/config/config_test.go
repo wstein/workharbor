@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -513,5 +515,14 @@ func TestDurationBudgetValidation(t *testing.T) {
 				t.Fatalf("invalid duration accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestNaturalLessOrdersIndexesNumerically(t *testing.T) {
+	got := []string{"api_clients[10]: x", "api_clients[2]: x", "api_clients[1]: x", "api_token_file: x"}
+	sort.Slice(got, func(i, j int) bool { return naturalLess(got[i], got[j]) })
+	want := []string{"api_clients[1]: x", "api_clients[2]: x", "api_clients[10]: x", "api_token_file: x"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }

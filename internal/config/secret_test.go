@@ -307,3 +307,18 @@ func TestAPIClientFilesAreCheckedLikeTheOtherSecrets(t *testing.T) {
 		t.Errorf("a world-readable client file = %v", err)
 	}
 }
+
+func TestAPIClientFileErrorsNameTheClientAndSortNumerically(t *testing.T) {
+	r := newRig(t)
+	for i := range 11 {
+		r.cfg.APIClients = append(r.cfg.APIClients, APIClient{Name: "c" + string(rune('a'+i)), TokenFile: filepath.Join(r.dir, "missing", string(rune('a'+i)))})
+	}
+	_, err := r.parse(t)
+	got := problems(err)
+	if !strings.Contains(got, `api_clients[2].token_file (client "cc")`) {
+		t.Fatalf("problems do not name the client: %q", got)
+	}
+	if strings.Index(got, "api_clients[2].") > strings.Index(got, "api_clients[10].") {
+		t.Errorf("[10] sorts before [2]: %q", got)
+	}
+}
