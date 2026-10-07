@@ -131,6 +131,18 @@ func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 	if t.readSecret != nil {
 		read = t.readSecret
 	}
+	if c.SecretConfirm {
+		// show the host's password rules first; silent when pwpolicy does not say
+		if out, err := t.Output(ctx, "pwpolicy", "-getaccountpolicies"); err == nil {
+			lang := os.Getenv("LC_ALL")
+			if lang == "" {
+				lang = os.Getenv("LANG")
+			}
+			if d := doctor.PolicyDescription(out, lang); d != "" {
+				fmt.Fprintln(t.Err, "Password rules of this Mac: "+d)
+			}
+		}
+	}
 	for attempt := 1; ; attempt++ {
 		pw, err := read(c.SecretPrompt)
 		if err != nil {

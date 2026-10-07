@@ -94,3 +94,23 @@ func TestRunNewPasswordMismatchStopsAfterThree(t *testing.T) {
 		t.Errorf("want a fatal stop, got %v", err)
 	}
 }
+
+// The policy hint comes from `pwpolicy`; a fake one on PATH stands in. The
+// hint is shown once before the first prompt and nothing breaks without it.
+func TestRunNewPasswordShowsThePolicyHint(t *testing.T) {
+	dir := t.TempDir()
+	fake := "#!/bin/sh\necho 'Getting global account policies'\ncat <<'EOF'\n<?xml version=\"1.0\"?><plist><dict><key>policyContentDescription</key><dict><key>en</key><string>Four characters or more.</string></dict></dict></plist>\nEOF\n"
+	if err := os.WriteFile(filepath.Join(dir, "pwpolicy"), []byte(fake), 0o700); err != nil { //nolint:gosec // a fake tool in a temp dir
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	var b strings.Builder
+	h := Terminal{Err: &b, readSecret: func(string) (string, error) { return "same-fake-value", nil }}
+	if err := h.Run(context.Background(), doctor.Cmd{Argv: []string{"/usr/bin/true"}, SecretPrompt: "pw", SecretConfirm: true}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(b.String(), "Four characters or more.") != 1 {
+		t.Errorf("want the hint once: %q", b.String())
+	}
+}
