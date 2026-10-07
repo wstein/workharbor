@@ -29,7 +29,11 @@ func (st *state) startRunLog(env *SetupEnv, command, path string, verbose bool) 
 	if !explicit {
 		path = runlog.Path("", st.env.Getenv("HOME"), command, time.Now())
 	}
-	lg, err := runlog.Open(path)
+	open := runlog.Open
+	if !explicit {
+		open = runlog.OpenDefault
+	}
+	lg, err := open(path)
 	if err != nil && !explicit {
 		// the default place is not writable: the run goes on, without a log
 		fmt.Fprintf(st.env.Stderr, "note: no run log: %s\n", clean(err.Error()))

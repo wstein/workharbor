@@ -217,3 +217,36 @@ func TestOpenAcceptsAnOwnFile(t *testing.T) {
 	}
 	_ = l.Close()
 }
+
+func TestOpenDefaultTightensAWiderLogsDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "logs")
+	if err := os.Mkdir(dir, 0o755); err != nil { //nolint:gosec // a wide mode is the point
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // a wide mode is the point
+		t.Fatal(err)
+	}
+	l, err := OpenDefault(filepath.Join(dir, "setup-x.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = l.Close()
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o700 {
+		t.Errorf("logs dir mode %v, want 0700", fi.Mode().Perm())
+	}
+}
+
+func TestOpenLeavesAnExplicitDirAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // a wide mode is the point
+		t.Fatal(err)
+	}
+	l, err := Open(filepath.Join(dir, "x.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = l.Close()
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o755 {
+		t.Errorf("an explicit --log-file's directory changed to %v", fi.Mode().Perm())
+	}
+}

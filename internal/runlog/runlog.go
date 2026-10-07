@@ -79,6 +79,22 @@ func Open(path string) (*Log, error) {
 // --log-file that would let another user steer what root appends to and chmods.
 func ownerOK(fileUID, euid uint32) bool { return euid != 0 || fileUID == euid }
 
+// OpenDefault opens the log at the fixed per-run path: Open, after the logs
+// directory (which may exist from an older run with a wider mode) is tightened
+// to 0700. An explicit --log-file uses Open, which never touches its directory.
+func OpenDefault(path string) (*Log, error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	if fi, err := os.Lstat(dir); err == nil && fi.IsDir() && fi.Mode().Perm() != 0o700 {
+		if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // a directory needs the x bit
+			return nil, err
+		}
+	}
+	return Open(path)
+}
+
 // Path is where the log is; empty for a nil log.
 func (l *Log) Path() string {
 	if l == nil {
