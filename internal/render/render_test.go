@@ -179,12 +179,12 @@ func TestSplitToolSeparatesWhrsReasonFromTheToolsRawText(t *testing.T) {
 func TestToolWriterIndentsEveryLineAndNeverHoldsAPromptBack(t *testing.T) {
 	var b bytes.Buffer
 	w := NewToolWriter(&b, Detect(false, "", false))
-	_, _ = w.Write([]byte("2026 log one\nPass"))
-	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Pass" {
+	_, _ = w.Write([]byte("2026 log one\nCont"))
+	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Cont" {
 		t.Errorf("a partial line (a prompt) must appear at once: %q", got)
 	}
-	_, _ = w.Write([]byte("word: \nnext\n"))
-	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Password: \n    | next\n" {
+	_, _ = w.Write([]byte("inue? \nnext\n"))
+	if got := b.String(); got != "    tool output:\n    | 2026 log one\n    | Continue? \n    | next\n" {
 		t.Errorf("got %q", got)
 	}
 	w.End()
@@ -300,6 +300,36 @@ func TestDetectEnvColourRules(t *testing.T) {
 		}
 		if got := strings.Contains(scene(st), "\x1b"); got != c.want {
 			t.Errorf("%s: escape byte present = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Issue #378: a tool's prompt for a secret is never relayed, whole or split
+// across writes, with or without its newline; the text typed after it is not
+// the relay's to show either.
+func TestToolWriterDropsSecretPrompts(t *testing.T) {
+	for name, chunks := range map[string][]string{
+		"whole":      {"hello\nUser password:"},
+		"newline":    {"hello\nPassword:\n"},
+		"split":      {"hello\nUser pass", "word: "},
+		"typed echo": {"hello\nUser password:", "\n"},
+		"passphrase": {"hello\nEnter passphrase for key '/k': "},
+	} {
+		var b strings.Builder
+		tw := NewToolWriter(&b, Style{})
+		for _, c := range chunks {
+			_, _ = tw.Write([]byte(c))
+		}
+		tw.End()
+		got := b.String()
+		if strings.Contains(strings.ToLower(got), "password:") || strings.Contains(got, "passphrase for") {
+			t.Errorf("%s: a secret prompt was relayed: %q", name, got)
+		}
+		if !strings.Contains(got, NeutralPromptLine) || !strings.Contains(got, "| hello\n") {
+			t.Errorf("%s: want the neutral line and the other output: %q", name, got)
+		}
+		if strings.Contains(got, "|\n") || strings.HasSuffix(got, "|\n\n") {
+			t.Errorf("%s: stray empty line: %q", name, got)
 		}
 	}
 }

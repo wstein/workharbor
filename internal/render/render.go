@@ -253,7 +253,18 @@ type ToolWriter struct {
 	started bool
 	atStart bool
 	pend    []byte // incomplete trailing UTF-8 of the last Write
+	line    string // text of the current line so far, to spot a split prompt
+	skipNL  bool   // the newline that follows a dropped prompt is dropped too
 }
+
+// secretPrompt matches a line a tool prints to ask for a secret ("Password:",
+// "User password:", "Enter passphrase for key:").
+var secretPrompt = regexp.MustCompile(`(?i)\b(pass(word|phrase|code)|secret|pin)\b[^:]*:\s*$`)
+
+// NeutralPromptLine replaces a prompt that asks for a secret. whr never relays
+// such a prompt: it would invite typing a secret into a terminal whr does not
+// control, and the child is not given the terminal for it.
+const NeutralPromptLine = "(a prompt for a secret is not shown: whr asks for passwords itself, without echo)"
 
 // NewToolWriter returns a ToolWriter on w.
 func NewToolWriter(w io.Writer, s Style) *ToolWriter { return &ToolWriter{w: w, s: s, atStart: true} }
@@ -293,6 +304,31 @@ func (t *ToolWriter) write(p []byte) error {
 			continue
 		}
 		var out string
+		nl := strings.HasSuffix(seg, "\n")
+		if t.skipNL {
+			t.skipNL = false
+			if strings.TrimRight(seg, "\r\n") == "" {
+				continue
+			}
+		}
+		if t.line += strings.TrimRight(seg, "\r\n"); secretPrompt.MatchString(t.line) {
+			if !t.started {
+				out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
+				t.started = true
+			}
+			if !t.atStart {
+				out += "\n"
+			}
+			out += "    " + t.s.paint(RoleTool, mark+" "+NeutralPromptLine) + "\n"
+			t.line, t.atStart, t.skipNL = "", true, !nl
+			if _, err := io.WriteString(t.w, out); err != nil {
+				return err
+			}
+			continue
+		}
+		if nl {
+			t.line = ""
+		}
 		if !t.started {
 			out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
 			t.started = true
