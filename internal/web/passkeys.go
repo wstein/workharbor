@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/passkey"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
@@ -269,7 +270,7 @@ func (s *Server) stepUpFinish(w http.ResponseWriter, r *http.Request, sess Sessi
 		return
 	}
 	s.finishStepUp(w, r, sess, passkey.Binding{Decision: string(d.ID), SHA: bindsTo(d)}, option+"|"+reason, func() (string, error) {
-		_, err := s.be.Answer(r.Context(), d.ID, domain.Response{By: "web+passkey", Option: option, Reason: reason, SHA: d.SHA, At: s.opt.Now()})
+		_, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction(actorOf(sess), "web")), d.ID, domain.Response{By: "web+passkey", Option: option, Reason: reason, SHA: d.SHA, At: s.opt.Now()})
 		if err != nil {
 			return "", err
 		}

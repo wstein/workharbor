@@ -9,6 +9,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 )
 
 // holdLaunchAgent blocks every Resume of the agent until the test releases it,
@@ -30,9 +31,9 @@ func (h *holdLaunchAgent) Resume(ctx context.Context, spec agent.StartSpec, id s
 // holdLaunch makes the rig's launches block until the returned agent opens.
 func (r *rig) holdLaunch() *holdLaunchAgent {
 	r.t.Helper()
-	h := &holdLaunchAgent{Adapter: r.svc.ag, entered: make(chan struct{}), release: make(chan struct{})}
+	h := &holdLaunchAgent{Adapter: r.agent, entered: make(chan struct{}), release: make(chan struct{})}
 	r.t.Cleanup(h.open)
-	r.svc.ag = h
+	r.svc.ag = initiation.New(h, r.store)
 	return h
 }
 
@@ -75,10 +76,10 @@ func TestAResumeIsNotStalledByARecoveryThatIsLaunching(t *testing.T) {
 	must(t, r.svc.Pause(bg, "t1"))
 	r.agent.Block() // the launched agent keeps running; an unscripted fake finishes at once and stops the run
 	h := r.holdLaunch()
-	rec := async(func() error { var rep Report; return r.svc.recover(bg, "t1", "r1", &rep) })
+	rec := async(func() error { var rep Report; return r.svc.recover(userContext(), "t1", "r1", &rep) })
 	waitFor(t, h.entered, "the recovery to reach its launch")
 
-	res := async(func() error { _, err := r.svc.Resume(bg, "t1"); return err })
+	res := async(func() error { _, err := r.svc.Resume(userContext(), "t1"); return err })
 	var c *domain.ConflictError
 	if err := waitFor(t, res, "the resume not to wait for the launch"); !errors.As(err, &c) {
 		t.Errorf("resume = %v, want a conflict", err)
@@ -98,11 +99,11 @@ func TestARecoveryIsNotStalledByAResumeThatIsLaunching(t *testing.T) {
 	must(t, r.svc.Pause(bg, "t1"))
 	gate := newGateRuntime(t, r.rt.Adapter)
 	r.svc.rt = gate
-	rec := async(func() error { var rep Report; return r.svc.recover(bg, "t1", "r1", &rep) })
+	rec := async(func() error { var rep Report; return r.svc.recover(userContext(), "t1", "r1", &rep) })
 	waitFor(t, gate.entered, "the recovery to reach the environment's exec")
 
 	h := r.holdLaunch()
-	res := async(func() error { _, err := r.svc.Resume(bg, "t1"); return err })
+	res := async(func() error { _, err := r.svc.Resume(userContext(), "t1"); return err })
 	waitFor(t, h.entered, "the resume to reach its launch")
 	gate.open()
 	if err := waitFor(t, rec, "the recovery not to wait for the launch"); err != nil {
@@ -126,15 +127,15 @@ func TestAnAnswerThatIsLaunchingStallsNeitherResumeNorRecovery(t *testing.T) {
 	r.agent.Block() // the answer's agent keeps running, so the run stays running and attached
 	h := r.holdLaunch()
 	ans := async(func() error {
-		return r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now})
+		return r.svc.AnswerDecision(userContext(), "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now})
 	})
 	waitFor(t, h.entered, "the answer to reach its launch")
 
-	res := async(func() error { _, err := r.svc.Resume(bg, "t1"); return err })
+	res := async(func() error { _, err := r.svc.Resume(userContext(), "t1"); return err })
 	if err := waitFor(t, res, "the resume not to wait for the launch"); err == nil {
 		t.Error("a resume during an answer's launch was accepted")
 	}
-	rec := async(func() error { var rep Report; return r.svc.recover(bg, "t1", "r1", &rep) })
+	rec := async(func() error { var rep Report; return r.svc.recover(userContext(), "t1", "r1", &rep) })
 	must(t, waitFor(t, rec, "the recovery not to wait for the launch"))
 	h.open()
 	must(t, waitFor(t, ans, "the answer to finish"))

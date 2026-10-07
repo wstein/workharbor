@@ -169,7 +169,7 @@ func (p *pubRig) envState() domain.EnvState {
 }
 
 func (p *pubRig) allow(sha string) error {
-	return p.svc.AnswerDecision(bg, "review-1", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: sha, At: p.clock.now})
+	return p.svc.AnswerDecision(userContext(), "review-1", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: sha, At: p.clock.now})
 }
 
 // remoteHas reports whether the remote has the topic branch.
@@ -299,7 +299,7 @@ func TestFollowUpRoundPushesAsAFastForward(t *testing.T) {
 	if len(second.Commits) != 1 {
 		t.Fatalf("follow-up commits = %v, want only the new one", second.Commits)
 	}
-	must(t, p.svc.AnswerDecision(bg, "review-2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: second.SHA, At: p.clock.now}))
+	must(t, p.svc.AnswerDecision(userContext(), "review-2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: second.SHA, At: p.clock.now}))
 	if _, err := p.pub.Publish(bg, "t1", "review-2", "Add a and b", "body"); err != nil {
 		t.Fatalf("the follow-up publish = %v, want a fast-forward push", err)
 	}

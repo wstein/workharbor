@@ -16,6 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/skillset"
@@ -109,7 +110,7 @@ type Config struct {
 type Service struct {
 	store *store.Store
 	rt    runtime.Adapter
-	ag    agent.Adapter
+	ag    *initiation.Gate
 	clock Clock
 	cfg   Config
 
@@ -263,7 +264,7 @@ func New(st *store.Store, rt runtime.Adapter, ag agent.Adapter, clock Clock, cfg
 	if cfg.ReadyInterval <= 0 {
 		cfg.ReadyInterval = 100 * time.Millisecond
 	}
-	s := &Service{store: st, loadTask: st.LoadTask, rt: rt, ag: ag, clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
+	s := &Service{store: st, loadTask: st.LoadTask, rt: rt, ag: initiation.New(ag, st), clock: clock, cfg: cfg, sessions: map[domain.ID]*slot{}, approvals: map[domain.ID]chan agent.Approval{}}
 	s.bg, s.bgStop = context.WithCancel(context.Background())
 	if cfg.Notifier != nil {
 		// A slow relay must never hold up a reconcile pass or a session
@@ -573,6 +574,9 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 	var sl *slot
 	unlock := func() {}
 	if resumes {
+		if !initiation.Valid(ctx) {
+			return initiation.ErrNotInitiated
+		}
 		if err := s.durationAdmission(ctx, row.TaskID, row.RunID); err != nil {
 			return err
 		}
@@ -630,6 +634,7 @@ func (s *Service) AnswerDecision(ctx context.Context, id domain.ID, r domain.Res
 		}
 		return err
 	}
+	ctx = initiation.DecisionAnswer(ctx, id)
 	if row.Cause == domain.CauseFeatureSource && row.Feature != "" {
 		// The run continues even if keeping the answer failed: the Decision is closed.
 		keepErr := s.keepFeatureAnswer(ctx, *row, r.Option)

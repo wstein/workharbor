@@ -362,24 +362,6 @@ func (s *Service) cancelStart(run domain.ID) {
 	}
 }
 
-// continueAllEgress is continueEgress for every run that waits: the reconciler
-// calls it, because a request that expired opens the way without an answer.
-func (s *Service) continueAllEgress(ctx context.Context) []error {
-	s.mu.Lock()
-	waits := make(map[domain.ID]domain.ID, len(s.egressWaits)) // run -> task
-	for run, w := range s.egressWaits {
-		waits[run] = w.task
-	}
-	s.mu.Unlock()
-	var errs []error
-	for run, task := range waits {
-		if err := s.continueEgress(ctx, task, run); err != nil {
-			errs = append(errs, fmt.Errorf("run %s: %w", run, err))
-		}
-	}
-	return errs
-}
-
 // RepoEnvironment is a repository's environment as read from its default branch,
 // with the means to make its image. The supervisor reads it in its own copy,
 // never in a workspace (D38).

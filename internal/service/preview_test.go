@@ -61,7 +61,7 @@ func TestAPreviewOpensOnlyADeclaredPortOfARunningEnvironment(t *testing.T) {
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	ws, a := r.create("run")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestAPreviewEndsWhenItsEnvironmentStops(t *testing.T) {
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	ws, a := r.create("run")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestPreviewsSayWhenTheRuntimeCannotReachAPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, a := r.create("run")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestAPreviewEndsWithTheWebSessionThatOpenedIt(t *testing.T) {
 	r := newWsRig(t)
 	p := r.withPreviewPorts()
 	_, a := r.create("run")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}

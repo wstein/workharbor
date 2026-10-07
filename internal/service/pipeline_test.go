@@ -90,14 +90,14 @@ func (f *flowRig) question(cause domain.DecisionCause) (domain.Decision, bool) {
 }
 
 func (f *flowRig) approve(d domain.Decision) error {
-	_, err := f.ws.Answer(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now})
+	_, err := f.ws.Answer(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now})
 	return err
 }
 
 func (f *flowRig) reconcileNow() Report {
 	f.t.Helper()
 	f.svc.markEnvStarted(f.env)
-	rep := f.reconcile()
+	rep := f.reconcileAndResume()
 	f.svc.Wait()
 	return rep
 }
@@ -149,7 +149,7 @@ func TestTheEnvironmentIsBusyFromTheStopUntilThePrepareEnds(t *testing.T) {
 	if err := f.svc.checkEnvFree(bg, f.env, ""); !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
 		t.Errorf("a run start in the held environment = %v, want environment busy", err)
 	}
-	if _, _, err := f.ws.StartTask(bg, StartRequest{AgentID: "a1", Issue: "#2"}); !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
+	if _, _, err := f.ws.StartTask(userContext(), StartRequest{AgentID: "a1", Issue: "#2"}); !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
 		t.Errorf("a second task on the agent = %v, want environment busy", err)
 	}
 	close(f.gate)
@@ -175,7 +175,7 @@ func TestTheEnvironmentIsBusyWhileASlowCheckRuns(t *testing.T) {
 	f.finishRun2()
 	<-started
 	var c *domain.ConflictError
-	if _, _, err := f.ws.StartTask(bg, StartRequest{AgentID: "a1", Issue: "#2"}); !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
+	if _, _, err := f.ws.StartTask(userContext(), StartRequest{AgentID: "a1", Issue: "#2"}); !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy {
 		t.Errorf("a second task on the agent during a slow check = %v, want environment busy", err)
 	}
 	close(release)
@@ -258,7 +258,7 @@ func TestARefusedPrepareRaisesPrepareFailedWithTheOutputAsData(t *testing.T) {
 		t.Errorf("a pass prepared again under an open question: %+v", rep)
 	}
 	f.onCheck = func(runtime.ExecRequest) (string, int) { return "ok\n", 0 }
-	if _, err := f.ws.Answer(bg, q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
+	if _, err := f.ws.Answer(userContext(), q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
 		t.Fatal(err)
 	}
 	f.svc.Wait()
@@ -308,7 +308,7 @@ func TestAnAllowPublishesAndADenyPublishesNothing(t *testing.T) {
 	}
 
 	// An allow for another commit is a denial and publishes nothing.
-	_, err := f.ws.Answer(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: strings.Repeat("f", 40), At: f.clock.now})
+	_, err := f.ws.Answer(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: strings.Repeat("f", 40), At: f.clock.now})
 	if !errors.Is(err, domain.ErrSHAMismatch) {
 		t.Fatalf("allow for another SHA = %v", err)
 	}
@@ -321,7 +321,7 @@ func TestAnAllowPublishesAndADenyPublishesNothing(t *testing.T) {
 	g := newFlowRig(t)
 	g.reconcileNow()
 	d2, _ := g.review()
-	if _, err := g.ws.Answer(bg, d2.ID, domain.Response{By: "werner", Option: domain.AnswerDeny, At: g.clock.now}); err != nil {
+	if _, err := g.ws.Answer(userContext(), d2.ID, domain.Response{By: "werner", Option: domain.AnswerDeny, At: g.clock.now}); err != nil {
 		t.Fatal(err)
 	}
 	g.svc.Wait()
@@ -357,7 +357,7 @@ func TestARestartBetweenTheApprovalAndThePushLosesNothing(t *testing.T) {
 	d, _ := f.review()
 	// The answer is recorded, then the supervisor dies before the publish starts:
 	// the service call alone (no Workspaces.Answer, so nothing is started).
-	must(t, f.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
+	must(t, f.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
 	if f.remoteHas() {
 		t.Fatal("pushed without the pass")
 	}
@@ -380,7 +380,7 @@ func TestARestartBetweenThePushAndRecordPushedLosesNothing(t *testing.T) {
 	f := newFlowRig(t)
 	f.reconcileNow()
 	d, _ := f.review()
-	must(t, f.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
+	must(t, f.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
 	// The push went through and the process died before RecordPushed: the remote
 	// holds the commit, the task does not know.
 	g := f.pub.cfg.Guard.For(policy.Context{PrivateData: true, Egress: true})
@@ -403,7 +403,7 @@ func TestAnApprovalDoesNotCoverANewerRevision(t *testing.T) {
 	f := newFlowRig(t)
 	f.reconcileNow()
 	d, _ := f.review()
-	must(t, f.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
+	must(t, f.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
 	// Before it is published the agent works again and commits: a newer revision
 	// is prepared, and the earlier approval must not cover it.
 	must(t, os.WriteFile(filepath.Join(f.checkout, "b.txt"), []byte("b\n"), 0o600))
@@ -574,7 +574,7 @@ func TestARefusalEndsThePublishWithPublishFailed(t *testing.T) {
 			}
 			// Retry completes it under the same approval once the fault is fixed.
 			fp.set(nil)
-			if _, err := f.ws.Answer(bg, q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
+			if _, err := f.ws.Answer(userContext(), q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
 				t.Fatal(err)
 			}
 			f.svc.Wait()
@@ -591,7 +591,7 @@ func TestACancelEndsAnOutstandingPublish(t *testing.T) {
 	f := newFlowRig(t)
 	f.reconcileNow()
 	d, _ := f.review()
-	must(t, f.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
+	must(t, f.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: d.SHA, At: f.clock.now}))
 	must(t, f.svc.Cancel(bg, "t1"))
 	if rep := f.reconcileNow(); len(rep.Published) != 0 || f.remoteHas() {
 		t.Fatalf("a cancelled task was published: %+v", rep)

@@ -54,7 +54,7 @@ func TestPauseStopsTheAgentSupersedesWhatItAskedAndKeepsTheEnvironment(t *testin
 		t.Errorf("after the session ended: %s", r.runState())
 	}
 	// an answer to the superseded approval is refused (D23)
-	if err := r.svc.AnswerDecision(bg, "ap1", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), "ap1", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
 		t.Error("an answer to a superseded approval was accepted")
 	}
 	// a second pause, or a pause of a task without a run, is a conflict
@@ -81,7 +81,7 @@ func TestResumeRelaunchesFromTheSessionWithTheBriefing(t *testing.T) {
 	r.svc.Wait()
 	r.agent.Block()
 
-	run, err := r.svc.Resume(bg, "t1")
+	run, err := r.svc.Resume(userContext(), "t1")
 	if err != nil || run != "r1" {
 		t.Fatalf("resume = %q, %v", run, err)
 	}
@@ -96,7 +96,7 @@ func TestResumeRelaunchesFromTheSessionWithTheBriefing(t *testing.T) {
 	}
 	// a running run is not resumed twice
 	var c *domain.ConflictError
-	if _, err := r.svc.Resume(bg, "t1"); !errors.As(err, &c) {
+	if _, err := r.svc.Resume(userContext(), "t1"); !errors.As(err, &c) {
 		t.Errorf("resuming a running run: %v", err)
 	}
 	must(t, r.svc.Cancel(bg, "t1"))
@@ -114,7 +114,7 @@ func TestResumeIsRefusedWhileALoginQuestionIsOpen(t *testing.T) {
 	must(t, err)
 	before := len(r.agent.Specs)
 
-	_, err = r.svc.Resume(bg, "t1")
+	_, err = r.svc.Resume(userContext(), "t1")
 	var c *domain.ConflictError
 	if !errors.As(err, &c) || c.Rule != domain.RuleDecisionOpen {
 		t.Fatalf("resume = %v", err)
@@ -130,7 +130,7 @@ func TestResumeOfAForgottenSessionFailsTheRun(t *testing.T) {
 	r := newRig(t, withSession("gone"))
 	must(t, r.svc.Pause(bg, "t1"))
 	r.svc.Wait()
-	if _, err := r.svc.Resume(bg, "t1"); !errors.Is(err, agent.ErrNoSession) {
+	if _, err := r.svc.Resume(userContext(), "t1"); !errors.Is(err, agent.ErrNoSession) {
 		t.Fatalf("resume = %v", err)
 	}
 	if r.runState() != domain.RunFailed {
@@ -235,7 +235,7 @@ func TestAStopBeforeTheSessionIsUpStopsItOnceAttached(t *testing.T) {
 				t.Fatal(err)
 			}
 			r.agent.Block()
-			sess, err := r.agent.Resume(bg, spec(), r.session)
+			sess, err := r.agent.Resume(userContext(), spec(), r.session)
 			must(t, err)
 			r.svc.attach("t1", "r1", sl, sess)
 
@@ -270,7 +270,7 @@ func TestConcurrentResumesStartTheAgentOnce(t *testing.T) {
 	const n = 6
 	errs := make(chan error, n)
 	for range n {
-		go func() { _, err := r.svc.Resume(bg, "t1"); errs <- err }()
+		go func() { _, err := r.svc.Resume(userContext(), "t1"); errs <- err }()
 	}
 	ok := 0
 	for range n {

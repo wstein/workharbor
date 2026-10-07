@@ -21,6 +21,7 @@ import (
 	"github.com/wstein/workharbor/internal/forge/forgetest"
 	"github.com/wstein/workharbor/internal/gittest"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
@@ -321,7 +322,7 @@ func TestStartTaskRunsTheAgentInItsWorktree(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("run")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "write the manual"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7", Prompt: "write the manual"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,10 +349,10 @@ func TestASecondAgentInTheSameEnvironmentIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: first.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: first.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
+	_, _, err = r.ws.StartTask(userContext(), StartRequest{AgentID: second.ID, Issue: "#2"})
 	var c *domain.ConflictError
 	if !errors.As(err, &c) || c.Rule != domain.RuleEnvBusy || !strings.Contains(err.Error(), "several agents at once are not supported") {
 		t.Fatalf("err = %v", err)
@@ -375,7 +376,7 @@ func TestTwoStartsAtOnceOnlyOneWins(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _, errs[i] = r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: fmt.Sprintf("#%d", i)})
+			_, _, errs[i] = r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: fmt.Sprintf("#%d", i)})
 		}()
 	}
 	wg.Wait()
@@ -398,7 +399,7 @@ func TestAFailedAgentStartOpensADecisionAndFreesTheEnvironment(t *testing.T) {
 	r := newWsRig(t)
 	w, a := r.create("failstart")
 	r.failAg = true
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err == nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err == nil {
 		t.Fatal("an agent that cannot start was reported as started")
 	}
 	live, err := r.store.LiveRuns(bg, w.EnvID)
@@ -406,7 +407,7 @@ func TestAFailedAgentStartOpensADecisionAndFreesTheEnvironment(t *testing.T) {
 		t.Errorf("live runs after a failed start: %+v, %v", live, err)
 	}
 	r.failAg = false
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#2"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#2"}); err != nil {
 		t.Errorf("the next start: %v", err)
 	}
 }
@@ -437,7 +438,7 @@ func TestRebaseRunsInTheEnvironmentAndReportsAConflict(t *testing.T) {
 	}
 
 	// Not under a running agent.
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.ws.Rebase(bg, a.ID); !errors.As(err, &c) || c.Rule != domain.RuleAgentActive {
@@ -456,7 +457,7 @@ func TestTheSessionOutlivesTheContextThatStartedIt(t *testing.T) {
 	r := newWsRig(t) // blocking sessions
 	_, a := r.create("outlive")
 	ctx, cancel := context.WithCancel(context.Background())
-	task, run, err := r.ws.StartTask(ctx, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(initiation.With(ctx, initiation.UserAction("test-user", "api")), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +471,7 @@ func TestTheSessionOutlivesTheContextThatStartedIt(t *testing.T) {
 		t.Errorf("run = %s, want running", v.Runs[0].State)
 	}
 	// An answer that resumes it does the same.
-	if _, err := r.svc.Say(bg, task, "still there?"); err != nil {
+	if _, err := r.svc.Say(userContext(), task, "still there?"); err != nil {
 		t.Errorf("the session cannot be spoken to: %v", err)
 	}
 }
@@ -481,7 +482,7 @@ func TestTheAgentIsStartedWithTheProxyAndItsHome(t *testing.T) {
 	r := newWsRig(t)
 	r.egress = true
 	_, a := r.create("proxyenv")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	spec := r.agent.Specs[0]
@@ -544,7 +545,7 @@ func TestRemoveAgentAndWorkspace(t *testing.T) {
 		t.Errorf("a workspace with agents = %v", err)
 	}
 	// An agent with an unfinished task is not removed; the other one is.
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,7 +588,7 @@ func TestTasksAndShowCarryTheAgentAsWorkspaceSlashRole(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("named")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +641,7 @@ func TestATaskKeepsThePresetItStartedUnder(t *testing.T) {
 	current := "published"
 	r.ws.cfg.Workflow = func(string) string { return current }
 	_, a := r.create("keep")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -700,7 +701,7 @@ func TestAnAgentsToolsWriteTheirOutputToTheBuildVolumeNotTheCheckout(t *testing.
 	if want := "mkdir -p /var/whr/build/docs"; !strings.Contains(r.logs(w.EnvID), want) {
 		t.Errorf("the agent's build directory was not made (%q); the log:\n%s", want, r.logs(w.EnvID))
 	}
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(r.agent.Specs) != 1 {
@@ -726,7 +727,7 @@ func TestWithoutABuildVolumeNothingIsRelocated(t *testing.T) {
 	if strings.Contains(r.logs(w.EnvID), "mkdir") {
 		t.Errorf("a build directory was made without a build volume:\n%s", r.logs(w.EnvID))
 	}
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, e := range r.agent.Specs[0].Env {
@@ -770,7 +771,7 @@ func TestARunRecordsHowManyFilesItsCheckoutTracksAndWarnsWhenItIsVeryLarge(t *te
 		r := newWsRig(t)
 		r.fake.TrackedFiles = tc.files
 		_, a := r.create("run")
-		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+		task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -802,7 +803,7 @@ func TestACountThatFailsIsReportedAndTheRunStartsAnyway(t *testing.T) {
 			return nil, "", 0, false
 		}
 		_, a := r.create("run")
-		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+		task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

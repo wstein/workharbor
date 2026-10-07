@@ -55,7 +55,7 @@ func TestTheBoardFollowsTheTaskAndNeedsYouComesFirst(t *testing.T) {
 		t.Fatalf("cards %+v, want one Needs you for wstein/workharbor#23 with the task link", cards)
 	}
 
-	must(t, r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, At: r.clock.now}))
 	<-res
 	r.svc.WaitBoard()
 	cards = fake.CardsSeen()
@@ -75,7 +75,7 @@ func TestAFailingBoardWriteNeverAffectsTheTask(t *testing.T) {
 
 	res := r.ask(bg, "ls")
 	d := r.openApproval()
-	must(t, r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerAllow, At: r.clock.now}))
 	if got := <-res; got.err != nil || !got.a.Allow {
 		t.Errorf("the agent was told %+v (%v): a board failure must not change the answer", got.a, got.err)
 	}

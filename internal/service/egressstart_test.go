@@ -65,7 +65,7 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 		t.Fatalf("the environment starts with the supervisor's hosts only: %v", base)
 	}
 
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,14 +90,14 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	}
 
 	// The first answer is not enough.
-	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err != nil {
+	if err := r.svc.AnswerDecision(userContext(), open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err != nil {
 		t.Fatal(err)
 	}
 	if r.agent.Started() != 0 {
 		t.Fatal("the agent started with a request still open")
 	}
 	// The last one starts it, with the allowed host in the sidecar and the denied one out.
-	if err := r.svc.AnswerDecision(bg, open[1].ID, domain.Response{Option: domain.AnswerDeny, By: "werner", At: t0}); err != nil {
+	if err := r.svc.AnswerDecision(userContext(), open[1].ID, domain.Response{Option: domain.AnswerDeny, By: "werner", At: t0}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return r.agent.Started() == 1 })
@@ -127,7 +127,7 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	if got := r.allowOf(w2.EnvID); !reflect.DeepEqual(got, []string{"api.anthropic.com", "proxy.golang.org"}) {
 		t.Errorf("a new workspace of the repository starts with %v", got)
 	}
-	task2, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a2.ID, Issue: "#8"})
+	task2, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a2.ID, Issue: "#8"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,14 +139,13 @@ func TestARunWaitsForItsEgressRequestsThenStartsWithTheAllowedHosts(t *testing.T
 	}
 }
 
-// An expired request is a denial for this run only: the run starts without the
-// host, and the host is asked again at the next start.
-func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
+// Expired requests do not authorize a start, even after repeated passes.
+func TestAnExpiredEgressRequestSendsNothing(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,28 +153,20 @@ func TestAnExpiredEgressRequestStartsTheRunWithoutTheHost(t *testing.T) {
 		t.Fatal("the run did not wait")
 	}
 	r.clock.now = t0.Add(domain.DefaultApprovalTimeout + time.Minute)
-	if _, err := r.svc.Reconcile(bg); err != nil {
+	for range 5 {
+		if _, err := r.svc.Reconcile(bg); err != nil {
+			t.Fatal(err)
+		}
+		if r.agent.Started() != 0 {
+			t.Fatal("expiry started the agent")
+		}
+	}
+	agg, err := r.store.LoadTask(bg, task)
+	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, func() bool { return r.agent.Started() == 1 })
-	if r.agent.Started() != 1 {
-		t.Fatalf("agent starts = %d: an expiry opens the way", r.agent.Started())
-	}
-	eventually(t, func() bool {
-		agg, _ := r.store.LoadTask(bg, task)
-		rn, _ := agg.Run(run)
-		return rn.State == domain.RunRunning
-	})
-	agg, _ := r.store.LoadTask(bg, task)
-	if rn, _ := agg.Run(run); rn.State != domain.RunRunning {
-		t.Errorf("run = %s", rn.State)
-	}
-	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
-		t.Errorf("an expiry allowed %v", allow)
-	}
-	env := devcontainer.Environment{Config: devcontainer.Config{EgressRequests: []string{"proxy.golang.org"}}}
-	if again, _ := r.svc.PendingEgress(bg, "wstein/workharbor", env, false); len(again) != 1 {
-		t.Errorf("the host is asked again at the next start: %+v", again)
+	if rn, _ := agg.Run(run); rn.State != domain.RunStarting {
+		t.Errorf("pending run = %s", rn.State)
 	}
 }
 
@@ -184,7 +175,7 @@ func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
 	r := newWsRig(t)
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +187,7 @@ func TestCancellingARunThatWaitsForEgressFreesItAndStartsNoAgent(t *testing.T) {
 		t.Error("the cancelled run still holds its wait or its slot")
 	}
 	// An answer to a request of a cancelled task is refused and starts nothing.
-	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
 		t.Error("an answer to a superseded request was accepted")
 	}
 	if r.agent.Started() != 0 {
@@ -220,7 +211,7 @@ func TestAnUnreadableRepositoryStartsTheRunAndAllowsNothing(t *testing.T) {
 		t.Fatalf("a workspace of an unreadable repository gets the default environment and reports it: %v", r.reported())
 	}
 	r.forget()
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 	if r.agent.Started() != 1 || len(r.reported()) != 1 {
@@ -259,7 +250,7 @@ func TestTheEnvironmentIsReadAtTheDefaultBranchNotTheIntegrationBranch(t *testin
 		return RepoEnvironment{}, errors.New("nothing to see")
 	}
 	_, a := r.create("docs-ws")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(read) == 0 {
@@ -284,7 +275,7 @@ func TestNoEnvironmentIsReadWhenTheDefaultBranchIsUnknown(t *testing.T) {
 		return RepoEnvironment{}, nil
 	}
 	_, a := r.create("docs-ws")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 	if called {

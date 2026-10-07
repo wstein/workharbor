@@ -24,8 +24,10 @@ const (
 type EventKind string
 
 const (
-	EventTaskState          EventKind = "task.state"
-	EventRunStarted         EventKind = "run.started"
+	EventTaskState  EventKind = "task.state"
+	EventRunStarted EventKind = "run.started"
+	// EventRunInitiated records the spent human capability before an agent send.
+	EventRunInitiated       EventKind = "run.initiated"
 	EventRunState           EventKind = "run.state"
 	EventRunSession         EventKind = "run.session"
 	EventEnvState           EventKind = "env.state"

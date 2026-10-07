@@ -7,6 +7,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -46,6 +47,9 @@ func (s *Service) Pause(ctx context.Context, task domain.ID) error {
 // the run and open the retry-or-cancel question, as the answer to a question
 // that resumes does. It returns the run.
 func (s *Service) Resume(ctx context.Context, task domain.ID) (domain.ID, error) {
+	if !initiation.Valid(ctx) {
+		return "", initiation.ErrNotInitiated
+	}
 	// A failed read stops the resume: the gate must not fail open (#216).
 	agg, err := s.loadTask(ctx, task)
 	if err != nil {

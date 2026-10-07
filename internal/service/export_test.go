@@ -255,7 +255,7 @@ func TestFollowUpFromABundleIsAFastForwardAndRewritesAreRefused(t *testing.T) {
 	if len(second.Commits) != 1 {
 		t.Fatalf("follow-up commits = %v", second.Commits)
 	}
-	must(t, b.svc.AnswerDecision(bg, "review-2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: second.SHA, At: b.clock.now}))
+	must(t, b.svc.AnswerDecision(userContext(), "review-2", domain.Response{By: "werner", Option: domain.AnswerAllow, SHA: second.SHA, At: b.clock.now}))
 	if _, err := b.pub.Publish(bg, "t1", "review-2", "Add a and b", "body"); err != nil {
 		t.Fatalf("the follow-up publish = %v, want a fast-forward push", err)
 	}

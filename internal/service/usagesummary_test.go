@@ -25,11 +25,11 @@ func TestTheSummaryTotalsByAgentAndModel(t *testing.T) {
 	r := newWsRig(t)
 	_, a1 := r.create("one")
 	_, a2 := r.create("two")
-	t1, run1, err := r.ws.StartTask(bg, StartRequest{AgentID: a1.ID, Issue: "#1", Prompt: "x"})
+	t1, run1, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a1.ID, Issue: "#1", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t2, run2, err := r.ws.StartTask(bg, StartRequest{AgentID: a2.ID, Issue: "#2", Prompt: "x"})
+	t2, run2, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a2.ID, Issue: "#2", Prompt: "x"})
 	if err != nil {
 		t.Fatal(err)
 	}

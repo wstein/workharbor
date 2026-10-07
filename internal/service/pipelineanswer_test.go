@@ -16,7 +16,7 @@ func TestAnswersOfPrepareFailedAndPublishFailed(t *testing.T) {
 		r := newWsRigBlocking(t, false)
 		r.agent.Finish("done")
 		_, a := r.create("prep")
-		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+		task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 		must(t, err)
 		r.svc.Wait()
 		agg, _ := r.store.LoadTask(bg, task)
@@ -31,7 +31,7 @@ func TestAnswersOfPrepareFailedAndPublishFailed(t *testing.T) {
 		r := newWsRigBlocking(t, false)
 		r.agent.Finish("done")
 		_, a := r.create("pub")
-		task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+		task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 		must(t, err)
 		r.svc.Wait()
 		agg, _ := r.store.LoadTask(bg, task)
@@ -50,7 +50,7 @@ func TestAnswersOfPrepareFailedAndPublishFailed(t *testing.T) {
 	for name, setup := range map[string]func(*testing.T) (*wsRig, domain.Decision, domain.ID){"prepare_failed": prepare, "publish_failed": publish} {
 		t.Run(name+" rework", func(t *testing.T) {
 			r, d, task := setup(t)
-			run, err := r.ws.Answer(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerRework, At: r.svc.clock.Now()})
+			run, err := r.ws.Answer(userContext(), d.ID, domain.Response{By: "w", Option: domain.AnswerRework, At: r.svc.clock.Now()})
 			if err != nil || run == "" {
 				t.Fatalf("rework = %q, %v", run, err)
 			}
@@ -65,7 +65,7 @@ func TestAnswersOfPrepareFailedAndPublishFailed(t *testing.T) {
 		})
 		t.Run(name+" cancel", func(t *testing.T) {
 			r, d, task := setup(t)
-			if _, err := r.ws.Answer(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerCancel, At: r.svc.clock.Now()}); err != nil {
+			if _, err := r.ws.Answer(userContext(), d.ID, domain.Response{By: "w", Option: domain.AnswerCancel, At: r.svc.clock.Now()}); err != nil {
 				t.Fatal(err)
 			}
 			if v, _ := r.svc.Show(bg, task); v.Task.State != domain.TaskCancelled {

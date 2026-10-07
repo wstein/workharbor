@@ -229,8 +229,11 @@ func TestRunReconcilesBeforeItAcceptsRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := got.Run("r1"); r.State != domain.RunFailed {
-		t.Errorf("the run is %s: it had no session and must have been reconciled", r.State)
+	if r, _ := got.Run("r1"); r.State != domain.RunInterrupted {
+		t.Errorf("the run is %s: it must await human initiation", r.State)
+	}
+	if started := d.Agent.(*agenttest.Fake).Started(); started != 0 {
+		t.Errorf("startup sent %d agent requests", started)
 	}
 }
 

@@ -110,7 +110,7 @@ func TestRebuildReplacesTheEnvironmentAndKeepsTheVolumesAndTheWorktrees(t *testi
 		t.Errorf("audit = %+v", e)
 	}
 	// An agent can start a task in the new environment.
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Errorf("a task does not start in the rebuilt environment: %v", err)
 	}
 }
@@ -119,7 +119,7 @@ func TestRebuildIsRefusedWhileARunIsLiveAndNamesIt(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
 	w, a := r.create("docs-ws")
-	_, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	_, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestATaskIsNotStartedWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
 	r.fake.OnExec = func(_ string, cmd []string) ([]byte, string, int, bool) {
 		if len(cmd) == 2 && cmd[0] == "git" && cmd[1] == "--version" {
 			once.Do(func() { // the new environment is being checked: a start comes in
-				_, _, startEr = r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#9"})
+				_, _, startEr = r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#9"})
 			})
 		}
 		return nil, "", 0, false
@@ -206,7 +206,7 @@ func TestATaskIsNotStartedWhileTheWorkspaceIsBeingRebuilt(t *testing.T) {
 	if !errors.As(startEr, &ce) || !strings.Contains(startEr.Error(), "being rebuilt") {
 		t.Errorf("a task started during the rebuild: %v", startEr)
 	}
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#9"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#9"}); err != nil {
 		t.Errorf("after the rebuild a task is refused: %v", err)
 	}
 	_ = w

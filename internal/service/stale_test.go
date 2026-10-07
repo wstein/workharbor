@@ -62,7 +62,7 @@ func TestALostRunsEnvironmentIsStoppedOnceThenStartedThenRelaunched(t *testing.T
 	c := r.counting()
 	r.agent.Block()
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Resumed) != 1 || len(rep.Interrupted) != 1 || len(rep.Errors) != 0 {
 		t.Fatalf("report = %+v", rep)
 	}
@@ -78,7 +78,7 @@ func TestALostRunsEnvironmentIsStoppedOnceThenStartedThenRelaunched(t *testing.T
 		t.Fatalf("run = %s after its session ended", r.runState())
 	}
 	r.agent.Block()
-	rep = r.reconcile()
+	rep = r.reconcileAndResume()
 	if len(rep.Resumed) != 1 || c.stops.Load() != 1 {
 		t.Errorf("second loss: report %+v, stops %d; want no further stop", rep, c.stops.Load())
 	}
@@ -93,13 +93,13 @@ func TestAFailedStopRelaunchesNothingAndCountsAnAttempt(t *testing.T) {
 	c.stopErr = errors.New("stop refused")
 	launched := len(r.agent.Specs)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	run, _ := r.load().Run("r1")
 	if len(rep.Resumed) != 0 || len(rep.Errors) == 0 || run.State != domain.RunInterrupted || run.ResumeAttempts != 1 || c.starts.Load() != 0 || len(r.agent.Specs) != launched {
 		t.Fatalf("report %+v, run %s (%d attempts), starts %d", rep, run.State, run.ResumeAttempts, c.starts.Load())
 	}
-	r.reconcile()
-	rep = r.reconcile()
+	r.reconcileAndResume()
+	rep = r.reconcileAndResume()
 	if r.runState() != domain.RunFailed || len(rep.Failed) != 1 {
 		t.Errorf("after the attempts: run %s, report %+v", r.runState(), rep)
 	}
@@ -113,7 +113,7 @@ func TestAPausedRunLeftByACrashIsResumedOnlyAfterAStopAndStart(t *testing.T) {
 	c := r.counting()
 	r.agent.Block()
 
-	if _, err := r.svc.Resume(bg, "t1"); err != nil {
+	if _, err := r.svc.Resume(userContext(), "t1"); err != nil {
 		t.Fatal(err)
 	}
 	if c.stops.Load() != 1 || c.starts.Load() != 1 || r.runState() != domain.RunRunning {
@@ -123,7 +123,7 @@ func TestAPausedRunLeftByACrashIsResumedOnlyAfterAStopAndStart(t *testing.T) {
 	must(t, r.svc.Pause(bg, "t1"))
 	r.svc.Wait()
 	r.agent.Block()
-	if _, err := r.svc.Resume(bg, "t1"); err != nil || c.stops.Load() != 1 {
+	if _, err := r.svc.Resume(userContext(), "t1"); err != nil || c.stops.Load() != 1 {
 		t.Errorf("second resume: %v, stops %d", err, c.stops.Load())
 	}
 }
@@ -136,7 +136,7 @@ func TestResumeWithAFailingStopLaunchesNothingAndKeepsThePausedRun(t *testing.T)
 	c.stopErr = errors.New("stop refused")
 	launched := len(r.agent.Specs)
 
-	if _, err := r.svc.Resume(bg, "t1"); err == nil {
+	if _, err := r.svc.Resume(userContext(), "t1"); err == nil {
 		t.Fatal("resume succeeded with a failing stop")
 	}
 	if r.runState() != domain.RunPaused || len(r.agent.Specs) != launched || c.starts.Load() != 0 {
@@ -158,7 +158,7 @@ func TestAnAnswerThatResumesStopsAnEnvironmentThisProcessDidNotStart(t *testing.
 	c.stopErr = errors.New("stop refused")
 	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}
 
-	if err := r.svc.AnswerDecision(bg, "auth1", ans); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), "auth1", ans); err == nil {
 		t.Fatal("the answer resumed with a failing stop")
 	}
 	d, _ := r.load().Decision("auth1")
@@ -167,7 +167,7 @@ func TestAnAnswerThatResumesStopsAnEnvironmentThisProcessDidNotStart(t *testing.
 	}
 	c.stopErr = nil
 	r.agent.Block()
-	must(t, r.svc.AnswerDecision(bg, "auth1", ans))
+	must(t, r.svc.AnswerDecision(userContext(), "auth1", ans))
 	if c.stops.Load() != 2 || c.starts.Load() != 1 || r.runState() != domain.RunRunning {
 		t.Errorf("stops %d, starts %d, run %s", c.stops.Load(), c.starts.Load(), r.runState())
 	}
@@ -232,12 +232,12 @@ func TestAnInterruptedRunKeepsAnotherTaskOutOfItsEnvironment(t *testing.T) {
 	_, first := r.create("busy")
 	second, err := r.ws.AddAgent(bg, "busy", "runtime", "", "")
 	must(t, err)
-	task1, run1, err := r.ws.StartTask(bg, StartRequest{AgentID: first.ID, Issue: "#1"})
+	task1, run1, err := r.ws.StartTask(userContext(), StartRequest{AgentID: first.ID, Issue: "#1"})
 	must(t, err)
 	r.interruptWithLogin(task1, run1, "login1")
 	c := r.restart()
 
-	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
+	_, _, err = r.ws.StartTask(userContext(), StartRequest{AgentID: second.ID, Issue: "#2"})
 	var conf *domain.ConflictError
 	if !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy || !strings.Contains(err.Error(), "interrupted") {
 		t.Fatalf("starting task 2: %v; want environment busy by the interrupted run", err)
@@ -252,7 +252,7 @@ func TestAnInterruptedRunKeepsAnotherTaskOutOfItsEnvironment(t *testing.T) {
 	// I's answer resumes it after one stop and start; nothing else lives there.
 	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}
 	r.agent.Block() // the first run's block was used by its launch; an unscripted relaunch finishes at once and stops the run
-	must(t, r.svc.AnswerDecision(bg, "login1", ans))
+	must(t, r.svc.AnswerDecision(userContext(), "login1", ans))
 	run, _ := mustRun(t, r.store, task1, run1)
 	if run.State != domain.RunRunning || !r.svc.attached(run1) || c.stops.Load() != 1 || c.starts.Load() != 1 {
 		t.Errorf("run %s, attached %v, stops %d, starts %d", run.State, r.svc.attached(run1), c.stops.Load(), c.starts.Load())
@@ -276,7 +276,7 @@ func TestResumePathsRefuseWhileAnotherRunOwnsTheEnvironment(t *testing.T) {
 	ws, first := r.create("owned")
 	second, err := r.ws.AddAgent(bg, "owned", "runtime", "", "")
 	must(t, err)
-	task1, run1, err := r.ws.StartTask(bg, StartRequest{AgentID: first.ID, Issue: "#1"})
+	task1, run1, err := r.ws.StartTask(userContext(), StartRequest{AgentID: first.ID, Issue: "#1"})
 	must(t, err)
 	r.interruptWithLogin(task1, run1, "login1")
 	// A run of another task in the same environment, saved directly.
@@ -289,10 +289,10 @@ func TestResumePathsRefuseWhileAnotherRunOwnsTheEnvironment(t *testing.T) {
 
 	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}
 	var conf *domain.ConflictError
-	if err := r.svc.AnswerDecision(bg, "login1", ans); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
+	if err := r.svc.AnswerDecision(userContext(), "login1", ans); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
 		t.Errorf("the answer: %v", err)
 	}
-	if _, err := r.svc.Resume(bg, task1); err == nil {
+	if _, err := r.svc.Resume(userContext(), task1); err == nil {
 		t.Error("Resume succeeded while another run owns the environment")
 	}
 	if run, _ := mustRun(t, r.store, task1, run1); run.State != domain.RunInterrupted || c.stops.Load() != 0 {
@@ -307,7 +307,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 	t.Parallel()
 	r := newWsRig(t)
 	_, a := r.create("fresh")
-	task, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	must(t, err)
 	must(t, r.svc.Cancel(bg, task))
 	r.svc.Wait()
@@ -315,7 +315,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 	c := r.restart()
 	launched := len(r.agent.Specs)
 	c.stopErr = errors.New("stop refused")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#2"}); !errors.Is(err, errStopFailed) {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#2"}); !errors.Is(err, errStopFailed) {
 		t.Fatalf("start with a failing stop: %v", err)
 	}
 	if len(r.agent.Specs) != launched || c.starts.Load() != 0 {
@@ -327,7 +327,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 
 	c.stopErr = nil
 	r.agent.Block() // each launch below gets its own blocking session
-	task2, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#3"})
+	task2, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#3"})
 	must(t, err)
 	if c.stops.Load() != 2 || c.starts.Load() != 1 || len(r.agent.Specs) != launched+1 {
 		t.Errorf("stops %d (one failed), starts %d, launches %d", c.stops.Load(), c.starts.Load(), len(r.agent.Specs)-launched)
@@ -337,7 +337,7 @@ func TestANewRunsStartStopsAndStartsAnEnvironmentThisProcessDidNotStart(t *testi
 	must(t, r.svc.Cancel(bg, task2))
 	r.svc.Wait()
 	r.agent.Block()
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#4"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#4"}); err != nil {
 		t.Fatal(err)
 	}
 	if c.stops.Load() != 2 {
@@ -353,7 +353,7 @@ func TestRecoveryRefusesWhileAnotherRunOwnsTheEnvironment(t *testing.T) {
 	ws, first := r.create("recover")
 	second, err := r.ws.AddAgent(bg, "recover", "runtime", "", "")
 	must(t, err)
-	task1, run1, err := r.ws.StartTask(bg, StartRequest{AgentID: first.ID, Issue: "#1"})
+	task1, run1, err := r.ws.StartTask(userContext(), StartRequest{AgentID: first.ID, Issue: "#1"})
 	must(t, err)
 	r.svc.stopSession(run1)
 	r.svc.Wait()
@@ -365,7 +365,7 @@ func TestRecoveryRefusesWhileAnotherRunOwnsTheEnvironment(t *testing.T) {
 	c := r.restart()
 
 	var conf *domain.ConflictError
-	if err := r.svc.recover(bg, task1, run1, &Report{}); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
+	if err := r.svc.recover(userContext(), task1, run1, &Report{}); !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
 		t.Errorf("recovery: %v", err)
 	}
 	if run, _ := mustRun(t, r.store, task1, run1); run.State != domain.RunInterrupted || c.stops.Load() != 0 {
@@ -393,7 +393,7 @@ func TestAFailedReadAtTheResumeGateLaunchesNothing(t *testing.T) {
 	c := r.counting()
 	failFirst(r)
 	launched := len(r.agent.Specs)
-	if _, err := r.svc.Resume(bg, "t1"); !errors.Is(err, boom) {
+	if _, err := r.svc.Resume(userContext(), "t1"); !errors.Is(err, boom) {
 		t.Fatalf("resume: %v", err)
 	}
 	if r.runState() != domain.RunPaused || len(r.agent.Specs) != launched || c.stops.Load() != 0 || c.starts.Load() != 0 {
@@ -417,7 +417,7 @@ func TestAFailedReadAtTheResumeGateLaunchesNothing(t *testing.T) {
 		return orig(ctx, id)
 	}
 	ans := domain.Response{By: "w", Option: domain.AnswerResume, At: r2.clock.now}
-	if err := r2.svc.AnswerDecision(bg, "auth1", ans); !errors.Is(err, boom) {
+	if err := r2.svc.AnswerDecision(userContext(), "auth1", ans); !errors.Is(err, boom) {
 		t.Fatalf("answer: %v", err)
 	}
 	if d, _ := r2.load().Decision("auth1"); d.Status != domain.DecisionOpen || r2.runState() != domain.RunPaused || c2.starts.Load() != 0 {

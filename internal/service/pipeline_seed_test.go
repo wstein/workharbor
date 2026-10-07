@@ -151,7 +151,7 @@ func TestSeedRetryStartsTheCapAfterARefusalAndRetry(t *testing.T) {
 	retryAt := first.Add(3 * time.Hour)
 	f.clock.now = retryAt
 	fp.set(fmt.Errorf("push: %w", hostgit.ErrTransport))
-	if _, err := f.ws.Answer(bg, q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
+	if _, err := f.ws.Answer(userContext(), q.ID, domain.Response{By: "werner", Option: domain.AnswerRetry, At: f.clock.now}); err != nil {
 		t.Fatal(err)
 	}
 	f.svc.Wait()

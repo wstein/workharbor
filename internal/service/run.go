@@ -17,6 +17,7 @@ import (
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -294,6 +295,7 @@ func (w *Workspaces) Answer(ctx context.Context, id domain.ID, r domain.Response
 	if err := w.svc.AnswerDecision(ctx, id, r); err != nil {
 		return "", err
 	}
+	ctx = initiation.DecisionAnswer(ctx, id)
 	switch {
 	case d.Cause == domain.CauseRunFailed && r.Option == domain.AnswerRetry:
 		run, err := w.NewRun(ctx, d.TaskID, "", "")

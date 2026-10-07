@@ -73,7 +73,7 @@ func TestAPermissionPromptBecomesAnApprovalDecisionAndTheAnswerGoesBack(t *testi
 			if got := r.load().Task().State; got != domain.TaskAwaitingGuidance {
 				t.Errorf("task %s while the agent waits, want awaiting_guidance", got)
 			}
-			must(t, r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "werner", Option: tc.option, Reason: tc.reason, At: r.clock.now}))
+			must(t, r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "werner", Option: tc.option, Reason: tc.reason, At: r.clock.now}))
 			got := <-res
 			if got.err != nil || got.a.Allow != tc.allow || got.a.Reason != tc.reason {
 				t.Errorf("the agent was told %+v (%v), want allow=%v reason %q", got.a, got.err, tc.allow, tc.reason)
@@ -98,7 +98,7 @@ func TestAnAnswerForAnApprovalNobodyWaitsForIsRefused(t *testing.T) {
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
 
-	err = r.svc.AnswerDecision(bg, "ap-old", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now})
+	err = r.svc.AnswerDecision(userContext(), "ap-old", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now})
 	var ce *domain.ConflictError
 	if !errors.As(err, &ce) {
 		t.Fatalf("err = %v, want a conflict", err)
@@ -107,7 +107,7 @@ func TestAnAnswerForAnApprovalNobodyWaitsForIsRefused(t *testing.T) {
 		t.Errorf("the refused answer changed the decision: %s", d.Status)
 	}
 	// ... and so is an answer to an ID that does not exist at all
-	if err := r.svc.AnswerDecision(bg, "no-such", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), "no-such", domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
 		t.Error("an unknown decision was answered")
 	}
 }
@@ -134,7 +134,7 @@ func TestAnUnansweredApprovalExpiresAndDenies(t *testing.T) {
 		t.Errorf("task %s, want running: the expired approval frees it", st)
 	}
 	// a late answer is now refused
-	if err := r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
 		t.Error("a late answer was accepted")
 	}
 }
@@ -160,7 +160,7 @@ func TestPausingARunSupersedesItsApproval(t *testing.T) {
 	if after, _ := r.load().Decision(d.ID); after.Status != domain.DecisionSuperseded {
 		t.Errorf("decision %s, want superseded", after.Status)
 	}
-	if err := r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}); err == nil {
 		t.Error("an answer to a superseded approval was accepted")
 	}
 }
@@ -175,12 +175,12 @@ func TestTheServiceGivesAManualSpecItsApprover(t *testing.T) {
 	}
 	must(t, r.rt.Restart(bg))
 	r.agent.AskApproval("Bash", "make test")
-	r.reconcile()
+	r.reconcileAndResume()
 	d := r.openApproval()
 	if d.Subject != "Bash" || d.Input != "make test" {
 		t.Fatalf("decision %+v", d)
 	}
-	must(t, r.svc.AnswerDecision(bg, d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), d.ID, domain.Response{By: "w", Option: domain.AnswerAllow, At: r.clock.now}))
 	r.svc.Wait()
 	if after, _ := r.load().Decision(d.ID); after.Status != domain.DecisionAnswered || !after.Allows("") {
 		t.Errorf("decision %+v", after)

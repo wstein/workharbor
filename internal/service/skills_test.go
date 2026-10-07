@@ -134,7 +134,7 @@ func TestNoneSelectionIsSavedBeforeLaunchAndSurvivesResume(t *testing.T) {
 	r := newWsRig(t)
 	r.svc.cfg.SkillSet = &skillset.Config{Selection: "none"}
 	_, profile := r.create("skills-none")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: profile.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: profile.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestNoneSelectionIsSavedBeforeLaunchAndSurvivesResume(t *testing.T) {
 	}
 	r.svc.Wait()
 	r.svc.cfg.SkillSet.Selection = "default"
-	if got, err := r.svc.Resume(bg, task); err != nil || got != run {
+	if got, err := r.svc.Resume(userContext(), task); err != nil || got != run {
 		t.Fatalf("recorded none failed after default changed: %s, %v", got, err)
 	}
 }
@@ -188,7 +188,7 @@ func TestAlternativeSelectionIsDurableAndTamperedResumeLaunchesNothing(t *testin
 		return nil
 	}
 	_, profile := r.create("skills-alternative")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: profile.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: profile.ID, Issue: "#1"})
 	if err != nil || !prepared {
 		t.Fatalf("alternative start: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestAlternativeSelectionIsDurableAndTamperedResumeLaunchesNothing(t *testin
 		t.Fatal(err)
 	}
 	before := r.agent.Started()
-	if _, err := r.svc.Resume(bg, task); err == nil {
+	if _, err := r.svc.Resume(userContext(), task); err == nil {
 		t.Fatal("tampered recorded package resumed")
 	}
 	if r.agent.Started() != before {

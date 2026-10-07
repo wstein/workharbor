@@ -23,7 +23,7 @@ func TestAnUnreadableStoredPresetRefusesTheRunAtItsStart(t *testing.T) {
 		var ids []domain.ID
 		next := r.ws.cfg.NewID
 		r.ws.cfg.NewID = func() domain.ID { id := next(); ids = append(ids, id); return id }
-		_, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+		_, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 		task, run := ids[0], ids[1] // StartTask takes the task's ID, then the run's
 		if err == nil || !strings.Contains(err.Error(), "removed-preset") || !strings.Contains(err.Error(), "preset") {
 			t.Fatalf("egress %v: error %v, want one that names the preset", egress, err)
@@ -48,7 +48,7 @@ func TestAnEmptyStoredPresetStartsAsBefore(t *testing.T) {
 	r.ws.cfg.Workflow = func(string) string { return "" } // workflowOf records the default
 	r.withEgressRequests()
 	_, a := r.create("ws")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -61,7 +61,7 @@ func TestAnUnreadableStoredPresetRefusesAResumeAndCountsAnAttempt(t *testing.T) 
 	r.svc.cfg.MaxAttempts = 2
 	launched := len(r.agent.Specs)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	run, _ := r.load().Run("r1")
 	if len(rep.Resumed) != 0 || len(rep.Errors) == 0 || run.State != domain.RunInterrupted || run.ResumeAttempts != 1 || len(r.agent.Specs) != launched {
 		t.Fatalf("report %+v, run %s (%d attempts), launched %d to %d", rep, run.State, run.ResumeAttempts, launched, len(r.agent.Specs))
@@ -69,7 +69,7 @@ func TestAnUnreadableStoredPresetRefusesAResumeAndCountsAnAttempt(t *testing.T) 
 	if !strings.Contains(rep.Errors[0].Error(), "removed-preset") {
 		t.Errorf("the error does not name the preset: %v", rep.Errors[0])
 	}
-	rep = r.reconcile()
+	rep = r.reconcileAndResume()
 	if r.runState() != domain.RunFailed || len(rep.Failed) != 1 || len(r.agent.Specs) != launched {
 		t.Errorf("after the attempts: run %s, report %+v", r.runState(), rep)
 	}

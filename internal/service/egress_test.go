@@ -52,7 +52,7 @@ func TestEgressRequestsAreAskedOnceAndKeptPerRepository(t *testing.T) {
 		} else {
 			allowed = append(allowed, pending[i].Host)
 		}
-		if err := r.svc.AnswerDecision(bg, id, domain.Response{Option: opt, By: "werner", At: t0}); err != nil {
+		if err := r.svc.AnswerDecision(userContext(), id, domain.Response{Option: opt, By: "werner", At: t0}); err != nil {
 			t.Fatalf("answer %s: %v", pending[i].Host, err)
 		}
 	}
@@ -110,7 +110,7 @@ func TestAnExpiredEgressRequestIsDeniedForThisRunOnly(t *testing.T) {
 		t.Errorf("an expired request allowed %v", allow)
 	}
 	// An answer after the expiry is refused and keeps nothing.
-	if err := r.svc.AnswerDecision(bg, ids[0], domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0.Add(time.Hour)}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), ids[0], domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0.Add(time.Hour)}); err == nil {
 		t.Error("an answer to an expired request was accepted")
 	}
 	if allow, _ := r.svc.EgressAllow(bg, "wstein/workharbor"); len(allow) != 0 {
@@ -154,7 +154,7 @@ func (r *rig) answerAll(repo string, env devcontainer.Environment, published boo
 	ids, err := r.svc.RequestEgress(bg, "t1", "r1", pending)
 	must(r.t, err)
 	for _, id := range ids {
-		must(r.t, r.svc.AnswerDecision(bg, id, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}))
+		must(r.t, r.svc.AnswerDecision(userContext(), id, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}))
 	}
 	return pending
 }
@@ -273,7 +273,7 @@ func TestFeatureSourcesAreAskedOnceAndKeptPerRepository(t *testing.T) {
 		if d.Feature == "ghcr.io/someone/else/thing:1" {
 			opt = domain.AnswerAllow
 		}
-		if err := r.svc.AnswerDecision(bg, id, domain.Response{Option: opt, By: "werner", At: t0}); err != nil {
+		if err := r.svc.AnswerDecision(userContext(), id, domain.Response{Option: opt, By: "werner", At: t0}); err != nil {
 			t.Fatalf("answer %s: %v", d.Feature, err)
 		}
 	}

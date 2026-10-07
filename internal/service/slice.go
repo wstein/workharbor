@@ -8,6 +8,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/store"
 )
 
@@ -198,7 +199,7 @@ func (s *Service) Say(ctx context.Context, task domain.ID, message string) (agen
 	if sl == nil || sl.sess == nil {
 		return "", domain.NewConflict(domain.RuleRunLive, "run %s has no attached session", run.ID)
 	}
-	delivery, err := sl.sess.Instruct(ctx, message)
+	delivery, err := sl.sess.Instruct(initiation.ForRun(ctx, task, run.ID), message)
 	if err != nil {
 		return "", err
 	}

@@ -121,7 +121,7 @@ func TestShellPreparationExcludesRunAndRebuild(t *testing.T) {
 	case <-t.Context().Done():
 		t.Fatal("preparation did not reach stop")
 	}
-	_, _, runErr := r.ws.StartTask(bg, StartRequest{AgentID: agent.ID, Issue: "#7"})
+	_, _, runErr := r.ws.StartTask(userContext(), StartRequest{AgentID: agent.ID, Issue: "#7"})
 	_, rebuildErr := r.ws.Rebuild(bg, ws.Name, "werner")
 	close(proceed)
 	must(t, <-finished)
@@ -184,7 +184,7 @@ func TestTheShellIsRefusedWhileARunIsUnfinishedAndNamesIt(t *testing.T) {
 	t.Parallel()
 	r := shellRig(t)
 	_, a := r.create("docs-ws")
-	_, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	_, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,7 @@ func TestSignInShellHoldsOffRunAndRebuildUntilChildExits(t *testing.T) {
 	// beneath StartTask must see the environment held throughout that lifetime.
 	childExit, holderReleased := make(chan struct{}), make(chan struct{})
 	go func() { <-childExit; shell.Release(); close(holderReleased) }()
-	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: agent.ID, Issue: "#7"})
+	_, _, err = r.ws.StartTask(userContext(), StartRequest{AgentID: agent.ID, Issue: "#7"})
 	var conflict *domain.ConflictError
 	if !errors.As(err, &conflict) || conflict.Rule != domain.RuleEnvBusy {
 		t.Fatalf("run beside shell: %v", err)
@@ -369,7 +369,7 @@ func TestSignInShellHoldsOffRunAndRebuildUntilChildExits(t *testing.T) {
 	}
 	close(childExit)
 	<-holderReleased
-	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: agent.ID, Issue: "#7"})
+	_, _, err = r.ws.StartTask(userContext(), StartRequest{AgentID: agent.ID, Issue: "#7"})
 	must(t, err)
 }
 

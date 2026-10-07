@@ -11,6 +11,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/notify"
 )
 
@@ -87,7 +88,7 @@ func (r *rig) wantForgotten(c *countingRuntime, run domain.RunState) {
 		r.t.Fatalf("run %s, start mark %v", r.runState(), r.svc.envStarted(r.env))
 	}
 	c.stopErr = nil
-	if rep := r.reconcile(); len(rep.Errors) != 0 || r.envState() != domain.EnvStopped {
+	if rep := r.reconcileAndResume(); len(rep.Errors) != 0 || r.envState() != domain.EnvStopped {
 		r.t.Errorf("errors %v, env %s: the next pass did not stop the environment", rep.Errors, r.envState())
 	}
 }
@@ -209,10 +210,10 @@ func TestKillAllWhoseEnvironmentStopFailsTooReportsTheTask(t *testing.T) {
 	if !foundPush {
 		t.Fatal("agent warning was not sent through the notifier")
 	}
-	if err := r.svc.AnswerDecision(bg, in[0].ID, domain.Response{Option: domain.AnswerResume, By: "werner", At: t0}); !errors.Is(err, domain.ErrDecisionOption) {
+	if err := r.svc.AnswerDecision(userContext(), in[0].ID, domain.Response{Option: domain.AnswerResume, By: "werner", At: t0}); !errors.Is(err, domain.ErrDecisionOption) {
 		t.Fatalf("notice accepted resume: %v", err)
 	}
-	must(t, r.svc.AnswerDecision(bg, in[0].ID, domain.Response{Option: domain.AnswerSeen, By: "werner", At: t0}))
+	must(t, r.svc.AnswerDecision(userContext(), in[0].ID, domain.Response{Option: domain.AnswerSeen, By: "werner", At: t0}))
 	seen, err := r.store.LoadDecision(bg, in[0].ID)
 	must(t, err)
 	if seen.AnsweredBy != "werner" || seen.Status != domain.DecisionAnswered || r.load().Task().State != domain.TaskCancelled {
@@ -261,7 +262,7 @@ func TestAStopBeforeTheSessionIsUpWhoseStopFailsStopsTheEnvironment(t *testing.T
 	if err := r.svc.checkEnvFree(bg, r.env, ""); err == nil {
 		t.Error("the environment is free before the session's stop has ended")
 	}
-	sess, err := r.agent.Resume(bg, spec(), r.session)
+	sess, err := r.agent.Resume(userContext(), spec(), r.session)
 	must(t, err)
 	r.svc.attach("t1", "r1", sl, stopFailSession{sess, errors.New("exec client lost")})
 	r.svc.Wait()
@@ -278,12 +279,12 @@ func TestAStopBeforeTheSessionIsUpWhoseStopFailsStopsTheEnvironment(t *testing.T
 func TestACancelWithAHangingStopKeepsTheEnvironmentBusy(t *testing.T) {
 	t.Parallel()
 	r := newWsRig(t)
-	ga := &gateAgent{Adapter: r.svc.ag, err: errors.New("exec client lost")}
-	r.svc.ag = ga
+	ga := &gateAgent{Adapter: r.agent, err: errors.New("exec client lost")}
+	r.svc.ag = initiation.New(ga, r.store)
 	w, first := r.create("busy")
 	second, err := r.ws.AddAgent(bg, "busy", "runtime", "", "")
 	must(t, err)
-	task1, _, err := r.ws.StartTask(bg, StartRequest{AgentID: first.ID, Issue: "#1"})
+	task1, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: first.ID, Issue: "#1"})
 	must(t, err)
 	gate := ga.sess
 	var open sync.Once
@@ -302,7 +303,7 @@ func TestACancelWithAHangingStopKeepsTheEnvironmentBusy(t *testing.T) {
 		a, err := r.store.LoadTask(bg, task1)
 		return err == nil && a.Task().State == domain.TaskCancelled
 	})
-	_, _, err = r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
+	_, _, err = r.ws.StartTask(userContext(), StartRequest{AgentID: second.ID, Issue: "#2"})
 	var conf *domain.ConflictError
 	if !errors.As(err, &conf) || conf.Rule != domain.RuleEnvBusy {
 		t.Fatalf("starting task 2 during the stop: %v; want environment busy", err)
@@ -314,7 +315,7 @@ func TestACancelWithAHangingStopKeepsTheEnvironmentBusy(t *testing.T) {
 	r.svc.Wait()
 	// The fallback has ended: the second task starts and its agent lives.
 	r.agent.Block()
-	task2, run2, err := r.ws.StartTask(bg, StartRequest{AgentID: second.ID, Issue: "#2"})
+	task2, run2, err := r.ws.StartTask(userContext(), StartRequest{AgentID: second.ID, Issue: "#2"})
 	must(t, err)
 	pollUntil(t, func() bool {
 		agg, err := r.store.LoadTask(bg, task2)
@@ -375,7 +376,7 @@ func TestACancelAnswerWithoutACauseDoesNotStopTheEnvironment(t *testing.T) {
 	must(t, err)
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
-	must(t, r.svc.AnswerDecision(bg, "q1", domain.Response{Option: domain.AnswerCancel, By: "werner", At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), "q1", domain.Response{Option: domain.AnswerCancel, By: "werner", At: r.clock.now}))
 	r.svc.Wait()
 	if c.stops.Load() != 0 || r.envState() == domain.EnvStopped {
 		t.Errorf("stops %d, env %s: the environment of a live run was stopped", c.stops.Load(), r.envState())
@@ -399,7 +400,7 @@ func TestAStopBeforeTheSessionIsUpWhoseEnvironmentStopFailsTooIsAnEvent(t *testi
 	if err := r.svc.Cancel(bg, "t1"); err != nil {
 		t.Fatal(err)
 	}
-	sess, err := r.agent.Resume(bg, spec(), r.session)
+	sess, err := r.agent.Resume(userContext(), spec(), r.session)
 	must(t, err)
 	r.svc.attach("t1", "r1", sl, stopFailSession{sess, errors.New("exec client lost")})
 	r.svc.Wait()
@@ -450,7 +451,7 @@ func TestKillAllReportsAStartingRunWhoseAgentStopIsPending(t *testing.T) {
 	if !strings.Contains(string(raw), `"agent_stop_pending":["t1"]`) {
 		t.Errorf("pending stop missing: %s", raw)
 	}
-	sess, err := r.agent.Resume(bg, spec(), r.session)
+	sess, err := r.agent.Resume(userContext(), spec(), r.session)
 	must(t, err)
 	r.svc.attach("t1", "r1", sl, stopFailSession{sess, errors.New("exec client lost")})
 	r.svc.Wait()

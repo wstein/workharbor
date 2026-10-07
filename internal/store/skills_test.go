@@ -30,6 +30,9 @@ func TestSkillMigrationMarksLegacyWithoutRewritingEvents(t *testing.T) {
 	if _, err := st.db.ExecContext(bg, `ALTER TABLE runs DROP COLUMN skills`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.db.ExecContext(bg, `DROP TABLE initiations`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := st.db.ExecContext(bg, `DELETE FROM schema_migrations WHERE version >= 22`); err != nil {
 		t.Fatal(err)
 	}

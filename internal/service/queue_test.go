@@ -75,7 +75,7 @@ func TestACardInTheQueueAsksBeforeAnyRunStarts(t *testing.T) {
 		t.Errorf("a second poll = %d, %v", n, err)
 	}
 	// nothing runs until the human accepts: the answer starts one run now
-	run, err := r.ws.Answer(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerStart, At: r.clock.now})
+	run, err := r.ws.Answer(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerStart, At: r.clock.now})
 	if err != nil || run == "" {
 		t.Fatalf("accept = %q, %v", run, err)
 	}
@@ -103,7 +103,7 @@ func TestADeclinedCardAsksAgainOnlyWhenItIsMovedAgain(t *testing.T) {
 	if !agg.Task().Untrusted {
 		t.Error("an issue by a stranger was not marked untrusted")
 	}
-	if _, err := r.ws.Answer(bg, d.ID, domain.Response{By: "werner", Option: domain.AnswerCancel, At: r.clock.now}); err != nil {
+	if _, err := r.ws.Answer(userContext(), d.ID, domain.Response{By: "werner", Option: domain.AnswerCancel, At: r.clock.now}); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := r.ws.PollQueue(bg); err != nil || n != 0 {

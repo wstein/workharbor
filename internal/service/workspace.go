@@ -22,6 +22,7 @@ import (
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/forge"
 	"github.com/wstein/workharbor/internal/hostgit"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/skillset"
@@ -448,6 +449,9 @@ type StartRequest struct {
 // run. A start that stops half-way leaves a starting run with no session, which
 // the reconciler fails into a retry-or-cancel Decision.
 func (w *Workspaces) StartTask(ctx context.Context, req StartRequest) (domain.ID, domain.ID, error) {
+	if !initiation.Valid(ctx) {
+		return "", "", initiation.ErrNotInitiated
+	}
 	a, ws, err := w.agentAndWorkspace(ctx, req.AgentID)
 	if err != nil {
 		return "", "", err
@@ -812,7 +816,7 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 		w.svc.end(run, sl)
 		return err
 	}
-	sess, err := w.svc.ag.Start(context.WithoutCancel(ctx), spec)
+	sess, err := w.svc.ag.Start(initiation.ForRun(context.WithoutCancel(ctx), task, run), spec)
 	if err != nil {
 		return w.abortStart(ctx, task, run, sl, err)
 	}
@@ -847,6 +851,9 @@ func (w *Workspaces) startAgent(ctx context.Context, task, run domain.ID, ws dom
 // agent starts with the briefing of D27 for a new run; notes are untrusted data
 // the caller wants in it, such as the paths of a rebase conflict.
 func (w *Workspaces) NewRun(ctx context.Context, task domain.ID, prompt, notes string) (domain.ID, error) {
+	if !initiation.Valid(ctx) {
+		return "", initiation.ErrNotInitiated
+	}
 	agg, err := w.svc.store.LoadTask(ctx, task)
 	if err != nil {
 		return "", err
@@ -1123,6 +1130,9 @@ func (w *Workspaces) workflowOf(repo string) string {
 // fails into a retry-or-cancel Decision. The error is returned for the report.
 func (w *Workspaces) abortStart(ctx context.Context, task, run domain.ID, sl *slot, cause error) error {
 	w.svc.end(run, sl)
+	if errors.Is(cause, initiation.ErrNotInitiated) {
+		return errors.Join(cause, w.svc.update(context.WithoutCancel(ctx), task, func(a *domain.TaskAggregate) error { return a.Interrupt(run) }))
+	}
 	if ctx.Err() != nil {
 		return ctx.Err() // cancelled: nothing to fail
 	}

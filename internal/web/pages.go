@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
 )
@@ -169,7 +170,7 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request, sess Session) {
 		return
 	}
 	loc, err := s.once(r, func() (string, error) {
-		res, err := s.be.Run(r.Context(), service.RunRequest{IssueURL: issue, Agent: agentRef})
+		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction(actorOf(sess), "web")), service.RunRequest{IssueURL: issue, Agent: agentRef})
 		if err != nil {
 			return "", err
 		}
@@ -231,7 +232,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request, sess Session) {
 		return
 	}
 	loc, err := s.once(r, func() (string, error) {
-		if _, err := s.be.Answer(r.Context(), id, domain.Response{By: "web", Option: option, Reason: reason, At: s.opt.Now()}); err != nil {
+		if _, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction(actorOf(sess), "web")), id, domain.Response{By: "web", Option: option, Reason: reason, At: s.opt.Now()}); err != nil {
 			return "", err
 		}
 		return "/inbox?flash=answered", nil
@@ -297,7 +298,7 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request, sess Session) {
 		return
 	}
 	loc, err := s.once(r, func() (string, error) {
-		d, err := s.be.Say(r.Context(), id, msg)
+		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction(actorOf(sess), "web")), id, msg)
 		if err != nil {
 			return "", err
 		}
@@ -351,7 +352,7 @@ func (s *Server) pause(w http.ResponseWriter, r *http.Request, sess Session) {
 func (s *Server) resume(w http.ResponseWriter, r *http.Request, sess Session) {
 	id := domain.ID(r.PathValue("task"))
 	loc, err := s.once(r, func() (string, error) {
-		if _, err := s.be.Resume(r.Context(), id); err != nil {
+		if _, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction(actorOf(sess), "web")), id); err != nil {
 			return "", err
 		}
 		return "/tasks/" + url.PathEscape(string(id)) + "?flash=started_again", nil

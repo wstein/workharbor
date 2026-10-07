@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/runtime"
 	"github.com/wstein/workharbor/internal/service"
 	"github.com/wstein/workharbor/internal/store"
@@ -455,7 +456,7 @@ func (s *Server) runTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		res, err := s.be.Run(r.Context(), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
+		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction("api", "api")), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -487,7 +488,7 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		d, err := s.be.Say(r.Context(), id, body.Message)
+		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction("api", "api")), id, body.Message)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -530,7 +531,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		run, err := s.be.Resume(r.Context(), id)
+		run, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction("api", "api")), id)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -705,7 +706,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		run, err := s.be.Answer(r.Context(), id, domain.Response{By: "api", Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
+		run, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction("api", "api")), id, domain.Response{By: "api", Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
 		if err != nil {
 			return 0, nil, err
 		}

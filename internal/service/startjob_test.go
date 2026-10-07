@@ -48,7 +48,7 @@ func TestCancelStopsAPostCreateThatIsRunning(t *testing.T) {
 	r := newWsRig(t)
 	r.withBlockingPostCreate()
 	_, a := r.create("docs-ws")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	task, run := r.onlyTask()
@@ -82,7 +82,7 @@ func TestAPostCreateThatDoesNotFinishFailsTheRun(t *testing.T) {
 	r.withBlockingPostCreate()
 	r.svc.cfg.PostCreateTimeout = 100 * time.Millisecond
 	_, a := r.create("docs-ws")
-	_, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	_, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	// The request waited only 50 ms, so the start is still running; it ends in a failure.
 	if err != nil {
 		t.Logf("the start failed within the wait: %v", err)
@@ -122,14 +122,14 @@ func TestTheStartOutlivesTheRequestThatAnsweredTheLastEgressRequest(t *testing.T
 	r.withEgressRequests()
 	_, a := r.create("docs-ws")
 	release := make(chan struct{})
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Hold the agent's start: the allowlist update runs first, and the fake agent starts at once,
 	// so the request's context is cancelled the moment AnswerDecision returns.
 	open := r.openEgress(task)
-	ctx, cancel := context.WithCancel(bg)
+	ctx, cancel := context.WithCancel(userContext())
 	var first bool
 	for _, d := range open {
 		if err := r.svc.AnswerDecision(ctx, d.ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err != nil {
@@ -224,7 +224,7 @@ func TestACancelBetweenMarkRunningAndAttachStopsTheAgent(t *testing.T) {
 			t.Errorf("cancel: %v", err)
 		}
 	}
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil && !errors.Is(err, context.Canceled) {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	list, _ := r.svc.List(bg, false)
@@ -249,7 +249,7 @@ func TestAStopRequestedBeforeAttachStopsTheSession(t *testing.T) {
 	r := newWsRig(t)
 	_, a := r.create("docs-ws")
 	r.svc.testBeforeAttach = func(run domain.ID) { r.svc.stopSession(run) }
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := r.svc.List(bg, false)

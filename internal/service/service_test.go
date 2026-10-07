@@ -14,12 +14,17 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/agent/agenttest"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/runtime/runtimetest"
 	"github.com/wstein/workharbor/internal/store"
 )
 
 var bg = context.Background()
+
+func userContext() context.Context {
+	return initiation.With(bg, initiation.UserAction("test-user", "api"))
+}
 
 // fakeClock is time that only moves when a test or a Sleep moves it.
 type fakeClock struct {
@@ -184,7 +189,7 @@ func must(t *testing.T, err error) {
 func (r *rig) live() {
 	r.t.Helper()
 	r.agent.Block()
-	sess, err := r.agent.Resume(bg, spec(), r.session)
+	sess, err := r.svc.ag.Resume(initiation.ForRun(userContext(), "t1", "r1"), spec(), r.session)
 	must(r.t, err)
 	r.svc.attach("t1", "r1", mustBegin(r.t, r.svc), sess)
 	r.svc.markEnvStarted(r.env) // an attached agent was launched by this process
@@ -204,11 +209,22 @@ func (r *rig) runState() domain.RunState {
 	return run.State
 }
 
-func (r *rig) reconcile() Report {
+// reconcileAndResume observes state then explicitly initiates recovery. Tests
+// of unattended reconciliation call svc.Reconcile directly.
+func (r *rig) reconcileAndResume() Report {
 	r.t.Helper()
 	rep, err := r.svc.Reconcile(bg)
 	if err != nil {
 		r.t.Fatal(err)
+	}
+	// Explicit human recovery preserves the older environment and failure regressions.
+	a := r.load()
+	for _, run := range a.Runs() {
+		if (run.State == domain.RunInterrupted && !a.WaitsForReset(run.ID, r.clock.Now())) || contains(a.DueResumes(r.clock.Now()), run.ID) {
+			if err := r.svc.recover(userContext(), a.Task().ID, run.ID, &rep); err != nil {
+				rep.Errors = append(rep.Errors, err)
+			}
+		}
 	}
 	return rep
 }
@@ -222,7 +238,7 @@ func TestRuntimeRestartResumesTheAgentFromItsSession(t *testing.T) {
 	r.agent.Block()
 	_ = r.rt.Restart(bg)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Interrupted) != 1 || len(rep.Resumed) != 1 || len(rep.Failed) != 0 || len(rep.Errors) != 0 {
 		t.Fatalf("report = %+v", rep)
 	}
@@ -246,7 +262,7 @@ func TestRuntimeRestartResumesTheAgentFromItsSession(t *testing.T) {
 		t.Errorf("events = %v", kinds)
 	}
 	// A second pass has nothing to do.
-	if rep := r.reconcile(); len(rep.Interrupted)+len(rep.Resumed)+len(rep.Failed) != 0 {
+	if rep := r.reconcileAndResume(); len(rep.Interrupted)+len(rep.Resumed)+len(rep.Failed) != 0 {
 		t.Errorf("a second pass did something: %+v", rep)
 	}
 }
@@ -272,7 +288,7 @@ func TestTheReconcilerWaitsForExec(t *testing.T) {
 	slow := &slowRuntime{runtimeAdapter: r.rt.Adapter, clock: r.clock, readyAt: t0.Add(300 * time.Millisecond)}
 	r.svc.rt = slow
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Resumed) != 1 || r.clock.sleeps < 3 {
 		t.Errorf("resumed %d, slept %d times; want a resume after waiting", len(rep.Resumed), r.clock.sleeps)
 	}
@@ -287,7 +303,7 @@ func TestAnEnvironmentThatNeverAnswersIsRetriedLater(t *testing.T) {
 	r.svc.cfg.ReadyCmd = []string{"exit", "1"}
 	r.svc.cfg.ReadyTimeout = time.Second
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Errors) != 1 || len(rep.Resumed) != 0 || len(rep.Failed) != 0 {
 		t.Fatalf("report = %+v", rep)
 	}
@@ -300,7 +316,7 @@ func TestAnEnvironmentThatNeverAnswersIsRetriedLater(t *testing.T) {
 	// Later the environment answers.
 	r.svc.cfg.ReadyCmd = []string{"echo", "ready"}
 	r.agent.Block()
-	if rep := r.reconcile(); len(rep.Resumed) != 1 {
+	if rep := r.reconcileAndResume(); len(rep.Resumed) != 1 {
 		t.Errorf("the retry: %+v", rep)
 	}
 }
@@ -310,7 +326,7 @@ func TestARunWithoutASessionFailsAndAsksWhatToDo(t *testing.T) {
 	r := newRig(t, withSession("")) // the agent never reported a session
 	_ = r.rt.Restart(bg)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Failed) != 1 || len(rep.Resumed) != 0 {
 		t.Fatalf("report = %+v", rep)
 	}
@@ -327,7 +343,7 @@ func TestASessionTheAgentForgotFailsTheRun(t *testing.T) {
 	r := newRig(t, withSession("lost-session")) // the agent no longer knows it
 	_ = r.rt.Restart(bg)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Failed) != 1 || r.runState() != domain.RunFailed {
 		t.Errorf("report %+v, run %s", rep, r.runState())
 	}
@@ -340,7 +356,7 @@ func TestALostEnvironmentFailsTheRun(t *testing.T) {
 	must(t, r.rt.Restart(bg))
 	must(t, r.rt.Adapter.Delete(bg, string(r.env)))
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	got := r.load()
 	env, _ := got.Environment(r.env)
 	if len(rep.Interrupted) != 1 || len(rep.Failed) != 1 || env.State != domain.EnvDeleted || r.runState() != domain.RunFailed {
@@ -354,9 +370,9 @@ func TestAnAgentThatCannotStartLeavesTheRunInterrupted(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
-	r.svc.ag = failingAgent{err: errors.New("agent binary missing")}
+	r.svc.ag = initiation.New(failingAgent{err: errors.New("agent binary missing")}, r.store)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Errors) != 1 || len(rep.Resumed) != 0 || r.runState() != domain.RunInterrupted {
 		t.Errorf("report %+v, run %s", rep, r.runState())
 	}
@@ -371,11 +387,11 @@ func TestAnExpiredApprovalIsExpiredAndTheTaskIsFreed(t *testing.T) {
 	must(t, err)
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
-	if rep := r.reconcile(); len(rep.Expired) != 0 {
+	if rep := r.reconcileAndResume(); len(rep.Expired) != 0 {
 		t.Fatalf("expired too early: %+v", rep)
 	}
 	r.clock.now = r.clock.now.Add(domain.DefaultApprovalTimeout)
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	got := r.load()
 	d, _ := got.Decision("ap1")
 	if len(rep.Expired) != 1 || d.Status != domain.DecisionExpired || d.Allows("") || got.Task().State != domain.TaskRunning {
@@ -395,15 +411,15 @@ func TestResumeAtReset(t *testing.T) {
 	must(t, err)
 	r.agent.Block()
 
-	must(t, r.svc.AnswerDecision(bg, "q1", domain.Response{By: "w", Option: domain.AnswerResumeAtReset, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), "q1", domain.Response{By: "w", Option: domain.AnswerResumeAtReset, At: r.clock.now}))
 	if got := r.runState(); got != domain.RunPaused {
 		t.Fatalf("run = %s, want paused until the reset", got)
 	}
-	if rep := r.reconcile(); len(rep.Resumed) != 0 || r.runState() != domain.RunPaused {
+	if rep := r.reconcileAndResume(); len(rep.Resumed) != 0 || r.runState() != domain.RunPaused {
 		t.Errorf("before the reset: %+v, run %s", rep, r.runState())
 	}
 	r.clock.now = reset
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
 		t.Errorf("at the reset: %+v, run %s", rep, r.runState())
 	}
@@ -419,7 +435,7 @@ func TestAnsweringResumeRelaunchesTheAgent(t *testing.T) {
 	must(t, err)
 	r.agent.Block()
 
-	must(t, r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}))
 	got := r.load()
 	if r.runState() != domain.RunRunning || got.Task().State != domain.TaskRunning {
 		t.Errorf("run %s, task %s", r.runState(), got.Task().State)
@@ -441,7 +457,7 @@ func TestACancelAnswerCancelsTheTask(t *testing.T) {
 	must(t, err)
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
-	must(t, r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerCancel, At: r.clock.now}))
+	must(t, r.svc.AnswerDecision(userContext(), "auth1", domain.Response{By: "w", Option: domain.AnswerCancel, At: r.clock.now}))
 	if got := r.load().Task().State; got != domain.TaskCancelled {
 		t.Errorf("task = %s", got)
 	}
@@ -454,7 +470,7 @@ func TestAnAuthEventSuspendsTheRun(t *testing.T) {
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.agent.AuthExpires()
-	r.reconcile()
+	r.reconcileAndResume()
 	r.svc.Wait() // the session ends by itself
 
 	got := r.load()
@@ -473,7 +489,7 @@ func TestAnAuthEventStopsTheAgentOfTheSuspendedRun(t *testing.T) {
 	_ = r.rt.Restart(bg)
 	base := r.agent.Stops() // the rig's own setup stops one
 	r.agent.AuthExpires()
-	r.reconcile()
+	r.reconcileAndResume()
 	r.svc.Wait()
 	if n := r.agent.Stops(); n != base+1 {
 		t.Errorf("stops = %d, want %d", n, base+1)
@@ -496,7 +512,7 @@ func TestACompletedSessionStopsTheRun(t *testing.T) {
 	r := newRig(t)
 	_ = r.rt.Restart(bg)
 	r.agent.Finish("all done")
-	r.reconcile()
+	r.reconcileAndResume()
 	r.svc.Wait()
 	if got := r.runState(); got != domain.RunStopped {
 		t.Errorf("run = %s, want stopped", got)
@@ -530,7 +546,7 @@ func TestARunWithoutASessionIsLostEvenWithAnEnvironmentThatIsUp(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	r.agent.Block()
-	rep := r.reconcile() // a fresh service: nothing is attached
+	rep := r.reconcileAndResume() // a fresh service: nothing is attached
 	if len(rep.Interrupted) != 1 || len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
 		t.Errorf("report %+v, run %s", rep, r.runState())
 	}
@@ -538,7 +554,7 @@ func TestARunWithoutASessionIsLostEvenWithAnEnvironmentThatIsUp(t *testing.T) {
 		t.Error("the agent was not resumed")
 	}
 	// A run whose agent is attached is left alone.
-	if rep := r.reconcile(); len(rep.Interrupted) != 0 || len(rep.Resumed) != 0 {
+	if rep := r.reconcileAndResume(); len(rep.Interrupted) != 0 || len(rep.Resumed) != 0 {
 		t.Errorf("an attached run was disturbed: %+v", rep)
 	}
 }
@@ -555,7 +571,7 @@ func TestShutdownInterruptsRunsInsteadOfStoppingThem(t *testing.T) {
 		t.Fatalf("after a shutdown: run %s, task %s; want interrupted and running", run.State, got.Task().State)
 	}
 	r.agent.Block()
-	if rep := r.reconcile(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
+	if rep := r.reconcileAndResume(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
 		t.Errorf("the next start: %+v, run %s", rep, r.runState())
 	}
 }
@@ -568,7 +584,7 @@ func TestResumingAfterANoSessionAnswerFailsTheRun(t *testing.T) {
 	must(t, err)
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
-	if err := r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}); !errors.Is(err, agent.ErrNoSession) {
+	if err := r.svc.AnswerDecision(userContext(), "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now}); !errors.Is(err, agent.ErrNoSession) {
 		t.Fatalf("answer = %v, want ErrNoSession", err)
 	}
 	if got := r.runState(); got != domain.RunFailed {
@@ -589,13 +605,13 @@ func TestAChosenWaitForTheResetSurvivesAnInterruption(t *testing.T) {
 	must(t, err)
 	must(t, r.rt.Restart(bg)) // the environment is stopped too
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Resumed) != 0 || r.runState() != domain.RunInterrupted || r.envState() != domain.EnvStopped {
 		t.Fatalf("before the reset: %+v, run %s, env %s; it must wait and start nothing", rep, r.runState(), r.envState())
 	}
 	r.clock.now = reset
 	r.agent.Block()
-	if rep := r.reconcile(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
+	if rep := r.reconcileAndResume(); len(rep.Resumed) != 1 || r.runState() != domain.RunRunning {
 		t.Errorf("at the reset: %+v, run %s", rep, r.runState())
 	}
 }
@@ -618,7 +634,7 @@ func TestNoContainerIsStartedForARunWaitingOnTheHuman(t *testing.T) {
 	must(t, err)
 	must(t, r.rt.Restart(bg))
 	for range 3 {
-		rep := r.reconcile()
+		rep := r.reconcileAndResume()
 		if len(rep.Errors) != 0 || len(rep.Resumed) != 0 || r.envState() != domain.EnvStopped {
 			t.Fatalf("report %+v, env %s: the login question is open, so nothing may start", rep, r.envState())
 		}
@@ -636,7 +652,7 @@ func TestEveryResumeStartsWithTheBriefing(t *testing.T) {
 	must(t, err)
 	r.svc.Shutdown() // interrupts the run and supersedes the approval
 	r.agent.Block()
-	r.reconcile()
+	r.reconcileAndResume()
 
 	specs := r.agent.Specs
 	last := specs[len(specs)-1]
@@ -655,14 +671,14 @@ func TestAttemptsAreCountedAndUsedUp(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	must(t, r.rt.Restart(bg))
-	r.svc.ag = failingAgent{err: errors.New("agent binary missing")}
+	r.svc.ag = initiation.New(failingAgent{err: errors.New("agent binary missing")}, r.store)
 	for attempt := 1; attempt <= 2; attempt++ {
-		rep := r.reconcile()
+		rep := r.reconcileAndResume()
 		if len(rep.Errors) != 1 || r.runState() != domain.RunInterrupted {
 			t.Fatalf("attempt %d: %+v, run %s", attempt, rep, r.runState())
 		}
 	}
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	got := r.load()
 	run, _ := got.Run("r1")
 	if len(rep.Failed) != 1 || run.State != domain.RunFailed || len(got.Decisions()) != 1 {
@@ -731,7 +747,7 @@ func TestAFailedRunNotifies(t *testing.T) {
 	rec := &pushes{}
 	r.svc.cfg.Notifier = rec
 	must(t, r.rt.Restart(bg))
-	r.reconcile() // no session: the run fails and asks what to do
+	r.reconcileAndResume() // no session: the run fails and asks what to do
 	found := false
 	for _, m := range rec.got {
 		found = found || m.Kind == notify.KindRunFailed

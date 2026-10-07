@@ -72,7 +72,7 @@ func TestRecoveryThatLosesToAManualResumeLeavesTheLiveAgentAttached(t *testing.T
 		err error
 	}
 	done := make(chan result, 1)
-	ctx, cancel := context.WithCancel(bg)
+	ctx, cancel := context.WithCancel(userContext())
 	t.Cleanup(cancel) // a recovery still waiting at the end is cancelled, not leaked
 	go func() {
 		var rep Report
@@ -82,7 +82,7 @@ func TestRecoveryThatLosesToAManualResumeLeavesTheLiveAgentAttached(t *testing.T
 	waitFor(t, gate.entered, "recovery to reach the environment's exec") // it has read the run
 
 	r.agent.Block()
-	_, err := r.svc.Resume(bg, "t1")
+	_, err := r.svc.Resume(userContext(), "t1")
 	must(t, err)
 	gate.open()
 	res := waitFor(t, done, "the losing recovery to return")
@@ -148,7 +148,7 @@ func TestACrashBetweenTheStartingWriteAndTheAttachIsRecovered(t *testing.T) {
 		t.Fatalf("run %s, want starting", got)
 	}
 	r.agent.Block()
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Interrupted) != 1 || len(rep.Resumed) != 1 || r.runState() != domain.RunRunning || !r.svc.attached("r1") {
 		t.Errorf("report %+v, run %s, attached %v", rep, r.runState(), r.svc.attached("r1"))
 	}
@@ -167,7 +167,7 @@ func TestAnAnswerThatResumesNeverReplacesAnAttachedSession(t *testing.T) {
 	must(t, err)
 	holder := mustBegin(t, r.svc) // a launch of the run is in progress
 
-	err = r.svc.AnswerDecision(bg, "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now})
+	err = r.svc.AnswerDecision(userContext(), "auth1", domain.Response{By: "w", Option: domain.AnswerResume, At: r.clock.now})
 	var c *domain.ConflictError
 	if !errors.As(err, &c) {
 		t.Fatalf("answer = %v, want a conflict", err)
@@ -192,7 +192,7 @@ func recoverWhileGated(t *testing.T, r *rig) (*gateRuntime, <-chan error, *Repor
 	r.svc.rt = gate
 	done := make(chan error, 1)
 	rep := &Report{}
-	ctx, cancel := context.WithCancel(bg)
+	ctx, cancel := context.WithCancel(userContext())
 	t.Cleanup(cancel)
 	go func() { done <- r.svc.recover(ctx, "t1", "r1", rep) }()
 	waitFor(t, gate.entered, "recovery to reach the environment's exec")

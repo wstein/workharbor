@@ -27,7 +27,7 @@ func (s stopFailSession) Stop(ctx context.Context) error {
 func (r *rig) liveStopFails() {
 	r.t.Helper()
 	r.agent.Block()
-	sess, err := r.agent.Resume(bg, spec(), r.session)
+	sess, err := r.agent.Resume(userContext(), spec(), r.session)
 	must(r.t, err)
 	r.svc.attach("t1", "r1", mustBegin(r.t, r.svc), stopFailSession{sess, errors.New("exec client lost")})
 	r.svc.markEnvStarted(r.env)
@@ -46,12 +46,12 @@ func TestAPausedRunSurvivesAnEnvironmentStopAndTheReconciler(t *testing.T) {
 	launched := len(r.agent.Specs)
 
 	must(t, r.rt.Adapter.Stop(bg, string(r.env))) // an observed stop
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	d, _ := r.load().Decision("q1")
 	if r.runState() != domain.RunPaused || d.Status != domain.DecisionOpen || len(rep.Interrupted) != 0 || len(rep.Resumed) != 0 {
 		t.Fatalf("run %s, question %s, report %+v", r.runState(), d.Status, rep)
 	}
-	r.reconcile()
+	r.reconcileAndResume()
 	if r.runState() != domain.RunPaused || len(r.agent.Specs) != launched || r.envState() != domain.EnvStopped {
 		t.Errorf("run %s, launches %d, env %s", r.runState(), len(r.agent.Specs)-launched, r.envState())
 	}
@@ -65,12 +65,12 @@ func TestAPausedRunResumesOnTheHumansResumeInAStoppedEnvironment(t *testing.T) {
 	r.pauseStored()
 	c := r.counting()
 	launched := len(r.agent.Specs)
-	rep := r.reconcile() // the first pass of a new process
+	rep := r.reconcileAndResume() // the first pass of a new process
 	if r.runState() != domain.RunPaused || len(rep.Resumed) != 0 || len(r.agent.Specs) != launched || c.starts.Load() != 0 {
 		t.Fatalf("run %s, report %+v, starts %d", r.runState(), rep, c.starts.Load())
 	}
 	r.agent.Block()
-	if _, err := r.svc.Resume(bg, "t1"); err != nil {
+	if _, err := r.svc.Resume(userContext(), "t1"); err != nil {
 		t.Fatal(err)
 	}
 	if r.runState() != domain.RunRunning || r.envState() != domain.EnvRunning || c.starts.Load() != 1 {
@@ -81,9 +81,9 @@ func TestAPausedRunResumesOnTheHumansResumeInAStoppedEnvironment(t *testing.T) {
 	must(t, r.svc.Pause(bg, "t1"))
 	r.svc.Wait()
 	must(t, c.Adapter.Stop(bg, string(r.env)))
-	r.reconcile()
+	r.reconcileAndResume()
 	r.agent.Block()
-	if _, err := r.svc.Resume(bg, "t1"); err != nil {
+	if _, err := r.svc.Resume(userContext(), "t1"); err != nil {
 		t.Fatal(err)
 	}
 	if r.runState() != domain.RunRunning || r.envState() != domain.EnvRunning {
@@ -100,11 +100,11 @@ func TestTheFirstPassStopsAPausedRunsLeftoverEnvironment(t *testing.T) {
 	c := r.counting()
 	launched := len(r.agent.Specs)
 
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Errors) != 0 || c.stops.Load() != 1 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused || len(r.agent.Specs) != launched {
 		t.Fatalf("errors %v, stops %d, env %s, run %s", rep.Errors, c.stops.Load(), r.envState(), r.runState())
 	}
-	r.reconcile()
+	r.reconcileAndResume()
 	if c.stops.Load() != 1 {
 		t.Errorf("a stopped environment was stopped again (%d stops)", c.stops.Load())
 	}
@@ -119,7 +119,7 @@ func TestAPassLeavesAnEnvironmentThisProcessStartedAlone(t *testing.T) {
 	c := r.counting()
 	must(t, r.svc.Pause(bg, "t1"))
 	r.svc.Wait()
-	r.reconcile()
+	r.reconcileAndResume()
 	if c.stops.Load() != 0 || r.envState() != domain.EnvRunning || r.runState() != domain.RunPaused {
 		t.Errorf("stops %d, env %s, run %s", c.stops.Load(), r.envState(), r.runState())
 	}
@@ -158,11 +158,11 @@ func TestAPauseWhoseEnvironmentStopFailsToIsStoppedByTheNextPass(t *testing.T) {
 	if r.runState() != domain.RunPaused || r.svc.envStarted(r.env) {
 		t.Fatalf("run %s, started mark %v", r.runState(), r.svc.envStarted(r.env))
 	}
-	if rep := r.reconcile(); len(rep.Errors) == 0 {
+	if rep := r.reconcileAndResume(); len(rep.Errors) == 0 {
 		t.Error("a failing stop reported nothing")
 	}
 	c.stopErr = nil
-	rep := r.reconcile()
+	rep := r.reconcileAndResume()
 	if len(rep.Errors) != 0 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused {
 		t.Errorf("errors %v, env %s, run %s", rep.Errors, r.envState(), r.runState())
 	}
@@ -205,7 +205,7 @@ func TestASuspensionWhoseEnvironmentStopFailsToIsStoppedByTheNextPass(t *testing
 		t.Fatalf("run %s, started mark %v", r.runState(), r.svc.envStarted(r.env))
 	}
 	c.stopErr = nil
-	if rep := r.reconcile(); len(rep.Errors) != 0 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused {
+	if rep := r.reconcileAndResume(); len(rep.Errors) != 0 || r.envState() != domain.EnvStopped || r.runState() != domain.RunPaused {
 		t.Errorf("errors %v, env %s, run %s", rep.Errors, r.envState(), r.runState())
 	}
 }

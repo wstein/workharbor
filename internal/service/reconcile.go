@@ -8,6 +8,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 )
@@ -26,13 +27,12 @@ type Report struct {
 	Errors []error
 }
 
-// Reconcile is one pass of the DB-first loop (design §5.3). For each active
-// task it observes the environments, interrupts the runs whose process or
-// environment is gone, brings their environments back, resumes the agent from
-// its session, resumes the runs whose quota has reset and expires Decisions
-// past their deadline. It never sets a state itself: it calls the aggregate.
+// Reconcile observes environments, interrupts lost runs and expires Decisions.
+// It never sends to an agent: interrupted and paused runs await a human action.
+// Domain state changes are made through the aggregate.
 // Container addresses are read for nothing and never stored.
 func (s *Service) Reconcile(ctx context.Context) (Report, error) {
+	ctx = initiation.With(ctx, initiation.Marker{})
 	var rep Report
 	rep.Errors = append(rep.Errors, s.sweepDurations(ctx)...)
 	infos, err := s.rt.List(ctx, s.cfg.Owner)
@@ -58,9 +58,7 @@ func (s *Service) Reconcile(ctx context.Context) (Report, error) {
 			rep.Errors = append(rep.Errors, fmt.Errorf("task %s: %w", id, err))
 		}
 	}
-	// A run that waited for egress requests starts once none is open, also when
-	// the last one expired instead of being answered.
-	rep.Errors = append(rep.Errors, s.continueAllEgress(ctx)...)
+	// Egress expiry never authorizes a send; pending starts wait for a human.
 	return rep, nil
 }
 
@@ -130,8 +128,7 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 		}
 	}
 
-	// 2. Bring back what should run: interrupted runs, and paused runs whose
-	// quota has reset.
+	// 2. Interrupted runs remain interrupted without a fresh human marker.
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
 		return err
@@ -143,7 +140,7 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 			todo = append(todo, r.ID)
 		}
 	}
-	todo = append(todo, agg.DueResumes(now)...)
+	// Reset time never authorizes recovery.
 	var firstErr error
 	for _, run := range todo {
 		if err := s.recover(ctx, task, run, rep); err != nil && firstErr == nil {
@@ -181,6 +178,9 @@ func liveRuns(a *domain.TaskAggregate) map[domain.ID]domain.RunState {
 // starting and relaunch the agent from its session. A run that cannot be
 // resumed ends failed and waits on a Decision.
 func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report) error {
+	if !initiation.Valid(ctx) {
+		return nil
+	}
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
 		return err
@@ -280,11 +280,7 @@ func (s *Service) recover(ctx context.Context, task, run domain.ID, rep *Report)
 // errAttemptsUsedUp tells recover that a run's launch attempts are used up.
 var errAttemptsUsedUp = errors.New("the run's launch attempts are used up")
 
-// launch relaunches the agent of a starting run from its session and attaches
-// the session. The first message is the resume briefing (D27). If the agent
-// cannot be started the run goes back to interrupted and the attempt is
-// counted; when the attempts are used up errAttemptsUsedUp is returned and the
-// caller fails the run. A session the agent forgot is ErrNoSession.
+// launch sends one explicitly initiated resume and attaches the gated session.
 func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) error {
 	if err := s.durationAdmission(ctx, task, run); err != nil {
 		s.end(run, sl)
@@ -332,9 +328,12 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 		s.end(run, sl)
 		return err
 	}
-	sess, err := s.ag.Resume(context.WithoutCancel(ctx), spec, r.SessionID)
+	sess, err := s.ag.Resume(initiation.ForRun(context.WithoutCancel(ctx), task, run), spec, r.SessionID)
 	if err != nil {
 		s.end(run, sl)
+		if errors.Is(err, initiation.ErrNotInitiated) {
+			return errors.Join(err, s.update(ctx, task, func(a *domain.TaskAggregate) error { return a.Interrupt(run) }))
+		}
 		if errors.Is(err, agent.ErrNoSession) {
 			return err
 		}
@@ -352,6 +351,9 @@ func (s *Service) launch(ctx context.Context, task, run domain.ID, sl *slot) err
 // recordLaunchFailure counts a failed launch attempt of a run and returns cause,
 // joined with errAttemptsUsedUp when the attempts are used up.
 func (s *Service) recordLaunchFailure(ctx context.Context, task, run domain.ID, cause error) error {
+	if errors.Is(cause, initiation.ErrNotInitiated) {
+		return cause
+	}
 	var exhausted bool
 	if uerr := s.update(ctx, task, func(a *domain.TaskAggregate) error {
 		var rerr error

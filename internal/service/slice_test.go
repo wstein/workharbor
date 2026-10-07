@@ -43,7 +43,7 @@ func TestSayDeliversRecordsAndShowsTheDelivery(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	r.live()
-	d, err := r.svc.Say(bg, "t1", "use the helper")
+	d, err := r.svc.Say(userContext(), "t1", "use the helper")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,17 +73,17 @@ func TestSayNeedsARunningRunWithASession(t *testing.T) {
 	t.Parallel()
 	r := newRig(t) // the run is running in the database but no session is attached
 	var c *domain.ConflictError
-	if _, err := r.svc.Say(bg, "t1", "hello"); !asConflict(err, &c) || c.Rule != domain.RuleRunLive {
+	if _, err := r.svc.Say(userContext(), "t1", "hello"); !asConflict(err, &c) || c.Rule != domain.RuleRunLive {
 		t.Errorf("no session: %v", err)
 	}
 	r.live()
 	if err := r.svc.Cancel(bg, "t1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.svc.Say(bg, "t1", "hello"); !asConflict(err, &c) {
+	if _, err := r.svc.Say(userContext(), "t1", "hello"); !asConflict(err, &c) {
 		t.Errorf("a cancelled task: %v", err)
 	}
-	if _, err := r.svc.Say(bg, "nope", "hello"); err == nil {
+	if _, err := r.svc.Say(userContext(), "nope", "hello"); err == nil {
 		t.Error("an unknown task was accepted")
 	}
 }
@@ -127,7 +127,7 @@ func TestSubscribeReplaysThenFollows(t *testing.T) {
 		}
 	}
 	// A live durable event.
-	if _, err := r.svc.Say(bg, "t1", "hello"); err != nil {
+	if _, err := r.svc.Say(userContext(), "t1", "hello"); err != nil {
 		t.Fatal(err)
 	}
 	e := nextKind(t, ch, domain.EventInstruction)
@@ -237,7 +237,7 @@ func TestTheAgentsObservationsAreStoredInTheTranscriptTier(t *testing.T) {
 	r := newWsRigBlocking(t, false)
 	r.agent.Finish("all done")
 	_, a := r.create("transcript")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestInboxAndWorkspaceList(t *testing.T) {
 	r := newWsRigBlocking(t, false)
 	r.agent.Finish("done")
 	_, a := r.create("inbox")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	r.svc.Wait()

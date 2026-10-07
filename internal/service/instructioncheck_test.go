@@ -8,6 +8,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/agent/claude"
 	"github.com/wstein/workharbor/internal/domain"
+	"github.com/wstein/workharbor/internal/initiation"
 	"github.com/wstein/workharbor/internal/runtime"
 )
 
@@ -30,9 +31,9 @@ func TestAWedgedInstructionCheckFailsTheLaunchAndFreesTheSlot(t *testing.T) {
 	orig := r.svc.ag
 	w := wedgedRunner{release: make(chan struct{})}
 	t.Cleanup(func() { close(w.release) })
-	r.svc.ag = claude.New(w, claude.Config{InstructionCheckTimeout: 50 * time.Millisecond})
+	r.svc.ag = initiation.New(claude.New(w, claude.Config{InstructionCheckTimeout: 50 * time.Millisecond}), r.store)
 
-	res := async(func() error { _, err := r.svc.Resume(bg, "t1"); return err })
+	res := async(func() error { _, err := r.svc.Resume(userContext(), "t1"); return err })
 	err := waitFor(t, res, "the launch to fail within the deadline")
 	if !errors.Is(err, claude.ErrInstructionCheckTimeout) {
 		t.Fatalf("resume = %v, want the instruction-check timeout", err)
@@ -45,7 +46,7 @@ func TestAWedgedInstructionCheckFailsTheLaunchAndFreesTheSlot(t *testing.T) {
 	}
 
 	r.svc.ag = orig
-	if _, err := r.svc.Resume(bg, "t1"); err != nil {
+	if _, err := r.svc.Resume(userContext(), "t1"); err != nil {
 		t.Fatalf("a later resume = %v, want accepted", err)
 	}
 	r.svc.Wait()

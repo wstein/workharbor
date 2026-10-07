@@ -128,7 +128,7 @@ func TestPostCreateRunsOnceBeforeTheAgent(t *testing.T) {
 		return nil, "", 0, false
 	}
 	_, a := r.create("docs-ws")
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(atExec) != 2 || atExec[0] != 0 || atExec[1] != 0 || len(r.agent.Specs) != 1 {
@@ -150,7 +150,7 @@ func TestPostCreateRunsOnceBeforeTheAgent(t *testing.T) {
 	}
 	// A second run finds the marker and runs nothing again.
 	atExec = nil
-	if _, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#2"}); err == nil {
+	if _, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#2"}); err == nil {
 		// the first task's run holds the environment: the one-run rule refuses it
 		t.Log("second start refused by the one-run rule, as expected")
 	}
@@ -175,7 +175,7 @@ func TestAFailingPostCreateEndsTheRunBeforeTheAgent(t *testing.T) {
 		return nil, "", 0, false
 	}
 	_, a := r.create("docs-ws")
-	_, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	_, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	if err == nil || !strings.Contains(err.Error(), "post-create command") || !strings.Contains(err.Error(), "no such host") {
 		t.Fatalf("err = %v", err)
 	}

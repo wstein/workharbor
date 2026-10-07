@@ -333,7 +333,7 @@ func TestDurationExpiryCancelsPreparationAndHoldsUntilCleanup(t *testing.T) {
 	r.svc.clock = clock
 	r.svc.cfg.Budgets = Budgets{PerRun: Limit{MaxDuration: time.Second}}
 	w, a := r.create("duration-start")
-	_, _, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	_, _, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	must(t, err)
 	task, run := r.onlyTask()
 	<-gate.entered
@@ -434,7 +434,7 @@ func TestDurationExpiryDropsOnlyOriginatingEgressWait(t *testing.T) {
 	r.withEgressRequests()
 	r.svc.cfg.Budgets = Budgets{PerRun: Limit{MaxDuration: time.Second}}
 	w, a := r.create("duration-egress")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#7"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#7"})
 	must(t, err)
 	open := r.openEgress(task)
 	r.clock.now = t0.Add(time.Second)
@@ -443,9 +443,9 @@ func TestDurationExpiryDropsOnlyOriginatingEgressWait(t *testing.T) {
 		t.Fatal("expired run retained its egress wait or ownership")
 	}
 	must(t, r.svc.checkEnvFree(bg, w.EnvID, ""))
-	nextTask, nextRun, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#8"})
+	nextTask, nextRun, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#8"})
 	must(t, err)
-	if err := r.svc.AnswerDecision(bg, open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
+	if err := r.svc.AnswerDecision(userContext(), open[0].ID, domain.Response{Option: domain.AnswerAllow, By: "werner", At: t0}); err == nil {
 		t.Fatal("late answer for expired run was accepted")
 	}
 	r.svc.checkBudgets(bg, task, run)

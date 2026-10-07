@@ -32,7 +32,7 @@ func newReworkRig(t *testing.T, cause domain.DecisionCause) *reworkRig {
 	r := &reworkRig{wsRig: newWsRigBlocking(t, false)}
 	r.agent.Finish("done")
 	_, a := r.create("rw")
-	task, run, err := r.ws.StartTask(bg, StartRequest{AgentID: a.ID, Issue: "#1"})
+	task, run, err := r.ws.StartTask(userContext(), StartRequest{AgentID: a.ID, Issue: "#1"})
 	must(t, err)
 	r.svc.Wait()
 	agg, _ := r.store.LoadTask(bg, task)
@@ -88,7 +88,7 @@ func TestReworkKeepsThePipelineOffTheTaskUntilTheNewRunIsSaved(t *testing.T) {
 			r := newReworkRig(t, cause)
 			// the reconciler's tick does not mark the environment started: the new
 			// run's start goes through the restart and readiness path
-			run, err := r.ws.Answer(bg, r.question.ID, domainRework(r))
+			run, err := r.ws.Answer(userContext(), r.question.ID, domainRework(r))
 			if err != nil || run == "" {
 				t.Fatalf("rework = %q, %v (errors %v)", run, err, r.reported())
 			}
@@ -134,7 +134,7 @@ func TestTheReworkGuardIsReleasedOnEveryPath(t *testing.T) {
 		t.Error("the guard outlived its releases")
 	}
 
-	if _, err := r.ws.Answer(bg, "no-such-decision", domainRework(r)); err == nil {
+	if _, err := r.ws.Answer(userContext(), "no-such-decision", domainRework(r)); err == nil {
 		t.Error("an unknown decision was answered")
 	}
 	if r.pipe.reworkHeld(task) {
@@ -143,7 +143,7 @@ func TestTheReworkGuardIsReleasedOnEveryPath(t *testing.T) {
 
 	// the new run cannot start (a cancelled context): the answer is recorded, the
 	// question raised again, and nothing is left held
-	ctx, cancel := context.WithCancel(bg)
+	ctx, cancel := context.WithCancel(userContext())
 	cancel()
 	_, _ = r.ws.Answer(ctx, r.question.ID, domainRework(r))
 	if r.pipe.reworkHeld(task) {
