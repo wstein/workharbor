@@ -301,16 +301,14 @@ EOT
 "
   return 0
 }
-# allcov: every commit of main..tip is covered. Each noted commit's patch-id is
-# computed once.
+# allcov: every commit of main..tip is covered. The patch-ids of all noted commits
+# come from one git log pass, not one process pair per note.
 covby=""
 allcov() {
-  noted_ids=""
-  for o in $(git notes --ref=review list 2>/dev/null | cut -d' ' -f2); do
-    [ "$(git cat-file -t "$o" 2>/dev/null)" = commit ] || continue
-    noted_ids="$noted_ids$(pid "$o") $o
-"
-  done
+  noted_ids="$(git notes --ref=review list 2>/dev/null | cut -d' ' -f2 |
+    git cat-file --batch-check='%(objecttype) %(objectname)' 2>/dev/null | sed -n 's/^commit //p' |
+    git log --no-walk=unsorted --stdin -p --full-index --binary --format='commit %H' 2>/dev/null |
+    git patch-id --verbatim)" || noted_ids=""
   revs="$(git rev-list "$base..$full")" || return 1
   for c in $revs; do covered "$c" || return 1; done
 }
