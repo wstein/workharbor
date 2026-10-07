@@ -302,3 +302,45 @@ func TestCommandShownStreamsNoOutput(t *testing.T) {
 		t.Errorf("stream %q, want %q", got, want)
 	}
 }
+
+func TestCheckParentRefusesAForeignOrWritableDirectory(t *testing.T) {
+	me := uint32(os.Geteuid()) //nolint:gosec // a uid fits
+	for _, c := range []struct {
+		name string
+		mode os.FileMode
+		euid uint32
+		ok   bool
+	}{
+		{"own private", 0o700, me, true},
+		{"own 0755", 0o755, me, true},
+		{"group writable", 0o770, me, false},
+		{"world writable", 0o777, me, false},
+		{"owned by a user that is neither euid nor root", 0o700, me + 1, me == 0},
+	} {
+		d := t.TempDir()
+		if err := os.Chmod(d, c.mode); err != nil { //nolint:gosec // a test directory
+			t.Fatal(err)
+		}
+		if err := checkParent(d, c.euid); (err == nil) != c.ok {
+			t.Errorf("%s: checkParent = %v, want ok=%v", c.name, err, c.ok)
+		}
+	}
+}
+
+func TestCheckParentJudgesASymlinkedParentByItsTarget(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "target")
+	if err := os.Mkdir(target, 0o777); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o777); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkParent(link, uint32(os.Geteuid())); err == nil { //nolint:gosec // a uid fits
+		t.Error("a symlink to a world-writable directory was accepted")
+	}
+}

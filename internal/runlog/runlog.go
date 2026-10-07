@@ -50,6 +50,11 @@ func open(path string, extra int) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
+	if euid := uint32(os.Geteuid()); euid == 0 { //nolint:gosec // a uid fits
+		if err := checkParent(filepath.Dir(path), euid); err != nil {
+			return nil, err
+		}
+	}
 	// never through a symlink, and never onto a file with another name too: the
 	// log must not change or grow a file the person did not name; O_NONBLOCK so
 	// a FIFO at the path fails or is refused below instead of hanging the run
@@ -81,9 +86,26 @@ func open(path string, extra int) (*Log, error) {
 // --log-file that would let another user steer what root appends to and chmods.
 func ownerOK(fileUID, euid uint32) bool { return euid != 0 || fileUID == euid }
 
+// checkParent refuses a directory that somebody else could use to redirect the
+// log: it must belong to euid or root and must not be writable by its group or
+// by others. The directory is looked at after symlinks, so a symlinked parent
+// is judged by what it points to. Root applies it to an explicit --log-file.
+func checkParent(dir string, euid uint32) error {
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok || !fi.IsDir() || (st.Uid != euid && st.Uid != 0) || fi.Mode().Perm()&0o022 != 0 {
+		return errors.New("the directory is owned by another user or writable by others (root writes only into its own, private directory)")
+	}
+	return nil
+}
+
 // OpenDefault opens the log at the fixed per-run path: Open, after the logs
 // directory (which may exist from an older run with a wider mode) is tightened
-// to 0700, and a run in the same second as another gets a -1, -2 suffix. An explicit --log-file uses Open, which never touches its directory.
+// to 0700, and a run in the same second as another gets a -1, -2 suffix. An
+// explicit --log-file uses Open, which never touches its directory.
 func OpenDefault(path string) (*Log, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
