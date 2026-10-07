@@ -26,6 +26,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 var subscriptionName = regexp.MustCompile(`(?i)oauth|session|auth_token|access_token|refresh_token|setup_token|login_token`)
@@ -51,7 +52,7 @@ func Check(name, value string) error {
 	if Name(name) {
 		return ErrSubscriptionName
 	}
-	v := strings.TrimSpace(strings.TrimLeft(value, "\uFEFF \t\r\n"))
+	v := strings.TrimFunc(value, func(r rune) bool { return r == '\uFEFF' || unicode.IsSpace(r) })
 	if v == "" {
 		return ErrEmptyValue
 	}

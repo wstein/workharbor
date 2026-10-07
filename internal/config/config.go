@@ -954,7 +954,7 @@ func (c *Config) AgentAPIKey() ([]string, error) {
 			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d is not KEY=VALUE", i+1)
 		}
 		if err := credcheck.Check(k, v); errors.Is(err, credcheck.ErrEmptyValue) {
-			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s to an empty value; write the API key after the = in %s, or delete the file and remove agent_api_key_env_file from the configuration to use a subscription login", i+1, k, c.AgentAPIKeyEnvFile)
+			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s to an empty value; write the value after the = in %s, or delete the file and remove agent_api_key_env_file from the configuration to use a subscription login", i+1, k, c.AgentAPIKeyEnvFile)
 		} else if err != nil {
 			return nil, fmt.Errorf("config: agent_api_key_env_file: line %d sets %s: %w; whr never handles a subscription credential (D40). %s", i+1, k, err, credcheck.Advice)
 		}

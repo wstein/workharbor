@@ -136,7 +136,7 @@ func TestAnEmptyAPIKeyValueIsRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err := r.parse(t)
-		if msg := problems(err); !strings.Contains(msg, "ANTHROPIC_API_KEY") || !strings.Contains(msg, "empty value") || !strings.Contains(msg, "write the API key after the =") || !strings.Contains(msg, "remove agent_api_key_env_file from the configuration") || strings.Contains(msg, "D40") || strings.Contains(msg, credcheck.Advice) {
+		if msg := problems(err); !strings.Contains(msg, "ANTHROPIC_API_KEY") || !strings.Contains(msg, "empty value") || !strings.Contains(msg, "write the value after the =") || !strings.Contains(msg, "remove agent_api_key_env_file from the configuration") || strings.Contains(msg, "D40") || strings.Contains(msg, credcheck.Advice) {
 			t.Errorf("%q: problems = %q", line, msg)
 		}
 	}

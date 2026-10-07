@@ -78,3 +78,9 @@ func TestAnEmptyOrBlankValueIsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestABOMAfterAUnicodeSpaceIsStillEmpty(t *testing.T) {
+	if err := Check("ANTHROPIC_API_KEY", "\u00a0\uFEFF"); !errors.Is(err, ErrEmptyValue) {
+		t.Errorf("got %v, want ErrEmptyValue", err)
+	}
+}

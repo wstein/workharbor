@@ -1286,7 +1286,7 @@ func TestTheAgentKeyStepFailsAnEmptyValueWithAnActionableStep(t *testing.T) {
 	}
 	check := steps(t, Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502})["agent-key"]
 	got, detail := status(check)
-	if got != Fail || !strings.Contains(detail, "write the API key after the =") || !strings.Contains(detail, "remove agent_api_key_env_file from the configuration") || strings.Contains(detail, "D40") || strings.Contains(detail, "setup-token") {
+	if got != Fail || !strings.Contains(detail, "write the value after the =") || !strings.Contains(detail, "remove agent_api_key_env_file from the configuration") || strings.Contains(detail, "D40") || strings.Contains(detail, "setup-token") {
 		t.Errorf("status %s, detail %q", got, detail)
 	}
 }
