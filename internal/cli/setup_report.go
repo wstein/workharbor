@@ -25,7 +25,11 @@ func setupPresentation(steps []doctor.Check, outcomes []setup.Outcome, phase doc
 					if outcome.UseUser != "" {
 						context.Account = outcome.UseUser
 					}
-					r.Fix = context.command(step.FixCommand(outcome.Detail))
+					fix := step.FixCommand(outcome.Detail)
+					if outcome.Remedy != "" { // not reachable: the step that unblocks it, not its own
+						fix = outcome.Remedy
+					}
+					r.Fix = context.command(fix)
 				}
 				break
 			}

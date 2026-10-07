@@ -323,7 +323,8 @@ func (d Deps) needsConfigFile(context.Context) *Unreachable {
 	}
 	u := &Unreachable{Why: "the workspace roots are read from " + d.ConfigPath + ", which is not written yet", Step: "config-first"}
 	if d.User != "" && d.User != d.account() {
-		u.Step, u.Command = "", "as "+d.account()+", in its desktop session: whr setup --only config-base"
+		u.Step, u.Command, u.Where = "", "whr setup --only config-base", "as "+d.account()+", in its desktop session"
+		u.Why += " (the administrator's run still cannot read it: open question)"
 	}
 	return u
 }
@@ -359,8 +360,9 @@ func hostSteps(d Deps) []Check {
 		// separate workharbor account never writes into that home (least privilege).
 		if d.User != "" && d.User != d.account() {
 			return &Unreachable{
-				Why:     "the configuration belongs to " + d.account() + ", and " + d.User + " does not write it",
-				Command: "as " + d.account() + ", in its desktop session: whr setup --only config-base",
+				Why:     "the configuration belongs to " + d.account() + ", and " + d.User + " does not write it (the administrator's run still cannot read it: open question)",
+				Command: "whr setup --only config-base",
+				Where:   "as " + d.account() + ", in its desktop session",
 			}
 		}
 		return nil

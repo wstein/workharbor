@@ -82,9 +82,12 @@ type Check struct {
 
 // Unreachable says why a step cannot run now and what to do. Step names a
 // remedy step of the same phase (the command is built from the run's own
-// flags); Command is the literal remedy when no step of this run is one.
+// flags). Command is the bare remedy command ("whr setup --only config-base",
+// no account name, no prose) when it is a step of the other phase, and Where
+// says in words who runs it. The prose belongs in Why and Where, never in a
+// command line the person copies.
 type Unreachable struct {
-	Why, Step, Command string
+	Why, Step, Command, Where string
 }
 
 // basic is a check as the list below writes it; base fills in the rest.

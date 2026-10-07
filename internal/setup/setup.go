@@ -210,6 +210,10 @@ type Outcome struct {
 	// digest of its fix: what --save-answers saves. Both are empty when the step
 	// was not decided that way, or was asked again.
 	Decision, Fix string
+	// Remedy is the bare command that fixes a step that was not reachable, and
+	// Next the same with this run's flags: the report and the summary name them
+	// instead of a command for the step itself.
+	Remedy, Next string
 }
 
 // Select returns the steps to run: those of the phase, from --from on, or only
@@ -361,16 +365,39 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			if u := s.Reach(ctx); u != nil {
 				// The precondition is missing: the check cannot run, so there is nothing
 				// to fix and no password to ask for (issue #394). It is not a failure.
-				remedy := u.Command
+				// bare is the remedy without this run's flags (the report adds them), shown
+				// is what the person copies, with the run's flags.
+				bare, shown := u.Command, ""
 				if u.Step != "" {
-					remedy = nextCommand(Options{Resume: o.Resume, Only: []string{u.Step}}, u.Step, []string{u.Step})
+					bare = "whr setup host --only " + u.Step
+					if o.Phase != doctor.PhaseHost {
+						bare = "whr setup --only " + u.Step
+					}
+					shown = nextCommand(Options{Resume: o.Resume, Only: []string{u.Step}}, u.Step, []string{u.Step})
+				} else {
+					// the other phase's command keeps the run's --dev and --user
+					argv := strings.Fields(u.Command)
+					for i, w := range o.Resume {
+						switch {
+						case w == "--dev":
+							argv = append(argv, w)
+						case w == "--user" && i+1 < len(o.Resume):
+							argv = append(argv, w, o.Resume[i+1])
+						}
+					}
+					shown = QuoteArgv(argv)
 				}
 				detail := "not reachable: " + u.Why
 				dataLine(o, doctor.NotVerified, s.Name, detail)
 				ui.Report(render.LevelSkipped, detail)
-				ui.Action("first run: " + remedy)
-				out := Outcome{Step: s.Name, Status: doctor.NotVerified, Detail: detail, Asked: true, NeedsHuman: o.Unattended}
-				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: []string{remedy}}
+				first := "first run"
+				if u.Where != "" {
+					first += " " + u.Where
+				}
+				ui.Action(first + ":")
+				ui.Command(shown)
+				out := Outcome{Step: s.Name, Status: doctor.NotVerified, Detail: detail, Asked: true, NeedsHuman: o.Unattended, Remedy: bare, Next: shown}
+				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: []string{shown}}
 				outs = append(outs, out)
 				outcome := protocol.OutNotRun
 				if o.Unattended {
@@ -820,7 +847,9 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 	}
 	if first != "" {
 		next := ""
-		if useUser != "" {
+		if r := firstRemedy(outs, first); r != "" {
+			next = r // a step that is not reachable: its own --from would stay unreachable
+		} else if useUser != "" {
 			argv := append([]string(nil), o.Resume...)
 			if len(argv) == 0 {
 				argv = []string{"whr", "setup"}
@@ -862,6 +891,17 @@ func nextCommand(o Options, first string, left []string) string {
 		argv = append(argv, "--from", first)
 	}
 	return QuoteArgv(argv)
+}
+
+// firstRemedy is the command that unblocks the first step left, when that step
+// was not reachable; "" otherwise.
+func firstRemedy(outs []Outcome, first string) string {
+	for _, out := range outs {
+		if out.Step == first {
+			return out.Next
+		}
+	}
+	return ""
 }
 
 func listOrNone(l []string) string {

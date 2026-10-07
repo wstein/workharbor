@@ -13,6 +13,7 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
 var bg = context.Background()
@@ -619,7 +620,7 @@ func TestAnUnreachableStepIsNotAFailureAndAsksNoPassword(t *testing.T) {
 	if len(outs) != 1 || outs[0].Status != doctor.NotVerified || !outs[0].Asked {
 		t.Errorf("outcome %+v", outs)
 	}
-	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run: whr setup host --dev --only first") {
+	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "$ whr setup host --dev --only first") {
 		t.Errorf("output %q", errOut)
 	}
 	if strings.Contains(errOut, "fix the cause") {
@@ -675,5 +676,42 @@ func TestHostSetupCreatesTheConfigurationBeforeWorkspaceVolume(t *testing.T) {
 	}
 	if strings.Contains(errOut, "needs a valid configuration") {
 		t.Errorf("workspace-volume was run before the configuration existed: %s", errOut)
+	}
+}
+
+type memLog struct{ entries []protocol.Entry }
+
+func (m *memLog) Append(e protocol.Entry) error { m.entries = append(m.entries, e); return nil }
+
+// The separate-account remedy keeps --dev, keeps prose out of the copyable
+// command, and is what the summary's next: names; the protocol says not_run.
+func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
+	var fixed bool
+	s := step("later", doctor.PhaseHost, &fixed, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"x"}}}})
+	s.Reach = func(context.Context) *doctor.Unreachable {
+		return &doctor.Unreachable{Why: "belongs to workharbor", Command: "whr setup --only config-base", Where: "as workharbor, in its desktop session"}
+	}
+	lg := &memLog{}
+	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--dev"}, Log: lg}
+	outs, _, errOut := run(t, &fakeHost{}, []doctor.Check{s}, o)
+	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "$ whr setup --only config-base --dev\n") {
+		t.Errorf("output %q", errOut)
+	}
+	if outs[0].Remedy != "whr setup --only config-base" || outs[0].Next != "whr setup --only config-base --dev" {
+		t.Errorf("outcome %+v", outs[0])
+	}
+	var sum bytes.Buffer
+	Summary(&sum, outs, o)
+	if !strings.Contains(sum.String(), "next: whr setup --only config-base --dev") || strings.Contains(sum.String(), "--from") {
+		t.Errorf("summary %q", sum.String())
+	}
+	found := false
+	for _, e := range lg.entries {
+		if e.Event == protocol.EventStepAfter && e.Step == "later" {
+			found = e.Outcome == protocol.OutNotRun
+		}
+	}
+	if !found {
+		t.Errorf("protocol %+v", lg.entries)
 	}
 }

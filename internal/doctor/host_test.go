@@ -1541,10 +1541,10 @@ func TestConfigFirstIsTheFirstHostStepAndTheReadersNeedIt(t *testing.T) {
 	d.User, d.Account = "admin", "workharbor"
 	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
 	cf := Steps(Checks(d), PhaseHost)[0]
-	if u := cf.Reach(context.Background()); u == nil || !strings.Contains(u.Command, "as workharbor") {
+	if u := cf.Reach(context.Background()); u == nil || u.Command != "whr setup --only config-base" || !strings.Contains(u.Where, "as workharbor") {
 		t.Errorf("admin: %+v", u)
 	}
-	if u := steps(t, d)["spotlight"].Reach(context.Background()); u == nil || u.Step != "" || !strings.Contains(u.Command, "as workharbor") {
+	if u := steps(t, d)["spotlight"].Reach(context.Background()); u == nil || u.Step != "" || u.Command != "whr setup --only config-base" || !strings.Contains(u.Where, "as workharbor") {
 		t.Errorf("spotlight as admin: %+v", u)
 	}
 }

@@ -203,3 +203,15 @@ func reportWriteFailure(t *testing.T, pass bool) {
 		t.Fatalf("write failure not reported: code %d, %q", code, stderr.String())
 	}
 }
+
+// An unreachable step shows the step that unblocks it in the report, not a
+// setup command for itself (#394).
+func TestSetupPresentationNamesTheRemedyOfAnUnreachableStep(t *testing.T) {
+	steps := doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json", User: "werner", Account: "werner"}), doctor.PhaseHost)
+	outs := []setup.Outcome{{Step: "workspace-volume", Status: doctor.NotVerified, Detail: "not reachable: x", Remedy: "whr setup host --only config-first"}}
+	p := setupPresentation(steps, outs, doctor.PhaseHost, repairContext{Dev: true, Account: "werner"})
+	got := p.Checks[0].Fix
+	if got != "whr setup host --dev --only config-first --user 'werner'" {
+		t.Errorf("fix %q", got)
+	}
+}
