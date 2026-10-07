@@ -6,10 +6,12 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
@@ -255,5 +257,74 @@ func TestOutputLinesStayNarrowAndHoldNoRawToolText(t *testing.T) {
 		if strings.Contains(errb.String()+out.String(), s) {
 			t.Errorf("raw tool text %q in the default output:\n%s%s", s, errb.String(), out.String())
 		}
+	}
+}
+
+// pauseHost counts the pages it was asked to pause at and quits at quitAt (0: never).
+type pauseHost struct {
+	fakeHost
+	pauses, quitAt int
+}
+
+func (p *pauseHost) Pause() error {
+	p.pauses++
+	if p.pauses == p.quitAt {
+		return render.ErrQuit
+	}
+	return nil
+}
+
+func TestPagedRunPausesBeforeEveryStepAndQuitsAtQ(t *testing.T) {
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Paged: true, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+	h := &pauseHost{}
+	if _, err := Run(bg, goldenSteps(), h, o); err != nil {
+		t.Fatal(err)
+	}
+	if h.pauses != 4 {
+		t.Errorf("pauses = %d, want one per step page (4)", h.pauses)
+	}
+	h = &pauseHost{quitAt: 2}
+	outs, err := Run(bg, goldenSteps(), h, o)
+	var q *QuitError
+	if !errors.As(err, &q) || q.Step != "workharbor-user" || len(outs) != 1 {
+		t.Errorf("q at the second page: outs=%d err=%v", len(outs), err)
+	}
+}
+
+// Without a terminal nothing pauses: no prompt, and a blocking input is never read.
+func TestUnpagedRunHasNoPressEnterAndNeverBlocks(t *testing.T) {
+	pr, pw := io.Pipe() // an input that never gives a byte
+	defer pw.Close()
+	var errb bytes.Buffer
+	h := Terminal{In: bufio.NewReader(pr), Err: &errb}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &bytes.Buffer{}, Err: &errb}
+		_, _ = Run(bg, goldenSteps(), h, o)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the run blocked on the input")
+	}
+	if strings.Contains(errb.String(), "Press Enter") {
+		t.Errorf("a Press Enter prompt without a terminal:\n%s", errb.String())
+	}
+}
+
+func TestTerminalPauseTakesEnterAndQ(t *testing.T) {
+	var errb bytes.Buffer
+	if err := (Terminal{In: bufio.NewReader(strings.NewReader("\n")), Err: &errb}).Pause(); err != nil {
+		t.Errorf("Enter: %v", err)
+	}
+	if !strings.Contains(errb.String(), "Press Enter to continue (q to quit)") {
+		t.Errorf("prompt: %q", errb.String())
+	}
+	if err := (Terminal{In: bufio.NewReader(strings.NewReader("q\n")), Err: &errb}).Pause(); !errors.Is(err, render.ErrQuit) {
+		t.Errorf("q: %v", err)
+	}
+	if err := (Terminal{In: bufio.NewReader(strings.NewReader("")), Err: &errb}).Pause(); err != nil {
+		t.Errorf("closed input must not block or fail: %v", err)
 	}
 }

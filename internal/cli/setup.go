@@ -326,6 +326,7 @@ func newSetup(st *state) *cobra.Command {
 		so := setup.Options{
 			Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose,
 			Unattended: unattended, Account: env.User, Home: st.env.Getenv("HOME"),
+			Paged: !dryRun && !unattended && env.IsTerminal(),
 		}
 		if answersPath != "" {
 			f, digest, err := loadAnswers(env, answersPath, st.env.Stderr)

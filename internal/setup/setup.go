@@ -46,6 +46,12 @@ type Asker interface {
 	Ask(question string, d render.Default) (render.Answer, error)
 }
 
+// Pauser is what a Host adds to page the output: Pause says "Press Enter to
+// continue (q to quit)" and waits. It returns render.ErrQuit for q.
+type Pauser interface {
+	Pause() error
+}
+
 // Ask asks through the Host's Asker, or through Confirm when it has none.
 func Ask(h Host, question string, d render.Default) (render.Answer, error) {
 	if a, ok := h.(Asker); ok {
@@ -136,6 +142,10 @@ type Options struct {
 	// zero value is plain ASCII. Verbose adds the raw text of the tools.
 	Style   render.Style
 	Verbose bool
+	// Paged stops after the legend page and after every step page for Enter,
+	// when the Host is a Pauser. Off for runs that must not block (no terminal,
+	// unattended, dry run).
+	Paged bool
 
 	// Answers is the answer file of a user-phase run (issue #337); nil asks
 	// every step. A host-phase run never uses one, whatever it is given: the
@@ -291,6 +301,14 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		title := s.Title
 		if title == "" {
 			title = s.Name
+		}
+		if p, ok := h.(Pauser); ok && o.Paged {
+			if err := p.Pause(); errors.Is(err, render.ErrQuit) {
+				if _, e := rc.finish(nil, protocol.RunQuit, nil); e != nil {
+					return outs, e
+				}
+				return outs, &QuitError{Step: s.Name, Resume: nextCommand(o, s.Name, names(chosen[i:]))}
+			}
 		}
 		ui.Header(i+1, len(chosen), title)
 		st, detail := s.Run(ctx)
