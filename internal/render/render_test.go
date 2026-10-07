@@ -254,3 +254,24 @@ func TestToolWriterCRLFSplitAcrossWritesMatchesUnsplit(t *testing.T) {
 		t.Fatalf("split %q != whole %q", split.String(), whole.String())
 	}
 }
+
+func TestToolWriterLoneCRIsHeldNotDropped(t *testing.T) {
+	var whole, split bytes.Buffer
+	w := NewToolWriter(&whole, Style{})
+	_, _ = w.Write([]byte("a\rb"))
+	w.End()
+	s := NewToolWriter(&split, Style{})
+	_, _ = s.Write([]byte("a\r"))
+	_, _ = s.Write([]byte("b"))
+	s.End()
+	if whole.String() != split.String() {
+		t.Fatalf("split %q != whole %q", split.String(), whole.String())
+	}
+	var tail bytes.Buffer
+	e := NewToolWriter(&tail, Style{})
+	_, _ = e.Write([]byte("50%\r"))
+	e.End()
+	if !strings.Contains(tail.String(), `50%\r`) { // shown escaped, not dropped
+		t.Fatalf("trailing CR lost at End: %q", tail.String())
+	}
+}
