@@ -288,7 +288,7 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 	}
 	if t.Log != nil {
 		lw.End() // flush the held-back partial text
-		t.Log.Command(argv, exitCodeOf(err), logged.String(), pw)
+		t.Log.CommandShown(argv, exitCodeOf(err), logged.String(), pw)
 	}
 	return err
 }

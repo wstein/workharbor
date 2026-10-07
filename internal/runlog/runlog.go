@@ -125,11 +125,13 @@ func (l *Log) Close() error {
 	return l.f.Close()
 }
 
-func (l *Log) put(s string) {
+func (l *Log) put(s string) { l.write(s, true) }
+
+func (l *Log) write(s string, stream bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	_, _ = io.WriteString(l.f, s)
-	if l.Stream != nil {
+	if stream && l.Stream != nil {
 		_, _ = io.WriteString(l.Stream, s)
 	}
 }
@@ -137,13 +139,24 @@ func (l *Log) put(s string) {
 // Command records a command (its argv, which holds no secret), its exit code and
 // its output. secret, when not empty, is masked in the output.
 func (l *Log) Command(argv []string, exit int, output, secret string) {
-	l.CommandAnswer(argv, exit, output, secret, "")
+	l.command(argv, exit, output, secret, "", true)
 }
 
 // CommandAnswer is Command for a command whose non-zero exit is an expected
 // answer (answer says which, e.g. "not a member"): the log shows the answer
 // and the status, not a bare "exit 67" that reads like an error.
 func (l *Log) CommandAnswer(argv []string, exit int, output, secret, answer string) {
+	l.command(argv, exit, output, secret, answer, true)
+}
+
+// CommandShown is Command for a command whose output the person already saw
+// live on the terminal: the --verbose stream gets the argv and the exit code,
+// not the output a second time. The file gets everything.
+func (l *Log) CommandShown(argv []string, exit int, output, secret string) {
+	l.command(argv, exit, output, secret, "", false)
+}
+
+func (l *Log) command(argv []string, exit int, output, secret, answer string, streamOutput bool) {
 	if l == nil {
 		return
 	}
@@ -153,16 +166,16 @@ func (l *Log) CommandAnswer(argv []string, exit int, output, secret, answer stri
 	l.mu.Lock()
 	l.last = output
 	l.mu.Unlock()
-	var b strings.Builder
+	head := fmt.Sprintf("$ %s\nexit %d\n", strings.Join(argv, " "), exit)
 	if answer != "" {
-		fmt.Fprintf(&b, "$ %s\nanswer: %s (exit %d)\n", strings.Join(argv, " "), answer, exit)
-	} else {
-		fmt.Fprintf(&b, "$ %s\nexit %d\n", strings.Join(argv, " "), exit)
+		head = fmt.Sprintf("$ %s\nanswer: %s (exit %d)\n", strings.Join(argv, " "), answer, exit)
 	}
+	body := ""
 	if output = strings.TrimRight(output, "\n"); output != "" {
-		b.WriteString(output + "\n")
+		body = output + "\n"
 	}
-	l.put(b.String())
+	l.write(head, true)
+	l.write(body, streamOutput)
 }
 
 // Step records one line for a step: status is ok, fail or unknown.

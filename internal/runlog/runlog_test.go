@@ -286,3 +286,19 @@ func TestResetOutputClearsTheTail(t *testing.T) {
 	var nilLog *Log
 	nilLog.ResetOutput()
 }
+
+func TestCommandShownStreamsNoOutput(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	l, _ := Open(p)
+	var stream strings.Builder
+	l.Stream = &stream
+	l.CommandShown([]string{"tool"}, 1, "SEEN-LIVE\n", "")
+	_ = l.Close()
+	b, _ := os.ReadFile(p) //nolint:gosec // a test path
+	if want := "$ tool\nexit 1\nSEEN-LIVE\n"; string(b) != want {
+		t.Errorf("file %q, want %q", b, want)
+	}
+	if got, want := stream.String(), "$ tool\nexit 1\n"; got != want {
+		t.Errorf("stream %q, want %q", got, want)
+	}
+}
