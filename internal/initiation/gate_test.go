@@ -14,10 +14,11 @@ import (
 )
 
 type adapter struct {
-	calls int
-	err   error
-	st    *store.Store
-	t     *testing.T
+	calls     int
+	err       error
+	sessOnErr bool
+	st        *store.Store
+	t         *testing.T
 }
 
 func (*adapter) Name() string                     { return "test" }
@@ -29,6 +30,9 @@ func (a *adapter) send(ctx context.Context) (agent.Session, error) {
 		a.t.Fatalf("send preceded its audit record: %v, %d events for %d sends", err, len(events), a.calls)
 	}
 	if a.err != nil {
+		if a.sessOnErr {
+			return &session{a: a}, a.err
+		}
 		return nil, a.err
 	}
 	return &session{a: a}, nil
@@ -202,5 +206,17 @@ func TestDecisionAnswerCannotMint(t *testing.T) {
 		if initiation.Valid(initiation.DecisionAnswer(ctx, "decision")) {
 			t.Fatal("answer invented a capability")
 		}
+	}
+}
+
+// A failed send returns no session, even when the adapter hands one back (#356).
+func TestFailedSendReturnsNoSession(t *testing.T) {
+	_, a, g := fixture(t)
+	a.err, a.sessOnErr = errors.New("boom"), true
+	if s, err := g.Start(human(), agent.StartSpec{}); err == nil || s != nil {
+		t.Errorf("Start = %v, %v", s, err)
+	}
+	if s, err := g.Resume(human(), agent.StartSpec{}, "id"); err == nil || s != nil {
+		t.Errorf("Resume = %v, %v", s, err)
 	}
 }

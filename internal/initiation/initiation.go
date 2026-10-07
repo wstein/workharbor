@@ -123,7 +123,10 @@ func (g *Gate) Start(ctx context.Context, spec agent.StartSpec) (agent.Session, 
 		return nil, err
 	}
 	s, err := g.adapter.Start(ctx, spec)
-	return g.wrap(s), err
+	if err != nil {
+		return nil, err
+	}
+	return g.wrap(s), nil
 }
 
 // Resume spends and audits the marker before resuming the adapter.
@@ -132,7 +135,10 @@ func (g *Gate) Resume(ctx context.Context, spec agent.StartSpec, id string) (age
 		return nil, err
 	}
 	s, err := g.adapter.Resume(ctx, spec, id)
-	return g.wrap(s), err
+	if err != nil {
+		return nil, err
+	}
+	return g.wrap(s), nil
 }
 
 func (g *Gate) wrap(s agent.Session) agent.Session {

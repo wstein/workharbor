@@ -321,7 +321,7 @@ func Run(ctx context.Context, d Deps) error {
 		_ = apiLn.Close()
 		return fmt.Errorf("reconcile at start: %w", err)
 	}
-	logf("reconciled: %d interrupted, %d resumed, %d failed", len(rep.Interrupted), len(rep.Resumed), len(rep.Failed))
+	logf("reconciled: %d interrupted, %d awaiting a human, %d failed", len(rep.Interrupted), len(rep.AwaitingHuman), len(rep.Failed))
 	errLog.note(rep.Errors)
 	if d.Ready != nil {
 		d.Ready(ln.Addr(), apiLn.Addr())

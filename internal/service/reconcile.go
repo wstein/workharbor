@@ -16,11 +16,15 @@ import (
 // Report says what one reconciler pass did.
 type Report struct {
 	Interrupted []domain.ID // runs marked interrupted
-	Resumed     []domain.ID // runs relaunched from their session
+	Resumed     []domain.ID // always empty from Reconcile (D57); only an explicit human resume relaunches
 	Failed      []domain.ID // runs that could not be resumed and now wait on a Decision
-	Expired     []domain.ID // Decisions that passed their deadline
-	Prepared    []domain.ID // tasks whose prepare was started again (D51)
-	Published   []domain.ID // tasks whose approved publish was started (D51)
+	// AwaitingHuman lists runs left interrupted after the pass. Nothing was
+	// sent for them: a human resumes them (D57). It repeats on every pass until
+	// they are resumed or ended.
+	AwaitingHuman []domain.ID
+	Expired       []domain.ID // Decisions that passed their deadline
+	Prepared      []domain.ID // tasks whose prepare was started again (D51)
+	Published     []domain.ID // tasks whose approved publish was started (D51)
 	// Errors are per-task problems that did not stop the pass: an environment
 	// that never answered exec, a runtime call that failed. The run stays
 	// interrupted and the next pass tries again.
@@ -32,7 +36,6 @@ type Report struct {
 // Domain state changes are made through the aggregate.
 // Container addresses are read for nothing and never stored.
 func (s *Service) Reconcile(ctx context.Context) (Report, error) {
-	ctx = initiation.With(ctx, initiation.Marker{})
 	var rep Report
 	rep.Errors = append(rep.Errors, s.sweepDurations(ctx)...)
 	infos, err := s.rt.List(ctx, s.cfg.Owner)
@@ -128,25 +131,18 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 		}
 	}
 
-	// 2. Interrupted runs remain interrupted without a fresh human marker.
+	// 2. Interrupted runs stay interrupted: no marker exists here, so the pass
+	// sends nothing and only reports them (D57; reset time authorizes nothing).
 	agg, err := s.store.LoadTask(ctx, task)
 	if err != nil {
 		return err
 	}
-	var todo []domain.ID
-	now := s.clock.Now()
 	for _, r := range agg.Runs() {
-		if r.State == domain.RunInterrupted && !agg.WaitsForReset(r.ID, now) {
-			todo = append(todo, r.ID)
+		if r.State == domain.RunInterrupted {
+			rep.AwaitingHuman = append(rep.AwaitingHuman, r.ID)
 		}
 	}
-	// Reset time never authorizes recovery.
 	var firstErr error
-	for _, run := range todo {
-		if err := s.recover(ctx, task, run, rep); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
 	// 3. Complete what a restart interrupted on the way to a pull request: a
 	// stopped run nothing was prepared for, an approved commit not yet pushed (D51).
 	if s.pipe != nil {
