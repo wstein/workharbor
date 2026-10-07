@@ -173,6 +173,17 @@ func (l *Log) Step(name, status, detail string) {
 	l.put(fmt.Sprintf("step %s: %s %s\n", name, status, oneLine(detail)))
 }
 
+// ResetOutput forgets the output of the last command, so the failure tail of a
+// step that ran no command does not show the previous step's output.
+func (l *Log) ResetOutput() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.last = ""
+	l.mu.Unlock()
+}
+
 // Tail is the last n lines of the output of the last command.
 func (l *Log) Tail(n int) string {
 	if l == nil {

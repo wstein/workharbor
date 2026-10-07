@@ -274,3 +274,15 @@ func TestOpenDefaultKeepsTwoRunsOfTheSameSecondApart(t *testing.T) {
 		}
 	}
 }
+
+func TestResetOutputClearsTheTail(t *testing.T) {
+	l, _ := Open(filepath.Join(t.TempDir(), "x.log"))
+	defer func() { _ = l.Close() }()
+	l.Command([]string{"t"}, 1, "old", "")
+	l.ResetOutput()
+	if got := l.Tail(5); got != "" {
+		t.Errorf("tail after reset %q", got)
+	}
+	var nilLog *Log
+	nilLog.ResetOutput()
+}

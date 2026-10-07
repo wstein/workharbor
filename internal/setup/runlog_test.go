@@ -3,8 +3,10 @@ package setup
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -53,5 +55,28 @@ func TestRunLogHasStepLinesAndAFailureSummary(t *testing.T) {
 	}
 	if fi, _ := os.Stat(lp); fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v", fi.Mode().Perm())
+	}
+}
+
+// silentFailHost fails a command without logging any output.
+type silentFailHost struct{ fakeHost }
+
+func (silentFailHost) Run(context.Context, doctor.Cmd) error { return errors.New("exit status 5") }
+
+func TestFailureTailIsNotTheOutputOfAnEarlierStep(t *testing.T) {
+	lg, err := runlog.Open(filepath.Join(t.TempDir(), "run.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lg.Close() }()
+	stale := "STALE-" + strconv.Itoa(rand.Int())  //nolint:gosec // a random marker, not a secret
+	lg.Command([]string{"earlier"}, 0, stale, "") // the previous step's output
+	var fixed bool
+	bad := step("account", doctor.PhaseHost, &fixed, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"mktool", "go"}}}})
+	h := &silentFailHost{fakeHost{answers: []string{"y"}}}
+	var so, se strings.Builder
+	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
+	if strings.Contains(se.String(), stale) {
+		t.Errorf("the failure shows an earlier step's output:\n%s", se.String())
 	}
 }

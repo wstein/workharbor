@@ -437,6 +437,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			outs = append(outs, out)
 			continue
 		}
+		o.RunLog.ResetOutput() // a failure tail is this step's output only
 		res, err := rn.apply(ctx, s, &out)
 		var fatal fatalError
 		if errors.As(err, &fatal) {
