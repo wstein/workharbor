@@ -13,7 +13,6 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/render"
-	"github.com/wstein/workharbor/internal/runlog"
 )
 
 var bg = context.Background()
@@ -575,26 +574,6 @@ func TestACutShortNeedsCheckInterruptsInsteadOfSkipping(t *testing.T) {
 	}
 	if strings.Contains(se.String(), "not run: it needs") {
 		t.Errorf("recorded as not run: %q", se.String())
-	}
-}
-
-func TestSummaryNamesTheLogPath(t *testing.T) {
-	var b bytes.Buffer
-	outs := []Outcome{{Step: "config-dir", Status: doctor.OK}}
-	lp := filepath.Join(t.TempDir(), "run.log")
-	lg, err := runlog.Open(lp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = lg.Close() }()
-	Summary(&b, outs, Options{RunLog: lg})
-	if !strings.Contains(b.String(), "log  "+lp) {
-		t.Errorf("no log path in\n%s", b.String())
-	}
-	b.Reset()
-	Summary(&b, outs, Options{})
-	if strings.Contains(b.String(), "log  ") {
-		t.Errorf("log line without a path:\n%s", b.String())
 	}
 }
 

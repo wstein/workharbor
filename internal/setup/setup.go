@@ -778,9 +778,6 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 		}
 	}
 	ui.Todo(todo)
-	if p := o.RunLog.Path(); p != "" {
-		ui.KV("log", p)
-	}
 }
 
 // wrapList wraps a comma-separated list at 80 columns, continuation lines

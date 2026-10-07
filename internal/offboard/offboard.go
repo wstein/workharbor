@@ -461,8 +461,6 @@ type Log struct {
 	Now    func() time.Time
 	Whr    string
 	Admin  string // the account sysadminctl authenticates as, set by Execute
-	// Path is the per-run log (#379), named in the closing summary.
-	Path string
 }
 
 func (l Log) line(result string, exit int, ran [][]string) error {
@@ -547,14 +545,14 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		o.Note("whr: cannot record the offboard result: %s", oneLine(err.Error()))
 		code = exitcode.Error
 	}
-	o.ui().Final(finalOf(f, code, lg.Path))
+	o.ui().Final(finalOf(f, code))
 	o.Note("%s", Unverified)
 	return code
 }
 
 // finalOf is the closing summary of a delete run.
-func finalOf(f Facts, code int, logPath string) render.Final {
-	fin := render.Final{LogPath: logPath}
+func finalOf(f Facts, code int) render.Final {
+	fin := render.Final{}
 	if code == exitcode.OK {
 		fin.Changed = []string{"Deleted the account " + f.Account + " and its home folder."}
 		return fin

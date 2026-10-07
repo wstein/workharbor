@@ -42,6 +42,10 @@ func TestSetupDryRunLogFileAndPath(t *testing.T) {
 	if !strings.Contains(errOut, "log  "+p) {
 		t.Errorf("path not printed:\n%s", errOut)
 	}
+	lines := strings.Split(strings.TrimSpace(errOut), "\n")
+	if last := lines[len(lines)-1]; last != "log  "+p {
+		t.Errorf("summary does not end with the log path: %q", last)
+	}
 }
 
 func TestLogFileThatCannotBeOpenedIsAUsageError(t *testing.T) {

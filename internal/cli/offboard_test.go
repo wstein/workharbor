@@ -346,6 +346,9 @@ func TestOffboardRunLog(t *testing.T) {
 	if code == exitcode.OK {
 		t.Fatal("want a failure")
 	}
+	if !strings.HasSuffix(strings.TrimSpace(errOut), "log  "+p2) {
+		t.Errorf("failure summary does not end with the log path:\n%s", errOut)
+	}
 	b, _ := os.ReadFile(p2) //nolint:gosec // a test path
 	if !strings.Contains(string(b), "step delete-user: fail") {
 		t.Errorf("log: %s", b)
