@@ -235,11 +235,15 @@ Each secret file must be `0600`, owned by you, absolute, a regular file with one
 
 workharbor talks to GitHub as an App of your own, never with your personal token (D15, D31): its tokens last about an hour, cover one repository and only the permissions below, and the App cannot merge, tag or release. On github.com, as the repository's owner:
 
-**The quick way: `whr github app create`** (provisional name). It creates the App from a manifest, so there is no form to fill in and no `.pem` to download. You need the `listen` and `api_token_file` lines of the configuration (step 13) and the HTTPS name your forwarder gives workharbor (step 7). `whr serve` must not be running, because the supervisor needs the App this creates.
+**The quick way: `whr github app create`** (provisional name). It creates the App from a manifest, so there is no form to fill in and no `.pem` to download. You need the `listen` and `api_token_file` lines of the configuration (step 13) and the HTTPS name your forwarder gives workharbor (step 7), which belongs in the configuration as `public_url`: `whr setup` asks for it (the `public-url` step) and writes it after a `y`. Type the host name only, for example `whr.example.ts.net`: `https://` is added when it is missing, the host is lower-cased and a trailing slash is dropped. An explicit `http://`, a path, a user name, a query, a space or a port outside 1 to 65535 is refused, because GitHub sends the browser to this name; `whr` does not guess it, since reading a Tailscale name would need the network. `whr serve` must not be running, because the supervisor needs the App this creates.
 
 ```bash
-whr github app create --public-url https://<your-forwarded-name>
+whr github app create
 ```
+
+`--public-url <name>` overrides `public_url` for one run. To try the flow on the Mac itself, without any forwarder, run `whr github app create --local` and open the link, `http://127.0.0.1:8787/...`, in a browser on this Mac; GitHub redirecting a browser back to a loopback address is {{< status unverified >}} on a real host.
+
+**If the link times out.** The command listens on loopback only (`listen`, default `127.0.0.1:8787`), and the forwarder of step 7 must map your HTTPS name to that port (`tailscale serve`). The macOS application firewall (`/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate`, which needs no `sudo`) does not filter a connection to loopback, so it cannot be why `http://127.0.0.1:8787` fails on this Mac; a link that times out points at the name or the forwarder: a name the device cannot resolve (MagicDNS or `.local` names need the VPN or the same network), or a forwarder that is not serving. `whr doctor` reports `public-url`: it checks the configuration and the listener and reads the firewall state, and says plainly that it does not check the forwarder ({{< status unverified >}} on a real host).
 
 1. It prints a link and waits on the configuration's `listen` address. Open the link on any device that reaches that name (the Mac or the phone, over the VPN of step 7) and press **Continue to GitHub**. GitHub shows the App's name and asks you to confirm: **Create GitHub App**. For an organization's App, add `--org <name>`; you must own the organization.
 2. GitHub sends the browser back to workharbor with a one-time code. Only a link this command just made is accepted, once, and for ten minutes (`--ttl`); anything else is refused. `whr` exchanges the code for the App and writes the private key to `~/.config/whr/github-app-<id>.pem` (mode `0600`, never overwriting a file). The key, the client secret and the webhook secret are never printed or logged; the two secrets are dropped.
@@ -319,6 +323,7 @@ The remaining steps run as the `workharbor` user: steps 2 and 3 from any `workha
     ```json
     {
       "listen": "127.0.0.1:8787",
+      "public_url": "https://<your-forwarded-name>",
       "repositories": [{ "name": "<owner>/<repository>", "integration_branch": "develop" }],
       "roots": {
         "workspaces": ["/Volumes/<ssd>/workspaces"],
