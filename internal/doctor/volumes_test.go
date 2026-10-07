@@ -2,10 +2,14 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"github.com/wstein/workharbor/internal/render"
 )
 
 func fixture(t *testing.T, name string) string {
@@ -116,5 +120,99 @@ func TestSizeIsShortAndDecimal(t *testing.T) {
 		if got := size(in); got != want {
 			t.Errorf("size(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func chooser(t *testing.T) Deps {
+	return Deps{GOOS: "darwin", Runner: fakeDiskutil(t), Home: "/Users/fake"}
+}
+
+func TestTheWorkspaceVolumeIsChosenByNumberWithADefault(t *testing.T) {
+	ctx := context.Background()
+	for name, tc := range map[string]struct {
+		lines []string
+		want  string
+	}{
+		"Enter is the data volume": {[]string{""}, "/Users/fake/workspaces"},
+		"2 is the store":           {[]string{"2"}, "/nix/workspaces"},
+		"3 is the external disk":   {[]string{" 3 "}, "/Volumes/Fake SSD/workspaces"},
+		"other path":               {[]string{"4", "/Volumes/else/ws/../ws"}, "/Volumes/else/ws"},
+		"other path default":       {[]string{"4", ""}, "/Users/fake/workspaces"},
+	} {
+		a := &answers{lines: tc.lines}
+		got, err := chooser(t).chooseWorkspaces(ctx, a)
+		if err != nil || got != tc.want {
+			t.Errorf("%s: %q, %v; want %q", name, got, err, tc.want)
+		}
+	}
+}
+
+func TestChoosingNothingChoosesNothing(t *testing.T) {
+	ctx := context.Background()
+	for name, lines := range map[string][]string{
+		"q":              {"q"},
+		"quit":           {"QUIT"},
+		"q for the path": {"4", "q"},
+		"zero":           {"0"},
+		"too big":        {"5"},
+		"text":           {"ssd"},
+		"relative path":  {"4", "ws"},
+		"escape path":    {"4", "/tmp/\u009b2J"},
+	} {
+		got, err := chooser(t).chooseWorkspaces(ctx, &answers{lines: lines})
+		if err == nil || got != "" {
+			t.Errorf("%s: %q, %v", name, got, err)
+		}
+		if strings.Contains(name, "q") && name != "too big" && !errors.Is(err, render.ErrQuit) && name != "zero" {
+			t.Errorf("%s: %v is not a quit", name, err)
+		}
+	}
+}
+
+func TestTheChoiceFitsEightyColumnsAndEscapesDiskNames(t *testing.T) {
+	r := fakeDiskutil(t)
+	r["diskutil info -plist /Volumes/Fake SSD"] = strings.Replace(fixture(t, "info_ssd.plist"),
+		"<string>Fake SSD</string>", "<string>&#x9b;2J&#x202e;"+strings.Repeat("long", 40)+"</string>", 1)
+	d := Deps{GOOS: "darwin", Runner: r, Home: "/Users/fake"}
+	a := &answers{lines: []string{""}}
+	if _, err := d.chooseWorkspaces(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	shown := strings.Join(a.shown, "\n")
+	for _, l := range strings.Split(shown, "\n") {
+		if utf8.RuneCountInString(l) > 80 {
+			t.Errorf("%d columns: %q", utf8.RuneCountInString(l), l)
+		}
+	}
+	for _, bad := range []string{"\u009b", "\u202e"} {
+		if strings.Contains(shown, bad) {
+			t.Errorf("the list shows an unescaped %q", bad)
+		}
+	}
+	for _, want := range []string{`\u009b2J`, "APFS", "internal", "external", "other (exfat)", "40.0 GB free", "1.0 TB", "4) other path"} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("the list lacks %q:\n%s", want, shown)
+		}
+	}
+}
+
+func TestYesTakesTheDefaultVolumeAndAsksNothing(t *testing.T) {
+	d := chooser(t)
+	d.Yes = true
+	got, err := d.chooseWorkspaces(context.Background(), &answers{})
+	if err != nil || got != "/Users/fake/workspaces" {
+		t.Errorf("%q, %v", got, err)
+	}
+}
+
+func TestWithoutADiskListOnlyAPathIsAsked(t *testing.T) {
+	d := Deps{GOOS: "darwin", Runner: scripted{"diskutil list -plist": "\x1b[31mgarbage"}, Home: "/Users/fake"}
+	a := &answers{lines: []string{""}}
+	got, err := d.chooseWorkspaces(context.Background(), a)
+	if err != nil || got != "/Users/fake/workspaces" {
+		t.Errorf("%q, %v", got, err)
+	}
+	if s := strings.Join(a.shown, "\n"); strings.Contains(s, "\x1b") || !strings.Contains(s, "not available") {
+		t.Errorf("shown %q", s)
 	}
 }

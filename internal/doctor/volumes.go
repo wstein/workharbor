@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/textsafe"
 )
 
@@ -149,4 +152,105 @@ func size(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 	return fmt.Sprintf("%.1f %s", f, unit)
+}
+
+// clip shortens s to at most n runes, with "..." where it cut.
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-3]) + "..."
+}
+
+// label is the two lines that describe a volume in the choice, at most 76
+// columns wide. Names come from disks and may hold escapes: they are escaped.
+func (v Volume) label(n int) string {
+	kind := "other (" + clip(textsafe.Escape(v.FS), 12) + ")"
+	if v.APFS() {
+		kind = "APFS"
+	}
+	place := "external"
+	if v.Internal {
+		place = "internal"
+	}
+	return fmt.Sprintf("%3d) %s: %s, %s free, %s, %s\n     %s", n, clip(textsafe.Escape(v.Name), 24),
+		size(v.Size), size(v.Free), kind, place, clip(textsafe.Escape(v.Mount), 70))
+}
+
+// workspacesIn is the folder for the workspaces on a volume: the Mac's own data
+// volume keeps them in the home folder, any other volume gets its own folder.
+func (d Deps) workspacesIn(v Volume) string {
+	if v.Mount == dataMount || v.Mount == "/" {
+		return filepath.Join(d.Home, "workspaces")
+	}
+	return filepath.Join(v.Mount, "workspaces")
+}
+
+// askFolder asks for a folder by its path; Enter takes def and q quits.
+func askFolder(p Prompter, def string) (string, error) {
+	s, err := p.Line("Folder for workspaces [" + def + "]")
+	if err != nil {
+		return "", err
+	}
+	s = strings.TrimSpace(s)
+	switch {
+	case strings.EqualFold(s, "q"), strings.EqualFold(s, "quit"):
+		return "", render.ErrQuit
+	case s == "":
+		return def, nil
+	case !filepath.IsAbs(s) || textsafe.Escape(s) != s:
+		return "", errors.New("that is not an absolute path; nothing was written")
+	}
+	return filepath.Clean(s), nil
+}
+
+// chooseWorkspaces lists the volumes and asks which one holds the workspaces:
+// a number, Enter for the default (the Mac's own data volume), q to quit, or
+// the last entry to type a path. It only chooses a folder: it never erases,
+// formats or adds a volume. With --yes it takes the default without asking.
+// Without a usable disk list it asks for the path alone.
+func (d Deps) chooseWorkspaces(ctx context.Context, p Prompter) (string, error) {
+	def := filepath.Join(d.Home, "workspaces")
+	vols, err := d.volumes(ctx)
+	if err != nil {
+		p.Show("The disk list is not available (" + err.Error() + ").")
+		return askFolder(p, def)
+	}
+	defIdx := 1
+	for i, v := range vols {
+		if v.Mount == dataMount {
+			defIdx = i + 1
+			break
+		}
+	}
+	other := len(vols) + 1
+	lines := []string{"Volumes that can hold the workspaces:"}
+	for i, v := range vols {
+		lines = append(lines, v.label(i+1))
+	}
+	lines = append(lines, fmt.Sprintf("%3d) other path", other))
+	p.Show(strings.Join(lines, "\n"))
+	if d.Yes {
+		p.Show(fmt.Sprintf("yes: volume %d, the default", defIdx))
+		return d.workspacesIn(vols[defIdx-1]), nil
+	}
+	s, err := p.Line(fmt.Sprintf("Volume number [%d, q quits]", defIdx))
+	if err != nil {
+		return "", err
+	}
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "q") || strings.EqualFold(s, "quit") {
+		return "", render.ErrQuit
+	}
+	n := defIdx
+	if s != "" {
+		if n, err = strconv.Atoi(s); err != nil || n < 1 || n > other {
+			return "", errors.New("that is not a number from the list; nothing was written")
+		}
+	}
+	if n == other {
+		return askFolder(p, def)
+	}
+	return d.workspacesIn(vols[n-1]), nil
 }

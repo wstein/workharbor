@@ -115,6 +115,7 @@ type Deps struct {
 	Managed bool   // `whr setup --managed`: the development_prefix key is to be removed
 	Prefix  string // the selected installation prefix, "/opt/whr" by default
 	Brewing string // the Brewfile's text; empty means the one in this package
+	Yes     bool   // `whr setup --yes`: take the default of a choice, never a destructive option
 }
 
 // VendorTerms is where the manual explains a subscription login (D40).
