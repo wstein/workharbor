@@ -93,7 +93,7 @@ func newOffboard(st *state) *cobra.Command {
 	f.BoolVar(&unattended, "unattended", false, "refused: this command asks every answer at the terminal")
 	f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
 	f.BoolVar(&verbose, "verbose", false, "also stream every logged command and its output to the terminal")
-	f.StringVar(&logFile, "log-file", "", "write the run log here (default: a new file under the state directory logs/); follow it with `tail -f` in a second terminal")
+	f.StringVar(&logFile, "log-file", "", "write the run log to this `path` (default: a new file under the state directory logs/); follow it with tail -f in a second terminal")
 	parent.AddCommand(host)
 	return parent
 }

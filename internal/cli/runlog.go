@@ -16,6 +16,12 @@ import (
 // result with finish, which prints the log path.
 func (st *state) startRunLog(env *SetupEnv, command, path string, verbose bool) (*runlog.Log, error) {
 	explicit := path != ""
+	if !explicit && env.UID == 0 {
+		// root: a default log would create a root-owned state directory in a
+		// kept HOME; give --log-file to log a root run
+		fmt.Fprintln(st.env.Stderr, "note: no run log as root; give --log-file to write one")
+		return nil, nil
+	}
 	if !explicit && (env.NoRunLog || !filepath.IsAbs(st.env.Getenv("HOME"))) {
 		// no home to put it under: a relative HOME would write into the current directory
 		return nil, nil

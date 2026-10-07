@@ -415,7 +415,7 @@ func newSetup(st *state) *cobra.Command {
 		f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal; also no fzf")
 		f.BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a step ran")
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
-		f.StringVar(&logFile, "log-file", "", "write the run log here (default: a new file under the state directory logs/); follow it with `tail -f` in a second terminal")
+		f.StringVar(&logFile, "log-file", "", "write the run log to this `path` (default: a new file under the state directory logs/); follow it with tail -f in a second terminal")
 		f.StringVar(&from, "from", "", "start at this step")
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 		f.StringVar(&answersPath, "answers", "", "answer the questions of the steps this file decides (user part only; host steps, sudo and guided steps are always asked)")

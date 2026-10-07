@@ -61,3 +61,23 @@ func TestNoDefaultRunLogWithoutAnAbsoluteHome(t *testing.T) {
 		t.Error("a log was written under the current directory")
 	}
 }
+
+func TestNoDefaultRunLogAsRoot(t *testing.T) {
+	r := newSetupRig(t)
+	r.env.NoRunLog = false
+	r.env.UID = 0
+	_, _, errOut := r.run("doctor", "--user", "operator")
+	if !strings.Contains(errOut, "no run log as root") || strings.Contains(errOut, "log  /") {
+		t.Errorf("want one note and no log:\n%s", errOut)
+	}
+}
+
+func TestLogFileHelpHasAPlaceholder(t *testing.T) {
+	r := newSetupRig(t)
+	for _, args := range [][]string{{"doctor", "--help"}, {"setup", "--help"}, {"offboard", "host", "--help"}} {
+		out := r.runBare(args...)
+		if !strings.Contains(out, "--log-file path") {
+			t.Errorf("%v: no --log-file placeholder:\n%s", args, out)
+		}
+	}
+}
