@@ -41,6 +41,11 @@ type Options struct {
 	// change the host has not confirmed and the revocation of the forge tokens
 	// (D45, issue #107). Without Passkeys it only lists them.
 	Changes Changes
+	// Setup adds read-only diagnostics; nil disables the setup routes.
+	Setup Setup
+	// SetupOrigin is the configured browser origin, including through an HTTPS
+	// forwarder. Empty uses the request's direct origin.
+	SetupOrigin string
 	// Previews, if set, adds the previews of an agent's dev servers to the task
 	// view and the inbox (D33). Without it the UI shows none.
 	Previews api.Previews
@@ -51,9 +56,10 @@ type Options struct {
 
 // Server is the web UI. It calls the same Backend as the JSON API.
 type Server struct {
-	be   api.Backend
-	opt  Options
-	keys onceKeys
+	be    api.Backend
+	opt   Options
+	keys  onceKeys
+	setup setupState
 }
 
 // New returns a server.
@@ -103,6 +109,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /console/ssh", s.authed(false, s.consoleCertificatePage))
 	mux.HandleFunc("POST /console/ssh/begin", s.authedJSON(s.consoleCertificateBegin))
 	mux.HandleFunc("POST /console/ssh/finish", s.authedJSON(s.consoleCertificateFinish))
+	mux.HandleFunc("GET /setup", s.authed(false, s.setupPage))
+	mux.HandleFunc("POST /setup/check", s.authed(true, s.setupCheck))
+	mux.HandleFunc("GET /setup/report.json", s.authed(false, s.setupReport))
 	mux.HandleFunc("GET /changes", s.authed(false, s.changes))
 	mux.HandleFunc("POST /changes/{change}/stepup/begin", s.authedJSON(s.changeBegin))
 	mux.HandleFunc("POST /changes/{change}/stepup/finish", s.authedJSON(s.changeFinish))

@@ -98,6 +98,8 @@ type Deps struct {
 	// operator confirms on the host CLI (`whr serve --accept-workflow-change`) or,
 	// with a passkey enrolled, in the web UI (issue #107).
 	AcceptWorkflowChange bool
+	// Setup supplies optional read-only diagnostics to the web UI.
+	Setup web.Setup
 	// SocketPath is the unix socket the JSON API is served on, and only there
 	// (D29, §7.5): the forwarded `listen` address serves the web UI alone.
 	SocketPath string
@@ -281,7 +283,8 @@ func Run(ctx context.Context, d Deps) error {
 	}()
 	defer func() { stopSess(); <-sessDone }()
 	apiOpt := api.Options{Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
-	webOpt := web.Options{Auth: auth, Store: d.Store, OnError: func(err error) { logf("web error: %v", err) }}
+	webOpt := web.Options{Auth: auth, Store: d.Store, Setup: d.Setup, OnError: func(err error) { logf("web error: %v", err) }}
+	webOpt.SetupOrigin, _ = d.Config.PublicOrigin()
 	if previews != nil {
 		apiOpt.Previews, webOpt.Previews = previews, previews
 	}

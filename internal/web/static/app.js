@@ -106,3 +106,22 @@
     }
   });
 })();
+
+// Copy diagnostic commands as text; host commands still run in Terminal.
+document.addEventListener("click", function (event) {
+  var button = event.target.closest("[data-copy-command]");
+  if (!button) {
+    return;
+  }
+  var block = button.closest(".setup-copy");
+  var status = block.querySelector('[role="status"]');
+  if (!navigator.clipboard || !navigator.clipboard.writeText) {
+    status.textContent = "Select and copy the command above.";
+    return;
+  }
+  navigator.clipboard.writeText(block.querySelector("code").textContent).then(function () {
+    status.textContent = "Copied.";
+  }, function () {
+    status.textContent = "Could not copy. Select and copy the command above.";
+  });
+});

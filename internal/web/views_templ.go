@@ -189,12 +189,12 @@ func layout(n nav, title string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var13 = []any{tab(n.Active, "devices")}
+			var templ_7745c5c3_Var13 = []any{tab(n.Active, "setup")}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var13...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<a href=\"/devices\" data-shortcut=\"d\" class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<a href=\"/setup\" class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -207,25 +207,47 @@ func layout(n nav, title string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">Devices</a></nav><form method=\"post\" action=\"/logout\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">Setup</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var15 string
-			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(n.CSRF)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 49, Col: 53}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
+			var templ_7745c5c3_Var15 = []any{tab(n.Active, "devices")}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var15...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\"> <button class=\"quiet\">Sign out</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<a href=\"/devices\" data-shortcut=\"d\" class=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var16 string
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var15).String())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">Devices</a></nav><form method=\"post\" action=\"/logout\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var17 string
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(n.CSRF)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 50, Col: 53}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\"> <button class=\"quiet\">Sign out</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</header><main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</header><main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -233,17 +255,17 @@ func layout(n nav, title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if n.CSRF != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<details id=\"shortcuts\" class=\"shortcuts muted\"><summary>Keyboard shortcuts</summary><dl><dt><kbd>g</kbd> then <kbd>h</kbd> <kbd>i</kbd> <kbd>c</kbd> <kbd>d</kbd></dt><dd>Go to the harbor, inbox, changes, devices</dd><dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next and previous task in the list beside a task</dd><dt><kbd>m</kbd> or <kbd>/</kbd></dt><dd>Write to the agent</dd><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd></dt><dd>Send the message you are typing</dd><dt><kbd>?</kbd></dt><dd>Show or hide this list</dd></dl></details>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<details id=\"shortcuts\" class=\"shortcuts muted\"><summary>Keyboard shortcuts</summary><dl><dt><kbd>g</kbd> then <kbd>h</kbd> <kbd>i</kbd> <kbd>c</kbd> <kbd>d</kbd></dt><dd>Go to the harbor, inbox, changes, devices</dd><dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next and previous task in the list beside a task</dd><dt><kbd>m</kbd> or <kbd>/</kbd></dt><dd>Write to the agent</dd><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd></dt><dd>Send the message you are typing</dd><dt><kbd>?</kbd></dt><dd>Show or hide this list</dd></dl></details>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -274,26 +296,26 @@ func flashNote(msg string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var16 == nil {
-			templ_7745c5c3_Var16 = templ.NopComponent
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if msg != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<p class=\"flash\" role=\"status\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<p class=\"flash\" role=\"status\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var17 string
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
+			var templ_7745c5c3_Var19 string
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 87, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 88, Col: 38}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -318,12 +340,12 @@ func loginView(msg string, passkeys bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var18 == nil {
-			templ_7745c5c3_Var18 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -335,47 +357,47 @@ func loginView(msg string, passkeys bool) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<h1>Sign in</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<h1>Sign in</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if msg != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<p class=\"flash bad\" role=\"alert\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<p class=\"flash bad\" role=\"alert\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var20 string
-				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
+				var templ_7745c5c3_Var22 string
+				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 95, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 96, Col: 42}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if passkeys {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<p>Sign in with the passkey on this device. It asks for your face, fingerprint or PIN.</p><p><button class=\"primary\" type=\"button\" data-passkey=\"login\">Sign in with a passkey</button></p><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Signing in with a passkey needs JavaScript.</p></noscript>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<p>Sign in with the passkey on this device. It asks for your face, fingerprint or PIN.</p><p><button class=\"primary\" type=\"button\" data-passkey=\"login\">Sign in with a passkey</button></p><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Signing in with a passkey needs JavaScript.</p></noscript>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<form method=\"post\" action=\"/login\" hx-boost=\"false\" class=\"stack\"><label for=\"token\">API token</label> <input id=\"token\" name=\"token\" type=\"password\" autocomplete=\"current-password\" required> <button class=\"primary\">Sign in</button></form><p class=\"muted\">The token is the one in your `whr` configuration (<code>api_token_file</code>). Once you enrol a passkey from the host (<code>whr passkey add</code>), the token no longer signs in here.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<form method=\"post\" action=\"/login\" hx-boost=\"false\" class=\"stack\"><label for=\"token\">API token</label> <input id=\"token\" name=\"token\" type=\"password\" autocomplete=\"current-password\" required> <button class=\"primary\">Sign in</button></form><p class=\"muted\">The token is the one in your `whr` configuration (<code>api_token_file</code>). Once you enrol a passkey from the host (<code>whr passkey add</code>), the token no longer signs in here.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(nav{}, "Sign in").Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(nav{}, "Sign in").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -399,12 +421,12 @@ func enrolView(token string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var21 == nil {
-			templ_7745c5c3_Var21 = templ.NopComponent
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var22 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var24 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -416,37 +438,37 @@ func enrolView(token string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<h1>Enrol a passkey</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<h1>Enrol a passkey</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if token == "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<p class=\"flash bad\" role=\"alert\">This enrolment link is not valid, has expired or was already used. Run <code>whr passkey add</code> on the host to get a new one.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<p class=\"flash bad\" role=\"alert\">This enrolment link is not valid, has expired or was already used. Run <code>whr passkey add</code> on the host to get a new one.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p>This registers the passkey of this device for signing in and for approving a push. It asks for your face, fingerprint or PIN. Only its public key is kept here.</p><p><button class=\"primary\" type=\"button\" data-passkey=\"enrol\" data-token=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<p>This registers the passkey of this device for signing in and for approving a push. It asks for your face, fingerprint or PIN. Only its public key is kept here.</p><p><button class=\"primary\" type=\"button\" data-passkey=\"enrol\" data-token=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var23 string
-				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(token)
+				var templ_7745c5c3_Var25 string
+				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(token)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 120, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 121, Col: 83}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">Create the passkey</button></p><p class=\"flash\" role=\"status\" data-passkey-status hidden></p><noscript><p class=\"muted\">Enrolling a passkey needs JavaScript.</p></noscript>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">Create the passkey</button></p><p class=\"flash\" role=\"status\" data-passkey-status hidden></p><noscript><p class=\"muted\">Enrolling a passkey needs JavaScript.</p></noscript>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(nav{}, "Enrol a passkey").Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(nav{}, "Enrol a passkey").Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -470,12 +492,12 @@ func errorPage(csrf string, status int, msg string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var24 == nil {
-			templ_7745c5c3_Var24 = templ.NopComponent
+		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var26 == nil {
+			templ_7745c5c3_Var26 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var25 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var27 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -487,39 +509,39 @@ func errorPage(csrf string, status int, msg string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var26 string
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(status))
+			var templ_7745c5c3_Var28 string
+			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(status))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 129, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 130, Col: 28}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</h1><p class=\"flash bad\" role=\"alert\">")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var27 string
-			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 130, Col: 41}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</h1><p class=\"flash bad\" role=\"alert\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</p><p><a href=\"/\">Back to the harbor</a></p>")
+			var templ_7745c5c3_Var29 string
+			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 131, Col: 41}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</p><p><a href=\"/\">Back to the harbor</a></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(nav{CSRF: csrf}, "Error").Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(nav{CSRF: csrf}, "Error").Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -543,115 +565,115 @@ func taskList(rows []taskRow) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var28 == nil {
-			templ_7745c5c3_Var28 = templ.NopComponent
+		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var30 == nil {
+			templ_7745c5c3_Var30 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<ul class=\"cards\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<ul class=\"cards\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, t := range rows {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<li class=\"card\"><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<li class=\"card\"><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var29 templ.SafeURL
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
+			var templ_7745c5c3_Var31 templ.SafeURL
+			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 139, Col: 45}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\"><strong>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var30 string
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 140, Col: 21}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var31 string
-			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 140, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 140, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</strong> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\"><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var32 = []any{"state " + t.State}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var32...)
+			var templ_7745c5c3_Var32 string
+			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 141, Col: 21}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<span class=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var33 string
-			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var32).String())
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 141, Col: 32}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</strong> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var34 = []any{"state " + t.State}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var34...)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<span class=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var35 string
+			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var34).String())
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var34 string
-			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
+			var templ_7745c5c3_Var36 string
+			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 141, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 142, Col: 49}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</span></a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</span></a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if t.Agent != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span class=\"muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<span class=\"muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var35 string
-				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(t.Agent)
+				var templ_7745c5c3_Var37 string
+				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(t.Agent)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 144, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 145, Col: 34}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</li>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</ul>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</ul>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -675,92 +697,66 @@ func usageRows(rows []usageRowView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var36 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var36 == nil {
-			templ_7745c5c3_Var36 = templ.NopComponent
+		templ_7745c5c3_Var38 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var38 == nil {
+			templ_7745c5c3_Var38 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		for _, r := range rows {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<tr><td>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<tr><td>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if r.Link != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var37 templ.SafeURL
-				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(r.Link))
+				var templ_7745c5c3_Var39 templ.SafeURL
+				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(r.Link))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 156, Col: 36}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var38 string
-				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 156, Col: 46}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</a>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				var templ_7745c5c3_Var39 string
-				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 158, Col: 12}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 157, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</td><td>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var40 string
-			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(r.Auth)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 161, Col: 15}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</td><td>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var41 string
-			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(r.Turns)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 162, Col: 16}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var40 string
+				templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 157, Col: 46}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</a>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				var templ_7745c5c3_Var41 string
+				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 159, Col: 12}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</td><td>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var42 string
-			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(r.In)
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(r.Auth)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 163, Col: 13}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 162, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -771,9 +767,9 @@ func usageRows(rows []usageRowView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var43 string
-			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(r.Out)
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(r.Turns)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 164, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 163, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -784,9 +780,9 @@ func usageRows(rows []usageRowView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var44 string
-			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(r.CacheRead)
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(r.In)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 165, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 164, Col: 13}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 			if templ_7745c5c3_Err != nil {
@@ -797,9 +793,9 @@ func usageRows(rows []usageRowView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var45 string
-			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(r.CacheWrite)
+			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(r.Out)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 166, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 165, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -810,9 +806,9 @@ func usageRows(rows []usageRowView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var46 string
-			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cache)
+			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(r.CacheRead)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 167, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 166, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
@@ -823,28 +819,54 @@ func usageRows(rows []usageRowView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var47 string
-			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cost)
+			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(r.CacheWrite)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 168, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 167, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " <span class=\"muted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</td><td>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var48 string
-			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(r.Label)
+			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cache)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 168, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 168, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</span></td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</td><td>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var49 string
+			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cost)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 169, Col: 15}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, " <span class=\"muted\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var50 string
+			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(r.Label)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 169, Col: 47}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "</span></td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -869,103 +891,103 @@ func usageTable(title string, rows []usageRowView, c *usageCard) templ.Component
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var49 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var49 == nil {
-			templ_7745c5c3_Var49 = templ.NopComponent
+		templ_7745c5c3_Var51 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var51 == nil {
+			templ_7745c5c3_Var51 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "<h3>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var50 string
-		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(title)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 174, Col: 12}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "</h3><div class=\"scroll\"><table class=\"usage\"><thead><tr><th><a href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var51 templ.SafeURL
-		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["name"]))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 179, Col: 53}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 179, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 175, Col: 12}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</a></th><th>Mode</th><th><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</h3><div class=\"scroll\"><table class=\"usage\"><thead><tr><th><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var53 templ.SafeURL
-		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["turns"]))
+		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["name"]))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 181, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 180, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\">Turns</a></th><th><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var54 templ.SafeURL
-		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["tokens"]))
+		var templ_7745c5c3_Var54 string
+		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 182, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 180, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "\">In</a></th><th>Out</th><th>Cache read</th><th>Cache write</th><th><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</a></th><th>Mode</th><th><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var55 templ.SafeURL
-		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["cache"]))
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["turns"]))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 186, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 182, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "\">Cache share</a></th><th><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "\">Turns</a></th><th><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var56 templ.SafeURL
-		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["cost"]))
+		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["tokens"]))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 187, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 183, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\">Cost</a></th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\">In</a></th><th>Out</th><th>Cache read</th><th>Cache write</th><th><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var57 templ.SafeURL
+		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["cache"]))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 187, Col: 54}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "\">Cache share</a></th><th><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var58 templ.SafeURL
+		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(c.SortLinks["cost"]))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 188, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\">Cost</a></th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -973,7 +995,7 @@ func usageTable(title string, rows []usageRowView, c *usageCard) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</tbody></table></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</tbody></table></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -997,242 +1019,216 @@ func usageSection(c *usageCard) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var57 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var57 == nil {
-			templ_7745c5c3_Var57 = templ.NopComponent
+		templ_7745c5c3_Var59 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var59 == nil {
+			templ_7745c5c3_Var59 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<section aria-labelledby=\"usage-h\" class=\"usage-card\"><h2 id=\"usage-h\">Usage</h2><p class=\"actions\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<section aria-labelledby=\"usage-h\" class=\"usage-card\"><h2 id=\"usage-h\">Usage</h2><p class=\"actions\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, l := range c.Periods {
 			if l.Current {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<a class=\"button primary\" href=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var58 templ.SafeURL
-				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(l.Href))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 203, Col: 59}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" aria-current=\"page\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var59 string
-				templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(l.Label)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 203, Col: 91}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</a>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<a class=\"button\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<a class=\"button primary\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var60 templ.SafeURL
 				templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(l.Href))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 205, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 204, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\" aria-current=\"page\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var61 string
 				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(l.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 205, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 204, Col: 91}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</p>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if c.Subscription {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<p class=\"muted\">The usage window leads on a subscription: it, not the cost below, limits you. The cost is API-equivalent, not billed.</p>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			for _, w := range c.Windows {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<p class=\"window\"><label for=\"")
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<a class=\"button\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var62 string
-				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue("win-" + w.ID)
+				var templ_7745c5c3_Var62 templ.SafeURL
+				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(l.Href))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 213, Col: 31}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 206, Col: 51}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var63 string
-				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(w.Name)
+				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(l.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 213, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 206, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "</label> <meter id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</a>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</p>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if c.Subscription {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "<p class=\"muted\">The usage window leads on a subscription: it, not the cost below, limits you. The cost is API-equivalent, not billed.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, w := range c.Windows {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<p class=\"window\"><label for=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var64 string
 				templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue("win-" + w.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 214, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 214, Col: 31}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\" min=\"0\" max=\"100\" low=\"70\" high=\"90\" optimum=\"0\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var65 string
-				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(itoa(int64(w.Percent)))
+				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(w.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 214, Col: 112}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 214, Col: 42}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</label> <meter id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var66 string
-				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(int64(w.Percent)))
+				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue("win-" + w.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 214, Col: 139}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 215, Col: 30}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "%</meter> <span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\" min=\"0\" max=\"100\" low=\"70\" high=\"90\" optimum=\"0\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var67 string
-				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(int64(w.Percent)))
+				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(itoa(int64(w.Percent)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 215, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 215, Col: 112}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "%</span> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var68 string
+				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(int64(w.Percent)))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 215, Col: 139}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "%</meter> <span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var69 string
+				templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(int64(w.Percent)))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 216, Col: 35}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "%</span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if w.Resets != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "<span class=\"muted\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "<span class=\"muted\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var68 string
-					templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(w.Resets)
+					var templ_7745c5c3_Var70 string
+					templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(w.Resets)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 217, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 218, Col: 36}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
 		if len(c.Total) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "<p class=\"muted\">Tokens and cost unknown: no agent reported usage in this period.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<p class=\"muted\">Tokens and cost unknown: no agent reported usage in this period.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "<div class=\"scroll\"><table class=\"usage\"><thead><tr><th>Total</th><th>Mode</th><th>Turns</th><th>Runs</th><th>API time</th><th>Wall time</th><th>Cost</th></tr></thead> <tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "<div class=\"scroll\"><table class=\"usage\"><thead><tr><th>Total</th><th>Mode</th><th>Turns</th><th>Runs</th><th>API time</th><th>Wall time</th><th>Cost</th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, r := range c.Total {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<tr><td>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var69 string
-				templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 22}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "</td><td>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var70 string
-				templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(r.Auth)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 41}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "</td><td>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<tr><td>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var71 string
-				templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(r.Turns)
+				templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(r.Key)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 				if templ_7745c5c3_Err != nil {
@@ -1243,9 +1239,9 @@ func usageSection(c *usageCard) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var72 string
-				templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(r.Runs)
+				templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(r.Auth)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 				if templ_7745c5c3_Err != nil {
@@ -1256,9 +1252,9 @@ func usageSection(c *usageCard) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var73 string
-				templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(r.APITime)
+				templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(r.Turns)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 				if templ_7745c5c3_Err != nil {
@@ -1269,9 +1265,9 @@ func usageSection(c *usageCard) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var74 string
-				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(r.WallTime)
+				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(r.Runs)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 125}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 				if templ_7745c5c3_Err != nil {
@@ -1282,33 +1278,59 @@ func usageSection(c *usageCard) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var75 string
-				templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cost)
+				templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(r.APITime)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 144}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, " <span class=\"muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "</td><td>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var76 string
-				templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(r.Label)
+				templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(r.WallTime)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 232, Col: 176}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 125}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "</span></td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "</td><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var77 string
+				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(r.Cost)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 144}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, " <span class=\"muted\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var78 string
+				templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(r.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 233, Col: 176}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, "</span></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "</tbody></table></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1316,7 +1338,7 @@ func usageSection(c *usageCard) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 105, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1324,58 +1346,58 @@ func usageSection(c *usageCard) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if c.Code != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "<p class=\"muted\">Code changes: ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<p class=\"muted\">Code changes: ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var77 string
-				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(c.Code)
+				var templ_7745c5c3_Var79 string
+				templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(c.Code)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 240, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 241, Col: 43}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if c.Balance != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "<p class=\"muted\">Balance: ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 112, "<p class=\"muted\">Balance: ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var78 string
-				templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(c.Balance)
+				var templ_7745c5c3_Var80 string
+				templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(c.Balance)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 243, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 244, Col: 41}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 112, " <p class=\"muted\">A cost is what the agent reported; an estimate is labelled as one and never added to a reported figure. Rows of different modes are never added together.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, " <p class=\"muted\">A cost is what the agent reported; an estimate is labelled as one and never added to a reported figure. Rows of different modes are never added together.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1399,256 +1421,237 @@ func limitsSection(ls []limitView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var79 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var79 == nil {
-			templ_7745c5c3_Var79 = templ.NopComponent
+		templ_7745c5c3_Var81 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var81 == nil {
+			templ_7745c5c3_Var81 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "<section aria-labelledby=\"limits-h\" class=\"limits-card\"><h2 id=\"limits-h\">Limits</h2>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "<section aria-labelledby=\"limits-h\" class=\"limits-card\"><h2 id=\"limits-h\">Limits</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, l := range ls {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "<div class=\"limit\"><h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "<div class=\"limit\"><h3>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var80 string
-			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(l.Provider)
+			var templ_7745c5c3_Var82 string
+			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(l.Provider)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 255, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 256, Col: 20}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "</h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</h3>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if l.Unknown {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "<p>unknown <span class=\"muted\">(")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "<p>unknown <span class=\"muted\">(")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var81 string
-				templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(l.Source)
+				var templ_7745c5c3_Var83 string
+				templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(l.Source)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 257, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 258, Col: 47}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, ")</span></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, ")</span></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
 				if l.Low {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "<p class=\"flash\" role=\"alert\">Low limit: ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var82 string
-					templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(l.Provider)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 260, Col: 59}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, " is running out.</p>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				for _, w := range l.Windows {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<p class=\"window\"><label for=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var83 string
-					templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.ResolveAttributeValue("lim-" + idOf(l.Provider) + "-" + w.ID)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 264, Col: 58}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var83)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<p class=\"flash\" role=\"alert\">Low limit: ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var84 string
-					templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(w.Name)
+					templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(l.Provider)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 264, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 261, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "</label> <meter id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, " is running out.</p>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				for _, w := range l.Windows {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "<p class=\"window\"><label for=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var85 string
 					templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.ResolveAttributeValue("lim-" + idOf(l.Provider) + "-" + w.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 265, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 265, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var85)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "\" min=\"0\" max=\"100\" low=\"70\" high=\"90\" optimum=\"0\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var86 string
-					templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(itoa(int64(w.Percent)))
+					templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(w.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 265, Col: 139}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 265, Col: 69}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "</label> <meter id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var87 string
-					templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(w.Used)
+					templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue("lim-" + idOf(l.Provider) + "-" + w.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 265, Col: 150}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 266, Col: 57}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "</meter> <span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "\" min=\"0\" max=\"100\" low=\"70\" high=\"90\" optimum=\"0\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var88 string
-					templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(w.Used)
+					templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.ResolveAttributeValue(itoa(int64(w.Percent)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 266, Col: 21}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 266, Col: 139}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var88)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, " used, ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var89 string
-					templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(w.Left)
+					templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(w.Used)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 266, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 266, Col: 150}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, " left</span> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "</meter> <span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if w.Resets != "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "<span class=\"muted\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var90 string
-						templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(w.Resets)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 268, Col: 38}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</span> ")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
+					var templ_7745c5c3_Var90 string
+					templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(w.Used)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 267, Col: 21}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "<span class=\"muted\">read ")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, " used, ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var91 string
-					templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(w.Age)
+					templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(w.Left)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 270, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 267, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, " ago</span></p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, " left</span> ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if w.Resets != "" {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "<span class=\"muted\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var92 string
+						templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(w.Resets)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 269, Col: 38}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "</span> ")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "<span class=\"muted\">read ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var93 string
+					templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(w.Age)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 271, Col: 39}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, " ago</span></p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if l.Balance != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "<p>Balance: ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "<p>Balance: ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var92 string
-					templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(l.Balance)
+					var templ_7745c5c3_Var94 string
+					templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(l.Balance)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 274, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 275, Col: 29}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "</p>")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "</p>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, " <p class=\"muted\">Source: ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, " <p class=\"muted\">Source: ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var93 string
-				templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(l.Source)
+				var templ_7745c5c3_Var95 string
+				templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(l.Source)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 276, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 277, Col: 40}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "</p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if l.Budget != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "<p class=\"muted\">Budget: ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var94 string
-				templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(l.Budget)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 279, Col: 40}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1657,12 +1660,31 @@ func limitsSection(ls []limitView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</div>")
+			if l.Budget != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "<p class=\"muted\">Budget: ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var96 string
+				templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(l.Budget)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 280, Col: 40}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1686,12 +1708,12 @@ func harborView(p harborPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var95 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var95 == nil {
-			templ_7745c5c3_Var95 = templ.NopComponent
+		templ_7745c5c3_Var97 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var97 == nil {
+			templ_7745c5c3_Var97 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var96 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var98 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -1703,7 +1725,7 @@ func harborView(p harborPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<h1>Harbor</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "<h1>Harbor</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1711,7 +1733,7 @@ func harborView(p harborPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1721,7 +1743,7 @@ func harborView(p harborPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1731,35 +1753,35 @@ func harborView(p harborPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.AgentRef != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "<p class=\"flash\">Tasks of ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<p class=\"flash\">Tasks of ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var97 string
-				templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(p.AgentRef)
+				var templ_7745c5c3_Var99 string
+				templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(p.AgentRef)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 297, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 298, Col: 41}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, ". <a href=\"/\">Show all</a></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, ". <a href=\"/\">Show all</a></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, " <section aria-labelledby=\"needs\"><h2 id=\"needs\">Needs you</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, " <section aria-labelledby=\"needs\"><h2 id=\"needs\">Needs you</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.NeedsYou) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "<p class=\"muted\">Nothing is waiting for you.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "<p class=\"muted\">Nothing is waiting for you.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1769,102 +1791,102 @@ func harborView(p harborPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</section><section aria-labelledby=\"start\"><h2 id=\"start\">Start a task</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "</section><section aria-labelledby=\"start\"><h2 id=\"start\">Start a task</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Agents) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "<p class=\"muted\">No agent exists yet: create one with <code>whr ws add</code>.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "<p class=\"muted\">No agent exists yet: create one with <code>whr ws add</code>.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "<form method=\"post\" action=\"/tasks\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "<form method=\"post\" action=\"/tasks\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var98 string
-				templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+				var templ_7745c5c3_Var100 string
+				templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 313, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 314, Col: 52}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var98)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var100)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var99 string
-				templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 314, Col: 50}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "\"> <input type=\"hidden\" name=\"key\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "\"> <label for=\"issue\">Issue address</label> <input id=\"issue\" name=\"issue\" type=\"url\" inputmode=\"url\" placeholder=\"https://github.com/owner/repo/issues/12\" required> <label for=\"agent\">Agent</label> <select id=\"agent\" name=\"agent\" required>")
+				var templ_7745c5c3_Var101 string
+				templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 315, Col: 50}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "\"> <label for=\"issue\">Issue address</label> <input id=\"issue\" name=\"issue\" type=\"url\" inputmode=\"url\" placeholder=\"https://github.com/owner/repo/issues/12\" required> <label for=\"agent\">Agent</label> <select id=\"agent\" name=\"agent\" required>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, a := range p.Agents {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "<option value=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var100 string
-					templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.Ref)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 320, Col: 28}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var100)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var101 string
-					templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(a.Ref)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 320, Col: 38}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, " (")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var102 string
-					templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(a.Repo)
+					templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.Ref)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 320, Col: 50}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 321, Col: 28}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, ")</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var103 string
+					templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(a.Ref)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 321, Col: 38}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, " (")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var104 string
+					templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(a.Repo)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 321, Col: 50}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, ")</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "</select> <button class=\"primary\">Start</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "</select> <button class=\"primary\">Start</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "</section><section aria-labelledby=\"others\"><h2 id=\"others\">Tasks</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "</section><section aria-labelledby=\"others\"><h2 id=\"others\">Tasks</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Others) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "<p class=\"muted\">No other tasks.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "<p class=\"muted\">No other tasks.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1874,13 +1896,13 @@ func harborView(p harborPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Harbor").Render(templ.WithChildren(ctx, templ_7745c5c3_Var96), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Harbor").Render(templ.WithChildren(ctx, templ_7745c5c3_Var98), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1904,351 +1926,351 @@ func decisionCard(d decisionRow, csrf string, stepUp bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var103 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var103 == nil {
-			templ_7745c5c3_Var103 = templ.NopComponent
+		templ_7745c5c3_Var105 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var105 == nil {
+			templ_7745c5c3_Var105 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "<article class=\"decision\"><h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "<article class=\"decision\"><h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var104 string
-		templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(d.Kind)
+		var templ_7745c5c3_Var106 string
+		templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(d.Kind)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 340, Col: 14}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 341, Col: 14}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "</h3><p class=\"subject\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var105 string
-		templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(d.Subject)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 341, Col: 32}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "</h3><p class=\"subject\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "</p>")
+		var templ_7745c5c3_Var107 string
+		templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(d.Subject)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 342, Col: 32}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.Input != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "<pre class=\"untrusted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<pre class=\"untrusted\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var106 string
-			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(d.Input)
+			var templ_7745c5c3_Var108 string
+			templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(d.Input)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 343, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 344, Col: 35}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</pre>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "</pre>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if d.Deadline != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<p class=\"muted\">Answer by ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var107 string
-			templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(d.Deadline)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 346, Col: 42}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, " or it is denied.</p>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "<p class=\"muted\"><a href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var108 templ.SafeURL
-		templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + d.TaskID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 348, Col: 64}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "\">Open the task</a></p>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Review && stepUp {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<p class=\"flash\">This answer needs your passkey: it is for exactly ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "<p class=\"muted\">Answer by ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var109 string
-			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(d.For)
+			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(d.Deadline)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 350, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 347, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, ".</p><label for=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, " or it is denied.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var110 string
-			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 351, Col: 32}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var110)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "\">Reason (optional, the agent sees it)</label> <input id=\"")
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<p class=\"muted\"><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var110 templ.SafeURL
+		templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + d.TaskID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 349, Col: 64}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "\">Open the task</a></p>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.Review && stepUp {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "<p class=\"flash\">This answer needs your passkey: it is for exactly ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var111 string
-			templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(d.For)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 352, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 351, Col: 77}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var111)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "\" name=\"reason\" type=\"text\" maxlength=\"500\"><div class=\"actions\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, ".</p><label for=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var112 string
+			templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 352, Col: 32}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var112)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "\">Reason (optional, the agent sees it)</label> <input id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var113 string
+			templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 353, Col: 31}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var113)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "\" name=\"reason\" type=\"text\" maxlength=\"500\"><div class=\"actions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, o := range d.Options {
-				var templ_7745c5c3_Var112 = []any{optionClass(o)}
-				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var112...)
+				var templ_7745c5c3_Var114 = []any{optionClass(o)}
+				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var114...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<button type=\"button\" data-stepup=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var113 string
-				templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.ResolveAttributeValue(o)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 355, Col: 42}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var113)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "\" data-decision=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var114 string
-				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 355, Col: 65}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var114)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "\" data-reason=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "<button type=\"button\" data-stepup=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var115 string
-				templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+				templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(o)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 355, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 356, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "\" class=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "\" data-decision=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var116 string
-				templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var112).String())
+				templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 356, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var116)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "\" data-reason=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var117 string
-				templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinStringErrs(o)
+				templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 355, Col: 129}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 356, Col: 98}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var117))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var117)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, " with passkey</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "\" class=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var118 string
+				templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var114).String())
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var118)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var119 string
+				templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(o)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 356, Col: 129}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, " with passkey</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "</div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Answering with a passkey needs JavaScript.</p></noscript>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "</div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Answering with a passkey needs JavaScript.</p></noscript>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if d.Review {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "<p class=\"flash\">This answer needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or answer it with <code>whr approve</code> or <code>whr reject</code> on the host.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "<p class=\"flash\">This answer needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or answer it with <code>whr approve</code> or <code>whr reject</code> on the host.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "<form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var118 templ.SafeURL
-			templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/decisions/" + d.ID + "/answer"))
+			var templ_7745c5c3_Var120 templ.SafeURL
+			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/decisions/" + d.ID + "/answer"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 363, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 364, Col: 79}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var119 string
-			templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrf)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 364, Col: 49}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var119)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "\"> <input type=\"hidden\" name=\"key\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var120 string
-			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Key)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 365, Col: 49}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var120)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "\"> <label for=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var121 string
-			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrf)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 366, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 365, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var121)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "\">Reason (optional, the agent sees it)</label> <input id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "\"> <input type=\"hidden\" name=\"key\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var122 string
-			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 367, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 366, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var122)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "\" name=\"reason\" type=\"text\" maxlength=\"500\"><div class=\"actions\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "\"> <label for=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var123 string
+			templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 367, Col: 33}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var123)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "\">Reason (optional, the agent sees it)</label> <input id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var124 string
+			templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.ResolveAttributeValue("reason-" + d.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 368, Col: 32}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var124)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "\" name=\"reason\" type=\"text\" maxlength=\"500\"><div class=\"actions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, o := range d.Options {
-				var templ_7745c5c3_Var123 = []any{optionClass(o)}
-				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var123...)
+				var templ_7745c5c3_Var125 = []any{optionClass(o)}
+				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var125...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "<button name=\"option\" value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var124 string
-				templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.ResolveAttributeValue(o)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 370, Col: 37}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var124)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "\" class=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var125 string
-				templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var123).String())
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var125)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "<button name=\"option\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var126 string
-				templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(optionLabel(o))
+				templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.ResolveAttributeValue(o)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 370, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 371, Col: 37}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var126)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "\" class=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var127 string
+				templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var125).String())
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var127)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var128 string
+				templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(optionLabel(o))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 371, Col: 81}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "</div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "</div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "</article>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</article>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2282,12 +2304,12 @@ func inboxView(p inboxPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var127 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var127 == nil {
-			templ_7745c5c3_Var127 = templ.NopComponent
+		templ_7745c5c3_Var129 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var129 == nil {
+			templ_7745c5c3_Var129 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var128 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var130 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2299,7 +2321,7 @@ func inboxView(p inboxPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<h1>Inbox</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "<h1>Inbox</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2307,12 +2329,12 @@ func inboxView(p inboxPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Decisions) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "<p class=\"muted\">Nothing needs an answer.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "<p class=\"muted\">Nothing needs an answer.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2323,56 +2345,56 @@ func inboxView(p inboxPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Previews) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "<section aria-labelledby=\"previews-h\"><h2 id=\"previews-h\">Open previews</h2><ul class=\"rows\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "<section aria-labelledby=\"previews-h\"><h2 id=\"previews-h\">Open previews</h2><ul class=\"rows\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, v := range p.Previews {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, "<li><a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "<li><a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var129 templ.SafeURL
-					templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + v.TaskID))
+					var templ_7745c5c3_Var131 templ.SafeURL
+					templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + v.TaskID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 404, Col: 52}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var129))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var130 string
-					templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(v.TaskID)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 404, Col: 65}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "</a> <span class=\"muted\">port ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var131 string
-					templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.Port))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 405, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 405, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var132 string
+					templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(v.TaskID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 405, Col: 65}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</a> <span class=\"muted\">port ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var133 string
+					templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.Port))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 406, Col: 54}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var133))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -2380,19 +2402,19 @@ func inboxView(p inboxPage) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</li>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, "</li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "</ul></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "</ul></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Inbox").Render(templ.WithChildren(ctx, templ_7745c5c3_Var128), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Inbox").Render(templ.WithChildren(ctx, templ_7745c5c3_Var130), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2418,51 +2440,51 @@ func previewButtons(v previewRow, csrf string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var132 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var132 == nil {
-			templ_7745c5c3_Var132 = templ.NopComponent
+		templ_7745c5c3_Var134 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var134 == nil {
+			templ_7745c5c3_Var134 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, "<a class=\"button\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, "<a class=\"button\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var133 templ.SafeURL
-		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/previews/" + v.ID + "/go"))
+		var templ_7745c5c3_Var135 templ.SafeURL
+		templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/previews/" + v.ID + "/go"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 418, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 419, Col: 68}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var133))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "\" target=\"_blank\" rel=\"noopener noreferrer\" hx-boost=\"false\">Open preview</a><form method=\"post\" action=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var134 templ.SafeURL
-		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/previews/" + v.ID + "/close"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 419, Col: 75}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var134))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "\" target=\"_blank\" rel=\"noopener noreferrer\" hx-boost=\"false\">Open preview</a><form method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+		var templ_7745c5c3_Var136 templ.SafeURL
+		templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/previews/" + v.ID + "/close"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 420, Col: 75}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var135 string
-		templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrf)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 420, Col: 47}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var135)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "\"> <button class=\"quiet\">Close</button></form>")
+		var templ_7745c5c3_Var137 string
+		templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrf)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 421, Col: 47}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var137)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 212, "\"> <button class=\"quiet\">Close</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2486,111 +2508,111 @@ func eventItem(e eventRow) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var136 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var136 == nil {
-			templ_7745c5c3_Var136 = templ.NopComponent
+		templ_7745c5c3_Var138 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var138 == nil {
+			templ_7745c5c3_Var138 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var137 = []any{"ev " + e.Label}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var137...)
+		var templ_7745c5c3_Var139 = []any{"ev " + e.Label}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var139...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "<li class=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var138 string
-		templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var137).String())
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var138)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 212, "\" id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var139 string
-		templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.ResolveAttributeValue(evID(e))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 426, Col: 43}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var139)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 213, "\"><span class=\"at\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 213, "<li class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var140 string
-		templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.JoinStringErrs(e.At)
+		templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var139).String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 427, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var140))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var140)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "</span> <span class=\"label\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var141 string
-		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(e.Label)
+		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.ResolveAttributeValue(evID(e))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 428, Col: 31}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 427, Col: 43}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var141)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 215, "</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 215, "\"><span class=\"at\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var142 string
+		templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(e.At)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 428, Col: 25}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 216, "</span> <span class=\"label\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var143 string
+		templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(e.Label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 429, Col: 31}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 217, "</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.Text != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 216, "<span class=\"text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 218, "<span class=\"text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var142 string
-			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(e.Text)
+			var templ_7745c5c3_Var144 string
+			templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(e.Text)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 430, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 431, Col: 30}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 217, "</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 219, "</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if e.Detail != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 218, "<pre class=\"untrusted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 220, "<pre class=\"untrusted\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var143 string
-			templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(e.Detail)
+			var templ_7745c5c3_Var145 string
+			templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(e.Detail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 433, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 434, Col: 36}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 219, "</pre>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 221, "</pre>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 220, "</li>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 222, "</li>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2621,12 +2643,12 @@ func taskView(p taskPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var144 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var144 == nil {
-			templ_7745c5c3_Var144 = templ.NopComponent
+		templ_7745c5c3_Var146 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var146 == nil {
+			templ_7745c5c3_Var146 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var145 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var147 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2638,204 +2660,204 @@ func taskView(p taskPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 221, "<div class=\"panes\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 223, "<div class=\"panes\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Panes) > 1 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 222, "<aside class=\"tasklist\" aria-label=\"Tasks\"><ul class=\"cards\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 224, "<aside class=\"tasklist\" aria-label=\"Tasks\"><ul class=\"cards\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, t := range p.Panes {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 223, "<li class=\"card\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 225, "<li class=\"card\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if t.Current {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 224, "<a href=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 226, "<a href=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var146 templ.SafeURL
-						templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
+						var templ_7745c5c3_Var148 templ.SafeURL
+						templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 454, Col: 50}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 225, "\" aria-current=\"page\"><strong>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var147 string
-						templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 455, Col: 26}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var148 string
-						templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 455, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 455, Col: 50}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 226, "</strong> ")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 227, "\" aria-current=\"page\"><strong>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var149 = []any{"state " + t.State}
-						templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var149...)
+						var templ_7745c5c3_Var149 string
+						templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
 						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 456, Col: 26}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 227, "<span class=\"")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var150 string
-						templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var149).String())
+						templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 456, Col: 37}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 228, "</strong> ")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var151 = []any{"state " + t.State}
+						templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var151...)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 229, "<span class=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var152 string
+						templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var151).String())
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var150)
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var152)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 228, "\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var151 string
-						templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 456, Col: 54}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 229, "</span></a>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 230, "<a href=\"")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var152 templ.SafeURL
-						templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 459, Col: 50}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 231, "\"><strong>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 230, "\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var153 string
-						templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
+						templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 460, Col: 26}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 457, Col: 54}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var154 string
-						templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 231, "</span></a>")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 460, Col: 37}
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 232, "<a href=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var154 templ.SafeURL
+						templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + t.ID))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 460, Col: 50}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 232, "</strong> ")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 233, "\"><strong>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var155 = []any{"state " + t.State}
-						templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var155...)
+						var templ_7745c5c3_Var155 string
+						templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(t.Repo)
 						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 461, Col: 26}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 233, "<span class=\"")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var156 string
-						templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var155).String())
+						templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(t.Issue)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 461, Col: 37}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 234, "</strong> ")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var157 = []any{"state " + t.State}
+						templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var157...)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 235, "<span class=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var158 string
+						templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var157).String())
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var156)
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var158)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 234, "\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 236, "\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var157 string
-						templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
+						var templ_7745c5c3_Var159 string
+						templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(t.State)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 461, Col: 54}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 462, Col: 54}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 235, "</span></a>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 237, "</span></a>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 236, "</li>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 238, "</li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 237, "</ul></aside>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 239, "</ul></aside>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 238, "<div class=\"pane-main\"><h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 240, "<div class=\"pane-main\"><h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var158 string
-			templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
+			var templ_7745c5c3_Var160 string
+			templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 470, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 471, Col: 14}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var159 string
-			templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 470, Col: 25}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 239, "</h1>")
+			var templ_7745c5c3_Var161 string
+			templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 471, Col: 25}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 241, "</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2843,75 +2865,56 @@ func taskView(p taskPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 240, "<p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 242, "<p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var160 = []any{"state " + p.State}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var160...)
+			var templ_7745c5c3_Var162 = []any{"state " + p.State}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var162...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 241, "<span class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 243, "<span class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var161 string
-			templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var160).String())
+			var templ_7745c5c3_Var163 string
+			templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var162).String())
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 1, Col: 0}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var161)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var163)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 242, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 244, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var162 string
-			templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(p.State)
+			var templ_7745c5c3_Var164 string
+			templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(p.State)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 473, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 474, Col: 47}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 243, "</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 245, "</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Agent != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 244, "<span class=\"muted\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var163 string
-				templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(p.Agent)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 475, Col: 33}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 245, "</span> ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if p.Branch != "" {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 246, "<span class=\"muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var164 string
-				templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(p.Branch)
+				var templ_7745c5c3_Var165 string
+				templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(p.Agent)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 478, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 476, Col: 33}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2920,127 +2923,146 @@ func taskView(p taskPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			if p.PRURL != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 248, "<a href=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var165 templ.SafeURL
-				templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.PRURL))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 481, Col: 36}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 249, "\" rel=\"noreferrer\">pull request</a>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 250, "</p>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			for _, r := range p.Runs {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 251, "<p class=\"muted\">Run ")
+			if p.Branch != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 248, "<span class=\"muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var166 string
-				templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(r)
+				templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(p.Branch)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 485, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 479, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 252, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 249, "</span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			for _, n := range p.AgentMayRun {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 253, "<section class=\"card\" aria-label=\"Agent stop warning\"><strong>Agent may still run</strong><p>Run ")
+			if p.PRURL != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 250, "<a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var167 string
-				templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(string(n.RunID))
+				var templ_7745c5c3_Var167 templ.SafeURL
+				templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.PRURL))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 490, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 482, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 254, ", environment ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 251, "\" rel=\"noreferrer\">pull request</a>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 252, "</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, r := range p.Runs {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 253, "<p class=\"muted\">Run ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var168 string
-				templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(string(n.EnvID))
+				templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(r)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 490, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 486, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 255, ", path ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 254, "</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			for _, n := range p.AgentMayRun {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 255, "<section class=\"card\" aria-label=\"Agent stop warning\"><strong>Agent may still run</strong><p>Run ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var169 string
-				templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(n.Path)
+				templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(string(n.RunID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 490, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 491, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 256, "</p><pre class=\"untrusted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 256, ", environment ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var170 string
-				templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(n.Error)
+				templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(string(n.EnvID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 491, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 491, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 257, "</pre></section>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if p.Usage != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 258, "<p class=\"muted usage\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 257, ", path ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var171 string
-				templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(p.Usage)
+				templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(n.Path)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 495, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 491, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 259, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 258, "</p><pre class=\"untrusted\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var172 string
+				templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(n.Error)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 492, Col: 36}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 259, "</pre></section>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			if p.Usage != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 260, "<p class=\"muted usage\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var173 string
+				templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(p.Usage)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 496, Col: 35}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 261, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if len(p.Decisions) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 260, "<section aria-labelledby=\"open\"><h2 id=\"open\">Waiting for you</h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 262, "<section aria-labelledby=\"open\"><h2 id=\"open\">Waiting for you</h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3050,31 +3072,31 @@ func taskView(p taskPage) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 261, "</section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 263, "</section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if p.PreviewsOn && len(p.Previews) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 262, "<section aria-labelledby=\"previews-h\"><h2 id=\"previews-h\">Previews</h2><p class=\"muted\">A web app the agent runs, shown through workharbor on a port and an origin of its own. It is code the agent wrote: it cannot see this page, and its link works once.</p><ul class=\"rows\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 264, "<section aria-labelledby=\"previews-h\"><h2 id=\"previews-h\">Previews</h2><p class=\"muted\">A web app the agent runs, shown through workharbor on a port and an origin of its own. It is code the agent wrote: it cannot see this page, and its link works once.</p><ul class=\"rows\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, v := range p.Previews {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 263, "<li><strong>port ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 265, "<li><strong>port ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var172 string
-					templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.Port))
+					var templ_7745c5c3_Var174 string
+					templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.Port))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 512, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 513, Col: 42}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var174))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 264, "</strong> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 266, "</strong> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3084,110 +3106,110 @@ func taskView(p taskPage) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 265, "<form method=\"post\" action=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 267, "<form method=\"post\" action=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var173 templ.SafeURL
-						templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/previews"))
+						var templ_7745c5c3_Var175 templ.SafeURL
+						templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/previews"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 516, Col: 82}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 517, Col: 82}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 266, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var174 string
-						templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 517, Col: 56}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var174)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 267, "\"> <input type=\"hidden\" name=\"key\" value=\"")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var175 string
-						templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Key)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 518, Col: 54}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var175)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 268, "\"> <input type=\"hidden\" name=\"port\" value=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 268, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var176 string
-						templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(v.Port))
+						templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 519, Col: 70}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 518, Col: 56}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var176)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 269, "\"> <button>Start a preview</button></form>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 269, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var177 string
+						templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Key)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 519, Col: 54}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var177)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 270, "\"> <input type=\"hidden\" name=\"port\" value=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var178 string
+						templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(v.Port))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 520, Col: 70}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var178)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 271, "\"> <button>Start a preview</button></form>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 270, "</li>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 272, "</li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 271, "</ul></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 273, "</ul></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 272, "<section aria-labelledby=\"transcript-h\"><h2 id=\"transcript-h\">Transcript</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 274, "<section aria-labelledby=\"transcript-h\"><h2 id=\"transcript-h\">Transcript</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Earlier > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 273, "<p class=\"muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 275, "<p class=\"muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var177 string
-				templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.Earlier))
+				var templ_7745c5c3_Var179 string
+				templ_7745c5c3_Var179, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.Earlier))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 531, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 532, Col: 46}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var177))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var179))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 274, " earlier events are not shown: <code>whr logs</code> has them.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 276, " earlier events are not shown: <code>whr logs</code> has them.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 275, "<ol id=\"transcript\" class=\"transcript\" data-live=\"true\" hx-ext=\"sse\" sse-connect=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 277, "<ol id=\"transcript\" class=\"transcript\" data-live=\"true\" hx-ext=\"sse\" sse-connect=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var178 string
-			templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.sinceURL())
+			var templ_7745c5c3_Var180 string
+			templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.sinceURL())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 533, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 534, Col: 98}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var178)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var180)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 276, "\" sse-swap=\"ev\" hx-swap=\"beforeend\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 278, "\" sse-swap=\"ev\" hx-swap=\"beforeend\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3197,184 +3219,184 @@ func taskView(p taskPage) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 277, "</ol><noscript><p class=\"muted\">This is the transcript as of loading the page; reload it to see more.</p></noscript></section><section aria-labelledby=\"say\"><h2 id=\"say\">Send a message</h2><form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 279, "</ol><noscript><p class=\"muted\">This is the transcript as of loading the page; reload it to see more.</p></noscript></section><section aria-labelledby=\"say\"><h2 id=\"say\">Send a message</h2><form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var179 templ.SafeURL
-			templ_7745c5c3_Var179, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/say"))
+			var templ_7745c5c3_Var181 templ.SafeURL
+			templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/say"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 542, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 543, Col: 72}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var179))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 278, "\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var180 string
-			templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 543, Col: 51}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var180)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 280, "\" class=\"stack\"><input type=\"hidden\" name=\"csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 279, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+			var templ_7745c5c3_Var182 string
+			templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 544, Col: 51}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var182)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var181 string
-			templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SayKey)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 544, Col: 52}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var181)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 281, "\"> <input type=\"hidden\" name=\"key\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 280, "\"> <label for=\"message\">To the agent</label> <textarea id=\"message\" name=\"message\" rows=\"3\" maxlength=\"20000\" required></textarea> <button class=\"primary\">Send</button></form></section>")
+			var templ_7745c5c3_Var183 string
+			templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SayKey)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 545, Col: 52}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var183)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 282, "\"> <label for=\"message\">To the agent</label> <textarea id=\"message\" name=\"message\" rows=\"3\" maxlength=\"20000\" required></textarea> <button class=\"primary\">Send</button></form></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Agent != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 281, "<form method=\"post\" action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var182 templ.SafeURL
-				templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/open"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 551, Col: 73}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var182))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 282, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var183 string
-				templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 552, Col: 51}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var183)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 283, "\"> <button>Make an editor copy</button></form>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if p.CanPause || p.CanResume {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 284, "<form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 283, "<form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var184 templ.SafeURL
-				templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + runVerb(p)))
+				templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/open"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 557, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 552, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var184))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 285, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 284, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var185 string
 				templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 558, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 553, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var185)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 286, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 285, "\"> <button>Make an editor copy</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var186 string
-				templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ActKey)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 559, Col: 52}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var186)
+			}
+			if p.CanPause || p.CanResume {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 286, "<form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 287, "\"> ")
+				var templ_7745c5c3_Var186 templ.SafeURL
+				templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + runVerb(p)))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 558, Col: 76}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var186))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 287, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var187 string
+				templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 559, Col: 51}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var187)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 288, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var188 string
+				templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ActKey)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 560, Col: 52}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var188)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 289, "\"> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.CanPause {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 288, "<button>Pause the run</button> <span class=\"muted\">Stops the agent now (it cannot pause politely); the environment keeps running and its open questions are asked again after a resume.</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 290, "<button>Pause the run</button> <span class=\"muted\">Stops the agent now (it cannot pause politely); the environment keeps running and its open questions are asked again after a resume.</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 289, "<button class=\"primary\">Resume the run</button>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 291, "<button class=\"primary\">Resume the run</button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 290, "</form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 292, "</form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 291, "<p><a class=\"button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 293, "<p><a class=\"button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var187 templ.SafeURL
-			templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/purge"))
+			var templ_7745c5c3_Var189 templ.SafeURL
+			templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/purge"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 568, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 569, Col: 72}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var189))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 292, "\">Delete the transcript…</a></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 294, "\">Delete the transcript…</a></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Cancelable {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 293, "<p><a class=\"button danger\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 295, "<p><a class=\"button danger\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var188 templ.SafeURL
-				templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/cancel"))
+				var templ_7745c5c3_Var190 templ.SafeURL
+				templ_7745c5c3_Var190, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/cancel"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 570, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 571, Col: 81}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var188))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var190))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 294, "\">Cancel this task…</a></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 296, "\">Cancel this task…</a></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 295, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 297, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, p.Repo+p.Issue).Render(templ.WithChildren(ctx, templ_7745c5c3_Var145), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, p.Repo+p.Issue).Render(templ.WithChildren(ctx, templ_7745c5c3_Var147), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3398,12 +3420,12 @@ func purgeView(p purgePage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var189 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var189 == nil {
-			templ_7745c5c3_Var189 = templ.NopComponent
+		templ_7745c5c3_Var191 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var191 == nil {
+			templ_7745c5c3_Var191 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var190 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var192 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3415,113 +3437,113 @@ func purgeView(p purgePage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 296, "<h1>Delete the transcript of ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var191 string
-			templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 579, Col: 39}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var192 string
-			templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 579, Col: 50}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var192))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 297, "?</h1><p>This deletes ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 298, "<h1>Delete the transcript of ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var193 string
-			templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.Events))
+			templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 580, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 580, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 298, " transcript event(s), ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			var templ_7745c5c3_Var194 string
-			templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(p.Bytes, 10))
+			templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 580, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 580, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var194))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 299, " byte(s): what the agent said, its tool inputs and results and its diffs. It cannot be undone.</p><p>The audit entries, the usage records and the Decisions stay, and so does the agent's own session. The purge is recorded as an audit entry. It is refused while the run is running: pause it first.</p><form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 299, "?</h1><p>This deletes ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var195 templ.SafeURL
-			templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/purge"))
+			var templ_7745c5c3_Var195 string
+			templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.Events))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 582, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 581, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var195))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 300, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 300, " transcript event(s), ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var196 string
-			templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+			templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(p.Bytes, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 583, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 581, Col: 98}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var196)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 301, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var196))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var197 string
-			templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 584, Col: 48}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var197)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 301, " byte(s): what the agent said, its tool inputs and results and its diffs. It cannot be undone.</p><p>The audit entries, the usage records and the Decisions stay, and so does the agent's own session. The purge is recorded as an audit entry. It is refused while the run is running: pause it first.</p><form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 302, "\"> <button class=\"danger\">Delete the transcript</button> <a class=\"button\" href=\"")
+			var templ_7745c5c3_Var197 templ.SafeURL
+			templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/purge"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 583, Col: 73}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var197))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var198 templ.SafeURL
-			templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 586, Col: 59}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var198))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 302, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 303, "\">Keep it</a></form>")
+			var templ_7745c5c3_Var198 string
+			templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 584, Col: 50}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var198)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 303, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var199 string
+			templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 585, Col: 48}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var199)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 304, "\"> <button class=\"danger\">Delete the transcript</button> <a class=\"button\" href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var200 templ.SafeURL
+			templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 587, Col: 59}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 305, "\">Keep it</a></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Delete the transcript").Render(templ.WithChildren(ctx, templ_7745c5c3_Var190), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Delete the transcript").Render(templ.WithChildren(ctx, templ_7745c5c3_Var192), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3545,12 +3567,12 @@ func changesView(p changesPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var199 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var199 == nil {
-			templ_7745c5c3_Var199 = templ.NopComponent
+		templ_7745c5c3_Var201 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var201 == nil {
+			templ_7745c5c3_Var201 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var200 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var202 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3562,7 +3584,7 @@ func changesView(p changesPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 304, "<h1>Changes to confirm</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 306, "<h1>Changes to confirm</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3570,117 +3592,117 @@ func changesView(p changesPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 305, " <p class=\"muted\">A change of the rules, or of a secret, is never done by a signed-in session alone: it needs your passkey, and the passkey names the change. The host's command line stays the other way.</p><section aria-labelledby=\"workflows\"><h2 id=\"workflows\">Workflow of a repository</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 307, " <p class=\"muted\">A change of the rules, or of a secret, is never done by a signed-in session alone: it needs your passkey, and the passkey names the change. The host's command line stays the other way.</p><section aria-labelledby=\"workflows\"><h2 id=\"workflows\">Workflow of a repository</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Changes) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 306, "<p class=\"muted\">Nothing waits. A repository's preset or integration branch is changed in the configuration; the change shows here after <code>whr serve</code> starts with it.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 308, "<p class=\"muted\">Nothing waits. A repository's preset or integration branch is changed in the configuration; the change shows here after <code>whr serve</code> starts with it.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			for _, c := range p.Changes {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 307, "<article class=\"decision\"><h3>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var201 string
-				templ_7745c5c3_Var201, templ_7745c5c3_Err = templ.JoinStringErrs(c.Repo)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 603, Col: 17}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var201))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 308, "</h3><p class=\"subject\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var202 string
-				templ_7745c5c3_Var202, templ_7745c5c3_Err = templ.JoinStringErrs(c.From)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 604, Col: 32}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var202))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 309, " becomes ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 309, "<article class=\"decision\"><h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var203 string
-				templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(c.To)
+				templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(c.Repo)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 604, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 604, Col: 17}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var203))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 310, "</p><p class=\"muted\">Until you confirm, the repository stays as it is, and a confirmed change takes effect when <code>whr serve</code> is restarted.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 310, "</h3><p class=\"subject\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var204 string
+				templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.JoinStringErrs(c.From)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 605, Col: 32}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var204))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 311, " becomes ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var205 string
+				templ_7745c5c3_Var205, templ_7745c5c3_Err = templ.JoinStringErrs(c.To)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 605, Col: 49}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var205))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 312, "</p><p class=\"muted\">Until you confirm, the repository stays as it is, and a confirmed change takes effect when <code>whr serve</code> is restarted.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.StepUp {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 311, "<div class=\"actions\"><button type=\"button\" data-stepup=\"confirm\" data-url=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 313, "<div class=\"actions\"><button type=\"button\" data-stepup=\"confirm\" data-url=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var204 string
-					templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.ResolveAttributeValue("/changes/" + c.ID + "/stepup")
+					var templ_7745c5c3_Var206 string
+					templ_7745c5c3_Var206, templ_7745c5c3_Err = templ.ResolveAttributeValue("/changes/" + c.ID + "/stepup")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 608, Col: 92}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 609, Col: 92}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var204)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var206)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 312, "\" class=\"primary\">Confirm with passkey</button></div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Confirming with a passkey needs JavaScript.</p></noscript>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 314, "\" class=\"primary\">Confirm with passkey</button></div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Confirming with a passkey needs JavaScript.</p></noscript>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 313, "<p class=\"flash\">This needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or start <code>whr serve</code> with <code>--accept-workflow-change</code>.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 315, "<p class=\"flash\">This needs your passkey, and none is enrolled. Enrol one from the host (<code>whr passkey add</code>), or start <code>whr serve</code> with <code>--accept-workflow-change</code>.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 314, "</article>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 316, "</article>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 315, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 317, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Revoke {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 316, "<section aria-labelledby=\"secrets\"><h2 id=\"secrets\">Secrets</h2><article class=\"decision\"><h3>Revoke the forge tokens</h3><p class=\"subject\">Every installation token the supervisor holds is revoked now. Nothing is stopped; a new token is made when one is needed. No secret is shown here.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 318, "<section aria-labelledby=\"secrets\"><h2 id=\"secrets\">Secrets</h2><article class=\"decision\"><h3>Revoke the forge tokens</h3><p class=\"subject\">Every installation token the supervisor holds is revoked now. Nothing is stopped; a new token is made when one is needed. No secret is shown here.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.StepUp {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 317, "<div class=\"actions\"><button type=\"button\" data-stepup=\"revoke\" data-url=\"/secrets/revoke-tokens/stepup\" class=\"danger\">Revoke with passkey</button></div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Revoking with a passkey needs JavaScript.</p></noscript>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 319, "<div class=\"actions\"><button type=\"button\" data-stepup=\"revoke\" data-url=\"/secrets/revoke-tokens/stepup\" class=\"danger\">Revoke with passkey</button></div><p class=\"flash bad\" role=\"alert\" data-passkey-status hidden></p><noscript><p class=\"muted\">Revoking with a passkey needs JavaScript.</p></noscript>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 318, "<p class=\"flash\">This needs your passkey, and none is enrolled. Use <code>whr kill-all</code> on the host.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 320, "<p class=\"flash\">This needs your passkey, and none is enrolled. Use <code>whr kill-all</code> on the host.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 319, "</article></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 321, "</article></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Changes").Render(templ.WithChildren(ctx, templ_7745c5c3_Var200), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Changes").Render(templ.WithChildren(ctx, templ_7745c5c3_Var202), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3704,12 +3726,12 @@ func devicesView(p devicesPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var205 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var205 == nil {
-			templ_7745c5c3_Var205 = templ.NopComponent
+		templ_7745c5c3_Var207 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var207 == nil {
+			templ_7745c5c3_Var207 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var206 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var208 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3721,7 +3743,7 @@ func devicesView(p devicesPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 320, "<h1>Signed-in devices</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 322, "<h1>Signed-in devices</h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3729,123 +3751,123 @@ func devicesView(p devicesPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 321, " <p class=\"muted\">Each browser that signed in has its own session. A phone signs itself out after 15 minutes without use. Sign out a lost device here, from another one.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 323, " <p class=\"muted\">Each browser that signed in has its own session. A phone signs itself out after 15 minutes without use. Sign out a lost device here, from another one.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !p.Revocable {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 322, "<p class=\"flash\">This sign-in does not keep a list of devices.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 324, "<p class=\"flash\">This sign-in does not keep a list of devices.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 323, " <ul class=\"rows\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 325, " <ul class=\"rows\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, d := range p.Devices {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 324, "<li><strong>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var207 string
-				templ_7745c5c3_Var207, templ_7745c5c3_Err = templ.JoinStringErrs(d.Label)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 650, Col: 22}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var207))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 325, "</strong> ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if d.Current {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 326, "<span class=\"count\">this device</span> ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 327, "<span class=\"muted\">signed in ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var208 string
-				templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.JoinStringErrs(d.Since)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 654, Col: 44}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var208))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 328, ", last used ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 326, "<li><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var209 string
-				templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(d.LastSeen)
+				templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(d.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 654, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 651, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var209))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 329, "</span><form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 327, "</strong> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var210 templ.SafeURL
-				templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/devices/" + d.ID + "/revoke"))
+				if d.Current {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 328, "<span class=\"count\">this device</span> ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 329, "<span class=\"muted\">signed in ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 655, Col: 79}
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var210 string
+				templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(d.Since)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 655, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 330, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 330, ", last used ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var211 string
-				templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+				templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(d.LastSeen)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 656, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 655, Col: 70}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var211)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var211))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 331, "\"> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 331, "</span><form method=\"post\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var212 templ.SafeURL
+				templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/devices/" + d.ID + "/revoke"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 656, Col: 79}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 332, "\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var213 string
+				templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 657, Col: 53}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var213)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 333, "\"> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if d.Current {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 332, "<button class=\"quiet\">Sign out</button>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 334, "<button class=\"quiet\">Sign out</button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 333, "<button class=\"danger\">Sign out this device</button>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 335, "<button class=\"danger\">Sign out this device</button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 334, "</form></li>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 336, "</form></li>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 335, "</ul><p class=\"muted\">The API token for the host's CLI is not a device: change <code>api_token_file</code> to replace it. A passkey is revoked on the host with <code>whr passkey rm</code>.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 337, "</ul><p class=\"muted\">The API token for the host's CLI is not a device: change <code>api_token_file</code> to replace it. A passkey is revoked on the host with <code>whr passkey rm</code>.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Devices").Render(templ.WithChildren(ctx, templ_7745c5c3_Var206), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Devices").Render(templ.WithChildren(ctx, templ_7745c5c3_Var208), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3869,12 +3891,12 @@ func cancelView(p cancelPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var212 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var212 == nil {
-			templ_7745c5c3_Var212 = templ.NopComponent
+		templ_7745c5c3_Var214 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var214 == nil {
+			templ_7745c5c3_Var214 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var213 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var215 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3886,87 +3908,87 @@ func cancelView(p cancelPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 336, "<h1>Cancel ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 338, "<h1>Cancel ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var214 string
-			templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
+			var templ_7745c5c3_Var216 string
+			templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 672, Col: 21}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var214))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var215 string
-			templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 672, Col: 32}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var215))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 337, "?</h1><p>This stops the agent and ends the task. It cannot be undone; the work the agent already did stays in its workspace.</p><form method=\"post\" action=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var216 templ.SafeURL
-			templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/cancel"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 674, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 673, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 338, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			var templ_7745c5c3_Var217 string
-			templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+			templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 675, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 673, Col: 32}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var217)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 339, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var217))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var218 string
-			templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 676, Col: 48}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var218)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 339, "?</h1><p>This stops the agent and ends the task. It cannot be undone; the work the agent already did stays in its workspace.</p><form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 340, "\"> <button class=\"danger\">Cancel the task</button> <a class=\"button\" href=\"")
+			var templ_7745c5c3_Var218 templ.SafeURL
+			templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID + "/cancel"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 675, Col: 74}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var219 templ.SafeURL
-			templ_7745c5c3_Var219, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 678, Col: 59}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var219))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 340, "\" class=\"actions\"><input type=\"hidden\" name=\"csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 341, "\">Keep it running</a></form>")
+			var templ_7745c5c3_Var219 string
+			templ_7745c5c3_Var219, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.CSRF)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 676, Col: 50}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var219)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 341, "\"> <input type=\"hidden\" name=\"key\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var220 string
+			templ_7745c5c3_Var220, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Key)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 677, Col: 48}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var220)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 342, "\"> <button class=\"danger\">Cancel the task</button> <a class=\"button\" href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var221 templ.SafeURL
+			templ_7745c5c3_Var221, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 679, Col: 59}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var221))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 343, "\">Keep it running</a></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Cancel").Render(templ.WithChildren(ctx, templ_7745c5c3_Var213), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Cancel").Render(templ.WithChildren(ctx, templ_7745c5c3_Var215), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3990,12 +4012,12 @@ func openView(p openPage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var220 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var220 == nil {
-			templ_7745c5c3_Var220 = templ.NopComponent
+		templ_7745c5c3_Var222 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var222 == nil {
+			templ_7745c5c3_Var222 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var221 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var223 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -4007,94 +4029,94 @@ func openView(p openPage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 342, "<h1>Editor copy of ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var222 string
-			templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 685, Col: 29}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var222))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var223 string
-			templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 685, Col: 40}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var223))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 343, "</h1><p>The supervisor made its own copy of the agent's branch. It is not the agent's checkout, has no hooks and none of the agent's configuration, and is refreshed without overwriting your edits.</p><pre class=\"untrusted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 344, "<h1>Editor copy of ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var224 string
-			templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(p.Path)
+			templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(p.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 687, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 686, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var224))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 344, "</pre>")
+			var templ_7745c5c3_Var225 string
+			templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(p.Issue)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 686, Col: 40}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if len(p.Warnings) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 345, "<p class=\"flash\">These files in the copy can run things when an editor opens the folder. Read them before you trust it:</p><ul>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				for _, w := range p.Warnings {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 346, "<li><code>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var225 string
-					templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(w)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 692, Col: 18}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 347, "</code></li>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 348, "</ul>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 349, " <p><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 345, "</h1><p>The supervisor made its own copy of the agent's branch. It is not the agent's checkout, has no hooks and none of the agent's configuration, and is refreshed without overwriting your edits.</p><pre class=\"untrusted\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var226 templ.SafeURL
-			templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
+			var templ_7745c5c3_Var226 string
+			templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinStringErrs(p.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 696, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 688, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var226))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 350, "\">Back to the task</a></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 346, "</pre>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if len(p.Warnings) > 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 347, "<p class=\"flash\">These files in the copy can run things when an editor opens the folder. Read them before you trust it:</p><ul>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				for _, w := range p.Warnings {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 348, "<li><code>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var227 string
+					templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.JoinStringErrs(w)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 693, Col: 18}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var227))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 349, "</code></li>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 350, "</ul>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 351, " <p><a href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var228 templ.SafeURL
+			templ_7745c5c3_Var228, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/tasks/" + p.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views.templ`, Line: 697, Col: 46}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var228))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 352, "\">Back to the task</a></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Editor copy").Render(templ.WithChildren(ctx, templ_7745c5c3_Var221), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Editor copy").Render(templ.WithChildren(ctx, templ_7745c5c3_Var223), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -4118,12 +4140,12 @@ func consoleCertificateView(p consoleCertificatePage) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var227 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var227 == nil {
-			templ_7745c5c3_Var227 = templ.NopComponent
+		templ_7745c5c3_Var229 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var229 == nil {
+			templ_7745c5c3_Var229 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var228 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var230 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -4135,28 +4157,28 @@ func consoleCertificateView(p consoleCertificatePage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 351, "<h1>Console SSH certificate</h1><article><p>Paste your SSH public key. Keep the private key on your device. Open the console on the host first.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 353, "<h1>Console SSH certificate</h1><article><p>Paste your SSH public key. Keep the private key on your device. Open the console on the host first.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Available {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 352, "<label for=\"console-public-key\">Public key (one line, at most 4096 bytes)</label> <textarea id=\"console-public-key\" maxlength=\"4096\" autocomplete=\"off\" spellcheck=\"false\"></textarea> <label><input id=\"console-forwarding\" type=\"checkbox\">Allow port forwarding for this certificate</label> <button type=\"button\" data-passkey=\"console-ssh\">Issue certificate with passkey</button><p data-passkey-status role=\"status\" hidden></p><label for=\"console-certificate-result\">Certificate and pinned host public key</label> <textarea id=\"console-certificate-result\" readonly autocomplete=\"off\" spellcheck=\"false\"></textarea><noscript>This action needs JavaScript and a passkey.</noscript>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 354, "<label for=\"console-public-key\">Public key (one line, at most 4096 bytes)</label> <textarea id=\"console-public-key\" maxlength=\"4096\" autocomplete=\"off\" spellcheck=\"false\"></textarea> <label><input id=\"console-forwarding\" type=\"checkbox\">Allow port forwarding for this certificate</label> <button type=\"button\" data-passkey=\"console-ssh\">Issue certificate with passkey</button><p data-passkey-status role=\"status\" hidden></p><label for=\"console-certificate-result\">Certificate and pinned host public key</label> <textarea id=\"console-certificate-result\" readonly autocomplete=\"off\" spellcheck=\"false\"></textarea><noscript>This action needs JavaScript and a passkey.</noscript>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 353, "<p>Enrol a passkey and configure console SSH on the host to issue certificates here.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 355, "<p>Enrol a passkey and configure console SSH on the host to issue certificates here.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 354, "</article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 356, "</article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout(p.nav, "Console SSH").Render(templ.WithChildren(ctx, templ_7745c5c3_Var228), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout(p.nav, "Console SSH").Render(templ.WithChildren(ctx, templ_7745c5c3_Var230), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

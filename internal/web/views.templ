@@ -43,6 +43,7 @@ templ layout(n nav, title string) {
 						</a>
 						<a href="/changes" data-shortcut="c" class={ tab(n.Active, "changes") }>Changes</a>
 						<a href="/console/ssh" class={ tab(n.Active, "console") }>Console SSH</a>
+						<a href="/setup" class={ tab(n.Active, "setup") }>Setup</a>
 						<a href="/devices" data-shortcut="d" class={ tab(n.Active, "devices") }>Devices</a>
 					</nav>
 					<form method="post" action="/logout" hx-boost="false">

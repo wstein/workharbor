@@ -172,3 +172,13 @@ kbd { padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; backgro
 .usage .window { display: grid; grid-template-columns: 6rem 1fr auto auto; gap: 8px; align-items: center; margin: 4px 0; }
 .usage meter { width: 100%; height: 0.9rem; }
 .usage .window label { text-transform: capitalize; }
+
+.setup-badge { border: 1px solid; border-radius: .3rem; padding: .1rem .4rem; font-size: .8rem; }
+.setup-ok { color: #26774b; }
+.setup-warn { color: #956000; }
+.setup-fail { color: var(--danger); }
+.setup-not_verified { color: #526db0; }
+.setup-skipped { color: var(--muted); }
+.setup-unverified { border-left: 3px solid #526db0; padding-left: 1rem; }
+.setup-copy pre { overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.setup-copy [role="status"] { margin-left: .5rem; }

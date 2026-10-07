@@ -1,0 +1,52 @@
+package web
+
+import "github.com/wstein/workharbor/internal/doctor"
+
+templ setupView(p setupPage) {
+	@layout(p.nav, "Setup status") {
+		<h1>Setup status</h1>
+		<p>Read-only diagnostics. Checks run only when you choose Re-check.</p>
+		@setupCheckForm(p)
+		if p.Report == nil {
+			<p>No checks have run in this supervisor session.</p>
+		} else {
+			<p>Last report: { p.Report.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</p>
+			<a href="/setup/report.json" hx-boost="false" download>Download redacted report</a>
+			for _, group := range p.Groups {
+				<section class="card">
+					if group.Phase == doctor.PhaseHost {
+						<h2>Host setup</h2>
+						<p>Run in Terminal on the Mac as your administrator</p>
+						<p>Copy the commands below to fix host steps, then re-check. The browser only reads their status.</p>
+						@setupCheckForm(p)
+					} else if group.Phase == doctor.PhaseUser {
+						<h2>User setup</h2>
+					} else {
+						<h2>Shared checks</h2>
+					}
+					for _, check := range group.Checks {
+						<article>
+							<h3>{ check.Check } <span class={ "setup-badge setup-" + string(check.Status) }>{ setupStatusLabel(check.Status) }</span></h3>
+							if check.Status == doctor.NotVerified {
+								<div class="setup-unverified"><h4>Not verified</h4><p>{ check.Detail }</p></div>
+							} else {
+								<p>{ check.Detail }</p>
+							}
+							if setupHasFix(check) {
+								<div class="setup-copy"><pre><code>{ check.Fix }</code></pre><button type="button" data-copy-command>Copy command</button><span role="status" aria-live="polite"></span></div>
+							}
+						</article>
+					}
+				</section>
+			}
+		}
+	}
+}
+
+templ setupCheckForm(p setupPage) {
+	<form method="post" action="/setup/check" hx-boost="false">
+		<input type="hidden" name="csrf" value={ p.CSRF }/>
+		<input type="hidden" name="key" value={ p.Key }/>
+		<button>Re-check</button>
+	</form>
+}

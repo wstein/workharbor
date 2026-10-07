@@ -47,6 +47,10 @@ func serveCommand(stderr io.Writer) *cobra.Command {
 				return err
 			}
 			defer closeAll()
+			deps.Setup, err = newServeSetup(cfg, path, exe, home)
+			if err != nil {
+				return err
+			}
 			deps.AcceptWorkflowChange, _ = cmd.Flags().GetBool("accept-workflow-change")
 			deps.Ready = func(web, api net.Addr) { logf("web UI on %s, API on %s", web, api) }
 			return serve.Run(cmd.Context(), deps)
