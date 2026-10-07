@@ -203,4 +203,6 @@ After a successful human-confirmed `make land SHA=<sha>` (including `land-next` 
 
 `make land-preview SHA=<sha>` reuses the phase 1 resolver and prints the candidate information without prompting, running checks or landing. It requires the same unique branch tip and matching review note, works without a terminal, and writes no state or confirmation record. The queue and preview load `scripts/land.sh` from `main`, so they become available after this implementation reaches local `main`. As with phase 1, run them from the shared checkout so its `Makefile` runs.
 
+The landing targets refuse caller-selected recipe shells, including a command-line `SHELL=/bin/sh` or `SHELL='/bin/sh -n'`. Leave the recipe shell to make; an inherited `SHELL` that make ignores remains supported. Landing check sub-makes use `/usr/bin/env` to clear make flags so an exported `env` function cannot swallow them. This narrows accidental or malicious check bypasses; it does not sandbox arbitrary shell code already supplied by the caller.
+
 Each lane's worktree is created once with `git worktree add <worktree> --detach main` and `make hooks` (the Setup steps above). In `wh/platform`'s second worktree, `workharbor.lane=wh/platform-2` keeps its temporary resources out of `make temp-clean LANE=wh/platform`.

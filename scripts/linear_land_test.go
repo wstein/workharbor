@@ -619,6 +619,78 @@ func TestLandSubMakesIgnoreCallerFlags(t *testing.T) {
 	}
 }
 
+func TestLandExportedEnvFunction(t *testing.T) {
+	r := newLandBranchRepo(t, false)
+	r.stubChecks("check-local:\n\t@echo required-check-failed >&2; exit 1\ncommitlint test-commitlint-consumers secrets-range check-generated:\n\t@:\n")
+	wt := r.topic("topic")
+	base := r.git(r.dir, "rev-parse", "main")
+	// bash versions use different exported-function names. Pass both formats,
+	// and prove that the recipe shell imports one before testing the safeguard.
+	env := []string{"BASH_FUNC_env%%=() { :; }", "env=() { :; }"}
+	probe := exec.CommandContext(t.Context(), "/bin/sh", "-c", "env ignored; echo imported")
+	probe.Env = append(r.env(), env...)
+	if out, err := probe.CombinedOutput(); err != nil || string(out) != "imported\n" {
+		t.Skip("recipe shell does not import exported env functions")
+	}
+	out, err := r.land(wt, env, "BRANCH=topic")
+	if got := r.git(r.dir, "rev-parse", "main"); got != base {
+		t.Fatalf("exported env function bypassed checks and moved main to %s\n%s", got, out)
+	}
+	if err == nil || !strings.Contains(out, "required-check-failed") {
+		t.Fatalf("want required check failure, got %v\n%s", err, out)
+	}
+}
+
+func TestLandRefusesCallerShell(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  []string
+		args []string
+	}{
+		{"no-execute shell", nil, []string{"land", "BRANCH=topic", "SHELL=/bin/sh -n"}},
+		{"explicit default shell", nil, []string{"land", "BRANCH=topic", "SHELL=/bin/sh"}},
+		{"invalid shell", nil, []string{"land", "BRANCH=topic", "SHELL=/does/not/exist"}},
+		{"environment override", []string{"SHELL=/bin/sh -n"}, []string{"-e", "land", "BRANCH=topic"}},
+		{"wizard", nil, []string{"land", "SHELL=/bin/sh -n"}},
+		{"list", nil, []string{"land-list", "SHELL=/bin/sh -n"}},
+		{"preview", nil, []string{"land-preview", "SHA=abcdef0", "SHELL=/bin/sh -n"}},
+		{"next", nil, []string{"land-next", "SHELL=/bin/sh -n"}},
+		{"all", nil, []string{"land-all", "SHELL=/bin/sh -n"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			wt := r.topic("topic")
+			base := r.git(r.dir, "rev-parse", "main")
+			cmd := exec.CommandContext(t.Context(), "make", append([]string{"-s"}, tc.args...)...) //nolint:gosec // fixed targets, test-controlled arguments, isolated repository
+			cmd.Dir, cmd.Env = wt, append(r.env(), tc.env...)
+			out, err := cmd.CombinedOutput()
+			// GNU make 3.81 ignores inherited SHELL even under -e and gives
+			// its built-in /bin/sh file origin. Permit that only when all
+			// landing checks actually ran; a no-execute success still fails.
+			if tc.name == "environment override" && err == nil {
+				logged, readErr := os.ReadFile(filepath.Join(wt, "checks-ran")) //nolint:gosec // fixed gate log in an isolated test repository
+				candidate := r.git(wt, "rev-parse", "HEAD")
+				want := "check-local\ncommitlint\ntest-commitlint-consumers\nsecrets-range " + base + ".." + candidate + " " + candidate + "\n"
+				if readErr != nil || string(logged) != want || r.git(r.dir, "rev-parse", "main") != candidate {
+					t.Fatalf("ignored inherited SHELL did not run every gate: %v\n%s\n%s", readErr, logged, out)
+				}
+				r.wantNoConfirm()
+				return
+			}
+			if err == nil || !strings.Contains(string(out), "SHELL is set by the caller") {
+				t.Fatalf("want caller shell refusal, got %v\n%s", err, out)
+			}
+			if got := r.git(r.dir, "rev-parse", "main"); got != base {
+				t.Fatalf("caller shell moved main to %s", got)
+			}
+			if _, err := os.Stat(filepath.Join(wt, "checks-ran")); !os.IsNotExist(err) {
+				t.Fatalf("checks ran with caller SHELL: %v", err)
+			}
+			r.wantNoConfirm()
+		})
+	}
+}
+
 // landCleanLine returns the real LAND_MAKE and LAND_CLEAN definitions, so that mutating its
 // flags is caught by the tests.
 func landCleanLine(t *testing.T, makefile []byte) string {

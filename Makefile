@@ -269,11 +269,17 @@ override LAND_MAKE := $(MAKE)
 # They also run without the caller's MAKEFLAGS: -i or a command-line override such
 # as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass. Both are
 # override variables so that no command-line or -e setting replaces them.
-override LAND_CLEAN := env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
+# An absolute executable also prevents an exported env shell function from
+# swallowing the sub-makes. This is narrow hardening, not a shell sandbox.
+override LAND_CLEAN := /usr/bin/env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
 
 # Queue order is lexical branch name; preview/list never confirm or land.
 # Decisions always use main's resolver, just like land SHA=.
+# Refuse a caller's SHELL while expanding the recipe, before that shell can
+# suppress execution with -n. GNU make treats its built-in /bin/sh as file
+# origin when it ignores a normal inherited SHELL; that case remains supported.
 land-list land-next land-all land-preview:
+	$(if $(filter default file,$(origin SHELL)),,$(error land: SHELL is set by the caller: refusing))
 	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
 	lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || exit 1; \
 	case "$@" in land-preview) [ "$(origin SHA)" = "command line" ] || { echo "usage: make land-preview SHA=<sha>" >&2; exit 1; }; sh -c "$$lsh" land.sh preview "$$SHA";; \
@@ -287,6 +293,7 @@ land-list land-next land-all land-preview:
 # the branch is rebased onto main, and local checks and candidate scans pass; then
 # fast-forward main, unless main moved during the checks (rebase and run again).
 land:
+	$(if $(filter default file,$(origin SHELL)),,$(error land: SHELL is set by the caller: refusing))
 	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
 	if [ "$(origin SHA)" != "command line" ] && [ "$(origin BRANCH)" != "command line" ]; then \
 		lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || { echo "land: cannot read main resolver: refusing" >&2; exit 1; }; \
