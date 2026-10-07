@@ -187,3 +187,21 @@ func TestRunOnceSurvivesSIGQUITDuringASecretCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOutputLogEscapesControlCharacters(t *testing.T) {
+	lp := filepath.Join(t.TempDir(), "run.log")
+	lg, _ := runlog.Open(lp)
+	h := Terminal{Err: io.Discard, Log: lg}
+	var raw [8]byte
+	_, _ = rand.Read(raw[:])
+	marker := "M" + hex.EncodeToString(raw[:])
+	_, _ = h.Output(context.Background(), "/bin/sh", "-c", `printf '\033[31m`+marker+`\033]0;x\007\r\nsecond\n'`)
+	_ = lg.Close()
+	got := readFile(t, lp)
+	if !strings.Contains(got, marker) || !strings.Contains(got, "second") {
+		t.Fatalf("output lost: %q", got)
+	}
+	if strings.ContainsAny(got, "\x1b\x07\r") {
+		t.Errorf("raw control character in the log: %q", got)
+	}
+}

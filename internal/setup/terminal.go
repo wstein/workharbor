@@ -165,7 +165,7 @@ func (t Terminal) output(ctx context.Context, argv ...string) ([]byte, error) {
 	}
 	err = t.interruptOr(ctx, err)
 	code := exitCodeOf(err)
-	t.Log.CommandAnswer(argv, code, out.String()+errb.String(), "", doctor.ExpectedAnswer(argv, code, errb.String()))
+	t.Log.CommandAnswer(argv, code, escapeLines(out.String()+errb.String()), "", doctor.ExpectedAnswer(argv, code, errb.String()))
 	if err != nil && errb.Len() > 0 {
 		// what the command said is what tells "not set" from "could not read"
 		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
@@ -291,6 +291,16 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 		t.Log.Command(argv, exitCodeOf(err), logged.String(), pw)
 	}
 	return err
+}
+
+// escapeLines shows every control character of a tool's output escaped, as the
+// ToolWriter does on the terminal, and keeps the line breaks (LF or CRLF as LF).
+func escapeLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		lines[i] = textsafe.Escape(strings.TrimSuffix(ln, "\r"))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // exitCodeOf is the exit status in an error from a command: 0 for none, -1
