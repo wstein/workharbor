@@ -874,3 +874,19 @@ func TestDataWrapsAtTheStyleWidth(t *testing.T) {
 		t.Errorf("a row over the terminal width must wrap: %q", b.String())
 	}
 }
+
+// When the delete ran but the verification still finds the account (a remnant),
+// the login picture is kept: it goes only once the account is verified gone.
+func TestAFailedVerifyKeepsThePicture(t *testing.T) {
+	h := newHost()
+	h.afterHome = true // the home folder is still there after the delete
+	r := attempt(h, inv())
+	if r.code != exitcode.Error || !strings.Contains(r.stdout, "fail\thome\t") {
+		t.Fatalf("exit %d\n%s", r.code, r.stdout)
+	}
+	for _, k := range h.ran {
+		if k == pictureArgv {
+			t.Error("the picture was removed although the account is not verified gone")
+		}
+	}
+}
