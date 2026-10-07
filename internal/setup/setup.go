@@ -346,7 +346,15 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			continue
 		}
 		showFix(ui, s.Fix)
-		if s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs) {
+		needsMissing := s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs)
+		if needsMissing {
+			if err := Interrupted(ctx, h); err != nil { // the check was cut short: "not provided" means nothing, so resume must run this step
+				outs = append(outs, out)
+				if e := rc.add(protocol.Entry{Event: protocol.EventStepAfter, Step: s.Name, Outcome: protocol.OutInterrupted, Status: string(out.Status)}); e != nil {
+					return rc.finish(outs, protocol.RunError, e)
+				}
+				return interrupted(i, DuringStep, err)
+			}
 			ui.Report(render.LevelSkipped, fmt.Sprintf("not run: it needs %s, which no step before it brought up", s.Needs))
 			out.Asked = true
 			out.NeedsHuman = o.Unattended

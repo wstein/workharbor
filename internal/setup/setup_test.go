@@ -542,3 +542,24 @@ func TestSudoIsPrimedForCommandsABuilderReturns(t *testing.T) {
 		t.Errorf("ran %q, want %q", got, want)
 	}
 }
+
+// A providedElsewhere check that the context cut short is not an answer: the
+// step is not recorded as not run, so a resume does not skip it (#362).
+func TestACutShortNeedsCheckInterruptsInsteadOfSkipping(t *testing.T) {
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	var k bool
+	start := step("container-start", doctor.PhaseUser, new(bool), nil)
+	start.Provides = "svc"
+	start.Run = func(context.Context) (doctor.Status, string) { cancel(); return doctor.Fail, "cut short" }
+	kernel := step("container-kernel", doctor.PhaseUser, &k, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"kernel"}}}})
+	kernel.Needs = "svc"
+	var so, se bytes.Buffer
+	_, err := Run(ctx, []doctor.Check{start, kernel}, &fakeHost{answers: []string{"y"}}, Options{Phase: doctor.PhaseUser, Only: []string{"container-kernel"}, Out: &so, Err: &se})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want the interruption", err)
+	}
+	if strings.Contains(se.String(), "not run: it needs") {
+		t.Errorf("recorded as not run: %q", se.String())
+	}
+}
