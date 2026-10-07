@@ -272,6 +272,7 @@ var allowedWildcardRules = []string{
 	"Bash(gh run list:*)",
 	"Bash(gh run view:*)",
 	"Bash(gh release list:*)",
+	reviewAppendRule,
 	"Bash(scripts/board-snapshot.sh card:*)",
 	"Bash(scripts/board-snapshot.sh queue:*)",
 }
@@ -502,10 +503,24 @@ var laneGitDenyRules = []string{
 	"Bash(git notes merge:*)",
 	"Bash(git notes prune:*)",
 	"Bash(git notes copy:*)",
-	"Bash(git notes --ref*)",
+	"Bash(git notes --ref *)",
+	"Bash(git notes --ref=* add*)",
+	"Bash(git notes --ref=* edit*)",
+	"Bash(git notes --ref=* remove*)",
+	"Bash(git notes --ref=* merge*)",
+	"Bash(git notes --ref=* prune*)",
+	"Bash(git notes --ref=* copy*)",
+	"Bash(git notes --ref=* append*-f*)",
+	"Bash(git notes --ref=confirm*)",
+	"Bash(git notes --ref=refs/*)",
 	"Bash(git update-ref:*)",
 	"Bash(git worktree add:*)",
 }
+
+// reviewAppendRule is the one note write a lane may run. Claude settings cannot
+// be scoped to a role, so every lane in this project may append to the review
+// ref; land.sh requires the Opus CLEAR line, and the human types the SHA (#363).
+const reviewAppendRule = "Bash(git notes --ref=review append -m *)"
 
 var laneLandAskRules = []string{
 	"Bash(make land:*)",
@@ -531,6 +546,9 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		if !slices.Contains(settings.Permissions.Deny, rule) {
 			t.Errorf("missing deny rule %s", rule)
 		}
+	}
+	if !slices.Contains(settings.Permissions.Allow, reviewAppendRule) {
+		t.Errorf("missing allow rule %s", reviewAppendRule)
 	}
 	for _, rule := range laneLandAskRules {
 		if !slices.Contains(settings.Permissions.Ask, rule) {
@@ -562,6 +580,15 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		"git notes prune",
 		"git notes copy a b",
 		"git notes --ref=review add -m x HEAD",
+		"git notes --ref=review add -f -m x HEAD",
+		"git notes --ref=review edit HEAD",
+		"git notes --ref=review remove HEAD",
+		"git notes --ref=review copy a b",
+		"git notes --ref=review merge x",
+		"git notes --ref=review prune",
+		"git notes --ref=review append -f -m x HEAD",
+		"git notes --ref=confirm append -m x HEAD",
+		"git notes --ref=refs/notes/review append -m x HEAD",
 		"git notes --ref review add -m x HEAD",
 		"git notes --ref=confirm add -f -m x HEAD",
 		"git update-ref refs/heads/main abc",
@@ -570,6 +597,18 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 	} {
 		if !matches(settings.Permissions.Deny, cmd) {
 			t.Errorf("not denied: %s", cmd)
+		}
+	}
+	// Deny beats allow: the append must be allowed and not denied, and nothing
+	// else on the review ref may be allowed.
+	for _, cmd := range []string{"git notes --ref=review append -m verdict", "git notes --ref=review append -m verdict HEAD"} {
+		if !matches(settings.Permissions.Allow, cmd) || matches(settings.Permissions.Deny, cmd) {
+			t.Errorf("review append not usable: %s", cmd)
+		}
+	}
+	for _, cmd := range []string{"git notes --ref=review add -m x HEAD", "git notes --ref=confirm append -m x HEAD", "git notes append -m x", "git notes --ref=review append -F f"} {
+		if matches(settings.Permissions.Allow, cmd) {
+			t.Errorf("note write allowed: %s", cmd)
 		}
 	}
 	for _, cmd := range []string{"make land", "make land-all", "make land-list", "make land-next", "make land-preview", "make land X=1"} {
