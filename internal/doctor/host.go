@@ -371,6 +371,7 @@ func hostSteps(d Deps) []Check {
 		configFirst,
 		userStep(d, setupCommand),
 		loginPictureStep(d),
+		d.workspaceFoldersStep(),
 
 		{
 			Name: "autologout", Phase: PhaseHost, Step: 2, Title: "no automatic log-out after inactivity (manual step 2)",
@@ -1423,7 +1424,11 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 			roots = map[string]any{}
 		}
 		roots["workspaces"], added = []string{ws}, added+1
-		mkdirs = append(mkdirs, ws)
+		// outside the home folder the host step workspace-folders makes it,
+		// with sudo, owned by the whr account (issue #395)
+		if rel, err := filepath.Rel(d.Home, ws); err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+			mkdirs = append(mkdirs, ws)
+		}
 	}
 	if _, ok := roots["tool_store"]; !ok {
 		store := filepath.Join(d.Home, "tools")
@@ -1679,30 +1684,13 @@ var dfMount = regexp.MustCompile(`(?m)^\S+\s+\d+\s+\d+\s+\d+\s+\d+%\s+(.+)$`)
 // configuration yet, a root that does not exist, a `df` that does not answer),
 // which is not verified rather than a pass.
 func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
-	// Only the roots are read, and not through config.Load: this check says what is
-	// wrong with a volume even while the rest of the configuration is not valid yet.
-	raw, err := os.ReadFile(d.ConfigPath)
-	if errors.Is(err, fs.ErrNotExist) {
-		// not a failure of the volume: the check cannot run yet. The doctor has no
-		// pending status; "needs a valid configuration" (not_verified) is its word
-		// for that, and FixCommand names the config-base step for it. The step
-		// itself is in the user phase, which runs after the host phase.
-		return nil, NotVerified, needsConfig + ": the workspace roots are read from it, and it is not written yet"
-	}
-	if err != nil {
-		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read, " + oneLine(err.Error())
-	}
-	var cfg struct {
-		Roots struct {
-			Workspaces []string `json:"workspaces"`
-		} `json:"roots"`
-	}
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read from it, " + oneLine(err.Error())
+	roots, st, msg := d.workspaceRoots()
+	if st != "" {
+		return nil, st, msg
 	}
 	var vols []string
 	seen := map[string]bool{}
-	for _, root := range cfg.Roots.Workspaces {
+	for _, root := range roots {
 		resolved, err := filepath.EvalSymlinks(root)
 		if err != nil {
 			return nil, NotVerified, "the workspace root " + root + " cannot be resolved, so its disk is not known: " + oneLine(err.Error())

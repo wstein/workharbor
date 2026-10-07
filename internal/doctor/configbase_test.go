@@ -70,8 +70,8 @@ func TestTheChosenVolumeBecomesTheWorkspaceRoot(t *testing.T) {
 	if fi, _ := os.Stat(d.ConfigPath); fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v", fi.Mode().Perm())
 	}
-	if _, err := os.Stat(filepath.Join(disk, "workspaces")); err != nil {
-		t.Error("the workspaces folder was not made")
+	if _, err := os.Stat(filepath.Join(disk, "workspaces")); err == nil {
+		t.Error("a folder outside the home was made without sudo: the host step workspace-folders makes it")
 	}
 	if shown := strings.Join(a.shown, "\n"); !strings.Contains(shown, filepath.Join(disk, "workspaces")) || strings.Contains(shown, "api_token") {
 		t.Errorf("the result was not shown as the summary: %q", shown)
@@ -129,20 +129,6 @@ func TestYesWritesTheDefaultWithoutAConfirmation(t *testing.T) {
 	}
 }
 
-func TestAnUnwritableVolumeSaysSoWithoutARawError(t *testing.T) {
-	d, disk := configDeps(t)
-	if err := os.WriteFile(filepath.Join(disk, "workspaces"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	err := baseStep(t, d).Fix.Do(context.Background(), &answers{confirm: true, lines: []string{"wstein/workharbor", "3", ""}})
-	if err == nil || !strings.Contains(err.Error(), "nothing was written") || strings.Contains(err.Error(), "mkdir ") {
-		t.Errorf("%v", err)
-	}
-	if _, err := os.Stat(d.ConfigPath); err == nil {
-		t.Error("a config was written")
-	}
-}
-
 func TestAnExistingFileIsNotAskedAboutOrChangedWhereItAlreadyAnswers(t *testing.T) {
 	d, _ := configDeps(t)
 	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
@@ -197,8 +183,8 @@ func TestRootsWithoutWorkspacesGetWorkspacesAndKeepTheRest(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil || cfg.Roots.ToolStore != "/keep/tools" || len(cfg.Roots.Workspaces) != 1 || cfg.Roots.Workspaces[0] != filepath.Join(disk, "workspaces") {
 		t.Errorf("roots %+v, %v", cfg.Roots, err)
 	}
-	if fi, err := os.Stat(filepath.Join(disk, "workspaces")); err != nil || fi.Mode().Perm() != 0o700 {
-		t.Errorf("workspaces folder: %v %v", fi, err)
+	if _, err := os.Stat(filepath.Join(disk, "workspaces")); err == nil {
+		t.Error("a folder outside the home was made without sudo")
 	}
 }
 
