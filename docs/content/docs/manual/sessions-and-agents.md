@@ -62,7 +62,7 @@ A review subagent is `wh/review`: its comment `Reviewed by wh/review at <sha>` w
 
 ### Client capacity
 
-For development sessions using [crewbook](../glossary.md#names), start with capacity for eight subagents. `wh/dispatch` is an always-on session in its own terminal (see the table above), not a subagent of `wh/desk`, so neither session counts. From the dispatch session the subagents are two authors, two independent reviewers, one design batch and two bounded helpers: seven of the eight slots, leaving one spare for a third helper or reviewer. A count from the desk session needs no more. This is a capacity recommendation, not a measured optimum or a request to fill every slot {{< status unverified >}}. The limits in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) still apply: at most two code workers, one editor per worktree, disjoint editing scopes and explicitly pinned role models. When actual capacity is lower, sequence work while preserving coordination and independent review.
+For development sessions using [crewbook](../glossary.md#names), start with capacity for eight subagents. `wh/dispatch` is an always-on session in its own terminal (see the table above), not a subagent of `wh/desk`, so neither session counts. From the dispatch session the subagents are three authors, two independent reviewers, one design batch and two bounded helpers: all eight slots, none spare. A fourth author needs a ninth slot or one fewer helper or reviewer. The crewbook session cap may be lower {{< status unverified >}}, and the lower cap applies. A count from the desk session needs no more. This is a capacity recommendation, not a measured optimum or a request to fill every slot {{< status unverified >}}. The limits in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) still apply: at most four code workers (fewer where the crewbook cap is lower), one editor per worktree, disjoint editing scopes and explicitly pinned role models. When actual capacity is lower, sequence work while preserving coordination and independent review.
 
 **Codex.** For a fresh crewbook session from the repository:
 
@@ -107,13 +107,13 @@ Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://g
 
 ## Rules of thumb
 
-- At most 2 code workers (issue subagents that edit) run at the same time, each in its own worktree (two may both be `wh/platform`, in `../workharbor-platform` and `../workharbor-platform-2`, when their issues touch no file in common), and only one editing subagent per worktree.
+- At most 4 code workers (issue subagents that edit) run at the same time, each in its own worktree (two may both be `wh/platform`, in `../workharbor-platform` and `../workharbor-platform-2`, when their issues touch no file in common), and only one editing subagent per worktree. The crewbook session cap may be lower {{< status unverified >}}, and the lower cap applies.
 - Keep the Opus session short and end it after each decision.
 - Do not hand running agents to a new session.
 
 ## Why
 
-A long session pays for its whole history on every turn. Measured on 3 October 2026 (Werner's usage report, recorded in [#167](https://github.com/wstein/workharbor/issues/167)): Opus cost $25.38 of $35.69, and about 80 % of its tokens were the `wh/design` session re-reading its own history (54M of 67.4M cache reads over 209 requests) {{< status verified >}}. So the long-lived sessions run on Sonnet, Opus is used where it pays (decisions and reviews) and ends quickly, and each issue runs in a fresh subagent whose context is discarded when it returns. The cap of 2 code workers also spares the one GitHub token every session shares ([rate limit](https://github.com/wstein/workharbor/blob/main/AGENTS.md)).
+A long session pays for its whole history on every turn. Measured on 3 October 2026 (Werner's usage report, recorded in [#167](https://github.com/wstein/workharbor/issues/167)): Opus cost $25.38 of $35.69, and about 80 % of its tokens were the `wh/design` session re-reading its own history (54M of 67.4M cache reads over 209 requests) {{< status verified >}}. So the long-lived sessions run on Sonnet, Opus is used where it pays (decisions and reviews) and ends quickly, and each issue runs in a fresh subagent whose context is discarded when it returns. The cap on code workers also spares the one GitHub token every session shares ([rate limit](https://github.com/wstein/workharbor/blob/main/AGENTS.md)).
 
 ## Procedure detail moved out of AGENTS.md
 
