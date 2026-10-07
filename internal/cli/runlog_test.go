@@ -50,3 +50,14 @@ func TestLogFileThatCannotBeOpenedIsAUsageError(t *testing.T) {
 		t.Errorf("code %d: %s", code, errOut)
 	}
 }
+
+func TestNoDefaultRunLogWithoutAnAbsoluteHome(t *testing.T) {
+	r := newSetupRig(t)
+	r.env.NoRunLog = false
+	wd := t.TempDir()
+	t.Chdir(wd)
+	r.runBare("doctor", "--user", "operator") // HOME is empty here
+	if _, err := os.Stat(filepath.Join(wd, ".local")); err == nil {
+		t.Error("a log was written under the current directory")
+	}
+}
