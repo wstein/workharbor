@@ -138,7 +138,7 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.PersistentFlags().StringVar(&st.color, "color", "auto", "colour: auto, always or never")
 	root.PersistentFlags().BoolVar(&st.asJSON, "json", false, "print the API's envelope (or one JSON event per line for logs -f) instead of text")
 
-	root.PersistentFlags().BoolVar(&st.dev, "dev", false, "use a development installation (default prefix: $HOME/.local; an explicit --prefix wins)")
+	root.PersistentFlags().BoolVar(&st.dev, "dev", false, "use a development installation (default prefix: $HOME/.local; --prefix, where a command has it, wins)")
 
 	// A command that ran owns its errors: only cobra's own refusal of the command
 	// line, which happens before any RunE, is a usage error. The mark goes on

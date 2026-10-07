@@ -50,4 +50,7 @@ func TestDevIsDefinedOnce(t *testing.T) {
 	if n := strings.Count(out.String(), "      --dev "); n != 1 {
 		t.Errorf("--dev appears %d times in doctor help:\n%s", n, out.String())
 	}
+	if !strings.Contains(strings.Join(strings.Fields(out.String()), " "), "default prefix: $HOME/.local; --prefix, where a command has it, wins") {
+		t.Errorf("the --dev help line changed:\n%s", out.String())
+	}
 }
