@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,7 +47,7 @@ const (
 
 var readTools = map[string]string{
 	"dscl": "/usr/bin/dscl", "id": "/usr/bin/id", "stat": "/usr/bin/stat", "dseditgroup": "/usr/sbin/dseditgroup",
-	"du": "/usr/bin/du",
+	"du": "/usr/bin/du", "mount": "/sbin/mount",
 }
 
 // absRunner runs the read-only tools by absolute path.
@@ -121,7 +122,13 @@ type Facts struct {
 	// recheck before the delete ignores it.
 	HomeSizeKiB   int64
 	HomeSizeKnown bool
-	Notes         []string
+
+	// HomeVolumes are the mount points at or under the home folder, read from
+	// mount(8). They are only shown, never a refusal, but the recheck compares
+	// them: a volume mounted after the plan blocks the delete.
+	HomeVolumes      []string
+	HomeVolumesKnown bool
+	Notes            []string
 }
 
 // Refusal is one guard that says no, with the exit code it carries.
@@ -293,6 +300,12 @@ func Inspect(ctx context.Context, d Deps, in Invocation) Facts {
 			if !f.HomeSizeKnown {
 				f.Notes = append(f.Notes, "the home size could not be read: the plan cannot say how much is removed")
 			}
+			f.HomeVolumes, f.HomeVolumesKnown = homeVolumes(ctx, d, f.HomeDir)
+			if !f.HomeVolumesKnown {
+				f.Notes = append(f.Notes, "the mounted volumes could not be read: the plan cannot say whether one is mounted in the home")
+			}
+		} else {
+			f.Notes = append(f.Notes, "the home folder is not a plain directory: its size and volumes were not read")
 		}
 	case errors.Is(err, fs.ErrNotExist):
 		f.HomeState = "missing"
@@ -322,6 +335,71 @@ func parseDU(out, home string) (int64, bool) {
 	return n, err == nil
 }
 
+// homeVolumes lists the mount points at or under home. The answer is unknown
+// unless every line parsed and the table has the root mount: an empty or
+// garbled table must never read as "none".
+func homeVolumes(ctx context.Context, d Deps, home string) ([]string, bool) {
+	b, err := rd(d).Output(ctx, "mount")
+	if err != nil {
+		return nil, false
+	}
+	return parseMount(string(b), home)
+}
+
+// parseMount reads "<device> on <mount point> (<options>)" lines. A device or
+// a mount point may itself contain " on /", so a line with several is tried at
+// every split: the line counts as a volume of the home when any split puts the
+// mount point at or under it (the earliest such split is printed). A line that
+// has no split or no option list, or a table without the root mount, makes the
+// whole answer unknown. Paths compare case-insensitively (the APFS default)
+// and also in the firmlink form /System/Volumes/Data/Users/....
+func parseMount(out, home string) ([]string, bool) {
+	var vols []string
+	root := false
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		i := strings.LastIndex(line, " (")
+		if i < 0 || !strings.HasSuffix(line, ")") {
+			return nil, false
+		}
+		head := line[:i]
+		found, hit := false, ""
+		for off := 0; ; {
+			j := strings.Index(head[off:], " on /")
+			if j < 0 {
+				break
+			}
+			found = true
+			mp := head[off+j+len(" on "):]
+			if mp == "/" {
+				root = true
+			}
+			if hit == "" && atOrUnder(mp, home) {
+				hit = mp
+			}
+			off += j + 1
+		}
+		if !found {
+			return nil, false
+		}
+		if hit != "" {
+			vols = append(vols, hit)
+		}
+	}
+	if !root {
+		return nil, false
+	}
+	return vols, true
+}
+
+func atOrUnder(mp, home string) bool {
+	low := strings.TrimPrefix(strings.ToLower(mp), "/system/volumes/data")
+	lowHome := strings.ToLower(home)
+	return low == lowHome || strings.HasPrefix(low, lowHome+"/")
+}
+
 // Plan prints exactly what would be removed.
 func Plan(o Out, f Facts) {
 	admin := "no"
@@ -339,6 +417,15 @@ func Plan(o Out, f Facts) {
 		size = strconv.FormatInt(f.HomeSizeKiB, 10) + " KiB"
 	}
 	o.Data("home-size", size)
+	switch {
+	case !f.HomeVolumesKnown:
+		o.Data("home-volumes", "unknown")
+	case len(f.HomeVolumes) == 0:
+		o.Data("home-volumes", "none")
+	}
+	for _, v := range f.HomeVolumes {
+		o.Data("home-volume", v)
+	}
 	o.Data("groups", strings.Join(f.Groups, " "))
 	o.Data("admin", admin)
 	o.Data("command", setup.QuoteArgv(DeleteCmd().Full()))
@@ -394,6 +481,11 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	f.HomeSizeKiB, f2.HomeSizeKiB = 0, 0
 	f.HomeSizeKnown, f2.HomeSizeKnown = false, false
 	f.Notes, f2.Notes = withoutSizeNote(f.Notes), withoutSizeNote(f2.Notes)
+	if v := newVolume(f.HomeVolumes, f2.HomeVolumes); v != "" {
+		o.Refusal(Refusal{"recheck", exitcode.Conflict, "a volume is mounted in the home: " + v})
+		o.Note("whr: the account changed since the plan: nothing was changed")
+		return exitcode.Conflict
+	}
 	if !reflect.DeepEqual(f, f2) {
 		o.Refusal(Refusal{"recheck", exitcode.Conflict, "the account differs from the plan you were shown"})
 		o.Note("whr: the account changed since the plan: nothing was changed")
@@ -567,4 +659,14 @@ func withoutSizeNote(notes []string) []string {
 		}
 	}
 	return out
+}
+
+// newVolume is the first mount point of now that the plan did not show.
+func newVolume(plan, now []string) string {
+	for _, v := range now {
+		if !slices.Contains(plan, v) {
+			return v
+		}
+	}
+	return ""
 }

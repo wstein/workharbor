@@ -499,7 +499,7 @@ func TestTheReadToolsRunByAbsolutePath(t *testing.T) {
 	h := newHost()
 	attempt(h, inv())
 	for _, k := range h.reads {
-		if !strings.HasPrefix(k, "/usr/") {
+		if !strings.HasPrefix(k, "/") {
 			t.Errorf("run by name: %q", k)
 		}
 	}
@@ -585,6 +585,42 @@ func TestTheSizeIsNotPartOfTheRecheck(t *testing.T) {
 	}
 }
 
+func TestThePlanShowsVolumesMountedInTheHome(t *testing.T) {
+	plan := func(h *fakeHost) (string, string) {
+		f := Inspect(context.Background(), h.deps(), inv())
+		var so, se bytes.Buffer
+		Plan(Out{Out: &so, Err: &se}, f)
+		return so.String(), se.String()
+	}
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, sealed, local)\n" +
+		"/dev/disk5s1 on /Users/workharbor/Data (apfs, local)\n" +
+		"/dev/disk6s1 on /Users/workharbor (apfs, local)\n" +
+		"/dev/disk7s1 on /Users/workharbor2 (apfs, local)\n" +
+		"/dev/disk8s1 on /Volumes/Backup (apfs, local)\n"
+	so, _ := plan(h)
+	for _, want := range []string{"home-volume\t/Users/workharbor/Data\n", "home-volume\t/Users/workharbor\n"} {
+		if !strings.Contains(so, want) {
+			t.Errorf("plan lacks %q:\n%s", want, so)
+		}
+	}
+	for _, not := range []string{"workharbor2", "Backup"} {
+		if strings.Contains(so, not) {
+			t.Errorf("plan names %q:\n%s", not, so)
+		}
+	}
+	// None mounted is said as such; an unreadable table is said as unknown.
+	h = newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, local)\n"
+	if so, _ := plan(h); !strings.Contains(so, "home-volumes\tnone\n") {
+		t.Errorf("none not said:\n%s", so)
+	}
+	so, se := plan(newHost())
+	if !strings.Contains(so, "home-volumes\tunknown\n") || !strings.Contains(se, "mounted volumes could not be read") {
+		t.Errorf("unknown not said:\n%s\n%s", so, se)
+	}
+}
+
 func TestOnlyOneExactDULineIsASize(t *testing.T) {
 	for out, ok := range map[string]bool{
 		"2048\t/Users/workharbor\n":                    true,
@@ -629,5 +665,116 @@ func TestASizeThatBecomesUnreadableDoesNotBlock(t *testing.T) {
 	lg := Log{W: &se, Now: time.Now, Whr: "t"}
 	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.OK {
 		t.Errorf("blocked: %d\n%s", c, se.String())
+	}
+}
+
+func TestAVolumeMountedAfterThePlanBlocksTheDelete(t *testing.T) {
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, local)\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	h.before["/sbin/mount"] += "/dev/disk5s1 on /Users/workharbor/Data (apfs, local)\n"
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.Conflict {
+		t.Errorf("a new volume did not block: %d", c)
+	}
+	if len(h.ran) != 0 {
+		t.Errorf("ran %v", h.ran)
+	}
+}
+
+func TestParseMount(t *testing.T) {
+	const home = "/Users/workharbor"
+	root := "/dev/disk3s1 on / (apfs, local)\n"
+	cases := []struct {
+		name, out string
+		want      []string
+		known     bool
+	}{
+		{"empty", "", nil, false},
+		{"garbage", "hello\n", nil, false},
+		{"no root", "/dev/d on /Volumes/X (apfs)\n", nil, false},
+		{"none", root, nil, true},
+		{"unparseable line", root + "weird line\n", nil, false},
+		{"trailing text", root + "/dev/d on /Users/workharbor/D (apfs) x\n", nil, false},
+		{"split a", root + "/dev/y on /Users/workharbor/a on /b (apfs)\n", []string{"/Users/workharbor/a on /b"}, true},
+		{"split x", root + "/dev/d on /Users/workharbor/x on /y (hfs, local)\n", []string{"/Users/workharbor/x on /y"}, true},
+		{"several splits", root + "/dev/a on /q on /Users/workharbor/z on /w (apfs)\n", []string{"/Users/workharbor/z on /w"}, true},
+		{"earliest of two matching splits", root + "/dev/a on /Users/workharbor/z on /Users/workharbor/w (apfs)\n", []string{"/Users/workharbor/z on /Users/workharbor/w"}, true},
+		{"several splits elsewhere", root + "/dev/a on /x on /y (apfs)\n", nil, true},
+		{"no split at all", root + "foo (bar)\n", nil, false},
+		{"options but no on", root + "/dev/d x (apfs)\n", nil, false},
+		{"no root hides a home volume", "/dev/d on /Users/workharbor/D (apfs)\n", nil, false},
+		{"no options", root + "/dev/d on /Users/workharbor/D\n", nil, false},
+		{"device with on", root + "//u@h/a on /x on /Users/workharbor/Share (smbfs)\n", []string{"/Users/workharbor/Share"}, true},
+		{"firmlink", root + "/dev/d on /System/Volumes/Data/Users/workharbor/D (apfs)\n", []string{"/System/Volumes/Data/Users/workharbor/D"}, true},
+		{"case", root + "/dev/d on /users/WorkHarbor (apfs)\n", []string{"/users/WorkHarbor"}, true},
+		{"sibling", root + "/dev/d on /Users/workharbor2 (apfs)\n/dev/e on /Users/WorkHarbor2/x (apfs)\n/dev/f on /System/Volumes/Data/Users/workharbor2 (apfs)\n", nil, true},
+		{"paren in path", root + "/dev/d on /Users/workharbor/a (b) (apfs)\n", []string{"/Users/workharbor/a (b)"}, true},
+	}
+	for _, c := range cases {
+		got, known := parseMount(c.out, home)
+		if known != c.known || strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: got %q %v, want %q %v", c.name, got, known, c.want, c.known)
+		}
+	}
+}
+
+func TestAnUnreadableMountTableIsUnknownEvenWithOutput(t *testing.T) {
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, local)\n"
+	h.errs["/sbin/mount"] = errors.New("exit status 1")
+	f := Inspect(context.Background(), h.deps(), inv())
+	if f.HomeVolumesKnown {
+		t.Errorf("a failed mount was trusted")
+	}
+}
+
+func TestANoneThatBecomesUnknownBlocksTheRecheck(t *testing.T) {
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, local)\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	delete(h.before, "/sbin/mount")
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	if c := Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se}); c != exitcode.Conflict {
+		t.Errorf("none then unknown did not block: %d", c)
+	}
+}
+
+func TestTheRecheckNamesTheNewVolume(t *testing.T) {
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/disk3s1 on / (apfs, local)\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	h.before["/sbin/mount"] += "/dev/d on /Users/workharbor/Data (apfs)\n"
+	var so, se bytes.Buffer
+	h.log = &se
+	lg := Log{W: &se, Now: time.Now, Whr: "t"}
+	Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se})
+	if !strings.Contains(se.String(), "a volume is mounted in the home: /Users/workharbor/Data") {
+		t.Errorf("volume not named:\n%s", se.String())
+	}
+}
+
+func TestWithoutTheRootMountThePlanPrintsUnknownOnly(t *testing.T) {
+	h := newHost()
+	h.before["/sbin/mount"] = "/dev/d on /Users/workharbor/D (apfs)\n"
+	f := Inspect(context.Background(), h.deps(), inv())
+	var so, se bytes.Buffer
+	Plan(Out{Out: &so, Err: &se}, f)
+	if !strings.Contains(so.String(), "home-volumes\tunknown\n") || strings.Contains(so.String(), "home-volume\t") {
+		t.Errorf("plan:\n%s", so.String())
+	}
+}
+
+func TestANonPlainHomeSaysWhyItWasNotRead(t *testing.T) {
+	h := newHost()
+	d := h.deps()
+	d.Stat = func(string) (HomeInfo, error) { return HomeInfo{Symlink: true, UID: 502, UIDKnown: true}, nil }
+	f := Inspect(context.Background(), d, inv())
+	if len(f.Notes) == 0 || !strings.Contains(strings.Join(f.Notes, "|"), "not a plain directory") {
+		t.Errorf("notes %v", f.Notes)
 	}
 }
