@@ -16,7 +16,7 @@ new tools are yours too. The design owner is `wh/design`; the human is Werner.
 
 - Work on the reference host only with the human's go-ahead for each kind of
   change; on a developer's Mac only read-only checks.
-- Every measurement is a script with its unedited output on a `spike/<name>`
+- Every measurement is a script with its unedited output on a `spike/<issue>-<slug>`
   branch under `spikes/<name>/`; `main` gets the spike page under
   `docs/content/docs/spikes/` (AGENTS.md, Design decisions). Comments alone are
   not evidence.

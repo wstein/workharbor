@@ -17,6 +17,26 @@ How to set up the sessions and subagents that build workharbor itself. This is a
 
 The lane agents, the reviewers and the helpers are subagents that `wh/dispatch` starts, not sessions of their own. Open the `wh/desk` and `wh/dispatch` prompts in `.agents/` in two sessions and check the model in each. Ask `wh/desk` for status, not `wh/dispatch`.
 
+## Development branch names
+
+New issue-work branches for developing workharbor use
+`<category>/<issue>-<slug>`. The category is an existing Conventional Commit
+type (`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`,
+`style` or `revert`), or `spike` for measurement work. The issue is the actual
+positive issue number, without `#` or leading zeros. The short slug uses
+lowercase letters and digits in words separated by single hyphens; it starts
+and ends with a letter or digit. For example, `feat/331-landing-queue` and
+`spike/89-bundle-export`.
+
+This convention applies to development issue branches, including new spike
+branches. Product branches created by `whr` (such as `agent/<role>`), `main`,
+remote refs, bot branches and test fixtures keep their existing contracts.
+Rename only a branch you own; coordinate any rename with its author. A rename
+keeps the commit SHA, so a review note bound to that SHA remains valid. Local
+landing confirmations also record the branch name; keep their recorded
+provenance intact and obtain any required confirmation for the current branch
+when landing.
+
 ## Shared and personal Claude Code settings
 
 The tracked `.claude/settings.json` shares project permissions without granting access to a maintainer’s external checkouts. Put personal paths and standing approvals (never board writes: [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md), GitHub rate limit) in `.claude/settings.local.json`, which Git ignores, including when you create it by hand. Keep credentials out of both files.
