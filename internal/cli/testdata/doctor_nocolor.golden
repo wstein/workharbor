@@ -141,6 +141,10 @@ Legend (colour is only decoration: the words are always printed)
           check)
 | ACTION  to fix bot-key, run
 |   $ whr setup --user 'operator' (run as operator)
+ x FAIL   api-clients          needs a valid configuration (see the config
+          check)
+| ACTION  to fix api-clients, run
+|   $ whr setup --user 'operator' (run as operator)
  x FAIL   forge-app            needs a valid configuration (see the config
           check)
 | ACTION  to fix forge-app, run
@@ -179,7 +183,7 @@ Legend (colour is only decoration: the words are always printed)
 | ACTION  to fix notifications, run
 |   $ whr setup --user 'operator' (run as operator)
 ------------------------------------------------------------
-Summary: 4 ok, 13 FAIL, 30 not verified (?), 0 WARN, 0 skipped
+Summary: 4 ok, 14 FAIL, 30 not verified (?), 0 WARN, 0 skipped
 
 What you need to do now
   1. workharbor-user: dscl did not say whether operator exists
@@ -270,16 +274,18 @@ What you need to do now
       $ whr setup --user 'operator' (run as operator)
   32. bot-key: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  33. forge-app: needs a valid configuration (see the config check)
+  33. api-clients: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  34. forge-board: needs a valid configuration (see the config check)
+  34. forge-app: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  35. forge-workflow: needs a valid configuration (see the config check)
+  35. forge-board: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  36. agent-login: needs a valid configuration (see the config check)
+  36. forge-workflow: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  37. lane-agents: needs a valid configuration (see the config check)
+  37. agent-login: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  38. notifications: needs a valid configuration (see the config check)
+  38. lane-agents: needs a valid configuration (see the config check)
+      $ whr setup --user 'operator' (run as operator)
+  39. notifications: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
 whr: some checks failed; fix them and run `whr doctor` again

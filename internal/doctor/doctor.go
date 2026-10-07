@@ -177,6 +177,7 @@ func Checks(d Deps) []Check {
 			return OK, fmt.Sprintf("App %d: the key file is private and a PEM key; not tried against GitHub", c.GitHub.AppID)
 		})},
 		{"bot-key", 2, needCfg(botKeyCheck)},
+		{"api-clients", 2, needCfg(apiClientsCheck)},
 		{"forge-app", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
 			if err != nil {
@@ -411,6 +412,37 @@ func botKeyCheck(c *config.Config) (Status, string) {
 		return Fail, "bot_signing_key_file holds an SSH key that is not ed25519"
 	}
 	return OK, "the bot's signing key is a private, unencrypted ed25519 key (mode 0600, owned by this user); not tried against git"
+}
+
+// apiClientsCheck checks the credential file of every API client, the default
+// one included, like the configuration check does for any secret file: a file
+// that is missing, a link, not a regular file, empty, over-size, not exactly
+// 0600, owned by another account or hard-linked is a Fail, and so are an
+// invalid or duplicate name and a token two clients share. A finding names the
+// client and the path, never a token or a digest.
+func apiClientsCheck(c *config.Config) (Status, string) {
+	type client struct{ name, path string }
+	all := []client{{config.DefaultAPIClient, c.APITokenFile}}
+	for _, cl := range c.APIClients {
+		all = append(all, client{cl.Name, cl.TokenFile})
+	}
+	var bad []string
+	for _, cl := range all {
+		msg := config.CheckSecretFile(cl.path)
+		if msg == "" {
+			if _, err := config.ReadSecret(cl.path); err != nil {
+				msg = oneLine(err.Error())
+			}
+		}
+		if msg != "" {
+			bad = append(bad, fmt.Sprintf("api client %q: %s", cl.name, msg))
+		}
+	}
+	bad = append(bad, c.CheckAPIClients()...)
+	if len(bad) > 0 {
+		return Fail, strings.Join(bad, "; ")
+	}
+	return OK, fmt.Sprintf("%d API client credential file(s) are private (mode 0600, owned by this user), distinct and non-empty", len(all))
 }
 
 // NewGitHub builds the App's client from the configuration: the key file read

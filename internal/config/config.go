@@ -734,7 +734,7 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	for _, p := range c.checkAPIClients() {
+	for _, p := range c.CheckAPIClients() {
 		add("%s", p)
 	}
 	// A secret file inside a root would reach an agent: it writes the
@@ -877,7 +877,11 @@ func checkCheckCommand(cmd string) string {
 // user, with mode 0600, a single link and some content: the value is in the
 // file, never in the configuration. A second hard link could sit where an
 // agent reads it.
-func checkSecretFile(path string) string {
+func checkSecretFile(path string) string { return CheckSecretFile(path) }
+
+// CheckSecretFile is the check every secret file passes in the configuration
+// check, for the doctor: it returns what is wrong, or "".
+func CheckSecretFile(path string) string {
 	switch {
 	case path == "":
 		return "a file path is needed"
@@ -1121,11 +1125,11 @@ func CheckAPIClientName(name string) string {
 	return ""
 }
 
-// checkAPIClients checks the names, and that no two clients (the default
+// CheckAPIClients checks the names, and that no two clients (the default
 // included) share a token. Tokens are compared by digest; a problem names the
 // clients and paths only, never a token or a digest. The files themselves are
 // checked with the other secrets.
-func (c *Config) checkAPIClients() []string {
+func (c *Config) CheckAPIClients() []string {
 	var out []string
 	names := map[string]bool{}
 	type entry struct{ name, path string }
