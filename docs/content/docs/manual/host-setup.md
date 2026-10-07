@@ -344,7 +344,7 @@ Use this to delete the macOS user of workharbor (`workharbor` by default, writte
     - `ls /etc/sudoers.d` shows a sudoers file that names it {{< status unverified >}}.
     - `sudo fdesetup list` shows whether it is a FileVault user {{< status unverified >}}.
     - `diskutil apfs list` shows the workspace volumes of step 3 {{< status unverified >}}.
-2. **Stop the sessions and processes.** First stop the containers and the service: in the account's session, `whr service uninstall` and `container system stop`. Then, as the administrator:
+2. **Stop the sessions and processes.** First stop the containers and the service: in the account's session, `whr service uninstall` {{< status unverified >}} and `container system stop` {{< status unverified >}}. Then, as the administrator:
     - `ps -u <user> -o pid,comm` shows what still runs for the account {{< status unverified >}}.
     - Optional: `sudo launchctl bootout user/$(id -u <user>)` unloads its launchd domain {{< status unverified >}}; in one run by the user it printed nothing.
     - Optional: log the account out at the login window or over Screen Sharing {{< status unverified >}}.
@@ -366,7 +366,7 @@ Use this to delete the macOS user of workharbor (`workharbor` by default, writte
 5. **Verify.**
     - `dscl . -read /Users/<user>` must fail with "does not exist", for the account name and for any alias record name {{< status unverified >}}.
     - `id <user>` must fail with "no such user" {{< status unverified >}}.
-    - `ls /Users` and `ls "/Users/Deleted Users"` show what is left of the home folder {{< status unverified >}}. Remove a leftover only after `sudo ls -la` on it shows what it holds.
+    - `ls /Users` and `ls "/Users/Deleted Users"` show what is left of the home folder {{< status unverified >}}. Remove a leftover only after `sudo ls -la` on it shows what it holds {{< status unverified >}}.
     - `dscl . -read /Groups/<group> GroupMembership` for each group of step 3 must no longer list the name {{< status unverified >}}. Only if a group still does, remove the name with `sudo dseditgroup -o edit -d <user> -t user <group>` {{< status unverified >}}.
 
     Observed once by the user after deleting `whr` (macOS version not recorded, not verified):
