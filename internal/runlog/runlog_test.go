@@ -166,3 +166,34 @@ func TestOpenDoesNotHangOnAFIFO(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenRefusesASymlinkToAOneNameFile(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sym := filepath.Join(dir, "sym.log")
+	if err := os.Symlink(target, sym); err != nil {
+		t.Fatal(err)
+	}
+	// the target has one name, so only O_NOFOLLOW can refuse this
+	if l, err := Open(sym); err == nil {
+		_ = l.Close()
+		t.Fatal("a symlink was followed")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "keep" { //nolint:gosec // a test path
+		t.Errorf("target changed: %q", b)
+	}
+}
+
+func TestOpenRefusesADevice(t *testing.T) {
+	l, err := Open("/dev/null")
+	if err == nil {
+		_ = l.Close()
+		t.Fatal("/dev/null was opened as a log")
+	}
+	if !strings.Contains(err.Error(), "plain file") {
+		t.Errorf("refused for another reason than the file type: %v", err)
+	}
+}
