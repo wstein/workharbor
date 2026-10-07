@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "kind": "whr.setup-report",
+  "generated_at": "2026-10-06T12:00:00Z",
+  "whr_version": "v0.1.0",
+  "source": "setup",
+  "phase": "user",
+  "account": "operator",
+  "dev": true,
+  "ok": true,
+  "counts": {
+    "ok": 1,
+    "warn": 1,
+    "fail": 0,
+    "not_verified": 1,
+    "skipped": 0
+  },
+  "checks": [
+    {
+      "check": "power",
+      "step": 1,
+      "status": "warn",
+      "detail": "check ~/power on [host]",
+      "phase": "host",
+      "fix": "whr setup host --only power"
+    },
+    {
+      "check": "config",
+      "step": 2,
+      "status": "ok",
+      "detail": "ready",
+      "phase": "user",
+      "fixed": true,
+      "asked": false
+    },
+    {
+      "check": "capacity",
+      "step": 0,
+      "status": "not_verified",
+      "detail": "not measured"
+    }
+  ]
+}

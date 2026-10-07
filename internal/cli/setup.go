@@ -98,7 +98,30 @@ func newSetup(st *state) *cobra.Command {
 		}
 		return DefaultConfigPath(st.env.Getenv)
 	}
-	run := func(cmd *cobra.Command, phase doctor.Phase) error {
+	run := func(cmd *cobra.Command, phase doctor.Phase) (runErr error) {
+		var reportSteps []doctor.Check
+		var reportOutcomes []setup.Outcome
+		var remembered bool
+		defer func() {
+			if dryRun {
+				return
+			}
+			repair := repairContext{Dev: dev && !remembered, Managed: managed, Account: whrUser}
+			if cmd.Flags().Changed("prefix") {
+				repair.Prefix = prefix
+			}
+			presentation := setupPresentation(reportSteps, reportOutcomes, phase, repair)
+			if runErr != nil && presentation.OK {
+				detail := oneLineError(runErr)
+				if detail == "" {
+					detail = "setup did not complete"
+				}
+				presentation = doctor.Present(append(presentation.Checks, doctor.ReportCheck{Result: doctor.Result{Check: "setup", Phase: phase, Status: doctor.Fail, Detail: detail}}))
+			}
+			if reportErr := writeSetupReport(st, configPath(), presentation, "setup", phase, whrUser, dev); reportErr != nil {
+				fmt.Fprintf(st.env.Stderr, "warning: %s\n", oneLineError(reportErr))
+			}
+		}()
 		style := st.style(st.env.Stderr, plain)
 		ui := render.Writer{W: st.env.Stderr, S: style}
 		env, err := st.env.Setup.resolve(st, style)
@@ -119,7 +142,7 @@ func newSetup(st *state) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		remembered := useRemembered(cmd, dev, key)
+		remembered = useRemembered(cmd, dev, key)
 		if remembered {
 			dev, prefix = true, key
 		} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
@@ -181,6 +204,7 @@ func newSetup(st *state) *cobra.Command {
 			}
 		}
 		steps := doctorOn(env, configPath())
+		reportSteps = steps
 		if dev && !dryRun {
 			for _, c := range steps {
 				if c.Name == "prefix" {
@@ -238,6 +262,7 @@ func newSetup(st *state) *cobra.Command {
 		}
 		so := setup.Options{Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose}
 		outs, err := setup.Run(ctx, steps, env.Host, so)
+		reportOutcomes = outs
 		var quit *setup.QuitError
 		if errors.As(err, &quit) {
 			printQuit(ui, quit)

@@ -28,6 +28,7 @@ func newDoctor(st *state) *cobra.Command {
 		prefix  string
 		plain   bool
 		verbose bool
+		report  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -113,27 +114,25 @@ func newDoctor(st *state) *cobra.Command {
 				skipped[n] = true
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
+			repair := repairContext{Dev: dev && !remembered, Account: whrUser}
+			if repair.Dev && cmd.Flags().Changed("prefix") {
+				repair.Prefix = prefix
+			}
 			for i, r := range rs {
-				// a remembered development installation is read by `whr setup` itself
-				if dev && !remembered {
-					if rs[i].Fix == "whr setup" {
-						rs[i].Fix = "whr setup --dev"
-					}
-					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup host ", "whr setup host --dev ", 1)
-					rs[i].Fix = strings.Replace(rs[i].Fix, "whr setup --only ", "whr setup --dev --only ", 1)
-					if cmd.Flags().Changed("prefix") && strings.HasPrefix(rs[i].Fix, "whr setup ") {
-						rs[i].Fix += " --prefix " + shellArgument(prefix)
-					}
-				}
-				if whrUser != doctor.WhrUser && strings.HasPrefix(rs[i].Fix, "whr setup") {
-					rs[i].Fix += " --user " + shellArgument(whrUser)
-				}
+				context := repair
 				if other && r.Fix != "" && r.Phase != doctor.PhaseHost {
-					rs[i].Fix += " (run as " + whrUser + ")"
+					context.RunAs = whrUser
+				}
+				rs[i].Fix = context.command(r.Fix)
+			}
+			presentation := doctor.PresentResults(rs)
+			if report {
+				if err := writeSetupReport(st, path, presentation, "doctor", "", whrUser, dev); err != nil {
+					return err
 				}
 			}
 			if st.asJSON {
-				if err := encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": !doctor.Failed(rs), "checks": rs}); err != nil {
+				if err := encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": presentation.OK, "checks": presentation.Results()}); err != nil {
 					return err
 				}
 			} else {
@@ -161,6 +160,7 @@ func newDoctor(st *state) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&report, "report", false, "save a private, redacted setup report in the state directory")
 	cmd.Flags().BoolVar(&dev, "dev", false, "check a development installation (default prefix: $HOME/.local; explicit --prefix wins)")
 	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
