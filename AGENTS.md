@@ -43,7 +43,9 @@ In `internal/`, each package has a package comment: `service/` is the layer the 
 
 Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` (72 characters at most), one logical change per commit, metadata in Git **trailers** in the last paragraph. `commitlint` enforces the rules.
 
-**Commit frequency.** One commit per finished change, not per attempt: iterate in the working tree, commit once the result is final. A file and what is generated from it (an SVG and its PNG, a source and its lockfile) go in one commit with the link fixes it caused; unrelated changes in separate commits. Correct your own unpushed commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way; only Werner force-pushes. From the beta on, never rewrite pushed commits unless asked.
+**One concern per commit.** feat, fix, docs and refactor are not mixed, and a change carries its test; the landing tip is green. Fold fixes into the commit they fix before review and after a round (fresh review of the new SHA); no fixup commits remain.
+
+**Commit frequency.** One commit per finished change, not per attempt: iterate in the working tree. A file and what is generated from it (an SVG and its PNG, a source and its lockfile) go in one commit with the link fixes it caused. From the beta on, never rewrite pushed commits unless asked; only Werner force-pushes. Autosquash and pre-beta folds: [manual](docs/content/docs/manual/sessions-and-agents.md#commits).
 
 | Trailer | Rule |
 | --- | --- |

@@ -162,6 +162,8 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 
 Use the actual exposed model ID (`unknown` if unavailable), never a guessed model. The examples apply only to sessions exposing that model. Attribution identities and the legacy `Assisted-by` compatibility rule are in [AGENTS.md](../../../../AGENTS.md).
 
+Fold a fix into its commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way.
+
 `Refs` and `Closes` also accept `owner/repo#12` and comma lists. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
 
 ### Spike pages
