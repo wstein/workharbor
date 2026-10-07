@@ -291,3 +291,30 @@ func TestLandMalformedNotClearRefuses(t *testing.T) {
 		})
 	}
 }
+
+func TestLandOpusModelIsStrict(t *testing.T) {
+	for _, tc := range []struct {
+		model   string
+		refuses bool
+	}{
+		{"opus", false},
+		{"claude-opus-4", false},
+		{"claude-opus-4-1-20250805", false},
+		{"claude-opus-4.1", false},
+		{"opusx", true},
+		{"opus-lookalike", true},
+		{"Claude-Opus", true},
+		{"OPUS", true},
+		{"not-opus", true},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			_, sha := r.orderCommit("topic", "rule\n")
+			r.clearBy(sha, tc.model)
+			out, err := r.previewOrder(sha)
+			if tc.refuses != (err != nil) {
+				t.Fatalf("refuses=%v, err=%v\n%s", tc.refuses, err, out)
+			}
+		})
+	}
+}

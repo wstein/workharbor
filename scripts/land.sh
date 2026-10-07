@@ -272,7 +272,7 @@ EOT
 need=any
 [ "$class" = carve-out ] && need=opus
 cr="$(printf '\r')"
-opus_re=' model=(claude-)?opus[-.0-9a-z]*$'
+opus_re=' model=(claude-)?opus(-[0-9]+([.-][0-9]+)*)?$'
 body_of() {
   n="$(git notes --ref=review list "$1" 2>/dev/null)" || return 1
   git cat-file blob "$n" 2>/dev/null | sed "s/$cr\$//"
@@ -280,7 +280,7 @@ body_of() {
 clear_at() { # callers refuse a NOT CLEAR commit first (covered)
   b="$(body_of "$1")" || return 1
   l="$(printf '%s\n' "$b" | grep -E "^CLEAR $1 role=[^ ]+ model=[^ ]+\$")" || return 1
-  [ "$need" = any ] || printf '%s\n' "$l" | grep -Eiq "$opus_re"
+  [ "$need" = any ] || printf '%s\n' "$l" | grep -Eq "$opus_re"
 }
 notclear_at() { body_of "$1" | notclear_in "$1"; }
 pid() { git show --format= --full-index --binary "$1" | git patch-id --verbatim | cut -d' ' -f1; }
@@ -314,7 +314,7 @@ allcov() {
   revs="$(git rev-list "$base..$full")" || return 1
   for c in $revs; do covered "$c" || return 1; done
 }
-if [ "$stamp" = matched ] && [ "$class" = carve-out ] && ! printf '%s\n' "$clear" | grep -Eiq "$opus_re" && ! allcov; then
+if [ "$stamp" = matched ] && [ "$class" = carve-out ] && ! printf '%s\n' "$clear" | grep -Eq "$opus_re" && ! allcov; then
   stamp=mismatch
   if git rev-parse -q --verify refs/heads/landing >/dev/null && git merge-base --is-ancestor "$full" refs/heads/landing; then
     [ "$command" = inspect ] || die "$full is on landing, but a commit of main..$full has no required CLEAR or equivalent original (landing order): refusing"
