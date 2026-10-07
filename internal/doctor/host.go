@@ -337,6 +337,7 @@ func hostSteps(d Deps) []Check {
 	}
 	return []Check{
 		userStep(d, setupCommand),
+		loginPictureStep(d),
 
 		{
 			Name: "autologout", Phase: PhaseHost, Step: 2, Title: "no automatic log-out after inactivity (manual step 2)",

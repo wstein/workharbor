@@ -11,6 +11,9 @@ Legend (colour is only decoration: the words are always printed)
  ? ?      workharbor-user      dscl did not say whether operator exists
 | ACTION  to fix workharbor-user, run
 |   $ whr setup host --only workharbor-user --user 'operator'
+ ? ?      login-picture        dscl did not say what the picture is
+| ACTION  to fix login-picture, run
+|   $ whr setup host --only login-picture --user 'operator'
  ? ?      autologout           defaults did not answer, so the setting is not
           known
 | ACTION  to fix autologout, run
@@ -181,107 +184,109 @@ Legend (colour is only decoration: the words are always printed)
 | ACTION  to fix notifications, run
 |   $ whr setup --user 'operator' (run as operator)
 ------------------------------------------------------------
-Summary: 4 ok, 14 FAIL, 30 not verified (?), 0 WARN, 0 skipped
+Summary: 4 ok, 14 FAIL, 31 not verified (?), 0 WARN, 0 skipped
 
 What you need to do now
   1. workharbor-user: dscl did not say whether operator exists
      $ whr setup host --only workharbor-user --user 'operator'
-  2. autologout: defaults did not answer, so the setting is not known
+  2. login-picture: dscl did not say what the picture is
+     $ whr setup host --only login-picture --user 'operator'
+  3. autologout: defaults did not answer, so the setting is not known
      $ whr setup host --only autologout --user 'operator'
-  3. workspace-volume: needs a valid configuration: the workspace roots are read
+  4. workspace-volume: needs a valid configuration: the workspace roots are read
      from it, and it is not written yet
      $ whr setup --only config-base --user 'operator' (run as operator)
-  4. power: pmset did not answer
+  5. power: pmset did not answer
      $ whr setup host --only power --user 'operator'
-  5. media-analysis: ps did not answer
+  6. media-analysis: ps did not answer
      $ whr setup host --only media-analysis --user 'operator'
-  6. spotlight: needs a valid configuration: the workspace roots are read from
+  7. spotlight: needs a valid configuration: the workspace roots are read from
      it, and it is not written yet
      $ whr setup --only config-base --user 'operator' (run as operator)
-  7. firewall: socketfilterfw did not answer
+  8. firewall: socketfilterfw did not answer
      $ whr setup host --only firewall --user 'operator'
-  8. ssh-keys-only: /etc/ssh/sshd_config.d/100-whr.conf is not there: password
+  9. ssh-keys-only: /etc/ssh/sshd_config.d/100-whr.conf is not there: password
      logins are not refused
      $ whr setup host --only ssh-keys-only --user 'operator'
-  9. filevault: fdesetup did not answer
-     $ whr setup host --only filevault --user 'operator'
-  10. homebrew: Homebrew is not installed at /opt/homebrew
+  10. filevault: fdesetup did not answer
+      $ whr setup host --only filevault --user 'operator'
+  11. homebrew: Homebrew is not installed at /opt/homebrew
       $ whr setup host --only homebrew --user 'operator'
-  11. brew-packages: not installed: container, git, gh
+  12. brew-packages: not installed: container, git, gh
       $ whr setup host --only brew-packages --user 'operator'
-  12. brew-pin: brew did not answer
+  13. brew-pin: brew did not answer
       $ whr setup host --only brew-pin --user 'operator'
-  13. screen-sharing: macOS keeps this under privacy controls (TCC) that a
+  14. screen-sharing: macOS keeps this under privacy controls (TCC) that a
       command cannot read or set
       $ whr setup host --only screen-sharing --user 'operator'
-  14. tailscale: signing in is the human's; whr does not check a third party's
+  15. tailscale: signing in is the human's; whr does not check a third party's
       state
       $ whr setup host --only tailscale --user 'operator'
-  15. config-dir: this check describes the account operator runs as: run `whr
+  16. config-dir: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only config-dir --user 'operator' (run as operator)
-  16. api-token: this check describes the account operator runs as: run `whr
+  17. api-token: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only api-token --user 'operator' (run as operator)
-  17. agent-key: this check describes the account operator runs as: run `whr
+  18. agent-key: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only agent-key --user 'operator' (run as operator)
-  18. ssh-ca: this check describes the account operator runs as: run `whr
+  19. ssh-ca: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only ssh-ca --user 'operator' (run as operator)
-  19. container-start: this check describes the account operator runs as: run
+  20. container-start: this check describes the account operator runs as: run
       `whr doctor` as operator
       $ whr setup --only container-start --user 'operator' (run as operator)
-  20. container-kernel: this check describes the account operator runs as: run
+  21. container-kernel: this check describes the account operator runs as: run
       `whr doctor` as operator
       $ whr setup --only container-kernel --user 'operator' (run as operator)
-  21. standard-user-check: this check describes the account operator runs as:
+  22. standard-user-check: this check describes the account operator runs as:
       run `whr doctor` as operator
       $ whr setup --only standard-user-check --user 'operator' (run as operator)
-  22. config-base: this check describes the account operator runs as: run `whr
+  23. config-base: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only config-base --user 'operator' (run as operator)
-  23. development-key: this check describes the account operator runs as: run
+  24. development-key: this check describes the account operator runs as: run
       `whr doctor` as operator
       $ whr setup --only development-key --user 'operator' (run as operator)
-  24. github-app: this check describes the account operator runs as: run `whr
+  25. github-app: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only github-app --user 'operator' (run as operator)
-  25. config-github: this check describes the account operator runs as: run `whr
+  26. config-github: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only config-github --user 'operator' (run as operator)
-  26. tool-store: this check describes the account operator runs as: run `whr
+  27. tool-store: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only tool-store --user 'operator' (run as operator)
-  27. service-install: this check describes the account operator runs as: run
+  28. service-install: this check describes the account operator runs as: run
       `whr doctor` as operator
       $ whr setup --only service-install --user 'operator' (run as operator)
-  28. drop-admin: this check describes the account operator runs as: run `whr
+  29. drop-admin: this check describes the account operator runs as: run `whr
       doctor` as operator
       $ whr setup --only drop-admin --user 'operator' (run as operator)
-  29. config: open /Users/workharbor/.config/whr/config.json: no such file or
+  30. config: open /Users/workharbor/.config/whr/config.json: no such file or
       directory
       $ whr setup --only config-base --user 'operator' (run as operator)
-  30. server: the supervisor did not accept the token: configuration: open
+  31. server: the supervisor did not accept the token: configuration: open
       /Users/workharbor/.config/whr/config.json: no such file or directory (is
       `whr serve` running?)
       $ whr setup --only service-install --user 'operator' (run as operator)
-  31. forge-key: needs a valid configuration (see the config check)
+  32. forge-key: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  32. bot-key: needs a valid configuration (see the config check)
+  33. bot-key: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  33. api-clients: needs a valid configuration (see the config check)
+  34. api-clients: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  34. forge-app: needs a valid configuration (see the config check)
+  35. forge-app: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  35. forge-board: needs a valid configuration (see the config check)
+  36. forge-board: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  36. forge-workflow: needs a valid configuration (see the config check)
+  37. forge-workflow: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  37. agent-login: needs a valid configuration (see the config check)
+  38. agent-login: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  38. lane-agents: needs a valid configuration (see the config check)
+  39. lane-agents: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
-  39. notifications: needs a valid configuration (see the config check)
+  40. notifications: needs a valid configuration (see the config check)
       $ whr setup --user 'operator' (run as operator)
 whr: some checks failed; fix them and run `whr doctor` again

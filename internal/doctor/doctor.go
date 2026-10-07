@@ -97,7 +97,9 @@ type Deps struct {
 	FS      runtime.FS
 	// SSHDFile overrides the sshd drop-in the ssh-keys-only check reads (tests).
 	SSHDFile string
-	LookPath func(string) (string, error)
+	// PictureFile overrides where the login picture is installed and read (tests).
+	PictureFile string
+	LookPath    func(string) (string, error)
 	// GitHub builds the App's client from the configuration; nil uses
 	// NewGitHub. Tests point it at a fake.
 	GitHub func(*config.Config) (*github.Client, error)
