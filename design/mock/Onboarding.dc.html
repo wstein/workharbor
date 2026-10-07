@@ -122,6 +122,7 @@ a{color:inherit;text-decoration:none}
                 <span style="color: {{ c.fg }}; font-size: 13px; text-align: right">{{ c.state }}</span>
               </div>
             </sc-for>
+            <a href="Setup.dc.html" style="padding: 12px 18px; background: #0b1626; color: #5eead4; font-size: 13px">Statuses: ok, warn, fail, not_verified, skipped. Open the full setup status page</a>
           </div>
         </sc-if>
 
@@ -227,16 +228,16 @@ class Component extends DCLogic {
     });
     const presetNote = presetDefs.find((d) => d.key === pm).note;
     const ok = { mark: '✓', bg: '#11331f', fg: '#4ade80' };
-    const warn = { mark: '!', bg: '#3a2d0b', fg: '#fbbf24' };
+    const nv = { mark: '?', bg: '#1b2a4a', fg: '#93c5fd' };
     const checks = [
-      Object.assign({ label: 'Container services running', note: 'Apple Container on the Mac mini. After a login, container system start has to run; the supervisor does it.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Limits enforced, one VM per environment', note: 'CPU and memory limits hold; a runaway allocation is killed and the environment survives.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Forbidden mounts rejected', note: 'The adapter rejects your home folder, ~/.ssh, other secrets and runtime sockets. The runtime alone would accept them.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Default-deny egress', note: 'Measured: an internal network plus a proxy sidecar; allowed hosts pass, everything else is blocked and logged.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Escape tests', note: 'Measured: the guest cannot reach the host, and mounted unix sockets are unusable.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Tool store', note: 'Read-only store mounted: claude 2.1.286, codex 0.159.3.', state: 'Passed' }, ok),
-      Object.assign({ label: 'Capacity: 4 concurrent environments', note: 'Memory at 1 then 4 instances is not measured yet; an idle agent container used about 290 MiB.', state: 'Not tested' }, warn),
-      Object.assign({ label: 'Recovery after a Mac reboot', note: 'Environments and the agent session survive a service restart and a rebuild. A reboot itself was not tested.', state: 'Not tested' }, warn),
+      Object.assign({ label: 'Container services running', note: 'Apple Container on the Mac mini. After a login, container system start has to run; the supervisor does it.', state: 'ok' }, ok),
+      Object.assign({ label: 'Limits enforced, one VM per environment', note: 'CPU and memory limits hold; a runaway allocation is killed and the environment survives.', state: 'ok' }, ok),
+      Object.assign({ label: 'Forbidden mounts rejected', note: 'The adapter rejects your home folder, ~/.ssh, other secrets and runtime sockets. The runtime alone would accept them.', state: 'ok' }, ok),
+      Object.assign({ label: 'Default-deny egress', note: 'Measured: an internal network plus a proxy sidecar; allowed hosts pass, everything else is blocked and logged.', state: 'ok' }, ok),
+      Object.assign({ label: 'Escape tests', note: 'Measured: the guest cannot reach the host, and mounted unix sockets are unusable.', state: 'ok' }, ok),
+      Object.assign({ label: 'Tool store', note: 'Read-only store mounted: claude 2.1.286, codex 0.159.3.', state: 'ok' }, ok),
+      Object.assign({ label: 'Capacity: 4 concurrent environments', note: 'Memory at 1 then 4 instances is not measured yet; an idle agent container used about 290 MiB.', state: 'not_verified' }, nv),
+      Object.assign({ label: 'Recovery after a Mac reboot', note: 'Environments and the agent session survive a service restart and a rebuild. A reboot itself was not tested.', state: 'not_verified' }, nv),
     ];
     const provDefs = [
       { key: 'self', title: 'Self-hosted ntfy', note: 'Messages stay on your server. Delivery to an iPhone through a self-hosted server is not verified yet.' },
@@ -251,7 +252,7 @@ class Component extends DCLogic {
       { k: 'Server', v: 'https://mac-mini.example.net' },
       { k: 'Forge', v: 'GitHub · wstein/workharbor · workharbor GitHub App' },
       { k: 'Agents', v: (mode === 'sub' ? 'Claude Code, subscription login' : 'API key from a 0600 file on the host') + ' · default mode ' + presetDefs.find((d) => d.key === pm).label },
-      { k: 'Host checks', v: '6 passed, 2 not tested yet' },
+      { k: 'Host checks', v: '6 ok, 2 not_verified' },
       { k: 'Notifications', v: (prov === 'self' ? 'Self-hosted ntfy' : 'ntfy.sh') + (sent ? ' · test push sent' : ' · no test push yet') },
     ];
 

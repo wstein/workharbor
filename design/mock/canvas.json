@@ -71,6 +71,14 @@
       "h": 1100,
       "title": "Onboarding wizard",
       "is_interactive": true
+    },
+    "Setup.dc.html": {
+      "x": 1880,
+      "y": 2580,
+      "w": 1360,
+      "h": 1700,
+      "title": "Setup status",
+      "is_interactive": true
     }
   },
   "order": [
@@ -81,7 +89,8 @@
     "Chat.dc.html",
     "CLI.dc.html",
     "Push.dc.html",
-    "Onboarding.dc.html"
+    "Onboarding.dc.html",
+    "Setup.dc.html"
   ],
   "notes": {
     "title": {
