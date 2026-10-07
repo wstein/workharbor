@@ -252,3 +252,26 @@ func TestReportEmptyAccountLeavesRootsAlone(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestReportRetentionKeepsNewReportWhenClockStepsBack(t *testing.T) {
+	dir := privateReportDir(t)
+	report := exampleReport()
+	for range 10 {
+		report.GeneratedAt = report.GeneratedAt.Add(time.Second)
+		if _, err := WriteArtifact(dir, report); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report.GeneratedAt = report.GeneratedAt.Add(-time.Hour)
+	path, err := WriteArtifact(dir, report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("new report deleted: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "setup-reports"))
+	if err != nil || len(entries) != 10 {
+		t.Fatalf("retention %d: %v", len(entries), err)
+	}
+}

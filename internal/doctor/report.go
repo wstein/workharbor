@@ -244,12 +244,14 @@ func WriteArtifact(stateDir string, report Artifact) (string, error) {
 	}
 	var names []string
 	for _, entry := range entries {
-		if entry.Type().IsRegular() && reportName(entry.Name()) {
+		if entry.Type().IsRegular() && reportName(entry.Name()) && entry.Name() != filepath.Base(path) {
 			names = append(names, entry.Name())
 		}
 	}
 	sort.Strings(names)
-	for len(names) > 10 {
+	// the report just written is never a candidate, so a clock that stepped
+	// back cannot delete it: keep it plus the newest nine others
+	for len(names) > 9 {
 		if err = os.Remove(filepath.Join(dir, names[0])); err != nil && !os.IsNotExist(err) {
 			return path, err
 		}
