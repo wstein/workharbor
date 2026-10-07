@@ -95,8 +95,9 @@ func newSetupRig(t *testing.T) *setupRig {
 	r := &setupRig{t: t, host: &setupHost{outputs: map[string]string{}}, exe: exe}
 	r.home = filepath.Join(dir, "home")
 	r.env = SetupEnv{
-		OpenLog: func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
-		Host:    r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
+		NoRunLog: true,
+		OpenLog:  func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
+		Host:     r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
 		Executable: func() (string, error) { return exe, nil },
 		Manager:    &launchd.Manager{R: aquaOnly{"Aqua"}, UID: 501, GOOS: "darwin"},
 	}

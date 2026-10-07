@@ -13,6 +13,7 @@ import (
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/runtime"
+	"github.com/wstein/workharbor/internal/setup"
 )
 
 // newDoctor is `whr doctor` (design §9.5, step 4 and the checks of the others).
@@ -29,6 +30,7 @@ func newDoctor(st *state) *cobra.Command {
 		plain   bool
 		verbose bool
 		report  bool
+		logFile string
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -51,6 +53,11 @@ func newDoctor(st *state) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			runLog, err := st.startRunLog(&env, "doctor", logFile, verbose)
+			if err != nil {
+				return err
+			}
+			defer st.finishRunLog(runLog, style)
 			exe, _ := env.Executable()
 			key, err := rememberedPrefix(cmd, dev, false, path, exe)
 			if err != nil {
@@ -126,6 +133,9 @@ func newDoctor(st *state) *cobra.Command {
 				}
 				rs[i].Fix = context.command(r.Fix)
 			}
+			for _, r := range rs {
+				runLog.Step(r.Check, setup.StepStatus(r.Status), clean(r.Detail))
+			}
 			presentation := doctor.PresentResults(rs)
 			// a failed report write must not hide the results: it is reported
 			// after them, with exit status 1
@@ -171,6 +181,7 @@ func newDoctor(st *state) *cobra.Command {
 	cmd.Flags().BoolVar(&report, "report", false, "save a private, redacted setup report in the state directory")
 	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
+	cmd.Flags().StringVar(&logFile, "log-file", "", "write the run log here (default: a new file under the state directory logs/); follow it with `tail -f` in a second terminal")
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
 	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")

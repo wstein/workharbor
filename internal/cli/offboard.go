@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/offboard"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/setup"
 	"github.com/wstein/workharbor/internal/setup/answers"
 	"github.com/wstein/workharbor/internal/setup/protocol"
@@ -47,7 +49,8 @@ volumes, backups and other accounts, in the section
 func newOffboard(st *state) *cobra.Command {
 	var (
 		del, allowAdmin, unattended, plain bool
-		answers                            string
+		answers, logFile                   string
+		verbose                            bool
 	)
 	run := func(cmd *cobra.Command, _ []string) error {
 		style := st.style(st.env.Stderr, plain)
@@ -68,7 +71,7 @@ func newOffboard(st *state) *cobra.Command {
 		if env.GOOS != "darwin" {
 			refused = append(refused, offboard.Refusal{Guard: "os", Code: exitcode.Usage, Msg: "this runs only on a Mac"})
 		}
-		return offboardRun(cmd, st, env, in, refused, o)
+		return offboardRun(cmd, st, env, in, refused, o, logOpts{logFile, verbose})
 	}
 	parent := &cobra.Command{
 		Use:   "offboard",
@@ -89,11 +92,13 @@ func newOffboard(st *state) *cobra.Command {
 	f.StringVar(&answers, "answers", "", "refused: this command asks every answer at the terminal")
 	f.BoolVar(&unattended, "unattended", false, "refused: this command asks every answer at the terminal")
 	f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
+	f.BoolVar(&verbose, "verbose", false, "also stream every logged command and its output to the terminal")
+	f.StringVar(&logFile, "log-file", "", "write the run log here (default: a new file under the state directory logs/); follow it with `tail -f` in a second terminal")
 	parent.AddCommand(host)
 	return parent
 }
 
-func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invocation, refused []offboard.Refusal, o offboard.Out) error {
+func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invocation, refused []offboard.Refusal, o offboard.Out, lo logOpts) error {
 	stop := func(rs []offboard.Refusal) error {
 		for _, r := range rs {
 			o.Refusal(r)
@@ -135,6 +140,11 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	if oe.Now == nil {
 		oe.Now = time.Now
 	}
+	runLog, err := st.startRunLog(&env, "offboard", lo.file, lo.verbose)
+	if err != nil {
+		return err
+	}
+	defer st.finishRunLog(runLog, o.Style)
 	d := offboard.Deps{Runner: env.Host, Stat: oe.Stat, ReadDir: oe.ReadDir}
 	f := offboard.Inspect(ctx, d, in)
 	if rs := offboard.Guards(f); len(rs) > 0 {
@@ -196,7 +206,14 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 		}
 		return appendEntry(protocol.Entry{Event: protocol.EventRunEnd, Outcome: end})
 	}}
-	if code := offboard.Execute(ctx, env.Host, d, f, lg, o); code != exitcode.OK {
+	code := offboard.Execute(ctx, env.Host, d, f, lg, o)
+	if code == exitcode.OK {
+		runLog.Step("delete-user", "ok", "the account was removed")
+	} else {
+		runLog.Step("delete-user", "fail", fmt.Sprintf("exit %d", code))
+		setup.FailureSummary(render.Writer{W: o.Err, S: o.Style}, runLog, fmt.Sprintf("the account was not removed (exit %d)", code), "check the account with `whr doctor`, then run `whr offboard host --delete` again")
+	}
+	if code != exitcode.OK {
 		return exitError{code}
 	}
 	return nil

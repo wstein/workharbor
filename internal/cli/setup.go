@@ -40,6 +40,9 @@ type SetupEnv struct {
 	// home directory is given; nil is protocol.Open. A test replaces both.
 	Identity func() (string, error)
 	OpenLog  func(home string) (*protocol.Log, error)
+	// NoRunLog skips the default run log (issue #379) so a test's output stays
+	// fixed; an explicit --log-file is still written.
+	NoRunLog bool
 }
 
 // installedPrefixes are the admin-owned places a whr may be installed (D24): the
@@ -95,6 +98,7 @@ func newSetup(st *state) *cobra.Command {
 		// issue #337: the answer file, saving one, and asking nothing
 		answersPath, savePath string
 		unattended            bool
+		logFile               string
 		doctorOn              = func(env SetupEnv, path string) []doctor.Check {
 			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
@@ -166,6 +170,11 @@ func newSetup(st *state) *cobra.Command {
 		if dev && managed {
 			return usageError{"--dev and --managed cannot be combined: --dev remembers a development installation, --managed removes the memory"}
 		}
+		runLog, err := st.startRunLog(&env, "setup", logFile, verbose)
+		if err != nil {
+			return err
+		}
+		defer st.finishRunLog(runLog, style)
 		exe, exeErr := env.Executable()
 		key, err := rememberedPrefix(cmd, dev, managed, configPath(), exe)
 		if err != nil {
@@ -338,6 +347,7 @@ func newSetup(st *state) *cobra.Command {
 			}
 		}
 		so.Log = setupLog
+		so.RunLog = runLog
 
 		outs, err := setup.Run(ctx, steps, env.Host, so)
 		reportOutcomes = outs
@@ -405,6 +415,7 @@ func newSetup(st *state) *cobra.Command {
 		f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal; also no fzf")
 		f.BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a step ran")
 		f.StringSliceVar(&only, "only", nil, "run only these steps (optional steps too)")
+		f.StringVar(&logFile, "log-file", "", "write the run log here (default: a new file under the state directory logs/); follow it with `tail -f` in a second terminal")
 		f.StringVar(&from, "from", "", "start at this step")
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 		f.StringVar(&answersPath, "answers", "", "answer the questions of the steps this file decides (user part only; host steps, sudo and guided steps are always asked)")
