@@ -8,6 +8,7 @@
 #   board-snapshot.sh session <number>... <lane>  set each card's Session
 #   board-snapshot.sh priority <number>... <P1|P2|P3>  set each card's Priority
 #   board-snapshot.sh add <number>...             add each issue to the board
+#   board-snapshot.sh sync [--dry-run] [--registry <path>] [--root <dir>]  reconcile open cards (rule table: docs, "Board move and sync")
 #   board-snapshot.sh budget                      lowest remaining and total cost, last 24 hours (no gh call)
 #
 #   board-snapshot.sh ready <number>...           set Ready to push (wh/dispatch for wh/review)
@@ -17,6 +18,8 @@
 # asks for permission, is set in AGENTS.md (GitHub rate limit). A failure on one issue is reported on stderr, the rest
 # still run, and the exit status is 1 if any failed. Input is validated before any gh call.
 #
+# sync is a card write and follows the same permission rule as the other non-move writes;
+# it refuses to write (exit 1) when its refresh failed and only an old snapshot is left.
 # move reads each card back after the write (a fresh query of that one card) and
 # exits 1 on a mismatch; a card already at the status gets no write ("already").
 # move sets only Todo, In progress, Blocked and In review: Ready to push
@@ -165,8 +168,20 @@ move | session | priority | add | ready)
     ;;
   esac
   ;;
+sync)
+  sync_dry=0 sync_registry="" sync_root=.
+  for ((i = 1; i < ${#args[@]}; i++)); do
+    case ${args[i]} in
+    --dry-run) sync_dry=1 ;;
+    --registry) i=$((i + 1)); sync_registry=${args[i]:-}; [ -n "$sync_registry" ] || die "--registry needs a path" ;;
+    --root) i=$((i + 1)); sync_root=${args[i]:-}; [ -n "$sync_root" ] || die "--root needs a path" ;;
+    *) die "usage: board-snapshot.sh sync [--dry-run] [--registry <path>] [--root <dir>]" ;;
+    esac
+  done
+  refresh=1
+  ;;
 budget) ;;
-*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready, budget)" ;;
+*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready, sync, budget)" ;;
 esac
 
 dir=$(dirname "$file")
@@ -270,7 +285,7 @@ field_ids() {
 }
 
 # items_query asks only for what the snapshot holds, 100 items a page (#165).
-items_query='query($p:ID!,$after:String){rateLimit{cost remaining limit resetAt} node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title url repository{nameWithOwner} labels(first:20){nodes{name}}}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
+items_query='query($p:ID!,$after:String){rateLimit{cost remaining limit resetAt} node(id:$p){... on ProjectV2{items(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{content{__typename ... on Issue{number title state url repository{nameWithOwner} labels(first:20){nodes{name}}}} status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} session:fieldValueByName(name:"Session"){... on ProjectV2ItemFieldSingleSelectValue{name}} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
 
 # query reads every page of the board with first:100 and an after: cursor and
 # rewrites the snapshot only when all pages came back; one failed page leaves
@@ -308,6 +323,7 @@ query() {
     items: [.[] | select(.content.__typename == "Issue" and .content.repository.nameWithOwner == $repo) | {
       number: .content.number,
       title: .content.title,
+      state: .content.state,
       status: .status.name,
       session: .session.name,
       priority: .priority.name,
@@ -678,6 +694,7 @@ if [ "$mode" = budget ]; then
   exit 0
 fi
 
+stale=0
 if [ "$refresh" = 1 ] || ! fresh; then
   started=$(date +%s)
   if lock_take; then
@@ -689,6 +706,7 @@ if [ "$refresh" = 1 ] || ! fresh; then
     }; then
       :
     elif ! query; then
+      stale=1
       if matches_target; then
         echo "board-snapshot: stale: the board query failed (rate limit?), using the snapshot of $(jq -r '.fetched_at' "$file" 2>/dev/null || echo unknown)" >&2
       else
@@ -699,11 +717,47 @@ if [ "$refresh" = 1 ] || ! fresh; then
     trap - EXIT
   elif [ ! -f "$file" ]; then
     die "could not take the lock and there is no snapshot"
+  else
+    stale=1
   fi
 fi
 
 [ -f "$file" ] || die "no snapshot"
 matches_target || die "snapshot target identity mismatch"
+
+if [ "$mode" = sync ]; then
+  # A write from an old snapshot could lower a card: a dry run may read it, a real run may not.
+  [ "$sync_dry" = 1 ] || [ "$stale" = 0 ] || die "stale snapshot; nothing changed"
+  # Wanted statuses from positive evidence only (docs: Board move and sync):
+  # registry phase "blocked" -> Blocked, phase "start requested" or a worktree
+  # on branch <type>/<n>-... -> In progress; first signal per issue wins.
+  [ -n "$sync_registry" ] || sync_registry=$(git -C "$sync_root" rev-parse --path-format=absolute --git-common-dir)/crewbook/registry.md || die "no git repository: pass --registry"
+  [ -f "$sync_registry" ] && [ "$(wc -c <"$sync_registry")" -le 262144 ] || die "no readable registry; nothing changed"
+  [ "$(head -n 1 "$sync_registry")" = "crewbook-registry: 1" ] || die "damaged or foreign registry; nothing changed"
+  worktrees=$(git -C "$sync_root" worktree list --porcelain) || die "cannot list worktrees; nothing changed"
+  signals=$({
+    awk '/^Resume: /{exit} /^## /{name=substr($0,4); next} name!="" && /^phase:/{v=tolower(substr($0,7)); gsub(/^[ \t]+|[ \t]+$/,"",v); print name "\t" v}' "$sync_registry" |
+      awk -F'\t' '{ if (match($1,/^#?[0-9]+([^0-9A-Za-z_]|$)/)) { n=$1; sub(/^#/,"",n); sub(/[^0-9].*/,"",n);
+        if ($2=="blocked") print n "\tBlocked\tregistry phase blocked"; else if ($2=="start requested") print n "\tIn progress\tregistry phase start requested" } }'
+    printf '%s\n' "$worktrees" | awk '/^branch /{b=substr($0,8); sub(/^refs\/heads\//,"",b); if (match(b,/^([A-Za-z0-9._-]+\/)?[0-9]+-/)) { n=b; sub(/^([A-Za-z0-9._-]+\/)?/,"",n); sub(/-.*/,"",n); print n "\tIn progress\tworktree branch" } }'
+  } | awk -F'\t' '!seen[$1]++' | jq -Rn '[inputs | split("\t") | {key: .[0], value: [.[1], .[2]]}] | from_entries')
+  diff=$(jq -r --argjson sig "$signals" '
+    .items[] | select(.state != "CLOSED" and .status != "Done") | . as $c | $sig[($c.number | tostring)] as $s
+    | (if $s == null then (if $c.status == "In progress" then ["Todo", "no worktree or registry signal"] else null end)
+      elif $s[0] == $c.status then null
+      elif $c.status == "In review" or $c.status == "Ready to push" then null
+      elif $s[0] == "In progress" and $c.status != null and $c.status != "Todo" then null
+      else $s end)
+    | select(. != null) | [$c.number, ($c.status // "(none)"), .[0], .[1]] | @tsv' "$file")
+  failed=0
+  while IFS=$'\t' read -r n old new why; do
+    [ -n "$n" ] || continue
+    if [ "$sync_dry" = 0 ] && ! bash "$0" move "$n" "$new" >/dev/null </dev/null; then failed=1; continue; fi
+    echo "#$n $old -> $new ($why)"
+  done <<<"$diff"
+  [ "$failed" = 0 ] || die "some moves failed"
+  exit 0
+fi
 
 case $mode in
 print) cat "$file" ;;

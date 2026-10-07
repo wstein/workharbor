@@ -5,11 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/wstein/workharbor/internal/gittest"
 )
 
 const fakeNodes = `[
@@ -1379,5 +1382,154 @@ func TestBoardSnapshotMoveReadBackMismatchFails(t *testing.T) {
 	}
 	if got := b.card(t, "20"); !strings.Contains(got, "\tTodo\t") {
 		t.Fatalf("the cache was patched after a mismatch: %q", got)
+	}
+}
+
+const syncNodes = `[
+{"content":{"__typename":"Issue","number":10,"title":"a","state":"OPEN"},"status":{"name":"Todo"}},
+{"content":{"__typename":"Issue","number":20,"title":"b","state":"OPEN"},"status":{"name":"Todo"}},
+{"content":{"__typename":"Issue","number":30,"title":"c","state":"OPEN"}},
+{"content":{"__typename":"Issue","number":40,"title":"d","state":"OPEN"},"status":{"name":"In progress"}},
+{"content":{"__typename":"Issue","number":50,"title":"e","state":"OPEN"},"status":{"name":"Todo"}},
+{"content":{"__typename":"Issue","number":60,"title":"f","state":"OPEN"},"status":{"name":"In review"}},
+{"content":{"__typename":"Issue","number":70,"title":"g","state":"OPEN"},"status":{"name":"Ready to push"}},
+{"content":{"__typename":"Issue","number":80,"title":"h","state":"CLOSED"},"status":{"name":"Todo"}},
+{"content":{"__typename":"Issue","number":90,"title":"i","state":"OPEN"},"status":{"name":"Done"}}
+]`
+
+const syncRegistry = `crewbook-registry: 1
+mode: split
+
+## 20-docs
+phase: blocked
+
+## #30
+phase: Start Requested
+
+## 60
+phase: start requested
+
+## 70
+phase: blocked
+
+## 80
+phase: blocked
+
+## 90
+phase: blocked
+
+## lane-A
+phase: author started (outcome: launched, running)
+
+Resume: log lines follow
+## 50
+phase: blocked
+`
+
+// syncFixture is a board whose cards, registry and worktrees give every rule
+// of the sync table one case; it returns the args for `sync`.
+func syncFixture(t *testing.T) (board, []string) {
+	t.Helper()
+	b := newBoard(t)
+	b.pages(t, map[string]string{"first": page(syncNodes, "")})
+	repo := t.TempDir()
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := gittest.Git(t.Context(), "", dir, gittest.Identity, args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	git(repo, "init", "-q", "-b", "main")
+	git(repo, "commit", "-q", "--allow-empty", "-m", "init")
+	git(repo, "worktree", "add", "-q", "-b", "feat/10-thing", filepath.Join(t.TempDir(), "wt10"))
+	git(repo, "worktree", "add", "-q", "-b", "scratch", filepath.Join(t.TempDir(), "wt-scratch"))
+	reg := filepath.Join(t.TempDir(), "registry.md")
+	if err := os.WriteFile(reg, []byte(syncRegistry), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return b, []string{"sync", "--root", repo, "--registry", reg}
+}
+
+func (b board) sync(t *testing.T, args ...string) (lines []string, stderr string, err error) {
+	t.Helper()
+	so, se, err := b.runEnv(t, []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"}, args...)
+	lines = strings.Split(strings.TrimSpace(so), "\n")
+	if strings.TrimSpace(so) == "" {
+		lines = nil
+	}
+	slices.Sort(lines)
+	return lines, se, err
+}
+
+func TestBoardSnapshotSyncReconcilesAndIsIdempotent(t *testing.T) {
+	t.Parallel()
+	b, args := syncFixture(t)
+	want := []string{
+		"#10 Todo -> In progress (worktree branch)",
+		"#20 Todo -> Blocked (registry phase blocked)",
+		"#30 (none) -> In progress (registry phase start requested)",
+		"#40 In progress -> Todo (no worktree or registry signal)",
+	}
+	got, se, err := b.sync(t, args...)
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("sync: %v %q\n%s", err, got, se)
+	}
+	for n, st := range map[string]string{"10": "In progress", "20": "Blocked", "30": "In progress", "40": "Todo", "50": "Todo", "60": "In review", "70": "Ready to push", "80": "Todo", "90": "Done"} {
+		if card := b.card(t, n); !strings.Contains(card, "\t"+st+"\t") {
+			t.Errorf("card %s = %q, want %s", n, card, st)
+		}
+	}
+	if b.mutations(t) != 4 {
+		t.Fatalf("mutations = %d, want 4 (only where the status differs)", b.mutations(t))
+	}
+	// GitHub now holds the new statuses; the fake board is static, so say so.
+	after := strings.NewReplacer(
+		`"number":10,"title":"a","state":"OPEN"},"status":{"name":"Todo"`, `"number":10,"title":"a","state":"OPEN"},"status":{"name":"In progress"`,
+		`"number":20,"title":"b","state":"OPEN"},"status":{"name":"Todo"`, `"number":20,"title":"b","state":"OPEN"},"status":{"name":"Blocked"`,
+		`"number":30,"title":"c","state":"OPEN"}`, `"number":30,"title":"c","state":"OPEN"},"status":{"name":"In progress"}`,
+		`"number":40,"title":"d","state":"OPEN"},"status":{"name":"In progress"`, `"number":40,"title":"d","state":"OPEN"},"status":{"name":"Todo"`,
+	).Replace(syncNodes)
+	b.pages(t, map[string]string{"first": page(after, "")})
+	got, se, err = b.sync(t, args...)
+	if err != nil || len(got) != 0 || b.mutations(t) != 4 {
+		t.Fatalf("second run: %v %q mutations %d\n%s", err, got, b.mutations(t), se)
+	}
+}
+
+func TestBoardSnapshotSyncDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
+	b, args := syncFixture(t)
+	got, se, err := b.sync(t, append(args, "--dry-run")...)
+	if err != nil || len(got) != 4 || b.mutations(t) != 0 {
+		t.Fatalf("dry run: %v %q mutations %d\n%s", err, got, b.mutations(t), se)
+	}
+}
+
+func TestBoardSnapshotSyncUnreadableRegistryChangesNothing(t *testing.T) {
+	t.Parallel()
+	b, args := syncFixture(t)
+	if err := os.WriteFile(args[len(args)-1], []byte("not a registry\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := b.sync(t, args...)
+	if err == nil || b.mutations(t) != 0 {
+		t.Fatalf("err %v mutations %d; want a refusal without writes", err, b.mutations(t))
+	}
+}
+
+func TestBoardSnapshotSyncRefusesAStaleSnapshot(t *testing.T) {
+	t.Parallel()
+	b, args := syncFixture(t)
+	if _, _, err := b.run(t); err != nil {
+		t.Fatal(err)
+	}
+	fail := []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "FAKE_GH_FAIL=1"}
+	_, se, err := b.runEnv(t, fail, args...)
+	if err == nil || !strings.Contains(se, "stale snapshot; nothing changed") || b.mutations(t) != 0 {
+		t.Fatalf("err %v mutations %d stderr %q; want a refusal without writes", err, b.mutations(t), se)
+	}
+	so, _, err := b.runEnv(t, fail, append(args, "--dry-run")...)
+	if err != nil || strings.TrimSpace(so) == "" {
+		t.Fatalf("a dry run may read a stale snapshot: %v %q", err, so)
 	}
 }
