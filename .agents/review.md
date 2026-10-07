@@ -51,7 +51,7 @@ keychain, credentials, `sudo`, launchd or real containers; `go test` is fine.
 One comment on the issue: `CLEAR <full sha> role=review model=<m>` and either "no
 findings" or the findings, each with `file:line`, a concrete failure scenario
 and a severity (high, medium, low). A criterion unmet or ticked but not met,
-without the author's reason in the issue, is a finding. Only real, high-confidence findings; say
+without the author's reason in the issue, is a finding. A commit that mixes concerns or carries fixup or "address review" noise is a medium finding (NOT CLEAR) unless Werner waived it; a commit that fails alone is no finding. Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
 Also append the same line to the local review note, which `make land` reads:
