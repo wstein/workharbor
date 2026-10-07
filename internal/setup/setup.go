@@ -705,9 +705,7 @@ func todoFor(title string, f *doctor.Fix) render.TodoItem {
 		for _, c := range f.Cmds {
 			it.Commands = append(it.Commands, QuoteArgv(c.Full()))
 		}
-		if f.Guide != "" {
-			it.Text += ": " + oneLine(f.Guide)
-		}
+		it.After = oneLine(f.Guide) // after the commands: the person acts first
 	}
 	return it
 }

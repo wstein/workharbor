@@ -505,6 +505,7 @@ func Summary(_ Style, c Counts) string {
 type TodoItem struct {
 	Text     string
 	Commands []string
+	After    string // follow-up text, printed after the commands
 }
 
 // Todo is the numbered list "What you need to do now", for the end of a run. It
@@ -521,6 +522,9 @@ func Todo(s Style, items []TodoItem) string {
 		fmt.Fprintf(&b, "%s%s\n", prefix, indent(wrap(it.Text, len(prefix)), pad))
 		for _, c := range it.Commands {
 			fmt.Fprintf(&b, "%s%s\n", pad, s.paint(RoleCommand, "$ "+c))
+		}
+		if it.After != "" {
+			fmt.Fprintf(&b, "%s%s\n", pad, indent(wrap(it.After, len(prefix)), pad))
 		}
 	}
 	return b.String()

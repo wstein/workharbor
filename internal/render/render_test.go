@@ -377,3 +377,11 @@ func TestNotVerifiedShowsAWord(t *testing.T) {
 		}
 	}
 }
+
+func TestTodoPrintsCommandsBeforeFollowUp(t *testing.T) {
+	got := Todo(Style{}, []TodoItem{{Text: "user", Commands: []string{"sudo add"}, After: "Then log in."}})
+	c, a := strings.Index(got, "$ sudo add"), strings.Index(got, "Then log in.")
+	if c < 0 || a < 0 || c > a {
+		t.Errorf("command must come before the follow-up text: %q", got)
+	}
+}
