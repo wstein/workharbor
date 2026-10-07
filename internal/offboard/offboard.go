@@ -36,7 +36,7 @@ const Unverified = "macOS commands are unverified on macOS 26 (#346)"
 
 const (
 	deletedUsers = "/Users/Deleted Users"
-	sysadminctlN = "also removes its Public share, kills processes (unverified)"
+	sysadminctlN = "also removes its Public share point and kills its processes (observed once, unverified)"
 )
 
 // The commands run by absolute path, so a PATH of the session cannot swap them.

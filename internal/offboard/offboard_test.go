@@ -368,7 +368,7 @@ func TestADryRunRunsNothing(t *testing.T) {
 			t.Errorf("plan lacks %q:\n%s", want, so.String())
 		}
 	}
-	if !strings.Contains(se.String(), "sysadminctl also removes its Public share, kills processes (unverified)") {
+	if !strings.Contains(strings.Join(strings.Fields(se.String()), " "), "sysadminctl also removes its Public share point and kills its processes (observed once, unverified)") {
 		t.Errorf("no fixed note: %s", se.String())
 	}
 }
