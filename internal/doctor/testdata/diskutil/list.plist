@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>AllDisksAndPartitions</key>
+  <array>
+    <dict>
+      <key>DeviceIdentifier</key><string>disk1</string>
+      <key>APFSVolumes</key>
+      <array>
+        <dict><key>MountPoint</key><string>/System/Volumes/Preboot</string></dict>
+        <dict><key>MountPoint</key><string>/System/Volumes/Data</string></dict>
+        <dict><key>MountPoint</key><string>/System/Volumes/Data</string></dict>
+        <dict><key>MountPoint</key><string>/nix</string></dict>
+        <dict><key>SnapshotMountPoint</key><string>/</string></dict>
+      </array>
+    </dict>
+    <dict>
+      <key>DeviceIdentifier</key><string>disk4</string>
+      <key>Partitions</key>
+      <array>
+        <dict><key>MountPoint</key><string>/Volumes/Fake SSD</string></dict>
+        <dict><key>MountPoint</key><string>/Volumes/Gone</string></dict>
+        <dict><key>MountPoint</key><string>relative</string></dict>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

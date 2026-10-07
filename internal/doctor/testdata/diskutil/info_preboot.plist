@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>APFSContainerFree</key><integer>400000000</integer>
+  <key>FilesystemType</key><string>apfs</string>
+  <key>FreeSpace</key><integer>0</integer>
+  <key>Internal</key><true/>
+  <key>MountPoint</key><string>/System/Volumes/Preboot</string>
+  <key>SystemImage</key><false/>
+  <key>TotalSize</key><integer>500000000</integer>
+  <key>VolumeName</key><string>Preboot</string>
+  <key>Writable</key><true/>
+</dict>
+</plist>
