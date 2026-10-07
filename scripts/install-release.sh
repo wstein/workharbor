@@ -132,9 +132,15 @@ tar -xzf "$work/$mac" -C "$work/mac" whr
 tar -xzf "$work/$guest" -C "$work/guest" whr-shim whr-proxy
 
 install -d -m 0755 "$prefix/bin" "$prefix/libexec/whr"
-install -m 0755 "$work/mac/whr" "$prefix/bin/whr"
-install -m 0755 "$work/guest/whr-shim" "$prefix/libexec/whr/whr-shim-linux-arm64"
-install -m 0755 "$work/guest/whr-proxy" "$prefix/libexec/whr/whr-proxy-linux-arm64"
+# Replace by rename, never by rewriting a binary in place: a running or cached
+# whr keeps its old inode and a stale code signature cannot be left behind (#393).
+# The release binaries keep the signature they were built with.
+place() { # place <source> <destination>
+  install -m 0755 "$1" "$2.new.$$" && mv -f "$2.new.$$" "$2" || { rm -f "$2.new.$$"; die "could not install $2"; }
+}
+place "$work/mac/whr" "$prefix/bin/whr"
+place "$work/guest/whr-shim" "$prefix/libexec/whr/whr-shim-linux-arm64"
+place "$work/guest/whr-proxy" "$prefix/libexec/whr/whr-proxy-linux-arm64"
 printf '%s\n' "$tag" >"$work/VERSION"
 install -m 0644 "$work/VERSION" "$prefix/libexec/whr/VERSION"
 

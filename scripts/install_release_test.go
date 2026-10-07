@@ -167,8 +167,15 @@ func TestAnOlderReleaseIsRefusedUnlessAllowed(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(r.prefix, "bin", "whr")); err != nil || !strings.Contains(string(b), "v0.2.0") {
 		t.Error("the installed whr was replaced by a refused downgrade")
 	}
+	before, err := os.Stat(filepath.Join(r.prefix, "bin", "whr"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if out, err := r.run(t, "v0.1.0", r.prefix, "--allow-downgrade"); err != nil {
 		t.Fatalf("--allow-downgrade: %v\n%s", err, out)
+	}
+	if after, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err != nil || os.SameFile(before, after) {
+		t.Errorf("whr was rewritten in place, not replaced by rename: %v", err)
 	}
 	same := newRelease(t, "0.2.0", "v0.2.0")
 	if out, err := same.run(t, "v0.2.0", same.prefix); err != nil {
