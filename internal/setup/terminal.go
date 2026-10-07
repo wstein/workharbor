@@ -255,11 +255,12 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 		w = io.MultiWriter(tw, seen)
 	}
 	// the log gets the same filtered text the terminal gets: a tool's prompt for
-	// a secret is dropped, and the secret value itself is masked
-	var logged bytes.Buffer
-	lw := render.NewToolWriter(&logged, render.Style{})
+	// a secret is dropped, and the secret value itself is masked. The raw bytes
+	// are kept and masked first, escaped after: the escaper rewrites DEL, C1 and
+	// bidi controls, and a secret holding one would no longer match.
+	var rawLog bytes.Buffer
 	if t.Log != nil {
-		w = io.MultiWriter(w, lw)
+		w = io.MultiWriter(w, &rawLog)
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, w, w
 	if c.SecretPrompt != "" {
@@ -285,6 +286,13 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 		err = t.interruptOr(ctx, err)
 	}
 	if t.Log != nil {
+		masked := rawLog.String()
+		if pw != "" {
+			masked = strings.ReplaceAll(masked, pw, "***")
+		}
+		var logged bytes.Buffer
+		lw := render.NewToolWriter(&logged, render.Style{})
+		_, _ = lw.Write([]byte(masked))
 		lw.End() // flush the held-back partial text
 		t.Log.CommandShown(argv, exitCodeOf(err), logged.String(), pw)
 	}

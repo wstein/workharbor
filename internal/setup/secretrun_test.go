@@ -205,3 +205,34 @@ func TestOutputLogEscapesControlCharacters(t *testing.T) {
 		t.Errorf("raw control character in the log: %q", got)
 	}
 }
+
+// The secret is masked before the log text is escaped: a secret with a control
+// character the escaper rewrites (DEL here) must not reach the log. The value is
+// random at test time, never a real password.
+func TestRunOnceMasksASecretWithControlCharactersInTheLog(t *testing.T) {
+	var raw [12]byte
+	_, _ = rand.Read(raw[:])
+	head, tail := "S"+hex.EncodeToString(raw[:]), "T"+hex.EncodeToString(raw[:4])
+	secret := head + "\x7f" + tail
+	lp := filepath.Join(t.TempDir(), "run.log")
+	lg, err := runlog.Open(lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Terminal{Err: io.Discard, Log: lg}
+	// the tool echoes the secret it read on stdin
+	c := doctor.Cmd{Argv: []string{"/bin/sh", "-c", `IFS= read -r l; printf 'got %s\n' "$l"`}, SecretPrompt: "pw"}
+	if err := h.runOnce(context.Background(), c, secret, nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = lg.Close()
+	got := readFile(t, lp)
+	if !strings.Contains(got, "got ***") {
+		t.Errorf("the secret was not masked: %q", got)
+	}
+	for _, part := range []string{head, tail} {
+		if strings.Contains(got, part) {
+			t.Errorf("part of the secret reached the log: %q", got)
+		}
+	}
+}
