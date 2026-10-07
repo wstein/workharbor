@@ -39,3 +39,19 @@ func TestPreflightIsOneLineBeforeTheFirstStep(t *testing.T) {
 		}
 	}
 }
+
+func TestNewSetupLinesFitIn80Columns(t *testing.T) {
+	var out, errb bytes.Buffer
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb}
+	if _, err := Run(bg, goldenSteps(), &fakeHost{}, o); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(errb.String(), "\n") {
+		if strings.Contains(l, "preflight:") || strings.HasPrefix(l, "           ") &&
+			strings.Contains(l, "Next:") {
+			if n := len([]rune(l)); n > 80 {
+				t.Errorf("over 80 columns (%d): %q", n, l)
+			}
+		}
+	}
+}
