@@ -161,3 +161,12 @@ func TestTerminalOutputIsNotStalledByABackgroundChild(t *testing.T) {
 		t.Errorf("took %v", d)
 	}
 }
+
+func TestEscapeLinesTrimsCRAndEscapesTheRest(t *testing.T) {
+	if got := escapeLines("a\r\nb\r\n"); got != "a\nb\n" {
+		t.Errorf("CRLF: %q", got)
+	}
+	if got := escapeLines("a\rb\n"); strings.Contains(got, "\r") || got == "a\rb\n" {
+		t.Errorf("a bare CR must be escaped, not kept: %q", got)
+	}
+}

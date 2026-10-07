@@ -355,6 +355,12 @@ func TestToolWriterPromptDetection(t *testing.T) {
 		"Invalid password. Try again:":             false,
 		"Authentication failed. Password for u:":   true,
 		"Password: invalid password for user:":     false,
+		// the error word on the last sentence keeps it relayed
+		"Login failed. Wrong password for u:": false,
+		// the last sentence end decides, not the first
+		"Check. Incorrect. Password:": true,
+		// a sentence end needs white space after it (\s+, not \s*)
+		"Error in a.b password:": false,
 	} {
 		var b strings.Builder
 		tw := NewToolWriter(&b, Style{})
