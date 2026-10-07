@@ -126,10 +126,11 @@ func newDoctor(st *state) *cobra.Command {
 				rs[i].Fix = context.command(r.Fix)
 			}
 			presentation := doctor.PresentResults(rs)
+			// a failed report write must not hide the results: it is reported
+			// after them, with exit status 1
+			var reportErr error
 			if report {
-				if err := writeSetupReport(st, path, presentation, "doctor", "", whrUser, dev); err != nil {
-					return err
-				}
+				reportErr = writeSetupReport(st, path, presentation, "doctor", "", whrUser, dev)
 			}
 			if st.asJSON {
 				if err := encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": presentation.OK, "checks": presentation.Results()}); err != nil {
@@ -154,7 +155,13 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			if doctor.Failed(rs) {
 				fmt.Fprintln(st.env.Stderr, "whr: some checks failed; fix them and run `whr doctor` again")
+				if reportErr != nil {
+					return reportErr
+				}
 				return quietError{}
+			}
+			if reportErr != nil {
+				return reportErr // the report was not written: no "ready" line
 			}
 			fmt.Fprintf(st.env.Stderr, "ready, with %d checks not verified and %d warnings; first command: whr run <issue-url>\n", unknown, warned)
 			return nil

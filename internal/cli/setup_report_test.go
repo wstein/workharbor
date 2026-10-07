@@ -153,3 +153,53 @@ func TestSetupDryRunDoesNotWriteOrPruneReports(t *testing.T) {
 		})
 	}
 }
+
+func TestDoctorReportWriteFailureKeepsResults(t *testing.T) {
+	t.Run("checks fail", func(t *testing.T) { reportWriteFailure(t, false) })
+	t.Run("checks pass", func(t *testing.T) { reportWriteFailure(t, true) })
+}
+
+func reportWriteFailure(t *testing.T, pass bool) {
+	rig := newSetupRig(t)
+	home := t.TempDir()
+	blocker := filepath.Join(home, "blocker")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, "config.json")
+	data, err := json.Marshal(map[string]string{"state_dir": filepath.Join(blocker, "state")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	env := Env{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &stderr, Getenv: func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	}, Setup: rig.env}
+	args := []string{"doctor", "--config", path, "--prefix", filepath.Dir(filepath.Dir(rig.exe)), "--report", "--json"}
+	if pass { // skipped checks do not fail the run
+		for _, c := range doctor.Checks(doctor.Deps{}) {
+			if c.Name != "whr-user" {
+				args = append(args, "--skip", c.Name)
+			}
+		}
+	}
+	code := Execute(context.Background(), env, args)
+	if pass && strings.Contains(stderr.String(), "some checks failed") {
+		t.Fatalf("checks did not pass: %s", stderr.String())
+	}
+	if pass && strings.Contains(stderr.String(), "ready, with") {
+		t.Fatalf("ready line printed although the report was not written: %s", stderr.String())
+	}
+	if !json.Valid(out.Bytes()) || !strings.Contains(out.String(), `"checks"`) {
+		t.Fatalf("results hidden: %q", out.String())
+	}
+	if !strings.Contains(stderr.String(), "setup report") || code == 0 {
+		t.Fatalf("write failure not reported: code %d, %q", code, stderr.String())
+	}
+}
