@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/config"
 )
 
 // scripted is a Runner that answers from a table: no test touches the machine.
@@ -1169,6 +1171,68 @@ func TestTheAgentKeyStepSaysItAsksForAnAPIKeyNotALogin(t *testing.T) {
 		}
 		if err == nil || !strings.Contains(err.Error(), "refused: "+"a value shaped like a subscription login") || !strings.Contains(err.Error(), "Use an API key") {
 			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}
+
+func TestTheAgentKeyStepValidatesExistingFileContents(t *testing.T) {
+	for _, tc := range []struct {
+		name, contents string
+		mode           os.FileMode
+		fail           bool
+	}{
+		{"API key", "ANTHROPIC_API_KEY=test-synthetic-api-key-value\n", 0o600, false},
+		{"login JSON", "ANTHROPIC_API_KEY={\"accessToken\":\"synthetic-login-value\"}\n", 0o600, true},
+		{"login assignment", "ANTHROPIC_API_KEY=accessToken:synthetic-login-value\n", 0o600, true},
+		{"login name", "ANTHROPIC_AUTH_TOKEN=synthetic-login-value\n", 0o600, true},
+		{"short login JSON", "ANTHROPIC_API_KEY={}\n", 0o600, true},
+		{"invalid assignment", "synthetic-invalid-line\n", 0o600, true},
+		{"empty", "", 0o600, true},
+		{"public file", "ANTHROPIC_API_KEY=test-synthetic-api-key-value\n", 0o644, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "agent.env")
+			if err := os.WriteFile(path, []byte(tc.contents), tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			check := steps(t, Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502})["agent-key"]
+			got, detail := status(check)
+			_, err := (&config.Config{AgentAPIKeyEnvFile: path}).AgentAPIKey()
+			if tc.fail {
+				if err == nil {
+					t.Fatal("config accepted the invalid fixture")
+				}
+				if got != Fail || detail != oneLine(err.Error()) {
+					t.Errorf("setup validation differs from config: status %s", got)
+				}
+			} else if got != OK || err != nil {
+				t.Errorf("valid private file failed: status %s", got)
+			}
+			if strings.Contains(detail, "synthetic-") {
+				t.Error("validation exposed a synthetic credential value")
+			}
+		})
+	}
+}
+
+func TestTheAgentKeyStepRefusesTypedLoginWithoutWriting(t *testing.T) {
+	for _, value := range []string{"{}", "{", "\uFEFF{}", "accessToken:synthetic-login-value", "{\"refreshToken\":\"synthetic-login-value\"}"} {
+		dir := t.TempDir()
+		check := steps(t, Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502})["agent-key"]
+		p := &answers{secrets: []string{value}}
+		err := check.Fix.Do(context.Background(), p)
+		if err == nil || !strings.Contains(err.Error(), "a value shaped like a subscription login") || !strings.Contains(err.Error(), "Use an API key") {
+			t.Error("typed login did not receive the credential refusal and advice")
+		}
+		if err != nil && strings.Contains(err.Error(), value) {
+			t.Error("refusal exposed the typed value")
+		}
+		if len(p.shown) != 0 {
+			t.Error("setup showed secret input")
+		}
+		if _, err := os.Stat(filepath.Join(dir, "agent.env")); !errors.Is(err, os.ErrNotExist) {
+			t.Error("refused login left a file")
 		}
 	}
 }

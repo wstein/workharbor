@@ -967,7 +967,7 @@ func userSteps(d Deps) []Check {
 				} else if err != nil {
 					return OK, "no API key: the agent signs in inside the environment (subscription)"
 				}
-				if _, err := config.ReadSecret(envPath); err != nil {
+				if _, err := (&config.Config{AgentAPIKeyEnvFile: envPath}).AgentAPIKey(); err != nil {
 					return Fail, oneLine(err.Error())
 				}
 				return OK, envPath + " is a private file"
@@ -978,14 +978,11 @@ func userSteps(d Deps) []Check {
 					return err
 				}
 				key = strings.TrimSpace(key)
-				if len(key) < 20 || strings.ContainsAny(key, " \t\r\n=") {
-					if credcheck.Check("ANTHROPIC_API_KEY", key) != nil {
-						return errors.New("refused: " + credcheck.ErrSubscriptionValue.Error() + "; nothing was written. " + credcheck.Advice)
-					}
-					return errors.New("that does not look like an API key; nothing was written")
-				}
 				if err := credcheck.Check("ANTHROPIC_API_KEY", key); err != nil {
 					return errors.New("refused: " + err.Error() + "; nothing was written. " + credcheck.Advice)
+				}
+				if len(key) < 20 || strings.ContainsAny(key, " \t\r\n=") {
+					return errors.New("that does not look like an API key; nothing was written")
 				}
 				return WriteSecret(envPath, []byte("ANTHROPIC_API_KEY="+key+"\n"))
 			}},
