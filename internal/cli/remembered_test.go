@@ -96,7 +96,7 @@ func TestDoctorReadsTheRememberedDevelopmentInstallation(t *testing.T) {
 			t.Errorf("the warn line lacks %q: %q", want, line)
 		}
 	}
-	if !strings.Contains(errOut, "remembered as development_prefix in "+cfgPathOf(home)) {
+	if !strings.Contains(errOut, "remembered as development_prefix in") || !strings.Contains(errOut, cfgPathOf(home)) {
 		t.Errorf("stderr does not say the mode is remembered: %q", errOut)
 	}
 	// repair lines do not append --dev: `whr setup` reads the key itself
@@ -480,5 +480,22 @@ func TestSetupManagedFromANonInstalledBinaryRunsOnlyTheKeyStep(t *testing.T) {
 	}
 	if !strings.Contains(errOut, "only the development-key step runs") || len(r.host.ran) != 0 {
 		t.Errorf("stderr %q, ran %v", errOut, r.host.ran)
+	}
+}
+
+func TestRememberedWarningBreaksALongPath(t *testing.T) {
+	short := rememberedWarning("/h/.config/whr/config.json")
+	if !strings.Contains(short, " in /h/.config/whr/config.json") {
+		t.Errorf("short path:\n%s", short)
+	}
+	long := "/" + strings.Repeat("d/", 40) + "config.json"
+	w := rememberedWarning(long)
+	for _, l := range strings.Split(w, "\n") {
+		if len(l) > 80 && !strings.HasSuffix(l, long) {
+			t.Errorf("line of %d columns: %q", len(l), l)
+		}
+	}
+	if !strings.Contains(w, "\n  "+long) {
+		t.Errorf("the path is not on its own line:\n%s", w)
 	}
 }

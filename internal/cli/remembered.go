@@ -14,7 +14,11 @@ import (
 // named, so the weaker mode is never silent. A managed installation takes no
 // key and no `--dev`; no environment variable is read for either.
 func rememberedWarning(configPath string) string {
-	return developmentWarning + "\n  remembered as " + config.DevelopmentPrefixKey + " in " + configPath
+	line := "  remembered as " + config.DevelopmentPrefixKey + " in " + configPath
+	if len([]rune(line)) > 80 { // a long path goes on a line of its own
+		line = "  remembered as " + config.DevelopmentPrefixKey + " in\n  " + configPath
+	}
+	return developmentWarning + "\n" + line
 }
 
 // rememberedPrefix returns the development prefix the configuration remembers,
