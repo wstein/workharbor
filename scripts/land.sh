@@ -218,6 +218,7 @@ note="$(git cat-file blob "$review" 2>/dev/null)" || {
   note="(no review note)"
 }
 # Review lines (crewbook#67): <CLEAR|NOT CLEAR> <full sha> role=<role> model=<model>, one per line.
+note="$(printf '%s\n' "$note" | sed "s/$(printf '\r')\$//")"
 clear="$(printf '%s\n' "$note" | grep -E "^CLEAR $full role=[^ ]+ model=[^ ]+\$" || true)"
 notclear="$(printf '%s\n' "$note" | grep -E "^NOT CLEAR $full( |\$)" || true)"
 stamp=matched
@@ -252,12 +253,66 @@ while IFS= read -r p; do
 done <<EOT
 $files
 EOT
-if [ "$class" = carve-out ] && [ "$stamp" = matched ]; then
-  # AGENTS.md: a security-relevant change needs an Opus review.
-  printf '%s\n' "$clear" | grep -Eiq ' model=[^ ]*opus' || {
-    stamp=mismatch
+# Landing order and patch-id inheritance (#365). A commit is covered when it has
+# its own CLEAR of the needed tier (Opus for a carve-out, any model otherwise) or its
+# verbatim patch-id (whitespace counts) equals that of another noted commit with such
+# a CLEAR. No model is involved. A commit with its own NOT CLEAR line, or one equal to
+# an original whose note says NOT CLEAR, is never covered. A tip with a CLEAR of the
+# needed tier is covered entirely: a linear tip contains its earlier commits, also on
+# `landing`. A carve-out tip with a lower tier (Sonnet) passes only when EVERY commit
+# of main..tip is covered; otherwise it needs Opus (on `landing`: landing order).
+need=any
+[ "$class" = carve-out ] && need=opus
+cr="$(printf '\r')"
+opus_re=' model=(claude-)?opus[-.0-9a-z]*$'
+body_of() {
+  n="$(git notes --ref=review list "$1" 2>/dev/null)" || return 1
+  git cat-file blob "$n" 2>/dev/null | sed "s/$cr\$//"
+}
+clear_at() { # callers refuse a NOT CLEAR commit first (covered)
+  b="$(body_of "$1")" || return 1
+  l="$(printf '%s\n' "$b" | grep -E "^CLEAR $1 role=[^ ]+ model=[^ ]+\$")" || return 1
+  [ "$need" = any ] || printf '%s\n' "$l" | grep -Eiq "$opus_re"
+}
+notclear_at() { body_of "$1" | grep -Eq "^NOT CLEAR $1( |\$)"; }
+pid() { git show --format= --full-index --binary "$1" | git patch-id --verbatim | cut -d' ' -f1; }
+covered() {
+  notclear_at "$1" && return 1
+  clear_at "$1" && return 0
+  p="$(pid "$1")"; [ -n "$p" ] || return 1
+  hit=""
+  while read -r q o; do
+    [ "$q" = "$p" ] && [ "$o" != "$1" ] || continue
+    notclear_at "$o" && return 1
+    [ -n "$hit" ] || { clear_at "$o" && hit="$o"; }
+  done <<EOT
+$noted_ids
+EOT
+  [ -n "$hit" ] || return 1
+  covby="$covby covered by $(printf '%s' "$hit" | cut -c1-7) (patch-id): $(printf '%s' "$1" | cut -c1-7)
+"
+  return 0
+}
+# allcov: every commit of main..tip is covered. Each noted commit's patch-id is
+# computed once.
+covby=""
+allcov() {
+  noted_ids=""
+  for o in $(git notes --ref=review list 2>/dev/null | cut -d' ' -f2); do
+    [ "$(git cat-file -t "$o" 2>/dev/null)" = commit ] || continue
+    noted_ids="$noted_ids$(pid "$o") $o
+"
+  done
+  revs="$(git rev-list "$base..$full")" || return 1
+  for c in $revs; do covered "$c" || return 1; done
+}
+if [ "$stamp" = matched ] && [ "$class" = carve-out ] && ! printf '%s\n' "$clear" | grep -Eiq "$opus_re" && ! allcov; then
+  stamp=mismatch
+  if git rev-parse -q --verify refs/heads/landing >/dev/null && git merge-base --is-ancestor "$full" refs/heads/landing; then
+    [ "$command" = inspect ] || die "$full is on landing, but a commit of main..$full has no required CLEAR or equivalent original (landing order): refusing"
+  else
     [ "$command" = inspect ] || die "security-relevant change: no CLEAR line from an Opus model: refusing"
-  }
+  fi
 fi
 {
   echo "land: candidate $full"
@@ -266,6 +321,7 @@ fi
   echo "land: review note:"
   printf '%s\n' "$note" | sanitize_display text | sed 's/^/  /'
   echo "land: path class: $class (from the changed paths, not from the note)"
+  [ -z "$covby" ] || printf '%s' "$covby" | sed 's/^/land: /' | sanitize_display text
   git -c core.quotepath=on --no-pager diff --stat "$base" "$full" | sanitize_display text
 } >&2
 case "$command" in preview | inspect) exit 0 ;; esac
