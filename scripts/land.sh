@@ -214,11 +214,16 @@ note="$(git cat-file blob "$review" 2>/dev/null)" || {
   [ "$command" = inspect ] || die "$full has no review note (git notes --ref=review): refusing"
   note="(no review note)"
 }
-at="$(printf '%s\n' "$note" | grep -Eo '(^|[^0-9a-f])at [0-9a-f]{40}([^0-9a-f]|$)' | grep -Eo '[0-9a-f]{40}' | sort -u)"
+# Review lines (crewbook#67): <CLEAR|NOT CLEAR> <full sha> role=<role> model=<model>, one per line.
+clear="$(printf '%s\n' "$note" | grep -E "^CLEAR $full role=[^ ]+ model=[^ ]+\$" || true)"
+notclear="$(printf '%s\n' "$note" | grep -E "^NOT CLEAR $full( |\$)" || true)"
 stamp=matched
-if [ "$at" != "$full" ]; then
+if [ -z "$clear" ]; then
   stamp=mismatch
-  [ "$command" = inspect ] || die "the review note is not for $full (it says: ${at:-no 'at <sha>'}): refusing"
+  [ "$command" = inspect ] || die "the review note is not for $full (it has no 'CLEAR $full role=<role> model=<model>' line): refusing"
+elif [ -n "$notclear" ]; then
+  stamp=mismatch
+  [ "$command" = inspect ] || die "the review note says NOT CLEAR for $full: refusing"
 fi
 if [ "$command" = resolve ]; then
   # Refuse before anything lands: the record step runs after the fast-forward and
@@ -244,6 +249,13 @@ while IFS= read -r p; do
 done <<EOT
 $files
 EOT
+if [ "$class" = carve-out ] && [ "$stamp" = matched ]; then
+  # AGENTS.md: a security-relevant change needs an Opus review.
+  printf '%s\n' "$clear" | grep -Eiq ' model=[^ ]*opus' || {
+    stamp=mismatch
+    [ "$command" = inspect ] || die "security-relevant change: no CLEAR line from an Opus model: refusing"
+  }
+fi
 {
   echo "land: candidate $full"
   echo "land: branch    $(printf '%s' "$branches" | sanitize_display)"

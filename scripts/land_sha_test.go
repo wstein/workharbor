@@ -14,10 +14,17 @@ import (
 	"time"
 )
 
-// stamp adds a review note for sha that names at (the sha it claims to review).
+// stamp adds a review note for sha: text, then an Opus CLEAR line naming at
+// (the sha it claims to review).
 func (r *landBranchRepo) stamp(sha, text, at string) {
 	r.t.Helper()
-	r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", text+" at "+at, sha)
+	r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", text, "-m", "CLEAR "+at+" role=review model=claude-opus-4", sha)
+}
+
+// reviewLines replaces the review note of sha with the given lines.
+func (r *landBranchRepo) reviewLines(sha string, lines ...string) {
+	r.t.Helper()
+	r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", strings.Join(lines, "\n"), sha)
 }
 
 // detachedTopic is a branch with one commit that no worktree has checked out.
@@ -229,8 +236,41 @@ func TestLandShortSHA(t *testing.T) {
 		r.wantTTYRefused(r.dir, "y\n", "review note is not for", nil, "SHA="+sha[:9])
 		r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", "no sha here", sha)
 		r.wantTTYRefused(r.dir, "y\n", "review note is not for", nil, "SHA="+sha[:9])
-		r.git(r.dir, "notes", "--ref=review", "add", "-f", "-m", "at "+sha+" and at "+strings.Repeat("b", 40), sha)
-		r.wantTTYRefused(r.dir, "y\n", "review note is not for", nil, "SHA="+sha[:9])
+		r.reviewLines(sha, "CLEAR "+sha+" role=review model=opus", "NOT CLEAR "+sha+" role=review model=opus")
+		r.wantTTYRefused(r.dir, "y\n", "NOT CLEAR", nil, "SHA="+sha[:9])
+	})
+	t.Run("several review lines", func(t *testing.T) {
+		other := strings.Repeat("b", 40)
+		for _, tc := range []struct {
+			name, want string
+			lines      func(sha string) []string
+		}{
+			{"one line", "", func(s string) []string { return []string{"CLEAR " + s + " role=review model=opus"} }},
+			{"several lines", "", func(s string) []string {
+				return []string{"NOT CLEAR " + other + " role=review model=opus", "CLEAR " + s + " role=review model=sonnet", "CLEAR " + s + " role=review model=claude-opus-4"}
+			}},
+			{"wrong sha", "review note is not for", func(string) []string { return []string{"CLEAR " + other + " role=review model=opus"} }},
+			{"short sha", "review note is not for", func(s string) []string { return []string{"CLEAR " + s[:12] + " role=review model=opus"} }},
+			{"not clear", "NOT CLEAR", func(s string) []string {
+				return []string{"CLEAR " + s + " role=review model=opus", "NOT CLEAR " + s + " role=review model=opus"}
+			}},
+			{"non-opus on a security path", "no CLEAR line from an Opus model", func(s string) []string {
+				return []string{"CLEAR " + s + " role=review model=sonnet", "NOT CLEAR " + other + " role=review model=opus"}
+			}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := newLandQueueRepo(t)
+				wt := r.topic("topic")
+				r.write(filepath.Join(wt, "Makefile"), "# security path\n")
+				r.git(wt, "commit", "-qam", "security path")
+				sha := r.git(wt, "rev-parse", "HEAD")
+				r.reviewLines(sha, tc.lines(sha)...)
+				out, err := r.queue("land-preview", "SHA="+sha)
+				if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(out, tc.want)) {
+					t.Fatalf("preview: %v\n%s", err, out)
+				}
+			})
+		}
 	})
 	t.Run("not a tip, no branch, several branches", func(t *testing.T) {
 		r := newLandBranchRepo(t, false)
