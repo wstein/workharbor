@@ -357,6 +357,31 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			}
 		}
 		ui.Header(i+1, len(chosen), title)
+		if s.Reach != nil {
+			if u := s.Reach(ctx); u != nil {
+				// The precondition is missing: the check cannot run, so there is nothing
+				// to fix and no password to ask for (issue #394). It is not a failure.
+				remedy := u.Command
+				if u.Step != "" {
+					remedy = nextCommand(Options{Resume: o.Resume, Only: []string{u.Step}}, u.Step, []string{u.Step})
+				}
+				detail := "not reachable: " + u.Why
+				dataLine(o, doctor.NotVerified, s.Name, detail)
+				ui.Report(render.LevelSkipped, detail)
+				ui.Action("first run: " + remedy)
+				out := Outcome{Step: s.Name, Status: doctor.NotVerified, Detail: detail, Asked: true, NeedsHuman: o.Unattended}
+				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: []string{remedy}}
+				outs = append(outs, out)
+				outcome := protocol.OutNotRun
+				if o.Unattended {
+					outcome = protocol.OutNeedsHuman
+				}
+				if err := rc.add(protocol.Entry{Event: protocol.EventStepAfter, Step: s.Name, Outcome: outcome, Status: string(out.Status)}); err != nil {
+					return rc.finish(outs, protocol.RunError, err)
+				}
+				continue
+			}
+		}
 		st, detail := s.Run(ctx)
 		if err := Interrupted(ctx, h); err != nil && st != doctor.OK { // the check was cut short: its answer means nothing, and no step after it starts
 			outs = append(outs, Outcome{Step: s.Name, Status: st, Detail: detail})

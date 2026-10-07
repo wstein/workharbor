@@ -175,7 +175,7 @@ func TestOffAMacTheStepsAreNotVerified(t *testing.T) {
 	d := hostDeps(scripted{})
 	d.GOOS = "linux"
 	for _, c := range Checks(d) {
-		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "ssh-ca" || c.Name == "config-base" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "tool-store" || c.Name == "prefix" {
+		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "ssh-ca" || c.Name == "config-base" || c.Name == "config-first" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "tool-store" || c.Name == "prefix" {
 			continue
 		}
 		if got, _ := status(c); got != NotVerified && got != OK {
@@ -1506,5 +1506,45 @@ func TestAConfigThatCannotBeReadIsNotReportedAsMissing(t *testing.T) {
 	_, detail := status(steps(t, d)["workspace-volume"])
 	if !strings.HasPrefix(detail, needsConfig) || !strings.Contains(detail, "cannot be read") || strings.Contains(detail, "not written yet") {
 		t.Errorf("detail %q", detail)
+	}
+}
+
+// The host phase writes the configuration itself, first (issue #394): the steps
+// that read the workspace roots are not reachable without it, and the remedy is
+// config-first. An account other than workharbor's never writes it.
+func TestConfigFirstIsTheFirstHostStepAndTheReadersNeedIt(t *testing.T) {
+	d := hostDeps(scripted{})
+	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
+	d.User, d.Account = "werner", "werner"
+	hs := Steps(Checks(d), PhaseHost)
+	if hs[0].Name != "config-first" || !hs[0].SetupOnly || hs[0].Reach(context.Background()) != nil {
+		t.Fatalf("first host step %+v", hs[0])
+	}
+	for _, name := range []string{"workspace-volume", "spotlight"} {
+		u := steps(t, d)[name].Reach(context.Background())
+		if u == nil || u.Step != "config-first" || !strings.Contains(u.Why, d.ConfigPath) {
+			t.Errorf("%s: %+v", name, u)
+		}
+	}
+	for _, r := range Run(context.Background(), hs[:1], nil) {
+		if r.Check != "" {
+			t.Error("doctor ran the setup-only config-first")
+		}
+	}
+	if err := os.WriteFile(d.ConfigPath, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if u := steps(t, d)["workspace-volume"].Reach(context.Background()); u != nil {
+		t.Errorf("with a file: %+v", u)
+	}
+	// an administrator who is not the whr account does not write its configuration
+	d.User, d.Account = "admin", "workharbor"
+	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
+	cf := Steps(Checks(d), PhaseHost)[0]
+	if u := cf.Reach(context.Background()); u == nil || !strings.Contains(u.Command, "as workharbor") {
+		t.Errorf("admin: %+v", u)
+	}
+	if u := steps(t, d)["spotlight"].Reach(context.Background()); u == nil || u.Step != "" || !strings.Contains(u.Command, "as workharbor") {
+		t.Errorf("spotlight as admin: %+v", u)
 	}
 }

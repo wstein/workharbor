@@ -71,6 +71,20 @@ type Check struct {
 	// a fix whose service no earlier step provided and a test holds the order to
 	// it (#265).
 	Needs, Provides string
+	// Reach, if set, says before the check runs whether the step can run at
+	// all; nil means it can. A step that cannot is reported as not reachable
+	// (never FAIL), no password is asked for it, and the remedy is named.
+	Reach func(ctx context.Context) *Unreachable
+	// SetupOnly marks a step that exists for `whr setup` alone: doctor does not
+	// list it, because a shared check (config) already reports the same state.
+	SetupOnly bool
+}
+
+// Unreachable says why a step cannot run now and what to do. Step names a
+// remedy step of the same phase (the command is built from the run's own
+// flags); Command is the literal remedy when no step of this run is one.
+type Unreachable struct {
+	Why, Step, Command string
 }
 
 // basic is a check as the list below writes it; base fills in the rest.
@@ -368,6 +382,9 @@ func Steps(checks []Check, phase Phase) []Check {
 func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
 	out := make([]Result, 0, len(checks))
 	for _, c := range checks {
+		if c.SetupOnly {
+			continue
+		}
 		if skip[c.Name] {
 			out = append(out, Result{Check: c.Name, Step: c.Step, Status: Skipped, Detail: "skipped on request", Phase: c.Phase})
 			continue

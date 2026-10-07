@@ -602,3 +602,78 @@ func TestNextCommandIsPrintedOnce(t *testing.T) {
 		t.Errorf("next command printed %d times:\n%s", n, b.String())
 	}
 }
+
+// A step whose precondition is missing is not reachable: it is no failure, no
+// password is asked for it, and the action names the step that fixes it (#394).
+func TestAnUnreachableStepIsNotAFailureAndAsksNoPassword(t *testing.T) {
+	var fixed bool
+	s := step("later", doctor.PhaseHost, &fixed, &doctor.Fix{Cmds: []doctor.Cmd{{Sudo: true, Argv: []string{"x"}}}})
+	s.Reach = func(context.Context) *doctor.Unreachable {
+		return &doctor.Unreachable{Why: "the file is not written yet", Step: "first"}
+	}
+	h := &fakeHost{answers: []string{"y"}}
+	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--dev"}})
+	if len(h.ran) != 0 || len(h.asked) != 0 {
+		t.Errorf("something ran or was asked: %v %v", h.ran, h.asked)
+	}
+	if len(outs) != 1 || outs[0].Status != doctor.NotVerified || !outs[0].Asked {
+		t.Errorf("outcome %+v", outs)
+	}
+	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run: whr setup host --dev --only first") {
+		t.Errorf("output %q", errOut)
+	}
+	if strings.Contains(errOut, "fix the cause") {
+		t.Errorf("reported as a failure: %q", errOut)
+	}
+}
+
+// A fresh machine, no configuration: `setup host` creates it first (volume
+// choice included), and workspace-volume then reads it (#394).
+func TestHostSetupCreatesTheConfigurationBeforeWorkspaceVolume(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	list, err := os.ReadFile(filepath.Join("..", "doctor", "testdata", "diskutil", "list.plist")) //nolint:gosec // a fixture of the doctor package
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := map[string]string{"diskutil list -plist": string(list)}
+	for mount, f := range map[string]string{"/System/Volumes/Data": "info_data.plist", "/System/Volumes/Preboot": "info_preboot.plist", "/nix": "info_nix.plist", "/Volumes/Fake SSD": "info_ssd.plist"} {
+		b, err := os.ReadFile(filepath.Join("..", "doctor", "testdata", "diskutil", f)) //nolint:gosec // a fixture of the doctor package
+		if err != nil {
+			t.Fatal(err)
+		}
+		info["diskutil info -plist "+mount] = string(b)
+	}
+	cfg := filepath.Join(home, ".config", "whr", "config.json")
+	ws, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws = filepath.Join(ws, "home", "workspaces")
+	info["df -P "+ws] = "Filesystem 512-blocks Used Available Capacity Mounted on\n/dev/disk3s5 100 1 99 1% /System/Volumes/Data\n"
+	h := &fakeHost{
+		outputs: info,
+		// the volume number is the line after the repository; Enter takes the default (the data volume)
+		lines:   []string{"owner/repo", "", ""},
+		answers: []string{"y", "y"}, // run the step, write the file
+	}
+	d := doctor.Deps{ConfigPath: cfg, Home: home, GOOS: "darwin", Runner: h, User: "werner", Account: "werner"}
+	steps := doctor.Steps(doctor.Checks(d), doctor.PhaseHost)
+	// workspace-volume is listed before nothing reads the file: config-first comes first
+	if steps[0].Name != "config-first" {
+		t.Fatalf("first host step is %s", steps[0].Name)
+	}
+	outs, _, errOut := run(t, h, steps, Options{Phase: doctor.PhaseHost, Only: []string{"workspace-volume", "config-first"}})
+	if len(outs) != 2 || outs[0].Step != "config-first" || !outs[0].Fixed || outs[1].Step != "workspace-volume" || outs[1].Status != doctor.OK {
+		t.Fatalf("outcomes %+v\n%s", outs, errOut)
+	}
+	if _, err := os.Stat(cfg); err != nil {
+		t.Errorf("config not written: %v", err)
+	}
+	if strings.Contains(strings.Join(h.ran, "\n"), "sudo") {
+		t.Errorf("sudo ran: %v", h.ran)
+	}
+	if strings.Contains(errOut, "needs a valid configuration") {
+		t.Errorf("workspace-volume was run before the configuration existed: %s", errOut)
+	}
+}

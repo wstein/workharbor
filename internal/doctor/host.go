@@ -314,6 +314,20 @@ func (d Deps) sshdPath() string {
 	return sshdFile
 }
 
+// needsConfigFile is the Reach of a host step that reads the workspace roots
+// from the configuration: without the file it cannot run, and the remedy is the
+// config-first step (issue #394), not a fix of its own.
+func (d Deps) needsConfigFile(context.Context) *Unreachable {
+	if _, err := os.Stat(d.ConfigPath); !errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	u := &Unreachable{Why: "the workspace roots are read from " + d.ConfigPath + ", which is not written yet", Step: "config-first"}
+	if d.User != "" && d.User != d.account() {
+		u.Step, u.Command = "", "as "+d.account()+", in its desktop session: whr setup --only config-base"
+	}
+	return u
+}
+
 func (d Deps) configDir() string { return filepath.Dir(d.ConfigPath) }
 
 // kv reads "name value" lines, as `pmset -g` prints them.
@@ -337,7 +351,22 @@ func hostSteps(d Deps) []Check {
 	if brewfile == "" {
 		brewfile = DefaultBrewfile
 	}
+	configFirst := configBaseStep(d, "config-first", PhaseHost, filepath.Join(d.configDir(), "api.token"), filepath.Join(d.configDir(), "agent.env"))
+	configFirst.SetupOnly = true
+	configFirst.Reach = func(context.Context) *Unreachable {
+		// The configuration is the whr account's file (0600, in its home). Only an
+		// account that is the whr account writes it here; the administrator of a
+		// separate workharbor account never writes into that home (least privilege).
+		if d.User != "" && d.User != d.account() {
+			return &Unreachable{
+				Why:     "the configuration belongs to " + d.account() + ", and " + d.User + " does not write it",
+				Command: "as " + d.account() + ", in its desktop session: whr setup --only config-base",
+			}
+		}
+		return nil
+	}
 	return []Check{
+		configFirst,
 		userStep(d, setupCommand),
 		loginPictureStep(d),
 
@@ -388,6 +417,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "workspace-volume", Phase: PhaseHost, Step: 3, Title: "workspace volumes encrypted, with ownership honoured (manual step 3)",
+			Reach: d.needsConfigFile,
 			Run: func(ctx context.Context) (Status, string) {
 				if d.GOOS != "darwin" || d.Runner == nil {
 					return NotVerified, "not checked: " + errNotHere.Error()
@@ -539,6 +569,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "spotlight", Phase: PhaseHost, Step: 4, Title: "Spotlight does not index the workspaces (manual step 4, headless Mac)",
+			Reach: d.needsConfigFile,
 			Run: func(ctx context.Context) (Status, string) {
 				if d.GOOS != "darwin" || d.Runner == nil {
 					return NotVerified, "not checked: " + errNotHere.Error()
@@ -971,6 +1002,34 @@ func appKey(dir string) (id int64, path string, err error) {
 	return id, path, nil
 }
 
+// configBaseStep is the base configuration as a step of the given phase. The
+// user phase runs it as config-base; the host phase runs the same code first as
+// config-first (issue #394), because workspace-volume and spotlight read the
+// workspace roots from the file it writes.
+func configBaseStep(d Deps, name string, phase Phase, tokenPath, envPath string) Check {
+	return Check{
+		Name: name, Phase: phase, Step: 1, Title: "the base configuration: listen, token, roots, repositories (manual step 13)",
+		Run: func(context.Context) (Status, string) {
+			m, err := readConfigMap(d.ConfigPath)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return Fail, d.ConfigPath + " does not exist"
+				}
+				return Fail, oneLine(err.Error())
+			}
+			for _, k := range []string{"listen", "api_token_file", "roots", "repositories"} {
+				if _, ok := m[k]; !ok {
+					return Fail, d.ConfigPath + " lacks " + k
+				}
+			}
+			return OK, d.ConfigPath + " has the base settings"
+		},
+		Fix: &Fix{Desc: "ask for the repository and the folders, choose the volume, then write " + d.ConfigPath + " (0600, atomic, an existing file is saved to .bak first)", Do: func(ctx context.Context, p Prompter) error {
+			return writeConfigBase(ctx, d, p, tokenPath, envPath)
+		}},
+	}
+}
+
 func userSteps(d Deps) []Check {
 	dir := d.configDir()
 	tokenPath := filepath.Join(dir, "api.token")
@@ -1178,27 +1237,7 @@ func userSteps(d Deps) []Check {
 			},
 		},
 
-		{
-			Name: "config-base", Phase: PhaseUser, Step: 1, Title: "the base configuration: listen, token, roots, repositories (manual step 13)",
-			Run: func(context.Context) (Status, string) {
-				m, err := readConfigMap(d.ConfigPath)
-				if err != nil {
-					if errors.Is(err, fs.ErrNotExist) {
-						return Fail, d.ConfigPath + " does not exist"
-					}
-					return Fail, oneLine(err.Error())
-				}
-				for _, k := range []string{"listen", "api_token_file", "roots", "repositories"} {
-					if _, ok := m[k]; !ok {
-						return Fail, d.ConfigPath + " lacks " + k
-					}
-				}
-				return OK, d.ConfigPath + " has the base settings"
-			},
-			Fix: &Fix{Desc: "ask for the repository and the folders, choose the volume, then write " + d.ConfigPath + " (0600, atomic, an existing file is saved to .bak first)", Do: func(ctx context.Context, p Prompter) error {
-				return writeConfigBase(ctx, d, p, tokenPath, envPath)
-			}},
-		},
+		configBaseStep(d, "config-base", PhaseUser, tokenPath, envPath),
 		{
 			Name: "config-github", Phase: PhaseUser, Step: 2, Title: "the GitHub App in the configuration (manual step 13)",
 			Run: func(context.Context) (Status, string) {
