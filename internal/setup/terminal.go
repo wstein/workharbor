@@ -435,6 +435,9 @@ func (t Terminal) Pause() error { return t.PauseContext(context.Background()) }
 
 // PauseContext implements ContextPauser: like Pause, but it returns the
 // context's error as soon as the context ends, without waiting for Enter.
+// After a cancel the reader goroutine still owns t.In and is blocked in
+// ReadString: it takes the next line typed, so the caller must not read t.In
+// again after a cancelled pause (the run stops there).
 func (t Terminal) PauseContext(ctx context.Context) error {
 	defer t.Probes.Reset()
 	fmt.Fprintln(t.Err, "\nPress Enter to continue (q to quit)")
