@@ -227,7 +227,7 @@ func toolProfile(c *config.Config) (string, error) {
 
 // Redactor returns the redactor the store applies before it writes (§5.4,
 // threat model T9): the well-known token formats, plus the exact secrets this
-// supervisor holds, so they are masked whatever their format: the API token and
+// supervisor holds, so they are masked whatever their format: the API tokens and
 // the values of the agent's API-key file (D40). A value too short to register
 // is refused rather than silently left unredacted.
 func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
@@ -238,6 +238,15 @@ func Redactor(c *config.Config, agentEnv []string) (*redact.Redactor, error) {
 	}
 	if !rd.Add(string(tok)) {
 		return nil, fmt.Errorf("api_token_file: the token is shorter than %d characters", redact.MinSecretLength)
+	}
+	clients, err := api.ClientsFromConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	for _, cl := range clients {
+		if !rd.Add(string(cl.Token)) {
+			return nil, fmt.Errorf("api_clients %q: the token is shorter than %d characters", cl.Name, redact.MinSecretLength)
+		}
 	}
 	if c.GitHub.KeyFile != "" {
 		key, err := config.ReadSecret(c.GitHub.KeyFile)

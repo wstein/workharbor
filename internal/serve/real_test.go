@@ -210,6 +210,35 @@ func TestTheRedactorKnowsTheSupervisorsOwnSecrets(t *testing.T) {
 	}
 }
 
+// Every named client's token is registered with the redactor; one too short to
+// register stops the start.
+func TestTheRedactorKnowsEveryClientToken(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, v string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(v+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	tok := "throwaway-client-" + strings.Repeat("c", 20)
+	c := &config.Config{
+		APITokenFile: write("api.token", "throwaway-default-"+strings.Repeat("d", 20)),
+		APIClients:   []config.APIClient{{Name: "ci", TokenFile: write("ci.token", tok)}},
+	}
+	rd, err := Redactor(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := rd.String("x " + tok); strings.Contains(out, tok) {
+		t.Errorf("a client token was not redacted: %s", out)
+	}
+	c.APIClients = append(c.APIClients, config.APIClient{Name: "short", TokenFile: write("short.token", "zq7")})
+	if _, err := Redactor(c, nil); err == nil || strings.Contains(err.Error(), "zq7") {
+		t.Errorf("a client token too short to redact = %v, want an error that names no value", err)
+	}
+}
+
 // The GitHub App's key is read with ReadSecret, parsed, and registered with the
 // redactor (D31): its PEM never reaches the database or a log.
 func TestTheGitHubClientIsBuiltFromTheAppKeyAndTheKeyIsRedacted(t *testing.T) {

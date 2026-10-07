@@ -132,8 +132,12 @@ func NewBackend(s *service.Service, w *service.Workspaces, c *service.Consoles) 
 
 // Options configures a Server.
 type Options struct {
-	// Token is the API token. It is required and never logged or echoed.
+	// Token is the API token of the default client. It is required and never
+	// logged or echoed.
 	Token []byte
+	// Clients are further named clients (api_clients). Each has its own token
+	// and its own audit actor, api:<name>. Optional.
+	Clients []Client
 	// Store holds the idempotency keys.
 	Store *store.Store
 	// Heartbeat is the interval of the event stream's keep-alive comments.
@@ -150,12 +154,24 @@ type Options struct {
 	Previews Previews
 }
 
+// Client is a named API client: its token is checked, its name is the audit
+// actor (api:<name>).
+type Client struct {
+	Name  string
+	Token []byte
+}
+
+// client is what the server keeps of a client: the digest and the actor.
+type client struct {
+	digest [sha256.Size]byte
+	actor  string
+}
+
 // Server is the API. Its Handler is the whole thing.
 type Server struct {
-	be    Backend
-	opt   Options
-	token [sha256.Size]byte
-	actor string // audit actor derived from the credential, never the token
+	be      Backend
+	opt     Options
+	clients []client // the default client first; digests and actors only, never a token
 
 	mu    sync.Mutex
 	locks map[string]*keyLock // idempotency keys in flight
@@ -181,9 +197,19 @@ func New(be Backend, opt Options) (*Server, error) {
 		opt.Now = time.Now
 	}
 	s := &Server{be: be, opt: opt, locks: map[string]*keyLock{}}
-	s.token = sha256.Sum256(opt.Token)
-	s.actor = actorFor(opt.Token)
-	s.opt.Token = nil // the digest is all that is kept
+	s.clients = []client{{sha256.Sum256(opt.Token), actorFor(opt.Token)}}
+	names := map[string]bool{}
+	for _, c := range opt.Clients {
+		if msg := config.CheckAPIClientName(c.Name); msg != "" {
+			return nil, fmt.Errorf("api: client: %s", msg)
+		}
+		if names[c.Name] || len(c.Token) == 0 {
+			return nil, fmt.Errorf("api: client %q: a unique name and a token are required", c.Name)
+		}
+		names[c.Name] = true
+		s.clients = append(s.clients, client{sha256.Sum256(c.Token), "api:" + c.Name})
+	}
+	s.opt.Token, s.opt.Clients = nil, nil // the digests are all that is kept
 	return s, nil
 }
 
@@ -194,8 +220,18 @@ func actorFor(token []byte) string {
 	return "api:" + hex.EncodeToString(sum[:6])
 }
 
-// Actor is the audit actor every action of this server's credential carries.
-func (s *Server) Actor() string { return s.actor }
+// Actor is the audit actor of the default client (api_token_file).
+func (s *Server) Actor() string { return s.clients[0].actor }
+
+type actorKey struct{}
+
+// actorOf is the audit actor of the client that authorized the request.
+func (s *Server) actorOf(r *http.Request) string {
+	if a, ok := r.Context().Value(actorKey{}).(string); ok {
+		return a
+	}
+	return s.clients[0].actor
+}
 
 // TokenFromConfig reads the API token with config.ReadSecret and trims the
 // line ending the file may have.
@@ -209,6 +245,23 @@ func TokenFromConfig(c *config.Config) ([]byte, error) {
 		return nil, errors.New("api: the token file is empty")
 	}
 	return tok, nil
+}
+
+// ClientsFromConfig reads the token of every named client in api_clients.
+func ClientsFromConfig(c *config.Config) ([]Client, error) {
+	var out []Client
+	for _, cl := range c.APIClients {
+		raw, err := config.ReadSecret(cl.TokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("api_clients %q: %w", cl.Name, err)
+		}
+		tok := []byte(strings.TrimSpace(string(raw)))
+		if len(tok) == 0 {
+			return nil, fmt.Errorf("api_clients %q: the token file is empty", cl.Name)
+		}
+		out = append(out, Client{Name: cl.Name, Token: tok})
+	}
+	return out, nil
 }
 
 type route struct {
@@ -284,7 +337,8 @@ func (s *Server) Handler() http.Handler {
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.authorized(r) {
+		actor, ok := s.authorized(r)
+		if !ok {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, authError{})
 			return
@@ -297,20 +351,29 @@ func (s *Server) Handler() http.Handler {
 			writeError(w, &domain.NotFoundError{Kind: "route", ID: r.URL.Path})
 			return
 		}
-		mux.ServeHTTP(w, r)
+		mux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), actorKey{}, actor)))
 	})
 }
 
-// authorized checks the bearer token in constant time. Both sides are hashed
-// first, so neither the value nor its length is compared byte by byte.
-func (s *Server) authorized(r *http.Request) bool {
+// authorized checks the bearer token in constant time against every client and
+// returns the audit actor of the one that matches. Both sides are hashed first,
+// so neither the value nor its length is compared byte by byte, and every
+// client is compared whatever matched before.
+func (s *Server) authorized(r *http.Request) (string, bool) {
 	h := r.Header.Get("Authorization")
 	tok, ok := strings.CutPrefix(h, "Bearer ")
 	if !ok {
-		return false
+		return "", false
 	}
 	got := sha256.Sum256([]byte(tok))
-	return subtle.ConstantTimeCompare(got[:], s.token[:]) == 1
+	match := -1
+	for i, c := range s.clients {
+		match = subtle.ConstantTimeSelect(subtle.ConstantTimeCompare(got[:], c.digest[:]), i, match)
+	}
+	if match < 0 {
+		return "", false
+	}
+	return s.clients[match].actor, true
 }
 
 // Listen binds addr, which must be a loopback address (D29): a guest reaches
@@ -469,7 +532,7 @@ func (s *Server) runTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
+		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction(s.actorOf(r), "api")), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -501,7 +564,7 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id, body.Message)
+		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction(s.actorOf(r), "api")), id, body.Message)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -544,7 +607,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		run, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id)
+		run, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction(s.actorOf(r), "api")), id)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -590,7 +653,7 @@ func (s *Server) purge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		res, err := s.be.PurgeTranscript(r.Context(), id, s.actor)
+		res, err := s.be.PurgeTranscript(r.Context(), id, s.actorOf(r))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -688,7 +751,7 @@ func (s *Server) killAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		rep, err := s.be.KillAll(r.Context(), s.actor)
+		rep, err := s.be.KillAll(r.Context(), s.actorOf(r))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -719,7 +782,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		run, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id, domain.Response{By: s.actor, Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
+		run, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction(s.actorOf(r), "api")), id, domain.Response{By: s.actorOf(r), Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -857,7 +920,7 @@ func (s *Server) rebuildWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		res, err := s.be.RebuildWorkspace(r.Context(), string(name), s.actor)
+		res, err := s.be.RebuildWorkspace(r.Context(), string(name), s.actorOf(r))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -926,7 +989,7 @@ func (s *Server) workspaceShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, usageError{"the sign-in shell needs Accept: application/x-ndjson and a connection held until its child exits"})
 		return
 	}
-	session, err := sb.OpenShell(r.Context(), string(name), s.actor)
+	session, err := sb.OpenShell(r.Context(), string(name), s.actorOf(r))
 	if err != nil {
 		s.fail(w, err)
 		return

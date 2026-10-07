@@ -163,6 +163,10 @@ func Run(ctx context.Context, d Deps) error {
 	if err != nil {
 		return err
 	}
+	clients, err := api.ClientsFromConfig(d.Config)
+	if err != nil {
+		return err
+	}
 	scfg := serviceConfig(d, logf)
 	svc := service.New(d.Store, d.Runtime, d.Agent, d.Clock, scfg)
 	defer svc.Shutdown()
@@ -282,7 +286,7 @@ func Run(ctx context.Context, d Deps) error {
 		}
 	}()
 	defer func() { stopSess(); <-sessDone }()
-	apiOpt := api.Options{Token: token, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
+	apiOpt := api.Options{Token: token, Clients: clients, Store: d.Store, OnError: func(err error) { logf("api error: %v", err) }}
 	webOpt := web.Options{Auth: auth, Store: d.Store, Setup: d.Setup, OnError: func(err error) { logf("web error: %v", err) }}
 	webOpt.SetupOrigin, _ = d.Config.PublicOrigin()
 	if previews != nil {
