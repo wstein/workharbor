@@ -84,6 +84,11 @@ func DSCLNotFound(err error) bool {
 	return commandExitIs(err, 56) || (dsRecordNotFound.MatchString(m) && !dsRecordNegated.MatchString(m))
 }
 
+// containerLabel matches a launchd service label of Apple Container
+// (com.apple.container.<name>) as a whole token: com.apple.containermanagerd
+// is another service.
+var containerLabel = regexp.MustCompile(`(^|[^A-Za-z0-9._-])com\.apple\.container\.[A-Za-z0-9-]+`)
+
 // dsRecordNotFound matches the error name as a whole token. Free text that
 // merely mentions it (a sentence about what it is not) cannot be told apart
 // from the real message, so the real process status, exit 56, stays primary.
@@ -555,16 +560,28 @@ func hostSteps(d Deps) []Check {
 					}
 					return NotVerified, "socketfilterfw did not answer: " + oneLine(err.Error())
 				}
-				stealth, _ := d.output(ctx, fw, "--getstealthmode")
-				var bad []string
-				if !strings.Contains(strings.ToLower(state), "enabled") {
-					bad = append(bad, "the firewall is off")
+				stealth, err := d.output(ctx, fw, "--getstealthmode")
+				if err != nil {
+					return NotVerified, "socketfilterfw did not answer for stealth mode: " + oneLine(err.Error())
 				}
-				if !strings.Contains(strings.ToLower(stealth), "enabled") && !strings.Contains(strings.ToLower(stealth), "on") {
+				var bad, unknown []string
+				switch firewallWord(state, false) {
+				case answerNo:
+					bad = append(bad, "the firewall is off")
+				case answerUnknown:
+					unknown = append(unknown, "the firewall state ("+oneLine(state)+")")
+				}
+				switch firewallWord(stealth, true) {
+				case answerNo:
 					bad = append(bad, "stealth mode is off")
+				case answerUnknown:
+					unknown = append(unknown, "the stealth mode state ("+oneLine(stealth)+")")
 				}
 				if len(bad) > 0 {
 					return Fail, strings.Join(bad, "; ")
+				}
+				if len(unknown) > 0 {
+					return NotVerified, "socketfilterfw's answer is not one this check knows for " + strings.Join(unknown, ", ") + " (its wording is unverified on macOS 26)"
 				}
 				return OK, "the firewall is on, in stealth mode"
 			},
@@ -611,10 +628,13 @@ func hostSteps(d Deps) []Check {
 					}
 					return NotVerified, "fdesetup did not answer: " + oneLine(err.Error())
 				}
-				if strings.Contains(out, "FileVault is On") {
+				switch fdesetupAnswer(out) {
+				case answerYes:
 					return OK, "FileVault is on"
+				case answerNo:
+					return Fail, "FileVault is off"
 				}
-				return Fail, "FileVault is off"
+				return NotVerified, "fdesetup's answer is not one this check knows: " + oneLine(out)
 			},
 			Fix: &Fix{
 				Guide: "Enabling FileVault is interactive and prints a recovery key that must be yours alone, so whr does not run it. Run `sudo fdesetup enable` yourself in this terminal (or use System Settings → Privacy & Security → FileVault) and keep the key safe.",
@@ -977,8 +997,15 @@ func userSteps(d Deps) []Check {
 					}
 					return Fail, "container list failed: " + oneLine(err.Error()) + " (tell issue #38 before making this user an administrator)"
 				}
-				out, _ := d.output(ctx, "launchctl", "print", "gui/"+strconv.Itoa(d.UID))
-				if !strings.Contains(out, "com.apple.container") {
+				out, err := d.output(ctx, "launchctl", "print", "gui/"+strconv.Itoa(d.UID))
+				if err != nil {
+					return NotVerified, "launchctl print did not answer for gui/" + strconv.Itoa(d.UID) + ": " + oneLine(err.Error())
+				}
+				listed, found := containerServiceListed(out)
+				if !found {
+					return NotVerified, "launchctl print's output for gui/" + strconv.Itoa(d.UID) + " has no services list this check knows (its format is unverified on macOS 26)"
+				}
+				if !listed {
 					return Fail, "the container services are not in this user's GUI launchd domain (gui/" + strconv.Itoa(d.UID) + ")"
 				}
 				return OK, "the container services answer in gui/" + strconv.Itoa(d.UID)
@@ -1499,6 +1526,78 @@ func volumeAnswer(v, yes, no string) volumeState {
 	case strings.EqualFold(f[0], yes):
 		return answerYes
 	case strings.EqualFold(f[0], no):
+		return answerNo
+	}
+	return answerUnknown
+}
+
+// firewallLine is the one whole line socketfilterfw prints, nothing around it:
+// "Firewall is disabled. (State = 0)" (global state; observed on macOS 26.6.2)
+// or "Firewall stealth mode is off" (observed). "enabled", "on" and State 1 or 2
+// are inferred, not measured.
+var firewallLine = regexp.MustCompile(`(?i)^Firewall( stealth mode)? is (on|off|enabled|disabled)\.?( \(State = ([0-9]+)\))?$`)
+
+// firewallWord is a strict allow-list: the output must be exactly one such line.
+// A "(State = N)" is cross-checked with the word and exists only for the global
+// state: 0 is off, 1 is on, and 2 (block all incoming connections, justified only
+// by being a non-zero state) is on only when the wording says enabled. Anything
+// else, in particular any other sentence, a negation, a second line or a word and
+// state that disagree, is unknown, which is never a pass.
+func firewallWord(out string, stealth bool) volumeState {
+	m := firewallLine.FindStringSubmatch(strings.TrimSpace(out))
+	if m == nil || (m[1] != "") != stealth {
+		return answerUnknown
+	}
+	on := strings.EqualFold(m[2], "on") || strings.EqualFold(m[2], "enabled")
+	if stealth {
+		if m[3] != "" {
+			return answerUnknown
+		}
+	} else if m[4] != "" {
+		switch {
+		case m[4] == "0" && !on:
+		case m[4] == "1" && on:
+		case m[4] == "2" && strings.EqualFold(m[2], "enabled"):
+		default:
+			return answerUnknown
+		}
+	}
+	if on {
+		return answerYes
+	}
+	return answerNo
+}
+
+// containerServiceListed reads `launchctl print gui/<uid>`: the label must be a
+// token in the "services = {" section, not in "disabled services" or elsewhere.
+// found is false when the output has no such section at all.
+func containerServiceListed(out string) (listed, found bool) {
+	in := false
+	for _, l := range strings.Split(out, "\n") {
+		t := strings.TrimSpace(l)
+		switch {
+		case !in && t == "services = {":
+			in, found = true, true
+		case in && t == "}":
+			in = false
+		case in && containerLabel.MatchString(l):
+			listed = true
+		}
+	}
+	return listed, found
+}
+
+// fdesetupAnswer accepts only one whole line: "FileVault is On." is yes,
+// "FileVault is Off." is no; several lines or anything else is unknown.
+func fdesetupAnswer(out string) volumeState {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 1 {
+		return answerUnknown
+	}
+	switch strings.TrimSuffix(strings.TrimSpace(lines[0]), ".") {
+	case "FileVault is On":
+		return answerYes
+	case "FileVault is Off":
 		return answerNo
 	}
 	return answerUnknown

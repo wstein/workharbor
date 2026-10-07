@@ -196,6 +196,7 @@ func TestADryRunPrintsEveryFixAndChangesNothing(t *testing.T) {
 	r.host.outputs["pmset -g"] = " sleep 10\n autorestart 0\n"
 	r.host.outputs["fdesetup status"] = "FileVault is Off."
 	r.host.outputs["/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate"] = "Firewall is disabled. (State = 0)"
+	r.host.outputs["/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode"] = "Firewall stealth mode is off"
 	code, out, errOut := r.run("setup", "host", "--dry-run")
 	if len(r.host.ran) != 0 || len(r.host.opened) != 0 || r.host.asked != 0 {
 		t.Fatalf("a dry run ran %v opened %v asked %d", r.host.ran, r.host.opened, r.host.asked)

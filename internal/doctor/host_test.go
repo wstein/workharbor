@@ -124,7 +124,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 		"dseditgroup -o checkmember -m workharbor admin": "no workharbor is NOT a member of admin",
 		"pmset -g": " sleep                0\n disksleep            0\n autorestart          1\n womp                 1\n powernap             0\n",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is enabled. (State = 1)",
-		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Stealth mode enabled",
+		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Firewall stealth mode is on",
 		"fdesetup status":                                            "FileVault is On.",
 		"/opt/homebrew/bin/brew --version":                           "Homebrew 5.0",
 		"/opt/homebrew/bin/brew list --formula --versions container": "container 1.5.0",
@@ -146,7 +146,7 @@ func TestTheHostChecksReadWhatMacOSPrints(t *testing.T) {
 		"pmset -g":        " sleep 10\n disksleep 10\n autorestart 0\n powernap 1\n",
 		"fdesetup status": "FileVault is Off.",
 		"/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate": "Firewall is disabled. (State = 0)",
-		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Stealth mode disabled",
+		"/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode": "Firewall stealth mode is off",
 		"/opt/homebrew/bin/brew --version":                                 "Homebrew 5.0",
 		"/opt/homebrew/bin/brew list --pinned":                             "git\n",
 	}
@@ -812,7 +812,7 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		"launchctl managername":   "Aqua",
 		"container system status": "apiserver is running",
 		"container list --all":    "",
-		"launchctl print gui/501": "com.apple.container.apiserver",
+		"launchctl print gui/501": launchdPrint("com.apple.container.apiserver"),
 	}}
 	d := hostDeps(r)
 	d.Home = t.TempDir()
@@ -1310,4 +1310,109 @@ func TestTheAgentKeyStepRefusesTypedLoginWithoutWriting(t *testing.T) {
 			t.Error("refused login left a file")
 		}
 	}
+}
+
+func TestFirewallFilevaultAndLaunchdFailOnlyOnStatedAnswers(t *testing.T) {
+	const fw = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+	const on, stealthOn = "Firewall is enabled. (State = 1)", "Firewall stealth mode is on"
+	fire := func(state, stealth string) (Status, string) {
+		return status(steps(t, hostDeps(scripted{fw + " --getglobalstate": state, fw + " --getstealthmode": stealth}))["firewall"])
+	}
+	// the observed and the inferred wording
+	for name, tc := range map[string]struct {
+		state, stealth string
+		want           Status
+	}{
+		"all on":               {on, stealthOn, OK},
+		"state 2 enabled":      {"Firewall is enabled. (State = 2)", stealthOn, OK},
+		"is on, state 1":       {"Firewall is on. (State = 1)", stealthOn, OK},
+		"observed off":         {"Firewall is disabled. (State = 0)", "Firewall stealth mode is off", Fail},
+		"stealth off":          {on, "Firewall stealth mode is off", Fail},
+		"global off only":      {"Firewall is disabled. (State = 0)", stealthOn, Fail},
+		"no state suffix":      {"Firewall is enabled", stealthOn, OK},
+		"trailing newline":     {on + "\n", stealthOn + "\n", OK},
+		"case does not matter": {"firewall is ENABLED. (State = 1)", stealthOn, OK},
+	} {
+		if got, detail := fire(tc.state, tc.stealth); got != tc.want {
+			t.Errorf("firewall %s: %s %q, want %s", name, got, detail, tc.want)
+		}
+	}
+	// everything else, hostile or merely new, is never a pass or a failure
+	for _, hostile := range []string{
+		"Firewall enabled: false", "Firewall will be enabled after restart", "Firewall was enabled",
+		"Failed to turn stealth mode on", "Stealth mode: on=false", "Stealth mode is on? unknown",
+		"Firewall isn\u2019t enabled", "Firewall isn't enabled", "Firewall wasn't enabled", "Firewall is un-enabled",
+		"Firewall is not enabled", "Firewall is never on", "Firewall is on (State = 0)", "Firewall is disabled. (State = 1)",
+		"Firewall is enabled. (State = 0)", "Firewall is on. (State = 2)", "Firewall is enabled. (State = x)",
+		"Stealth mode enabled", "Firewall stealth mode is on (State = 1)", "Firewall is enabled.\nFirewall is disabled.",
+		"Firewall is enabled. (State = 1) extra", "xFirewall is enabled", "", "Firewall is",
+	} {
+		if got, detail := fire(hostile, stealthOn); got != NotVerified {
+			t.Errorf("firewall state %q = %s %q, want not_verified", hostile, got, detail)
+		}
+		if got, detail := fire(on, hostile); got != NotVerified {
+			t.Errorf("firewall stealth %q = %s %q, want not_verified", hostile, got, detail)
+		}
+	}
+	for name, tc := range map[string]struct {
+		out    scripted
+		detail string
+	}{
+		"stealth lookup fails":   {scripted{fw + " --getglobalstate": on, fw + " --getstealthmode": "ERR:exit status 1: denied"}, "denied"},
+		"stealth lookup missing": {scripted{fw + " --getglobalstate": on}, "stealth"},
+	} {
+		got, detail := status(steps(t, hostDeps(tc.out))["firewall"])
+		if got != NotVerified || !strings.Contains(detail, tc.detail) {
+			t.Errorf("firewall %s: %s %q", name, got, detail)
+		}
+	}
+	for name, tc := range map[string]struct {
+		out  string
+		want Status
+	}{
+		"on":                  {"FileVault is On.", OK},
+		"off":                 {"FileVault is Off.", Fail},
+		"unknown":             {"Encryption in progress: 40%", NotVerified},
+		"empty":               {"", NotVerified},
+		"contradictory lines": {"FileVault is Off.\nFileVault is On.", NotVerified},
+		"trailing text":       {"FileVault is On? unknown", NotVerified},
+		"two lines both on":   {"FileVault is On.\nFileVault is On.", NotVerified},
+	} {
+		if got, detail := status(steps(t, hostDeps(scripted{"fdesetup status": tc.out}))["filevault"]); got != tc.want {
+			t.Errorf("filevault %s: %s %q, want %s", name, got, detail, tc.want)
+		}
+	}
+	// the standard-user check: a failed launchctl print is not a missing service
+	base := scripted{"launchctl managername": "Aqua", "container list --all": ""}
+	for name, tc := range map[string]struct {
+		print string
+		want  Status
+	}{
+		"service listed":      {launchdPrint("com.apple.container.apiserver"), OK},
+		"service not listed":  {launchdPrint("com.example.other"), Fail},
+		"manager only":        {launchdPrint("com.apple.containermanagerd"), Fail},
+		"prefixed label":      {launchdPrint("xcom.apple.container.apiserver"), Fail},
+		"label only disabled": {"\tservices = {\n\t}\n\tdisabled services = {\n\t\t\"com.apple.container.apiserver\" => disabled\n\t}\n", Fail},
+		"no services section": {"com.apple.container.apiserver", NotVerified},
+		"launchctl fails":     {"ERR:exit status 113: Could not find domain", NotVerified},
+	} {
+		r := scripted{}
+		for k, v := range base {
+			r[k] = v
+		}
+		r["launchctl print gui/501"] = tc.print
+		got, detail := status(steps(t, hostDeps(r))["standard-user-check"])
+		if got != tc.want {
+			t.Errorf("launchctl %s: %s %q, want %s", name, got, detail, tc.want)
+		}
+	}
+}
+
+// launchdPrint is a `launchctl print gui/<uid>` excerpt that lists the labels.
+func launchdPrint(labels ...string) string {
+	out := "gui/501 = {\n\tservices = {\n"
+	for _, l := range labels {
+		out += "\t\t     0      - \t" + l + "\n"
+	}
+	return out + "\t}\n}\n"
 }
