@@ -488,3 +488,101 @@ func TestClaudeAllowRuleCoversInterpreterAndFlagFirst(t *testing.T) {
 		}
 	}
 }
+
+// laneGitDenyRules and laneLandAskRules keep a lane agent, which runs as the
+// same OS user as the human, from landing or rewriting main and the review
+// notes itself (#328, #315). The grammar is prefix/wildcard only: spellings
+// such as `make -C . land`, `command make land` or `FOO=1 git update-ref` are
+// not matched; the ghguard hook would have to cover them.
+var laneGitDenyRules = []string{
+	"Bash(git notes add:*)",
+	"Bash(git notes append:*)",
+	"Bash(git notes edit:*)",
+	"Bash(git notes remove:*)",
+	"Bash(git notes merge:*)",
+	"Bash(git notes prune:*)",
+	"Bash(git notes copy:*)",
+	"Bash(git update-ref:*)",
+	"Bash(git worktree add:*)",
+}
+
+var laneLandAskRules = []string{
+	"Bash(make land:*)",
+	"Bash(make land-*)",
+}
+
+func TestClaudeLaneLandingDeny(t *testing.T) {
+	data, err := os.ReadFile("../.claude/settings.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+			Ask   []string `json:"ask"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range laneGitDenyRules {
+		if !slices.Contains(settings.Permissions.Deny, rule) {
+			t.Errorf("missing deny rule %s", rule)
+		}
+	}
+	for _, rule := range laneLandAskRules {
+		if !slices.Contains(settings.Permissions.Ask, rule) {
+			t.Errorf("missing ask rule %s", rule)
+		}
+	}
+	matches := func(rules []string, cmd string) bool {
+		for _, r := range rules {
+			if !strings.HasPrefix(r, "Bash(") || !strings.HasSuffix(r, ")") {
+				continue
+			}
+			pat := strings.TrimSuffix(strings.TrimPrefix(r, "Bash("), ")")
+			if p, ok := strings.CutSuffix(pat, ":*"); ok {
+				if cmd == p || strings.HasPrefix(cmd, p+" ") {
+					return true
+				}
+			} else if globMatch(pat, cmd) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, cmd := range []string{
+		"git notes add -m x HEAD",
+		"git notes append -m x",
+		"git notes edit",
+		"git notes remove HEAD",
+		"git notes merge origin",
+		"git notes prune",
+		"git notes copy a b",
+		"git update-ref refs/heads/main abc",
+		"git update-ref -d refs/heads/main",
+		"git worktree add ../x",
+	} {
+		if !matches(settings.Permissions.Deny, cmd) {
+			t.Errorf("not denied: %s", cmd)
+		}
+	}
+	for _, cmd := range []string{"make land", "make land-all", "make land-list", "make land-next", "make land-preview", "make land X=1"} {
+		if !matches(settings.Permissions.Ask, cmd) {
+			t.Errorf("land not asked: %s", cmd)
+		}
+		if matches(settings.Permissions.Allow, cmd) {
+			t.Errorf("land allowed: %s", cmd)
+		}
+	}
+	for _, cmd := range []string{
+		"git notes show HEAD", "git notes list", "git log --notes=review",
+		"git worktree list", "git rev-parse HEAD", "git status",
+		"make check-local", "make commitlint", "make check",
+	} {
+		if matches(settings.Permissions.Deny, cmd) || matches(settings.Permissions.Ask, cmd) {
+			t.Errorf("needlessly restricted: %s", cmd)
+		}
+	}
+}

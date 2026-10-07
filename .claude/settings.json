@@ -48,6 +48,10 @@
       "Bash(scripts/board-snapshot.sh card:*)",
       "Bash(scripts/board-snapshot.sh queue:*)"
     ],
+    "ask": [
+      "Bash(make land:*)",
+      "Bash(make land-*)"
+    ],
     "deny": [
       "Bash(gh issue:*)",
       "Bash(gh project:*)",
@@ -61,6 +65,15 @@
       "Bash(git push:*)",
       "Bash(git merge:*)",
       "Bash(git tag:*)",
+      "Bash(git notes add:*)",
+      "Bash(git notes append:*)",
+      "Bash(git notes edit:*)",
+      "Bash(git notes remove:*)",
+      "Bash(git notes merge:*)",
+      "Bash(git notes prune:*)",
+      "Bash(git notes copy:*)",
+      "Bash(git update-ref:*)",
+      "Bash(git worktree add:*)",
       "Bash(gh release create:*)",
       "Bash(gh release edit:*)",
       "Bash(gh release delete:*)",
