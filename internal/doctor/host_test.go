@@ -531,6 +531,8 @@ func TestAutomaticLogOutIsOffWhenTheKeyIsAbsentOrZero(t *testing.T) {
 		"pair message plus other text":      {scripted{autologoutKey: "ERR:exit status 1: permission denied; The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist"}, NotVerified, "not known"},
 		"absent message plus text":          {scripted{autologoutKey: "ERR:exit status 1: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication' (denied)"}, NotVerified, "not known"},
 		"absent key, Error prefix and stop": {scripted{autologoutKey: "ERR:exit status 1: Error: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'."}, OK, "key not set"},
+		"unset pair, Error prefix":          {scripted{autologoutKey: "ERR:exit status 1: Error: The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist"}, OK, "not set"},
+		"unset pair, final stop":            {scripted{autologoutKey: "ERR:exit status 1: The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist."}, OK, "not set"},
 		"double zero":                       {scripted{autologoutKey: "00\n"}, OK, "off"},
 		"plus sign":                         {scripted{autologoutKey: "+60\n"}, NotVerified, "+60"},
 		"negative":                          {scripted{autologoutKey: "-5\n"}, NotVerified, "-5"},
@@ -1495,5 +1497,14 @@ func TestConfigDependentHostChecksWaitForTheConfiguration(t *testing.T) {
 	d.Runner = scripted{}
 	if st, detail := status(steps(t, d)["workspace-volume"]); st != OK {
 		t.Errorf("valid configuration: %s %q", st, detail)
+	}
+}
+
+func TestAConfigThatCannotBeReadIsNotReportedAsMissing(t *testing.T) {
+	d := hostDeps(scripted{})
+	d.ConfigPath = t.TempDir() // a directory: reading it fails, but not with ENOENT
+	_, detail := status(steps(t, d)["workspace-volume"])
+	if !strings.HasPrefix(detail, needsConfig) || !strings.Contains(detail, "cannot be read") || strings.Contains(detail, "not written yet") {
+		t.Errorf("detail %q", detail)
 	}
 }
