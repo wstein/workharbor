@@ -6,6 +6,8 @@ Legend (colour is only decoration: the words are always printed)
  - skip   left out, or not offered
 | ACTION  something you must do or answer
 |   $ a command you can copy
+preflight: tools found: sudo; missing: brew, container. State: no earlier run.
+           Next: check 4 steps and change nothing (dry run).
 
 -- Step 1 of 4 - title of autologout --
  + ok     key not set: the system default applies (default off)

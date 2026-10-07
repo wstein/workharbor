@@ -47,3 +47,13 @@ func TestAskAutoSkipsOnlyUndoableSteps(t *testing.T) {
 		t.Errorf("without --yes it asks: %v", a)
 	}
 }
+
+func TestPreflightIsOneLineWithAllFourFacts(t *testing.T) {
+	got := Preflight(Detect(false, "", false), []string{"sudo"}, nil,
+		"no config", "check 3 steps.")
+	for _, w := range []string{"found: sudo", "missing: none", "no config", "check 3"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in %q", w, got)
+		}
+	}
+}

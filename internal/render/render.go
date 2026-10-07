@@ -498,6 +498,9 @@ type Writer struct {
 
 func (w Writer) put(text string) { _, _ = io.WriteString(w.W, text) }
 
+// Put writes text that is already rendered.
+func (w Writer) Put(text string) { w.put(text) }
+
 // Legend writes the legend.
 func (w Writer) Legend() { w.put(Legend(w.S)) }
 

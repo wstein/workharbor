@@ -276,6 +276,25 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 	if len(chosen) > 0 {
 		ui.Legend()
 	}
+	if len(chosen) > 0 {
+		var found, missing []string
+		for _, t := range []string{"sudo", "brew", "container"} {
+			if _, err := lookPath(t); err != nil {
+				missing = append(missing, t)
+			} else {
+				found = append(found, t)
+			}
+		}
+		will := fmt.Sprintf("check %d steps and change nothing without a question.", len(chosen))
+		if o.DryRun {
+			will = fmt.Sprintf("check %d steps and change nothing (dry run).", len(chosen))
+		}
+		state := "no earlier run"
+		if o.Resume != nil && o.From != "" {
+			state = "an earlier run, go on at " + o.From
+		}
+		ui.Put(render.Preflight(o.Style, found, missing, state, will))
+	}
 	rc := &recorder{log: o.Log, account: o.Account, phase: o.Phase}
 	start := protocol.Entry{Event: protocol.EventRunStart, Source: protocol.SourceInteractive, Flags: protocol.Flags(o.Resume, o.Home)}
 	if o.Answers != nil {
@@ -546,6 +565,9 @@ func (noPrompt) Secret(string) (string, error) { return "", ErrUnattended }
 func (noPrompt) Confirm(string) (bool, error)  { return false, ErrUnattended }
 
 // runner is what applying a fix needs of one run.
+// lookPath finds a tool on PATH; a test replaces it.
+var lookPath = exec.LookPath
+
 // ask asks through the Host, or answers yes for an undoable step under --yes.
 func (r *runner) ask(question string, d render.Default) (render.Answer, error) {
 	if a, ok := render.AutoYes(r.ui, question, d, r.o.Yes); ok {

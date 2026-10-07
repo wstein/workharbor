@@ -68,3 +68,16 @@ func AskAuto(in *bufio.Reader, w Writer, question string, d Default, yes bool) (
 	}
 	return Ask(in, w, question, d)
 }
+
+// Preflight is the one line before the first change: the tools that were found,
+// the tools that are missing, what exists already, and what will happen.
+func Preflight(s Style, found, missing []string, state, will string) string {
+	list := func(l []string) string {
+		if len(l) == 0 {
+			return "none"
+		}
+		return strings.Join(l, ", ")
+	}
+	return Note(s, "preflight: tools found: "+list(found)+"; missing: "+
+		list(missing)+". State: "+state+". Next: "+will)
+}
