@@ -346,9 +346,20 @@ func (t Terminal) AskWord(question, word string) (render.Answer, error) {
 
 // Pause implements Pauser: Enter goes on, q or quit quits. A closed input goes on, so a
 // run never blocks on it.
-func (t Terminal) Pause() error {
+func (t Terminal) Pause() error { return t.PauseContext(context.Background()) }
+
+// PauseContext implements ContextPauser: like Pause, but it returns the
+// context's error as soon as the context ends, without waiting for Enter.
+func (t Terminal) PauseContext(ctx context.Context) error {
 	fmt.Fprintln(t.Err, "\nPress Enter to continue (q to quit)")
-	s, _ := t.In.ReadString('\n')
+	line := make(chan string, 1)
+	go func() { s, _ := t.In.ReadString('\n'); line <- s }()
+	var s string
+	select {
+	case s = <-line:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	if s = strings.TrimSpace(s); strings.EqualFold(s, "q") || strings.EqualFold(s, "quit") {
 		return render.ErrQuit
 	}

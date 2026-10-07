@@ -405,3 +405,22 @@ func TestLastPageLengthWithManyFailingSteps(t *testing.T) {
 		t.Errorf("the last page is %d lines long, want at most 25", n)
 	}
 }
+
+func TestPauseReturnsOnCancel(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- Terminal{In: bufio.NewReader(pr), Err: io.Discard}.PauseContext(ctx)
+	}()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Pause kept waiting for Enter after the cancel")
+	}
+}

@@ -53,6 +53,19 @@ type Pauser interface {
 	Pause() error
 }
 
+// ContextPauser is a Pauser that also stops waiting when the context ends
+// (Ctrl-C at the prompt), instead of waiting for Enter.
+type ContextPauser interface {
+	PauseContext(ctx context.Context) error
+}
+
+func pause(ctx context.Context, p Pauser) error {
+	if c, ok := p.(ContextPauser); ok {
+		return c.PauseContext(ctx)
+	}
+	return p.Pause()
+}
+
 // Ask asks through the Host's Asker, or through Confirm when it has none.
 func Ask(h Host, question string, d render.Default) (render.Answer, error) {
 	if a, ok := h.(Asker); ok {
@@ -329,7 +342,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			title = s.Name
 		}
 		if p, ok := h.(Pauser); ok && o.Paged {
-			if err := p.Pause(); errors.Is(err, render.ErrQuit) {
+			if err := pause(ctx, p); errors.Is(err, render.ErrQuit) {
 				if _, e := rc.finish(nil, protocol.RunQuit, nil); e != nil {
 					return outs, e
 				}
