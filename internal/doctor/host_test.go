@@ -704,6 +704,37 @@ func TestAWorkspaceVolumeMustBeEncryptedAndHonourOwnership(t *testing.T) {
 	if st, _ := check(scripted{ka: va}, a); st != NotVerified {
 		t.Errorf("diskutil that does not answer: %s", st)
 	}
+	// output this check does not know is not a failure: only a stated No or
+	// Disabled is (the format is unverified on macOS 26)
+	for name, out := range map[string]string{
+		"empty output":      "",
+		"no keys":           "   Volume Name:               ssd\n",
+		"unknown encrypted": "   FileVault:                 Maybe\n   Owners:                    Enabled\n",
+		"unknown owners":    "   FileVault:                 Yes\n   Owners:                    Perhaps\n",
+		"owners missing":    "   FileVault:                 Yes\n",
+		"None owners":       "   FileVault:                 Yes\n   Owners:                    None\n",
+		"Nope filevault":    "   FileVault:                 Nope\n   Owners:                    Enabled\n",
+		"Yesterday":         "   FileVault:                 Yesterday\n   Owners:                    Enabled\n",
+		"Enabledish owners": "   FileVault:                 Yes\n   Owners:                    Enabledish\n",
+	} {
+		if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": out}, a); st != NotVerified || !strings.Contains(detail, "/Volumes/ssd") {
+			t.Errorf("%s: %s %q, want not_verified", name, st, detail)
+		}
+	}
+	// the Encrypted key stands in when FileVault is not stated
+	if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": "   Encrypted:                 Yes\n   Owners:                    Enabled\n"}, a); st != OK {
+		t.Errorf("Encrypted: Yes alone: %s %q", st, detail)
+	}
+	if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": "   Encrypted:                 No\n   Owners:                    Enabled\n"}, a); st != Fail || !strings.Contains(detail, "is not encrypted") {
+		t.Errorf("Encrypted: No alone: %s %q", st, detail)
+	}
+	if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": "   FileVault:                 Maybe\n   Encrypted:                 Yes\n   Owners:                    Enabled\n"}, a); st != OK {
+		t.Errorf("unknown FileVault with Encrypted: Yes: %s %q", st, detail)
+	}
+	// a stated failure still wins over an unknown field
+	if st, detail := check(scripted{ka: va, "diskutil info /Volumes/ssd": "   FileVault:                 No\n"}, a); st != Fail || !strings.Contains(detail, "is not encrypted") {
+		t.Errorf("a stated No with owners unknown: %s %q", st, detail)
+	}
 	// a mount point that holds spaces is read whole
 	ks, vs := onDisk(a, "/Volumes/My SSD")
 	if st, detail := check(scripted{ks: vs, "diskutil info /Volumes/My SSD": plain}, a); st != Fail || !strings.Contains(detail, "/Volumes/My SSD is not encrypted") {

@@ -350,22 +350,33 @@ func hostSteps(d Deps) []Check {
 				if len(vols) == 0 {
 					return OK, "the workspace roots are on the internal disk, which FileVault covers"
 				}
-				var bad []string
+				var bad, unknown []string
 				for _, v := range vols {
 					out, err := d.output(ctx, "diskutil", "info", v)
 					if err != nil {
 						return NotVerified, "diskutil did not answer for " + v + ": " + oneLine(err.Error())
 					}
 					info := colonLines(out)
-					if enc := info["FileVault"]; !strings.HasPrefix(enc, "Yes") && !strings.HasPrefix(info["Encrypted"], "Yes") {
+					fv, en := volumeAnswer(info["FileVault"], "Yes", "No"), volumeAnswer(info["Encrypted"], "Yes", "No")
+					switch {
+					case fv == answerYes || en == answerYes:
+					case fv == answerNo || en == answerNo:
 						bad = append(bad, v+" is not encrypted")
+					default:
+						unknown = append(unknown, v+" (FileVault: "+orNone(info["FileVault"])+")")
 					}
-					if !strings.HasPrefix(info["Owners"], "Enabled") {
+					switch volumeAnswer(info["Owners"], "Enabled", "Disabled") {
+					case answerNo:
 						bad = append(bad, v+" ignores file ownership (Owners: "+orNone(info["Owners"])+")")
+					case answerUnknown:
+						unknown = append(unknown, v+" (Owners: "+orNone(info["Owners"])+")")
 					}
 				}
 				if len(bad) > 0 {
 					return Fail, strings.Join(bad, "; ")
+				}
+				if len(unknown) > 0 {
+					return NotVerified, "diskutil's answer is not one this check knows for " + strings.Join(unknown, ", ") + " (its format is unverified on macOS 26)"
 				}
 				return OK, "every workspace volume is encrypted and honours ownership (diskutil's output format is unverified on macOS 26)"
 			},
@@ -1465,6 +1476,32 @@ func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
 		vols = append(vols, mount)
 	}
 	return vols, "", ""
+}
+
+type volumeState int
+
+const (
+	answerUnknown volumeState = iota
+	answerYes
+	answerNo
+)
+
+// volumeAnswer reads one diskutil value by its first whole word, ignoring case:
+// the yes word is yes, the no word is no, and anything else ("None", "Nope",
+// "Yesterday", empty, a new wording) is unknown. Text after the word, such as
+// "Yes (Unlocked)", is allowed.
+func volumeAnswer(v, yes, no string) volumeState {
+	f := strings.Fields(v)
+	if len(f) == 0 {
+		return answerUnknown
+	}
+	switch {
+	case strings.EqualFold(f[0], yes):
+		return answerYes
+	case strings.EqualFold(f[0], no):
+		return answerNo
+	}
+	return answerUnknown
 }
 
 // colonLines reads "Key: value" lines, as `diskutil info` prints them.
