@@ -716,7 +716,7 @@ func TestParseMount(t *testing.T) {
 		{"garbage", "hello\n", nil, false},
 		{"no root", "/dev/d on /Volumes/X (apfs)\n", nil, false},
 		{"none", root, nil, true},
-		{"unparseable line", root + "weird line\n", nil, false},
+		{"unparsable line", root + "weird line\n", nil, false},
 		{"trailing text", root + "/dev/d on /Users/workharbor/D (apfs) x\n", nil, false},
 		{"split a", root + "/dev/y on /Users/workharbor/a on /b (apfs)\n", []string{"/Users/workharbor/a on /b"}, true},
 		{"split x", root + "/dev/d on /Users/workharbor/x on /y (hfs, local)\n", []string{"/Users/workharbor/x on /y"}, true},
