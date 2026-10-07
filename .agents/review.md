@@ -15,8 +15,9 @@ code. The design owner is `wh/design`; the human is Werner.
 
 ## Setup
 
-Your own worktree as in AGENTS.md. You do not create it: the human does,
-once, with `git worktree add ../workharbor-review --detach main` and
+Your own worktree as in AGENTS.md. You do not run `git worktree add` (denied,
+#328): the coordinator prepares it, reusing an idle one first and otherwise
+running `git worktree add ../workharbor-review --detach main` and
 `make hooks`. Read AGENTS.md, then the design pages the
 change touches, `docs/content/docs/threat-model.md` and the review notes on its
 issue.
