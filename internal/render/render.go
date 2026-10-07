@@ -87,8 +87,29 @@ type Style struct {
 // terminal, NO_COLOR is empty (no.color.org: any non-empty value turns colour
 // off) and --plain is not given.
 func Detect(tty bool, noColor string, plain bool) Style {
-	on := tty && noColor == "" && !plain
-	return Style{Color: on, Unicode: on}
+	return DetectEnv(Env{TTY: tty, NoColor: noColor, Plain: plain})
+}
+
+// Env is what decides the style. Colour is decoration only: the words are
+// always printed.
+type Env struct {
+	TTY         bool   // the output is a terminal
+	Term        string // $TERM
+	NoColor     string // $NO_COLOR; non-empty turns colour off
+	ForceColor  string // $FORCE_COLOR; non-empty and not "0" turns colour on
+	NoColorFlag bool   // --no-color
+	ColorAlways bool   // --color=always
+	Plain       bool   // --plain
+}
+
+// DetectEnv is Detect with the rest of the rules. --no-color and --plain win;
+// then --color=always and FORCE_COLOR force colour on; otherwise colour needs a
+// terminal, a TERM that is not "dumb" and an empty NO_COLOR. Symbols follow
+// the automatic rule only.
+func DetectEnv(e Env) Style {
+	auto := e.TTY && e.Term != "dumb" && e.NoColor == "" && !e.Plain && !e.NoColorFlag
+	force := (e.ColorAlways || (e.ForceColor != "" && e.ForceColor != "0")) && !e.Plain && !e.NoColorFlag
+	return Style{Color: auto || force, Unicode: auto}
 }
 
 func (s Style) paint(r Role, text string) string {

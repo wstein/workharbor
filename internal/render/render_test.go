@@ -275,3 +275,31 @@ func TestToolWriterLoneCRIsHeldNotDropped(t *testing.T) {
 		t.Fatalf("trailing CR lost at End: %q", tail.String())
 	}
 }
+
+func TestDetectEnvColourRules(t *testing.T) {
+	cases := []struct {
+		name string
+		e    Env
+		want bool
+	}{
+		{"tty", Env{TTY: true, Term: "xterm"}, true},
+		{"not a tty", Env{Term: "xterm"}, false},
+		{"NO_COLOR", Env{TTY: true, Term: "xterm", NoColor: "1"}, false},
+		{"TERM=dumb", Env{TTY: true, Term: "dumb"}, false},
+		{"--no-color", Env{TTY: true, Term: "xterm", NoColorFlag: true}, false},
+		{"FORCE_COLOR", Env{Term: "dumb", ForceColor: "1"}, true},
+		{"FORCE_COLOR=0", Env{ForceColor: "0"}, false},
+		{"--color=always", Env{ColorAlways: true}, true},
+		{"--no-color beats force", Env{ColorAlways: true, ForceColor: "1", NoColorFlag: true}, false},
+		{"--plain beats force", Env{ColorAlways: true, Plain: true}, false},
+	}
+	for _, c := range cases {
+		st := DetectEnv(c.e)
+		if st.Color != c.want {
+			t.Errorf("%s: Color = %v, want %v", c.name, st.Color, c.want)
+		}
+		if got := strings.Contains(scene(st), "\x1b"); got != c.want {
+			t.Errorf("%s: escape byte present = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
