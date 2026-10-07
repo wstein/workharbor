@@ -336,3 +336,23 @@ func TestToolWriterDropsSecretPrompts(t *testing.T) {
 		}
 	}
 }
+
+func TestToolWriterPromptDetection(t *testing.T) {
+	for in, hidden := range map[string]bool{
+		"Password:":                  true,
+		"\x1b[1mPassword:\x1b[0m ":   true,
+		"Passwort:":                  true,
+		"Kennwort: ":                 true,
+		"invalid password for user:": false,
+		"Falsches Passwort, Fehler:": false,
+		"Set the password":           false,
+	} {
+		var b strings.Builder
+		tw := NewToolWriter(&b, Style{})
+		_, _ = tw.Write([]byte(in))
+		tw.End()
+		if got := strings.Contains(b.String(), NeutralPromptLine); got != hidden {
+			t.Errorf("%q: hidden = %v, want %v (%q)", in, got, hidden, b.String())
+		}
+	}
+}

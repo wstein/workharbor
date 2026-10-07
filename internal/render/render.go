@@ -307,8 +307,22 @@ type ToolWriter struct {
 }
 
 // secretPrompt matches a line a tool prints to ask for a secret ("Password:",
-// "User password:", "Enter passphrase for key:").
-var secretPrompt = regexp.MustCompile(`(?i)\b(pass(word|phrase|code)|secret|pin)\b[^:]*:\s*$`)
+// "User password:", "Enter passphrase for key:", "Passwort:", "Kennwort:").
+// It is matched on the line without ANSI color sequences. A prompt without a
+// colon is not matched: "Set the password" is ordinary output, and hiding it
+// would cost more than the rare colon-less prompt, which whr never answers.
+var secretPrompt = regexp.MustCompile(`(?i)\b(pass(word|phrase|code|wort)|kennwort|secret|pin)\b[^:]*:\s*$`)
+
+// promptError spots a line that reports a failure and merely names the
+// password ("invalid password for user:"): it is a real error, not a prompt.
+var promptError = regexp.MustCompile(`(?i)\b(invalid|incorrect|wrong|fail(ed|ure)?|error|denied|sorry|unknown|ung[uü]ltig|falsch|fehler)\b`)
+
+var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func isSecretPrompt(line string) bool {
+	line = ansiSeq.ReplaceAllString(line, "")
+	return secretPrompt.MatchString(line) && !promptError.MatchString(line)
+}
 
 // NeutralPromptLine replaces a prompt that asks for a secret. whr never relays
 // such a prompt: it would invite typing a secret into a terminal whr does not
@@ -360,7 +374,7 @@ func (t *ToolWriter) write(p []byte) error {
 				continue
 			}
 		}
-		if t.line += strings.TrimRight(seg, "\r\n"); secretPrompt.MatchString(t.line) {
+		if t.line += strings.TrimRight(seg, "\r\n"); isSecretPrompt(t.line) {
 			if !t.started {
 				out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
 				t.started = true
