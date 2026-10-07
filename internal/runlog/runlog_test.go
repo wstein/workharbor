@@ -76,3 +76,47 @@ func TestCommandMasksTheSecretValue(t *testing.T) {
 		t.Fatal("secret in log")
 	}
 }
+
+func TestOpenRefusesLinks(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o644); err != nil { //nolint:gosec // a loose mode is the point
+		t.Fatal(err)
+	}
+	sym := filepath.Join(dir, "sym.log")
+	if err := os.Symlink(target, sym); err != nil {
+		t.Fatal(err)
+	}
+	hard := filepath.Join(dir, "hard.log")
+	if err := os.Link(target, hard); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{sym, hard} {
+		if l, err := Open(p); err == nil {
+			_ = l.Close()
+			t.Errorf("%s: want a refusal", p)
+		}
+	}
+	fi, _ := os.Stat(target)
+	if b, _ := os.ReadFile(target); string(b) != "keep" || fi.Mode().Perm() != 0o644 { //nolint:gosec // a test path
+		t.Errorf("target changed: %q %v", b, fi.Mode())
+	}
+}
+
+func TestOpenFixesModeAndAppends(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	if err := os.WriteFile(p, []byte("old\n"), 0o644); err != nil { //nolint:gosec // a loose mode is the point
+		t.Fatal(err)
+	}
+	l, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Step("a", "ok", "")
+	_ = l.Close()
+	fi, _ := os.Stat(p)
+	b, _ := os.ReadFile(p) //nolint:gosec // a test path
+	if fi.Mode().Perm() != 0o600 || string(b) != "old\nstep a: ok \n" {
+		t.Errorf("mode %v content %q", fi.Mode().Perm(), b)
+	}
+}

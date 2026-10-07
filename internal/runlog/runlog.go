@@ -10,12 +10,14 @@
 package runlog
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/wstein/workharbor/internal/config"
@@ -46,9 +48,20 @@ func Open(path string) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	// never through a symlink, and never onto a file with another name too: the
+	// log must not change or grow a file the person did not name
+	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
 		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); !fi.Mode().IsRegular() || !ok || st.Nlink != 1 {
+		_ = f.Close()
+		return nil, errors.New("not a plain file with one name (a link or a device is refused)")
 	}
 	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
