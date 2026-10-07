@@ -46,3 +46,24 @@ func TestPolicyDescriptionOnlyFromPasswordContent(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestPolicyDescriptionWithTheCategoriesInReverseOrder(t *testing.T) {
+	reverse := `<?xml version="1.0"?><plist><dict>
+<key>policyCategoryPasswordContent</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>right</string></dict></dict></array>
+<key>policyCategoryAuthentication</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>wrong category</string></dict></dict></array>
+</dict></plist>`
+	if got := PolicyDescription([]byte(reverse), "en"); got != "right" {
+		t.Errorf("got %q", got)
+	}
+	// a rule of another category after an empty password category is not it
+	empty := `<?xml version="1.0"?><plist><dict>
+<key>policyCategoryPasswordContent</key><array></array>
+<key>policyCategoryAuthentication</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>wrong category</string></dict></dict></array>
+</dict></plist>`
+	if got := PolicyDescription([]byte(empty), "en"); got != "" {
+		t.Errorf("got %q", got)
+	}
+}
