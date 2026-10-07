@@ -15,7 +15,8 @@ const maxCommand = 32 << 10
 // Check returns a non-empty reason when command must be refused.
 //
 // The rule. Normalise the text (lower case, percent-decoded up to three
-// rounds, quotes, backslashes, backticks, `^` and `+` removed). Refuse when
+// rounds, backslash-newline joined, quotes, backslashes, backticks, `^`
+// and `+` removed). Refuse when
 //
 //  1. the normalised text contains "graphql" and contains `gh` as a word
 //     (also `=gh`, `/opt/homebrew/bin/gh`, `"gh"`, `GH`) or `api` as a word; or
@@ -26,9 +27,9 @@ const maxCommand = 32 << 10
 //
 // Allowed even when "graphql" is present: (a) a plain one-line
 // `gh <issue|pr|search|repo|run|workflow|label|release|...> ...` with none of
-// ; & | < > $ ` ( ) { } \ * ? [ and no newline (`gh issue list --search
-// graphql`); (b) data contexts, removed before the search: a single-quoted
-// argument of git commit -m/--message or gh pr|issue create|comment|edit
+// ; & | < > $ ` ( ) { } \ * ? [ and no newline, with complete quoted
+// words (`gh issue list --search graphql`); (b) data contexts, removed before the search: a single-quoted
+// complete argument of git commit -m/--message or gh pr|issue create|comment|edit
 // -b/--body/-t/--title, and a `<<'EOF'` heredoc body owned by cat, tee,
 // git commit or gh pr|issue with nothing else on its line (also inside
 // `"$(cat <<'EOF'`). The data exception is dropped when the remaining text
@@ -40,7 +41,11 @@ const maxCommand = 32 << 10
 // word api next to graphql outside the allowed contexts (echo, grep, a
 // double-quoted commit message; workaround: -F file or single quotes),
 // `curl .../graphql` (the `api.github.com` host is an `api` word), and
-// dynamic constructs with "ql" in them.
+// dynamic constructs with "ql" in them. #325 L2 and the L5 REST jq case
+// remain conservative over-blocks: a double-quoted heredoc delimiter and
+// `gh api rate_limit --jq .resources.graphql` are refused; use a single-quoted
+// delimiter or fetch rate_limit without that inline filter. Revisit these
+// exceptions only with guard and mutation evidence for a bounded text rule.
 //
 // Residual gaps (not covered): commands assembled at runtime or read from
 // files (`xargs < list`, `$(cat f)`, `gh api $EP`, `gh api *`, `gr*`), gh or
@@ -49,8 +54,9 @@ const maxCommand = 32 << 10
 // hook that fails to start or times out (Claude Code treats that as allow),
 // a hook compiled by `go run` from the working tree (an agent editing
 // internal/ghguard, go.mod or GOFLAGS can turn it into allow), matcher scope
-// (only Bash, Monitor, PowerShell; other tools are not inspected) and runtime
-// enforcement, which is unverified until the #274-style probe is run.
+// (only Bash, Monitor, PowerShell; other tools are not inspected), the
+// shell/interpreter word list (L3), which is a heuristic, not exhaustive, and
+// runtime enforcement, which is unverified until the #274-style probe is run.
 func Check(command string) string {
 	if len(command) > maxCommand {
 		return "command too large to inspect (#314)"
@@ -70,7 +76,7 @@ func Check(command string) string {
 var (
 	ghWord  = regexp.MustCompile(`(^|[^a-z0-9_.-])gh($|[^a-z0-9_-])`)
 	apiWord = regexp.MustCompile(`(^|[^a-z0-9_-])api($|[^a-z0-9_-])`)
-	dropper = strings.NewReplacer("'", "", `"`, "", `\`, "", "`", "", "^", "", "+", "", "\x00", "")
+	dropper = strings.NewReplacer("\\\n", "", "\\\r\n", "", "'", "", `"`, "", `\`, "", "`", "", "^", "", "+", "", "\x00", "")
 )
 
 func normalise(s string) string {
@@ -134,7 +140,7 @@ var ghSub = map[string]bool{
 
 // simpleGh: one plain line `gh <non-api subcommand> ...` with no shell metacharacters.
 func simpleGh(c string) bool {
-	if strings.ContainsAny(c, ";&|<>$`(){}\\*?[\n\r") {
+	if strings.ContainsAny(c, ";&|<>$`(){}\\*?[\n\r") || !plainQuotes.MatchString(c) {
 		return false
 	}
 	f := strings.Fields(c)
@@ -144,12 +150,19 @@ func simpleGh(c string) bool {
 	return f[0] == "gh" || strings.HasSuffix(f[0], "/gh")
 }
 
+// Plain gh reads allow complete quoted arguments, but not unmatched quotes.
+// Shell substitutions and escapes are already excluded by simpleGh.
+var plainQuotes = regexp.MustCompile(`^(?:[^'"\n\r]|'[^']*'(?:[ \t]|$)|"[^"]*"(?:[ \t]|$))*$`)
+
+// A data quote must end a word; concatenated fragments are not an exception.
+var completeSingleQuotes = regexp.MustCompile("^(?:[^']|'[^']*'(?:[ \t\r\n;&]|$))*$")
+
 var singleQuoted = regexp.MustCompile("(?m)(^|&&\\s*|;\\s*)((?:git commit|gh (?:pr|issue) (?:create|comment|edit))" +
 	"(?:[^'\"`$\\\\;&|<>()\\n]*?(?:-[a-zA-Z]*m|--message|-b|--body|-t|--title)[ =]'[^']*')+)")
 
 // shellWord: a heredoc may be consumed by a shell elsewhere in the text.
 var (
-	shellWord   = regexp.MustCompile(`(^|[^a-z0-9_-])(ba|z|da|k|c|tc|fi)?sh|eval|source|python3?|perl|node|ruby|xargs|exec($|[^a-z0-9_-])`)
+	shellWord   = regexp.MustCompile(`(^|[^a-z0-9_-])(a|ba|z|da|k|c|tc|fi)?sh|busybox|eval|source|python3?|perl|node|ruby|xargs|exec($|[^a-z0-9_-])`)
 	innerQuoted = regexp.MustCompile("'[^']*'")
 )
 
@@ -213,6 +226,9 @@ func stripData(c string) (string, bool) {
 	}
 	out.WriteString(rest)
 	s := out.String()
+	if !completeSingleQuotes.MatchString(s) {
+		return "", false
+	}
 	if t := singleQuoted.ReplaceAllStringFunc(s, func(x string) string {
 		changed = true
 		return innerQuoted.ReplaceAllString(x, "X")

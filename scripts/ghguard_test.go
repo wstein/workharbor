@@ -363,6 +363,36 @@ func TestGhGuardTable(t *testing.T) {
 	}
 }
 
+// TestGhGuardLows pins conservative exception boundaries from #325. These
+// checks exercise command text only, not live client hook invocation.
+func TestGhGuardLows(t *testing.T) {
+	for _, tc := range []struct {
+		name, command string
+		refused       bool
+	}{
+		{"L1 adjacent message word", "git commit -m 'gh api graph'ql", true},
+		{"L1 adjacent body word", "gh pr create --body 'gh api graph'ql", true},
+		{"L2 quoted heredoc accepted over-block", "cat <<\"EOF\"\ngh api graphql\nEOF", true},
+		{"L3 ash vetoes exception", "cat <<'EOF'\ngh api graphql\nEOF\nash", true},
+		{"L3 busybox vetoes exception", "cat <<'EOF'\ngh api graphql\nEOF\nbusybox", true},
+		{"L4 endpoint continuation", "gh api graph\\\nql", true},
+		{"L4 command continuation", "g\\\nh api graphql", true},
+		{"L4 encoded continuation", "gh api graph%5c%0aql", true},
+		{"L4 CRLF continuation", "gh api graph\\\r\nql", true},
+		{"L5 unmatched quote", "gh issue list --search 'graphql", true},
+		{"L5 unmatched double quote", `gh issue list --search "graphql`, true},
+		{"L5 double quoted read", `gh issue list --search "graphql"`, false},
+		{"L5 quoted read", "gh pr list --search 'graphql in:title'", false},
+		{"L5 rate limit accepted over-block", "gh api rate_limit --jq .resources.graphql", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ghguard.Check(tc.command) != ""; got != tc.refused {
+				t.Fatalf("refused = %v, want %v for %q", got, tc.refused, tc.command)
+			}
+		})
+	}
+}
+
 func indexOf(l []string, s string) (int, bool) {
 	for i, x := range l {
 		if x == s {
@@ -417,6 +447,8 @@ func TestGhGuardHookBinary(t *testing.T) {
 		want     int
 	}{
 		{"graphql", hook("Bash", "gh -R x api /graphql"), 2},
+		{"continued endpoint", hook("Bash", "gh api graph\\\nql"), 2},
+		{"unmatched quote", hook("Bash", "gh issue list --search 'graphql"), 2},
 		{"rest", hook("Bash", "gh api repos/x/y"), 0},
 		{"other tool", hook("Read", "gh api graphql"), 0},
 		{"monitor", hook("Monitor", "gh api graphql"), 2},
