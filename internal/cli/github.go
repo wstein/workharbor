@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/wstein/workharbor/internal/config"
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/githubapp"
 	"github.com/wstein/workharbor/internal/redact"
@@ -43,7 +45,7 @@ func newAppCreate(st *state) *cobra.Command {
 	var (
 		publicURL, listen, keyDir, name, org string
 		ttl                                  time.Duration
-		board                                bool
+		board, local                         bool
 		githubURL, apiURL                    string
 	)
 	cmd := &cobra.Command{
@@ -51,8 +53,10 @@ func newAppCreate(st *state) *cobra.Command {
 		Short: "create your own GitHub App from a manifest, no manual download",
 		Long: `Creates a private GitHub App with exactly the permissions workharbor needs.
 
-It prints a link; open it on any device that reaches whr's HTTPS name, press
-Continue to GitHub, and confirm there. GitHub redirects back, whr stores the
+It prints a link; open it on any device that reaches whr's HTTPS name (the
+configuration's public_url, or --public-url), press Continue to GitHub, and
+confirm there. With --local the link points at the loopback listener instead:
+open it in a browser on the host itself. GitHub redirects back, whr stores the
 private key in a 0600 file, and this command prints the two lines to add to
 the configuration and the link to install the App on your repositories.
 
@@ -60,22 +64,42 @@ It listens on the configuration's "listen" address while it waits, so stop
 "whr serve" first.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if publicURL == "" {
-				return usageError{"--public-url is needed: whr's HTTPS name behind the forwarder, for example https://whr.example.ts.net"}
+			if local && publicURL != "" {
+				return usageError{"--local and --public-url exclude each other"}
 			}
 			path := st.configPath
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
 			}
+			cc, ccErr := ReadClientConfig(path)
 			if listen == "" {
-				cc, err := ReadClientConfig(path)
-				if err != nil {
-					return usageError{"no listen address: pass --listen or put it in the configuration (" + err.Error() + ")"}
+				if ccErr != nil {
+					return usageError{"no listen address: pass --listen or put it in the configuration (" + ccErr.Error() + ")"}
 				}
 				listen = cc.Listen
 				if listen == "" {
 					return usageError{"no listen address: pass --listen or put it in the configuration"}
 				}
+			}
+			host, _, err := net.SplitHostPort(listen)
+			if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+				return usageError{fmt.Sprintf("--listen %q is not a loopback address: the forwarder reaches whr there (D29)", listen)}
+			}
+			switch {
+			case local:
+				publicURL = "http://" + listen
+			case publicURL == "" && ccErr == nil:
+				publicURL = cc.PublicURL
+			}
+			if publicURL == "" {
+				return usageError{"no public name: set public_url in the configuration (whr setup asks for it) or pass --public-url whr.example.ts.net; to try it on the host itself, pass --local and open the link in a browser on this Mac"}
+			}
+			if !local && !loopbackHTTP(publicURL) {
+				n, err := config.NormalizePublicURL(publicURL)
+				if err != nil {
+					return usageError{"public name: " + err.Error()}
+				}
+				publicURL = n
 			}
 			if keyDir == "" {
 				abs, err := filepath.Abs(filepath.Dir(path))
@@ -97,10 +121,6 @@ It listens on the configuration's "listen" address while it waits, so stop
 			if err != nil {
 				return usageError{err.Error()}
 			}
-			host, _, err := net.SplitHostPort(listen)
-			if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
-				return usageError{fmt.Sprintf("--listen %q is not a loopback address: the forwarder reaches whr there (D29)", listen)}
-			}
 			var lc net.ListenConfig
 			ln, err := lc.Listen(cmd.Context(), "tcp", listen)
 			if err != nil {
@@ -116,6 +136,11 @@ It listens on the configuration's "listen" address while it waits, so stop
 
 			start, exp := setup.StartURL()
 			fmt.Fprintf(st.env.Stderr, "Open this link (valid until %s, once):\n  %s\nThen press Continue to GitHub and confirm. Waiting for GitHub to send you back...\n", exp.Local().Format("15:04"), clean(start))
+			if local {
+				fmt.Fprintln(st.env.Stderr, "This link points at the loopback listener: open it in a browser on this Mac. GitHub's redirect back to it is unverified.")
+			} else {
+				fmt.Fprintf(st.env.Stderr, "If the link times out, the name or the forwarder is at fault, not this command: whr waits on http://%s (loopback only). Check that the forwarder serves %s to that port, or use --local.\n", listen, clean(publicURL))
+			}
 
 			wctx, cancel := context.WithDeadline(cmd.Context(), exp)
 			defer cancel()
@@ -138,7 +163,8 @@ It listens on the configuration's "listen" address while it waits, so stop
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&publicURL, "public-url", "", "whr's HTTPS name behind the forwarder (required)")
+	f.StringVar(&publicURL, "public-url", "", "whr's HTTPS name behind the forwarder (default: the configuration's public_url); https:// is added when missing")
+	f.BoolVar(&local, "local", false, "use the loopback listener as the link, to open on the host itself")
 	f.StringVar(&listen, "listen", "", "loopback address to wait on (default: the configuration's listen)")
 	f.StringVar(&keyDir, "key-dir", "", "where to write the private key (default: the configuration's directory)")
 	f.StringVar(&name, "name", "", "the App's name, unique on GitHub (default workharbor-<random>)")
@@ -150,4 +176,15 @@ It listens on the configuration's "listen" address while it waits, so stop
 	_ = f.MarkHidden("github-url")
 	_ = f.MarkHidden("api-url")
 	return cmd
+}
+
+// loopbackHTTP is an explicit http:// address on a loopback host: a test double
+// or a local trial, which githubapp.CheckBaseURL still checks.
+func loopbackHTTP(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	ip := net.ParseIP(u.Hostname())
+	return u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
 }

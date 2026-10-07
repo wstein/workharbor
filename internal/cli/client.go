@@ -69,6 +69,7 @@ type ClientConfig struct {
 	Listen       string `json:"listen"`
 	APITokenFile string `json:"api_token_file"`
 	StateDir     string `json:"state_dir"`
+	PublicURL    string `json:"public_url"`
 }
 
 // ReadClientConfig reads listen, api_token_file and state_dir from the

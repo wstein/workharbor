@@ -149,3 +149,48 @@ func TestGitHubAppCreateRefusesWhatIsNotSafeOrPossible(t *testing.T) {
 		t.Errorf("exit %d, stderr %q", code, errOut)
 	}
 }
+
+func TestGitHubAppCreateTakesThePublicNameFromTheConfigurationAndAddsHTTPS(t *testing.T) {
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.json")
+	body := fmt.Sprintf(`{"listen": %q, "api_token_file": "/x", "public_url": "WHR.Example.test/"}`, addr)
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done, _, stderr := runCLIAsync("github", "app", "create", "--config", cfg, "--ttl", "1s", "--key-dir", dir)
+	<-done
+	out := stderr.String()
+	if !strings.Contains(out, "https://whr.example.test/github/app/new?state=") {
+		t.Errorf("the link does not use the normalised public name: %q", out)
+	}
+	if !strings.Contains(out, "If the link times out") {
+		t.Errorf("no hint for a link that times out: %q", out)
+	}
+
+	// a name that could steer the redirect is refused before anything listens
+	for _, bad := range []string{"http://whr.example.test", "whr.example.test/x", "a.example?b=//evil.example"} {
+		done, _, stderr = runCLIAsync("github", "app", "create", "--config", cfg, "--public-url", bad)
+		if code := <-done; code != exitcode.Usage || !strings.Contains(stderr.String(), "public name") {
+			t.Errorf("%q: exit %d, stderr %q", bad, code, stderr.String())
+		}
+	}
+}
+
+func TestGitHubAppCreateWithoutAPublicNameSaysWhatToDo(t *testing.T) {
+	addr := freeAddr(t)
+	done, _, stderr := runCLIAsync("github", "app", "create", "--listen", addr)
+	if code := <-done; code != exitcode.Usage {
+		t.Fatalf("exit %d", code)
+	}
+	for _, want := range []string{"public_url", "--public-url", "--local"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr lacks %q: %q", want, stderr.String())
+		}
+	}
+	done, _, stderr = runCLIAsync("github", "app", "create", "--listen", addr, "--local", "--ttl", "1s", "--key-dir", t.TempDir())
+	<-done
+	if !strings.Contains(stderr.String(), "http://"+addr+"/github/app/new?state=") || !strings.Contains(stderr.String(), "on this Mac") {
+		t.Errorf("--local: %q", stderr.String())
+	}
+}
