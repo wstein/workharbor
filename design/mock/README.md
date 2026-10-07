@@ -11,7 +11,7 @@ Interactive mock of the workharbor web UI and the `whr` CLI, made as a customer 
 | `Chat.dc.html` | Phone chat: live transcript, approve or deny, message the agent |
 | `Push.dc.html` | Phone push notifications (ntfy): task ID, event kind and a link only |
 | `Onboarding.dc.html` | First-run web wizard (after v0: release 1 onboards through `whr login`, `whr doctor` and a config file, §9.5): sign in, install the workharbor GitHub App and verify the forge limits, agents and default mode, host checks, ntfy |
-| `Setup.dc.html` | Read-only setup status page (`/setup`), as states: all ok, a fail with a copyable fix command, the not-verified list, a running check with live rows, the redacted report download, the guarded "run user-phase fixes" button with its confirmation modal (deferred), and the host-phase card (the browser never runs host steps) |
+| `Setup.dc.html` | Read-only setup status page (`/setup`), as states: all ok, a fail with a copyable fix command, the not-verified list, a running check with live rows, the redacted report download, the guarded "run user-phase fixes" button with its confirmation modal (deferred), and the host-phase card (the browser never runs host steps); the fail-count badge on the Main link is static |
 | `CLI.dc.html` | A `whr` terminal session: `ls`, `inbox`, `approve` (including a push), `usage`, `purge` and exit codes |
 
 `canvas.json` holds the layout of the artboards on the canvas.
