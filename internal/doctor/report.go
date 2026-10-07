@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wstein/workharbor/internal/config"
+	"github.com/wstein/workharbor/internal/redact"
 )
 
 // Counts includes every status, including those with no checks.
@@ -113,15 +114,60 @@ type Artifact struct {
 	Checks        []ReportCheck `json:"checks"`
 }
 
+var secrets = redact.New()
+
+func wordByte(b byte) bool {
+	return b == '_' || b == '-' || b >= '0' && b <= '9' || b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z'
+}
+
+// replaceComponent replaces old only where it is a whole name: not inside a
+// longer word or path component. A path starts with a slash and may end at one;
+// a dot followed by a word character continues a path name (/home/op.bak) but
+// ends a host name (mac.local).
+func replaceComponent(s, old, repl string, path bool) string {
+	if old == "" {
+		return s
+	}
+	var b strings.Builder
+	pos := 0 // s[:pos] is written; boundaries are judged on all of s
+	for {
+		i := strings.Index(s[pos:], old)
+		if i < 0 {
+			break
+		}
+		i += pos
+		end := i + len(old)
+		startOK := path || i == 0 || !wordByte(s[i-1]) && s[i-1] != '.'
+		endOK := end == len(s) || !wordByte(s[end]) && (!path || s[end] != '.' || end+1 == len(s) || !wordByte(s[end+1]))
+		if startOK && endOK {
+			b.WriteString(s[pos:i])
+			b.WriteString(repl)
+			pos = end
+		} else {
+			// a match may start inside the rejected one: step one byte only
+			b.WriteString(s[pos : i+1])
+			pos = i + 1
+		}
+	}
+	b.WriteString(s[pos:])
+	return b.String()
+}
+
 // Artifact returns an export-safe copy. Only existing diagnostic text is copied;
 // no environment, host metadata, credentials or additional paths are collected.
 func (p Presentation) Artifact(now time.Time, version, source string, phase Phase, account string, dev bool, home, hostname string) Artifact {
 	redact := func(s string) string {
-		if home != "" && home != "/" {
-			s = strings.ReplaceAll(s, strings.TrimRight(home, "/"), "~")
+		s = secrets.String(s)
+		if h := strings.TrimRight(home, "/"); h != "" {
+			s = replaceComponent(s, h, "~", true)
+		}
+		if account != "" {
+			for _, root := range []string{"/home/", "/Users/"} {
+				s = replaceComponent(s, root+account, "~", true)
+			}
 		}
 		if hostname != "" {
-			s = strings.ReplaceAll(s, hostname, "[host]")
+			s = replaceComponent(s, hostname, "[host]", false)
 		}
 		return s
 	}

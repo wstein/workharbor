@@ -136,3 +136,119 @@ func privateReportDir(t *testing.T) string {
 	}
 	return dir
 }
+
+func TestReportRedactionBoundaries(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"https://h/home/op/x?y", "https://h~/x?y"},
+		{"-L/home/op/lib", "-L~/lib"},
+		{"-v/home/op:/data", "-v~:/data"},
+		{"/srv/home/alice/x", "/srv~/x"},
+		{"./home/op", ".~"},
+		{"/home/op-x", "/home/op-x"},
+		{"/home/op_x", "/home/op_x"},
+		{"/home/op1", "/home/op1"},
+		{"/home/opX", "/home/opX"},
+		{"/home/op./x", "~./x"},
+		{"/home/op.:", "~.:"},
+		{"mac_x", "mac_x"},
+		{"/home/alice.", "~."},
+		{"/home/alice.bak", "/home/alice.bak"},
+		{"/home/alice", "~"},
+		{"/home/op/a", "~/a"},
+		{"/home/op.", "~."},
+		{"/home/op.bak", "/home/op.bak"},
+		{"/home/operator/b", "/home/operator/b"},
+		{"unix:///home/op/x.sock", "unix://~/x.sock"},
+		{"file:///Users/alice/x", "file://~/x"},
+		{"/Users/alice/x", "~/x"},
+		{"/System/Volumes/Data/Users/alice/x", "/System/Volumes/Data~/x"},
+		{"/Users/alicia/x", "/Users/alicia/x"},
+		{"ssh mac.local", "ssh [host].local"},
+		{"x.mac", "x.mac"},
+		{"xmac machine mac-1", "xmac machine mac-1"},
+		{"on mac", "on [host]"},
+		{"/srv/mac/data", "/srv/[host]/data"},
+		{"token " + "ghp" + "_" + strings.Repeat("a", 36) + " end", "token [REDACTED] end"},
+		{"github" + "_pat_" + strings.Repeat("b", 24), "[REDACTED]"},
+		{"glpat" + "-" + strings.Repeat("c", 22), "[REDACTED]"},
+		{"sk" + "-" + strings.Repeat("d", 26), "[REDACTED]"},
+		{"xox" + "b-" + strings.Repeat("1", 12), "[REDACTED]"},
+		{"Bearer " + strings.Repeat("e", 24), "Bearer [REDACTED]"},
+		{"https://u:" + strings.Repeat("f", 10) + "@example.com/x", "https://u:[REDACTED]@example.com/x"},
+		{"sk-short", "sk-short"},
+	} {
+		p := PresentResults([]Result{{Check: "c", Detail: tc.in}})
+		got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "alice", false, "/home/op", "mac").Checks[0].Detail
+		if got != tc.want {
+			t.Errorf("%q -> %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestReportRedactionDegenerateHome(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, home := range []string{"", "/", "//", "///"} {
+			p := PresentResults([]Result{{Check: "c", Detail: "/a//b /home/x"}})
+			got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", false, home, "").Checks[0].Detail
+			if got != "/a//b /home/x" {
+				t.Errorf("home %q: %q", home, got)
+			}
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("redaction does not finish")
+	}
+}
+
+func TestReplaceComponentOverlapAndEmpty(t *testing.T) {
+	done := make(chan string, 1)
+	go func() { done <- replaceComponent("abc", "", "~", true) }()
+	select {
+	case got := <-done:
+		if got != "abc" {
+			t.Errorf("empty name: %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("empty name does not finish")
+	}
+	for _, tc := range []struct{ in, old, want string }{
+		{"a/xa/x/xa/xa/x/x", "/xa/x", "a~/xa~/x"},
+		{"/var/var/v", "/var/v", "/var~"},
+		{"/opt/op/opt/op", "/opt/op", "~~"},
+		{"/Users/U/Users/U", "/Users/U", "~~"},
+	} {
+		if got := replaceComponent(tc.in, tc.old, "~", true); got != tc.want {
+			t.Errorf("%q: %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestReplaceComponentStartIsTheInputStart(t *testing.T) {
+	for _, tc := range []struct {
+		in, old string
+		path    bool
+		want    string
+	}{
+		{"aa", "a", false, "aa"},
+		{"baa", "a", false, "baa"},
+		{"-aa:", "a", false, "-aa:"},
+		{"xx xxx", "xx", false, "~ xxx"},
+		{"/x/x", "/x", false, "~/x"},
+	} {
+		if got := replaceComponent(tc.in, tc.old, "~", tc.path); got != tc.want {
+			t.Errorf("%q: %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestReportEmptyAccountLeavesRootsAlone(t *testing.T) {
+	p := PresentResults([]Result{{Check: "c", Detail: "/home/ x /Users/ x"}})
+	got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", false, "/srv/h", "").Checks[0].Detail
+	if got != "/home/ x /Users/ x" {
+		t.Fatalf("%q", got)
+	}
+}
