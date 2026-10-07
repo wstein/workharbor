@@ -378,3 +378,30 @@ func TestGoldenPagesStayShort(t *testing.T) {
 		}
 	}
 }
+
+// The last page (the last step, the summary and the next steps) of a host with
+// many failing steps: how long it gets.
+func TestLastPageLengthWithManyFailingSteps(t *testing.T) {
+	guided := &doctor.Fix{Guide: "Open System Settings and turn the toggle off."}
+	var steps []doctor.Check
+	for _, n := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+		steps = append(steps, fixStep("step-"+n, doctor.Fail, "broken "+n, guided))
+	}
+	var out, errb bytes.Buffer
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup", "host"}}
+	outs, err := Run(bg, steps, &fakeHost{}, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Summary(&errb, outs, o)
+	lines := strings.Split(strings.TrimRight(errb.String(), "\n"), "\n")
+	last := 0
+	for i, l := range lines {
+		if strings.HasPrefix(l, "-- Step 8 of 8") {
+			last = i
+		}
+	}
+	if n := len(lines) - last; n > 25 {
+		t.Errorf("the last page is %d lines long, want at most 25", n)
+	}
+}
