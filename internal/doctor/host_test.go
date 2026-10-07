@@ -1354,6 +1354,9 @@ func TestFirewallFilevaultAndLaunchdFailOnlyOnStatedAnswers(t *testing.T) {
 			t.Errorf("firewall stealth %q = %s %q, want not_verified", hostile, got, detail)
 		}
 	}
+	if got, detail := status(steps(t, hostDeps(scripted{fw + " --getglobalstate": "Firewall is disabled. (State = 0)", fw + " --getstealthmode": "ERR:exit status 1: denied"}))["firewall"]); got != Fail {
+		t.Errorf("firewall off with stealth error = %s %q, want fail", got, detail)
+	}
 	for name, tc := range map[string]struct {
 		out    scripted
 		detail string

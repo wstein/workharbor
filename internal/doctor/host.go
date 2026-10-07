@@ -562,6 +562,9 @@ func hostSteps(d Deps) []Check {
 				}
 				stealth, err := d.output(ctx, fw, "--getstealthmode")
 				if err != nil {
+					if firewallWord(state, false) == answerNo {
+						return Fail, "the firewall is off"
+					}
 					return NotVerified, "socketfilterfw did not answer for stealth mode: " + oneLine(err.Error())
 				}
 				var bad, unknown []string
