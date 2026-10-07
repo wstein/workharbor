@@ -199,6 +199,9 @@ if [ -z "$branches" ]; then
   fi
   die "no local branch has $full as its tip"
 fi
+# The branch named exactly `landing` is excluded from the "several branches" check; when only `landing` points at the SHA it is the branch (#365).
+others="$(printf '%s\n' "$branches" | grep -vx landing || true)"
+[ -z "$others" ] || branches="$others"
 if [ "$command" = inspect ]; then
   branches="${3:-}"
   [ "$(git rev-parse --verify "refs/heads/$branches^{commit}")" = "$full" ] || die "queue branch moved"
