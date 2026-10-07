@@ -1329,42 +1329,8 @@ func readConfigMap(path string) (map[string]any, error) {
 // whole configuration: github comes later (config-github), so it is not validated
 // as one.
 func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath string) error {
-	repo, err := p.Line("Repository to work on (owner/name)")
-	if err != nil {
-		return err
-	}
-	repo = strings.TrimSpace(repo)
-	if !ownerNameRE.MatchString(repo) {
-		return errors.New("that is not owner/name; nothing was written")
-	}
-	ws, err := d.chooseWorkspaces(ctx, p)
-	if err != nil {
-		return err
-	}
-	store := filepath.Join(d.Home, "tools")
-	acct, err := p.Line("Is " + d.account() + " dedicated to workharbor, or your own account that you also work in (D49)? [dedicated/shared, default dedicated]")
-	if err != nil {
-		return err
-	}
-	acct = strings.ToLower(strings.TrimSpace(acct))
-	if acct == "" {
-		acct = config.AccountDedicated
-	}
-	if acct != config.AccountDedicated && acct != config.AccountShared {
-		return errors.New("that is not dedicated or shared; nothing was written")
-	}
-	defaults := map[string]any{
-		"account":             acct,
-		"listen":              "127.0.0.1:8787",
-		"repositories":        []map[string]any{{"name": repo}},
-		"roots":               map[string]any{"workspaces": []string{ws}, "tool_store": store},
-		"api_token_file":      tokenPath,
-		"agent_allowed_tools": []string{"Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"},
-	}
-	if _, err := os.Stat(envPath); err == nil {
-		defaults["agent_api_key_env_file"] = envPath
-	}
-	// An existing file keeps every key it has: only what is missing is added.
+	// An existing file keeps every key it has: only what is missing is asked
+	// for and added, and the summary is read back from the merged result.
 	m, err := readConfigMap(d.ConfigPath)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -1372,11 +1338,67 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 	case err != nil:
 		return err
 	}
+	roots, _ := m["roots"].(map[string]any)
+	if m["roots"] != nil && roots == nil {
+		return errors.New(textsafe.Escape(d.ConfigPath) + " has a roots entry that is not an object; nothing was written")
+	}
+	var mkdirs []string
 	added := 0
-	for k, v := range defaults {
+	set := func(k string, v any) {
 		if _, ok := m[k]; !ok {
 			m[k], added = v, added+1
 		}
+	}
+	if _, ok := m["repositories"]; !ok {
+		repo, err := p.Line("Repository to work on (owner/name)")
+		if err != nil {
+			return err
+		}
+		repo = strings.TrimSpace(repo)
+		if !ownerNameRE.MatchString(repo) {
+			return errors.New("that is not owner/name; nothing was written")
+		}
+		set("repositories", []map[string]any{{"name": repo}})
+	}
+	if _, ok := roots["workspaces"]; !ok {
+		ws, err := d.chooseWorkspaces(ctx, p)
+		if err != nil {
+			return err
+		}
+		if roots == nil {
+			roots = map[string]any{}
+		}
+		roots["workspaces"], added = []string{ws}, added+1
+		mkdirs = append(mkdirs, ws)
+	}
+	if _, ok := roots["tool_store"]; !ok {
+		store := filepath.Join(d.Home, "tools")
+		if roots == nil {
+			roots = map[string]any{}
+		}
+		roots["tool_store"], added = store, added+1
+		mkdirs = append(mkdirs, store)
+	}
+	m["roots"] = roots
+	if _, ok := m["account"]; !ok {
+		acct, err := p.Line("Is " + d.account() + " dedicated to workharbor, or your own account that you also work in (D49)? [dedicated/shared, default dedicated]")
+		if err != nil {
+			return err
+		}
+		acct = strings.ToLower(strings.TrimSpace(acct))
+		if acct == "" {
+			acct = config.AccountDedicated
+		}
+		if acct != config.AccountDedicated && acct != config.AccountShared {
+			return errors.New("that is not dedicated or shared; nothing was written")
+		}
+		set("account", acct)
+	}
+	set("listen", "127.0.0.1:8787")
+	set("api_token_file", tokenPath)
+	set("agent_allowed_tools", []string{"Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"})
+	if _, err := os.Stat(envPath); err == nil {
+		set("agent_api_key_env_file", envPath)
 	}
 	if added == 0 {
 		return fmt.Errorf("%s already has these settings: not overwritten", d.ConfigPath)
@@ -1385,13 +1407,7 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 	if err != nil {
 		return err
 	}
-	p.Show(strings.Join([]string{
-		"The configuration will have:",
-		"  repository:  " + repo,
-		"  workspaces:  " + textsafe.Escape(ws),
-		"  tool store:  " + textsafe.Escape(store),
-		"  account:     " + acct,
-	}, "\n"))
+	p.Show(configSummary(m))
 	if d.Yes {
 		p.Show("yes: write " + textsafe.Escape(d.ConfigPath))
 	} else if ok, err := p.Confirm("Write " + textsafe.Escape(d.ConfigPath)); err != nil || !ok {
@@ -1400,7 +1416,7 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 		}
 		return err
 	}
-	for _, dir := range []string{ws, store, filepath.Dir(d.ConfigPath)} {
+	for _, dir := range append(mkdirs, filepath.Dir(d.ConfigPath)) {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			var pe *fs.PathError
 			if errors.As(err, &pe) {
@@ -1410,6 +1426,33 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 		}
 	}
 	return replaceWithBackup(p, d.ConfigPath, append(raw, '\n'))
+}
+
+// configSummary shows what the file will say, read from the merged map, so the
+// confirmed text is what is written.
+func configSummary(m map[string]any) string {
+	repos := []string{}
+	switch r := m["repositories"].(type) {
+	case []map[string]any:
+		for _, e := range r {
+			repos = append(repos, fmt.Sprint(e["name"]))
+		}
+	case []any:
+		for _, e := range r {
+			if em, ok := e.(map[string]any); ok {
+				repos = append(repos, fmt.Sprint(em["name"]))
+			}
+		}
+	}
+	roots, _ := m["roots"].(map[string]any)
+	show := func(v any) string { return textsafe.Escape(strings.Trim(fmt.Sprint(v), "[]")) }
+	return strings.Join([]string{
+		"The configuration will have:",
+		"  repository:  " + textsafe.Escape(strings.Join(repos, ", ")),
+		"  workspaces:  " + show(roots["workspaces"]),
+		"  tool store:  " + show(roots["tool_store"]),
+		"  account:     " + show(m["account"]),
+	}, "\n")
 }
 
 var ownerNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)

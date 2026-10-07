@@ -142,3 +142,89 @@ func TestAnUnwritableVolumeSaysSoWithoutARawError(t *testing.T) {
 		t.Error("a config was written")
 	}
 }
+
+func TestAnExistingFileIsNotAskedAboutOrChangedWhereItAlreadyAnswers(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := filepath.Join(t.TempDir(), "mine")
+	old := `{"account":"shared","repositories":[{"name":"own/repo"}],"roots":{"workspaces":["` + mine + `"],"tool_store":"` + mine + `-tools"},"extra_unknown":1}`
+	if err := os.WriteFile(d.ConfigPath, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &answers{confirm: true}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{mine, mine + "-tools", filepath.Join(d.Home, "workspaces"), filepath.Join(d.Home, "tools")} {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s was created though the file names its own roots", p)
+		}
+	}
+	shown := strings.Join(a.shown, "\n")
+	for _, want := range []string{"own/repo", mine, "shared"} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("the summary lacks %q: %s", want, shown)
+		}
+	}
+	var m map[string]any
+	raw, _ := os.ReadFile(d.ConfigPath)
+	if err := json.Unmarshal(raw, &m); err != nil || m["account"] != "shared" || m["extra_unknown"] != 1.0 || m["listen"] == nil || m["api_token_file"] == nil {
+		t.Errorf("merged %s, %v", raw, err)
+	}
+}
+
+func TestRootsWithoutWorkspacesGetWorkspacesAndKeepTheRest(t *testing.T) {
+	d, disk := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.ConfigPath, []byte(`{"roots":{"tool_store":"/keep/tools"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &answers{confirm: true, lines: []string{"wstein/workharbor", "3", ""}}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Roots struct {
+			Workspaces []string `json:"workspaces"`
+			ToolStore  string   `json:"tool_store"`
+		}
+	}
+	raw, _ := os.ReadFile(d.ConfigPath)
+	if err := json.Unmarshal(raw, &cfg); err != nil || cfg.Roots.ToolStore != "/keep/tools" || len(cfg.Roots.Workspaces) != 1 || cfg.Roots.Workspaces[0] != filepath.Join(disk, "workspaces") {
+		t.Errorf("roots %+v, %v", cfg.Roots, err)
+	}
+	if fi, err := os.Stat(filepath.Join(disk, "workspaces")); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("workspaces folder: %v %v", fi, err)
+	}
+}
+
+func TestAConfigThatAlreadyHasEverythingIsNotOverwritten(t *testing.T) {
+	d, _ := configDeps(t)
+	first := &answers{confirm: true, lines: []string{"wstein/workharbor", "", ""}}
+	if err := baseStep(t, d).Fix.Do(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	err := baseStep(t, d).Fix.Do(context.Background(), &answers{confirm: true})
+	if err == nil || !strings.Contains(err.Error(), "not overwritten") {
+		t.Errorf("%v", err)
+	}
+}
+
+func TestABadRepositoryNameIsRefusedBeforeAnyOtherQuestion(t *testing.T) {
+	d, _ := configDeps(t)
+	a := &answers{lines: []string{"not a repo"}}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err == nil || len(a.lines) != 0 {
+		t.Errorf("%v, %d lines left", err, len(a.lines))
+	}
+}
+
+func TestTheSummaryEscapesWhatItShows(t *testing.T) {
+	s := configSummary(map[string]any{"roots": map[string]any{"workspaces": []string{"/a\u009b2J"}}})
+	if strings.Contains(s, "\u009b") || !strings.Contains(s, `\u009b2J`) {
+		t.Errorf("%q", s)
+	}
+}
