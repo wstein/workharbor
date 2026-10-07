@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/toolstore"
@@ -23,7 +21,7 @@ import (
 // default. Tests set it to trust their TLS server.
 var toolsClient *http.Client
 
-func runTools(args []string, stdout, stderr io.Writer) int {
+func runTools(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "build" {
 		fmt.Fprintln(stderr, "usage: whr tools build -store <dir> [-shim <whr-shim linux-arm64 binary>] [-platform linux-arm64|linux-arm64-musl] [-tools claude,antigravity]")
 		return exitcode.Usage
@@ -50,13 +48,23 @@ func runTools(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "whr tools build:", err)
 		return exitcode.Error
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	store := &toolstore.Store{Root: *dir, Client: toolsClient}
+	known := map[string]bool{}
+	for _, p := range pins {
+		known[p.Name] = true
+	}
 	want := map[string]bool{}
 	for _, n := range strings.Split(*only, ",") {
-		want[strings.TrimSpace(n)] = true
+		n = strings.TrimSpace(n)
+		switch {
+		case n == "":
+			fmt.Fprintln(stderr, "whr tools build: empty tool name in -tools")
+			return exitcode.Usage
+		case !known[n]:
+			fmt.Fprintf(stderr, "whr tools build: unknown tool %q in -tools\n", n)
+			return exitcode.Usage
+		}
+		want[n] = true // a repeated name is the same tool
 	}
 	var entries []toolstore.Entry
 	var used []toolstore.Pin

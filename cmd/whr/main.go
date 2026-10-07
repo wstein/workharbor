@@ -74,7 +74,7 @@ func executeWithShellSignals(ctx context.Context, args []string, stdin io.Reader
 }
 
 // passthrough builds a command that hands its arguments to a function that
-// parses them itself, as `whr version` and `whr tools build` always have.
+// parses them itself, as `whr version` always has.
 func passthrough(use, short string, fn func(args []string) int) *cobra.Command {
 	return &cobra.Command{
 		Use: use, Short: short, DisableFlagParsing: true,
@@ -99,7 +99,15 @@ func versionCommand(stdout, stderr io.Writer) *cobra.Command {
 }
 
 func toolsCommand(stdout, stderr io.Writer) *cobra.Command {
-	return passthrough("tools", "Build the shared tool store", func(args []string) int { return runTools(args, stdout, stderr) })
+	return &cobra.Command{
+		Use: "tools", Short: "Build the shared tool store", DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if code := runTools(cmd.Context(), args, stdout, stderr); code != exitcode.OK {
+				return exitCodeError(code)
+			}
+			return nil
+		},
+	}
 }
 
 // runVersion prints the version, the commit and whether the tree was dirty;
