@@ -23,10 +23,10 @@ func (st *state) isTTY(w io.Writer) bool {
 	return ok && term.IsTerminal(int(f.Fd())) //nolint:gosec // a file descriptor of this process
 }
 
-// style is how human text on w is drawn: colour and symbols only on a terminal,
-// without NO_COLOR and without --plain.
+// style is how human text on w is drawn: colour and symbols only when both
+// stdout and w are terminals, without NO_COLOR and without --plain.
 func (st *state) style(w io.Writer, plain bool) render.Style {
-	return render.Detect(st.isTTY(w), st.env.Getenv("NO_COLOR"), plain)
+	return render.Detect(st.isTTY(st.env.Stdout) && st.isTTY(w), st.env.Getenv("NO_COLOR"), plain)
 }
 
 // quitError ends `whr setup` after the person answered q: a distinct exit code,

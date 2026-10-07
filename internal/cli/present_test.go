@@ -74,9 +74,9 @@ func goldenCLI(t *testing.T, name, got string) {
 // is what the tab-separated lines on stdout are made from.
 func TestGoldenDoctorReport(t *testing.T) {
 	for name, o := range map[string]uiOpts{
-		"doctor_tty":     {stderrTTY: true},
+		"doctor_tty":     {stdoutTTY: true, stderrTTY: true},
 		"doctor_plain":   {},
-		"doctor_nocolor": {stderrTTY: true, noColor: "1"},
+		"doctor_nocolor": {stdoutTTY: true, stderrTTY: true, noColor: "1"},
 	} {
 		r := newSetupRig(t)
 		_, _, errOut := r.runUI(o, "doctor", "--user", "operator")
@@ -93,9 +93,21 @@ func TestGoldenDoctorReport(t *testing.T) {
 
 func TestPlainFlagTurnsColourOffOnATerminal(t *testing.T) {
 	r := newSetupRig(t)
-	_, _, errOut := r.runUI(uiOpts{stderrTTY: true}, "doctor", "--plain")
+	_, _, errOut := r.runUI(uiOpts{stdoutTTY: true, stderrTTY: true}, "doctor", "--plain")
 	if strings.Contains(errOut, "\x1b") || strings.ContainsAny(errOut, "▌✓✗─") {
 		t.Errorf("--plain:\n%s", errOut)
+	}
+}
+
+func TestHumanReportIsPlainWhenEitherOutputIsPiped(t *testing.T) {
+	for _, o := range []uiOpts{{stdoutTTY: true}, {stderrTTY: true}} {
+		for _, args := range [][]string{{"doctor"}, {"setup", "--dry-run"}} {
+			r := newSetupRig(t)
+			_, _, got := r.runUI(o, args...)
+			if strings.Contains(got, "\x1b") || strings.ContainsAny(got, "▌✓✗─") {
+				t.Errorf("%v with %+v was not plain: %q", args, o, got)
+			}
+		}
 	}
 }
 
@@ -103,7 +115,7 @@ func TestPlainFlagTurnsColourOffOnATerminal(t *testing.T) {
 // the same as the plain one, apart from the drawing characters.
 func TestEveryColouredLineHasItsTextLabel(t *testing.T) {
 	r := newSetupRig(t)
-	_, _, errOut := r.runUI(uiOpts{stderrTTY: true}, "doctor", "--user", "operator")
+	_, _, errOut := r.runUI(uiOpts{stdoutTTY: true, stderrTTY: true}, "doctor", "--user", "operator")
 	known := map[string]bool{"\x1b[0m": true}
 	for _, c := range render.Palette {
 		known["\x1b["+c.SGR+"m"] = true

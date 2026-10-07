@@ -74,7 +74,7 @@ func (Terminal) Open(ctx context.Context, target string) error {
 
 // Line implements doctor.Prompter.
 func (t Terminal) Line(question string) (string, error) {
-	fmt.Fprintf(t.Err, "  %s: ", question)
+	fmt.Fprint(t.Err, render.Question(t.Style, question+":"))
 	s, err := t.In.ReadString('\n')
 	if err != nil && s == "" {
 		return "", errors.New("no answer: standard input ended")
@@ -88,24 +88,20 @@ func (t Terminal) Secret(question string) (string, error) {
 	if t.Stdin == nil || !term.IsTerminal(int(t.Stdin.Fd())) { //nolint:gosec // a file descriptor of this process
 		return "", errors.New("a secret is only read from a terminal, without echo")
 	}
-	fmt.Fprintf(t.Err, "  %s: ", question)
+	fmt.Fprint(t.Err, render.Question(t.Style, question+":"))
 	b, err := term.ReadPassword(int(t.Stdin.Fd())) //nolint:gosec // a file descriptor of this process
 	fmt.Fprintln(t.Err)
 	return string(b), err
 }
 
-// Confirm implements doctor.Prompter: only y or yes is a yes.
+// Confirm implements doctor.Prompter: only y or yes is a yes. Nested
+// configuration writes still require explicit assent; q stops the setup run.
 func (t Terminal) Confirm(question string) (bool, error) {
-	fmt.Fprintf(t.Err, "  %s [y/N] ", question)
-	s, err := t.In.ReadString('\n')
-	if err != nil && s == "" {
-		return false, errors.New("no answer: standard input ended")
+	a, err := t.Ask(question, render.DefaultNo)
+	if a == render.Quit {
+		return false, render.ErrQuit
 	}
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "y", "yes":
-		return true, nil
-	}
-	return false, nil
+	return a == render.Yes, err
 }
 
 // Show implements doctor.Prompter.
