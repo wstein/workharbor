@@ -108,16 +108,25 @@ func (s *Server) setupCheck(w http.ResponseWriter, r *http.Request, sess Session
 			return "", &httpError{http.StatusTooManyRequests, "wait one minute between setup checks"}
 		}
 		s.setup.running = true
-		s.setup.next = s.opt.Now().Add(setupCooldown)
 		s.setup.mu.Unlock()
-		report, checkErr := s.opt.Setup.Check(r.Context())
-		s.setup.mu.Lock()
-		s.setup.running = false
-		if checkErr == nil {
-			report.Checks = append([]doctor.ReportCheck{}, report.Checks...)
-			s.setup.report = &report
-		}
-		s.setup.mu.Unlock()
+		// Release the flag even if Check panics (ok stays false and the panic
+		// continues). The cooldown starts only after a successful check, so a
+		// failed one can be retried at once.
+		var report doctor.Artifact
+		var checkErr error
+		ok := false
+		defer func() {
+			s.setup.mu.Lock()
+			defer s.setup.mu.Unlock()
+			s.setup.running = false
+			if ok && checkErr == nil {
+				report.Checks = append([]doctor.ReportCheck{}, report.Checks...)
+				s.setup.report = &report
+				s.setup.next = s.opt.Now().Add(setupCooldown)
+			}
+		}()
+		report, checkErr = s.opt.Setup.Check(r.Context())
+		ok = true
 		return "/setup", checkErr
 	})
 	if err != nil {

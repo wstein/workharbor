@@ -202,10 +202,14 @@ func TestSetupSingleFlightAndFailedCheckKeepsPreviousReport(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal(calls.Load())
 	}
-	if got := setupRequest(s, "POST", "/setup/check", setupForm("three"), true, "http://setup.test"); got.Code != 429 {
-		t.Fatal(got.Code)
+	// A failed check does not start the cooldown, so an immediate retry runs.
+	s.opt.Setup = setupFunc(func(context.Context) (doctor.Artifact, error) {
+		calls.Add(1)
+		return doctor.Artifact{}, errors.New("failed again")
+	})
+	if got := setupRequest(s, "POST", "/setup/check", setupForm("three"), true, "http://setup.test"); got.Code != 500 || calls.Load() != 2 {
+		t.Fatal(got.Code, calls.Load())
 	}
-	*now = now.Add(setupCooldown)
 	s.opt.Setup = setupFunc(func(context.Context) (doctor.Artifact, error) { return doctor.Artifact{GeneratedAt: t0}, nil })
 	if got := setupRequest(s, "POST", "/setup/check", setupForm("four"), true, "http://setup.test"); got.Code != 303 {
 		t.Fatal(got.Code)
@@ -216,6 +220,18 @@ func TestSetupSingleFlightAndFailedCheckKeepsPreviousReport(t *testing.T) {
 	_ = setupRequest(s, "POST", "/setup/check", setupForm("five"), true, "http://setup.test")
 	if s.setupSnapshot() != previous {
 		t.Fatal("failed check replaced last report")
+	}
+}
+
+func TestSetupPanickingCheckReleasesRunningFlag(t *testing.T) {
+	s, _ := setupRig(t, setupFunc(func(context.Context) (doctor.Artifact, error) { panic("boom") }))
+	func() {
+		defer func() { _ = recover() }()
+		setupRequest(s, "POST", "/setup/check", setupForm("one"), true, "http://setup.test")
+	}()
+	s.opt.Setup = setupFunc(func(context.Context) (doctor.Artifact, error) { return doctor.Artifact{GeneratedAt: t0}, nil })
+	if got := setupRequest(s, "POST", "/setup/check", setupForm("two"), true, "http://setup.test"); got.Code != 303 {
+		t.Fatal(got.Code)
 	}
 }
 
