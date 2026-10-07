@@ -214,17 +214,17 @@ func (d Deps) chooseWorkspaces(ctx context.Context, p Prompter) (string, error) 
 	def := filepath.Join(d.Home, "workspaces")
 	vols, err := d.volumes(ctx)
 	if err != nil {
-		p.Show("The disk list is not available (" + err.Error() + ").")
+		p.Show("The disk list is not available (" + clip(textsafe.Escape(err.Error()), 60) + ").")
 		return askFolder(p, def)
 	}
-	defIdx := 1
+	other := len(vols) + 1
+	defIdx := other // no data volume in the list: no volume is guessed
 	for i, v := range vols {
 		if v.Mount == dataMount {
 			defIdx = i + 1
 			break
 		}
 	}
-	other := len(vols) + 1
 	lines := []string{"Volumes that can hold the workspaces:"}
 	for i, v := range vols {
 		lines = append(lines, v.label(i+1))
@@ -233,6 +233,9 @@ func (d Deps) chooseWorkspaces(ctx context.Context, p Prompter) (string, error) 
 	p.Show(strings.Join(lines, "\n"))
 	if d.Yes {
 		p.Show(fmt.Sprintf("yes: volume %d, the default", defIdx))
+		if defIdx == other {
+			return def, nil
+		}
 		return d.workspacesIn(vols[defIdx-1]), nil
 	}
 	s, err := p.Line(fmt.Sprintf("Volume number [%d, q quits]", defIdx))

@@ -216,3 +216,56 @@ func TestWithoutADiskListOnlyAPathIsAsked(t *testing.T) {
 		t.Errorf("shown %q", s)
 	}
 }
+
+func TestWithoutAReadableDataVolumeNoVolumeIsGuessed(t *testing.T) {
+	r := fakeDiskutil(t)
+	delete(r, "diskutil info -plist /System/Volumes/Data")
+	d := Deps{GOOS: "darwin", Runner: r, Home: "/Users/fake"}
+	a := &answers{lines: []string{"", ""}}
+	got, err := d.chooseWorkspaces(context.Background(), a)
+	if err != nil || got != "/Users/fake/workspaces" {
+		t.Errorf("Enter: %q, %v", got, err)
+	}
+	// Enter chose "other path" (a second question was asked: two lines were used)
+	if len(a.lines) != 0 {
+		t.Errorf("%d lines left", len(a.lines))
+	}
+	d.Yes = true
+	b := &answers{}
+	if got, err := d.chooseWorkspaces(context.Background(), b); err != nil || got != "/Users/fake/workspaces" || !strings.Contains(strings.Join(b.shown, "\n"), "yes: volume 3") {
+		t.Errorf("--yes: %q, %v", got, err)
+	}
+}
+
+func TestTheDataVolumeIsTheDefaultWhereverItIs(t *testing.T) {
+	r := fakeDiskutil(t)
+	r["diskutil list -plist"] = "<plist><array><dict><key>MountPoint</key><string>/nix</string></dict><dict><key>MountPoint</key><string>/System/Volumes/Data</string></dict></array></plist>"
+	d := Deps{GOOS: "darwin", Runner: r, Home: "/Users/fake"}
+	d.Yes = true
+	a := &answers{}
+	got, err := d.chooseWorkspaces(context.Background(), a)
+	if err != nil || got != "/Users/fake/workspaces" || !strings.Contains(strings.Join(a.shown, "\n"), "yes: volume 2") {
+		t.Errorf("%q, %v, %v", got, err, a.shown)
+	}
+}
+
+func TestOnlyMaxVolumesMountPointsAreAsked(t *testing.T) {
+	var entries []any
+	for i := range maxVolumes + 10 {
+		entries = append(entries, map[string]any{"MountPoint": "/Volumes/v" + strings.Repeat("x", i)})
+	}
+	if got := mountPoints(entries); len(got) != maxVolumes {
+		t.Errorf("%d mount points", len(got))
+	}
+}
+
+func TestADiskListErrorIsEscapedAndShort(t *testing.T) {
+	d := Deps{GOOS: "darwin", Runner: scripted{"diskutil list -plist": "ERR:\u009b2J" + strings.Repeat("x", 500)}, Home: "/h"}
+	a := &answers{lines: []string{""}}
+	if _, err := d.chooseWorkspaces(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	if s := a.shown[0]; strings.Contains(s, "\u009b") || len(s) > 160 {
+		t.Errorf("%q", s)
+	}
+}
