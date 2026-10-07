@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,5 +54,44 @@ func TestDevIsDefinedOnce(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(strings.Fields(out.String()), " "), "default prefix: $HOME/.local; --prefix, where a command has it, wins") {
 		t.Errorf("the --dev help line changed:\n%s", out.String())
+	}
+}
+
+// offboard host --dev takes a binary under $HOME/.local as installed, refuses a
+// relative HOME like setup and doctor do, and without --dev refuses the binary.
+func TestOffboardDevAcceptsABinaryUnderHomeLocal(t *testing.T) {
+	r := newOffboardRig(t)
+	home := t.TempDir()
+	exe := filepath.Join(home, ".local", "bin", "whr")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // an executable test file
+		t.Fatal(err)
+	}
+	r.rig.env.Executable = func() (string, error) { return exe, nil }
+	r.env.Setup = r.rig.env
+	r.env.Offboard.Prefix = ""
+	run := func(home string, args ...string) (int, string) {
+		var out, errOut bytes.Buffer
+		env := r.env
+		env.Stdout, env.Stderr = &out, &errOut
+		env.Getenv = func(k string) string {
+			if k == "HOME" {
+				return home
+			}
+			return ""
+		}
+		code := Execute(context.Background(), env, append([]string{"offboard", "host"}, args...))
+		return code, errOut.String()
+	}
+	if code, errOut := run(home, "--dev"); code != exitcode.OK || strings.Contains(errOut, "note (dry run)") {
+		t.Errorf("--dev under $HOME/.local: exit %d\n%s", code, errOut)
+	}
+	if _, errOut := run(home); !strings.Contains(errOut, "note (dry run)") {
+		t.Errorf("without --dev the binary is not installed:\n%s", errOut)
+	}
+	if _, errOut := run("relative", "--dev"); !strings.Contains(errOut, "--dev needs an absolute HOME") {
+		t.Errorf("a relative HOME with --dev:\n%s", errOut)
 	}
 }

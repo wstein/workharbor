@@ -106,6 +106,9 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	}
 	ctx := cmd.Context()
 	exe, exeErr := env.Executable()
+	if exeErr == nil && st.dev && st.env.Offboard.Prefix == "" && !filepath.IsAbs(st.env.Getenv("HOME")) {
+		exeErr = usageError{"--dev needs an absolute HOME"} // as setup and doctor refuse
+	}
 	if exeErr == nil {
 		exeErr = setup.CheckInstalled(exe, installedPrefixes(prefixOf(st.env.Offboard, st.dev, st.env.Getenv("HOME")))...)
 	}
