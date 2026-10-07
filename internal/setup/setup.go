@@ -285,11 +285,11 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				found = append(found, t)
 			}
 		}
-		will := fmt.Sprintf("check %d steps and change nothing without a question.", len(chosen))
+		will := fmt.Sprintf("check %d steps and change nothing without a question (--yes answers the undoable ones).", len(chosen))
 		if o.DryRun {
 			will = fmt.Sprintf("check %d steps and change nothing (dry run).", len(chosen))
 		}
-		state := "no earlier run"
+		state := "a new run"
 		if o.Resume != nil && o.From != "" {
 			state = "an earlier run, go on at " + o.From
 		}

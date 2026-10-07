@@ -33,7 +33,7 @@ func TestPreflightIsOneLineBeforeTheFirstStep(t *testing.T) {
 	if strings.Index(got, "Step 1") < i && strings.Contains(got, "Step 1") {
 		t.Errorf("preflight comes after the first step:\n%s", got)
 	}
-	for _, w := range []string{"found: sudo", "missing: brew, container", "change nothing (dry run)"} {
+	for _, w := range []string{"found: sudo", "missing: brew, container", "change nothing (dry run)", "a new run"} {
 		if !strings.Contains(got, w) {
 			t.Errorf("missing %q in\n%s", w, got)
 		}

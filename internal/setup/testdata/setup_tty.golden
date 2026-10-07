@@ -6,8 +6,8 @@ Legend (colour is only decoration: the words are always printed)
  [2m– skip[0m   left out, or not offered
 [1;33m▌ ACTION[0m  something you must do or answer
 [1;33m▌[0m   [36m$ a command you can copy[0m
-preflight: tools found: sudo; missing: brew, container. State: no earlier run.
-           Next: check 4 steps and change nothing (dry run).
+preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
+           check 4 steps and change nothing (dry run).
 
 [1m── Step 1 of 4 ─ title of autologout ──[0m
  [34m✓ ok[0m     key not set: the system default applies (default off)
