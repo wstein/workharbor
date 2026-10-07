@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
@@ -70,6 +71,39 @@ func (e *QuitError) Error() string {
 
 // Is makes errors.Is(err, render.ErrQuit) true.
 func (e *QuitError) Is(target error) bool { return target == render.ErrQuit }
+
+// InterruptedError is returned by Run when Ctrl-C, SIGTERM or a deadline stopped
+// it. It wraps the cause (a context error) and says where to go on.
+type InterruptedError struct {
+	Step   string
+	When   InterruptedWhen // where in Step the run was stopped
+	Resume string          // the command that goes on, for the hint
+	Err    error
+}
+
+// InterruptedWhen says whether the step an InterruptedError names had started.
+type InterruptedWhen int
+
+const (
+	// DuringStep: the step had started (its check or its fix was cut short).
+	DuringStep InterruptedWhen = iota
+	// BeforeStep: the step had not started; it is the next one.
+	BeforeStep
+	// AfterLastStep: every step had finished; Step is the last one.
+	AfterLastStep
+)
+
+func (e *InterruptedError) Error() string {
+	switch e.When {
+	case BeforeStep:
+		return fmt.Sprintf("interrupted before step %s; to go on, run: %s", e.Step, e.Resume)
+	case AfterLastStep:
+		return fmt.Sprintf("interrupted after step %s; to check it again, run: %s", e.Step, e.Resume)
+	}
+	return fmt.Sprintf("interrupted in step %s; to check it and go on, run: %s", e.Step, e.Resume)
+}
+
+func (e *InterruptedError) Unwrap() error { return e.Err }
 
 // Level is the report level of a status.
 func Level(st doctor.Status) render.Level {
@@ -233,15 +267,26 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 	if err := rc.add(start); err != nil {
 		return nil, err
 	}
+	if rs, ok := h.(InterruptSeen); ok {
+		rs.ResetInterrupts()
+	}
 	rn := &runner{h: h, p: h, o: o, ui: ui, rc: rc}
 	if o.Unattended {
 		rn.p = noPrompt{h}
 	}
 	var outs []Outcome
 	provided := map[string]bool{} // services a step has brought up or found running
+	// interrupted ends the run at chosen[i] with the cause, which is a context error
+	interrupted := func(i int, when InterruptedWhen, cause error) ([]Outcome, error) {
+		if len(chosen) == 0 {
+			return rc.finish(outs, protocol.RunInterrupted, cause)
+		}
+		i = min(i, len(chosen)-1)
+		return rc.finish(outs, protocol.RunInterrupted, &InterruptedError{Step: chosen[i].Name, When: when, Resume: nextCommand(o, chosen[i].Name, names(chosen[i:])), Err: cause})
+	}
 	for i, s := range chosen {
-		if err := ctx.Err(); err != nil {
-			return rc.finish(outs, protocol.RunInterrupted, err)
+		if err := Interrupted(ctx, h); err != nil {
+			return interrupted(i, BeforeStep, err)
 		}
 		title := s.Title
 		if title == "" {
@@ -249,6 +294,13 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		}
 		ui.Header(i+1, len(chosen), title)
 		st, detail := s.Run(ctx)
+		if err := Interrupted(ctx, h); err != nil && st != doctor.OK { // the check was cut short: its answer means nothing, and no step after it starts
+			outs = append(outs, Outcome{Step: s.Name, Status: st, Detail: detail})
+			if e := rc.add(protocol.Entry{Event: protocol.EventStepAfter, Step: s.Name, Outcome: protocol.OutInterrupted, Status: string(st)}); e != nil {
+				return rc.finish(outs, protocol.RunError, e)
+			}
+			return interrupted(i, DuringStep, err)
+		}
 		fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
 		report(ui, o, st, detail)
 		out := Outcome{Step: s.Name, Status: st, Detail: detail}
@@ -331,7 +383,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			}
 			return outs, &QuitError{Step: s.Name, Resume: nextCommand(o, s.Name, names(chosen[i:]))}
 		}
-		if err != nil {
+		if err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			ui.Report(render.LevelSkipped, "interrupted: nothing more runs")
+		} else if err != nil {
 			reason, tool := render.SplitTool(oneLine(err.Error()))
 			ui.Report(render.LevelFail, reason)
 			if o.Verbose && tool != "" {
@@ -358,6 +412,14 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
 			report(ui, o, st, detail)
 		}
+		if ctxErr := Interrupted(ctx, h); ctxErr != nil && !out.Fixed { // also during the re-check, which has no error to return; a step that fixed itself stays fixed
+			outcome = protocol.OutInterrupted
+			if err == nil {
+				err = ctxErr
+			} else if !errors.Is(err, ctxErr) {
+				err = fmt.Errorf("%w: %w", ctxErr, err)
+			}
+		}
 		outs = append(outs, out)
 		var ran [][]string
 		if res.fixed || outcome == protocol.OutFixFailed || outcome == protocol.OutInterrupted {
@@ -369,6 +431,12 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		if err := after(outcome, res.exit, ran); err != nil {
 			return stop(err)
 		}
+		if outcome == protocol.OutInterrupted { // Ctrl-C, SIGTERM or a deadline: no step after it starts
+			return interrupted(i, DuringStep, err)
+		}
+	}
+	if err := Interrupted(ctx, h); err != nil { // cut short after the last step finished
+		return interrupted(len(chosen)-1, AfterLastStep, err)
 	}
 	end := protocol.RunDone
 	for _, out := range outs {
@@ -706,11 +774,18 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			if errors.Is(err, ErrUnattended) {
 				res.outcome = protocol.OutNeedsHuman
 			}
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if Interrupted(ctx, r.h) != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				res.outcome = protocol.OutInterrupted
 			}
 		}
 	}()
+	if err := Interrupted(ctx, r.h); err != nil { // Ctrl-C came before the question: ask nothing, run nothing
+		res.outcome = protocol.OutInterrupted
+		if e := before(protocol.AnswerNone, protocol.SourceNone); e != nil {
+			return res, e
+		}
+		return res, err
+	}
 	// decide records an answer of the outer prompt and says whether to go on.
 	decide := func(a render.Answer, source string) (bool, error) {
 		switch a {
@@ -815,6 +890,9 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			return res, err
 		}
 	}
+	if err := Interrupted(ctx, r.h); err != nil { // Ctrl-C came during the question: Do and Build never start
+		return res, err
+	}
 	if f.Do != nil {
 		if err := f.Do(ctx, r.p); err != nil {
 			return res, err
@@ -882,6 +960,10 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	return res, nil
 }
 
+// interruptGrace is how long a failed sudo -v waits to see whether an interrupt
+// is the reason.
+var interruptGrace = 300 * time.Millisecond
+
 // primeSudo runs one sudo -v in the host phase, no background refresh: root
 // stays reachable only while the human is here, and sudo asks again if it
 // expires.
@@ -889,9 +971,25 @@ func (r *runner) primeSudo(ctx context.Context) error {
 	if r.o.Phase != doctor.PhaseHost || r.sudoReady {
 		return nil
 	}
+	if err := Interrupted(ctx, r.h); err != nil { // stopped already: no password prompt
+		return err
+	}
 	r.ui.Action("sudo asks for your password once, so the commands above need it only once (no background refresh)")
 	r.ui.Command("sudo -v")
 	if err := r.h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		// sudo catches Ctrl-C and exits 1, often before whr's own signal handling
+		// has cancelled the context: give it a moment before calling this a refusal
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interruptGrace):
+		}
+		if e := Interrupted(ctx, r.h); e != nil {
+			return e
+		}
 		return fmt.Errorf("sudo did not accept the password: %w", err)
 	}
 	r.sudoReady = true

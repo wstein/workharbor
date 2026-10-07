@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -28,14 +30,66 @@ type Terminal struct {
 	Stdin *os.File
 	// Style draws the prompts and the output of commands (zero: plain ASCII).
 	Style render.Style
+	// Sig records that a command died of an interrupt, see Interrupts. Nil: not
+	// recorded, and only the context tells.
+	Sig *Interrupts
+}
+
+// Interrupts is the sticky record that a command was ended by an interrupt.
+// Ctrl-C reaches the command and whr together, and the command often dies
+// before whr's signal goroutine cancels the context; a check returns only a
+// status, so the mark on its error is lost. The record is what Run, the
+// re-check and the guards before a question or a prefix check read besides
+// ctx.Err().
+type Interrupts struct{ seen atomic.Bool }
+
+// Seen says whether a command died of an interrupt since the last Reset.
+func (i *Interrupts) Seen() bool { return i != nil && i.seen.Load() }
+
+// Reset forgets what was seen; Run does it at its start.
+func (i *Interrupts) Reset() {
+	if i != nil {
+		i.seen.Store(false)
+	}
+}
+
+func (i *Interrupts) note() {
+	if i != nil {
+		i.seen.Store(true)
+	}
+}
+
+// Interrupted implements InterruptSeen.
+func (t Terminal) Interrupted() bool { return t.Sig.Seen() }
+
+// ResetInterrupts implements InterruptSeen.
+func (t Terminal) ResetInterrupts() { t.Sig.Reset() }
+
+// InterruptSeen is what a Host adds to tell Run that a command died of an
+// interrupt while the context was still live.
+type InterruptSeen interface {
+	Interrupted() bool
+	ResetInterrupts()
+}
+
+// Interrupted says whether the context ended or the host saw a command die of
+// an interrupt: the person pressed Ctrl-C, whichever of the two noticed first.
+func Interrupted(ctx context.Context, h any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s, ok := h.(InterruptSeen); ok && s.Interrupted() {
+		return context.Canceled
+	}
+	return nil
 }
 
 // Output implements doctor.Runner.
-func (Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
+func (t Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // a read-only command named by the steps
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
+	err := t.interruptOr(ctx, cmd.Run())
 	if err != nil && errb.Len() > 0 {
 		// what the command said is what tells "not set" from "could not read"
 		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
@@ -63,7 +117,57 @@ func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 		// the command itself succeeded; a leftover child only held the pipe
 		return nil
 	}
+	return t.interruptOr(ctx, err)
+}
+
+// interruptOr marks the error of a command that an interrupt ended, so the
+// callers see the context error: os/exec reports the signal that killed the
+// command, not the context.
+//
+// A command that was killed by SIGINT, SIGTERM or SIGHUP, or that caught one
+// and exited 130, 129 or 143 (the shell convention, as a trap does), counts as
+// interrupted and is recorded in t.Sig.
+func (t Terminal) interruptOr(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("%w: %w", ctx.Err(), err)
+	}
+	if isInterruptEnd(err) {
+		// Ctrl-C reaches the command and whr together, and the command often
+		// dies first: that is an interrupt even before the context says so
+		t.Sig.note()
+		return fmt.Errorf("%w: %w", context.Canceled, err)
+	}
 	return err
+}
+
+// isInterruptEnd says whether a command ended by an interrupt signal or exited
+// with the status a shell gives one.
+func isInterruptEnd(err error) bool {
+	if sig, ok := killedBy(err); ok {
+		return sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == syscall.SIGHUP
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		switch ee.ExitCode() {
+		case 128 + int(syscall.SIGHUP), 128 + int(syscall.SIGINT), 128 + int(syscall.SIGTERM):
+			return true
+		}
+	}
+	return false
+}
+
+// killedBy is the signal that ended a command, if one did.
+func killedBy(err error) (syscall.Signal, bool) {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return ws.Signal(), true
+		}
+	}
+	return 0, false
 }
 
 // Open implements Host. It runs `open`, so a URL or a System Settings pane opens
