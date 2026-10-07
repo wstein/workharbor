@@ -7,6 +7,7 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -221,6 +222,10 @@ type Config struct {
 	BotSigningKeyFile string `json:"bot_signing_key_file,omitempty"`
 	// APITokenFile holds the API token that guards the API (D29).
 	APITokenFile string `json:"api_token_file"`
+	// APIClients are further named API clients, each with a token file of its
+	// own, so the audit tells callers apart. Optional and additive: the
+	// api_token_file stays the client "default".
+	APIClients []APIClient `json:"api_clients,omitempty"`
 	// StateDir holds the supervisor's database. Optional: an absolute path, or
 	// ~/.local/state/whr. It must not lie in a workspace root, where an agent
 	// writes.
@@ -695,6 +700,9 @@ func (c *Config) Validate() error {
 	if c.AgentAPIKeyEnvFile != "" {
 		secrets["agent_api_key_env_file"] = c.AgentAPIKeyEnvFile
 	}
+	for i, cl := range c.APIClients {
+		secrets[fmt.Sprintf("api_clients[%d].token_file", i)] = cl.TokenFile
+	}
 	if c.BotSigningKeyFile != "" {
 		secrets["bot_signing_key_file"] = c.BotSigningKeyFile
 	}
@@ -725,6 +733,9 @@ func (c *Config) Validate() error {
 				add("%s: %s", key, strings.TrimPrefix(err.Error(), "config: "+key+": "))
 			}
 		}
+	}
+	for _, p := range c.checkAPIClients() {
+		add("%s", p)
 	}
 	// A secret file inside a root would reach an agent: it writes the
 	// workspaces, every environment mounts the tool store, and checkouts share
@@ -1080,3 +1091,69 @@ var boardOwnerRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}$`)
 // MaxLowBalanceUSD caps limits.low_balance_usd, far under what converts to
 // micro-USD in an int64.
 const MaxLowBalanceUSD = 1e9
+
+// APIClient is one named API client: a label for the audit and the file that
+// holds its token. The token never lives in the configuration.
+type APIClient struct {
+	Name      string `json:"name"`
+	TokenFile string `json:"token_file"`
+}
+
+// DefaultAPIClient names the client that api_token_file defines. Its audit
+// actor is the derived id, so the name is reserved.
+const DefaultAPIClient = "default"
+
+var (
+	apiClientNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	derivedIDRE     = regexp.MustCompile(`^[0-9a-f]{12}$`)
+)
+
+// CheckAPIClientName says why a client name is refused, or returns "".
+func CheckAPIClientName(name string) string {
+	switch {
+	case name == DefaultAPIClient:
+		return fmt.Sprintf("the name %q is reserved for api_token_file", name)
+	case !apiClientNameRE.MatchString(name):
+		return fmt.Sprintf("the name %q must match [a-z][a-z0-9-]{0,31}", name)
+	case derivedIDRE.MatchString(name):
+		return fmt.Sprintf("the name %q looks like a derived client id (12 hex digits)", name)
+	}
+	return ""
+}
+
+// checkAPIClients checks the names, and that no two clients (the default
+// included) share a token. Tokens are compared by digest; a problem names the
+// clients and paths only, never a token or a digest. The files themselves are
+// checked with the other secrets.
+func (c *Config) checkAPIClients() []string {
+	var out []string
+	names := map[string]bool{}
+	type entry struct{ name, path string }
+	all := []entry{{DefaultAPIClient, c.APITokenFile}}
+	for i, cl := range c.APIClients {
+		if msg := CheckAPIClientName(cl.Name); msg != "" {
+			out = append(out, fmt.Sprintf("api_clients[%d]: %s", i, msg))
+		} else if names[cl.Name] {
+			out = append(out, fmt.Sprintf("api_clients[%d]: the name %q is used twice", i, cl.Name))
+		}
+		names[cl.Name] = true
+		all = append(all, entry{cl.Name, cl.TokenFile})
+	}
+	seen := map[[sha256.Size]byte]entry{}
+	for _, e := range all {
+		if checkSecretFile(e.path) != "" {
+			continue // reported with the secret files
+		}
+		raw, err := ReadSecret(e.path)
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256([]byte(strings.TrimSpace(string(raw))))
+		if first, ok := seen[sum]; ok {
+			out = append(out, fmt.Sprintf("api_clients: %q (%s) and %q (%s) share one token", first.name, first.path, e.name, e.path))
+			continue
+		}
+		seen[sum] = e
+	}
+	return out
+}

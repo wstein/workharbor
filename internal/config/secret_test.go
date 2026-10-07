@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"slices"
@@ -222,5 +224,86 @@ func TestNtfyConfigIsValidated(t *testing.T) {
 				t.Fatalf("want a problem with %q, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+func (r *rig) client(t *testing.T, name, token string) APIClient {
+	t.Helper()
+	p := filepath.Join(r.dir, "secrets", name+".token")
+	if err := os.WriteFile(p, []byte(token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return APIClient{Name: name, TokenFile: p}
+}
+
+func TestAPIClientsAreAdditive(t *testing.T) {
+	r := newRig(t)
+	r.cfg.APIClients = []APIClient{r.client(t, "ci-nightly", "throwaway-one"), r.client(t, "alice", "throwaway-two")}
+	if _, err := r.parse(t); err != nil {
+		t.Fatalf("two named clients = %v", err)
+	}
+}
+
+func TestAPIClientsAreRefusedWhenInvalid(t *testing.T) {
+	for name, tc := range map[string]struct {
+		clients func(*rig, *testing.T) []APIClient
+		want    string
+	}{
+		"reserved": {func(r *rig, t *testing.T) []APIClient { return []APIClient{r.client(t, "default", "tok-a")} }, "reserved"},
+		"shape":    {func(r *rig, t *testing.T) []APIClient { return []APIClient{r.client(t, "Alice", "tok-a")} }, "must match"},
+		"derived":  {func(r *rig, t *testing.T) []APIClient { return []APIClient{r.client(t, "abcdef012345", "tok-a")} }, "derived client id"},
+		"long name": {func(r *rig, t *testing.T) []APIClient {
+			return []APIClient{r.client(t, "a"+strings.Repeat("b", 32), "tok-a")}
+		}, "must match"},
+		"duplicate name": {func(r *rig, t *testing.T) []APIClient {
+			a := r.client(t, "ci", "tok-a")
+			b := r.client(t, "ci2", "tok-b")
+			b.Name = "ci"
+			return []APIClient{a, b}
+		}, "used twice"},
+		"duplicate token": {func(r *rig, t *testing.T) []APIClient {
+			return []APIClient{r.client(t, "one", "tok-same"), r.client(t, "two", "tok-same")}
+		}, "share one token"},
+		"relative file": {func(_ *rig, _ *testing.T) []APIClient { return []APIClient{{Name: "one", TokenFile: "one.token"}} }, "absolute"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			r.cfg.APIClients = tc.clients(r, t)
+			_, err := r.parse(t)
+			if err == nil || !strings.Contains(problems(err), tc.want) {
+				t.Fatalf("problems = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestAPIClientSharingTheDefaultTokenIsRefusedWithoutLeakingIt(t *testing.T) {
+	r := newRig(t)
+	const tok = "throwaway-shared-0042"
+	if err := os.WriteFile(r.cfg.APITokenFile, []byte(tok+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := r.client(t, "bot", tok)
+	r.cfg.APIClients = []APIClient{c}
+	_, err := r.parse(t)
+	got := problems(err)
+	if !strings.Contains(got, `"default"`) || !strings.Contains(got, `"bot"`) || !strings.Contains(got, c.TokenFile) {
+		t.Fatalf("problems = %q, want both clients and a path", got)
+	}
+	sum := sha256.Sum256([]byte(tok))
+	if strings.Contains(got, tok) || strings.Contains(got, hex.EncodeToString(sum[:4])) {
+		t.Errorf("problems leak the token or its digest: %q", got)
+	}
+}
+
+func TestAPIClientFilesAreCheckedLikeTheOtherSecrets(t *testing.T) {
+	r := newRig(t)
+	c := r.client(t, "bot", "tok-a")
+	if err := os.Chmod(c.TokenFile, 0o644); err != nil { //nolint:gosec // the test makes a file world-readable on purpose
+		t.Fatal(err)
+	}
+	r.cfg.APIClients = []APIClient{c}
+	if _, err := r.parse(t); err == nil || !strings.Contains(problems(err), "0600") {
+		t.Errorf("a world-readable client file = %v", err)
 	}
 }
