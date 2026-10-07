@@ -3,7 +3,6 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -12,7 +11,8 @@ import (
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/offboard"
 	"github.com/wstein/workharbor/internal/setup"
-	"github.com/wstein/workharbor/internal/version"
+	"github.com/wstein/workharbor/internal/setup/answers"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
 // exitError is a command that already explained itself and ends with a code.
@@ -143,7 +143,56 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 		o.Note("%s", offboard.Unverified)
 		return nil
 	}
-	lg := offboard.Log{W: st.env.Stderr, Now: oe.Now, Whr: strings.TrimSpace(version.Get().Version)}
+	// Keep the record in the administrator's account, which survives removal.
+	// Open only after the typed confirmation and final account recheck.
+	var log *protocol.Log
+	defer func() {
+		if log != nil {
+			_ = log.Close()
+		}
+	}()
+	lg := offboard.Log{Record: func(result string, code int, ran [][]string) error {
+		appendEntry := func(e protocol.Entry) error {
+			e.Account, e.Cmd, e.Phase = env.User, protocol.CmdOffboard, protocol.PhaseHost
+			return log.Append(e)
+		}
+		if result == "started" {
+			open := env.OpenLog
+			if open == nil {
+				open = func(home string) (*protocol.Log, error) { return protocol.Open(home, oe.Now, nil) }
+			}
+			var err error
+			log, err = open(st.env.Getenv("HOME"))
+			if err != nil {
+				return err
+			}
+			for _, w := range log.Warnings() {
+				o.Note("note: %s", clean(w))
+			}
+			if err := appendEntry(protocol.Entry{Event: protocol.EventRunStart, Source: protocol.SourceInteractive}); err != nil {
+				return err
+			}
+			fix := answers.FixDigest(doctor.Check{
+				Name: "delete-user", Phase: doctor.PhaseHost,
+				Fix: &doctor.Fix{Cmds: []doctor.Cmd{offboard.DeleteCmd()}, Irreversible: true},
+			})
+			return appendEntry(protocol.Entry{
+				Event: protocol.EventStepBefore, Step: "delete-user", Fix: fix,
+				Answer: protocol.AnswerRun, Source: protocol.SourceInteractive, Status: string(doctor.Fail),
+			})
+		}
+		outcome, end, status := protocol.OutFixed, protocol.RunDone, doctor.OK
+		if code != exitcode.OK {
+			outcome, end, status = protocol.OutNotFixed, protocol.RunError, doctor.Fail
+		}
+		if err := appendEntry(protocol.Entry{
+			Event: protocol.EventStepAfter, Step: "delete-user", Outcome: outcome,
+			Status: string(status), Exit: &code, Ran: protocol.RanDigest(ran),
+		}); err != nil {
+			return err
+		}
+		return appendEntry(protocol.Entry{Event: protocol.EventRunEnd, Outcome: end})
+	}}
 	if code := offboard.Execute(ctx, env.Host, d, f, lg, o); code != exitcode.OK {
 		return exitError{code}
 	}

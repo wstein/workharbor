@@ -504,3 +504,33 @@ func TestTheReadToolsRunByAbsolutePath(t *testing.T) {
 		}
 	}
 }
+
+func TestRecorderFailureBeforeAndAfterExecution(t *testing.T) {
+	for _, failAt := range []string{"started", "ok"} {
+		t.Run(failAt, func(t *testing.T) {
+			h := newHost()
+			d := h.deps()
+			f := Inspect(context.Background(), d, inv())
+			var out bytes.Buffer
+			lg := Log{Record: func(result string, _ int, ran [][]string) error {
+				if result == "ok" && len(ran) != 2 {
+					t.Fatalf("attempted commands: %v", ran)
+				}
+				if result == failAt {
+					return errors.New("disk full")
+				}
+				return nil
+			}}
+			code := Execute(context.Background(), h, d, f, lg, Out{Out: &out, Err: &out})
+			if code != exitcode.Error || !strings.Contains(out.String(), "disk full") {
+				t.Fatalf("%d %s", code, out.String())
+			}
+			if failAt == "started" && len(h.ran) != 0 {
+				t.Fatalf("ran after recording failed: %v", h.ran)
+			}
+			if failAt == "ok" && !h.deleted {
+				t.Fatal("expected deletion before final record failure")
+			}
+		})
+	}
+}

@@ -311,17 +311,23 @@ func Plan(o Out, f Facts) {
 	}
 }
 
-// Log writes the one plain log line before and after the change.
+// Log records the change before and after execution. Record, when present,
+// replaces the plain log and must succeed before any command runs.
 type Log struct {
-	W   io.Writer
-	Now func() time.Time
-	Whr string
+	Record func(result string, exit int, ran [][]string) error
+	W      io.Writer
+	Now    func() time.Time
+	Whr    string
 }
 
-func (l Log) line(result string, exit int) {
+func (l Log) line(result string, exit int, ran [][]string) error {
+	if l.Record != nil {
+		return l.Record(result, exit, ran)
+	}
 	sum := sha256.Sum256([]byte(strings.Join(DeleteCmd().Full(), "\x00")))
 	fmt.Fprintf(l.W, "log: %s offboard.delete-user argv-sha256=%s source=interactive result=%s exit=%d whr=%s\n",
 		l.Now().UTC().Format(time.RFC3339), hex.EncodeToString(sum[:]), result, exit, l.Whr)
+	return nil
 }
 
 // Execute is the real run: the typed word, a second inspection, then sudo -v
@@ -354,7 +360,11 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		return exitcode.Conflict
 	}
 	c := DeleteCmd()
-	lg.line("started", 0)
+	if err := lg.line("started", 0, nil); err != nil {
+		o.Note("whr: cannot record the offboard protocol: %s; nothing was removed", oneLine(err.Error()))
+		return exitcode.Error
+	}
+	ran := [][]string{sudoCheckCmd().Full()}
 	o.Command(sudoCheckCmd())
 	o.Note("  (once, so the command asks for your password only once; no background refresh)")
 	runErr := h.Run(ctx, sudoCheckCmd())
@@ -362,6 +372,7 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		runErr = fmt.Errorf("sudo did not accept the password: %w", runErr)
 	} else {
 		o.Command(c)
+		ran = append(ran, c.Full())
 		if err := h.Run(ctx, c); err != nil {
 			runErr = fmt.Errorf("%s failed: %w", setup.QuoteArgv(c.Full()), err)
 		}
@@ -378,7 +389,10 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	if code != exitcode.OK {
 		result = "failed"
 	}
-	lg.line(result, code)
+	if err := lg.line(result, code, ran); err != nil {
+		o.Note("whr: cannot record the offboard result: %s", oneLine(err.Error()))
+		code = exitcode.Error
+	}
 	o.Note("%s", Unverified)
 	return code
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/offboard"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup/protocol"
 )
 
 const offboardDelete = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharbor"
@@ -23,6 +25,7 @@ const offboardDelete = "/usr/bin/sudo /usr/sbin/sysadminctl -deleteUser workharb
 // when the delete argv is run.
 type offboardHost struct {
 	deleted bool
+	fail    string
 	answer  string
 	ran     []string
 	asked   []string
@@ -54,6 +57,9 @@ func (h *offboardHost) Output(_ context.Context, argv ...string) ([]byte, error)
 func (h *offboardHost) Run(_ context.Context, c doctor.Cmd) error {
 	k := strings.Join(c.Full(), " ")
 	h.ran = append(h.ran, k)
+	if k == h.fail {
+		return errors.New("fake failure")
+	}
 	h.deleted = h.deleted || k == offboardDelete
 	return nil
 }
@@ -188,7 +194,7 @@ func TestOffboardDeleteAndTheTypedWord(t *testing.T) {
 	if code != exitcode.OK || strings.Join(r.host.ran, "|") != "/usr/bin/sudo -v|"+offboardDelete {
 		t.Fatalf("exit %d ran %v\n%s\n%s", code, r.host.ran, out, errOut)
 	}
-	if !strings.Contains(out, "ok\tdscl\t") || strings.Count(errOut, "offboard.delete-user") != 2 {
+	if !strings.Contains(out, "ok\tdscl\t") || strings.Contains(errOut, "log:") {
 		t.Errorf("%s\n%s", out, errOut)
 	}
 }
@@ -221,5 +227,93 @@ func TestOffboardRefusesWhereThereIsNoMac(t *testing.T) {
 	}
 	if len(r.host.ran) != 0 {
 		t.Error("ran something")
+	}
+}
+
+func readOffboardProtocol(t *testing.T, r *offboardRig) []protocol.Entry {
+	t.Helper()
+	b, err := os.ReadFile(protocol.Path(r.rig.home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entries []protocol.Entry
+	previous := ""
+	for _, line := range bytes.Split(bytes.TrimSuffix(b, []byte("\n")), []byte("\n")) {
+		e, err := protocol.Decode(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.Prev != previous || e.Cmd != protocol.CmdOffboard || e.Account != "werner" || e.Phase != protocol.PhaseHost {
+			t.Fatalf("wrong offboard entry: %+v", e)
+		}
+		previous = protocol.LineDigest(line)
+		entries = append(entries, e)
+	}
+	return entries
+}
+
+func TestOffboardRecordsProtocolAfterConfirmation(t *testing.T) {
+	r := newOffboardRig(t)
+	if code, _, errOut := r.run("--delete"); code != exitcode.OK {
+		t.Fatalf("%d: %s", code, errOut)
+	}
+	es := readOffboardProtocol(t, r)
+	if len(es) != 4 || es[0].Event != protocol.EventRunStart || es[1].Event != protocol.EventStepBefore ||
+		es[1].Step != "delete-user" || es[1].Answer != protocol.AnswerRun || es[1].Source != protocol.SourceInteractive ||
+		es[2].Event != protocol.EventStepAfter || es[2].Outcome != protocol.OutFixed || es[2].Exit == nil || *es[2].Exit != 0 ||
+		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}, {"/usr/bin/sudo", "/usr/sbin/sysadminctl", "-deleteUser", "workharbor"}}) ||
+		es[3].Event != protocol.EventRunEnd || es[3].Outcome != protocol.RunDone {
+		t.Fatalf("entries: %+v", es)
+	}
+}
+
+func TestOffboardDoesNotOpenProtocolUnlessConfirmed(t *testing.T) {
+	for _, args := range [][]string{nil, {"--delete"}, {"--delete", "--answers="}, {"--delete", "--unattended"}} {
+		r := newOffboardRig(t)
+		r.host.answer = "yes"
+		r.env.Setup.OpenLog = func(string) (*protocol.Log, error) { t.Fatal("opened protocol without confirmation"); return nil, nil }
+		r.run(args...)
+		if len(r.host.ran) != 0 {
+			t.Fatal(r.host.ran)
+		}
+	}
+}
+
+func TestOffboardProtocolFailureRefusesExecution(t *testing.T) {
+	for _, kind := range []string{"open", "append"} {
+		t.Run(kind, func(t *testing.T) {
+			r := newOffboardRig(t)
+			r.env.Setup.OpenLog = func(string) (*protocol.Log, error) {
+				if kind == "open" {
+					return nil, protocol.ErrConflict
+				}
+				l, err := protocol.Open(r.rig.home, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := l.Close(); err != nil {
+					t.Fatal(err)
+				}
+				return l, nil
+			}
+			code, _, errOut := r.run("--delete")
+			if code != exitcode.Error || len(r.host.ran) != 0 || !strings.Contains(errOut, "nothing was removed") {
+				t.Fatalf("exit %d ran %v stderr %s", code, r.host.ran, errOut)
+			}
+		})
+	}
+}
+
+func TestOffboardProtocolRecordsFailedSudoWithoutDeletion(t *testing.T) {
+	r := newOffboardRig(t)
+	r.host.fail = "/usr/bin/sudo -v"
+	code, _, errOut := r.run("--delete")
+	if code != exitcode.Error || r.host.deleted || len(r.host.ran) != 1 {
+		t.Fatalf("%d %v %s", code, r.host.ran, errOut)
+	}
+	es := readOffboardProtocol(t, r)
+	if len(es) != 4 || es[2].Outcome != protocol.OutNotFixed || es[2].Exit == nil || *es[2].Exit != exitcode.Error ||
+		es[2].Ran != protocol.RanDigest([][]string{{"/usr/bin/sudo", "-v"}}) || es[3].Outcome != protocol.RunError {
+		t.Fatalf("entries: %+v", es)
 	}
 }
