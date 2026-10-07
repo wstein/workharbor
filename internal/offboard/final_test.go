@@ -22,3 +22,21 @@ func TestFinalOfNamesChangeLogAndNextStep(t *testing.T) {
 		t.Errorf("failed run:\n%s", bad)
 	}
 }
+
+func TestNewOffboardLinesFitIn80Columns(t *testing.T) {
+	long := "/Users/workharbor/.local/state/whr/logs/offboard-20261007T101500Z.log"
+	f := Facts{Account: "workharbor", HomeDir: "/Users/workharbor"}
+	var so, se strings.Builder
+	o := Out{Out: &so, Err: &se}
+	Plan(o, f)
+	se.WriteString(render.FinalBlock(render.Detect(false, "", false),
+		finalOf(f, exitcode.Error, long)))
+	for _, l := range strings.Split(se.String(), "\n") {
+		if len([]rune(l)) > 80 {
+			t.Errorf("over 80 columns (%d): %q", len([]rune(l)), l)
+		}
+	}
+	if !strings.Contains(se.String(), "preflight:") {
+		t.Errorf("no preflight line:\n%s", se.String())
+	}
+}

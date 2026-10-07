@@ -425,6 +425,8 @@ func Plan(o Out, f Facts) {
 	case f.Admin:
 		admin = "yes"
 	}
+	o.Note("preflight: account %s found, home %s. Next: show the plan; "+
+		"nothing is changed without --delete.", f.Account, f.HomeDir)
 	o.Data("account", f.Account)
 	o.Data("uid", strconv.Itoa(f.UID))
 	o.Data("home", f.HomeDir)
