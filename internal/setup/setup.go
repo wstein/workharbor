@@ -566,8 +566,6 @@ func (r *runner) dryRunQuestion(s doctor.Check, out Outcome) string {
 	return "; the question stays open: " + why
 }
 
-// report prints a step's result once: its reason, and the raw text of the tool
-// behind it only with --verbose.
 // dataLine writes the one data line of a step. The raw text a tool printed
 // (exit status and message) stays out of it unless Verbose: the human line
 // states the same finding, so it is not printed twice.
@@ -579,6 +577,8 @@ func dataLine(o Options, st doctor.Status, name, detail string) {
 	fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, name, detail)
 }
 
+// report prints a step's result once: its reason, and the raw text of the tool
+// behind it only with --verbose.
 func report(ui render.Writer, o Options, st doctor.Status, detail string) {
 	reason, tool := render.SplitTool(oneLine(detail))
 	ui.Report(Level(st), reason)
