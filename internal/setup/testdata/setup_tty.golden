@@ -39,5 +39,3 @@ Summary: 1 ok, 2 need action, 1 not verified (dry run: nothing was changed)
      Then log in as workharbor and run `whr setup`.
   2. title of tailscale: whr has no fix for this step; see the manual
   3. title of power: Open System Settings and turn the toggle off.
-  4. Then go on with the steps that are left
-     [36m$ whr setup host --from workharbor-user[0m

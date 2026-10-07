@@ -593,3 +593,12 @@ func TestYesAnswersOnlyUndoableQuestions(t *testing.T) {
 		t.Errorf("irreversible must be asked: %v %v", a, h.asked)
 	}
 }
+
+// The next command is printed once: the summary line is the one place.
+func TestNextCommandIsPrintedOnce(t *testing.T) {
+	var b bytes.Buffer
+	Summary(&b, []Outcome{{Step: "container-kernel", Status: doctor.Fail, Todo: render.TodoItem{Text: "kernel: fix it"}}}, Options{})
+	if n := strings.Count(b.String(), "whr setup --from container-kernel"); n != 1 {
+		t.Errorf("next command printed %d times:\n%s", n, b.String())
+	}
+}

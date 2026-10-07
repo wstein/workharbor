@@ -797,7 +797,6 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 			next = nextCommand(o, first, leftNames)
 		}
 		fmt.Fprintf(w, "  next: %s\n", next)
-		todo = append(todo, render.TodoItem{Text: "Then go on with the steps that are left", Commands: []string{next}})
 	}
 	for _, out := range outs {
 		if out.Step == "container-kernel" && out.Status != doctor.OK {
