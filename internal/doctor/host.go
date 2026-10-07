@@ -1223,23 +1223,32 @@ func userSteps(d Deps) []Check {
 				return Fail, "no GitHub App key in " + dir
 			},
 			Fix: &Fix{
-				Cmds: []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", "<https name>"}}},
+				Cmds: []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", "<name>"}}},
 				Build: func(_ context.Context, p Prompter) ([]Cmd, error) {
-					u, err := p.Line("whr's HTTPS name behind the forwarder (manual step 7), for example https://whr.example.ts.net")
+					// the configured name is used by the command itself; only an
+					// absent one is asked for, and shown normalised before it runs
+					if m, err := readConfigMap(d.ConfigPath); err == nil {
+						if s, _ := m["public_url"].(string); s != "" {
+							return []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath}}}, nil
+						}
+					}
+					u, err := p.Line("whr's public name behind the forwarder (manual step 7), for example whr.example.ts.net (https:// is added)")
 					if err != nil {
 						return nil, err
 					}
-					u = strings.TrimSpace(u)
-					if !strings.HasPrefix(u, "https://") || strings.ContainsAny(u, " \t\r\n") {
-						return nil, errors.New("that is not an https address; nothing was run")
+					u, err = config.NormalizePublicURL(u)
+					if err != nil {
+						return nil, errors.New("that is not usable: " + oneLine(err.Error()) + "; nothing was run")
 					}
+					p.Show("the link will use " + textsafe.Escape(u))
 					return []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", u}}}, nil
 				},
-				Guide: "whr github app create prints a link: open it, press Continue to GitHub and confirm. Then install the App on your selected repositories and check that main's ruleset does not list it as a bypass actor (D15). The command asks for --public-url: the HTTPS name your forwarder gives whr (manual step 7).",
+				Guide: "whr github app create prints a link: open it, press Continue to GitHub and confirm. Then install the App on your selected repositories and check that main's ruleset does not list it as a bypass actor (D15). The link uses public_url from the configuration (the public-url step), or the name you give here. If it times out, check the name and the forwarder; `whr github app create --local` gives a link for a browser on this Mac.",
 				Open:  "https://github.com/settings/apps",
 			},
 		},
 
+		d.publicURLStep(),
 		configBaseStep(d, "config-base", PhaseUser, tokenPath, envPath),
 		{
 			Name: "config-github", Phase: PhaseUser, Step: 2, Title: "the GitHub App in the configuration (manual step 13)",
@@ -1328,7 +1337,7 @@ func userSteps(d Deps) []Check {
 // that needs a service says so with Needs, and a test holds the order to it.
 var userOrder = []string{
 	"config-dir", "api-token", "agent-key", "ssh-ca", "container-start", "container-kernel", "standard-user-check",
-	"config-base", "development-key", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
+	"config-base", "development-key", "public-url", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
 }
 
 // ordered returns the checks in the given order. A name with no check is a bug

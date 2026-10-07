@@ -175,7 +175,7 @@ func TestOffAMacTheStepsAreNotVerified(t *testing.T) {
 	d := hostDeps(scripted{})
 	d.GOOS = "linux"
 	for _, c := range Checks(d) {
-		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "ssh-ca" || c.Name == "config-base" || c.Name == "config-first" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "tool-store" || c.Name == "prefix" {
+		if c.Phase == "" || c.Name == "config-dir" || c.Name == "api-token" || c.Name == "agent-key" || c.Name == "ssh-ca" || c.Name == "config-base" || c.Name == "config-first" || c.Name == "config-github" || c.Name == "github-app" || c.Name == "public-url" || c.Name == "tool-store" || c.Name == "prefix" {
 			continue
 		}
 		if got, _ := status(c); got != NotVerified && got != OK {
@@ -455,7 +455,7 @@ func TestStepNamesAreKebabCaseInTheWizardsOrderWithoutACycle(t *testing.T) {
 	for _, c := range Steps(all, PhaseUser) {
 		user = append(user, c.Name)
 	}
-	want := "config-dir api-token agent-key ssh-ca container-start container-kernel standard-user-check config-base development-key github-app config-github tool-store service-install drop-admin"
+	want := "config-dir api-token agent-key ssh-ca container-start container-kernel standard-user-check config-base development-key public-url github-app config-github tool-store service-install drop-admin"
 	if strings.Join(user, " ") != want {
 		t.Errorf("user steps %v\nwant %s", user, want)
 	}
