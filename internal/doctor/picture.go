@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -69,7 +70,10 @@ func loginPictureStep(d Deps) Check {
 				}
 				err = dsclFailure(out, err)
 				if DSCLNotFound(err) {
-					return NotVerified, "there is no user " + d.account() + " yet"
+					// Skipped, not NotVerified: a skipped step is not offered a fix,
+					// and `dscl -create` on a missing record would make a stub
+					// without UniqueID or home. workharbor-user comes first.
+					return Skipped, "there is no user " + d.account() + " yet: create it first (workharbor-user)"
 				}
 				return NotVerified, "dscl did not say what the picture is: " + oneLine(err.Error())
 			}
@@ -90,7 +94,13 @@ func loginPictureStep(d Deps) Check {
 		},
 		Fix: &Fix{
 			Desc: "write the embedded logo to a private temporary file, install it as root's, point the account's Picture at it",
-			Do:   func(context.Context, Prompter) error { return writeTemp(loginPictureTemp(), string(loginPicture)) },
+			Do: func(ctx context.Context, _ Prompter) error {
+				// never `dscl -create` a record that does not exist
+				if out, err := d.output(ctx, "dscl", ".", "-read", "/Users/"+d.account(), "UniqueID"); err != nil {
+					return fmt.Errorf("not setting the picture: the user %s is not readable: %w", d.account(), dsclFailure(out, err))
+				}
+				return writeTemp(loginPictureTemp(), string(loginPicture))
+			},
 			Cmds: []Cmd{
 				{Sudo: true, Argv: []string{"install", "-d", "-m", "0755", "-o", "root", "-g", "wheel", filepath.Dir(d.pictureFile())}},
 				{Sudo: true, Argv: []string{"install", "-m", "0644", "-o", "root", "-g", "wheel", loginPictureTemp(), d.pictureFile()}},

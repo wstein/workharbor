@@ -12,6 +12,7 @@ const readPicture = "dscl . -read /Users/workharbor Picture"
 
 func pictureDeps(t *testing.T, r Runner) Deps {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // writeTemp writes under the home
 	d := hostDeps(r)
 	d.PictureFile = filepath.Join(t.TempDir(), "logo.png")
 	return d
@@ -39,12 +40,12 @@ func TestLoginPictureStates(t *testing.T) {
 	if st, _ := run(scripted{readPicture: "Picture:\n " + file + "\n"}); st != Fail {
 		t.Errorf("other bytes: %s", st)
 	}
-	// another picture path
-	if st, _ := run(scripted{readPicture: "Picture:\n /Library/User Pictures/Animals/Penguin.heic\n"}); st != Fail {
-		t.Errorf("other path: %s", st)
-	}
+	// another picture path, with the right bytes in the file: the path decides
 	if err := os.WriteFile(file, loginPicture, 0o600); err != nil {
 		t.Fatal(err)
+	}
+	if st, _ := run(scripted{readPicture: "Picture:\n /Library/User Pictures/Animals/Penguin.heic\n"}); st != Fail {
+		t.Errorf("other path: %s", st)
 	}
 	for _, out := range []string{"Picture:\n " + file + "\n", "Picture: " + file + "\n"} {
 		if st, msg := run(scripted{readPicture: out}); st != OK {
@@ -52,7 +53,7 @@ func TestLoginPictureStates(t *testing.T) {
 		}
 	}
 	// dscl fails, or this is not a Mac
-	if st, _ := run(scripted{readPicture: "ERR:exit status 56"}); st != NotVerified {
+	if st, _ := run(scripted{readPicture: "ERR:exit status 56"}); st != Skipped {
 		t.Errorf("no user: %s", st)
 	}
 	if st, _ := run(scripted{}); st != NotVerified {
@@ -72,6 +73,9 @@ func TestLoginPictureSetsOnceThenIdempotent(t *testing.T) {
 	fake := funcRunner(func(argv ...string) (string, bool) {
 		if strings.Join(argv, " ") == readPicture {
 			return "Picture:\n " + picture + "\n", true
+		}
+		if strings.Join(argv, " ") == "dscl . -read /Users/workharbor UniqueID" {
+			return "UniqueID: 502", true
 		}
 		return "", false
 	})
@@ -99,7 +103,15 @@ func TestLoginPictureSetsOnceThenIdempotent(t *testing.T) {
 		switch cmd.Argv[0] {
 		case "install":
 			if cmd.Argv[1] == "-d" {
+				wantD := []string{"install", "-d", "-m", "0755", "-o", "root", "-g", "wheel", LoginPictureDir}
+				if d.PictureFile == "" || strings.Join(cmd.Argv, "\x00") != strings.Join(append(wantD[:8:8], filepath.Dir(d.PictureFile)), "\x00") {
+					t.Errorf("install -d argv %q", cmd.Argv)
+				}
 				continue
+			}
+			wantF := []string{"install", "-m", "0644", "-o", "root", "-g", "wheel", loginPictureTemp(), d.PictureFile}
+			if strings.Join(cmd.Argv, "\x00") != strings.Join(wantF, "\x00") {
+				t.Errorf("install file argv %q", cmd.Argv)
 			}
 			if got := cmd.Argv[len(cmd.Argv)-1]; got != d.PictureFile {
 				t.Errorf("install target %q", got)
@@ -151,4 +163,35 @@ func (f funcRunner) Output(_ context.Context, argv ...string) ([]byte, error) {
 		return []byte(out), nil
 	}
 	return nil, os.ErrNotExist
+}
+
+// No user: no step offered, and the fix itself refuses, so no dscl -create runs.
+func TestLoginPictureNeverCreatesARecord(t *testing.T) {
+	d := pictureDeps(t, nil)
+	var calls []string
+	d.Runner = funcRunner(func(argv ...string) (string, bool) {
+		calls = append(calls, strings.Join(argv, " "))
+		return "", false
+	})
+	d.Runner = scripted{readPicture: "ERR:exit status 56"}
+	if st, _ := status(steps(t, d)["login-picture"]); st != Skipped {
+		t.Errorf("no user: %s, want skipped", st)
+	}
+	calls = nil
+	d.Runner = funcRunner(func(argv ...string) (string, bool) {
+		calls = append(calls, strings.Join(argv, " "))
+		return "ERR", false
+	})
+	c := steps(t, d)["login-picture"]
+	if err := c.Fix.Do(context.Background(), nil); err == nil {
+		t.Error("Do must refuse when the user cannot be read")
+	}
+	for _, k := range calls {
+		if strings.Contains(k, "-create") {
+			t.Errorf("a create ran: %q", k)
+		}
+	}
+	if _, err := os.Stat(loginPictureTemp()); err == nil {
+		t.Error("the temp file was written for a missing user")
+	}
 }
