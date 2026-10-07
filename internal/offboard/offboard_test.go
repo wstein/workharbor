@@ -394,6 +394,11 @@ func TestAFailedDeleteStillVerifies(t *testing.T) {
 	if r.code != exitcode.Error || !strings.Contains(r.stderr, "result=failed exit=1") || !strings.Contains(r.stdout, "ok\tdscl") {
 		t.Errorf("exit %d\n%s\n%s", r.code, r.stdout, r.stderr)
 	}
+	for _, k := range h.ran {
+		if k == pictureArgv {
+			t.Error("the picture was removed although the account was not")
+		}
+	}
 }
 
 func TestEachRemnantIsNamed(t *testing.T) {

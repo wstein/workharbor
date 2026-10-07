@@ -536,15 +536,6 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 		ran = append(ran, c.Full())
 		if err := h.Run(ctx, c); err != nil {
 			runErr = fmt.Errorf("%s failed: %w", setup.QuoteArgv(c.Full()), err)
-		} else {
-			// the login picture of the setup step lives outside the home; a
-			// failure here leaves a public logo behind and is only a note
-			pc := PictureCmd()
-			o.Command(pc)
-			ran = append(ran, pc.Full())
-			if err := h.Run(ctx, pc); err != nil {
-				o.Note("note: the login picture %s was not removed: %s", doctor.LoginPictureDir, oneLine(err.Error()))
-			}
 		}
 	}
 	code := exitcode.OK
@@ -554,6 +545,16 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	}
 	if !Verify(ctx, d, f, o) {
 		code = exitcode.Error
+	} else if code == exitcode.OK {
+		// the login picture of the setup step lives outside the home; only
+		// when the account is verified gone is it removed. A failure here
+		// leaves a public logo behind and is only a note.
+		pc := PictureCmd()
+		o.Command(pc)
+		ran = append(ran, pc.Full())
+		if err := h.Run(ctx, pc); err != nil {
+			o.Note("note: the login picture %s was not removed: %s", doctor.LoginPictureDir, oneLine(err.Error()))
+		}
 	}
 	result := "ok"
 	if code != exitcode.OK {
