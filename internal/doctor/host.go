@@ -87,7 +87,7 @@ func DSCLNotFound(err error) bool {
 // containerLabel matches a launchd service label of Apple Container
 // (com.apple.container.<name>) as a whole token: com.apple.containermanagerd
 // is another service.
-var containerLabel = regexp.MustCompile(`(^|[^A-Za-z0-9._-])com\.apple\.container\.[A-Za-z0-9-]+`)
+var containerLabel = regexp.MustCompile(`(^|\s)com\.apple\.container\.[A-Za-z0-9-]+`)
 
 // dsRecordNotFound matches the error name as a whole token. Free text that
 // merely mentions it (a sentence about what it is not) cannot be told apart
@@ -1070,6 +1070,9 @@ func userSteps(d Deps) []Check {
 				return OK, envPath + " is a private file"
 			},
 			Fix: &Fix{Desc: agentKeyPrompt + "; written to " + envPath + " (0600, never overwritten, never shown)", Do: func(_ context.Context, p Prompter) error {
+				if _, err := os.Lstat(envPath); err == nil {
+					return errors.New(envPath + " already exists and is never overwritten; fix its mode or remove it, then run again")
+				}
 				key, err := p.Secret(agentKeyPrompt)
 				if err != nil {
 					return err
@@ -1581,11 +1584,14 @@ func containerServiceListed(out string) (listed, found bool) {
 		switch {
 		case !in && t == "services = {":
 			in, found = true, true
-		case in && t == "}":
-			in = false
+		case in && (t == "}" || strings.HasSuffix(t, "services = {")):
+			in = false // a "disabled services = {" block is never the loaded list
 		case in && containerLabel.MatchString(l):
 			listed = true
 		}
+	}
+	if in { // the section never closed: what it holds is not trustworthy
+		return false, false
 	}
 	return listed, found
 }

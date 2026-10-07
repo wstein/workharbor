@@ -1419,3 +1419,36 @@ func launchdPrint(labels ...string) string {
 	}
 	return out + "\t}\n}\n"
 }
+
+func TestContainerServiceListedAnchorsTheLabelAndTheSection(t *testing.T) {
+	for _, tc := range []struct {
+		name, out     string
+		listed, found bool
+	}{
+		{"label as token", "services = {\n  0 0 com.apple.container.apiserver\n}\n", true, true},
+		{"label after a slash", "services = {\n  x /tmp/com.apple.container.apiserver\n}\n", false, true},
+		{"label after a colon", "services = {\n  x:com.apple.container.apiserver\n}\n", false, true},
+		{"unclosed section does not absorb the disabled block", "services = {\n  0 0 other\ndisabled services = {\n  \"com.apple.container.apiserver\" => disabled\n}\n", false, true},
+		{"never closed", "services = {\n  0 0 com.apple.container.apiserver\n", false, false},
+	} {
+		if l, f := containerServiceListed(tc.out); l != tc.listed || f != tc.found {
+			t.Errorf("%s: listed %v found %v, want %v %v", tc.name, l, f, tc.listed, tc.found)
+		}
+	}
+}
+
+func TestAgentKeyFixRefusesBeforeAskingWhenTheFileExists(t *testing.T) {
+	dir := t.TempDir()
+	d := Deps{ConfigPath: filepath.Join(dir, "config.json"), Home: t.TempDir(), GOOS: "darwin", Runner: scripted{}, User: "workharbor", UID: 502}
+	env := filepath.Join(dir, "agent.env")
+	if err := os.WriteFile(env, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := &answers{secrets: []string{"sk-ant-api03-" + strings.Repeat("x", 30)}}
+	if err := steps(t, d)["agent-key"].Fix.Do(context.Background(), p); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(p.secrets) != 1 {
+		t.Error("the key was asked for although the file exists")
+	}
+}
