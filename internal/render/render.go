@@ -325,9 +325,24 @@ var promptError = regexp.MustCompile(`(?i)\b(invalid|incorrect|wrong|fail(ed|ure
 
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
+// sentenceEnd is where a sentence of a line ends: ". ", "! " or "? ".
+var sentenceEnd = regexp.MustCompile(`[.!?]\s+`)
+
+// isSecretPrompt is true for a line that asks for a secret and does not merely
+// report a failure. An error word exempts only its own sentence: "Incorrect
+// password. Password:" still ends in a prompt, so it is dropped. Either the
+// whole line or its last sentence being a clean prompt is enough, so text a
+// tool puts before the prompt cannot get the prompt relayed.
 func isSecretPrompt(line string) bool {
 	line = ansiSeq.ReplaceAllString(line, "")
-	return secretPrompt.MatchString(line) && !promptError.MatchString(line)
+	if secretPrompt.MatchString(line) && !promptError.MatchString(line) {
+		return true
+	}
+	if ends := sentenceEnd.FindAllStringIndex(line, -1); len(ends) > 0 {
+		last := line[ends[len(ends)-1][1]:]
+		return secretPrompt.MatchString(last) && !promptError.MatchString(last)
+	}
+	return false
 }
 
 // NeutralPromptLine replaces a prompt that asks for a secret. whr never relays

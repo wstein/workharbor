@@ -346,6 +346,13 @@ func TestToolWriterPromptDetection(t *testing.T) {
 		"invalid password for user:": false,
 		"Falsches Passwort, Fehler:": false,
 		"Set the password":           false,
+		// an error word exempts its own sentence only
+		"Enter passphrase for key 'a. b': ":        true,
+		"Incorrect password. Password:":            true,
+		"Sorry, try again! Enter your passphrase:": true,
+		"Invalid password. Try again:":             false,
+		"Authentication failed. Password for u:":   true,
+		"Password: invalid password for user:":     false,
 	} {
 		var b strings.Builder
 		tw := NewToolWriter(&b, Style{})
