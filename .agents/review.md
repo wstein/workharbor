@@ -49,6 +49,14 @@ The cards in `In review`: their commits are on local `main` and not pushed
 Read-only: never edit the author's code, never run anything that touches the
 keychain, credentials, `sudo`, launchd or real containers; `go test` is fine.
 
+## Review scope
+
+- Default: no mutation tests. Read the diff and check that the new tests pin the behaviour.
+- Mutation only when the desk or the human asks, or for changed security-relevant lines (passwords/secrets, privilege, `land.sh`, run-log permissions). Then mutate only the changed lines, never whole packages.
+- When run: private `GOCACHE=<scratchpad>/gocache`, deleted afterwards; delete temp dirs.
+- A Sonnet review never runs mutation tests.
+- A surviving mutant is a Low only when it shows a real behaviour gap.
+
 ## Your output
 
 One comment on the issue: `CLEAR <full sha> role=review model=<m>` and either "no
