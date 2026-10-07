@@ -25,7 +25,7 @@ func rawForgeUses(t *testing.T, modRoot string, allowed func(rel string) bool) [
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == ".git" {
+			if d.Name() == ".git" || d.Name() == ".work" {
 				return filepath.SkipDir
 			}
 			return nil
