@@ -467,3 +467,19 @@ func TestShowFixLabelsPlanInADryRun(t *testing.T) {
 		}
 	}
 }
+
+// A step with no fix has one badge: the note under it has none.
+func TestNoFixNoteHasNoBadge(t *testing.T) {
+	checks := []doctor.Check{fixStep("tailscale", doctor.NotVerified, "tailscale did not answer", nil)}
+	_, out, errOut := run(t, &fakeHost{}, checks, Options{Phase: doctor.PhaseHost, DryRun: true})
+	all := out + errOut
+	_, all, _ = strings.Cut(all, "Step 1 of 1") // past the legend
+	for _, l := range strings.Split(all, "\n") {
+		if strings.Contains(l, "whr has no fix for this step") && strings.Contains(l, "?") {
+			t.Errorf("the note carries a badge: %q", l)
+		}
+	}
+	if strings.Count(all, "unverified") != 1 {
+		t.Errorf("want one badge:\n%s", all)
+	}
+}

@@ -21,7 +21,7 @@ preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
 
 -- Step 3 of 4 - title of tailscale --
  ? unverified  tailscale did not answer
- ? unverified  whr has no fix for this step
+          whr has no fix for this step
 
 -- Step 4 of 4 - title of power --
  x FAIL   sleep is on

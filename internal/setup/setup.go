@@ -398,7 +398,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		}
 		out.Todo = todoFor(title, s.Fix)
 		if s.Fix == nil {
-			ui.Report(render.LevelNotVerified, "whr has no fix for this step")
+			ui.Note(strings.Repeat(" ", 10) + "whr has no fix for this step") // a note under the badge, not a second badge
 			outs = append(outs, out)
 			if err := after(protocol.OutNoFix, nil, nil); err != nil {
 				return stop(err)
