@@ -294,3 +294,69 @@ func TestTheSummaryShowsSeveralWorkspacesAndEndsWithTheLastPathIntact(t *testing
 		t.Errorf("%q", s)
 	}
 }
+
+func TestTheRepositoryLineEscapesAHostileNameFromAnExistingFile(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := filepath.Join(t.TempDir(), "mine")
+	old := `{"repositories":[{"name":"a/b\u001b[2J\u009b2J"}],"roots":{"workspaces":["` + mine + `"]}}`
+	if err := os.WriteFile(d.ConfigPath, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &answers{confirm: true, lines: []string{"shared"}}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	shown := strings.Join(a.shown, "\n")
+	if strings.ContainsAny(shown, "\u001b\u009b") || !strings.Contains(shown, `repository:  a/b\x1b[2J\u009b2J`) {
+		t.Errorf("%q", shown)
+	}
+}
+
+func TestTheToolStoreLineShowsTheStoreTheFileGets(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := filepath.Join(t.TempDir(), "mine")
+	if err := os.WriteFile(d.ConfigPath, []byte(`{"account":"shared","repositories":[{"name":"own/repo"}],"roots":{"workspaces":["`+mine+`"]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &answers{confirm: true}
+	if err := baseStep(t, d).Fix.Do(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	// only tool_store was missing: that alone counts as added, not "not overwritten"
+	if shown := strings.Join(a.shown, "\n"); !strings.Contains(shown, "tool store:  "+filepath.Join(d.Home, "tools")) {
+		t.Errorf("%q", shown)
+	}
+	var cfg struct {
+		Roots struct {
+			ToolStore string `json:"tool_store"`
+		} `json:"roots"`
+	}
+	raw, _ := os.ReadFile(d.ConfigPath)
+	if err := json.Unmarshal(raw, &cfg); err != nil || cfg.Roots.ToolStore != filepath.Join(d.Home, "tools") {
+		t.Errorf("%s %v", raw, err)
+	}
+}
+
+func TestANonObjectRootsIsRefusedWithoutAWrite(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const old = `{"roots":["/x"]}`
+	if err := os.WriteFile(d.ConfigPath, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := baseStep(t, d).Fix.Do(context.Background(), &answers{confirm: true, lines: []string{"wstein/workharbor"}})
+	if err == nil || !strings.Contains(err.Error(), "roots entry that is not an object") {
+		t.Errorf("%v", err)
+	}
+	if raw, _ := os.ReadFile(d.ConfigPath); string(raw) != old {
+		t.Errorf("the file changed: %q", raw)
+	}
+}
