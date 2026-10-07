@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor/internal/setup"
 )
 
 // Issue #379: --log-file puts the run log where the person says, mode 0600, one
@@ -79,5 +82,38 @@ func TestLogFileHelpHasAPlaceholder(t *testing.T) {
 		if !strings.Contains(out, "--log-file path") {
 			t.Errorf("%v: no --log-file placeholder:\n%s", args, out)
 		}
+	}
+}
+
+// The production wiring: the real Terminal host gets the log, so the commands it
+// runs are logged (the rig's fake host cannot show that).
+func TestStartRunLogGivesTheLogToTheTerminalHost(t *testing.T) {
+	var errBuf strings.Builder
+	st := &state{env: &Env{Stderr: &errBuf, Getenv: func(string) string { return "" }}}
+	env := SetupEnv{Host: setup.Terminal{Err: &errBuf}}
+	p := filepath.Join(t.TempDir(), "t.log")
+	lg, err := st.startRunLog(&env, "setup", p, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	term, ok := env.Host.(setup.Terminal)
+	if !ok || term.Log != lg {
+		t.Fatalf("host %#v: the Terminal has no log", env.Host)
+	}
+	if _, err := term.Output(context.Background(), "/bin/sh", "-c", "echo hello-log; exit 3"); err == nil {
+		t.Fatal("want exit 3")
+	}
+	_ = lg.Close()
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "exit 3") || !strings.Contains(string(b), "hello-log") { //nolint:gosec // a test path
+		t.Errorf("command not logged:\n%s", b)
+	}
+}
+
+func TestSetupStepLinesReachTheLogFile(t *testing.T) {
+	r := newSetupRig(t)
+	p := filepath.Join(t.TempDir(), "s.log")
+	r.run("setup", "--dry-run", "--log-file", p)
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "step ") { //nolint:gosec // a test path
+		t.Errorf("no step lines (Options.RunLog not wired):\n%s", b)
 	}
 }

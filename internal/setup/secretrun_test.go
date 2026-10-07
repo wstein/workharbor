@@ -149,7 +149,7 @@ func TestRunLogNeverHoldsTheSecret(t *testing.T) {
 			t.Errorf("log lacks %q: %q", want, got)
 		}
 	}
-	if strings.Contains(got, "| User password") {
+	if strings.Contains(got[strings.Index(got, "tool output:"):], "User password") {
 		t.Errorf("the tool's secret prompt reached the log: %q", got)
 	}
 	if lg.Tail(2) == "" {
