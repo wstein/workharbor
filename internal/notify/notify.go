@@ -37,6 +37,9 @@ const (
 	KindBudgetExceeded Kind = "budget_exceeded"
 	// KindLimitLow is a provider limit the agent reported as low (issue #172).
 	KindLimitLow Kind = "limit_low"
+	// KindRunInterrupted is an interrupted run waiting for the human to resume
+	// it; the supervisor never resumes it itself (D57, issue #356).
+	KindRunInterrupted Kind = "run_interrupted"
 )
 
 // Message is everything a notification carries: IDs and a kind, nothing the

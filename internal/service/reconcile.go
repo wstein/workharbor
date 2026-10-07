@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor/internal/agent"
 	"github.com/wstein/workharbor/internal/domain"
 	"github.com/wstein/workharbor/internal/initiation"
+	"github.com/wstein/workharbor/internal/notify"
 	"github.com/wstein/workharbor/internal/policy"
 	"github.com/wstein/workharbor/internal/runtime"
 )
@@ -140,6 +141,10 @@ func (s *Service) reconcileTask(ctx context.Context, task domain.ID, seen map[do
 	for _, r := range agg.Runs() {
 		if r.State == domain.RunInterrupted {
 			rep.AwaitingHuman = append(rep.AwaitingHuman, r.ID)
+			// An alert only; the notifier's throttle keeps it to one per window.
+			if s.cfg.Notifier != nil {
+				s.report(s.cfg.Notifier.Notify(ctx, notify.Message{TaskID: task, Kind: notify.KindRunInterrupted, RunID: r.ID}))
+			}
 		}
 	}
 	var firstErr error

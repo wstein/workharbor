@@ -263,3 +263,17 @@ func TestAgentMayRunNoticeUsesTheSharedNotificationPath(t *testing.T) {
 		t.Fatal("notice did not use shared deduplication")
 	}
 }
+
+// A repeated interrupted-run alert is dropped inside the window and sent again after it.
+func TestThrottleRunInterrupted(t *testing.T) {
+	now := time.Unix(0, 0)
+	th := &Throttle{Now: func() time.Time { return now }}
+	m := Message{TaskID: "t1", Kind: KindRunInterrupted, RunID: "r1"}
+	if !th.Allow(m) || th.Allow(m) {
+		t.Fatal("first must pass, repeat must drop")
+	}
+	now = now.Add(time.Hour)
+	if !th.Allow(m) {
+		t.Fatal("must pass after the window")
+	}
+}
