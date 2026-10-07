@@ -206,80 +206,80 @@ Summary: 4 ok, 13 FAIL, 30 not verified (?), 0 WARN, 0 skipped
   9. filevault: fdesetup did not answer
      [36m$ whr setup host --only filevault --user 'operator'[0m
   10. homebrew: Homebrew is not installed at /opt/homebrew
-     [36m$ whr setup host --only homebrew --user 'operator'[0m
+      [36m$ whr setup host --only homebrew --user 'operator'[0m
   11. brew-packages: not installed: container, git, gh
-     [36m$ whr setup host --only brew-packages --user 'operator'[0m
+      [36m$ whr setup host --only brew-packages --user 'operator'[0m
   12. brew-pin: brew did not answer
-     [36m$ whr setup host --only brew-pin --user 'operator'[0m
+      [36m$ whr setup host --only brew-pin --user 'operator'[0m
   13. screen-sharing: macOS keeps this under privacy controls (TCC) that a
-     command cannot read or set
-     [36m$ whr setup host --only screen-sharing --user 'operator'[0m
+      command cannot read or set
+      [36m$ whr setup host --only screen-sharing --user 'operator'[0m
   14. tailscale: signing in is the human's; whr does not check a third party's
-     state
-     [36m$ whr setup host --only tailscale --user 'operator'[0m
+      state
+      [36m$ whr setup host --only tailscale --user 'operator'[0m
   15. config-dir: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only config-dir --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only config-dir --user 'operator' (run as operator)[0m
   16. api-token: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only api-token --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only api-token --user 'operator' (run as operator)[0m
   17. agent-key: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only agent-key --user 'operator' (run as operator)[0m
-  18. ssh-ca: this check describes the account operator runs as: run `whr doctor`
-     as operator
-     [36m$ whr setup --only ssh-ca --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only agent-key --user 'operator' (run as operator)[0m
+  18. ssh-ca: this check describes the account operator runs as: run `whr
+      doctor` as operator
+      [36m$ whr setup --only ssh-ca --user 'operator' (run as operator)[0m
   19. container-start: this check describes the account operator runs as: run
-     `whr doctor` as operator
-     [36m$ whr setup --only container-start --user 'operator' (run as operator)[0m
+      `whr doctor` as operator
+      [36m$ whr setup --only container-start --user 'operator' (run as operator)[0m
   20. container-kernel: this check describes the account operator runs as: run
-     `whr doctor` as operator
-     [36m$ whr setup --only container-kernel --user 'operator' (run as operator)[0m
-  21. standard-user-check: this check describes the account operator runs as: run
-     `whr doctor` as operator
-     [36m$ whr setup --only standard-user-check --user 'operator' (run as operator)[0m
+      `whr doctor` as operator
+      [36m$ whr setup --only container-kernel --user 'operator' (run as operator)[0m
+  21. standard-user-check: this check describes the account operator runs as:
+      run `whr doctor` as operator
+      [36m$ whr setup --only standard-user-check --user 'operator' (run as operator)[0m
   22. config-base: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only config-base --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only config-base --user 'operator' (run as operator)[0m
   23. development-key: this check describes the account operator runs as: run
-     `whr doctor` as operator
-     [36m$ whr setup --only development-key --user 'operator' (run as operator)[0m
+      `whr doctor` as operator
+      [36m$ whr setup --only development-key --user 'operator' (run as operator)[0m
   24. github-app: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only github-app --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only github-app --user 'operator' (run as operator)[0m
   25. config-github: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only config-github --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only config-github --user 'operator' (run as operator)[0m
   26. tool-store: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only tool-store --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only tool-store --user 'operator' (run as operator)[0m
   27. service-install: this check describes the account operator runs as: run
-     `whr doctor` as operator
-     [36m$ whr setup --only service-install --user 'operator' (run as operator)[0m
+      `whr doctor` as operator
+      [36m$ whr setup --only service-install --user 'operator' (run as operator)[0m
   28. drop-admin: this check describes the account operator runs as: run `whr
-     doctor` as operator
-     [36m$ whr setup --only drop-admin --user 'operator' (run as operator)[0m
+      doctor` as operator
+      [36m$ whr setup --only drop-admin --user 'operator' (run as operator)[0m
   29. config: open /Users/workharbor/.config/whr/config.json: no such file or
-     directory
-     [36m$ whr setup --only config-base --user 'operator' (run as operator)[0m
+      directory
+      [36m$ whr setup --only config-base --user 'operator' (run as operator)[0m
   30. server: the supervisor did not accept the token: configuration: open
-     /Users/workharbor/.config/whr/config.json: no such file or directory (is
-     `whr serve` running?)
-     [36m$ whr setup --only service-install --user 'operator' (run as operator)[0m
+      /Users/workharbor/.config/whr/config.json: no such file or directory (is
+      `whr serve` running?)
+      [36m$ whr setup --only service-install --user 'operator' (run as operator)[0m
   31. forge-key: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   32. bot-key: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   33. forge-app: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   34. forge-board: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   35. forge-workflow: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   36. agent-login: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   37. lane-agents: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
   38. notifications: needs a valid configuration (see the config check)
-     [36m$ whr setup --user 'operator' (run as operator)[0m
+      [36m$ whr setup --user 'operator' (run as operator)[0m
 whr: some checks failed; fix them and run `whr doctor` again

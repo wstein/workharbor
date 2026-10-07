@@ -374,9 +374,11 @@ func Todo(s Style, items []TodoItem) string {
 	var b strings.Builder
 	b.WriteString(s.paint(RoleTodo, "What you need to do now") + "\n")
 	for i, it := range items {
-		fmt.Fprintf(&b, "  %d. %s\n", i+1, indent(wrap(it.Text, 5), "     "))
+		prefix := fmt.Sprintf("  %d. ", i+1)
+		pad := strings.Repeat(" ", len(prefix))
+		fmt.Fprintf(&b, "%s%s\n", prefix, indent(wrap(it.Text, len(prefix)), pad))
 		for _, c := range it.Commands {
-			fmt.Fprintf(&b, "     %s\n", s.paint(RoleCommand, "$ "+c))
+			fmt.Fprintf(&b, "%s%s\n", pad, s.paint(RoleCommand, "$ "+c))
 		}
 	}
 	return b.String()
