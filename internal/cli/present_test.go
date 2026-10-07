@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
@@ -366,5 +367,21 @@ func TestTermColsOfAPipeIsZero(t *testing.T) {
 	var b bytes.Buffer
 	if n := termCols(&b); n != 0 {
 		t.Errorf("termCols = %d", n)
+	}
+}
+
+// No line of a doctor report is wider than 90 runes once colour is stripped.
+func TestDoctorGoldensStayWithin90Runes(t *testing.T) {
+	esc := regexp.MustCompile("\x1b\\[[0-9;]*m")
+	for _, name := range []string{"doctor_tty", "doctor_plain", "doctor_nocolor"} {
+		b, err := os.ReadFile(filepath.Join("testdata", name+".golden")) //nolint:gosec // a golden file of this package
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			if n := utf8.RuneCountInString(esc.ReplaceAllString(line, "")); n > 90 {
+				t.Errorf("%s: %d runes wide: %q", name, n, line)
+			}
+		}
 	}
 }
