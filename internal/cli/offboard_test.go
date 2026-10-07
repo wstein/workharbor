@@ -364,13 +364,18 @@ func TestOffboardRunLog(t *testing.T) {
 }
 
 func TestOffboardCauseNamesTheRealCause(t *testing.T) {
-	for code, want := range map[int]string{
-		exitcode.Usage:    "nothing was removed",
-		exitcode.Conflict: "changed since the plan",
-		exitcode.Error:    "may be done",
+	for _, c := range []struct {
+		code    int
+		started bool
+		want    string
+	}{
+		{exitcode.Usage, false, "not confirmed: nothing was removed (exit 2)"},
+		{exitcode.Conflict, false, "the account changed since the plan: nothing was changed (exit 5)"},
+		{exitcode.Error, true, "removing the account did not finish cleanly, part of it may be done (exit 1)"},
+		{exitcode.Error, false, "the delete did not start: nothing was removed (exit 1)"},
 	} {
-		if got := offboardCause(code); !strings.Contains(got, want) || strings.Contains(got, "was not removed") {
-			t.Errorf("exit %d: %q lacks %q", code, got, want)
+		if got := offboardCause(c.code, c.started); got != c.want {
+			t.Errorf("exit %d started=%v: %q, want %q", c.code, c.started, got, c.want)
 		}
 	}
 }

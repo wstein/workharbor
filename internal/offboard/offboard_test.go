@@ -890,3 +890,31 @@ func TestAFailedVerifyKeepsThePicture(t *testing.T) {
 		}
 	}
 }
+
+// Only a started delete may leave part of the account behind: ExecuteReport
+// says so, and a refused sudo or a declined word did not start it.
+func TestExecuteReportSaysWhetherTheDeleteStarted(t *testing.T) {
+	run := func(h *fakeHost) (int, bool) {
+		f := Inspect(context.Background(), h.deps(), inv())
+		var so, se bytes.Buffer
+		h.log = &se
+		return ExecuteReport(context.Background(), h, h.deps(), f, Log{W: &se, Now: time.Now, Whr: "t"}, Out{Out: &so, Err: &se})
+	}
+	h := newHost()
+	h.answer = "workharbor"
+	h.failSudo = true
+	if c, started := run(h); c != exitcode.Error || started {
+		t.Errorf("sudo refused: exit %d started %v", c, started)
+	}
+	h = newHost()
+	h.answer = "workharbor"
+	h.failDelete = true
+	if c, started := run(h); c != exitcode.Error || !started {
+		t.Errorf("delete failed: exit %d started %v", c, started)
+	}
+	h = newHost()
+	h.answer = "no"
+	if c, started := run(h); c != exitcode.Usage || started {
+		t.Errorf("declined: exit %d started %v", c, started)
+	}
+}

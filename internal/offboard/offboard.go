@@ -488,13 +488,20 @@ func (l Log) line(result string, exit int, ran [][]string) error {
 // program in an administrator's session could feed it through a pty, and sudo's
 // authentication is the real barrier.
 func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) int {
+	code, _ := ExecuteReport(ctx, h, d, f, lg, o)
+	return code
+}
+
+// ExecuteReport is Execute that also says whether the delete command was
+// started: only then may part of the account be gone after a failure.
+func ExecuteReport(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) (code int, removalStarted bool) {
 	o.Action("This deletes the macOS account " + f.Account + " and its home folder " + f.HomeDir + ". It cannot be undone. No backup is made: copy what you need first.")
 	// A quit (q) is "not confirmed", exit 2, like any answer that is not the word:
 	// nothing was changed, and a script cannot tell a quit from a refusal.
 	a, err := askWord(h, "Delete the account "+f.Account+"?")
 	if err != nil || a != render.Yes {
 		o.Note("whr: not confirmed: nothing was removed")
-		return exitcode.Usage
+		return exitcode.Usage, false
 	}
 	// The plan was shown some time ago: look again, and refuse if anything
 	// changed or a guard now says no.
@@ -504,7 +511,7 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 			o.Refusal(r)
 		}
 		o.Note("whr: the account changed since the plan: nothing was changed")
-		return exitcode.Conflict
+		return exitcode.Conflict, false
 	}
 	f.HomeSizeKiB, f2.HomeSizeKiB = 0, 0
 	f.HomeSizeKnown, f2.HomeSizeKnown = false, false
@@ -512,18 +519,18 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	if v := newVolume(f.HomeVolumes, f2.HomeVolumes); v != "" {
 		o.Refusal(Refusal{"recheck", exitcode.Conflict, "a volume is mounted in the home: " + v})
 		o.Note("whr: the account changed since the plan: nothing was changed")
-		return exitcode.Conflict
+		return exitcode.Conflict, false
 	}
 	if !reflect.DeepEqual(f, f2) {
 		o.Refusal(Refusal{"recheck", exitcode.Conflict, "the account differs from the plan you were shown"})
 		o.Note("whr: the account changed since the plan: nothing was changed")
-		return exitcode.Conflict
+		return exitcode.Conflict, false
 	}
 	c := DeleteCmd(f.RunUser)
 	lg.Admin = f.RunUser
 	if err := lg.line("started", 0, nil); err != nil {
 		o.Note("whr: cannot record the offboard protocol: %s; nothing was removed", oneLine(err.Error()))
-		return exitcode.Error
+		return exitcode.Error, false
 	}
 	ran := [][]string{sudoCheckCmd().Full()}
 	o.Command(sudoCheckCmd())
@@ -534,11 +541,12 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	} else {
 		o.Command(c)
 		ran = append(ran, c.Full())
+		removalStarted = true
 		if err := h.Run(ctx, c); err != nil {
 			runErr = fmt.Errorf("%s failed: %w", setup.QuoteArgv(c.Full()), err)
 		}
 	}
-	code := exitcode.OK
+	code = exitcode.OK
 	if runErr != nil {
 		code = exitcode.Error
 		o.Note("whr: %s", oneLine(runErr.Error()))
@@ -566,7 +574,7 @@ func Execute(ctx context.Context, h setup.Host, d Deps, f Facts, lg Log, o Out) 
 	}
 	o.ui().Final(finalOf(f, code))
 	o.Note("%s", Unverified)
-	return code
+	return code, removalStarted
 }
 
 // finalOf is the closing summary of a delete run.

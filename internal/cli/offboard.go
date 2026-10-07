@@ -208,12 +208,12 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 		}
 		return appendEntry(protocol.Entry{Event: protocol.EventRunEnd, Outcome: end})
 	}}
-	code := offboard.Execute(ctx, env.Host, d, f, lg, o)
+	code, started := offboard.ExecuteReport(ctx, env.Host, d, f, lg, o)
 	if code == exitcode.OK {
 		runLog.Step("delete-user", "ok", "the account was removed")
 	} else {
 		runLog.Step("delete-user", "fail", fmt.Sprintf("exit %d", code))
-		setup.FailureSummary(render.Writer{W: o.Err, S: o.Style}, runLog, offboardCause(code), "check the account with `whr doctor`, then run `whr offboard host --delete` again")
+		setup.FailureSummary(render.Writer{W: o.Err, S: o.Style}, runLog, offboardCause(code, started), "check the account with `whr doctor`, then run `whr offboard host --delete` again")
 	}
 	if code != exitcode.OK {
 		return exitError{code}
@@ -221,16 +221,20 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	return nil
 }
 
-// offboardCause names what a failed delete run means by its exit code. Only a
-// refusal before the delete changed nothing; an error may be a partial removal
-// (the command failed, the check afterwards found leftovers, or the record could
-// not be written), so it must not claim the account is still there.
-func offboardCause(code int) string {
+// offboardCause names what a failed delete run means by its exit code. A refusal
+// before the delete changed nothing. An error may be a partial removal only when
+// the delete command was started (it failed, the check afterwards found
+// leftovers, or the result could not be recorded); an error before that (the
+// record could not be opened, sudo refused) removed nothing, and says so.
+func offboardCause(code int, started bool) string {
 	switch code {
 	case exitcode.Usage:
 		return fmt.Sprintf("not confirmed: nothing was removed (exit %d)", code)
 	case exitcode.Conflict:
 		return fmt.Sprintf("the account changed since the plan: nothing was changed (exit %d)", code)
+	}
+	if !started {
+		return fmt.Sprintf("the delete did not start: nothing was removed (exit %d)", code)
 	}
 	return fmt.Sprintf("removing the account did not finish cleanly, part of it may be done (exit %d)", code)
 }
