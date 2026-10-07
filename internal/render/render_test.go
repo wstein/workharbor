@@ -224,3 +224,18 @@ func TestToolWriterEscapesControlBytes(t *testing.T) {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
 }
+
+func TestToolWriterKeepsASplitMultibyteCharacterWhole(t *testing.T) {
+	var b bytes.Buffer
+	tw := NewToolWriter(&b, Style{})
+	_, _ = tw.Write([]byte("a\xe2\x82"))
+	_, _ = tw.Write([]byte("\xacb\n\xe2\x82"))
+	tw.End()
+	got := b.String()
+	if !strings.Contains(got, "a\u20acb\n") {
+		t.Fatalf("split character broken: %q", got)
+	}
+	if !strings.Contains(got, "| \ufffd") && !strings.Contains(got, "\\x") {
+		t.Fatalf("dangling partial sequence dropped: %q", got)
+	}
+}

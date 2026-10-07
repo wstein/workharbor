@@ -21,6 +21,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor/internal/textsafe"
 )
@@ -188,13 +189,33 @@ type ToolWriter struct {
 	s       Style
 	started bool
 	atStart bool
+	pend    []byte // incomplete trailing UTF-8 of the last Write
 }
 
 // NewToolWriter returns a ToolWriter on w.
 func NewToolWriter(w io.Writer, s Style) *ToolWriter { return &ToolWriter{w: w, s: s, atStart: true} }
 
-// Write implements io.Writer.
+// Write implements io.Writer. An incomplete UTF-8 character at the end is held
+// until the next Write (or End), so one split across writes stays whole.
 func (t *ToolWriter) Write(p []byte) (int, error) {
+	b := append(t.pend, p...)
+	t.pend = nil
+	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(b[i]) {
+			if !utf8.FullRune(b[i:]) {
+				t.pend = append([]byte(nil), b[i:]...)
+				b = b[:i]
+			}
+			break
+		}
+	}
+	if err := t.write(b); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (t *ToolWriter) write(p []byte) error {
 	mark := "|"
 	if t.s.Unicode {
 		mark = "│"
@@ -222,14 +243,19 @@ func (t *ToolWriter) Write(p []byte) (int, error) {
 		}
 		t.atStart = strings.HasSuffix(seg, "\n")
 		if _, err := io.WriteString(t.w, out); err != nil {
-			return 0, err
+			return err
 		}
 	}
-	return len(p), nil
+	return nil
 }
 
 // End closes the block: the next write starts a new one with its label.
 func (t *ToolWriter) End() {
+	if len(t.pend) > 0 {
+		b := t.pend
+		t.pend = nil
+		_ = t.write(b)
+	}
 	if t.started && !t.atStart {
 		_, _ = io.WriteString(t.w, "\n")
 	}
