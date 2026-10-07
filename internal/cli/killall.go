@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wstein/workharbor/internal/render"
 )
 
 // confirmWord is what the human types to pull the kill switch.
@@ -25,7 +27,7 @@ func newKillAll(s *state) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !yes {
-				fmt.Fprintf(s.env.Stderr, "This stops every run, cancels every unfinished task and revokes the forge tokens.\nType %q to go on: ", confirmWord)
+				fmt.Fprintf(s.env.Stderr, "%s ", render.Wrap(fmt.Sprintf("This stops every run, cancels every unfinished task and revokes the forge tokens.\nType %q to go on:", confirmWord), 0))
 				line, err := bufio.NewReader(s.env.Stdin).ReadString('\n')
 				if err != nil && !errors.Is(err, io.EOF) {
 					return err

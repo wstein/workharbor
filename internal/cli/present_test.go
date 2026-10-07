@@ -269,7 +269,7 @@ func TestInterruptExitsWithItsOwnCode(t *testing.T) {
 	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "whr: interrupted") || strings.Contains(last, "context") {
 		t.Errorf("final line %q", last)
 	}
-	if !regexp.MustCompile(`to check it and go on, run\n.*\$ whr setup host .*--only power`).MatchString(errOut) {
+	if !regexp.MustCompile(`to check it and go on, run\n(?:.*one long line.*\n)?.*\$ whr setup host .*--only power`).MatchString(errOut) {
 		t.Errorf("no resume command:\n%s", errOut)
 	}
 }

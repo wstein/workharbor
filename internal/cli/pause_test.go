@@ -34,7 +34,8 @@ func TestPurgeSaysWhatGoesAndAsks(t *testing.T) {
 	s.reply("POST /v1/tasks/t-aaa111/purge", 200, ok(`{"events":12,"bytes":3400,"digest":"abc"}`))
 
 	code, _, errOut := s.runCLI("no\n", "purge", "t-aaa111")
-	if code != exitcode.Usage || !strings.Contains(errOut, "12 transcript event(s), 3400 byte(s)") || !strings.Contains(errOut, "audit entries, usage and Decisions stay") {
+	flat := strings.Join(strings.Fields(errOut), " ")
+	if code != exitcode.Usage || !strings.Contains(flat, "12 transcript event(s), 3400 byte(s)") || !strings.Contains(flat, "audit entries, usage and Decisions stay") {
 		t.Fatalf("declined: %d %q", code, errOut)
 	}
 	if n := len(s.requests("POST /v1/tasks/t-aaa111/purge")); n != 0 {

@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wstein/workharbor/internal/render"
 )
 
 // newPause is `whr pause <task>` (provisional, issue #106): a hard interrupt of the
@@ -90,7 +92,7 @@ func newPurge(s *state) *cobra.Command {
 				return fmt.Errorf("the size is not what this whr expects: %w", err)
 			}
 			if !yes {
-				fmt.Fprintf(s.env.Stderr, "This deletes %d transcript event(s), %d byte(s), of %s. The audit entries, usage and Decisions stay.\nType %q to go on: ", size.Events, size.Bytes, clean(id), "purge")
+				fmt.Fprintf(s.env.Stderr, "%s ", render.Wrap(fmt.Sprintf("This deletes %d transcript event(s), %d byte(s), of %s. The audit entries, usage and Decisions stay.\nType %q to go on:", size.Events, size.Bytes, clean(id), "purge"), 0))
 				line, err := bufio.NewReader(s.env.Stdin).ReadString('\n')
 				if err != nil && !errors.Is(err, io.EOF) {
 					return err
