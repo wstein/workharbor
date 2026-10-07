@@ -331,3 +331,11 @@ func TestColourFlagsAndEnv(t *testing.T) {
 		}
 	}
 }
+
+// Output that is not a terminal wraps at the default 80: no width is read.
+func TestTermColsOfAPipeIsZero(t *testing.T) {
+	var b bytes.Buffer
+	if n := termCols(&b); n != 0 {
+		t.Errorf("termCols = %d", n)
+	}
+}

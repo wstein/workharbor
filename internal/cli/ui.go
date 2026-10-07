@@ -36,7 +36,21 @@ func (st *state) style(w io.Writer, plain bool) render.Style {
 		NoColorFlag: st.noColor || st.color == "never",
 		ColorAlways: st.color == "always",
 		Plain:       plain,
+		Cols:        termCols(w),
 	})
+}
+
+// termCols is the width of the terminal behind w, or 0 when w is not one.
+func termCols(w io.Writer) int {
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0
+	}
+	n, _, err := term.GetSize(int(f.Fd())) //nolint:gosec // a file descriptor fits an int
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // quitError ends `whr setup` after the person answered q: a distinct exit code,
