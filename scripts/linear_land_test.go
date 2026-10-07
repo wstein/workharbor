@@ -691,6 +691,49 @@ func TestLandRefusesCallerShell(t *testing.T) {
 	}
 }
 
+func TestLandNestedExportedEnvFunction(t *testing.T) {
+	for _, target := range []string{"land", "land-next", "land-all"} {
+		t.Run(target, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			env := []string{"BASH_FUNC_env%%=() { :; }", "env=() { :; }"}
+			probe := exec.CommandContext(t.Context(), "/bin/sh", "-c", "env ignored; echo imported")
+			probe.Env = append(r.env(), env...)
+			if out, err := probe.CombinedOutput(); err != nil || string(out) != "imported\n" {
+				t.Skip("recipe shell does not import exported env functions")
+			}
+			makefile := filepath.Join(r.dir, "Makefile")
+			data, readErr := os.ReadFile(makefile) //nolint:gosec // fixed fixture Makefile in an isolated repository
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			r.write(makefile, strings.Replace(string(data), "check-local commitlint test-commitlint-consumers check-generated:\n", "check-local:\n\t@echo required-check-failed >&2; exit 1\ncommitlint test-commitlint-consumers check-generated:\n", 1))
+			r.git(r.dir, "commit", "-qam", "failing check")
+			wt := r.topic("topic")
+			sha := r.git(wt, "rev-parse", "HEAD")
+			r.stamp(sha, "review", sha)
+			base := r.git(r.dir, "rev-parse", "main")
+			var out string
+			var err error
+			if target == "land" {
+				out, err = r.wizardTTY(r.dir, "1\ny\n", t.TempDir(), env)
+			} else {
+				cmd := r.ttyCmd(r.dir, t.TempDir(), env)
+				for i, arg := range cmd.Args {
+					cmd.Args[i] = strings.ReplaceAll(arg, "make -s land", "make -s "+target)
+				}
+				out, err = r.runTTY(cmd, "y\n")
+			}
+			if got := r.git(r.dir, "rev-parse", "main"); got != base {
+				t.Fatalf("nested env function moved main despite failing check to %s\n%s", got, out)
+			}
+			r.wantNoConfirm()
+			if err == nil || !strings.Contains(out, "required-check-failed") || strings.Contains(out, "landed the selected candidate") || strings.Contains(out, "git push origin main") {
+				t.Fatalf("nested landing reported success or skipped failing gate: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
 // landCleanLine returns the real LAND_MAKE and LAND_CLEAN definitions, so that mutating its
 // flags is caught by the tests.
 func landCleanLine(t *testing.T, makefile []byte) string {

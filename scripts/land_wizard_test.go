@@ -2,6 +2,7 @@ package scripts_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -297,5 +298,132 @@ func TestLandWizardBranchDisplay(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A review note or branch name must not reach the terminal as a screen clear or
+// a bidi override: the inspect/preview output is display text only.
+func TestLandInspectOutputIsInert(t *testing.T) {
+	const bad = "\x1b[2J\x1b]52;c;x\x07\u202e\u2066"
+	check := func(t *testing.T, out string) {
+		t.Helper()
+		if strings.ContainsAny(out, "\x1b\x07\u202e\u2066") {
+			t.Fatalf("raw controls reached the terminal: %q", out)
+		}
+		if !strings.Contains(out, "topic?evil") || !strings.Contains(out, "?[2J?]52;c;x??") {
+			t.Fatalf("display copies missing: %q", out)
+		}
+	}
+	t.Run("wizard", func(t *testing.T) {
+		r := newLandBranchRepo(t, false)
+		wt := r.topic("topic\u202eevil")
+		sha := r.git(wt, "rev-parse", "HEAD")
+		r.stamp(sha, "note "+bad, sha)
+		out, _ := r.wizardTTY(r.dir, "q\n", t.TempDir(), nil)
+		check(t, out)
+	})
+	for _, target := range []string{"land-list", "land-preview"} {
+		t.Run(target, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			wt := r.topic("topic\u202eevil")
+			sha := r.git(wt, "rev-parse", "HEAD")
+			r.stamp(sha, "note "+bad, sha)
+			args := []string{}
+			if target == "land-preview" {
+				args = append(args, "SHA="+sha)
+			}
+			out, err := r.queue(target, args...)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			check(t, out)
+		})
+	}
+}
+
+// The confirmation note is written after the fast-forward, so a pre-existing note
+// or a locked notes ref must refuse before main moves.
+func TestLandRefusesBeforeUnrecordableConfirmation(t *testing.T) {
+	for _, mode := range []string{"existing-note", "locked-ref"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newLandBranchRepo(t, false)
+			wt := r.topic("topic")
+			sha := r.git(wt, "rev-parse", "HEAD")
+			r.stamp(sha, "review", sha)
+			if mode == "existing-note" {
+				r.git(r.dir, "notes", "--ref=confirm", "add", "-m", "planted", sha)
+			} else {
+				gitDir := r.git(r.dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+				lock := filepath.Join(gitDir, "refs", "notes", "confirm.lock")
+				r.write(lock, "")
+			}
+			base := r.git(r.dir, "rev-parse", "main")
+			out, err := r.wizardTTY(r.dir, "1\ny\n", t.TempDir(), nil)
+			if err == nil || r.git(r.dir, "rev-parse", "main") != base {
+				t.Fatalf("main moved or land succeeded: %v\n%s", err, out)
+			}
+			if !strings.Contains(out, "refusing before main moves") {
+				t.Fatalf("no early refusal: %s", out)
+			}
+		})
+	}
+}
+
+func TestLandPreviewInertFileNamesAndBranchList(t *testing.T) {
+	t.Run("file name", func(t *testing.T) {
+		r := newLandQueueRepo(t)
+		wt := r.topic("topic")
+		r.write(filepath.Join(wt, "x\u202e\u0085y.md"), "x\n")
+		r.git(wt, "add", "-A")
+		r.git(wt, "commit", "-qm", "named file")
+		sha := r.git(wt, "rev-parse", "HEAD")
+		r.stamp(sha, "review", sha)
+		out, err := r.queue("land-preview", "SHA="+sha)
+		if err != nil || strings.ContainsAny(out, "\u202e\u0085") || !strings.Contains(out, "y.md") {
+			t.Fatalf("file name reached the terminal raw or preview failed: %v %q", err, out)
+		}
+	})
+	t.Run("several branches", func(t *testing.T) {
+		r := newLandQueueRepo(t)
+		wt := r.topic("topic")
+		sha := r.git(wt, "rev-parse", "HEAD")
+		r.stamp(sha, "review", sha)
+		r.git(r.dir, "branch", "alias\u202eevil", sha)
+		out, err := r.queue("land-preview", "SHA="+sha)
+		if err == nil || strings.ContainsAny(out, "\u202e") || !strings.Contains(out, "alias?evil") {
+			t.Fatalf("branch list not inert: %v %q", err, out)
+		}
+	})
+}
+
+func TestLandRecordIdempotentOnlyForIdenticalNote(t *testing.T) {
+	r := newLandBranchRepo(t, false)
+	wt := r.topic("topic")
+	sha := r.git(wt, "rev-parse", "HEAD")
+	r.stamp(sha, "review", sha)
+	base := r.git(r.dir, "rev-parse", "main")
+	review := r.git(r.dir, "notes", "--ref=review", "list", sha)
+	r.git(r.dir, "merge", "-q", "--ff-only", sha)
+	record := func(at string) error {
+		cmd := exec.CommandContext(t.Context(), "sh", filepath.Join(r.dir, "scripts", "land.sh"), "record", sha, "topic", "yn", "yes", at, review, base, "ordinary", "0") //nolint:gosec // fixture script in an isolated repository
+		cmd.Dir, cmd.Env = r.dir, r.env()
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("%s", out)
+		}
+		return err
+	}
+	if err := record("2026-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	first := r.git(r.dir, "notes", "--ref=confirm", "list", sha)
+	if err := record("2026-01-01T00:00:00Z"); err != nil {
+		t.Fatalf("identical note refused: %v", err)
+	}
+	if err := record("2026-01-02T00:00:00Z"); err == nil {
+		t.Fatal("different note accepted")
+	}
+	if r.git(r.dir, "notes", "--ref=confirm", "list", sha) != first {
+		t.Fatal("existing note was replaced")
 	}
 }

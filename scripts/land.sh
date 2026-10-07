@@ -18,6 +18,23 @@
 set -u
 export GIT_NO_REPLACE_OBJECTS=1
 die() { echo "land: $*" >&2; exit 1; }
+# Match design §7.1 / internal/textsafe for every display field (branch names, review
+# notes, titles). Raw values stay in variables for Git; only display copies change.
+# "sanitize_display text" keeps newlines for multi-line text.
+sanitize_display() {
+  command -v python3 >/dev/null 2>&1 || { LC_ALL=C tr -c '[:print:]\t\n' '?'; return; }
+  python3 -I -c '
+import sys
+text = sys.stdin.buffer.read().decode("utf-8", "replace")
+keep = {9, 10} if len(sys.argv) > 1 else {9}
+def unsafe(c):
+    n = ord(c)
+    return ((n < 0x20 and n not in keep) or 0x7f <= n <= 0x9f or
+            0x202a <= n <= 0x202e or 0x2066 <= n <= 0x2069 or
+            n in (0x061c, 0x200e, 0x200f, 0x2028, 0x2029))
+sys.stdout.buffer.write("".join("?" if unsafe(c) else c for c in text).encode("utf-8"))
+' "$@"
+}
 command="${1:-}"
 case "$command" in
 wizard)
@@ -32,20 +49,6 @@ wizard)
     case "$answer" in y | Y) cd "$shared" || die "cannot enter the shared checkout" ;;
       *) die "cancelled: run make land from the shared checkout when ready; no checkout was switched" ;; esac
   fi
-  # Match design §7.1 / internal/textsafe for new wizard display fields.
-  # Raw branch names remain in candidates for Git; only display copies change.
-  sanitize_display() {
-    python3 -c '
-import sys
-text = sys.stdin.buffer.read().decode("utf-8", "replace")
-def unsafe(c):
-    n = ord(c)
-    return ((n < 0x20 and n != 9) or 0x7f <= n <= 0x9f or
-            0x202a <= n <= 0x202e or 0x2066 <= n <= 0x2069 or
-            n in (0x061c, 0x200e, 0x200f, 0x2028, 0x2029))
-sys.stdout.write("".join("?" if unsafe(c) else c for c in text))
-'
-  }
   lsh="$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || die "cannot read main's resolver"
   queue="$(git for-each-ref --sort=refname --no-merged=refs/heads/main --format='%(objectname) %(refname:lstrip=2)' refs/heads/)" || die "cannot list candidates"
   candidates=""; display_candidates=""; count=0
@@ -86,7 +89,7 @@ EOT
   git merge-base --is-ancestor refs/heads/main "$tip" || die "$display_branch is not on top of main: in its worktree run git rebase main, obtain review of the new SHA, then run make land again"
   echo "land: selected candidate summary; confirmation follows." >&2
   # Do not pass BRANCH: the short form retains the review and human-answer gate.
-  env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u MAKEFILES make -s land SHA="$tip" || exit 1
+  /usr/bin/env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u MAKEFILES make -s land SHA="$tip" || exit 1
   echo "land: landed the selected candidate on local main. Push only after all intended commits are reviewed: git push origin main" >&2
   exit 0 ;;
 record)
@@ -98,7 +101,7 @@ record)
   # The resolver and this writer are the same blob captured from main before
   # landing. Never execute a candidate's writer after the fast-forward.
   # assurance local is an honest log, not proof against same-user agents.
-  record="$(python3 - "$full" "$branch" "$mode" "$answer" "$at" "$review" "$base" "$class" "$generated" <<'PYRECORD'
+  record="$(python3 -I - "$full" "$branch" "$mode" "$answer" "$at" "$review" "$base" "$class" "$generated" <<'PYRECORD'
 import datetime
 import json
 import re
@@ -142,7 +145,13 @@ record = {
 print(canonical(record), end="")
 PYRECORD
 )" || die "cannot encode the confirmation"
-  # No -f: an existing record is never silently overwritten.
+  # No -f: an existing record is never silently overwritten; a byte-identical one
+  # (a rerun after a partial failure) is accepted.
+  existing="$(git notes --ref=confirm list "$full" 2>/dev/null)" || existing=""
+  if [ -n "$existing" ]; then
+    [ "$(git cat-file blob "$existing" 2>/dev/null)" = "$record" ] && exit 0
+    die "a different confirmation note already exists"
+  fi
   printf '%s' "$record" | git notes --ref=confirm add -F - "$full" || die "cannot write the confirmation note"
   exit 0 ;;
 list | next | all)
@@ -159,10 +168,10 @@ list | next | all)
     fi
     # Unstamped branches are visible in land-list but do not enter the queue.
     git notes --ref=review show "$tip" >/dev/null 2>&1 || continue
-    [ "$(git rev-parse --verify "refs/heads/$branch^{commit}")" = "$tip" ] || die "queue branch $branch moved: run the queue again"
+    [ "$(git rev-parse --verify "refs/heads/$branch^{commit}")" = "$tip" ] || die "queue branch $(printf '%s' "$branch" | sanitize_display) moved: run the queue again"
     selected=1
     # Use phase 1, without BRANCH (which would bypass the review decision).
-    env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u MAKEFILES make -s land SHA="$tip" || exit 1
+    /usr/bin/env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u MAKEFILES make -s land SHA="$tip" || exit 1
     [ "$command" = next ] && break
   done 3<<EOT
 $queue
@@ -193,7 +202,7 @@ if [ "$command" = inspect ]; then
 fi
 if [ "$(printf '%s\n' "$branches" | wc -l | tr -d ' ')" != 1 ]; then
   echo "land: several branches have $full as their tip:" >&2
-  printf '  %s\n' $branches >&2
+  printf '  %s\n' $branches | sanitize_display text >&2
   die "say which one is meant: remove the extra branches or use BRANCH=<name> SHA=<40 hex>"
 fi
 [ "$branches" != main ] || die "$full is main itself: nothing to land"
@@ -207,6 +216,13 @@ stamp=matched
 if [ "$at" != "$full" ]; then
   stamp=mismatch
   [ "$command" = inspect ] || die "the review note is not for $full (it says: ${at:-no 'at <sha>'}): refusing"
+fi
+if [ "$command" = resolve ]; then
+  # Refuse before anything lands: the record step runs after the fast-forward and
+  # must not meet an existing note or a locked notes ref there.
+  [ -z "$(git notes --ref=confirm list "$full" 2>/dev/null)" ] || die "$full already has a confirmation note (git notes --ref=confirm): refusing before main moves"
+  cgit="$(git rev-parse --path-format=absolute --git-common-dir)" || die "cannot find the git directory"
+  [ ! -e "$cgit/refs/notes/confirm.lock" ] || die "the confirmation notes ref is locked ($cgit/refs/notes/confirm.lock): refusing before main moves"
 fi
 files="$(git -c core.quotepath=off diff --no-renames --name-only -z "$base" "$full" | tr '\0' '\n')" || die "cannot diff against main"
 class=ordinary
@@ -227,12 +243,12 @@ $files
 EOT
 {
   echo "land: candidate $full"
-  echo "land: branch    $branches"
+  echo "land: branch    $(printf '%s' "$branches" | sanitize_display)"
   echo "land: review stamp: $stamp"
   echo "land: review note:"
-  printf '%s\n' "$note" | sed 's/^/  /'
+  printf '%s\n' "$note" | sanitize_display text | sed 's/^/  /'
   echo "land: path class: $class (from the changed paths, not from the note)"
-  git --no-pager diff --stat "$base" "$full"
+  git -c core.quotepath=on --no-pager diff --stat "$base" "$full" | sanitize_display text
 } >&2
 case "$command" in preview | inspect) exit 0 ;; esac
 command -v python3 >/dev/null 2>&1 || die "python3 is required to record the confirmation"

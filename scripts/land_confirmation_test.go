@@ -203,7 +203,7 @@ func TestLandConfirmationRefusals(t *testing.T) {
 
 func TestLandConfirmationWriterFailure(t *testing.T) {
 	for _, existing := range []bool{false, true} {
-		t.Run(map[bool]string{false: "encoder fails after ff", true: "existing note is preserved"}[existing], func(t *testing.T) {
+		t.Run(map[bool]string{false: "encoder fails after ff", true: "existing note refuses before ff"}[existing], func(t *testing.T) {
 			r := newLandBranchRepo(t, false)
 			sha := r.detachedTopic()
 			r.stamp(sha, "review", sha)
@@ -223,20 +223,24 @@ func TestLandConfirmationWriterFailure(t *testing.T) {
 					}
 				}
 			}
+			base := r.git(r.dir, "rev-parse", "main")
 			out, err := r.landTTY(r.dir, "y\n", t.TempDir(), env, "SHA="+sha)
+			if existing {
+				if err == nil || !strings.Contains(out, "refusing before main moves") || r.git(r.dir, "rev-parse", "main") != base {
+					t.Fatalf("existing note did not refuse before the ff: %v\n%s", err, out)
+				}
+				if r.git(r.dir, "notes", "--ref=confirm", "show", sha) != "existing record" {
+					t.Fatal("writer replaced existing note")
+				}
+				return
+			}
 			if err == nil || !strings.Contains(out, "main moved to "+sha+", but its confirmation note was not recorded") {
 				t.Fatalf("writer failure: %v\n%s", err, out)
 			}
 			if r.git(r.dir, "rev-parse", "main") != sha {
 				t.Fatal("writer failure undid successful ff")
 			}
-			if existing {
-				if r.git(r.dir, "notes", "--ref=confirm", "show", sha) != "existing record" {
-					t.Fatal("writer replaced existing note")
-				}
-			} else {
-				r.wantNoConfirm()
-			}
+			r.wantNoConfirm()
 		})
 	}
 }
