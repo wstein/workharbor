@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -38,6 +39,10 @@ type Terminal struct {
 	Sig *Interrupts
 	// Log records every command, its exit code and output (issue #379); nil: none.
 	Log *runlog.Log
+	// Probes remembers the answers of read-only commands for one run, so a
+	// check that the doctor and the wizard both make runs its command once. Any
+	// command the wizard runs (a fix) forgets them. Nil: every call runs.
+	Probes *Probes
 	// readSecret replaces Secret in tests.
 	readSecret func(question string) (string, error)
 }
@@ -91,8 +96,65 @@ func Interrupted(ctx context.Context, h any) error {
 	return nil
 }
 
-// Output implements doctor.Runner.
+// Probes is the per-run memory of read-only command answers, see Terminal.
+type Probes struct {
+	mu sync.Mutex
+	m  map[string]probe
+}
+
+type probe struct {
+	out []byte
+	err error
+}
+
+func (p *Probes) get(key string) (probe, bool) {
+	if p == nil {
+		return probe{}, false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	v, ok := p.m[key]
+	return v, ok
+}
+
+func (p *Probes) put(key string, v probe) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.m == nil {
+		p.m = map[string]probe{}
+	}
+	p.m[key] = v
+}
+
+// Reset forgets every answer: something may have changed the system.
+func (p *Probes) Reset() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.m = nil
+}
+
+// Output implements doctor.Runner. With Probes, a command already run since
+// the last fix answers from memory and is neither run nor logged again; an
+// answer cut short by an interrupt is never kept.
 func (t Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
+	key := strings.Join(argv, "\x00")
+	if v, ok := t.Probes.get(key); ok {
+		return v.out, v.err
+	}
+	out, err := t.output(ctx, argv...)
+	if ctx.Err() == nil && !t.Sig.Seen() {
+		t.Probes.put(key, probe{out, err})
+	}
+	return out, err
+}
+
+func (t Terminal) output(ctx context.Context, argv ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // a read-only command named by the steps
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -102,7 +164,8 @@ func (t Terminal) Output(ctx context.Context, argv ...string) ([]byte, error) {
 		err = nil // the command itself succeeded; its output was read
 	}
 	err = t.interruptOr(ctx, err)
-	t.Log.Command(argv, exitCodeOf(err), out.String()+errb.String(), "")
+	code := exitCodeOf(err)
+	t.Log.CommandAnswer(argv, code, out.String()+errb.String(), "", doctor.ExpectedAnswer(argv, code))
 	if err != nil && errb.Len() > 0 {
 		// what the command said is what tells "not set" from "could not read"
 		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
@@ -130,6 +193,7 @@ var ErrPasswordPolicy = errors.New("password rejected by the macOS password poli
 // asked again (up to three times) when the password policy rejects it. Any
 // other failure is not retried, and a third rejection stops the whole run.
 func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
+	t.Probes.Reset() // a command that is not a probe may change what the probes read
 	if c.SecretPrompt == "" {
 		return t.runOnce(ctx, c, "", nil)
 	}

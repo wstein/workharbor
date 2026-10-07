@@ -98,6 +98,13 @@ func (l *Log) put(s string) {
 // Command records a command (its argv, which holds no secret), its exit code and
 // its output. secret, when not empty, is masked in the output.
 func (l *Log) Command(argv []string, exit int, output, secret string) {
+	l.CommandAnswer(argv, exit, output, secret, "")
+}
+
+// CommandAnswer is Command for a command whose non-zero exit is an expected
+// answer (answer says which, e.g. "not a member"): the log shows the answer
+// and the status, not a bare "exit 67" that reads like an error.
+func (l *Log) CommandAnswer(argv []string, exit int, output, secret, answer string) {
 	if l == nil {
 		return
 	}
@@ -108,7 +115,11 @@ func (l *Log) Command(argv []string, exit int, output, secret string) {
 	l.last = output
 	l.mu.Unlock()
 	var b strings.Builder
-	fmt.Fprintf(&b, "$ %s\nexit %d\n", strings.Join(argv, " "), exit)
+	if answer != "" {
+		fmt.Fprintf(&b, "$ %s\nanswer: %s (exit %d)\n", strings.Join(argv, " "), answer, exit)
+	} else {
+		fmt.Fprintf(&b, "$ %s\nexit %d\n", strings.Join(argv, " "), exit)
+	}
 	if output = strings.TrimRight(output, "\n"); output != "" {
 		b.WriteString(output + "\n")
 	}

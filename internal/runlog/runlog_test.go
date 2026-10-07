@@ -120,3 +120,14 @@ func TestOpenFixesModeAndAppends(t *testing.T) {
 		t.Errorf("mode %v content %q", fi.Mode().Perm(), b)
 	}
 }
+
+func TestCommandAnswerShowsTheAnswerNotARawExit(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	l, _ := Open(p)
+	l.CommandAnswer([]string{"dseditgroup", "-o", "checkmember"}, 67, "no u is NOT a member of admin\n", "", "not a member")
+	_ = l.Close()
+	b, _ := os.ReadFile(p) //nolint:gosec // a test path
+	if want := "$ dseditgroup -o checkmember\nanswer: not a member (exit 67)\nno u is NOT a member of admin\n"; string(b) != want {
+		t.Fatalf("log %q", b)
+	}
+}

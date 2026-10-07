@@ -75,7 +75,7 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 		e.Executable = os.Executable
 	}
 	if e.Host == nil {
-		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style, Sig: &setup.Interrupts{}}
+		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style, Sig: &setup.Interrupts{}, Probes: &setup.Probes{}}
 	}
 	return e, nil
 }
