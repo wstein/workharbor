@@ -47,7 +47,7 @@ table inet whr_agents {
 }
 ```
 
-The addresses are documentation examples. Loopback and the host's DNS resolver must also be allowed for the agent uid (for example `pass out quick on lo0` and `meta iifname "lo" accept`, and the resolver on port 53), or the sketches drop them. Agent users are listed by the supervisor's configuration.
+The addresses are documentation examples. Loopback and the host's DNS resolver must also be allowed for the agent uid (for example `pass out quick on lo0` and `meta oifname "lo" accept`, and the resolver on port 53), or the sketches drop them. Agent users are listed by the supervisor's configuration.
 
 ### Setup and offboard
 
