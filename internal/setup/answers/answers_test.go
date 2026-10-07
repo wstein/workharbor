@@ -438,3 +438,36 @@ func TestAccountNamesFollowMacOSShortNames(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckSavePathRefusesWhatSaveWouldNotWriteOrWouldOverwrite(t *testing.T) {
+	root := t.TempDir()
+	if err := CheckSavePath(filepath.Join(root, "new.json")); err != nil {
+		t.Fatalf("a new file in an existing directory: %v", err)
+	}
+	if err := CheckSavePath(filepath.Join(root, "missing", "a.json")); !errors.Is(err, ErrNoDirectory) {
+		t.Fatalf("missing parent: %v", err)
+	}
+	if err := CheckSavePath(filepath.Join(root, ".config", "whr", "a.json")); err != nil {
+		t.Fatalf("~/.config/whr is created by Save: %v", err)
+	}
+	if err := CheckSavePath(root); !errors.Is(err, ErrUnsafeFile) {
+		t.Fatalf("a directory: %v", err)
+	}
+	target := writeFile(t, root, 0o600)
+	if err := CheckSavePath(target); !errors.Is(err, ErrExists) {
+		t.Fatalf("an existing file is never overwritten silently: %v", err)
+	}
+	link := filepath.Join(root, "l.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckSavePath(link); !errors.Is(err, ErrUnsafeFile) {
+		t.Fatalf("a link: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckSavePath(filepath.Join(root, "n.json")); !errors.Is(err, ErrInGitTree) {
+		t.Fatalf("a git tree: %v", err)
+	}
+}

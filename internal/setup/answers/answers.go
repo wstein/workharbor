@@ -76,6 +76,7 @@ var (
 	ErrWritableByOthers = errors.New("answers: file is writable by group or others")
 	ErrInGitTree        = errors.New("answers: path is inside a git working tree")
 	ErrNoDirectory      = errors.New("answers: parent directory does not exist")
+	ErrExists           = errors.New("answers: file already exists")
 	ErrIneligible       = errors.New("answers: the step cannot be answered from a file")
 )
 

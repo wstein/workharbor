@@ -124,6 +124,34 @@ func Save(path string, f File, checks []doctor.Check) error {
 	return SaveAs(id, path, f, checks)
 }
 
+// CheckSavePath reports before a run whether Save would write path, so a bad
+// path fails at the start and not after the questions. It applies the rules of
+// SaveAs (parent, git tree, link or foreign file) and, unlike SaveAs, refuses an
+// existing file (ErrExists): a person's saved answers are never replaced
+// silently, and merging two runs is not attempted. Remove the file to replace it.
+func CheckSavePath(path string) error {
+	path = filepath.Clean(path)
+	dir := filepath.Dir(path)
+	if err := checkNotInGitTree(path); err != nil {
+		return err
+	}
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		if filepath.Base(dir) != "whr" || filepath.Base(filepath.Dir(dir)) != ".config" {
+			return fmt.Errorf("%w: %s", ErrNoDirectory, dir)
+		}
+	}
+	fi, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil
+	case err != nil:
+		return err
+	case !fi.Mode().IsRegular() || infoOf(fi).UID != os.Getuid():
+		return fmt.Errorf("%w: %s", ErrUnsafeFile, path)
+	}
+	return fmt.Errorf("%w: %s", ErrExists, path)
+}
+
 // SaveAs is Save for the build identity id, which the caller got from Identity
 // (or a test passes in): the file binds its answers to that build.
 func SaveAs(id, path string, f File, checks []doctor.Check) error {

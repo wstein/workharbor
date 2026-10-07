@@ -157,6 +157,11 @@ func newSetup(st *state) *cobra.Command {
 				return err
 			}
 		}
+		if savePath != "" {
+			if err := answers.CheckSavePath(savePath); err != nil {
+				return usageError{"--save-answers: " + clean(err.Error()) + " (an existing file is never overwritten; remove it first)"}
+			}
+		}
 		if dev && managed {
 			return usageError{"--dev and --managed cannot be combined: --dev remembers a development installation, --managed removes the memory"}
 		}
@@ -345,7 +350,10 @@ func newSetup(st *state) *cobra.Command {
 		}
 		var saveErr error
 		if savePath != "" {
-			saveErr = saveAnswers(env, savePath, steps, outs, st.env.Stderr)
+			saveErr = answers.CheckSavePath(savePath) // the file may have appeared during the run
+			if saveErr == nil {
+				saveErr = saveAnswers(env, savePath, steps, outs, st.env.Stderr)
+			}
 		}
 		if isQuit {
 			printQuit(ui, quit)

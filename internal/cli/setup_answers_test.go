@@ -389,3 +389,27 @@ func TestAccountRiskQuitHintQuotesItsArguments(t *testing.T) {
 		t.Errorf("the restart hint does not quote the argument with a space:\n%s", errOut.String())
 	}
 }
+
+func TestSaveAnswersPathIsCheckedBeforeTheRun(t *testing.T) {
+	r := answersRig(t, true)
+	missing := filepath.Join(t.TempDir(), "nope", "a.json")
+	code, errOut := r.setup("--save-answers", missing)
+	if code != exitcode.Usage || r.host.asked != 0 || len(r.host.ran) != 0 || !strings.Contains(errOut, "--save-answers") {
+		t.Fatalf("exit %d asked %d ran %v\n%s", code, r.host.asked, r.host.ran, errOut)
+	}
+}
+
+func TestSaveAnswersRefusesToOverwriteBeforeTheRun(t *testing.T) {
+	r := answersRig(t, true)
+	f := answersFile(t)
+	if err := os.WriteFile(f, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, errOut := r.setup("--save-answers", f)
+	if code != exitcode.Usage || r.host.asked != 0 || len(r.host.ran) != 0 || !strings.Contains(errOut, "already exists") {
+		t.Fatalf("exit %d asked %d ran %v\n%s", code, r.host.asked, r.host.ran, errOut)
+	}
+	if b, _ := os.ReadFile(f); string(b) != "keep me" { //nolint:gosec // a test path
+		t.Errorf("the file changed: %q", b)
+	}
+}
