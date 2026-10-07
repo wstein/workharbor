@@ -37,9 +37,11 @@ const offboardLong = `Remove the workharbor macOS account that "whr setup host" 
 
 The default is a dry run: it inspects read-only and prints exactly what would be
 removed. --delete removes the account and its home folder with
-"sudo sysadminctl -deleteUser workharbor -adminUser <you> -adminPassword -", after you type the word workharbor at
-the terminal. It never takes an answer from --answers or --unattended. --allow-admin
-allows removing an administrator account. whr asks for your password itself, without echo, and hands it to sysadminctl on its input; it is never in the command line.
+"sudo sysadminctl -deleteUser workharbor -adminUser <you> -adminPassword -",
+after you type the word workharbor at the terminal. It never takes an answer
+from --answers or --unattended. --allow-admin allows removing an administrator
+account. whr asks for your password itself, without echo, and hands it to
+sysadminctl on its input; it is never in the command line.
 
 Every macOS command here is unverified. The manual has the commands by hand, for
 volumes, backups and other accounts, in the section
