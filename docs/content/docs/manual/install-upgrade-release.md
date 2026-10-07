@@ -101,6 +101,8 @@ whr setup --dev --user "$USER" --only config-base
 whr doctor --dev --user "$USER"
 ```
 
+`whr setup host --dev --user "$USER"` creates this configuration itself as its first step (`config-first`, the same code as `config-base`, issue #394), so the commands above are needed first only to run the user part alone or to preview it. Without `--user`, `workharbor` is the account and the administrator does not write its configuration: the steps that read it are reported as not reachable, with the command to run as `workharbor`.
+
 `config-base` writes the usual `~/.config/whr/config.json`; it does not install
 or start a service. Remove `--only config-base` to run the other setup steps.
 `--dev` prints a warning: a supervisor in a user-writable prefix can be replaced
