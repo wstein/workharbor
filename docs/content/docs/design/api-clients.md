@@ -5,7 +5,7 @@ weight: 9
 toc: true
 ---
 
-## 5.12 Per-client API credentials (proposal)
+## 5.12 Per-client API credentials
 
 {{< status open >}} Design note for [#364](https://github.com/wstein/workharbor/issues/364),
 a follow-up to [#357](https://github.com/wstein/workharbor/issues/357). The
