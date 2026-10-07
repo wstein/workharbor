@@ -84,3 +84,28 @@ func TestYesStillAsksGuidedStepsAndReadyToRun(t *testing.T) {
 		}
 	}
 }
+
+func TestToolFoundLooksForBrewAtTheManagedPrefixFirst(t *testing.T) {
+	old := lookPath
+	defer func() { lookPath = old }()
+	var asked []string
+	// brew exists only at the managed prefix, not on PATH
+	lookPath = func(name string) (string, error) {
+		asked = append(asked, name)
+		if name == managedBrew {
+			return name, nil
+		}
+		return "", errors.New("not found")
+	}
+	if !toolFound("brew") {
+		t.Error("brew at the managed prefix was not found")
+	}
+	if len(asked) != 1 || asked[0] != "/opt/homebrew/bin/brew" {
+		t.Errorf("looked up %v, want the managed path first and only", asked)
+	}
+	// a tool other than brew is looked up by name
+	asked = nil
+	if toolFound("sudo") || len(asked) != 1 || asked[0] != "sudo" {
+		t.Errorf("sudo: asked %v", asked)
+	}
+}

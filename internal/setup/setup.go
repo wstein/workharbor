@@ -292,7 +292,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 	if len(chosen) > 0 {
 		var found, missing []string
 		for _, t := range []string{"sudo", "brew", "container"} {
-			if _, err := lookPath(t); err != nil {
+			if !toolFound(t) {
 				missing = append(missing, t)
 			} else {
 				found = append(found, t)
@@ -581,6 +581,21 @@ func (noPrompt) Confirm(string) (bool, error)  { return false, ErrUnattended }
 // runner is what applying a fix needs of one run.
 // lookPath finds a tool on PATH; a test replaces it.
 var lookPath = exec.LookPath
+
+// managedBrew is where whr's own steps install and call Homebrew.
+const managedBrew = "/opt/homebrew/bin/brew"
+
+// toolFound says whether a tool is there. Homebrew is looked up at its managed
+// prefix first: a brew elsewhere on PATH is not the one the steps use.
+func toolFound(name string) bool {
+	if name == "brew" {
+		if _, err := lookPath(managedBrew); err == nil {
+			return true
+		}
+	}
+	_, err := lookPath(name)
+	return err == nil
+}
 
 // ask asks through the Host, or answers yes for an undoable step under --yes.
 func (r *runner) ask(question string, d render.Default) (render.Answer, error) {
