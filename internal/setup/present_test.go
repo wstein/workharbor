@@ -293,6 +293,25 @@ func TestPagedRunPausesBeforeEveryStepAndQuitsAtQ(t *testing.T) {
 	}
 }
 
+// Ctrl-C at the Press Enter prompt stops the run before the step starts.
+func TestCtrlCAtThePauseStopsBeforeTheStep(t *testing.T) {
+	ctx, cancel := context.WithCancel(bg)
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Paged: true, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+	h := &cancelPauseHost{cancel: cancel}
+	outs, err := Run(ctx, goldenSteps(), h, o)
+	var ie *InterruptedError
+	if !errors.As(err, &ie) || ie.When != BeforeStep || len(outs) != 0 {
+		t.Errorf("outs=%d err=%v", len(outs), err)
+	}
+}
+
+type cancelPauseHost struct {
+	fakeHost
+	cancel context.CancelFunc
+}
+
+func (p *cancelPauseHost) Pause() error { p.cancel(); return nil }
+
 // Without a terminal nothing pauses: no prompt, and a blocking input is never read.
 func TestUnpagedRunHasNoPressEnterAndNeverBlocks(t *testing.T) {
 	pr, pw := io.Pipe() // an input that never gives a byte

@@ -309,6 +309,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				}
 				return outs, &QuitError{Step: s.Name, Resume: nextCommand(o, s.Name, names(chosen[i:]))}
 			}
+			if err := Interrupted(ctx, h); err != nil { // Ctrl-C at the prompt: stop now, not after the step
+				return interrupted(i, BeforeStep, err)
+			}
 		}
 		ui.Header(i+1, len(chosen), title)
 		st, detail := s.Run(ctx)
