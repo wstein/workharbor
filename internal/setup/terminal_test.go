@@ -148,3 +148,16 @@ func TestTerminalRunIsNotStalledByABackgroundChild(t *testing.T) {
 		t.Errorf("after cancel took %v, want about %v", d, runWaitDelay)
 	}
 }
+
+func TestTerminalOutputIsNotStalledByABackgroundChild(t *testing.T) {
+	var b bytes.Buffer
+	tm := Terminal{Err: &b}
+	start := time.Now()
+	out, err := tm.Output(context.Background(), "sh", "-c", "sleep 30 & echo hi")
+	if err != nil || strings.TrimSpace(string(out)) != "hi" {
+		t.Errorf("out %q err %v", out, err)
+	}
+	if d := time.Since(start); d > runWaitDelay+3*time.Second {
+		t.Errorf("took %v", d)
+	}
+}
