@@ -239,3 +239,18 @@ func TestToolWriterKeepsASplitMultibyteCharacterWhole(t *testing.T) {
 		t.Fatalf("dangling partial sequence dropped: %q", got)
 	}
 }
+
+func TestToolWriterCRLFSplitAcrossWritesMatchesUnsplit(t *testing.T) {
+	var whole, split bytes.Buffer
+	w := NewToolWriter(&whole, Style{})
+	_, _ = w.Write([]byte("a\r\nb\r\n"))
+	w.End()
+	s := NewToolWriter(&split, Style{})
+	for _, c := range []string{"a\r", "\nb\r", "\n"} {
+		_, _ = s.Write([]byte(c))
+	}
+	s.End()
+	if whole.String() != split.String() {
+		t.Fatalf("split %q != whole %q", split.String(), whole.String())
+	}
+}

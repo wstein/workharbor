@@ -200,7 +200,12 @@ func NewToolWriter(w io.Writer, s Style) *ToolWriter { return &ToolWriter{w: w, 
 func (t *ToolWriter) Write(p []byte) (int, error) {
 	b := append(t.pend, p...)
 	t.pend = nil
-	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
+	if n := len(b); n > 0 && b[n-1] == '\r' {
+		// A CR may be the first half of a CRLF split across writes.
+		t.pend = []byte{'\r'}
+		b = b[:n-1]
+	}
+	for i := len(b) - 1; t.pend == nil && i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
 		if utf8.RuneStart(b[i]) {
 			if !utf8.FullRune(b[i:]) {
 				t.pend = append([]byte(nil), b[i:]...)
@@ -236,7 +241,9 @@ func (t *ToolWriter) write(p []byte) error {
 		// return would act on the terminal, so every control is shown escaped.
 		// The line ending (LF or CRLF) is the one thing kept, as LF.
 		body := strings.TrimSuffix(seg, "\n")
-		body = strings.TrimSuffix(body, "\r")
+		if strings.HasSuffix(seg, "\n") {
+			body = strings.TrimSuffix(body, "\r")
+		}
 		out += textsafe.Escape(body)
 		if strings.HasSuffix(seg, "\n") {
 			out += "\n"
