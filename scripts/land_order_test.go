@@ -296,6 +296,10 @@ func TestLandLandingPointerSelection(t *testing.T) {
 		{"both pointers and one original land the original", []string{"orig", "land", "landing"}, false},
 		{"both pointers alone are one landing", []string{"land", "landing"}, false},
 		{"two real branches plus both pointers refuse", []string{"a", "b", "land", "landing"}, true},
+		// a name that only looks like a pointer is a real branch
+		{"landing2 is not a pointer", []string{"a", "landing2"}, true},
+		{"land/x is not a pointer", []string{"a", "land/x"}, true},
+		{"lands is not a pointer", []string{"a", "lands"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, sha := mk(t, tc.names...)
