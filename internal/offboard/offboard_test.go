@@ -840,3 +840,18 @@ func TestLongGroupsRowWrapsOnATerminalOnly(t *testing.T) {
 		t.Errorf("the note lost its unverified marker: %s", se.String())
 	}
 }
+
+// Data wraps a long row at the detected width, not at a fixed 80.
+func TestDataWrapsAtTheStyleWidth(t *testing.T) {
+	row := strings.Repeat("word ", 9)
+	var b bytes.Buffer
+	Out{Out: &b, Style: render.Style{Unicode: true}}.Data("groups", row)
+	if strings.Count(b.String(), "\n") != 1 {
+		t.Errorf("a row that fits 80 stays one line: %q", b.String())
+	}
+	b.Reset()
+	Out{Out: &b, Style: render.Style{Unicode: true, Width: 40}}.Data("groups", row)
+	if strings.Count(b.String(), "\n") < 2 {
+		t.Errorf("a row over the terminal width must wrap: %q", b.String())
+	}
+}

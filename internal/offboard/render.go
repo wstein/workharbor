@@ -40,7 +40,7 @@ func (o Out) Data(fields ...string) {
 		fields[i] = plain(f)
 	}
 	line := strings.Join(fields, "\t")
-	if o.Style.Unicode && len(fields) == 2 && utf8.RuneCountInString(line) > 80 {
+	if o.Style.Unicode && len(fields) == 2 && utf8.RuneCountInString(line) > o.Style.Columns() {
 		line = strings.TrimRight(render.KV(o.Style, fields[0], fields[1]), "\n")
 	}
 	fmt.Fprintln(o.Out, line)

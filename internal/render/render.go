@@ -94,6 +94,12 @@ func (s Style) cols() int {
 	return wrapWidth
 }
 
+// Columns is the width human text wraps at: the terminal width, at most 80.
+func (s Style) Columns() int { return s.cols() }
+
+// Wrap is Wrap at the width of the style.
+func (s Style) Wrap(text string, padWidth int) string { return wrapAt(text, padWidth, s.cols()) }
+
 // Detect chooses the style: colour and symbols only when the output is a
 // terminal, NO_COLOR is empty (no.color.org: any non-empty value turns colour
 // off) and --plain is not given.

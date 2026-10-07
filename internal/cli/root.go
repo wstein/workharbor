@@ -21,6 +21,9 @@ type Env struct {
 	// IsTTY says whether a stream is a terminal, for colour and the readable
 	// report. Nil asks the file.
 	IsTTY func(io.Writer) bool
+	// Cols says the width of the terminal behind a stream; nil asks the
+	// stream itself. A test sets it.
+	Cols func(io.Writer) int
 	// NewClient builds the API client from the configuration file path. Nil
 	// uses NewClient.
 	NewClient func(configPath string) (*Client, error)

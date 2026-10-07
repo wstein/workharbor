@@ -36,8 +36,16 @@ func (st *state) style(w io.Writer, plain bool) render.Style {
 		NoColorFlag: st.noColor || st.color == "never",
 		ColorAlways: st.color == "always",
 		Plain:       plain,
-		Cols:        termCols(w),
+		Cols:        st.cols(w),
 	})
+}
+
+// cols is the terminal width behind w, see Env.Cols.
+func (st *state) cols(w io.Writer) int {
+	if st.env.Cols != nil {
+		return st.env.Cols(w)
+	}
+	return termCols(w)
 }
 
 // termCols is the width of the terminal behind w, or 0 when w is not one.
