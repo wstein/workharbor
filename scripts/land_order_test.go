@@ -261,3 +261,33 @@ func TestLandLandingPointerSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestLandMalformedNotClearRefuses(t *testing.T) {
+	const opus = "claude-opus-4"
+	other := strings.Repeat("b", 40)
+	for _, tc := range []struct {
+		name    string
+		line    func(sha string) string
+		refuses bool
+	}{
+		{"lowercase", func(s string) string { return "not clear " + s }, true},
+		{"double space", func(s string) string { return "NOT  CLEAR " + s }, true},
+		{"tab", func(s string) string { return "NOT\tCLEAR " + s }, true},
+		{"leading blank", func(s string) string { return " NOT CLEAR " + s }, true},
+		{"colon", func(s string) string { return "NOT CLEAR: " + s }, true},
+		{"short sha", func(s string) string { return "NOT CLEAR " + s[:12] }, true},
+		{"no sha", func(string) string { return "NOT CLEAR" }, true},
+		{"another full sha", func(string) string { return "NOT CLEAR " + other }, false},
+		{"word merely starting with not clear", func(string) string { return "NOT CLEARLY fine" }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newLandQueueRepo(t)
+			_, sha := r.orderCommit("topic", "rule\n")
+			r.rawNote(sha, "CLEAR "+sha+" role=review model="+opus+"\n"+tc.line(sha))
+			out, err := r.previewOrder(sha)
+			if tc.refuses != (err != nil) {
+				t.Fatalf("refuses=%v, err=%v\n%s", tc.refuses, err, out)
+			}
+		})
+	}
+}

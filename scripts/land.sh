@@ -220,7 +220,15 @@ note="$(git cat-file blob "$review" 2>/dev/null)" || {
 # Review lines (crewbook#67): <CLEAR|NOT CLEAR> <full sha> role=<role> model=<model>, one per line.
 note="$(printf '%s\n' "$note" | sed "s/$(printf '\r')\$//")"
 clear="$(printf '%s\n' "$note" | grep -E "^CLEAR $full role=[^ ]+ model=[^ ]+\$" || true)"
-notclear="$(printf '%s\n' "$note" | grep -E "^NOT CLEAR $full( |\$)" || true)"
+# A refusal is any line starting with NOT CLEAR (any case, any blank run, optional
+# leading blanks) that names this sha or no full sha at all; malformed variants count.
+notclear_in() { # $1 = sha, stdin = note
+  nl="$(grep -Ei '^[[:space:]]*not[[:space:]]+clear([^0-9a-z]|$)' || true)"
+  [ -n "$nl" ] || return 1
+  printf '%s\n' "$nl" | grep -Fiq "$1" || printf '%s\n' "$nl" | grep -Evq '[0-9a-fA-F]{40}'
+}
+notclear=""
+! printf '%s\n' "$note" | notclear_in "$full" || notclear=yes
 stamp=matched
 if [ -z "$clear" ]; then
   stamp=mismatch
@@ -274,7 +282,7 @@ clear_at() { # callers refuse a NOT CLEAR commit first (covered)
   l="$(printf '%s\n' "$b" | grep -E "^CLEAR $1 role=[^ ]+ model=[^ ]+\$")" || return 1
   [ "$need" = any ] || printf '%s\n' "$l" | grep -Eiq "$opus_re"
 }
-notclear_at() { body_of "$1" | grep -Eq "^NOT CLEAR $1( |\$)"; }
+notclear_at() { body_of "$1" | notclear_in "$1"; }
 pid() { git show --format= --full-index --binary "$1" | git patch-id --verbatim | cut -d' ' -f1; }
 covered() {
   notclear_at "$1" && return 1
