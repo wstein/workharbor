@@ -21,6 +21,7 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/runlog"
 	"github.com/wstein/workharbor/internal/setup/answers"
 	"github.com/wstein/workharbor/internal/setup/protocol"
 	"github.com/wstein/workharbor/internal/textsafe"
@@ -161,7 +162,10 @@ type Options struct {
 	// Log gets the setup protocol of the run; nil writes none. A failure to
 	// write it stops the run (a dry run writes none). Account is the account
 	// running it and Home its home directory, shown as ~ in the logged flags.
-	Log     Recorder
+	Log Recorder
+	// RunLog is the text log of the run (issue #379): one line per step, and on
+	// a failure its cause, next action and the tail of the step's output.
+	RunLog  *runlog.Log
 	Account string
 	Home    string
 }
@@ -420,6 +424,8 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			if o.Verbose && tool != "" {
 				ui.Tool(tool)
 			}
+			o.RunLog.Step(s.Name, "fail", reason)
+			FailureSummary(ui, o.RunLog, reason, "fix the cause, then run: "+nextCommand(o, s.Name, names(chosen[i:])))
 		}
 		out.Asked = !res.fixed
 		out.NeedsHuman = res.outcome == protocol.OutNeedsHuman
@@ -440,6 +446,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			}
 			dataLine(o, st, s.Name, detail)
 			report(ui, o, st, detail)
+			if st == doctor.Fail {
+				FailureSummary(ui, o.RunLog, oneLine(detail), "fix the cause, then run: "+nextCommand(o, s.Name, names(chosen[i:])))
+			}
 		}
 		if ctxErr := Interrupted(ctx, h); ctxErr != nil && !out.Fixed { // also during the re-check, which has no error to return; a step that fixed itself stays fixed
 			outcome = protocol.OutInterrupted
@@ -577,6 +586,7 @@ func dataLine(o Options, st doctor.Status, name, detail string) {
 	if !o.Verbose {
 		detail, _ = render.SplitTool(detail)
 	}
+	o.RunLog.Step(name, StepStatus(st), detail)
 	fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, name, detail)
 }
 
