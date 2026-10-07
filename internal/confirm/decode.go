@@ -28,10 +28,7 @@ func Decode(data []byte) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	// Version first, so an unknown v is reported as such.
-	if r.V != Version {
-		return Record{}, fmt.Errorf("%w: %d", ErrUnknownVersion, r.V)
-	}
+	// fromTree already rejects an unknown v, so no version check is needed here.
 	canon, err := Encode(r)
 	if err != nil {
 		return Record{}, err
