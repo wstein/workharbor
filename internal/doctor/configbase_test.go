@@ -251,3 +251,33 @@ func TestAConfigHoldingOnlyNullIsRefusedWithoutAPanicOrAWrite(t *testing.T) {
 		t.Error("a backup was written")
 	}
 }
+
+func TestLargeAndExponentNumbersSurviveARewriteUnchanged(t *testing.T) {
+	d, _ := configDeps(t)
+	if err := os.MkdirAll(filepath.Dir(d.ConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := filepath.Join(t.TempDir(), "mine")
+	old := `{"big":9007199254740993,"huge":12345678901234567890,"exp":1e2,"account":"shared","repositories":[{"name":"own/repo"}],"roots":{"workspaces":["` + mine + `"],"tool_store":"` + mine + `-tools"}}`
+	if err := os.WriteFile(d.ConfigPath, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := baseStep(t, d).Fix.Do(context.Background(), &answers{confirm: true}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(d.ConfigPath)
+	for _, want := range []string{`"big": 9007199254740993`, `"huge": 12345678901234567890`, `"exp": 1e2`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("lost %s in %s", want, raw)
+		}
+	}
+	if _, err := readConfigMap(d.ConfigPath); err != nil {
+		t.Error(err)
+	}
+	if err := os.WriteFile(d.ConfigPath, []byte(`{} {}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readConfigMap(d.ConfigPath); err == nil {
+		t.Error("trailing data was accepted")
+	}
+}

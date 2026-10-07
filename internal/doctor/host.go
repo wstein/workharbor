@@ -1,12 +1,14 @@
 package doctor
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -1317,9 +1319,16 @@ func readConfigMap(path string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// UseNumber keeps a number as its text, so a large integer or 1e2 is
+	// written back exactly as it was read.
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
 	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("%s is not JSON: %w", path, err)
+	}
+	if _, err := dec.Token(); err != io.EOF { // Unmarshal refused trailing data too
+		return nil, fmt.Errorf("%s is not JSON: unexpected data after the top-level value", path)
 	}
 	if m == nil { // the file holds only null, which Unmarshal accepts into a nil map
 		return nil, fmt.Errorf("%s is not a JSON object", path)
