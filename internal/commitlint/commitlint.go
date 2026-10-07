@@ -32,10 +32,52 @@ var (
 	// trailerRe, so a spaced or tabbed key cannot hide a line from the rules.
 	scanKeyRe = regexp.MustCompile(`^([A-Za-z0-9-]+)[ \t]*:[ \t]*(.*)$`)
 
-	// depBotRe matches the dependency-update bots, whose generated messages
-	// cannot follow every rule: long titles, and a DCO Signed-off-by line.
-	depBotRe = regexp.MustCompile(`(?i)^\s*(?:dependabot|renovate)(?:\[bot\])?\b`)
+	// The dependency-update bots, whose generated messages cannot follow every
+	// rule: long titles, and a DCO Signed-off-by line. The exemption needs the
+	// bot's name and its usual address together. Both are self-asserted, so
+	// this only rules out look-alike or accidental names; it proves nothing
+	// about who wrote the commit (the forge's PR login does). Patterns are
+	// lower case and applied to ASCII-lowered, ASCII-only input.
+	depBotIdentities = []struct{ name, email *regexp.Regexp }{
+		{ // Dependabot (support@github.com is the address older commits carry)
+			regexp.MustCompile(`^dependabot(?:\[bot\])?$`),
+			regexp.MustCompile(`^(?:(?:\d+\+)?dependabot\[bot\]@users\.noreply\.github\.com|support@github\.com)$`),
+		},
+		{ // Renovate
+			regexp.MustCompile(`^renovate(?:\[bot\]| bot)?$`),
+			regexp.MustCompile(`^(?:(?:\d+\+)?renovate\[bot\]@users\.noreply\.github\.com|bot@renovateapp\.com)$`),
+		},
+	}
+	// authorRe reads "Name <email>", with the optional " <unix-time> <tz>"
+	// tail that `git var GIT_AUTHOR_IDENT` appends. Surrounding whitespace of
+	// the name is trimmed; the email may hold none.
+	authorRe = regexp.MustCompile(`^\s*(.*?)\s*<([^<>\s]*)>(?:\s+\d+\s+[+-]\d{4})?\s*$`)
 )
+
+// isDepBot reports an author that is a dependency bot by both name and
+// address, compared with ASCII-only case folding.
+func isDepBot(author string) bool {
+	m := authorRe.FindStringSubmatch(author)
+	if m == nil || !isASCII(m[1]) || !isASCII(m[2]) {
+		return false
+	}
+	name, email := strings.ToLower(m[1]), strings.ToLower(m[2])
+	for _, id := range depBotIdentities {
+		if id.name.MatchString(name) && id.email.MatchString(email) {
+			return true
+		}
+	}
+	return false
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
 
 // aiIdentities are the project's reserved attribution addresses and the first
 // word of the name that goes with each.
@@ -62,7 +104,8 @@ type Options struct {
 	// Author is the commit author identity ("Name <email>"). Bot authors may
 	// not add Signed-off-by, which certifies human origin. The dependency bots
 	// (Dependabot, Renovate) are exempt from the subject length and Signed-off-by
-	// rules, because they generate their own messages.
+	// rules, because they generate their own messages; the exemption needs the bot's
+	// own name and address, not a name alone.
 	Author string
 	// Final says the commit is about to land, as when a range is checked: a
 	// fixup!, squash! or amend! commit must have been squashed away by then
@@ -131,7 +174,7 @@ func Lint(msg string, opt Options) []string {
 	if m == nil {
 		add("subject must follow Conventional Commits, e.g. 'feat(domain): add run state'")
 	}
-	depBot := depBotRe.MatchString(opt.Author)
+	depBot := isDepBot(opt.Author)
 	if n := utf8.RuneCountInString(subject); n > maxSubject && !depBot {
 		add("subject is %d characters; keep it at %d or fewer", n, maxSubject)
 	}
@@ -194,7 +237,7 @@ func Lint(msg string, opt Options) []string {
 // commit is refused on any line that has the shape of a trailer, so no
 // difference between git's reading and this one can hide it.
 func attributionProblemsFor(scans []finalParagraph, opt Options) []string {
-	botAuthor := botRe.MatchString(opt.Author) && !depBotRe.MatchString(opt.Author)
+	botAuthor := botRe.MatchString(opt.Author) && !isDepBot(opt.Author)
 	var problems []string
 	seen := map[string]bool{}
 	add := func(p string) {
@@ -276,7 +319,7 @@ func isAICoauthor(value string) bool {
 // trailer, on a commit whose author is a bot or an agent (the dependency bots
 // are exempt).
 func signoffByBot(scans []finalParagraph, opt Options) bool {
-	if !botRe.MatchString(opt.Author) || depBotRe.MatchString(opt.Author) {
+	if !botRe.MatchString(opt.Author) || isDepBot(opt.Author) {
 		return false
 	}
 	for _, sc := range scans {
