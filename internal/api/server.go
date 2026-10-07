@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	_ "embed" // the OpenAPI document
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -154,6 +155,7 @@ type Server struct {
 	be    Backend
 	opt   Options
 	token [sha256.Size]byte
+	actor string // audit actor derived from the credential, never the token
 
 	mu    sync.Mutex
 	locks map[string]*keyLock // idempotency keys in flight
@@ -180,9 +182,20 @@ func New(be Backend, opt Options) (*Server, error) {
 	}
 	s := &Server{be: be, opt: opt, locks: map[string]*keyLock{}}
 	s.token = sha256.Sum256(opt.Token)
+	s.actor = actorFor(opt.Token)
 	s.opt.Token = nil // the digest is all that is kept
 	return s, nil
 }
+
+// actorFor derives the audit actor from the credential: a short, domain-
+// separated digest prefix that identifies the client without revealing the token.
+func actorFor(token []byte) string {
+	sum := sha256.Sum256(append([]byte("workharbor/api-client/v1\x00"), token...))
+	return "api:" + hex.EncodeToString(sum[:6])
+}
+
+// Actor is the audit actor every action of this server's credential carries.
+func (s *Server) Actor() string { return s.actor }
 
 // TokenFromConfig reads the API token with config.ReadSecret and trims the
 // line ending the file may have.
@@ -456,7 +469,7 @@ func (s *Server) runTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction("api", "api")), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
+		res, err := s.be.Run(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), service.RunRequest{IssueURL: body.IssueURL, Agent: body.Agent, Prompt: body.Prompt})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -488,7 +501,7 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction("api", "api")), id, body.Message)
+		d, err := s.be.Say(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id, body.Message)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -531,7 +544,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		run, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction("api", "api")), id)
+		run, err := s.be.Resume(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -577,7 +590,7 @@ func (s *Server) purge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		res, err := s.be.PurgeTranscript(r.Context(), id, "api")
+		res, err := s.be.PurgeTranscript(r.Context(), id, s.actor)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -675,7 +688,7 @@ func (s *Server) killAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		rep, err := s.be.KillAll(r.Context(), "api")
+		rep, err := s.be.KillAll(r.Context(), s.actor)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -706,7 +719,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		run, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction("api", "api")), id, domain.Response{By: "api", Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
+		run, err := s.be.Answer(initiation.With(r.Context(), initiation.UserAction(s.actor, "api")), id, domain.Response{By: s.actor, Option: body.Option, Reason: body.Reason, SHA: body.SHA, At: s.opt.Now()})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -844,7 +857,7 @@ func (s *Server) rebuildWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		res, err := s.be.RebuildWorkspace(r.Context(), string(name), "api")
+		res, err := s.be.RebuildWorkspace(r.Context(), string(name), s.actor)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -913,7 +926,7 @@ func (s *Server) workspaceShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, usageError{"the sign-in shell needs Accept: application/x-ndjson and a connection held until its child exits"})
 		return
 	}
-	session, err := sb.OpenShell(r.Context(), string(name), "api")
+	session, err := sb.OpenShell(r.Context(), string(name), s.actor)
 	if err != nil {
 		s.fail(w, err)
 		return

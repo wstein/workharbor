@@ -117,7 +117,7 @@ func (s *Server) consoleShell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	req := service.ShellRequest{Workspace: q.Get("workspace"), Term: q.Get("term"), Actor: "api"}
+	req := service.ShellRequest{Workspace: q.Get("workspace"), Term: q.Get("term"), Actor: s.actor}
 	for name, to := range map[string]*uint16{"cols": &req.Cols, "rows": &req.Rows} {
 		if v := q.Get(name); v != "" {
 			n, err := strconv.ParseUint(v, 10, 16)
@@ -244,7 +244,7 @@ func (s *Server) consoleSSHCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, raw, func() (int, any, error) {
-		cert, err := s.consoleOf().ConsoleSSHCertificate(r.Context(), service.SSHRequest{PublicKey: body.PublicKey, Forwarding: body.Forwarding, Actor: "api"})
+		cert, err := s.consoleOf().ConsoleSSHCertificate(r.Context(), service.SSHRequest{PublicKey: body.PublicKey, Forwarding: body.Forwarding, Actor: s.actor})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -262,7 +262,7 @@ func (s *Server) consoleSSH(w http.ResponseWriter, r *http.Request) {
 		writeError(w, usageError{"an SSH connection is a stream: ask for it with Connection: Upgrade and Upgrade: " + termproto.SSHUpgrade})
 		return
 	}
-	sc, err := s.consoleOf().ConsoleSSH(r.Context(), "api")
+	sc, err := s.consoleOf().ConsoleSSH(r.Context(), s.actor)
 	if err != nil {
 		s.fail(w, err)
 		return

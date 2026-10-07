@@ -85,7 +85,7 @@ func TestAPreviewIsOpenedListedLinkedAndClosed(t *testing.T) {
 		t.Fatalf("open = %d %s", status, body)
 	}
 	golden(t, "open-preview", status, body)
-	if f.actors[0] != "api" {
+	if f.actors[0] != r.srv.Actor() {
 		t.Errorf("actor = %q", f.actors[0])
 	}
 	status, _, body = r.do("GET", "/v1/previews", "")

@@ -156,7 +156,7 @@ func TestAShellIsAStreamOfFramesBothWays(t *testing.T) {
 	r.be.mu.Lock()
 	asked := r.be.shells[0]
 	r.be.mu.Unlock()
-	if asked.Workspace != "docs-ws" || asked.Term != "xterm-kitty" || asked.Cols != 100 || asked.Rows != 30 || asked.Actor != "api" {
+	if asked.Workspace != "docs-ws" || asked.Term != "xterm-kitty" || asked.Cols != 100 || asked.Rows != 30 || !strings.HasPrefix(asked.Actor, "api:") {
 		t.Errorf("request = %+v", asked)
 	}
 

@@ -114,7 +114,7 @@ func TestACertificateIsRequestedWithAPublicKeyOnly(t *testing.T) {
 	r.be.mu.Lock()
 	asked := r.be.sshCerts
 	r.be.mu.Unlock()
-	if len(asked) != 1 || asked[0].PublicKey != "ssh-ed25519 AAAAkey me" || !asked[0].Forwarding || asked[0].Actor != "api" {
+	if len(asked) != 1 || asked[0].PublicKey != "ssh-ed25519 AAAAkey me" || !asked[0].Forwarding || !strings.HasPrefix(asked[0].Actor, "api:") {
 		t.Errorf("asked = %+v", asked)
 	}
 	for name, body := range map[string]string{"empty": `{}`, "too long": `{"public_key":"` + strings.Repeat("a", 5000) + `"}`, "not json": `x`, "unknown field": `{"public_key":"k","private_key":"p"}`} {

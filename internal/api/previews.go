@@ -84,7 +84,7 @@ func (s *Server) openPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, usageError{"port must be a TCP port from 1 to 65535"})
 		return
 	}
-	pv, err := p.Open(r.Context(), task, b.Port, "api")
+	pv, err := p.Open(r.Context(), task, b.Port, s.actor)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -129,7 +129,7 @@ func (s *Server) closePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.idempotent(w, r, nil, func() (int, any, error) {
-		if err := p.Close(r.Context(), string(id), "api"); err != nil {
+		if err := p.Close(r.Context(), string(id), s.actor); err != nil {
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{}, nil
