@@ -1442,7 +1442,7 @@ func replaceWithBackup(p Prompter, path string, data []byte) error {
 	switch {
 	case err == nil:
 		bak := path + ".bak"
-		if err := os.WriteFile(filepath.Clean(bak), old, 0o600); err != nil { //nolint:gosec // beside the configuration
+		if err := replaceFile(bak, old); err != nil {
 			return errors.New("could not save the backup, so nothing was changed: " + err.Error())
 		}
 		p.Show(strings.TrimRight(render.Backup(render.Style{}, filepath.Base(path), bak), "\n"))

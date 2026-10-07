@@ -43,3 +43,50 @@ func TestReplacingTheConfigSavesAPrivateBackupAndSaysWhere(t *testing.T) {
 		t.Errorf("fresh: %v %q", err, p.shown)
 	}
 }
+
+func TestAnOldBackupIsReplacedAtMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	_ = os.WriteFile(path, []byte("one"), 0o600)
+	_ = os.WriteFile(path+".bak", []byte("older"), 0o644) //nolint:gosec // the test needs a loose mode
+	if err := replaceWithBackup(&showOnly{}, path, []byte("two")); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path + ".bak")
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("backup mode: %v %v", fi, err)
+	}
+}
+
+func TestASymlinkAtTheBackupPathIsReplacedNotFollowed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	target := filepath.Join(dir, "target")
+	_ = os.WriteFile(path, []byte("one"), 0o600)
+	_ = os.WriteFile(target, []byte("untouched"), 0o600)
+	if err := os.Symlink(target, path+".bak"); err != nil {
+		t.Skip(err)
+	}
+	if err := replaceWithBackup(&showOnly{}, path, []byte("two")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Clean(target)); string(b) != "untouched" {
+		t.Errorf("the symlink target changed: %q", b)
+	}
+	if fi, _ := os.Lstat(path + ".bak"); fi.Mode()&os.ModeSymlink != 0 {
+		t.Error("the symlink is still there")
+	}
+}
+
+func TestADirectoryAtTheBackupPathStopsBeforeTheConfigChanges(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(path, []byte("one"), 0o600)
+	_ = os.Mkdir(path+".bak", 0o700)
+	err := replaceWithBackup(&showOnly{}, path, []byte("two"))
+	if err == nil || !strings.Contains(err.Error(), "nothing was changed") {
+		t.Fatalf("err = %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Clean(path)); string(b) != "one" {
+		t.Errorf("the config changed: %q", b)
+	}
+}
