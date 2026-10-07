@@ -24,9 +24,19 @@ func (st *state) isTTY(w io.Writer) bool {
 }
 
 // style is how human text on w is drawn: colour and symbols only when both
-// stdout and w are terminals, without NO_COLOR and without --plain.
+// stdout and w are terminals, TERM is not dumb, NO_COLOR is empty and neither
+// --plain nor --no-color is given. FORCE_COLOR and --color=always force colour.
 func (st *state) style(w io.Writer, plain bool) render.Style {
-	return render.Detect(st.isTTY(st.env.Stdout) && st.isTTY(w), st.env.Getenv("NO_COLOR"), plain)
+	g := st.env.Getenv
+	return render.DetectEnv(render.Env{
+		TTY:         st.isTTY(st.env.Stdout) && st.isTTY(w),
+		Term:        g("TERM"),
+		NoColor:     g("NO_COLOR"),
+		ForceColor:  g("FORCE_COLOR"),
+		NoColorFlag: st.noColor || st.color == "never",
+		ColorAlways: st.color == "always",
+		Plain:       plain,
+	})
 }
 
 // quitError ends `whr setup` after the person answered q: a distinct exit code,

@@ -315,3 +315,19 @@ func TestInterruptedTextNamesOnlyWhatStarted(t *testing.T) {
 		}
 	}
 }
+
+func TestColourFlagsAndEnv(t *testing.T) {
+	has := func(args ...string) bool {
+		r := newSetupRig(t)
+		_, _, errOut := r.runUI(uiOpts{stdoutTTY: true, stderrTTY: true}, args...)
+		return strings.Contains(errOut, "\x1b")
+	}
+	if !has("setup", "--dry-run") {
+		t.Fatal("setup on a terminal draws no colour")
+	}
+	for _, a := range [][]string{{"--no-color"}, {"--color=never"}} {
+		if has(append([]string{"setup", "--dry-run"}, a...)...) {
+			t.Errorf("%v still printed an escape sequence", a)
+		}
+	}
+}
