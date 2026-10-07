@@ -50,13 +50,21 @@ func FinalBlock(s Style, f Final) string {
 // Final writes the closing block.
 func (w Writer) Final(f Final) { w.put(FinalBlock(w.S, f)) }
 
-// AskAuto is Ask for a run with --yes: a step that can be undone (DefaultYes)
-// is answered yes without a question, and the answer is shown. A step that
-// cannot (DefaultNo) is still asked.
-func AskAuto(in *bufio.Reader, w Writer, question string, d Default, yes bool) (Answer, error) {
+// AutoYes answers an undoable step (DefaultYes) yes under --yes and shows the
+// question with that answer. It reports whether it answered; a step that cannot
+// be undone (DefaultNo) is never answered here.
+func AutoYes(w Writer, question string, d Default, yes bool) (Answer, bool) {
 	if yes && d == DefaultYes {
 		w.Note("yes: " + question)
-		return Yes, nil
+		return Yes, true
+	}
+	return No, false
+}
+
+// AskAuto is Ask for a run with --yes: see AutoYes.
+func AskAuto(in *bufio.Reader, w Writer, question string, d Default, yes bool) (Answer, error) {
+	if a, ok := AutoYes(w, question, d, yes); ok {
+		return a, nil
 	}
 	return Ask(in, w, question, d)
 }

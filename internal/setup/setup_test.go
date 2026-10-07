@@ -12,6 +12,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/runlog"
 )
 
@@ -594,5 +595,22 @@ func TestSummaryNamesTheLogPath(t *testing.T) {
 	Summary(&b, outs, Options{})
 	if strings.Contains(b.String(), "log  ") {
 		t.Errorf("log line without a path:\n%s", b.String())
+	}
+}
+
+func TestYesAnswersOnlyUndoableQuestions(t *testing.T) {
+	var b bytes.Buffer
+	h := &fakeHost{}
+	r := &runner{h: h, o: Options{Yes: true}, ui: render.Writer{W: &b}}
+	a, err := r.ask("Ready to run this?", render.DefaultYes)
+	if err != nil || a != render.Yes || !strings.Contains(b.String(), "yes: Ready") {
+		t.Errorf("undoable: %v %v %q", a, err, b.String())
+	}
+	if len(h.asked) != 0 {
+		t.Errorf("asked despite --yes: %v", h.asked)
+	}
+	a, _ = r.ask("Delete it?", render.DefaultNo)
+	if a == render.Yes || len(h.asked) != 1 {
+		t.Errorf("irreversible must be asked: %v %v", a, h.asked)
 	}
 }

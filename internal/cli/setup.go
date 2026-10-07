@@ -99,6 +99,7 @@ func newSetup(st *state) *cobra.Command {
 		answersPath, savePath string
 		unattended            bool
 		logFile               string
+		yes                   bool
 		doctorOn              = func(env SetupEnv, path string) []doctor.Check {
 			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
@@ -334,7 +335,7 @@ func newSetup(st *state) *cobra.Command {
 		}
 		so := setup.Options{
 			Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose,
-			Unattended: unattended, Account: env.User, Home: st.env.Getenv("HOME"),
+			Unattended: unattended, Yes: yes, Account: env.User, Home: st.env.Getenv("HOME"),
 			Paged: !dryRun && !unattended && env.IsTerminal(),
 		}
 		if answersPath != "" {
@@ -420,6 +421,7 @@ func newSetup(st *state) *cobra.Command {
 		f.StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 		f.StringVar(&answersPath, "answers", "", "answer the questions of the steps this file decides (user part only; host steps, sudo and guided steps are always asked)")
 		f.StringVar(&savePath, "save-answers", "", "save your run/skip answers of this run to this file (0600; never a password, token or key)")
+		f.BoolVar(&yes, "yes", false, "answer yes to the questions you can undo; still ask before anything that cannot be undone")
 		f.BoolVar(&unattended, "unattended", false, "ask nothing: run what --answers decides, leave the rest for you and exit 6 (user part only)")
 		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
 		names := func(phase doctor.Phase) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {

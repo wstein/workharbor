@@ -163,6 +163,9 @@ type Options struct {
 	// write it stops the run (a dry run writes none). Account is the account
 	// running it and Home its home directory, shown as ~ in the logged flags.
 	Log Recorder
+	// Yes (--yes) answers the questions of undoable steps with yes; the
+	// others are still asked.
+	Yes bool
 	// RunLog is the text log of the run (issue #379): one line per step, and on
 	// a failure its cause, next action and the tail of the step's output.
 	RunLog  *runlog.Log
@@ -543,6 +546,14 @@ func (noPrompt) Secret(string) (string, error) { return "", ErrUnattended }
 func (noPrompt) Confirm(string) (bool, error)  { return false, ErrUnattended }
 
 // runner is what applying a fix needs of one run.
+// ask asks through the Host, or answers yes for an undoable step under --yes.
+func (r *runner) ask(question string, d render.Default) (render.Answer, error) {
+	if a, ok := render.AutoYes(r.ui, question, d, r.o.Yes); ok {
+		return a, nil
+	}
+	return Ask(r.h, question, d)
+}
+
 type runner struct {
 	h         Host
 	p         doctor.Prompter // what a fix's Build and Do ask through
@@ -874,7 +885,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			return res, nil
 		}
 		yes := func(question string) (bool, error) {
-			a, err := Ask(r.h, question, render.DefaultYes)
+			a, err := r.ask(question, render.DefaultYes)
 			if err != nil {
 				return false, err
 			}
@@ -928,7 +939,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 		ui.Report(render.LevelSkipped, "left for you: no answer in the file, and --unattended asks nothing")
 		return res, before(protocol.AnswerNone, protocol.SourceNone)
 	default:
-		a, err := Ask(r.h, "Ready to run this?", d)
+		a, err := r.ask("Ready to run this?", d)
 		if err != nil {
 			res.outcome = protocol.OutNotRun
 			if e := before(protocol.AnswerNone, protocol.SourceNone); e != nil {
@@ -981,7 +992,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 				return res, nil
 			}
 			ui.Report(render.LevelSkipped, "the answers file does not decide commands that use sudo: you are asked")
-			a, err := Ask(r.h, "Ready to run these commands?", d)
+			a, err := r.ask("Ready to run these commands?", d)
 			if err != nil {
 				return res, err
 			}
@@ -1007,7 +1018,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	}
 	res.fixed = true
 	if f.Guide != "" && f.Open != "" && !o.Unattended {
-		a, err := Ask(r.h, "Open the page that helps with the rest?", render.DefaultYes)
+		a, err := r.ask("Open the page that helps with the rest?", render.DefaultYes)
 		if err != nil {
 			return res, err
 		}
