@@ -94,6 +94,18 @@ var dsRecordNotFound = regexp.MustCompile(`(^|[^A-Za-z0-9_])eDSRecordNotFound($|
 // reliable signal, and offboard relies on this same function.
 var dsRecordNegated = regexp.MustCompile(`(?i)\b(not|isn'?t|never)\s+eDSRecordNotFound`)
 
+// The whole error text must be defaults's own message for this key: after an
+// optional exit status prefix, an optional header line that defaults prints
+// first (timestamp, defaults[pid:tid]; observed on macOS 26.6.2), then the
+// message. Any other extra text says something else.
+const defaultsHeader = `(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ defaults\[\d+:\d+\] *\n)?`
+
+var (
+	autologoutUnset  = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `The domain/default pair of \(/Library/Preferences/\.GlobalPreferences, com\.apple\.autologout\.AutoLogOutDelay\) does not exist$`)
+	autologoutAbsent = regexp.MustCompile(`^(exit status \d+: )?` + defaultsHeader + `Could not find key 'com\.apple\.autologout\.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'$`)
+	digitsOnly       = regexp.MustCompile(`^[0-9]+$`)
+)
+
 // commandExitIs prefers the real process status. The exact textual fallback
 // supports Runners that expose only an error string, including scripted checks.
 func commandExitIs(err error, code int) bool {
@@ -292,20 +304,29 @@ func hostSteps(d Deps) []Check {
 					// not set, which is the default: automatic log-out is off. Any
 					// other failure (a timeout, a bad plist) says nothing about the
 					// setting, so it is not a pass (unverified on macOS 26).
-					if strings.Contains(err.Error(), "does not exist") {
+					if autologoutUnset.MatchString(strings.TrimSpace(err.Error())) {
 						return OK, "automatic log-out is not set"
 					}
 					// the key is absent in the way macOS 26 words it (one observed
 					// data point, unverified elsewhere): the system default applies,
 					// which is off. Only this exact message; anything else stays
 					// not verified.
-					if strings.Contains(err.Error(), "Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'") {
+					if autologoutAbsent.MatchString(strings.TrimSpace(err.Error())) {
 						return OK, "key not set: the system default applies (default off)"
 					}
 					return NotVerified, "defaults did not answer, so the setting is not known: " + oneLine(err.Error())
 				}
 				delay := strings.TrimSpace(out)
-				if delay == "" || delay == "0" {
+				if delay == "" {
+					return OK, "automatic log-out is off"
+				}
+				// only plain digits are a number of seconds: "+60" or "-5" is
+				// not known, "00" is zero
+				n, convErr := strconv.Atoi(delay)
+				if !digitsOnly.MatchString(delay) || convErr != nil {
+					return NotVerified, "defaults printed a value that is not a number of seconds, so the setting is not known: " + oneLine(delay)
+				}
+				if n == 0 {
 					return OK, "automatic log-out is off"
 				}
 				return Fail, "the Mac logs out automatically after " + oneLine(delay) + " seconds of inactivity, which ends Apple Container's services and every agent"
