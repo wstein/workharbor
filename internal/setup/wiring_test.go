@@ -462,7 +462,7 @@ func TestADryRunWithAnswersSaysWhichQuestionsStayOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"the answers file says run: it would run without asking", "the answers file says skip: it would be skipped", "the question stays open: the answers file has no matching answer", "the question stays open: the step runs a command with sudo"} {
-		if !strings.Contains(errOut, want) {
+		if !strings.Contains(strings.Join(strings.Fields(errOut), " "), want) {
 			t.Errorf("lacks %q\n%s", want, errOut)
 		}
 	}

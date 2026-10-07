@@ -314,7 +314,7 @@ func TestTheHappyPath(t *testing.T) {
 	if len(h.lines) != 1 || h.lines[0] != "Delete the account workharbor?" || len(h.confirms) != 0 {
 		t.Errorf("asked %v %v", h.lines, h.confirms)
 	}
-	if !strings.Contains(r.stderr, "ACTION  This deletes the macOS account workharbor and its home folder /Users/workharbor. It cannot be undone.") {
+	if !strings.Contains(strings.Join(strings.Fields(r.stderr), " "), "ACTION This deletes the macOS account workharbor and its home folder /Users/workharbor. It cannot be undone.") {
 		t.Errorf("no ACTION text: %s", r.stderr)
 	}
 	for _, l := range strings.Split(strings.TrimSpace(r.stdout), "\n") {
@@ -753,7 +753,7 @@ func TestTheRecheckNamesTheNewVolume(t *testing.T) {
 	h.log = &se
 	lg := Log{W: &se, Now: time.Now, Whr: "t"}
 	Execute(context.Background(), h, h.deps(), f, lg, Out{Out: &so, Err: &se})
-	if !strings.Contains(se.String(), "a volume is mounted in the home: /Users/workharbor/Data") {
+	if !strings.Contains(strings.Join(strings.Fields(se.String()), " "), "a volume is mounted in the home: /Users/workharbor/Data") {
 		t.Errorf("volume not named:\n%s", se.String())
 	}
 }

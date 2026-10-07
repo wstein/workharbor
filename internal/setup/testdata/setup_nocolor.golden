@@ -24,10 +24,12 @@ Legend (colour is only decoration: the words are always printed)
 -- Step 4 of 4 - title of power --
  x FAIL   sleep is on
 | ACTION  Open System Settings and turn the toggle off.
-| ACTION  this opens: x-apple.systempreferences:x
+| ACTION  this opens:
+          x-apple.systempreferences:x
  - skip   dry run: nothing is run
 ------------------------------------------------------------
-Summary: 1 ok, 2 FAIL, 1 not verified (?), 0 WARN, 0 skipped (dry run: nothing was changed)
+Summary: 1 ok, 2 FAIL, 1 not verified (?), 0 WARN, 0 skipped
+  (dry run: nothing was changed)
   done: autologout
   left: workharbor-user (fail), tailscale (not_verified), power (fail)
   next: whr setup host --from workharbor-user

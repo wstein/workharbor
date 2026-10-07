@@ -230,7 +230,7 @@ func TestADryRunWithAnswersShowsWhatWouldRunAndWhichQuestionsStayOpen(t *testing
 	r.setup("--save-answers", f)
 	r.host.ran, r.host.asked = nil, 0
 	_, errOut := r.setup("--answers", f, "--dry-run")
-	if !strings.Contains(errOut, "the answers file says run: it would run without asking") || len(r.host.ran) != 0 || r.host.asked != 0 {
+	if !strings.Contains(strings.Join(strings.Fields(errOut), " "), "the answers file says run: it would run without asking") || len(r.host.ran) != 0 || r.host.asked != 0 {
 		t.Fatalf("ran %v asked %d\n%s", r.host.ran, r.host.asked, errOut)
 	}
 	lines := bytes.Count(readLog(t, r), []byte("\n"))

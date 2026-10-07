@@ -301,7 +301,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			}
 			return interrupted(i, DuringStep, err)
 		}
-		fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
+		dataLine(o, st, s.Name, detail)
 		report(ui, o, st, detail)
 		out := Outcome{Step: s.Name, Status: st, Detail: detail}
 		if s.UseUser != nil {
@@ -417,7 +417,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			if out.Fixed && s.Provides != "" {
 				provided[s.Provides] = true
 			}
-			fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, s.Name, oneLine(detail))
+			dataLine(o, st, s.Name, detail)
 			report(ui, o, st, detail)
 		}
 		if ctxErr := Interrupted(ctx, h); ctxErr != nil && !out.Fixed { // also during the re-check, which has no error to return; a step that fixed itself stays fixed
@@ -550,6 +550,17 @@ func (r *runner) dryRunQuestion(s doctor.Check, out Outcome) string {
 
 // report prints a step's result once: its reason, and the raw text of the tool
 // behind it only with --verbose.
+// dataLine writes the one data line of a step. The raw text a tool printed
+// (exit status and message) stays out of it unless Verbose: the human line
+// states the same finding, so it is not printed twice.
+func dataLine(o Options, st doctor.Status, name, detail string) {
+	detail = oneLine(detail)
+	if !o.Verbose {
+		detail, _ = render.SplitTool(detail)
+	}
+	fmt.Fprintf(o.Out, "%s\t%s\t%s\n", st, name, detail)
+}
+
 func report(ui render.Writer, o Options, st doctor.Status, detail string) {
 	reason, tool := render.SplitTool(oneLine(detail))
 	ui.Report(Level(st), reason)
@@ -569,7 +580,7 @@ func showFix(ui render.Writer, f *doctor.Fix) {
 	case !hasCommands(f):
 		ui.Action(oneLine(f.Guide))
 		if f.Open != "" {
-			ui.Action("this opens: " + f.Open)
+			ui.Action("this opens:\n" + f.Open)
 		}
 	case f.Desc != "":
 		ui.Action(f.Desc)
@@ -582,7 +593,7 @@ func showFix(ui render.Writer, f *doctor.Fix) {
 		ui.Command(QuoteArgv(c.Full()))
 	}
 	if hasCommands(f) && f.Open != "" {
-		ui.Action("this opens: " + f.Open)
+		ui.Action("this opens:\n" + f.Open)
 	}
 }
 
@@ -673,11 +684,11 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 	ui.Rule()
 	line := render.Summary(o.Style, counts)
 	if o.DryRun {
-		line = strings.TrimSuffix(line, "\n") + " (dry run: nothing was changed)\n"
+		line += "  (dry run: nothing was changed)\n"
 	}
 	fmt.Fprint(w, line)
-	fmt.Fprintf(w, "  done: %s\n", listOrNone(done))
-	fmt.Fprintf(w, "  left: %s\n", listOrNone(left))
+	fmt.Fprintf(w, "  done: %s\n", wrapList(listOrNone(done), 8))
+	fmt.Fprintf(w, "  left: %s\n", wrapList(listOrNone(left), 8))
 	if first != "" {
 		next := ""
 		if useUser != "" {
@@ -698,6 +709,12 @@ func Summary(w io.Writer, outs []Outcome, o Options) {
 		}
 	}
 	ui.Todo(todo)
+}
+
+// wrapList wraps a comma-separated list at 80 columns, continuation lines
+// indented by pad.
+func wrapList(list string, pad int) string {
+	return strings.ReplaceAll(render.Wrap(list, pad), "\n", "\n"+strings.Repeat(" ", pad))
 }
 
 // nextCommand is the command that goes on: the phase and the flags of this run

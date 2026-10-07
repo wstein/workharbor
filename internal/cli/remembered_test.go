@@ -221,7 +221,7 @@ func TestOnlyAnExplicitSetupDevWritesTheKey(t *testing.T) {
 	if _, ok := keysOf(t, home)["development_prefix"]; ok || code == exitcode.Usage {
 		t.Fatalf("dry run: exit %d, wrote the key", code)
 	}
-	if !strings.Contains(errOut, "development_prefix "+prefix) {
+	if !strings.Contains(strings.Join(strings.Fields(errOut), " "), "development_prefix "+prefix) {
 		t.Errorf("a dry run names what it would write: %q", errOut)
 	}
 

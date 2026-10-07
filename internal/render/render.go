@@ -116,6 +116,48 @@ func (s Style) symbol(l Level) string {
 	return asc[l]
 }
 
+// wrapWidth is the column the report and ACTION text wraps at; a word longer
+// than the room (a path, a URL) is never broken.
+const wrapWidth = 80
+
+var padded = regexp.MustCompile(`^\S+ {2,}`)
+
+// wrap breaks each line of text at spaces so that padWidth plus the line stays
+// within wrapWidth columns.
+func wrap(text string, padWidth int) string {
+	room := wrapWidth - padWidth
+	var out []string
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		if utf8.RuneCountInString(line) <= room {
+			out = append(out, line)
+			continue
+		}
+		cur := ""
+		if m := padded.FindString(line); m != "" { // a padded name column stays whole
+			cur, line = m, line[len(m):]
+		}
+		for _, w := range strings.Fields(line) {
+			switch {
+			case cur == "":
+				cur = w
+			case strings.HasSuffix(cur, " "):
+				cur += w
+			case utf8.RuneCountInString(cur)+1+utf8.RuneCountInString(w) <= room:
+				cur += " " + w
+			default:
+				out = append(out, cur)
+				cur = w
+			}
+		}
+		out = append(out, cur)
+	}
+	return strings.Join(out, "\n")
+}
+
+// Wrap breaks text at spaces so that padWidth plus a line stays within 80
+// columns.
+func Wrap(text string, padWidth int) string { return wrap(text, padWidth) }
+
 func indent(text, pad string) string {
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	return strings.Join(lines, "\n"+pad)
@@ -128,12 +170,12 @@ func Report(s Style, l Level, text string) string {
 	word := Palette[role].Label
 	pad := strings.Repeat(" ", 5-len([]rune(word)))
 	head := s.paint(role, s.symbol(l)+" "+word)
-	return " " + head + pad + "  " + indent(text, strings.Repeat(" ", 10)) + "\n"
+	return " " + head + pad + "  " + indent(wrap(text, 12), strings.Repeat(" ", 10)) + "\n"
 }
 
 // Action is a line the person must act on: a bar and the label ACTION.
 func Action(s Style, text string) string {
-	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(text, "          ") + "\n"
+	return s.paint(RoleAction, s.bar()+" ACTION") + "  " + indent(wrap(text, 10), "          ") + "\n"
 }
 
 // Command is text to copy, behind the action bar and a "$".
@@ -332,7 +374,7 @@ func Todo(s Style, items []TodoItem) string {
 	var b strings.Builder
 	b.WriteString(s.paint(RoleTodo, "What you need to do now") + "\n")
 	for i, it := range items {
-		fmt.Fprintf(&b, "  %d. %s\n", i+1, indent(it.Text, "     "))
+		fmt.Fprintf(&b, "  %d. %s\n", i+1, indent(wrap(it.Text, 5), "     "))
 		for _, c := range it.Commands {
 			fmt.Fprintf(&b, "     %s\n", s.paint(RoleCommand, "$ "+c))
 		}

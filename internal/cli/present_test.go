@@ -177,7 +177,7 @@ func TestADevelopmentWarningIsSetApartByARule(t *testing.T) {
 	lines := strings.Split(errOut, "\n")
 	for i, l := range lines {
 		if strings.HasPrefix(l, "warning: development installation") {
-			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+1], "-") != "" {
+			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+2], "-") != "" {
 				t.Errorf("the warning is not between rules:\n%s", errOut)
 			}
 			return
@@ -226,7 +226,7 @@ func TestSetupDevWarningIsSetApartByARule(t *testing.T) {
 	lines := strings.Split(errOut, "\n")
 	for i, l := range lines {
 		if strings.HasPrefix(l, "warning: development installation") {
-			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+1], "-") != "" {
+			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+2], "-") != "" {
 				t.Errorf("the warning is not between rules:\n%s", errOut)
 			}
 			return

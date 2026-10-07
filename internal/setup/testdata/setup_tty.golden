@@ -24,10 +24,12 @@ Legend (colour is only decoration: the words are always printed)
 [1m── Step 4 of 4 ─ title of power ──[0m
  [1;31m✗ FAIL[0m   sleep is on
 [1;33m▌ ACTION[0m  Open System Settings and turn the toggle off.
-[1;33m▌ ACTION[0m  this opens: x-apple.systempreferences:x
+[1;33m▌ ACTION[0m  this opens:
+          x-apple.systempreferences:x
  [2m– skip[0m   dry run: nothing is run
 ────────────────────────────────────────────────────────────
-Summary: 1 ok, 2 FAIL, 1 not verified (?), 0 WARN, 0 skipped (dry run: nothing was changed)
+Summary: 1 ok, 2 FAIL, 1 not verified (?), 0 WARN, 0 skipped
+  (dry run: nothing was changed)
   done: autologout
   left: workharbor-user (fail), tailscale (not_verified), power (fail)
   next: whr setup host --from workharbor-user

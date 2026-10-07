@@ -337,7 +337,7 @@ func hostSteps(d Deps) []Check {
 				return Fail, "the Mac logs out automatically after " + oneLine(delay) + " seconds of inactivity, which ends Apple Container's services and every agent"
 			},
 			Fix: &Fix{
-				Guide: "Open System Settings → Privacy & Security → Advanced and turn off \"Log out automatically after inactivity\". whr does not change it for you. The key it reads (com.apple.autologout.AutoLogOutDelay in /Library/Preferences/.GlobalPreferences) is unverified on macOS 26.",
+				Guide: "Open System Settings → Privacy & Security → Advanced and turn off \"Log out automatically after inactivity\". whr does not change it for you.",
 				Open:  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
 			},
 		},

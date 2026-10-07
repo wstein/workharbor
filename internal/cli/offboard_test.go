@@ -158,7 +158,7 @@ func TestOffboardInvocationGuards(t *testing.T) {
 	r = newOffboardRig(t)
 	r.rig.env.IsTerminal = func() bool { return false }
 	r.env.Setup = r.rig.env
-	if code, _, errOut := r.run("--delete"); code != exitcode.Usage || !strings.Contains(errOut, "needs a terminal") {
+	if code, _, errOut := r.run("--delete"); code != exitcode.Usage || !strings.Contains(strings.Join(strings.Fields(errOut), " "), "needs a terminal") {
 		t.Errorf("piped --delete: %d %s", code, errOut)
 	}
 	r.nothingRan("piped")

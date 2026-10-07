@@ -14,7 +14,7 @@ import (
 // named, so the weaker mode is never silent. A managed installation takes no
 // key and no `--dev`; no environment variable is read for either.
 func rememberedWarning(configPath string) string {
-	return developmentWarning + "; remembered as " + config.DevelopmentPrefixKey + " in " + configPath + " (`whr setup --managed` leaves development mode)"
+	return developmentWarning + "\n  remembered as " + config.DevelopmentPrefixKey + " in " + configPath
 }
 
 // rememberedPrefix returns the development prefix the configuration remembers,

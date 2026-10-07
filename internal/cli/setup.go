@@ -446,7 +446,7 @@ func newSetup(st *state) *cobra.Command {
 
 // Development mode is explicit on each setup/doctor invocation. The LaunchAgent
 // retains the selected executable, so restart needs no mode flag or config key.
-const developmentWarning = "warning: development installation; a user-writable supervisor lacks managed-install replacement protection"
+const developmentWarning = "warning: development installation: no managed-install replacement protection\n  to leave it: `whr setup --managed`"
 
 func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string) (string, error) {
 	if cmd.Flags().Changed("prefix") {

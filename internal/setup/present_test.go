@@ -228,3 +228,32 @@ func TestTerminalAsksWithThePromptsOfTheStepClass(t *testing.T) {
 }
 
 func bufioReader(s string) *bufio.Reader { return bufio.NewReader(strings.NewReader(s)) }
+
+// No line of the default output is wider than 90 runes, and the raw text of a
+// tool (exit status, its error message) is neither on the human lines nor on the
+// data line unless --verbose (issue #369).
+func TestOutputLinesStayNarrowAndHoldNoRawToolText(t *testing.T) {
+	raw := "defaults did not answer, so the setting is not known: exit status 1: Error: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'."
+	long := &doctor.Fix{
+		Guide: "Open System Settings → Privacy & Security → Advanced and turn off \"Log out automatically after inactivity\". whr does not change it for you.",
+		Open:  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+	}
+	steps := append(goldenSteps(), fixStep("autologout2", doctor.NotVerified, raw, long))
+	var out, errb bytes.Buffer
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup", "host"}}
+	outs, err := Run(bg, steps, &fakeHost{}, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Summary(&errb, outs, o)
+	for _, l := range strings.Split(errb.String()+out.String(), "\n") {
+		if n := len([]rune(l)); n > 90 {
+			t.Errorf("line of %d runes: %q", n, l)
+		}
+	}
+	for _, s := range []string{"exit status", "AutoLogOutDelay", "kCFPreferences"} {
+		if strings.Contains(errb.String()+out.String(), s) {
+			t.Errorf("raw tool text %q in the default output:\n%s%s", s, errb.String(), out.String())
+		}
+	}
+}
