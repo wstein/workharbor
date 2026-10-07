@@ -251,6 +251,16 @@ func TestLandShortSHA(t *testing.T) {
 			}},
 			{"wrong sha", "review note is not for", func(string) []string { return []string{"CLEAR " + other + " role=review model=opus"} }},
 			{"short sha", "review note is not for", func(s string) []string { return []string{"CLEAR " + s[:12] + " role=review model=opus"} }},
+			{"missing role", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + " model=opus"} }},
+			{"empty role", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + " role= model=opus"} }},
+			{"missing model", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + " role=review"} }},
+			{"empty model", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + " role=review model="} }},
+			{"trailing field", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + " role=review model=opus extra=1"} }},
+			{"double space", "review note is not for", func(s string) []string { return []string{"CLEAR  " + s + " role=review model=opus"} }},
+			{"tab separator", "review note is not for", func(s string) []string { return []string{"CLEAR\t" + s + " role=review model=opus"} }},
+			{"lowercase keyword", "review note is not for", func(s string) []string { return []string{"clear " + s + " role=review model=opus"} }},
+			{"leading blank", "review note is not for", func(s string) []string { return []string{" CLEAR " + s + " role=review model=opus"} }},
+			{"sha with a suffix", "review note is not for", func(s string) []string { return []string{"CLEAR " + s + "0 role=review model=opus"} }},
 			{"not clear", "NOT CLEAR", func(s string) []string {
 				return []string{"CLEAR " + s + " role=review model=opus", "NOT CLEAR " + s + " role=review model=opus"}
 			}},
