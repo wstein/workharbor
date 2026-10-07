@@ -23,11 +23,36 @@ var updateGolden = flag.Bool("update", false, "rewrite the golden files")
 
 var escape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
+// TERM=dumb turns colour off on a terminal; FORCE_COLOR and --color=always turn
+// it on without one; --color takes only auto, always or never.
+func TestColourTermForceAndFlagValue(t *testing.T) {
+	has := func(o uiOpts, args ...string) bool {
+		r := newSetupRig(t)
+		_, _, errOut := r.runUI(o, append([]string{"setup", "--dry-run"}, args...)...)
+		return strings.Contains(errOut, "\x1b")
+	}
+	if has(uiOpts{stdoutTTY: true, stderrTTY: true, term: "dumb"}) {
+		t.Error("TERM=dumb still drew colour")
+	}
+	if !has(uiOpts{forceColor: "1"}) {
+		t.Error("FORCE_COLOR drew no colour")
+	}
+	if !has(uiOpts{}, "--color=always") {
+		t.Error("--color=always drew no colour")
+	}
+	r := newSetupRig(t)
+	code, _, _ := r.runUI(uiOpts{}, "setup", "--dry-run", "--color=sometimes")
+	if code != exitcode.Usage {
+		t.Errorf("--color=sometimes: exit %d, want usage %d", code, exitcode.Usage)
+	}
+}
+
 // uiOpts say how a run looks to the program: which streams are terminals and
 // what NO_COLOR says.
 type uiOpts struct {
 	stdoutTTY, stderrTTY bool
 	noColor              string
+	term, forceColor     string
 	ctx                  context.Context // the run's context; Background when nil
 }
 
@@ -43,6 +68,10 @@ func (r *setupRig) runUI(o uiOpts, args ...string) (int, string, string) {
 				return "/Users/workharbor"
 			case "NO_COLOR":
 				return o.noColor
+			case "TERM":
+				return o.term
+			case "FORCE_COLOR":
+				return o.forceColor
 			}
 			return ""
 		},

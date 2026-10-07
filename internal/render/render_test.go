@@ -298,6 +298,9 @@ func TestDetectEnvColourRules(t *testing.T) {
 		if st.Color != c.want {
 			t.Errorf("%s: Color = %v, want %v", c.name, st.Color, c.want)
 		}
+		if c.e.TTY == false && st.Unicode {
+			t.Errorf("%s: forced colour must not turn on Unicode symbols", c.name)
+		}
 		if got := strings.Contains(scene(st), "\x1b"); got != c.want {
 			t.Errorf("%s: escape byte present = %v, want %v", c.name, got, c.want)
 		}

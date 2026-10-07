@@ -125,6 +125,13 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.SetErr(env.Stderr)
 	root.SetIn(env.Stdin)
 	root.SetHelpFunc(helpFunc)
+	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+		switch st.color {
+		case "auto", "always", "never":
+			return nil
+		}
+		return usageError{fmt.Sprintf("--color %q: use auto, always or never", st.color)}
+	}
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err.Error()} })
 	root.PersistentFlags().StringVar(&st.configPath, "config", "", "the configuration file (default $WHR_CONFIG or ~/.config/whr/config.json)")
 	root.PersistentFlags().BoolVar(&st.noColor, "no-color", false, "no colour (decoration only; the words are always printed)")
