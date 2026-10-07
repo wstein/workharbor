@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -129,5 +130,39 @@ func TestCommandAnswerShowsTheAnswerNotARawExit(t *testing.T) {
 	b, _ := os.ReadFile(p) //nolint:gosec // a test path
 	if want := "$ dseditgroup -o checkmember\nanswer: not a member (exit 67)\nno u is NOT a member of admin\n"; string(b) != want {
 		t.Fatalf("log %q", b)
+	}
+}
+
+func TestOpenDoesNotHangOnAFIFO(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "fifo.log")
+	if err := syscall.Mkfifo(p, 0o600); err != nil {
+		t.Skip("no mkfifo:", err)
+	}
+	// a reader makes the non-blocking open succeed, so the regular-file check
+	// is what refuses; without a reader the open itself fails (ENXIO)
+	for _, withReader := range []bool{false, true} {
+		if withReader {
+			r, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // a test path
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = r.Close() }()
+		}
+		done := make(chan error, 1)
+		go func() {
+			l, err := Open(p)
+			if err == nil {
+				_ = l.Close()
+			}
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err == nil {
+				t.Errorf("reader=%v: want a refusal for a FIFO", withReader)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("reader=%v: Open hangs on a FIFO", withReader)
+		}
 	}
 }

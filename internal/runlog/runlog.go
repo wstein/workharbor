@@ -49,8 +49,9 @@ func Open(path string) (*Log, error) {
 		return nil, err
 	}
 	// never through a symlink, and never onto a file with another name too: the
-	// log must not change or grow a file the person did not name
-	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	// log must not change or grow a file the person did not name; O_NONBLOCK so
+	// a FIFO at the path fails or is refused below instead of hanging the run
+	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
 		return nil, err
 	}
