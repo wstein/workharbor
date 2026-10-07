@@ -80,7 +80,7 @@ func (d Deps) inspectFolder(ctx context.Context, root string) (folder, Status, s
 			return folder{}, Fail, "the volume for " + shown + " is not mounted (it would land on " + textsafe.Escape(mount) + ")"
 		}
 	}
-	if mount != "/" && root != mount && !strings.HasPrefix(root, mount+"/") {
+	if !internalMounts[mount] && root != mount && !strings.HasPrefix(root, mount+"/") {
 		return folder{}, Fail, "the workspace root " + shown + " is outside its volume " + textsafe.Escape(mount)
 	}
 	f := folder{Path: root}
@@ -119,10 +119,10 @@ func (d Deps) folderCmds(f folder) []Cmd {
 		cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"mkdir", "-p", f.Path}})
 	}
 	if !f.Exists || f.Owner != d.account() {
-		cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"chown", d.account(), f.Path}})
+		cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"chown", "-h", d.account(), f.Path}})
 	}
 	if !f.Exists || f.Mode != workspaceMode || f.Owner != d.account() {
-		cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"chmod", "0" + workspaceMode, f.Path}})
+		cmds = append(cmds, Cmd{Sudo: true, Argv: []string{"chmod", "-h", "0" + workspaceMode, f.Path}})
 	}
 	return cmds
 }
@@ -163,11 +163,10 @@ func (d Deps) workspaceFoldersStep() Check {
 			return OK, strings.Join(good, "; ")
 		},
 		Fix: &Fix{
-			Cmds: []Cmd{
-				{Sudo: true, Argv: []string{"mkdir", "-p", "<workspace root>"}},
-				{Sudo: true, Argv: []string{"chown", d.account(), "<workspace root>"}},
-				{Sudo: true, Argv: []string{"chmod", "0" + workspaceMode, "<workspace root>"}},
-			},
+			// No Sudo preview commands: the wizard asks for the password before
+			// Build when a fix has them, even if Build then refuses. Desc shows
+			// them, and sudo is asked only once Build has returned commands.
+			Desc: "for each workspace root, with sudo: mkdir -p <root>; chown -h " + d.account() + " <root>; chmod -h 0" + workspaceMode + " <root> (only what is missing)",
 			Build: func(ctx context.Context, p Prompter) ([]Cmd, error) {
 				roots, _, msg := d.workspaceRoots()
 				if msg != "" {
@@ -188,6 +187,12 @@ func (d Deps) workspaceFoldersStep() Check {
 						}
 						if !ok {
 							return nil, errors.New(textsafe.Escape(r) + " was left as it is")
+						}
+						// the answer took a human's time: look again, and act only
+						// on what is still the same
+						g, st2, msg2 := d.inspectFolder(ctx, r)
+						if st2 == NotVerified || g.Path == "" || g != f {
+							return nil, errors.New(textsafe.Escape(r) + " changed while you were asked (" + msg2 + "); nothing was changed")
 						}
 					}
 					cmds = append(cmds, d.folderCmds(f)...)

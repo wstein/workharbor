@@ -24,7 +24,7 @@ func folderDeps(t *testing.T, rel string) (Deps, scripted, string) {
 	if err := os.WriteFile(cfg, []byte(`{"roots":{"workspaces":["`+root+`"]}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r := scripted{"df -P " + base: dfHeader + "/dev/disk3s5 100 1 99 1% /"}
+	r := scripted{"df -P " + base: dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"}
 	return Deps{GOOS: "darwin", Runner: r, ConfigPath: cfg, Home: base}, r, root
 }
 
@@ -50,14 +50,15 @@ func TestAMissingWorkspaceRootIsMadeByTheListedSudoCommands(t *testing.T) {
 		}
 		got = append(got, c.Full())
 	}
-	want := [][]string{{"sudo", "mkdir", "-p", root}, {"sudo", "chown", "workharbor", root}, {"sudo", "chmod", "0700", root}}
+	want := [][]string{{"sudo", "mkdir", "-p", root}, {"sudo", "chown", "-h", "workharbor", root}, {"sudo", "chmod", "-h", "0700", root}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("commands %v, want %v", got, want)
 	}
-	for _, c := range c.Fix.Cmds { // the dry-run preview
-		if !c.Sudo || strings.Contains(strings.Join(c.Argv, " "), root) {
-			t.Errorf("preview %v", c.Argv)
-		}
+	for _, pc := range c.Fix.Cmds { // a Sudo preview would prime sudo before Build
+		t.Errorf("preview command %v", pc.Argv)
+	}
+	if !strings.Contains(c.Fix.Desc, "sudo") {
+		t.Error("the dry-run does not say the commands use sudo")
 	}
 }
 
@@ -66,7 +67,7 @@ func TestARightWorkspaceRootIsOKAndNeedsNothing(t *testing.T) {
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	r["df -P "+root] = dfHeader + "/dev/disk3s5 100 1 99 1% /"
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
 	r["stat -f %Su %Lp "+root] = "workharbor 700\n"
 	c := folderStep(t, d)
 	if st, msg := c.Run(context.Background()); st != OK {
@@ -82,7 +83,7 @@ func TestAWrongOwnerIsReportedAndChownIsOnlyOfferedNotTaken(t *testing.T) {
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	r["df -P "+root] = dfHeader + "/dev/disk3s5 100 1 99 1% /"
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
 	r["stat -f %Su %Lp "+root] = "alice 700\n"
 	c := folderStep(t, d)
 	if st, msg := c.Run(context.Background()); st != Fail || !strings.Contains(msg, "belongs to alice") {
@@ -102,14 +103,14 @@ func TestAWrongModeNeedsOnlyChmod(t *testing.T) {
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	r["df -P "+root] = dfHeader + "/dev/disk3s5 100 1 99 1% /"
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
 	r["stat -f %Su %Lp "+root] = "workharbor 755\n"
 	c := folderStep(t, d)
 	if st, msg := c.Run(context.Background()); st != Fail || !strings.Contains(msg, "mode 755") {
 		t.Fatalf("%s %s", st, msg)
 	}
 	cmds, err := c.Fix.Build(context.Background(), &answers{})
-	if err != nil || len(cmds) != 1 || !reflect.DeepEqual(cmds[0].Argv, []string{"chmod", "0700", root}) {
+	if err != nil || len(cmds) != 1 || !reflect.DeepEqual(cmds[0].Argv, []string{"chmod", "-h", "0700", root}) {
 		t.Errorf("%v %v", cmds, err)
 	}
 }
@@ -139,7 +140,7 @@ func TestAVolumeThatIsNotMountedIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, anc := range []string{"/Volumes", "/"} {
-		r["df -P "+anc] = dfHeader + "/dev/disk3s5 100 1 99 1% /"
+		r["df -P "+anc] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
 	}
 	st, msg := folderStep(t, d).Run(context.Background())
 	if st != Fail || !strings.Contains(msg, "is not mounted") {
@@ -156,5 +157,60 @@ func TestWithoutAConfigurationOrDfTheFolderIsNotVerified(t *testing.T) {
 	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
 	if st, _ := folderStep(t, d).Run(context.Background()); st != NotVerified {
 		t.Errorf("no config: %s", st)
+	}
+}
+
+// hookPrompter confirms, and runs a hook while the person "thinks".
+type hookPrompter struct {
+	answers
+	hook func()
+}
+
+func (h *hookPrompter) Confirm(string) (bool, error) {
+	h.hook()
+	return true, nil
+}
+
+func TestARootThatBecameASymlinkAfterTheConfirmRunsNothing(t *testing.T) {
+	d, r, root := folderDeps(t, "ws")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
+	r["stat -f %Su %Lp "+root] = "alice 700\n"
+	p := &hookPrompter{hook: func() {
+		if err := os.Remove(root); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Dir(root), root); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	cmds, err := folderStep(t, d).Fix.Build(context.Background(), p)
+	if err == nil || len(cmds) != 0 || !strings.Contains(err.Error(), "changed while you were asked") {
+		t.Errorf("%v %v", cmds, err)
+	}
+}
+
+func TestTheHomeRootOnTheDataVolumeIsAccepted(t *testing.T) {
+	d, r, root := folderDeps(t, "workspaces")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
+	r["stat -f %Su %Lp "+root] = "workharbor 700\n"
+	if st, msg := folderStep(t, d).Run(context.Background()); st != OK {
+		t.Errorf("%s %s", st, msg)
+	}
+}
+
+func TestAMountedExternalVolumeIsNotCalledUnmounted(t *testing.T) {
+	d, r, _ := folderDeps(t, "ws")
+	if err := os.WriteFile(d.ConfigPath, []byte(`{"roots":{"workspaces":["/Volumes/Fake395/workspaces"]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r["df -P /Volumes"] = dfHeader + "/dev/disk9s1 100 1 99 1% /Volumes/Fake395"
+	if _, msg := folderStep(t, d).Run(context.Background()); strings.Contains(msg, "not mounted") || strings.Contains(msg, "outside") {
+		t.Errorf("%s", msg)
 	}
 }
