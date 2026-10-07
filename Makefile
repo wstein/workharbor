@@ -296,7 +296,9 @@ land:
 		if [ "$(origin BRANCH)" != "command line" ]; then \
 			lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || { echo "land: main has no scripts/land.sh: refusing" >&2; exit 1; }; \
 			res="$$(sh -c "$$lsh" land.sh resolve "$$SHA")" || exit 1; \
-			short=1; want="$${res%% *}"; BRANCH="$${res#* }"; \
+			set -f; set -- $$res; set +f; \
+			[ "$$#" = 8 ] || { echo "land: invalid resolver confirmation: refusing" >&2; exit 1; }; \
+			short=1; want="$$1"; BRANCH="$$2"; confirm_mode="$$3"; confirm_answer="$$4"; confirm_at="$$5"; confirm_review="$$6"; confirm_base="$$7"; confirm_class="$$8"; \
 		else want="$$SHA"; fi; fi; \
 	if [ "$(origin BRANCH)" = "command line" ] || [ -n "$$short" ]; then \
 		wb="$$BRANCH"; \
@@ -330,6 +332,7 @@ land:
 	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
 		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
 	base="$$(git rev-parse --verify refs/heads/main)"; \
+	if [ -n "$$short" ] && [ "$$base" != "$$confirm_base" ]; then echo "land: main moved since confirmation: run make land again" >&2; exit 1; fi; \
 	candidate="$$(git rev-parse --verify HEAD^{commit})" || { echo "land: cannot read the candidate commit" >&2; exit 1; }; \
 	if [ -n "$$want" ] && [ "$$candidate" != "$$want" ]; then echo "land: the candidate is $$candidate, not the requested SHA $$want: refusing" >&2; exit 1; fi; \
 	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
@@ -339,7 +342,7 @@ land:
 	$(LAND_CLEAN) $(LAND_MAKE) -s test-commitlint-consumers || exit 1; \
 	$(LAND_CLEAN) $(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
 	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
-	if [ -n "$$generated" ]; then $(LAND_CLEAN) $(LAND_MAKE) -s check-generated || exit 1; fi; \
+	generated_check=0; if [ -n "$$generated" ]; then $(LAND_CLEAN) $(LAND_MAKE) -s check-generated || exit 1; generated_check=1; fi; \
 	if { [ -z "$$det" ] && [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ]; } || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ] || [ "$$(git rev-parse --verify "refs/heads/$$branch^{commit}")" != "$$candidate" ]; then \
 		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
 	if [ "$$(git rev-parse --verify refs/heads/main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
@@ -349,6 +352,9 @@ land:
 		echo "land: the shared checkout's index is stale (every path that differs from HEAD equals HEAD in the tree): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; fi; \
 	if [ "$$state" != 0 ] && [ "$$state" != 4 ]; then echo "land: cannot read the shared checkout's index" >&2; exit 1; fi; \
 	git -C "$$shared" merge -q --ff-only "$$candidate" || exit 1; \
+	if [ -n "$$short" ]; then \
+		sh -c "$$lsh" land.sh record "$$candidate" "$$branch" "$$confirm_mode" "$$confirm_answer" "$$confirm_at" "$$confirm_review" "$$confirm_base" "$$confirm_class" "$$generated_check" || { echo "land: main moved to $$candidate, but its confirmation note was not recorded: stop and tell the human" >&2; exit 1; }; \
+	fi; \
 	echo "land: main is now $$(git rev-parse --short refs/heads/main)"; \
 	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 

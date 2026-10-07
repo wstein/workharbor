@@ -292,6 +292,7 @@ func (r *landBranchRepo) wantRefused(at string, msg string, args ...string) {
 	if got := r.git(r.dir, "rev-parse", "main"); got != base {
 		r.t.Fatalf("refused land moved main to %s", got)
 	}
+	r.wantNoConfirm()
 }
 
 func TestLandBranchArg(t *testing.T) {

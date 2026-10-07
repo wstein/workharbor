@@ -4,10 +4,13 @@
 # or the caller's own checkout, so neither can change the decision about itself.
 # Usage: land.sh resolve|preview <hex>, or list|next|all.
 # inspect <hex> <branch> is the read-only per-branch listing operation.
+# record <sha> <branch> <mode> <answer> <at> <review-object> <base> <class> <generated>
+# writes a local confirmation note after the fast-forward.
 # Resolves the abbreviated commit id, finds the one local branch whose tip it is,
 # checks the review note, derives the path class from the diff against main (never
 # from the note), shows it all on stderr and asks the human (a terminal is
-# required). On success it prints "<full sha> <branch>" on stdout.
+# required). On success stdout carries the candidate, branch and confirmation
+# fields for the Makefile to retain through the checks.
 # Accepted limitations (#315): the Makefile that runs this comes from the working
 # directory, so run make land from the shared checkout (a candidate worktree's own
 # Makefile is the candidate's); and the prompt is a UX safeguard, not a boundary
@@ -17,6 +20,62 @@ export GIT_NO_REPLACE_OBJECTS=1
 die() { echo "land: $*" >&2; exit 1; }
 command="${1:-}"
 case "$command" in
+record)
+  [ "$#" = 10 ] || die "record requires the retained confirmation fields"
+  full="$2"; branch="$3"; mode="$4"; answer="$5"; at="$6"
+  review="$7"; base="$8"; class="$9"; shift 9; generated="$1"
+  [ "$(git rev-parse --verify refs/heads/main^{commit})" = "$full" ] || die "main is not the confirmed commit: no confirmation recorded"
+  git check-ref-format "refs/heads/$branch" || die "invalid confirmation branch"
+  # The resolver and this writer are the same blob captured from main before
+  # landing. Never execute a candidate's writer after the fast-forward.
+  # assurance local is an honest log, not proof against same-user agents.
+  record="$(python3 - "$full" "$branch" "$mode" "$answer" "$at" "$review" "$base" "$class" "$generated" <<'PYRECORD'
+import datetime
+import json
+import re
+import sys
+
+full, branch, mode, answer, at, review, base, path_class, generated = sys.argv[1:]
+for obj in (full, review, base):
+    if not re.fullmatch(r"[0-9a-f]{40}", obj):
+        sys.exit("land: invalid confirmation object")
+branch.encode("utf-8")  # Reject invalid UTF-8 refnames rather than emit surrogates.
+if path_class == "carve-out":
+    valid_answer = mode == "typed_sha" and answer == full[:7]
+elif path_class == "ordinary":
+    valid_answer = mode == "yn" and answer == "yes"
+else:
+    valid_answer = False
+if not valid_answer or generated not in ("0", "1"):
+    sys.exit("land: invalid retained confirmation")
+if datetime.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%dT%H:%M:%SZ") != at:
+    sys.exit("land: invalid confirmation time")
+checks = ["check-local", "commitlint", "test-commitlint-consumers", "secrets-range"]
+if generated == "1":
+    checks.append("check-generated")
+evidence = [{"kind": "base", "object": base},
+            {"kind": "path-class", "value": path_class},
+            {"kind": "review-note", "object": review, "ref": "refs/notes/review"}]
+evidence += [{"kind": "check", "name": name, "result": "pass"} for name in checks]
+# Only validated refnames and fixed ASCII fields enter this encoder. Refnames
+# cannot contain ASCII controls, whose json.dumps short escapes would differ
+# from v1. Do not add free text here without using the v1 control escaping.
+def canonical(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+evidence.sort(key=canonical)
+record = {
+    "v": 1, "schema": "workharbor.confirmation", "action": "land",
+    "subject": {"commit": full, "branch": branch},
+    "answer": {"mode": mode, "value": answer}, "at": at,
+    "channel": "cli", "by": "human", "assurance": "local",
+    "evidence": evidence,
+}
+print(canonical(record), end="")
+PYRECORD
+)" || die "cannot encode the confirmation"
+  # No -f: an existing record is never silently overwritten.
+  printf '%s' "$record" | git notes --ref=confirm add -F - "$full" || die "cannot write the confirmation note"
+  exit 0 ;;
 list | next | all)
   # Snapshot branch tips in lexical refname order. Notes index this queue; the
   # exact tip and its note are checked again by resolve before every landing.
@@ -69,7 +128,8 @@ if [ "$(printf '%s\n' "$branches" | wc -l | tr -d ' ')" != 1 ]; then
   die "say which one is meant: remove the extra branches or use BRANCH=<name> SHA=<40 hex>"
 fi
 [ "$branches" != main ] || die "$full is main itself: nothing to land"
-note="$(git notes --ref=review show "$full" 2>/dev/null)" || {
+review="$(git notes --ref=review list "$full" 2>/dev/null)" || review=""
+note="$(git cat-file blob "$review" 2>/dev/null)" || {
   [ "$command" = inspect ] || die "$full has no review note (git notes --ref=review): refusing"
   note="(no review note)"
 }
@@ -106,15 +166,19 @@ EOT
   git --no-pager diff --stat "$base" "$full"
 } >&2
 case "$command" in preview | inspect) exit 0 ;; esac
+command -v python3 >/dev/null 2>&1 || die "python3 is required to record the confirmation"
 [ -t 0 ] && [ -t 2 ] || die "not a terminal: run it where the human can answer"
 short="$(printf '%s' "$full" | cut -c1-7)"
 if [ "$class" = carve-out ]; then
   printf 'land: security-relevant change: type %s to land it: ' "$short" >&2
   read -r ans || die "no answer"
   [ "$ans" = "$short" ] || die "answer does not match $short: not landing"
+  mode=typed_sha; answer="$ans"
 else
   printf 'land: land %s onto main? [y/N] ' "$short" >&2
   read -r ans || die "no answer"
   case "$ans" in y | Y) ;; *) die "not landing" ;; esac
+  mode=yn; answer=yes
 fi
-printf '%s %s\n' "$full" "$branches"
+at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || die "cannot read the confirmation time"
+printf '%s %s %s %s %s %s %s %s\n' "$full" "$branches" "$mode" "$answer" "$at" "$review" "$base" "$class"

@@ -128,6 +128,7 @@ func (r *landBranchRepo) wantTTYRefused(at, input, msg string, extraEnv []string
 		r.t.Fatalf("refused land moved main to %s", got)
 	}
 	r.wantNoTemp(tmp)
+	r.wantNoConfirm()
 }
 
 // wantNoTemp checks that the temporary worktree is gone from disk and from git.

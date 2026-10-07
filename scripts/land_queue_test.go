@@ -77,6 +77,7 @@ func TestLandQueueListAndPreview(t *testing.T) {
 	if err != nil || string(after) != string(index) {
 		t.Fatal("list/preview wrote index")
 	}
+	r.wantNoConfirm()
 }
 
 func TestLandQueueStopsAtMismatch(t *testing.T) {
@@ -150,6 +151,10 @@ func TestLandQueueSequentialLanding(t *testing.T) {
 			}
 			if target == "land-all" && (!strings.Contains(out, "first review") || !strings.Contains(out, "second review")) {
 				t.Fatal("missing per-tip reviews")
+			}
+			r.confirmation(first)
+			if target == "land-all" {
+				r.confirmation(second)
 			}
 			r.wantNoTemp(tmp)
 		})
