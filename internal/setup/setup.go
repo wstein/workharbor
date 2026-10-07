@@ -810,15 +810,10 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	if f.Guide != "" {
 		ui.Action("what happens next: " + oneLine(f.Guide))
 	}
-	if o.Phase == doctor.PhaseHost && !r.sudoReady && usesSudo(f) && source != protocol.SourceAnswers {
-		// One sudo -v, no background refresh: root stays reachable only while the
-		// human is here, and sudo asks again if it expires.
-		ui.Action("sudo asks for your password once, so the commands above need it only once (no background refresh)")
-		ui.Command("sudo -v")
-		if err := r.h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
-			return res, fmt.Errorf("sudo did not accept the password: %w", err)
+	if usesSudo(f) && source != protocol.SourceAnswers {
+		if err := r.primeSudo(ctx); err != nil {
+			return res, err
 		}
-		r.sudoReady = true
 	}
 	if f.Do != nil {
 		if err := f.Do(ctx, r.p); err != nil {
@@ -853,6 +848,12 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 			}
 		}
 	}
+	if f.Build != nil && anySudo(cmds) {
+		// the commands a builder returns were not known before: validate sudo now
+		if err := r.primeSudo(ctx); err != nil {
+			return res, err
+		}
+	}
 	for _, c := range cmds {
 		res.ran = append(res.ran, append([]string(nil), c.Full()...))
 		if err := r.h.Run(ctx, c); err != nil {
@@ -879,6 +880,22 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 		}
 	}
 	return res, nil
+}
+
+// primeSudo runs one sudo -v in the host phase, no background refresh: root
+// stays reachable only while the human is here, and sudo asks again if it
+// expires.
+func (r *runner) primeSudo(ctx context.Context) error {
+	if r.o.Phase != doctor.PhaseHost || r.sudoReady {
+		return nil
+	}
+	r.ui.Action("sudo asks for your password once, so the commands above need it only once (no background refresh)")
+	r.ui.Command("sudo -v")
+	if err := r.h.Run(ctx, doctor.Cmd{Sudo: true, Argv: []string{"-v"}}); err != nil {
+		return fmt.Errorf("sudo did not accept the password: %w", err)
+	}
+	r.sudoReady = true
+	return nil
 }
 
 func anySudo(cmds []doctor.Cmd) bool {

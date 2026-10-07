@@ -522,3 +522,23 @@ func TestUncertainLegacyAccountNeverOffersOrRunsCreation(t *testing.T) {
 		}
 	}
 }
+
+// A host step whose commands come from a builder gets its sudo -v too, before
+// the first built command, and once for the whole run.
+func TestSudoIsPrimedForCommandsABuilderReturns(t *testing.T) {
+	var a, b bool
+	build := func(arg string) *doctor.Fix {
+		return &doctor.Fix{
+			Cmds: []doctor.Cmd{{Argv: []string{"x", "<value>"}}},
+			Build: func(context.Context, doctor.Prompter) ([]doctor.Cmd, error) {
+				return []doctor.Cmd{{Sudo: true, Argv: []string{"x", arg}}}, nil
+			},
+		}
+	}
+	h := &fakeHost{answers: []string{"y", "y"}}
+	steps := []doctor.Check{step("one", doctor.PhaseHost, &a, build("v1")), step("two", doctor.PhaseHost, &b, build("v2"))}
+	run(t, h, steps, Options{Phase: doctor.PhaseHost})
+	if got, want := strings.Join(h.ran, "|"), "sudo -v|sudo x v1|sudo x v2"; got != want {
+		t.Errorf("ran %q, want %q", got, want)
+	}
+}
