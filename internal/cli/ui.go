@@ -36,6 +36,32 @@ type quitError struct{}
 func (quitError) Error() string { return "" }
 func (quitError) ExitCode() int { return exitcode.Quit }
 
+// interruptedError ends `whr setup` after Ctrl-C, SIGTERM or a deadline: a code
+// of its own, so a script can tell it from a refused command line.
+type interruptedError struct{}
+
+func (interruptedError) Error() string {
+	return "interrupted"
+}
+func (interruptedError) ExitCode() int { return exitcode.Interrupted }
+
+// printInterrupted says which step was cut short, or not yet started, and the
+// command that goes on.
+func printInterrupted(ui render.Writer, e *setup.InterruptedError) {
+	switch e.When {
+	case setup.BeforeStep:
+		ui.Report(render.LevelSkipped, "interrupted: no step was running, the next one had not started")
+		ui.Action("to go on, run")
+	case setup.AfterLastStep:
+		ui.Report(render.LevelSkipped, "interrupted: every step had finished")
+		ui.Action("to check the last step again, run")
+	default:
+		ui.Report(render.LevelSkipped, "interrupted: the step that was running did not finish")
+		ui.Action("to check it and go on, run")
+	}
+	ui.Command(e.Resume)
+}
+
 // printQuit says where to go on after q.
 func printQuit(ui render.Writer, q *setup.QuitError) {
 	ui.Report(render.LevelSkipped, "stopped at your request, nothing more was run")

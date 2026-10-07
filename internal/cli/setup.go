@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -71,7 +72,7 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 		e.Executable = os.Executable
 	}
 	if e.Host == nil {
-		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style}
+		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style, Sig: &setup.Interrupts{}}
 	}
 	return e, nil
 }
@@ -231,6 +232,9 @@ func newSetup(st *state) *cobra.Command {
 			for _, c := range steps {
 				if c.Name == "prefix" {
 					if status, detail := c.Run(ctx); status == doctor.Fail {
+						if setup.Interrupted(ctx, env.Host) != nil { // Ctrl-C cut the check short, or killed its command first: not a usage error
+							return interruptedError{}
+						}
 						return usageError{detail}
 					}
 				}
@@ -333,6 +337,10 @@ func newSetup(st *state) *cobra.Command {
 		var quit *setup.QuitError
 		isQuit := errors.As(err, &quit)
 		if err != nil && !isQuit {
+			var stopped *setup.InterruptedError
+			if errors.As(err, &stopped) {
+				printInterrupted(ui, stopped)
+			}
 			return runFailure(err)
 		}
 		var saveErr error
@@ -471,6 +479,9 @@ func setupPrefixes(prefix string, dev bool) []string {
 // refused the command line, the plain error when the protocol could not be
 // written.
 func runFailure(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return interruptedError{}
+	}
 	if errors.Is(err, setup.ErrUnattended) || strings.HasPrefix(err.Error(), "setup protocol:") {
 		return err
 	}

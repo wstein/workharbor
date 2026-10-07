@@ -4,16 +4,17 @@ package exitcode
 import "errors"
 
 const (
-	OK         = 0
-	Error      = 1
-	Usage      = 2
-	NotFound   = 3
-	Auth       = 4
-	Conflict   = 5
-	NeedsHuman = 6
-	Timeout    = 7
-	Quit       = 8 // the person answered q in `whr setup`: stopped cleanly, not a failure
-	TaskFailed = 10
+	OK          = 0
+	Error       = 1
+	Usage       = 2
+	NotFound    = 3
+	Auth        = 4
+	Conflict    = 5
+	NeedsHuman  = 6
+	Timeout     = 7
+	Quit        = 8 // the person answered q in `whr setup`: stopped cleanly, not a failure
+	Interrupted = 9 // Ctrl-C, SIGTERM or a deadline stopped `whr setup`: not a usage error
+	TaskFailed  = 10
 )
 
 // Coder is implemented by errors that know the exit code they map to.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/launchd"
+	"github.com/wstein/workharbor/internal/setup"
 )
 
 func devSetupRig(t *testing.T) (*setupRig, string) {
@@ -540,5 +541,47 @@ func TestDoctorRefusesControlCharactersInUser(t *testing.T) {
 	_, _, errOut := runDevSetup(t, r, home, "doctor", "--dev", "--user", "whr")
 	if !strings.Contains(errOut, "(run as whr)") {
 		t.Fatalf("a normal user: stderr %q", errOut)
+	}
+}
+
+// Ctrl-C during the --dev prefix check is an interrupt, not a usage error.
+func TestDevSetupInterruptedInThePrefixCheckExitsWithTheInterruptCode(t *testing.T) {
+	r, home := devSetupRig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	r.env.Executable = func() (string, error) { cancel(); return r.exe, nil }
+	var out, errOut bytes.Buffer
+	env := Env{
+		Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Setup: r.env,
+		Getenv: func(k string) string {
+			if k == "HOME" {
+				return home
+			}
+			return ""
+		},
+	}
+	// the prefix check fails (no home from the directory service) as Ctrl-C lands
+	delete(r.host.outputs, "/usr/bin/dscl . -read /Users/werner NFSHomeDirectory")
+	prefix := filepath.Join(home, ".local")
+	code := Execute(ctx, env, []string{"setup", "--dev", "--user", "werner", "--only", "config-base", "--prefix", prefix})
+	if code != exitcode.Interrupted {
+		t.Errorf("exit %d, want %d\n%s", code, exitcode.Interrupted, errOut.String())
+	}
+}
+
+// sigSeenHost is a host that has seen a command die of an interrupt while the
+// context is still live: Ctrl-C reached the command before whr's own handler.
+type sigSeenHost struct{ setup.Host }
+
+func (sigSeenHost) Interrupted() bool { return true }
+func (sigSeenHost) ResetInterrupts()  {}
+
+func TestDevSetupPrefixCheckKilledByTheSignalWithALiveContextExitsWithTheInterruptCode(t *testing.T) {
+	r, home := devSetupRig(t)
+	r.env.Host = sigSeenHost{r.host}
+	delete(r.host.outputs, "/usr/bin/dscl . -read /Users/werner NFSHomeDirectory")
+	prefix := filepath.Join(home, ".local")
+	code, _, errOut := runDevSetup(t, r, home, "setup", "--dev", "--user", "werner", "--only", "config-base", "--prefix", prefix)
+	if code != exitcode.Interrupted {
+		t.Errorf("exit %d, want %d\n%s", code, exitcode.Interrupted, errOut)
 	}
 }

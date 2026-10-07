@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"io"
 	"os"
@@ -10,9 +11,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/render"
+	"github.com/wstein/workharbor/internal/setup"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite the golden files")
@@ -24,6 +28,7 @@ var escape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 type uiOpts struct {
 	stdoutTTY, stderrTTY bool
 	noColor              string
+	ctx                  context.Context // the run's context; Background when nil
 }
 
 // runUI runs a command line like setupRig.run, with terminals decided by o.
@@ -48,7 +53,11 @@ func (r *setupRig) runUI(o uiOpts, args ...string) (int, string, string) {
 			return o.stderrTTY
 		},
 	}
-	code := Execute(context.Background(), env, append(args, "--config", "/Users/workharbor/.config/whr/config.json", "--prefix", filepath.Dir(filepath.Dir(r.exe))))
+	ctx := o.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	code := Execute(ctx, env, append(args, "--config", "/Users/workharbor/.config/whr/config.json", "--prefix", filepath.Dir(filepath.Dir(r.exe))))
 	tmp := filepath.Dir(filepath.Dir(filepath.Dir(r.exe)))
 	return code, strings.ReplaceAll(out.String(), tmp, "<tmp>"), strings.ReplaceAll(errOut.String(), tmp, "<tmp>")
 }
@@ -224,4 +233,85 @@ func TestSetupDevWarningIsSetApartByARule(t *testing.T) {
 		}
 	}
 	t.Errorf("no development warning:\n%s", errOut)
+}
+
+// runFailsHost fails every command the way os/exec does when it kills one:
+// with the signal, never with the context's own error. cancel, when set, is the
+// Ctrl-C that came with it.
+type runFailsHost struct {
+	askingHost
+	cancel context.CancelFunc
+	wait   bool // block until the context is done
+}
+
+func (h *runFailsHost) Run(ctx context.Context, _ doctor.Cmd) error {
+	if h.wait { // a deadline ends it
+		<-ctx.Done()
+	}
+	if h.cancel != nil {
+		h.cancel()
+	}
+	return errors.New("signal: killed")
+}
+
+func TestInterruptExitsWithItsOwnCode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := newSetupRig(t)
+	h := &runFailsHost{askingHost: askingHost{setupHost: setupHost{outputs: map[string]string{}}, answers: []render.Answer{render.Yes}}, cancel: cancel}
+	r.env.Host = h
+	r.dsclSays("workharbor", io.ErrUnexpectedEOF)
+	code, _, errOut := r.runUI(uiOpts{ctx: ctx}, "setup", "host", "--only", "power")
+	if code != exitcode.Interrupted {
+		t.Errorf("exit %d, want %d\n%s", code, exitcode.Interrupted, errOut)
+	}
+	lines := strings.Split(strings.TrimSpace(errOut), "\n")
+	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "whr: interrupted") || strings.Contains(last, "context") {
+		t.Errorf("final line %q", last)
+	}
+	if !regexp.MustCompile(`to check it and go on, run\n.*\$ whr setup host .*--only power`).MatchString(errOut) {
+		t.Errorf("no resume command:\n%s", errOut)
+	}
+}
+
+func TestDeadlineExitsWithTheInterruptCode(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	r := newSetupRig(t)
+	h := &runFailsHost{askingHost: askingHost{setupHost: setupHost{outputs: map[string]string{}}, answers: []render.Answer{render.Yes}}, wait: true}
+	r.env.Host = h
+	r.dsclSays("workharbor", io.ErrUnexpectedEOF)
+	code, _, errOut := r.runUI(uiOpts{ctx: ctx}, "setup", "host", "--only", "power")
+	if code != exitcode.Interrupted || !strings.Contains(errOut, "whr: interrupted") {
+		t.Errorf("exit %d\n%s", code, errOut)
+	}
+}
+
+func TestACommandThatFailsWithALiveContextIsNotAnInterrupt(t *testing.T) {
+	r := newSetupRig(t)
+	h := &runFailsHost{askingHost: askingHost{setupHost: setupHost{outputs: map[string]string{}}, answers: []render.Answer{render.Yes}}}
+	r.env.Host = h
+	r.dsclSays("workharbor", io.ErrUnexpectedEOF)
+	code, _, errOut := r.runUI(uiOpts{}, "setup", "host", "--only", "power")
+	if code == exitcode.Interrupted || strings.Contains(errOut, "whr: interrupted") {
+		t.Errorf("exit %d, an ordinary failure is not an interrupt\n%s", code, errOut)
+	}
+}
+
+func TestInterruptedTextNamesOnlyWhatStarted(t *testing.T) {
+	for _, c := range []struct {
+		when setup.InterruptedWhen
+		want string
+		not  string
+	}{
+		{setup.DuringStep, "the step that was running did not finish", "had not started"},
+		{setup.BeforeStep, "the next one had not started", "did not finish"},
+		{setup.AfterLastStep, "every step had finished", "did not finish"},
+	} {
+		var b bytes.Buffer
+		printInterrupted(render.Writer{W: &b}, &setup.InterruptedError{Step: "two", When: c.when, Resume: "whr setup --from two"})
+		if got := b.String(); !strings.Contains(got, c.want) || strings.Contains(got, c.not) || !strings.Contains(got, "whr setup --from two") {
+			t.Errorf("when %d:\n%s", c.when, got)
+		}
+	}
 }
