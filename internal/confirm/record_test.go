@@ -111,6 +111,19 @@ func rep(t *testing.T, name, old, repl string) []byte {
 	return []byte(strings.Replace(s, old, repl, 1))
 }
 
+func TestDecodeRejectsOutOfRangeVersion(t *testing.T) {
+	for _, v := range []string{"4294967297", "2147483648", "-2147483649", "9223372036854775807", "-9223372036854775808"} {
+		_, err := Decode(rep(t, "land-cli", `"v":1`, `"v":`+v))
+		if !errors.Is(err, ErrUnknownVersion) {
+			t.Errorf("v=%s: err = %v, want ErrUnknownVersion", v, err)
+			continue
+		}
+		if !strings.Contains(err.Error(), ": "+v) {
+			t.Errorf("v=%s: message %q lacks the true value", v, err)
+		}
+	}
+}
+
 func TestDecodeRejects(t *testing.T) {
 	const land = "land-cli"
 	tests := []struct {

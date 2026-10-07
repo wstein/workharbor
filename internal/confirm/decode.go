@@ -66,10 +66,11 @@ func fromTree(top map[string]any) (r Record, err error) {
 	if !ok {
 		return r, fmt.Errorf("%w: v must be an integer", ErrSyntax)
 	}
-	r.V = int(v)
 	if v != Version {
-		return r, nil // Decode reports the unknown version
+		// Compare as int64 so an out-of-range v is never truncated.
+		return r, fmt.Errorf("%w: %d", ErrUnknownVersion, v)
 	}
+	r.V = Version
 	for _, f := range []struct {
 		key string
 		dst *string
