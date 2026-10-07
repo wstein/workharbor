@@ -104,7 +104,7 @@ func TestRunNewPasswordMismatchStopsAfterThree(t *testing.T) {
 // hint is shown once before the first prompt and nothing breaks without it.
 func TestRunNewPasswordShowsThePolicyHint(t *testing.T) {
 	dir := t.TempDir()
-	fake := "#!/bin/sh\necho 'Getting global account policies'\ncat <<'EOF'\n<?xml version=\"1.0\"?><plist><dict><key>policyContentDescription</key><dict><key>en</key><string>Four characters or more.</string></dict></dict></plist>\nEOF\n"
+	fake := "#!/bin/sh\necho 'Getting global account policies'\ncat <<'EOF'\n<?xml version=\"1.0\"?><plist><dict><key>policyCategoryPasswordContent</key><array><dict><key>policyContentDescription</key><dict><key>en</key><string>Four characters or more.&#x9b;31m</string></dict></dict></array></dict></plist>\nEOF\n"
 	if err := os.WriteFile(filepath.Join(dir, "pwpolicy"), []byte(fake), 0o700); err != nil { //nolint:gosec // a fake tool in a temp dir
 		t.Fatal(err)
 	}
@@ -117,6 +117,9 @@ func TestRunNewPasswordShowsThePolicyHint(t *testing.T) {
 	}
 	if strings.Count(b.String(), "Four characters or more.") != 1 {
 		t.Errorf("want the hint once: %q", b.String())
+	}
+	if strings.ContainsRune(b.String(), 0x9b) || !strings.Contains(b.String(), `\u009b`) {
+		t.Errorf("the hint must be escaped: %q", b.String())
 	}
 }
 

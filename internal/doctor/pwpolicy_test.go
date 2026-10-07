@@ -27,3 +27,22 @@ func TestPolicyDescription(t *testing.T) {
 		}
 	}
 }
+
+func TestPolicyDescriptionOnlyFromPasswordContent(t *testing.T) {
+	other := `<?xml version="1.0"?><plist><dict>
+<key>policyCategoryAuthentication</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>wrong category</string></dict></dict></array>
+</dict></plist>`
+	if got := PolicyDescription([]byte(other), "en"); got != "" {
+		t.Errorf("got %q", got)
+	}
+	mixed := `<?xml version="1.0"?><plist><dict>
+<key>policyCategoryAuthentication</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>wrong category</string></dict></dict></array>
+<key>policyCategoryPasswordContent</key><array><dict>
+<key>policyContentDescription</key><dict><key>en</key><string>right</string></dict></dict></array>
+</dict></plist>`
+	if got := PolicyDescription([]byte(mixed), "en"); got != "right" {
+		t.Errorf("got %q", got)
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/runlog"
+	"github.com/wstein/workharbor/internal/textsafe"
 )
 
 // Terminal is the real Host: a person at a terminal. Prompts go to Err (stdout is
@@ -143,7 +144,7 @@ func (t Terminal) Run(ctx context.Context, c doctor.Cmd) error {
 				lang = os.Getenv("LANG")
 			}
 			if d := doctor.PolicyDescription(out, lang); d != "" {
-				fmt.Fprintln(t.Err, "Password rules of this Mac: "+d)
+				fmt.Fprintln(t.Err, "Password rules of this Mac: "+textsafe.Escape(d))
 			}
 		}
 	}

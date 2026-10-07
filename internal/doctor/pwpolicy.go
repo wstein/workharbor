@@ -22,6 +22,7 @@ func PolicyDescription(out []byte, lang string) string {
 	}
 	dec := xml.NewDecoder(bytes.NewReader(out))
 	texts := map[string]string{}
+	inPassword := false // inside the policyCategoryPasswordContent array
 	for {
 		tok, err := dec.Token()
 		if err != nil {
@@ -32,7 +33,14 @@ func PolicyDescription(out []byte, lang string) string {
 			continue
 		}
 		var k string
-		if dec.DecodeElement(&k, &se) != nil || k != "policyContentDescription" {
+		if dec.DecodeElement(&k, &se) != nil {
+			continue
+		}
+		if strings.HasPrefix(k, "policyCategory") {
+			inPassword = k == "policyCategoryPasswordContent"
+			continue
+		}
+		if k != "policyContentDescription" || !inPassword {
 			continue
 		}
 		var key string
