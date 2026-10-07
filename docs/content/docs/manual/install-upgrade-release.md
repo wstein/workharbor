@@ -72,6 +72,8 @@ This source route is for a developer's machine. The managed dogfood and referenc
 host retain the signed release route above; a development install is not evidence
 that either host is ready.
 
+`make install` builds each binary into a temporary directory next to its destination, signs the macOS `whr` ad hoc (`codesign --force --sign -`, macOS only) and moves it into place by rename, so a running or cached binary is never overwritten in place. `whr-shim` and `whr-proxy` are Linux files and are renamed, not signed. It ends by running `whr version` and fails with a message naming `codesign -v` and `xattr -l` if that does not run. Whether an invalid signature after an in-place overwrite is what killed `whr` on the real host is {{< status unverified >}} until the output of those two commands is known (issue #393); see [Troubleshooting](troubleshooting.md).
+
 `make install` defaults to `$HOME/.local`. An explicit `PREFIX=/absolute/path`
 chooses another development prefix. The destination must be user-owned and
 writable, outside Git working trees and source checkouts. It refuses `/`, your
