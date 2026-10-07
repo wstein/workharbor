@@ -68,6 +68,8 @@ func TestExpectedAnswersAreNamed(t *testing.T) {
 		{[]string{"dscl", ".", "-read", "/Users/u", "UniqueID"}, 56, "", "no such record"},
 		{[]string{"dscl", ".", "-list", "/Users"}, 56, "", ""},
 		{key, 1, absent, "key not set"},
+		{key, 1, "The domain/default pair of (/Library/Preferences/.GlobalPreferences, com.apple.autologout.AutoLogOutDelay) does not exist\n", "key not set"},
+		{key, 1, "The domain/default pair of (/Library/Preferences/.GlobalPreferences, other.key) does not exist\n", ""},
 		{key, 1, "Error: permission denied\n", ""},
 		{key, 2, absent, ""},
 		{[]string{"defaults", "read", "x", "y"}, 1, absent, ""},
@@ -152,5 +154,25 @@ func TestTerminalLogsTheExpectedAnswer(t *testing.T) {
 	got := string(b)
 	if !strings.Contains(got, "answer: not a member (exit 67)") || !strings.Contains(got, "$ sh -c exit 67\nexit 67\n") {
 		t.Errorf("log %q", got)
+	}
+}
+
+// Terminal hands the command's stderr to ExpectedAnswer: the "key not set"
+// answer is named only when stderr says so.
+func TestTerminalNamesKeyNotSetFromStderr(t *testing.T) {
+	dir := t.TempDir()
+	bin := t.TempDir()
+	script := "#!/bin/sh\necho \"Error: Could not find key 'com.apple.autologout.AutoLogOutDelay' in domain 'kCFPreferencesAnyApplication'.\" >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "defaults"), []byte(script), 0o700); err != nil { //nolint:gosec // a test stand-in
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	log, _ := runlog.Open(filepath.Join(dir, "run.log"))
+	h := Terminal{Log: log}
+	_, _ = h.Output(context.Background(), "defaults", "read", "/Library/Preferences/.GlobalPreferences", "com.apple.autologout.AutoLogOutDelay")
+	_ = log.Close()
+	b, _ := os.ReadFile(filepath.Join(dir, "run.log")) //nolint:gosec // a test path
+	if !strings.Contains(string(b), "answer: key not set (exit 1)") {
+		t.Errorf("log %q", b)
 	}
 }
