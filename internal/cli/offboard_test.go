@@ -317,3 +317,42 @@ func TestOffboardProtocolRecordsFailedSudoWithoutDeletion(t *testing.T) {
 		t.Fatalf("entries: %+v", es)
 	}
 }
+
+// Issue #379: offboard writes the run log to --log-file (0600), prints its path
+// last, and a failed delete-user shows the summary with the path.
+func TestOffboardRunLog(t *testing.T) {
+	const marker = "marker-7c1e9d"
+	p := filepath.Join(t.TempDir(), "logs", "offboard.log")
+	r := newOffboardRig(t)
+	code, _, errOut := r.run("--log-file", p)
+	if code != exitcode.OK {
+		t.Fatalf("dry run exit %d\n%s", code, errOut)
+	}
+	fi, err := os.Stat(p)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("log file: %v %v", err, fi)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(errOut), p) {
+		t.Errorf("path not printed last:\n%s", errOut)
+	}
+	if b, _ := os.ReadFile(p); strings.Contains(string(b), marker) { //nolint:gosec // a test path
+		t.Error("marker in log")
+	}
+
+	p2 := filepath.Join(t.TempDir(), "fail.log")
+	r = newOffboardRig(t)
+	r.host.fail = offboardDelete
+	code, _, errOut = r.run("--delete", "--log-file", p2)
+	if code == exitcode.OK {
+		t.Fatal("want a failure")
+	}
+	b, _ := os.ReadFile(p2) //nolint:gosec // a test path
+	if !strings.Contains(string(b), "step delete-user: fail") {
+		t.Errorf("log: %s", b)
+	}
+	for _, want := range []string{"cause", "the account was not removed", "log  " + p2} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("failure output lacks %q:\n%s", want, errOut)
+		}
+	}
+}
