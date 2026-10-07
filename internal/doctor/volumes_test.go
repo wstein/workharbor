@@ -269,3 +269,23 @@ func TestADiskListErrorIsEscapedAndShort(t *testing.T) {
 		t.Errorf("%q", s)
 	}
 }
+
+func TestPlistLimitsFailWithTheirOwnError(t *testing.T) {
+	nestedDicts := "<plist>" + strings.Repeat("<dict><key>k</key>", 30) + "<true/>" + strings.Repeat("</dict>", 30) + "</plist>"
+	for name, tc := range map[string]struct{ in, want string }{
+		"26 arrays":    {"<plist>" + strings.Repeat("<array>", 26) + strings.Repeat("</array>", 26) + "</plist>", "nested too deeply"},
+		"30 dicts":     {nestedDicts, "nested too deeply"},
+		"150k nodes":   {"<plist><array>" + strings.Repeat("<true/>", 150000) + "</array></plist>", "too many entries"},
+		"5 MiB string": {"<plist><string>" + strings.Repeat("a", 5<<20) + "</string></plist>", "too large"},
+		"external DTD": {`<!DOCTYPE plist SYSTEM "http://example.invalid/x.dtd"><plist><string>&ext;</string></plist>`, "not valid XML"},
+		"mismatch":     {"<plist><dict></array></plist>", "not valid XML"},
+		"20-digit int": {"<plist><integer>" + strings.Repeat("9", 20) + "</integer></plist>", "not a number"},
+	} {
+		if _, err := parsePlist([]byte(tc.in)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	if _, err := parsePlist([]byte("<plist>" + strings.Repeat("<array>", 24) + strings.Repeat("</array>", 24) + "</plist>")); err != nil {
+		t.Errorf("24 nested arrays are within the limit: %v", err)
+	}
+}
