@@ -54,6 +54,12 @@ and a severity (high, medium, low). A criterion unmet or ticked but not met,
 without the author's reason in the issue, is a finding. Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
+Also append the same line to the local review note, which `make land` reads:
+`git notes --ref=review append -m 'CLEAR <full sha> role=review model=<m>' <sha>`
+(it asks for approval). Any lane could write such a line, so it is only a
+convenience: the human checks the short sha, reads the note and matches it to
+your handback.
+
 - No findings: report the verdict to `wh/dispatch`, which sets the card to `Ready to push` with
   `scripts/board-snapshot.sh ready <issue-number>` (two small GraphQL calls by
   item ID; never `gh project item-edit --url`, which trips a secondary rate

@@ -39,7 +39,7 @@ runs, and stop if one does.
   `wh/desk`.
 - **Start the review once per push**, narrow per fix commit: a reviewer subagent on Opus
   for code and the rule sections, on Sonnet for documentation
-  outside the rule sections. That subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note, and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.
+  outside the rule sections. That subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note (the reviewer also appends it to the local note, `git notes --ref=review append`; see `.agents/review.md`), and you then set `Ready to push` on its behalf, only for the reviewed sha. Never review yourself, and never start the review of a change in the author's own context.
   **Restrict the tools yourself:** the deleted prompts enforced read-only reviewers and research subagents by `tools:` frontmatter; nothing does now. Claude Code's Agent call has no tools parameter, so start a subagent type without Edit and Write, or restrict the tools in your own call by whatever the client offers. If the client cannot, the brief says "read-only: do not edit", the reviewer works in a scratch clone, and you verify afterwards that the scratch clone and the worktree are unchanged (`git status` there only, never in the shared checkout). The same goes for a research subagent and a read-only helper.
 - **Land and move cards.** `make land` with safe retries; `In progress`, `Blocked`
   and `In review` through the script. On a GraphQL rate-limit error, skip the
