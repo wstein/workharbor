@@ -133,7 +133,7 @@ func TestRunLogNeverHoldsTheSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the child echoes what it read, as a careless tool would, and fails
-	script := `printf 'User password:'; IFS= read -r l; printf '\\n'; printf 'got %s\n' "$l"; echo oops >&2; exit 5`
+	script := `printf 'User password:'; IFS= read -r l; printf '\n'; printf 'got %s\n' "$l"; echo oops >&2; exit 5`
 	h := Terminal{Err: io.Discard, Log: lg, readSecret: func(string) (string, error) { return marker, nil }}
 	c := doctor.Cmd{Argv: []string{"/bin/sh", "-c", script, "sh"}, SecretPrompt: "pw"}
 	if err := h.Run(context.Background(), c); err == nil {
