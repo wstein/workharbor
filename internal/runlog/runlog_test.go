@@ -250,3 +250,27 @@ func TestOpenLeavesAnExplicitDirAlone(t *testing.T) {
 		t.Errorf("an explicit --log-file's directory changed to %v", fi.Mode().Perm())
 	}
 }
+
+func TestOpenDefaultKeepsTwoRunsOfTheSameSecondApart(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "logs", "setup-20261007T101500Z.log")
+	var paths []string
+	for i := 0; i < 3; i++ {
+		l, err := OpenDefault(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		l.Step("n", "ok", "run "+string(rune('a'+i)))
+		paths = append(paths, l.Path())
+		_ = l.Close()
+	}
+	want := []string{p, strings.TrimSuffix(p, ".log") + "-1.log", strings.TrimSuffix(p, ".log") + "-2.log"}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("paths %v, want %v", paths, want)
+		}
+		b, _ := os.ReadFile(want[i]) //nolint:gosec // a test path
+		if exp := "step n: ok run " + string(rune('a'+i)) + "\n"; string(b) != exp {
+			t.Errorf("%s holds %q, want %q", want[i], b, exp)
+		}
+	}
+}

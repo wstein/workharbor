@@ -44,14 +44,16 @@ type Log struct {
 
 // Open creates the log at path: the directory 0700, the file 0600, appended to
 // when it exists (a --log-file that a second terminal already follows).
-func Open(path string) (*Log, error) {
+func Open(path string) (*Log, error) { return open(path, 0) }
+
+func open(path string, extra int) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
 	// never through a symlink, and never onto a file with another name too: the
 	// log must not change or grow a file the person did not name; O_NONBLOCK so
 	// a FIFO at the path fails or is refused below instead of hanging the run
-	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0o600)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC|extra, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +83,7 @@ func ownerOK(fileUID, euid uint32) bool { return euid != 0 || fileUID == euid }
 
 // OpenDefault opens the log at the fixed per-run path: Open, after the logs
 // directory (which may exist from an older run with a wider mode) is tightened
-// to 0700. An explicit --log-file uses Open, which never touches its directory.
+// to 0700, and a run in the same second as another gets a -1, -2 suffix. An explicit --log-file uses Open, which never touches its directory.
 func OpenDefault(path string) (*Log, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -92,7 +94,19 @@ func OpenDefault(path string) (*Log, error) {
 			return nil, err
 		}
 	}
-	return Open(path)
+	// two runs in the same second must not share a file: O_EXCL, then -1, -2, ...
+	base := strings.TrimSuffix(path, ".log")
+	for i := 0; i < 100; i++ {
+		p := path
+		if i > 0 {
+			p = fmt.Sprintf("%s-%d.log", base, i)
+		}
+		l, err := open(p, syscall.O_EXCL)
+		if !errors.Is(err, os.ErrExist) {
+			return l, err
+		}
+	}
+	return nil, errors.New("too many run logs with the same name")
 }
 
 // Path is where the log is; empty for a nil log.
