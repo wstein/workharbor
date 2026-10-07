@@ -41,7 +41,9 @@ The cards in `In review`: their commits are on local `main` and not pushed
   ticked but not met), and what the diff does that the issue did not ask for;
   a list of its own in the comment, ahead of the findings.
 - **Tests**: they test what they claim and fail without the change.
-  `go test -race` on the packages touched.
+  `go test -race` on the packages touched. A stamp brief for a commitlint or
+  land-gate change states the result of the full `go test ./...` and
+  `GOOS=linux go vet ./...`.
 
 Read-only: never edit the author's code, never run anything that touches the
 keychain, credentials, `sudo`, launchd or real containers; `go test` is fine.
