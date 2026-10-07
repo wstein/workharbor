@@ -380,7 +380,7 @@ func TestTheConfigurationIsWrittenInTwoStepsWithoutADropOfAnythingUnknown(t *tes
 	if _, err := os.Stat(d.ConfigPath); err == nil {
 		t.Fatal("a refused answer left a file")
 	}
-	must(st["config-base"].Fix.Do(ctx, &answers{lines: []string{"wstein/workharbor", "", ""}}))
+	must(st["config-base"].Fix.Do(ctx, &answers{confirm: true, lines: []string{"wstein/workharbor", "", ""}}))
 	fi, _ := os.Stat(d.ConfigPath)
 	if fi.Mode().Perm() != 0o600 {
 		t.Errorf("config mode %v", fi.Mode().Perm())

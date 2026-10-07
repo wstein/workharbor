@@ -105,7 +105,7 @@ func newSetup(st *state) *cobra.Command {
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
 				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: doctor.DefaultLookPath,
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev, Managed: managed,
+				Runner: env.Host, Yes: yes, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev, Managed: managed,
 			})
 		}
 	)

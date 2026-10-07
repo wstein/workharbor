@@ -22,6 +22,7 @@ import (
 	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/sshca"
+	"github.com/wstein/workharbor/internal/textsafe"
 	"github.com/wstein/workharbor/internal/toolstore"
 )
 
@@ -1191,8 +1192,8 @@ func userSteps(d Deps) []Check {
 				}
 				return OK, d.ConfigPath + " has the base settings"
 			},
-			Fix: &Fix{Desc: "ask for the repository and the folders, then write " + d.ConfigPath + " (0600, never overwritten)", Do: func(_ context.Context, p Prompter) error {
-				return writeConfigBase(d, p, tokenPath, envPath)
+			Fix: &Fix{Desc: "ask for the repository and the folders, choose the volume, then write " + d.ConfigPath + " (0600, atomic, an existing file is saved to .bak first)", Do: func(ctx context.Context, p Prompter) error {
+				return writeConfigBase(ctx, d, p, tokenPath, envPath)
 			}},
 		},
 		{
@@ -1323,20 +1324,22 @@ func readConfigMap(path string) (map[string]any, error) {
 }
 
 // writeConfigBase asks for what `whr github app create` and the rest need before
-// the App exists, and writes a new file. It never overwrites one. It is not the
+// the App exists, and writes the file (0600, atomically) after the person has seen
+// the result and said y; a file that exists is saved to .bak and keeps its keys. It is not the
 // whole configuration: github comes later (config-github), so it is not validated
 // as one.
-func writeConfigBase(d Deps, p Prompter, tokenPath, envPath string) error {
+func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath string) error {
 	repo, err := p.Line("Repository to work on (owner/name)")
 	if err != nil {
 		return err
 	}
-	ws, err := p.Line("Folder for workspaces [" + filepath.Join(d.Home, "workspaces") + "]")
+	repo = strings.TrimSpace(repo)
+	if !ownerNameRE.MatchString(repo) {
+		return errors.New("that is not owner/name; nothing was written")
+	}
+	ws, err := d.chooseWorkspaces(ctx, p)
 	if err != nil {
 		return err
-	}
-	if strings.TrimSpace(ws) == "" {
-		ws = filepath.Join(d.Home, "workspaces")
 	}
 	store := filepath.Join(d.Home, "tools")
 	acct, err := p.Line("Is " + d.account() + " dedicated to workharbor, or your own account that you also work in (D49)? [dedicated/shared, default dedicated]")
@@ -1350,30 +1353,63 @@ func writeConfigBase(d Deps, p Prompter, tokenPath, envPath string) error {
 	if acct != config.AccountDedicated && acct != config.AccountShared {
 		return errors.New("that is not dedicated or shared; nothing was written")
 	}
-	m := map[string]any{
+	defaults := map[string]any{
 		"account":             acct,
 		"listen":              "127.0.0.1:8787",
-		"repositories":        []map[string]any{{"name": strings.TrimSpace(repo)}},
-		"roots":               map[string]any{"workspaces": []string{strings.TrimSpace(ws)}, "tool_store": store},
+		"repositories":        []map[string]any{{"name": repo}},
+		"roots":               map[string]any{"workspaces": []string{ws}, "tool_store": store},
 		"api_token_file":      tokenPath,
 		"agent_allowed_tools": []string{"Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"},
 	}
 	if _, err := os.Stat(envPath); err == nil {
-		m["agent_api_key_env_file"] = envPath
+		defaults["agent_api_key_env_file"] = envPath
 	}
-	if !ownerNameRE.MatchString(strings.TrimSpace(repo)) {
-		return errors.New("that is not owner/name; nothing was written")
+	// An existing file keeps every key it has: only what is missing is added.
+	m, err := readConfigMap(d.ConfigPath)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		m = map[string]any{}
+	case err != nil:
+		return err
 	}
-	for _, dd := range []string{strings.TrimSpace(ws), store} {
-		if err := os.MkdirAll(dd, 0o700); err != nil {
-			return err
+	added := 0
+	for k, v := range defaults {
+		if _, ok := m[k]; !ok {
+			m[k], added = v, added+1
 		}
+	}
+	if added == 0 {
+		return fmt.Errorf("%s already has these settings: not overwritten", d.ConfigPath)
 	}
 	raw, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return WriteSecret(d.ConfigPath, append(raw, '\n'))
+	p.Show(strings.Join([]string{
+		"The configuration will have:",
+		"  repository:  " + repo,
+		"  workspaces:  " + textsafe.Escape(ws),
+		"  tool store:  " + textsafe.Escape(store),
+		"  account:     " + acct,
+	}, "\n"))
+	if d.Yes {
+		p.Show("yes: write " + textsafe.Escape(d.ConfigPath))
+	} else if ok, err := p.Confirm("Write " + textsafe.Escape(d.ConfigPath)); err != nil || !ok {
+		if err == nil {
+			err = errors.New("not written")
+		}
+		return err
+	}
+	for _, dir := range []string{ws, store, filepath.Dir(d.ConfigPath)} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			var pe *fs.PathError
+			if errors.As(err, &pe) {
+				err = pe.Err
+			}
+			return errors.New("could not create " + textsafe.Escape(dir) + ": " + oneLine(err.Error()) + "; nothing was written")
+		}
+	}
+	return replaceWithBackup(p, d.ConfigPath, append(raw, '\n'))
 }
 
 var ownerNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
