@@ -87,9 +87,43 @@ var aiIdentities = map[string]struct{ vendor string }{
 	"noreply@google.com":    {"Antigravity"},
 }
 
-// issueKeys are the trailer tokens that reference an issue.
+// issueKeys are the lower-case tokens that reference an issue: GitHub's closing
+// keywords (per its docs, not measured here) and our Refs/Related. Keys match
+// in any letter case.
 var issueKeys = map[string]bool{
-	"Closes": true, "Fixes": true, "Resolves": true, "Refs": true, "Related": true,
+	"close": true, "closes": true, "closed": true,
+	"fix": true, "fixes": true, "fixed": true,
+	"resolve": true, "resolves": true, "resolved": true,
+	"refs": true, "related": true,
+}
+
+// issueWord is the same set as a regexp alternative.
+const issueWord = `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs|related)`
+
+var (
+	// bareIssueRe is the no-colon spelling "Closes #12" (single space, a
+	// well-formed reference), which git does not parse as a trailer.
+	bareIssueRe = regexp.MustCompile(`(?i)^` + issueWord + ` ` + issueRef + `(?:, ` + issueRef + `)*$`)
+	// subjectIssueRe finds a keyword with a reference inside the subject.
+	subjectIssueRe = regexp.MustCompile(`(?i)\b` + issueWord + `:? ` + issueRef)
+)
+
+// bareIssueLines counts no-colon issue lines in the final paragraph.
+func bareIssueLines(lines []string) int {
+	start := len(lines)
+	for start > 1 && lines[start-1] != "" {
+		start--
+	}
+	if start <= 1 {
+		return 0
+	}
+	n := 0
+	for _, l := range lines[start:] {
+		if bareIssueRe.MatchString(l) {
+			n++
+		}
+	}
+	return n
 }
 
 // issueRequired lists the commit types that must reference an issue.
@@ -186,7 +220,7 @@ func Lint(msg string, opt Options) []string {
 	var issues, tasks, runs, changelogs int
 	for _, t := range trailers {
 		switch {
-		case issueKeys[t.key]:
+		case issueKeys[strings.ToLower(t.key)]:
 			issues++
 			if !issueValue.MatchString(t.value) {
 				add("%s: %q is not an issue reference; use #123 or owner/repo#123", t.key, t.value)
@@ -209,6 +243,10 @@ func Lint(msg string, opt Options) []string {
 		}
 	}
 
+	issues += bareIssueLines(lines)
+	if subjectIssueRe.MatchString(subject) {
+		add("do not put an issue keyword in the subject; use a trailer such as 'Closes: #123'")
+	}
 	if m != nil && issueRequired[m[1]] && issues == 0 {
 		add("%s commits must reference an issue, e.g. 'Refs: #123' or 'Closes: #123'", m[1])
 	}

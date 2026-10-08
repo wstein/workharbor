@@ -177,7 +177,7 @@ Use the actual exposed model ID (`unknown` if unavailable), never a guessed mode
 
 Fold a fix into its commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way.
 
-`Refs` and `Closes` also accept `owner/repo#12` and comma lists. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
+`Refs` and `Closes` also accept `owner/repo#12` and comma lists. The canonical form is the trailer `Closes: #12`; commitlint also accepts Close, Closes, Closed, Fix, Fixes, Fixed, Resolve, Resolves, Resolved, Refs and Related in any letter case with the colon optional (`CLOSES #12`), and refuses them in the subject. That GitHub closes the issue for these spellings is taken from its docs, not measured here. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
 
 ### Spike pages
 

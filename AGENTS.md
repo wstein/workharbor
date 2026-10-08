@@ -49,7 +49,7 @@ Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `t
 
 | Trailer | Rule |
 | --- | --- |
-| `Refs: #12`, `Closes: #12` (also `Fixes`, `Resolves`, `Related`) | **Required for `feat`, `fix`, `perf` and `refactor`**; optional for other types. Never in the subject. Never invent an issue number: open one first. |
+| `Refs: #12`, `Closes: #12` ([spellings](docs/content/docs/manual/sessions-and-agents.md#commits)) | **Required for `feat`, `fix`, `perf`, `refactor`**; else optional. Never in the subject or invented. |
 | `Co-Authored-By: <tool> <model-id> <attribution-email>` | When an AI tool wrote or shaped the change; one line per tool/model, with the model name as exposed by the session (`unknown` if unavailable; never guess). Preserve legitimate human coauthors. |
 | `Signed-off-by` | **Humans only.** Agents and bot identities never add it (Dependabot and Renovate excepted). |
 | `Whr-Task: <id>`, `Whr-Run: <id>` | Provenance written by `whr` for an agent run. `Whr-Run` requires `Whr-Task`. |
