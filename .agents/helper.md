@@ -87,8 +87,8 @@ These tool sets are no longer enforced: the deleted `wh-helper*` prompts restric
 
 `.claude/settings.json` lets every session read the repository, search, run the
 exact `make` checks, read GitHub and search the web without a prompt; everything
-else asks, and credential, push, merge, tag, release, `gh api` and `launchctl`
-commands and reads of the secret directories are denied. Two limits stay:
+else asks, and credential, merge, tag, release, `gh api` and `launchctl`
+commands and reads of the secret directories are denied. Push is denied except plain or `-u` `git push origin <docs|fix|feat|chore|ci>/<name>`; the settings deny force, `+`/`:` refspecs, `main`, tags, `--delete`, `--mirror`, `--all`, `--no-verify` and `git -C … push`, but not every spelling (a combined flag such as `-vf` slips through), so the rule is by role: only the desk and the PR-owning author push their own topic branch, never force; reviewers, helpers and watchers never push. Two limits stay:
 `make check-local` and its siblings run the worktree's own test code, which is fine
 only while every writer of the worktree is trusted (accepted risk), and a
 prefix deny cannot catch every way to read a file, so the secret directories

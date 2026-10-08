@@ -76,7 +76,7 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
 
 ## What you do not do
 
-Decide a rule or a priority, write or land code, review code, push (except a reviewed topic branch under the
+Decide a rule or a priority, write or land code, review code, push (except a topic branch, never force, under the
 [trial rule](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)), tag or
 change a rule section. Start no lane agent (platform, runtime,
 docs, verify) and no review: `wh/dispatch` does, and one start per
