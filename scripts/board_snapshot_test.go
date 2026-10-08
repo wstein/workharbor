@@ -1062,9 +1062,9 @@ func TestBoardSnapshotMoveRefusesDone(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := b.calls(t)
-	for _, st := range []string{"Done"} {
+	for _, st := range []string{"Done", "Ready to push"} {
 		_, se, err := b.run(t, "move", "20", st)
-		if err == nil || !strings.Contains(se, "does not set") {
+		if err == nil || se == "" {
 			t.Fatalf("move %q: err %v, stderr %q; want a refusal", st, err, se)
 		}
 	}

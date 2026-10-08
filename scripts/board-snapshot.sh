@@ -128,7 +128,7 @@ card)
   ;;
 move | session | priority | add)
   # move, session and priority end with one value shared by every issue; add
-  # and ready take only issue numbers. All input is checked before any gh call.
+  # takes only issue numbers. All input is checked before any gh call.
   nums=("${args[@]:1}")
   value=""
   case $mode in
