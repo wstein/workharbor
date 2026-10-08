@@ -14,15 +14,19 @@ body = """
 ## Unreleased
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | striptags | trim | upper_first }}
+<details><summary>{{ group | striptags | trim | upper_first }} ({{ commits | length }})</summary>
 {% for commit in commits %}
+{% set subject = commit.message | split(pat="\n") | first | upper_first | trim %}\
+{% set_global seen = subject %}\
 - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
 {% if commit.breaking %}[**breaking**] {% endif %}\
-{{ commit.message | split(pat="\n") | first | upper_first | trim }}\
+{{ subject }}\
 {% for footer in commit.footers %}\
-{% if footer.token is matching("^(Closes|Fixes|Resolves|Refs|Related)$") %} ({{ footer.value }}){% endif %}\
+{% if footer.token is matching("^(Closes|Fixes|Resolves|Refs|Related)$") and seen is not containing(footer.value) %} ({{ footer.value }}){% set_global seen = seen ~ " " ~ footer.value %}{% endif %}\
 {% endfor %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/wstein/workharbor/commit/{{ commit.id }}))\
 {% endfor %}
+
+</details>
 {% endfor %}
 """
 trim = true
