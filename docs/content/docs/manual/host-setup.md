@@ -311,10 +311,10 @@ Until `v0.1.0` the host runs a **dogfood pre-release**: a signed prerelease tag 
     ```bash
     sudo install -d -o "$(id -un)" -g admin -m 755 /opt/whr
     git clone https://github.com/wstein/workharbor.git && cd workharbor
-    make install-release VERSION=v0.1.0-alpha.1    # PREFIX=/opt/whr is the default
+    make install-release VERSION=<tag>    # PREFIX=/opt/whr is the default; <tag> is a release after v0.1.0-alpha.4
     ```
 
-    It downloads the macOS archive, the guest archive and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of the repository's release workflow, and installs `whr` in `/opt/whr/bin` and the guest binaries `whr-shim` and `whr-proxy` in `/opt/whr/libexec/whr`; it installs nothing if a check fails. `gh release download` finds a draft by its tag ({{< status verified >}} with the first draft, `v0.1.0-alpha.1`, on an Apple-silicon Mac; issue #103). Upgrade the same way with the next tag. Then, as `workharbor`, add `export PATH=/opt/whr/bin:$PATH` to `~/.zprofile`: `whr version` shows the tag, and `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
+    From a release after `v0.1.0-alpha.4` it downloads the one release archive (macOS `whr`, guest binaries, installer) and `checksums.txt`, checks the archive against the checksums and against the build-provenance attestation of the repository's release workflow, and installs `whr` in `/opt/whr/bin` and the guest binaries `whr-shim` and `whr-proxy` in `/opt/whr/libexec/whr`; it installs nothing if a check fails. `gh release download` finds a draft by its tag ({{< status verified >}} with the first draft, `v0.1.0-alpha.1`, on an Apple-silicon Mac; issue #103). Upgrade the same way with the next tag. For `v0.1.0-alpha.4` and older, use that tag's own script (`git show <tag>:scripts/install-release.sh`). Then, as `workharbor`, add `export PATH=/opt/whr/bin:$PATH` to `~/.zprofile`: `whr version` shows the tag, and `whr completion zsh` (or `bash`, `fish`) prints the shell completion.
 
 The remaining steps run as the `workharbor` user: steps 2 and 3 from any `workharbor` shell, step 4 from a Terminal of its desktop session (step 2).
 

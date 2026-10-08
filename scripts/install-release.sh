@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
 # Install whr, whr-shim and whr-proxy from a release of this repository (design
-# D24, D34, §13 Releases). The script is self-contained and is a release asset
-# itself: download it from the release, no clone needed. Run it as the
-# administrator; PREFIX must be one the whr user cannot write.
+# D24, D34, §13 Releases). Run it as the administrator; PREFIX must be one the whr
+# user cannot write.
 #
-#   install-release.sh <tag> [prefix]
+#   install.sh <tag> [prefix]          from the unpacked release archive
+#   install-release.sh <tag> [prefix]  from a clone: downloads the archive
 #
-# It downloads the macOS archive, the guest archive and checksums.txt with curl (gh
-# is used as a fallback for a draft, which only a repository writer can download)
-# and checks both archives against checksums.txt. With gh installed it also checks
-# the build-provenance attestation of this repository's release workflow for
-# exactly this tag (run on refs/tags/<tag>, at the tag's commit, on a GitHub-hosted
-# runner). Without gh only the checksums are checked: that proves the download is
-# intact, not who built it, and the script says so. Nothing is installed unless every
-# check passes. It refuses an older tag than the one installed unless
+# A release is one archive, whr_<version>_darwin_arm64.tar.gz: bin/whr, the Linux
+# guest binaries in guest/ (payload, never run on the host) and this script as
+# install.sh. Next to bin/ and guest/ the script installs them as they are: the
+# archive was checked against checksums.txt by the user (shasum -a 256 -c), nothing
+# is downloaded and gh is not needed. From a clone it downloads the archive and
+# checksums.txt with curl (gh is the fallback for a draft, which only a repository
+# writer can download), checks the archive against checksums.txt and, with gh
+# installed, the build-provenance attestation of this repository's release workflow
+# for exactly this tag (run on refs/tags/<tag>, at the tag's commit, on a
+# GitHub-hosted runner). Without gh only the checksums are checked: that proves the
+# download is intact, not who built it, and the script says so. Nothing is installed
+# unless every check passes. It refuses an older tag than the one installed unless
 # --allow-downgrade is given: the archives of an old, vulnerable release are still
-# validly attested. WHR_RELEASE_DIR names a folder that already holds the three
-# files, to skip the download; the checks still run. WHR_RELEASE_REPO changes the
-# repository whose attestations are trusted (a fork, say): it must be owner/name and
-# is refused unless --trust-release-repo confirms it. The installed version is read
-# from $prefix/libexec/whr/VERSION, which this script writes after a verified
+# validly attested. WHR_RELEASE_DIR names a folder that already holds the archive and
+# checksums.txt, to skip the download; the checks still run. WHR_RELEASE_REPO changes
+# the repository whose attestations are trusted (a fork, say): it must be owner/name
+# and is refused unless --trust-release-repo confirms it. The installed version is
+# read from $prefix/libexec/whr/VERSION, which this script writes after a verified
 # install: the installed whr is never run before the checks (an install from before
 # that file existed needs --allow-downgrade once).
 set -euo pipefail
@@ -73,9 +77,17 @@ prefix="${args[1]:-/opt/whr}"
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "usage: $0 vX.Y.Z[-pre] [prefix] (got '$tag')"
 [[ "$prefix" = /* ]] || die "the prefix must be an absolute path (got '$prefix')"
 [ "$(uname -s)/$(uname -m)" = Darwin/arm64 ] || die "whr releases are for macOS on Apple silicon"
+# In the unpacked archive the files are next to the script.
+self="${BASH_SOURCE[0]:-$0}"
+[[ "$self" == */* ]] || self="./$self"
+here="$(cd "${self%/*}" && pwd)"
+unpacked=0
+[ -f "$here/bin/whr" ] && [ -d "$here/guest" ] && unpacked=1
 have_gh=0
 command -v gh >/dev/null && have_gh=1
-if [ "$have_gh" -ne 1 ]; then
+if [ "$unpacked" -eq 1 ]; then
+  have_gh=0
+elif [ "$have_gh" -ne 1 ]; then
   echo "install-release: gh not found: checking checksums.txt only. That proves the download is intact, not who built it (install gh to verify the attestation of $repo)." >&2
 fi
 
@@ -96,14 +108,17 @@ if [ -e "$prefix/bin/whr" ]; then
 fi
 
 version="${tag#v}"
-mac="whr_${version}_darwin_arm64.tar.gz"
-guest="whr-guest_${version}_linux_arm64.tar.gz"
+archive="whr_${version}_darwin_arm64.tar.gz"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+if [ "$unpacked" -eq 1 ]; then
+  echo "install: from the unpacked archive in $here (its checksum is the user's to check; with gh, verify its attestation afterwards)" >&2
+  root="$here"
+else
 if [ -n "${WHR_RELEASE_DIR:-}" ]; then
-  for f in "$mac" "$guest" checksums.txt; do
+  for f in "$archive" checksums.txt; do
     cp "$WHR_RELEASE_DIR/$f" "$work/" || die "$f is not in $WHR_RELEASE_DIR"
   done
 else
@@ -114,18 +129,16 @@ else
     fi
     [ "$have_gh" -eq 1 ] && gh release download "$tag" --repo "$repo" --dir "$work" --pattern "$1" 2>/dev/null
   }
-  for f in "$mac" "$guest" checksums.txt; do
+  for f in "$archive" checksums.txt; do
     fetch "$f" || die "cannot download $f of $tag from $repo (a draft needs a writer's gh login)"
   done
 fi
 
-# Exactly one line per archive, checked with the file names fixed above.
+# Exactly one line for the archive, checked with the file name fixed above.
 (
   cd "$work"
-  for f in "$mac" "$guest"; do
-    [ "$(awk -v f="$f" '$2 == f' checksums.txt | wc -l)" -eq 1 ] || die "checksums.txt has no single line for $f"
-    awk -v f="$f" '$2 == f' checksums.txt | shasum -a 256 -c - >/dev/null || die "$f does not match checksums.txt"
-  done
+  [ "$(awk -v f="$archive" '$2 == f' checksums.txt | wc -l)" -eq 1 ] || die "checksums.txt has no single line for $archive"
+  awk -v f="$archive" '$2 == f' checksums.txt | shasum -a 256 -c - >/dev/null || die "$archive does not match checksums.txt"
 )
 
 commit=""
@@ -142,15 +155,19 @@ if [ "$have_gh" -eq 1 ]; then
 fi
 if [ "$have_gh" -eq 1 ]; then
   echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
-  for f in "$mac" "$guest"; do
-    gh attestation verify "$work/$f" --repo "$repo" \
-      --signer-workflow "$repo/.github/workflows/release.yml" \
-      --source-ref "refs/tags/$tag" --source-digest "$commit" \
-      --deny-self-hosted-runners >/dev/null ||
-      die "$f has no valid build-provenance attestation from $repo's release workflow run on tag $tag at $commit"
-  done
+  gh attestation verify "$work/$archive" --repo "$repo" \
+    --signer-workflow "$repo/.github/workflows/release.yml" \
+    --source-ref "refs/tags/$tag" --source-digest "$commit" \
+    --deny-self-hosted-runners >/dev/null ||
+    die "$archive has no valid build-provenance attestation from $repo's release workflow run on tag $tag at $commit"
 else
   echo "install-release: caveat: only the checksums were verified, not the origin (no attestation check without gh)" >&2
+fi
+mkdir -p "$work/x"
+[ -n "$(tar -tzf "$work/$archive" bin/whr 2>/dev/null)" ] ||
+  die "$archive has no bin/whr: $tag has the old layout (separate host and guest archives); use that tag's own script: git show $tag:scripts/install-release.sh"
+tar -xzf "$work/$archive" -C "$work/x" bin/whr guest/whr-shim-linux-arm64 guest/whr-proxy-linux-arm64 || die "cannot unpack $archive"
+root="$work/x"
 fi
 
 # The whr user must not be able to write what root runs: refuse an existing prefix
@@ -163,10 +180,6 @@ for d in "$prefix" "$prefix/bin" "$prefix/libexec" "$prefix/libexec/whr"; do
   fi
 done
 
-mkdir -p "$work/mac" "$work/guest"
-tar -xzf "$work/$mac" -C "$work/mac" whr
-tar -xzf "$work/$guest" -C "$work/guest" whr-shim whr-proxy
-
 install -d -m 0755 "$prefix/bin" "$prefix/libexec/whr"
 # Replace by rename, never by rewriting a binary in place: a running or cached
 # whr keeps its old inode and a stale code signature cannot be left behind (#393).
@@ -174,9 +187,9 @@ install -d -m 0755 "$prefix/bin" "$prefix/libexec/whr"
 place() { # place <source> <destination>
   install -m 0755 "$1" "$2.new.$$" && mv -f "$2.new.$$" "$2" || { rm -f "$2.new.$$"; die "could not install $2"; }
 }
-place "$work/mac/whr" "$prefix/bin/whr"
-place "$work/guest/whr-shim" "$prefix/libexec/whr/whr-shim-linux-arm64"
-place "$work/guest/whr-proxy" "$prefix/libexec/whr/whr-proxy-linux-arm64"
+place "$root/bin/whr" "$prefix/bin/whr"
+place "$root/guest/whr-shim-linux-arm64" "$prefix/libexec/whr/whr-shim-linux-arm64"
+place "$root/guest/whr-proxy-linux-arm64" "$prefix/libexec/whr/whr-proxy-linux-arm64"
 printf '%s\n' "$tag" >"$work/VERSION"
 install -m 0644 "$work/VERSION" "$prefix/libexec/whr/VERSION"
 

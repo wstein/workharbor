@@ -88,11 +88,15 @@ func newRelease(t *testing.T, version, installed string) release {
 	t.Helper()
 	r := release{dir: t.TempDir(), prefix: filepath.Join(t.TempDir(), "whr"), bin: t.TempDir()}
 	r.ghlog = filepath.Join(r.bin, "gh.log")
-	mac, guest := "whr_"+version+"_darwin_arm64.tar.gz", "whr-guest_"+version+"_linux_arm64.tar.gz"
-	tarball(t, filepath.Join(r.dir, mac), map[string]string{"whr": "#!/bin/sh\necho " + "v" + version + " abc\n"})
-	tarball(t, filepath.Join(r.dir, guest), map[string]string{"whr-shim": "x", "whr-proxy": "y"})
+	mac := "whr_" + version + "_darwin_arm64.tar.gz"
+	tarball(t, filepath.Join(r.dir, mac), map[string]string{
+		"bin/whr":                     "#!/bin/sh\necho " + "v" + version + " abc\n",
+		"guest/whr-shim-linux-arm64":  "x",
+		"guest/whr-proxy-linux-arm64": "y",
+		"install.sh":                  "echo not run\n",
+	})
 	var sums strings.Builder
-	for _, f := range []string{mac, guest} {
+	for _, f := range []string{mac} {
 		b, _ := os.ReadFile(filepath.Join(r.dir, f)) //nolint:gosec // a test path
 		h := sha256.Sum256(b)
 		sums.WriteString(hex.EncodeToString(h[:]) + "  " + f + "\n")
@@ -144,12 +148,47 @@ func TestTheAttestationIsPinnedToTheTag(t *testing.T) {
 	}
 	log, _ := os.ReadFile(r.ghlog) //nolint:gosec // a test path
 	for _, want := range []string{"--source-ref refs/tags/v0.2.0", "--deny-self-hosted-runners", "--source-digest 0123456789abcdef0123456789abcdef01234567", "--signer-workflow wstein/workharbor/.github/workflows/release.yml"} {
-		if strings.Count(string(log), want) != 2 { // once for each archive
-			t.Errorf("gh attestation verify lacks %q for each archive:\n%s", want, log)
+		if strings.Count(string(log), want) != 1 { // one archive
+			t.Errorf("gh attestation verify lacks %q for the archive:\n%s", want, log)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err != nil {
 		t.Errorf("nothing was installed: %v", err)
+	}
+}
+
+// Unpacked, the script installs what sits next to it: no download, no checksums.txt,
+// no gh, and the guest binaries land under their installed names.
+func TestInstallFromTheUnpackedArchive(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := t.TempDir()
+	for name, body := range map[string]string{"bin/whr": "#!/bin/sh\necho v0.2.0 abc\n", "guest/whr-shim-linux-arm64": "x", "guest/whr-proxy-linux-arm64": "y"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o700); err != nil { //nolint:gosec // an executable test fake
+			t.Fatal(err)
+		}
+	}
+	script, err := os.ReadFile("install-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "install.sh"), script, 0o700); err != nil { //nolint:gosec // the installer under test
+		t.Fatal(err)
+	}
+	out, err := bash(t, []string{"PATH=" + r.bin + ":" + os.Getenv("PATH")}, "'"+filepath.Join(root, "install.sh")+"' v0.2.0 "+r.prefix)
+	if err != nil {
+		t.Fatalf("install: %v\n%s", err, out)
+	}
+	for _, f := range []string{"bin/whr", "libexec/whr/whr-shim-linux-arm64", "libexec/whr/whr-proxy-linux-arm64", "libexec/whr/VERSION"} {
+		if _, err := os.Stat(filepath.Join(r.prefix, f)); err != nil {
+			t.Errorf("%s was not installed: %v", f, err)
+		}
+	}
+	if _, err := os.Stat(r.ghlog); err == nil {
+		t.Error("gh was called")
 	}
 }
 
@@ -411,8 +450,8 @@ func TestAnUnusableGHFallsBackToTheChecksums(t *testing.T) {
 	}
 }
 
-// The notes' checksum step checks only the named file with stock tools: other
-// lines of checksums.txt (archives not downloaded) are ignored, a changed script fails.
+// The notes' checksum step checks only the named archive with stock tools: other
+// lines of checksums.txt are ignored, a changed archive fails.
 func TestTheNotesChecksumStep(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -422,15 +461,16 @@ func TestTheNotesChecksumStep(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("install-release.sh", "echo hi\n")
-	write("checksums.txt", sum("x")+"  whr_0.2.0_darwin_arm64.tar.gz\n"+sum("echo hi\n")+"  install-release.sh\n")
-	step := "cd '" + dir + "' && grep ' install-release.sh$' checksums.txt | shasum -a 256 -c -"
-	if out, err := bash(t, []string{"PATH=" + os.Getenv("PATH")}, step); err != nil || !strings.Contains(out, "install-release.sh: OK") {
-		t.Fatalf("the step failed on a matching script: %v\n%s", err, out)
+	const f = "whr_0.2.0_darwin_arm64.tar.gz"
+	write(f, "archive")
+	write("checksums.txt", sum("x")+"  other.tar.gz\n"+sum("archive")+"  "+f+"\n")
+	step := "cd '" + dir + "' && grep \" " + f + "$\" checksums.txt | shasum -a 256 -c -"
+	if out, err := bash(t, []string{"PATH=" + os.Getenv("PATH")}, step); err != nil || !strings.Contains(out, f+": OK") {
+		t.Fatalf("the step failed on a matching archive: %v\n%s", err, out)
 	}
-	write("install-release.sh", "echo changed\n")
+	write(f, "changed")
 	if out, err := bash(t, []string{"PATH=" + os.Getenv("PATH")}, "set -o pipefail; "+step); err == nil {
-		t.Errorf("the step passed a changed script:\n%s", out)
+		t.Errorf("the step passed a changed archive:\n%s", out)
 	}
 }
 
@@ -477,7 +517,7 @@ func firstBashBlock(t *testing.T, path, heading string) string {
 
 // The pasted download blocks of the notes template and the install page run in
 // stock interactive zsh (where a # line is not a comment) against a local
-// file:// "release", and pass, or fail, on the checksum of install-release.sh.
+// file:// "release", and pass, or fail, on the checksum of the archive.
 func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 	t.Parallel()
 	zsh, err := exec.LookPath("zsh")
@@ -486,7 +526,7 @@ func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 	}
 	blocks := map[string]string{
 		"template": firstBashBlock(t, "../docs/releases/TEMPLATE.md", "## Install"),
-		"manual":   firstBashBlock(t, "../docs/content/docs/manual/install-upgrade-release.md", "### Install without a clone or `gh`"),
+		"manual":   firstBashBlock(t, "../docs/content/docs/manual/install-upgrade-release.md", "### Install from the release archive"),
 	}
 	sum := func(b string) string { h := sha256.Sum256([]byte(b)); return hex.EncodeToString(h[:]) }
 	for name, block := range blocks {
@@ -503,14 +543,15 @@ func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 		if !strings.Contains(block, "file://$REL") {
 			t.Fatalf("%s: the download base was not found", name)
 		}
+		const arc = "whr_0.2.0_darwin_arm64.tar.gz"
 		cases := map[string]struct {
 			files map[string]string
 			ok    bool
 		}{
-			"match":   {map[string]string{"install-release.sh": "echo hi\n", "checksums.txt": sum("x") + "  a.tar.gz\n" + sum("echo hi\n") + "  install-release.sh\n"}, true},
-			"changed": {map[string]string{"install-release.sh": "echo evil\n", "checksums.txt": sum("echo hi\n") + "  install-release.sh\n"}, false},
-			"no line": {map[string]string{"install-release.sh": "echo hi\n", "checksums.txt": sum("x") + "  a.tar.gz\n"}, false},
-			"no sums": {map[string]string{"install-release.sh": "echo hi\n"}, false},
+			"match":   {map[string]string{arc: "archive", "checksums.txt": sum("x") + "  a.tar.gz\n" + sum("archive") + "  " + arc + "\n"}, true},
+			"changed": {map[string]string{arc: "evil", "checksums.txt": sum("archive") + "  " + arc + "\n"}, false},
+			"no line": {map[string]string{arc: "archive", "checksums.txt": sum("x") + "  a.tar.gz\n"}, false},
+			"no sums": {map[string]string{arc: "archive"}, false},
 		}
 		for cname, c := range cases {
 			rel := t.TempDir()
@@ -522,12 +563,28 @@ func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 			cmd := exec.CommandContext(context.Background(), zsh, "-f", "-i", "-c", block) //nolint:gosec // a test script
 			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "REL=" + rel}
 			out, err := cmd.CombinedOutput()
-			if c.ok && (err != nil || !strings.Contains(string(out), "install-release.sh: OK")) {
+			if c.ok && (err != nil || !strings.Contains(string(out), arc+": OK")) {
 				t.Errorf("%s/%s: %v\n%s", name, cname, err, out)
 			}
 			if !c.ok && err == nil {
 				t.Errorf("%s/%s: the block passed:\n%s", name, cname, out)
 			}
 		}
+	}
+}
+
+// A tag with the old layout (no bin/whr in the archive) gets a clear message.
+func TestAnOldLayoutArchiveIsNamed(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	mac := filepath.Join(r.dir, "whr_0.2.0_darwin_arm64.tar.gz")
+	tarball(t, mac, map[string]string{"whr": "x"})
+	b, _ := os.ReadFile(mac) //nolint:gosec // a test path
+	h := sha256.Sum256(b)
+	if err := os.WriteFile(filepath.Join(r.dir, "checksums.txt"), []byte(hex.EncodeToString(h[:])+"  whr_0.2.0_darwin_arm64.tar.gz\n"), 0o600); err != nil { //nolint:gosec // a test path
+		t.Fatal(err)
+	}
+	if out, err := r.run(t, "v0.2.0", r.prefix); err == nil || !strings.Contains(out, "old layout") {
+		t.Errorf("the old layout was not named: %v\n%s", err, out)
 	}
 }

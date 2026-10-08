@@ -22,45 +22,44 @@ The managed dogfood or reference-host supervisor runs an installed binary built 
 Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (the `v0.1.0-alpha.N` pre-releases are, per `gh release list`, 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`; the first command uses the prefix `/opt/whr`, the second another one:
 
 ```bash
-make install-release VERSION=v0.1.0-alpha.1
-make install-release VERSION=v0.1.0-alpha.1 PREFIX=/some/prefix
+make install-release VERSION=<tag>
+make install-release VERSION=<tag> PREFIX=/some/prefix
 ```
 
-`gh` is optional: with it (`brew install gh`, signed in; a draft can be downloaded only by a writer) the script also verifies the attestation, without it only the checksums. A `gh` that is installed but cannot read the tag (not signed in, or no login under `sudo`) counts as absent: the script prints that and checks the checksums only. The fallback and the `grep ... | shasum` step are covered by script tests with stubbed tools; a run on a clean Mac (no `gh`, Homebrew or Command Line Tools) and the paste into stock zsh are {{< status unverified >}}. The script downloads the macOS archive (`whr_<tag>_darwin_arm64.tar.gz`), the guest archive (`whr-guest_<tag>_linux_arm64.tar.gz`) and `checksums.txt`, checks both archives against the checksums and, when `gh` is present, against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
+`gh` is optional: with it (`brew install gh`, signed in; a draft can be downloaded only by a writer) the script also verifies the attestation, without it only the checksums. A `gh` that is installed but cannot read the tag (not signed in, or no login under `sudo`) counts as absent: the script prints that and checks the checksums only. The fallback and the `grep ... | shasum` step are covered by script tests with stubbed tools; a run on a clean Mac (no `gh`, Homebrew or Command Line Tools) and the paste into stock zsh are {{< status unverified >}}. This single-archive script installs releases after `v0.1.0-alpha.4`; for `v0.1.0-alpha.4` and earlier, use the script of that tag (`git show <tag>:scripts/install-release.sh`). From a clone the script downloads the release archive (`whr_<version>_darwin_arm64.tar.gz`) and `checksums.txt`, checks the archive against the checksums and, when `gh` is present, against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
 
-### Install without a clone or `gh`
+### Install from the release archive
 
-From the release after `v0.1.0-alpha.3` (which is immutable and has no such asset; its release notes carry a manual `curl`/`shasum`/`tar` block), `install-release.sh` is a release asset, listed in `checksums.txt` and so covered by the attestation. It needs only `curl`, `tar`, `shasum` and `install`; run it as the administrator:
+From the release after `v0.1.0-alpha.4` (alpha.4 and earlier keep the old layout: separate host and guest archives, and for alpha.4 a loose `install-release.sh`) a release is **one archive**, `whr_<version>_darwin_arm64.tar.gz`, next to `checksums.txt`, the SBOM and the attestation bundle. The archive holds `bin/whr`, `guest/whr-shim-linux-arm64` and `guest/whr-proxy-linux-arm64` (Linux binaries, payload for the guests, never run on the Mac), `install.sh` (the same script as `scripts/install-release.sh`), `LICENSE` and `README.md`. `checksums.txt` lists that one archive (and the SBOM), so one checksum line and one attestation cover both the host and the guest binaries, built from the same commit. The first install needs only what stock macOS ships: `curl`, `tar`, `shasum`, `install` and `sudo`; no `gh`, no Homebrew. Replace `<tag>` (zsh reads a literal `<tag>` as a redirect) and run it as the administrator:
 
 ```bash
 cd "$(mktemp -d)"
-tag=v0.1.0-alpha.4
-base=https://github.com/wstein/workharbor/releases/download/$tag
-curl -fsSLO "$base/install-release.sh" -O "$base/checksums.txt" &&
-grep ' install-release.sh$' checksums.txt | shasum -a 256 -c -
+tag=<tag>; base=https://github.com/wstein/workharbor/releases/download/$tag
+f=whr_${tag#v}_darwin_arm64.tar.gz
+curl -fsSLO "$base/$f" -O "$base/checksums.txt" &&
+grep " $f\$" checksums.txt | shasum -a 256 -c -
 ```
 
-With `gh`, verify the script itself next: it runs as root, and its own attestation check proves nothing if the script was swapped.
+```bash
+tar -xzf "$f" &&
+sudo ./install.sh "$tag"
+```
+
+The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it: the `workharbor` user must not be able to write the prefix. Once `gh` is installed, signed in, check who built the archive (a later check; the first install trusts the checksums and TLS):
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
-gh attestation verify install-release.sh --repo wstein/workharbor \
+gh attestation verify "$f" --repo wstein/workharbor \
   --signer-workflow wstein/workharbor/.github/workflows/release.yml \
   --source-ref refs/tags/$tag --source-digest "$commit" \
   --deny-self-hosted-runners
 ```
 
-Then run the installer:
-
-```bash
-sudo bash install-release.sh "$tag"
-```
-
-Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Under `sudo` the script usually has no `gh` login and so usually checks checksums only; the user-level `gh attestation verify install-release.sh` step proves only the script, not the archives or `checksums.txt`. For the archives' attestation, sign `gh` in for the account that runs the script and rerun. The first block's last command prints `install-release.sh: OK`; any other output is a failure. The `sudo` command uses the prefix `/opt/whr` unless you add a path. The `workharbor` user must not be able to write the prefix: the script refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable or symlinked prefix, prefix of another owner, a `gh` that cannot read the tag falling back to checksums, a `gh` whose attestation check fails stopping the install) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
+The tag of `install.sh <tag>` only names the version written to `<prefix>/libexec/whr/VERSION`; it is not checked against the archive. The unpacked mode checks no attestation and does not tie the tag to the archive: that is what the checksum step and the later `gh` check are for. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, checksum mismatch, downgrade, writable or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
 
 ### Verify a download yourself
 
-The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl` (from `v0.1.0-alpha.3`; alpha.1 and alpha.2 have none, so use the online form for them; the second command below is the offline form with the attached bundle). The attestation covers the archives, the SBOM and (from the release after `v0.1.0-alpha.3`) `install-release.sh`, all listed in `checksums.txt`, not `checksums.txt` itself: verify an archive, and check `checksums.txt` only with `shasum`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
+The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl` (from `v0.1.0-alpha.3`; alpha.1 and alpha.2 have none, so use the online form for them; the second command below is the offline form with the attached bundle). The attestation covers the archive and the SBOM (alpha.4 also the loose `install-release.sh`), all listed in `checksums.txt`, not `checksums.txt` itself: verify an archive, and check `checksums.txt` only with `shasum`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
 
 ```bash
 tag=v0.1.0-alpha.3
@@ -311,7 +310,7 @@ Only a human tags, signs and publishes (D24, §6); an agent never does.
 
 0. Write the release summary `docs/releases/vX.Y.Z.md` from `docs/releases/TEMPLATE.md` (4-6 lines: highlights, what users can do now, what is known broken or unverified, how to verify provenance; then the `## Install` block) and commit it on `main`, reviewed like any file. The release workflow prepends it to the generated lists. If the file is missing or empty the release job fails before it builds anything; the tag cannot be moved, so fix `main` and create a new tag. The generated lists (features, bug fixes, ...) are folded in `<details>` with counts.
 1. `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release)`. It does not tag.
-2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: `whr`, the guest binaries, `checksums.txt`, an SBOM, a build-provenance attestation and its bundle (`whr_<tag>.intoto.jsonl`).
+2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: one archive (`whr`, the guest binaries and `install.sh`), `checksums.txt`, an SBOM, a build-provenance attestation and its bundle (`whr_<tag>.intoto.jsonl`).
 
     Sign with the signing key, the one whose public half is in `.github/release-signers`, not with your login key, and check the tag locally before you push it:
 

@@ -99,7 +99,8 @@ install: check-install-source
 	@printf '%s\n' $(call install-quote,next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64)
 
 # Install a release, a dogfood draft included (D24, D34), as the administrator
-# into a prefix whr cannot write: make install-release VERSION=v0.1.0-alpha.1
+# into a prefix whr cannot write: make install-release VERSION=<tag>
+# (a release after v0.1.0-alpha.4; for older tags use that tag's own script)
 # (an older tag than the installed one needs ALLOW_DOWNGRADE=1)
 # [PREFIX=/opt/whr]. It checks the checksums and the provenance attestation.
 install-release:
