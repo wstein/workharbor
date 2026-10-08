@@ -49,7 +49,7 @@ const WhrUser = "workharbor"
 const DefaultBrewfile = `brew "container"
 brew "git"
 brew "gh"
-cask "tailscale"
+cask "tailscale-app"
 `
 
 const (
