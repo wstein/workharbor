@@ -57,6 +57,10 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  # The installer is a release asset (#459): listing it here puts it in
+  # checksums.txt, so the attestation (subject-checksums) covers it.
+  extra_files:
+    - glob: scripts/install-release.sh
 
 # One SBOM of the module's dependencies (CycloneDX), from a pinned tool. It
 # runs in dist/, hence the module path "..", and reads the main module's
@@ -87,3 +91,6 @@ sboms:
 release:
   draft: true
   prerelease: auto
+  # Uploaded next to the archives, so the installer needs no clone (#459).
+  extra_files:
+    - glob: scripts/install-release.sh
