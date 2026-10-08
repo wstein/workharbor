@@ -12,6 +12,15 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
+# -trimpath removes the checkout path from builds, so every worktree shares the
+# Go build cache (#466). An exported GOFLAGS replaces the one from `go env -w`, so
+# start from whichever is set, then append -trimpath once.
+GOFLAGS := $(strip $(or $(GOFLAGS),$(shell go env GOFLAGS)))
+ifeq (,$(findstring -trimpath,$(GOFLAGS)))
+GOFLAGS += -trimpath
+endif
+export GOFLAGS
+
 .PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
