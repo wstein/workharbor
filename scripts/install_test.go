@@ -394,6 +394,21 @@ func TestSourceInstallDestdirStagesUnderDestdirOnly(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fresh, prefix, "bin", "whr")); err != nil {
 		t.Errorf("missing staged whr in an empty DESTDIR: %v", err)
 	}
+	// A symlink below DESTDIR would let mkdir -p leave it (here into the git checkout).
+	linked := t.TempDir()
+	if err := os.Symlink(s.repo, filepath.Join(linked, "a")); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(context.Background(), "make", "install", "PREFIX=/a/newprefix", "DESTDIR="+linked) //nolint:gosec // fixture-controlled arguments, no shell
+	cmd.Dir, cmd.Env = s.repo, s.env
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Errorf("a symlink below DESTDIR must be refused:\n%s", out)
+	} else if !strings.Contains(string(out), "symlink") {
+		t.Errorf("refusal must name the symlink:\n%s", out)
+	}
+	if _, err := os.Lstat(filepath.Join(s.repo, "newprefix")); !os.IsNotExist(err) {
+		t.Errorf("install escaped DESTDIR through the symlink: %v", err)
+	}
 	for _, bad := range []string{"relative/dir", destdir + "/", "/", filepath.Join(destdir, "missing")} {
 		if out, err := run("DESTDIR=" + bad); err == nil {
 			t.Errorf("DESTDIR=%q must be refused:\n%s", bad, out)
