@@ -384,6 +384,14 @@ func TestNotVerifiedShowsAWord(t *testing.T) {
 	}
 }
 
+func TestTodoPrintsTheCommandsAFollowUpLeadsToAfterIt(t *testing.T) {
+	got := Todo(Style{}, []TodoItem{{Text: "create the user", Commands: []string{"sudo a"}, After: "then, as that user, run:", Then: []string{"whr setup --user 'a b'"}}})
+	i, j, k := strings.Index(got, "$ sudo a"), strings.Index(got, "then, as that user, run:"), strings.Index(got, "$ whr setup --user 'a b'")
+	if i < 0 || j < i || k < j {
+		t.Errorf("order:\n%s", got)
+	}
+}
+
 func TestTodoPrintsCommandsBeforeFollowUp(t *testing.T) {
 	got := Todo(Style{}, []TodoItem{{Text: "user", Commands: []string{"sudo add"}, After: "Then log in."}})
 	c, a := strings.Index(got, "$ sudo add"), strings.Index(got, "Then log in.")

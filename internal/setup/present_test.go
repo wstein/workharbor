@@ -67,7 +67,8 @@ func goldenFile(t *testing.T, name, got string) {
 func goldenSteps() []doctor.Check {
 	create := &doctor.Fix{
 		Cmds:  []doctor.Cmd{{Sudo: true, Argv: []string{"sysadminctl", "-addUser", "workharbor", "-fullName", "WorkHarbor", "-password", "-"}}},
-		Guide: "Then log in as workharbor and run `whr setup`.",
+		Guide: "Then log in as workharbor and run:",
+		Try:   []string{"whr setup"},
 	}
 	guided := &doctor.Fix{Guide: "Open System Settings and turn the toggle off.", Open: "x-apple.systempreferences:x"}
 	return []doctor.Check{

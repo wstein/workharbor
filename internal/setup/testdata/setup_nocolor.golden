@@ -16,7 +16,8 @@ preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
  x FAIL   there is no user workharbor
 | PLAN    run this command
 |   $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
-| PLAN    what happens next: Then log in as workharbor and run `whr setup`.
+| PLAN    what happens next: Then log in as workharbor and run:
+|   $ whr setup
  - skip   dry run: nothing is run
 
 -- Step 3 of 4 - title of tailscale --
@@ -36,6 +37,7 @@ Summary: 1 ok, 2 need action, 1 not verified (dry run: nothing was changed)
 What you need to do now
   1. title of workharbor-user
      $ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -
-     Then log in as workharbor and run `whr setup`.
+     Then log in as workharbor and run:
+     $ whr setup
   2. title of tailscale: whr has no fix for this step; see the manual
   3. title of power: Open System Settings and turn the toggle off.

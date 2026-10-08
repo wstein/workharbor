@@ -75,6 +75,11 @@ type Fix struct {
 	// Open is the System Settings pane or link that helps with it.
 	Guide string
 	Open  string
+	// Try are commands the person runs themself, as the guide says: shown
+	// after it, each on a line of its own that is never wrapped, and never run
+	// by whr. A command embedded in the guide's prose would wrap, and a wrapped
+	// command cannot be copied.
+	Try []string
 	// Irreversible marks a fix that cannot be undone by running it again or
 	// reverting by hand (removing the account's administrator rights): the
 	// wizard then defaults to no, [y/N/q], where it defaults to yes otherwise.

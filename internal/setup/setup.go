@@ -496,6 +496,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 		if o.DryRun {
 			if f := s.Fix; f.Guide != "" && hasCommands(f) {
 				ui.Plan("what happens next: " + oneLine(f.Guide))
+				tryLines(ui, f)
 			}
 			ui.Report(render.LevelSkipped, "dry run: nothing is run"+rn.dryRunQuestion(s, out))
 			out.Asked = true
@@ -735,6 +736,14 @@ func hasCommands(f *doctor.Fix) bool {
 	return f.Do != nil || f.Build != nil || len(f.Cmds) > 0
 }
 
+// tryLines shows the commands the person runs themself, each whole on a line
+// of its own.
+func tryLines(ui render.Writer, f *doctor.Fix) {
+	for _, c := range f.Try {
+		ui.Command(c)
+	}
+}
+
 // showFix prints what a fix does as ACTION lines and the exact commands as
 // copyable ones. A guided fix (no command) shows its guide as the ACTION.
 func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
@@ -745,6 +754,7 @@ func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
 	switch {
 	case !hasCommands(f):
 		ui.Action(oneLine(f.Guide))
+		tryLines(ui, f)
 		if f.Open != "" {
 			ui.Action("this opens:\n" + f.Open)
 		}
@@ -773,6 +783,7 @@ func todoFor(title string, f *doctor.Fix) render.TodoItem {
 		it.Text += ": whr has no fix for this step; see the manual"
 	case !hasCommands(f):
 		it.Text += ": " + oneLine(f.Guide)
+		it.Commands = f.Try
 	default:
 		if f.Desc != "" {
 			it.Text += ": " + f.Desc
@@ -781,6 +792,7 @@ func todoFor(title string, f *doctor.Fix) render.TodoItem {
 			it.Commands = append(it.Commands, QuoteArgv(c.Full()))
 		}
 		it.After = oneLine(f.Guide) // after the commands: the person acts first
+		it.Then = f.Try
 	}
 	return it
 }
@@ -1097,6 +1109,7 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	}
 	if f.Guide != "" {
 		ui.Action("what happens next: " + oneLine(f.Guide))
+		tryLines(ui, f)
 	}
 	if usesSudo(f) && source != protocol.SourceAnswers {
 		if err := r.primeSudo(ctx); err != nil {
