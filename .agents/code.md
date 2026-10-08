@@ -59,7 +59,7 @@ design owner is the `wh/design` session; the human is Werner.
   commit; CI parity: no host-dependent and no tty-dependent tests.
 - Loop budget (#405): author time is counted in minutes. Local checks are the targeted tests of the touched packages, `typos` and lint only: no `go test -race ./...`, no `./scripts` tests unless touched. The heavy full run belongs to CI on the PR (ci workflow), not to a local gate.
 - Hand over only after `git rebase main`. On "main moved", rebase again. Delete your branch only after its pull request merged.
-- Never tag, release, merge on the forge or force anything. You push only your own PR topic branch (plain or `-u`, never force, never `main`) when you own its PR and the desk or human asked for the update; tagging is the human's (the desk's first push after CLEAR is not yours: [manual](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)).
+- Never tag, release, merge on the forge or force anything, and never run `gh pr ready` (the desk's). You push only your own PR topic branch (plain or `-u`, never force, never `main`) when you own its PR and the desk or human asked for the update; tagging is the human's (the desk's first push after CLEAR is not yours: [manual](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)).
 - Mark what you could not measure on the real setup as
   `{{< status unverified >}}` and say so in your report; never claim it works.
 

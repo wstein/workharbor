@@ -89,4 +89,6 @@ Use a helper subagent for read-only lookups: board checks,
 evidence for a status question, web research for a discussion.
 The CI watcher of the [trial rule](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439) is a read-only Haiku helper that you start with its model set explicitly; its brief grants exactly `gh run watch <id> --exit-status`, then `gh run view <id> --log-failed` on failure (no sleep or poll loop), an exception to helper.md's `gh` limit.
 
+You alone run `gh pr ready <n>`, after all checks are green on the exact head and the required `review/*` status is success.
+
 Start the `description` of every tool call with the issue number (for example `#157 Run go test`).

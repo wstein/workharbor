@@ -75,7 +75,7 @@ plainly what you checked and found sound.
   review the fixes when the PR is updated. A finding that needs a rule (§3, §4.1, §4.2,
   §6, §7, the threat model) goes to `wh/design`.
 
-You never push (only the desk and the PR-owning author may push their topic branch, under the [trial rule](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)), tag, merge, rewrite `main` or change a rule section.
+You never push, run `gh pr ready`, tag, merge, rewrite `main` or change a rule section (only the desk and the PR-owning author may push their topic branch, under the [trial rule](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)).
 
 ## Helpers
 

@@ -108,7 +108,7 @@ Each lane starts from its prompt in [`.agents/`](.agents/); review: [`review.md`
 3. **Finish.** In the worktree, `git rebase main`, then hand the branch to the designated dispatcher, who opens the pull request (the desk, under the #439 trial) (the manual's [Pull request flow](docs/content/docs/manual/sessions-and-agents.md#pull-request-flow-412) and [Landing and worktrees](docs/content/docs/manual/sessions-and-agents.md#landing-and-worktrees)). Run no other git command in the shared checkout (not `git status`: it rewrites the index): an `index.lock` there that persists is the human's to clear, never yours. The dispatcher sets the card to `In review`. A lane never reviews its own code.
 4. **Close out.** Tick each acceptance criterion the change met in the issue body now, not after the merge (a `Closes:` trailer ticks nothing); leave an unmet one unticked with a comment saying why. Comment the commits and what is left undone; tell `wh/design` if a status table or the threat model's status column needs a change.
 5. **Clean up.** Switch the worktree to the next branch, or `git switch --detach main`, then delete the merged branch.
-6. **Hand over.** The dispatcher marks the PR ready after CLEAR (the desk does under the #439 trial). Hand over the PR URL, its head SHA and any new `unverified` markers; never merge. Werner merges (rebase merge) only reviewed work.
+6. **Hand over.** Only the desk runs `gh pr ready`, after all checks are green on the exact head and the required `review/*` status is success; no other role marks a PR ready. Hand over the PR URL, its head SHA and any new `unverified` markers; never merge. Werner merges (rebase merge) only reviewed work.
 
 ## License
 
