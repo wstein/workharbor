@@ -57,7 +57,7 @@ Focused, atomic [Conventional Commits](https://www.conventionalcommits.org/): `t
 
 AI attribution uses `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`, `Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>` or `Co-Authored-By: Antigravity Gemini 3.8 Flash <noreply@google.com>` only when that is the actual exposed model. These addresses are project-defined attribution identities, not verified provider mailboxes. Other tools require an explicitly defined project attribution identity; never invent an address. Person coauthors belong only on human-authored commits (Dependabot and Renovate excepted). Git trailer tokens are case-insensitive; write `Co-Authored-By`. The linter recognizes AI coauthors by these addresses and validates their syntax; it cannot infer undisclosed assistance or prove the model ran. Historical `Assisted-by: <tool>:<model-id>` remains valid and validated for existing history; use coauthor trailers for new commits; never rewrite history for it.
 
-Push only when the human asks for it in the session; a request covers that push only. Trial exception (#439): the desk may push a reviewed topic branch under the [manual](docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439) rule; authors, reviewers and dispatch never push. Merge into `main` only through a pull request (Working on an issue).
+Push only when the human asks for it in the session; a request covers that push only. Exception (#448): the desk and the PR-owning author may push their own topic branch, never force or `main` ([manual](docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)); others never push. Merge into `main` only through a pull request (Working on an issue).
 
 ## Working together
 
@@ -108,7 +108,7 @@ Each lane starts from its prompt in [`.agents/`](.agents/); review: [`review.md`
 3. **Finish.** In the worktree, `git rebase main`, then hand the branch to the designated dispatcher, who opens the pull request (the desk, under the #439 trial) (the manual's [Pull request flow](docs/content/docs/manual/sessions-and-agents.md#pull-request-flow-412) and [Landing and worktrees](docs/content/docs/manual/sessions-and-agents.md#landing-and-worktrees)). Run no other git command in the shared checkout (not `git status`: it rewrites the index): an `index.lock` there that persists is the human's to clear, never yours. The dispatcher sets the card to `In review`. A lane never reviews its own code.
 4. **Close out.** Tick each acceptance criterion the change met in the issue body now, not after the merge (a `Closes:` trailer ticks nothing); leave an unmet one unticked with a comment saying why. Comment the commits and what is left undone; tell `wh/design` if a status table or the threat model's status column needs a change.
 5. **Clean up.** Switch the worktree to the next branch, or `git switch --detach main`, then delete the merged branch.
-6. **Hand over.** The dispatcher marks the PR ready after CLEAR (the desk does under the #439 trial). Hand over the PR URL, its head SHA and any new `unverified` markers; never push (the desk's trial push, see Commits) or merge. Werner merges (rebase merge) only reviewed work.
+6. **Hand over.** The dispatcher marks the PR ready after CLEAR (the desk does under the #439 trial). Hand over the PR URL, its head SHA and any new `unverified` markers; never merge. Werner merges (rebase merge) only reviewed work.
 
 ## License
 
