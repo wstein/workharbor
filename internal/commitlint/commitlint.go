@@ -420,6 +420,11 @@ func parseTrailers(lines []string) []trailer {
 			}
 			continue
 		}
+		if bareIssueRe.MatchString(l) {
+			// git does not read this line as a trailer, but the other lines
+			// of the paragraph are still validated.
+			continue
+		}
 		m := trailerRe.FindStringSubmatch(l)
 		if m == nil {
 			return nil

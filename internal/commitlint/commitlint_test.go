@@ -30,6 +30,8 @@ func TestLint(t *testing.T) {
 		{"related no colon", "feat: a\n\nrelated #10, #11", human, ""},
 		{"refs no colon", "feat: a\n\nRefs #10", human, ""},
 		{"bare with trailers", "feat: a\n\nCloses #10\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>", human, ""},
+		{"bare then bad trailer", "fix: a\n\nCloses #10\nRefs: garbage", human, "not an issue reference"},
+		{"bare then bad task", "fix: a\n\nCloses #10\nWhr-Task: bad id", human, "not a valid id"},
 		{"no space", "fix: a\n\nCloses#10", human, "must reference an issue"},
 		{"non-numeric bare", "fix: a\n\nCloses #abc", human, "must reference an issue"},
 		{"non-numeric colon", "fix: a\n\nCloses: #abc", human, "not an issue reference"},
