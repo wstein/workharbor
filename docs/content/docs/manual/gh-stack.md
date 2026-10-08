@@ -8,7 +8,7 @@ Related or dependent issues are stacked automatically: the desk decides this at 
 
 ## Who may run what
 
-On their own branches, and when the human allows it, agents may run `gh stack init`, `add`, `push`, `submit`, `view`, `sync` and `rebase`. Agents never run `gh stack merge`: the human merges, with rebase.
+On their own branches, and when the human allows it, agents may run `gh stack init`, `add`, `view`, `sync` and `rebase`. `gh stack push` and `submit` push branches, so they follow the push rule: only when the human asks, or the desk under the [desk push trial](sessions-and-agents.md#desk-push-trial-439). Agents never run `gh stack merge`: the human merges, with rebase.
 
 ## Adopt existing branches
 
