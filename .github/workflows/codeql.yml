@@ -3,8 +3,16 @@ name: codeql
 # Static analysis (SAST) of the Go code with CodeQL. OpenSSF Scorecard's SAST
 # check recognises github/codeql-action by name; golangci-lint (make lint) is
 # not recognised. Results go to code scanning.
+#
+# Pull requests into main are analysed as well: Scorecard's SAST check counts
+# the share of recent commits that were checked by the tool, and commits that
+# only ever reach main through a PR are otherwise never analysed. Fork PRs are
+# skipped (read-only token, no security-events: write). CodeQL is not a
+# required check.
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   schedule:
@@ -17,6 +25,7 @@ env:
 
 jobs:
   analyze:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
