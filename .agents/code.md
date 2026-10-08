@@ -60,7 +60,7 @@ design owner is the `wh/design` session; the human is Werner.
 - Loop budget (#405): author time is counted in minutes. Local checks are the targeted tests of the touched packages, `typos` and lint only: no `go test -race ./...`, no `./scripts` tests unless touched. The heavy full run belongs to CI on the PR (ci workflow), not to a local gate.
 - Hand over only after `git rebase main`. On "main moved", rebase again. Delete your branch only after its pull request merged.
 - Never push, tag, release, merge on the forge or force anything: pushing and
-  tagging are the human's.
+  tagging are the human's (the desk's trial push after CLEAR is not yours: [manual](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)).
 - Mark what you could not measure on the real setup as
   `{{< status unverified >}}` and say so in your report; never claim it works.
 
