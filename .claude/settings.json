@@ -24,7 +24,6 @@
       "Bash(git worktree list)",
       "Bash(git branch --list)",
       "Bash(git ls-files)",
-      "Bash(git notes --ref=review append -m *)",
       "Bash(make check)",
       "Bash(make test)",
       "Bash(make vet)",
@@ -48,10 +47,6 @@
       "Bash(scripts/board-snapshot.sh --refresh)",
       "Bash(scripts/board-snapshot.sh card:*)",
       "Bash(scripts/board-snapshot.sh queue:*)"
-    ],
-    "ask": [
-      "Bash(make land:*)",
-      "Bash(make land-*)"
     ],
     "deny": [
       "Bash(gh issue:*)",
