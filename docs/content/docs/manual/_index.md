@@ -15,6 +15,7 @@ How to set up and run workharbor. workharbor is building release 1. The service 
   {{< card link="install-upgrade-release" title="Install, upgrade and release" subtitle="Draft releases, the tap, upgrade notes, cutting a release (draft, operators)." icon="download" >}}
   {{< card link="first-run" title="First run" subtitle="The path from a prepared host to the first task (draft, provisional)." icon="arrow-right" >}}
   {{< card link="sessions-and-agents" title="Sessions and agents" subtitle="Which sessions to keep open, their models, the review gate (draft)." icon="users" >}}
+  {{< card link="gh-stack" title="Stack pull requests" subtitle="Related issues as a gh stack: who runs what, adopting branches (provisional)." icon="collection" >}}
   {{< card link="operations-digest" title="Operations digest" subtitle="An index of decisions, procedures, how-tos and known gaps, linked to their sources." icon="collection" >}}
 {{< /cards >}}
 
