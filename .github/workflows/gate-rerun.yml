@@ -1,0 +1,39 @@
+name: gate-rerun
+
+# Posting a commit status does not start the gate (#450: gate passed at 11:51:44,
+# review/opus went pending at 11:52:37, nobody re-ran it). A status event runs the
+# workflow file of the default branch, checks out nothing and runs no PR code: it
+# only re-runs the existing gate run of that head SHA when a review/* status changes.
+on:
+  status:
+
+permissions: {}
+
+concurrency:
+  group: gate-rerun-${{ github.event.sha }}
+  cancel-in-progress: false
+
+jobs:
+  rerun:
+    if: startsWith(github.event.context, 'review/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Re-run gate for the head SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.sha }}
+        run: |
+          set -eu
+          id=$(gh run list --repo "$REPO" --workflow gate.yml --event pull_request \
+            --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$id" ]; then
+            echo "gate-rerun: no gate run for this SHA, nothing to do"
+            exit 0
+          fi
+          # A re-run of a still-running run is refused; wait for it to finish first.
+          gh run watch --repo "$REPO" "$id" >/dev/null 2>&1 || true
+          gh run rerun --repo "$REPO" "$id"
