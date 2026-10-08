@@ -26,7 +26,21 @@ make install-release VERSION=v0.1.0-alpha.1            # prefix /opt/whr
 make install-release VERSION=v0.1.0-alpha.1 PREFIX=/some/prefix
 ```
 
-You need `gh` (`brew install gh`), signed in (`gh auth login`); a draft of a final release can be downloaded only by a writer, a published pre-release does not need that. The script downloads the macOS archive (`whr_<tag>_darwin_arm64.tar.gz`), the guest archive (`whr-guest_<tag>_linux_arm64.tar.gz`) and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
+`gh` is optional: with it (`brew install gh`, signed in; a draft can be downloaded only by a writer) the script also verifies the attestation, without it only the checksums. The script downloads the macOS archive (`whr_<tag>_darwin_arm64.tar.gz`), the guest archive (`whr-guest_<tag>_linux_arm64.tar.gz`) and `checksums.txt`, checks both archives against the checksums and, when `gh` is present, against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
+
+### Install without a clone or `gh`
+
+From the release after `v0.1.0-alpha.3` (which is immutable and has no such asset; its release notes carry a manual `curl`/`shasum`/`tar` block), `install-release.sh` is a release asset, listed in `checksums.txt` and so covered by the attestation. It needs only `curl`, `tar`, `shasum` and `install`; run it as the administrator:
+
+```bash
+tag=v0.1.0-alpha.4   # example
+curl -fsSLO "https://github.com/wstein/workharbor/releases/download/$tag/install-release.sh"
+curl -fsSLO "https://github.com/wstein/workharbor/releases/download/$tag/checksums.txt"
+shasum -a 256 -c checksums.txt --ignore-missing   # install-release.sh: OK
+sudo bash install-release.sh "$tag"               # prefix /opt/whr, or add a prefix
+```
+
+Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Install `gh` and rerun for the attestation. The `workharbor` user must not be able to write the prefix: the script refuses a prefix tree that is group- or world-writable. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable prefix) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
 
 ### Verify a download yourself
 
