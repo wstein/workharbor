@@ -95,7 +95,7 @@ func TestStackReadyAppendsOnceAndPrints(t *testing.T) {
 	if got := r.note(t, r.a); got != "CLEAR "+r.a+" role=review model=sonnet\n" {
 		t.Errorf("a note = %q", got)
 	}
-	want := "- workharbor STACK on `land`, tip " + r.c[:7] + ", 3 commits on main " + r.base[:7] + " (#401 #404). Opus CLEAR"
+	want := "- workharbor STACK on `topic`, tip " + r.c[:7] + ", 3 commits on main " + r.base[:7] + " (#401 #404). Opus CLEAR"
 	if !strings.Contains(out, want) || !strings.Contains(out, "\n  `cd /Users/werner/workspaces/workharbor/workharbor && make land SHA="+r.c+"`\n") || strings.Contains(out, "carve-out") {
 		t.Errorf("no READY entry:\n%s", out)
 	}
@@ -123,6 +123,12 @@ func TestStackReadyRefusals(t *testing.T) {
 		"no shas":            {r.c, "--opus"},
 		"unknown option":     {r.c, "--haiku", r.b},
 		"one bad among good": {r.c, "--opus", r.b, "--sonnet", r.side},
+		"issues then opus":   {r.c, "--issues", "--opus", r.b, r.c},
+		"issues then sonnet": {r.c, "--issues", "--sonnet", r.b, r.c},
+		"branch then opus":   {r.c, "--branch", "--opus", r.b, r.c},
+		"issues at end":      {r.c, "--opus", r.b, "--issues"},
+		"branch then flag":   {r.c, "--branch", "--opus", r.b},
+		"branch not at tip":  {r.c, "--branch", "other", "--opus", r.b},
 	}
 	for name, args := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -154,5 +160,50 @@ func TestStackReadyCarveOut(t *testing.T) {
 	}
 	if !strings.Contains(out, "verified by the desk (carve-out: type the short SHA `"+r.c[:7]+"`):") {
 		t.Errorf("no carve-out text:\n%s", out)
+	}
+}
+
+func TestStackReadyClaimNamesTiers(t *testing.T) {
+	r := newSRRepo(t)
+	out, err := r.run(t, r.c, "--sonnet", r.c, "--opus", r.b)
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "Opus CLEAR on the tip and") || !strings.Contains(out, "No Opus CLEAR on the tip; tiers given: sonnet opus.") {
+		t.Errorf("claim not limited to the given tiers:\n%s", out)
+	}
+}
+
+func TestStackReadyNotClearRefuses(t *testing.T) {
+	r := newSRRepo(t)
+	r.git(t, "notes", "--ref=review", "add", "-m", "NOT CLEAR "+r.b+" role=review model=opus", r.b)
+	r.git(t, "notes", "--ref=review", "add", "-m", "  not  clear "+r.a+" role=review model=opus", r.a)
+	out, err := r.run(t, r.c, "--opus", r.c, r.b)
+	if err == nil || !strings.Contains(out, "NOT CLEAR") {
+		t.Fatalf("expected refusal:\n%s", out)
+	}
+	if n := r.note(t, r.c); n != "" {
+		t.Errorf("note written despite refusal: %q", n)
+	}
+	if _, err := os.Stat(r.makeLog); err == nil {
+		t.Error("make ran despite refusal")
+	}
+	if out, err = r.run(t, r.c, "--opus", r.c, r.a); err == nil || !strings.Contains(out, r.a) {
+		t.Fatalf("lowercase not clear accepted:\n%s", out)
+	}
+}
+
+func TestStackReadyBranchChoice(t *testing.T) {
+	r := newSRRepo(t)
+	r.git(t, "branch", "twin", r.c)
+	out, err := r.run(t, r.c, "--opus", r.c)
+	if err == nil || !strings.Contains(out, "several local branches") || !strings.Contains(out, "twin") || !strings.Contains(out, "topic") {
+		t.Fatalf("expected ambiguity refusal:\n%s", out)
+	}
+	if n := r.note(t, r.c); n != "" {
+		t.Errorf("note written despite refusal: %q", n)
+	}
+	if out, err = r.run(t, r.c, "--branch", "twin", "--opus", r.c); err != nil || !strings.Contains(out, "STACK on `twin`, tip") {
+		t.Fatalf("explicit branch: %v\n%s", err, out)
 	}
 }
