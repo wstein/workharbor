@@ -36,11 +36,10 @@ From the release after `v0.1.0-alpha.3` (which is immutable and has no such asse
 tag=v0.1.0-alpha.4   # example
 base=https://github.com/wstein/workharbor/releases/download/$tag
 curl -fsSLO "$base/install-release.sh" -O "$base/checksums.txt" &&
-shasum -a 256 -c checksums.txt --ignore-missing &&   # install-release.sh: OK
-sudo bash install-release.sh "$tag"                  # prefix /opt/whr, or add a prefix
+shasum -a 256 -c checksums.txt --ignore-missing   # install-release.sh: OK
 ```
 
-With `gh`, verify the script itself first, before the `sudo` line: it runs as root, and its own attestation check proves nothing if the script was swapped.
+With `gh`, verify the script itself next: it runs as root, and its own attestation check proves nothing if the script was swapped.
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -50,7 +49,13 @@ gh attestation verify install-release.sh --repo wstein/workharbor \
   --deny-self-hosted-runners
 ```
 
-Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Install `gh` and rerun for the attestation. The `workharbor` user must not be able to write the prefix: the script refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable prefix) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
+Then run the installer:
+
+```bash
+sudo bash install-release.sh "$tag"   # prefix /opt/whr, or add a prefix
+```
+
+Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Install `gh` and rerun for the attestation. The `workharbor` user must not be able to write the prefix: the script refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable or symlinked prefix, prefix of another owner, a failing `gh`) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
 
 ### Verify a download yourself
 
