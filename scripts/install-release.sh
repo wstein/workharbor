@@ -75,9 +75,7 @@ prefix="${args[1]:-/opt/whr}"
 [ "$(uname -s)/$(uname -m)" = Darwin/arm64 ] || die "whr releases are for macOS on Apple silicon"
 have_gh=0
 command -v gh >/dev/null && have_gh=1
-if [ "$have_gh" -eq 1 ]; then
-  echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
-else
+if [ "$have_gh" -ne 1 ]; then
   echo "install-release: gh not found: checking checksums.txt only. That proves the download is intact, not who built it (install gh to verify the attestation of $repo)." >&2
 fi
 
@@ -130,10 +128,20 @@ fi
   done
 )
 
+commit=""
 if [ "$have_gh" -eq 1 ]; then
   # The tag's commit, so an attestation made for another commit does not pass.
   commit="$(gh api "repos/$repo/commits/refs/tags/$tag" --jq .sha 2>/dev/null)" || commit=""
-  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "cannot read the commit of tag $tag in $repo (is gh signed in? gh auth login)"
+  if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+    # gh is installed but unusable (not signed in, no login under sudo, no network
+    # to the API): same as no gh. A working gh never takes this path, so a failing
+    # attestation check below still stops the install.
+    echo "install-release: gh cannot read the commit of tag $tag in $repo (not signed in? under sudo the login may be missing): checking checksums.txt only" >&2
+    have_gh=0
+  fi
+fi
+if [ "$have_gh" -eq 1 ]; then
+  echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
   for f in "$mac" "$guest"; do
     gh attestation verify "$work/$f" --repo "$repo" \
       --signer-workflow "$repo/.github/workflows/release.yml" \

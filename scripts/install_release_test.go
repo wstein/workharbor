@@ -379,26 +379,77 @@ func TestAPrefixOfAnotherOwnerIsRefused(t *testing.T) {
 	}
 }
 
-// A gh that is present but fails never falls back to the checksum-only path.
-func TestAFailingGHInstallsNothing(t *testing.T) {
+// A gh that cannot read the tag (not signed in, no login under sudo) counts as
+// absent: the checksums are still checked, the caveat is printed and gh is not
+// asked to verify anything.
+func TestAnUnusableGHFallsBackToTheChecksums(t *testing.T) {
 	t.Parallel()
-	for name, body := range map[string]string{
-		"attestation": "#!/bin/sh\nif [ \"$1\" = api ]; then echo 0123456789abcdef0123456789abcdef01234567; exit 0; fi\nexit 1\n",
-		"api":         "#!/bin/sh\nexit 1\n",
-	} {
-		r := newRelease(t, "0.2.0", "")
-		if err := os.WriteFile(filepath.Join(r.bin, "gh"), []byte(body), 0o700); err != nil { //nolint:gosec // an executable test fake
+	r := newRelease(t, "0.2.0", "")
+	if err := os.WriteFile(filepath.Join(r.bin, "gh"), []byte("#!/bin/sh\necho \"$@\" >> '"+r.ghlog+"'\nexit 1\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	out, err := r.run(t, "v0.2.0", r.prefix)
+	if err != nil {
+		t.Fatalf("a gh that is not signed in blocked the install: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "checking checksums.txt only") || !strings.Contains(out, "only the checksums were verified, not the origin") {
+		t.Errorf("the fallback notice or caveat is missing:\n%s", out)
+	}
+	if log, _ := os.ReadFile(r.ghlog); strings.Contains(string(log), "attestation") { //nolint:gosec // a test path
+		t.Errorf("gh attestation ran:\n%s", log)
+	}
+	// The checksums still decide: a changed archive fails with the same gh.
+	r2 := newRelease(t, "0.2.0", "")
+	if err := os.WriteFile(filepath.Join(r2.bin, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r2.dir, "whr_0.2.0_darwin_arm64.tar.gz"), []byte("changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := r2.run(t, "v0.2.0", r2.prefix); err == nil || !strings.Contains(out, "does not match checksums.txt") {
+		t.Errorf("a changed archive passed with an unusable gh: %v\n%s", err, out)
+	}
+}
+
+// The notes' checksum step checks only the named file with stock tools: other
+// lines of checksums.txt (archives not downloaded) are ignored, a changed script fails.
+func TestTheNotesChecksumStep(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	sum := func(b string) string { h := sha256.Sum256([]byte(b)); return hex.EncodeToString(h[:]) }
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		out, err := r.run(t, "v0.2.0", r.prefix)
-		if err == nil {
-			t.Errorf("%s: a failing gh passed:\n%s", name, out)
-		}
-		if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err == nil {
-			t.Errorf("%s: whr was installed", name)
-		}
-		if strings.Contains(out, "only the checksums were verified") {
-			t.Errorf("%s: the checksum-only caveat was printed:\n%s", name, out)
-		}
+	}
+	write("install-release.sh", "echo hi\n")
+	write("checksums.txt", sum("x")+"  whr_0.2.0_darwin_arm64.tar.gz\n"+sum("echo hi\n")+"  install-release.sh\n")
+	step := "cd '" + dir + "' && grep ' install-release.sh$' checksums.txt | shasum -a 256 -c -"
+	if out, err := bash(t, []string{"PATH=" + os.Getenv("PATH")}, step); err != nil || !strings.Contains(out, "install-release.sh: OK") {
+		t.Fatalf("the step failed on a matching script: %v\n%s", err, out)
+	}
+	write("install-release.sh", "echo changed\n")
+	if out, err := bash(t, []string{"PATH=" + os.Getenv("PATH")}, "set -o pipefail; "+step); err == nil {
+		t.Errorf("the step passed a changed script:\n%s", out)
+	}
+}
+
+// A gh that reads the tag but fails the attestation never falls back.
+func TestAFailingAttestationInstallsNothing(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	body := "#!/bin/sh\nif [ \"$1\" = api ]; then echo 0123456789abcdef0123456789abcdef01234567; exit 0; fi\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(r.bin, "gh"), []byte(body), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	out, err := r.run(t, "v0.2.0", r.prefix)
+	if err == nil {
+		t.Errorf("a failing attestation passed:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err == nil {
+		t.Error("whr was installed")
+	}
+	if strings.Contains(out, "only the checksums were verified") {
+		t.Errorf("the checksum-only caveat was printed:\n%s", out)
 	}
 }
