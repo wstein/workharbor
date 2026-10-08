@@ -54,7 +54,7 @@ A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review mode
 
 Design: [pr-flow-landing](../design/pr-flow-landing.md) (Flow, Turnaround budget, Stacking cost, Migration plan). Every branch merges through a pull request; the old local landing (`make land`, the `land` pointer branch and the local review and confirm notes) is retired (#414) and its notes refs stay only as history.
 
-1. **Draft PR.** For each branch the dispatcher runs `gh pr create --draft --base main --head <branch> --title "<issue title>" --body-file <file>`. The body holds `Closes #N`, the acceptance summary and a placeholder line `Verdict evidence: pending`. The PR stays a draft until CLEAR; then `gh pr ready <n>`.
+1. **Draft PR.** For each branch the dispatcher runs `gh pr create --draft --base main --head <branch> --title "<issue title>" --body-file <file>`. The body holds `Closes #N`, the acceptance summary and a placeholder line `Verdict evidence: pending`. (During the #439 trial the desk does this after CLEAR; see [Desk push trial](#desk-push-trial-439).) The PR stays a draft until CLEAR; then `gh pr ready <n>`.
 2. **Pre-PR review.** The Opus review runs on the local branch diff within the turnaround budget (design note, Turnaround budget); the PR is then ready with `review/opus` set.
 3. **Status.** The desk posts the verdict on the PR head SHA:
 
@@ -74,7 +74,7 @@ Statuses are not signatures: anyone with write access can set one with any conte
 
 Trial, revisit on 2026-11-08 after a few PRs and record the outcome (what went wrong, what the watcher missed). This is the one exception to "Push only when the human asks" in `AGENTS.md`.
 
-- **Rule.** After the required CLEAR on the exact head SHA (and after any rebase with its range-diff proof) the desk may push that topic branch (never force), open the PR as a draft with `Closes #N` in the body, post `review/<tier>` plus the evidence comment, hand the check watching to a background helper, and mark the PR ready when the checks are green. Carve-out paths still need `review/opus`. The human merges, by rebase. Authors, reviewers and `wh/dispatch` never push.
+- **Rule.** After the required CLEAR on the exact head SHA (and after any rebase with its range-diff proof) the desk may push that topic branch (never force), open the PR as a draft with `Closes #N` in the body (during the #439 trial the desk opens the PR and marks it ready, when the checks are green, instead of the dispatcher), post `review/<tier>` plus the evidence comment, hand the check watching to a background helper, and mark the PR ready when the checks are green. Carve-out paths still need `review/opus`. The human merges, by rebase. Authors, reviewers and `wh/dispatch` never push.
 - **Never.** Merge; push `main` or tags; force-push; change rulesets or repository settings; push a branch without the required CLEAR.
 - **Size budget.** A PR stays within 10 commits and about 500 lines.
 - **Monitoring never blocks.** The desk and dispatch run no foreground sleep or poll loop. CI and check watching goes to a read-only background Haiku helper (model set explicitly, brief per `.agents/helper.md`) that reports once. A failure report holds the check name, the job URL and the first failing test line (`--- FAIL:` plus the next line). The helper never judges, reruns or comments; the desk decides. Red CI that the PR did not cause becomes a defect issue (never a "known failure", for example #438), and the desk reruns the failed jobs with `gh run rerun <id> --failed`.
