@@ -55,7 +55,7 @@ A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review mode
 
 ## Pull request flow (#412)
 
-Design: [pr-flow-landing](../design/pr-flow-landing/) (Flow, Turnaround budget, Stacking cost, Migration plan). Until the first PR-flow merge succeeded, `make land` stays the default way to land (it is only turned off at migration step 5); during migration step 3 the PR statuses and comments run in parallel with the review notes above, and the notes stay what `make land` reads.
+Design: [pr-flow-landing](../design/pr-flow-landing.md) (Flow, Turnaround budget, Stacking cost, Migration plan). Until the first PR-flow merge succeeded, `make land` stays the default way to land (it is only turned off at migration step 5); during migration step 3 the PR statuses and comments run in parallel with the review notes above, and the notes stay what `make land` reads.
 
 1. **Draft PR.** For each branch the dispatcher runs `gh pr create --draft --base main --head <branch> --title "<issue title>" --body-file <file>`. The body holds `Closes #N`, the acceptance summary and a placeholder line `Verdict evidence: pending`. The PR stays a draft until CLEAR; then `gh pr ready <n>`.
 2. **Pre-PR review.** The Opus review runs on the local branch diff within the turnaround budget (design note, Turnaround budget); the PR is then ready with `review/opus` set.
