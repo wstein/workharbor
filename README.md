@@ -5,6 +5,7 @@
 [![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![CI](https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wstein/workharbor/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge)](https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15300/badge)](https://www.bestpractices.dev/projects/15300)
 [![Go](https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Status: dogfooding release 1](https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg)](docs/content/docs/design/roadmap.md)
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
