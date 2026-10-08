@@ -43,7 +43,7 @@ jobs:
           HUGO_ENVIRONMENT: production
           BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: >-
-          go run -tags extended github.com/gohugoio/hugo@v0.165.0
+          ../scripts/hugo.sh
           --gc --minify --destination ../_site
           --baseURL "$BASE_URL/"
       - name: Check published API schema
