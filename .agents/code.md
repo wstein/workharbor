@@ -57,6 +57,7 @@ design owner is the `wh/design` session; the human is Werner.
   or marked unverified; `--yes` semantics stated and tested; run `typos`,
   `make check-local` and `go test` for the touched packages once, not per
   commit; CI parity: no host-dependent and no tty-dependent tests.
+- Loop budget (#405): author time is counted in minutes. Local checks are the targeted tests of the touched packages, `typos` and lint only: no `go test -race ./...`, no `./scripts` tests unless touched. The heavy full run belongs to CI on the PR (ci workflow), not to a local gate. This applies to the PR flow (#407); the old landing flow keeps its full run until #407 replaces it.
 - Land only with `git rebase main && make land`. On "main moved", rebase and run
   it again; a failure from github.com answering 503 is not your content, so wait
   and retry. Delete your branch only after a successful land.
