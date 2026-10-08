@@ -176,7 +176,7 @@ make check-ci      # what CI runs beyond make check: docs build, typos, lychee, 
 make commitlint    # check this branch's commits against the commit rules
 make hooks         # enable hooks and the commit template (once per clone and worktree)
 make generate      # compile the web UI's templ templates (the generated files are committed)
-make docs          # build the Hugo site into _site (make docs-serve for live reload)
+make docs          # build the Hugo site into _site (make docs-serve for live reload; the first run downloads the pinned prebuilt Hugo extended v0.165.0 into .cache/hugo and verifies its SHA-256, so no install and no Go build of Hugo is needed)
 make temp-ls       # list temporary containers, volumes, networks and images (LANE=<lane> to narrow)
 make temp-clean    # remove one lane's: LANE=<lane> is required
 ```
