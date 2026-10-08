@@ -55,7 +55,7 @@ A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review mode
 Design: [pr-flow-landing](../design/pr-flow-landing.md) (Flow, Turnaround budget, Stacking cost, Migration plan). Every branch merges through a pull request; the old local landing (`make land`, the `land` pointer branch and the local review and confirm notes) is retired (#414) and its notes refs stay only as history.
 
 1. **Draft PR.** For each branch the dispatcher runs `gh pr create --draft --base main --head <branch> --title "<issue title>" --body-file <file>`. The body holds `Closes #N`, the acceptance summary and a placeholder line `Verdict evidence: pending`. (During the #439 trial the desk does this after CLEAR; see [Desk push trial](#desk-push-trial-439).) The PR stays a draft until CLEAR; then the desk, and no other role, runs `gh pr ready <n>` once all checks are green on the exact head SHA and the required `review/*` status is success.
-2. **Pre-PR review.** The Opus review runs on the local branch diff within the turnaround budget (design note, Turnaround budget); the PR is then ready with `review/opus` set.
+2. **Pre-PR review.** The Opus review runs on the local branch diff within the turnaround budget (design note, Turnaround budget); the PR is then ready with `review/opus` set. Choose the reviewer model with `sh scripts/review-class.sh <branch>`: it prints the path class and the required `review/*` context(s) from the same logic as the `gate` (a carve-out needs `review/opus`).
 3. **Status.** The desk posts the verdict on the PR head SHA:
 
 ```sh
