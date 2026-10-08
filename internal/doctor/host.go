@@ -1103,11 +1103,13 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 		}
 		return &Unreachable{
 			Why:   "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec(),
-			Where: "from the source tree, as the account that can write " + d.prefix() + " (or, for a release, the second command)",
+			Where: "as an administrator who can write " + d.prefix() + ", in the source tree",
 			Tools: []string{
 				"make install PREFIX=" + shellWord(d.prefix()),
 				"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
+				"scripts/install-release.sh <tag> " + shellWord(d.prefix()),
 			},
+			Note: "The first builds the binary and both helpers from the source tree and signs them ad hoc. The other two install a release (gh signed in as a writer of the repository): <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute; check it with `xattr -l <whr>` (unverified).",
 		}
 	}
 }

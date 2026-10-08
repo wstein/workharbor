@@ -93,6 +93,8 @@ type Check struct {
 type Unreachable struct {
 	Why, Step, Command, Where string
 	Tools                     []string
+	// Note is prose after the commands (what they do to an existing install).
+	Note string
 }
 
 // basic is a check as the list below writes it; base fills in the rest.

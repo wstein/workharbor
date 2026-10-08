@@ -1609,7 +1609,7 @@ func TestToolStoreIsNotReachableWithoutTheGuestHelpers(t *testing.T) {
 			if tc.wantNotNamed != "" && strings.Contains(u.Why, tc.wantNotNamed) {
 				t.Errorf("names a helper that is there: %q", u.Why)
 			}
-			if len(u.Tools) != 2 || u.Tools[0] != "make install PREFIX="+d.Prefix || !strings.HasPrefix(u.Tools[1], "make install-release VERSION=<tag> PREFIX="+d.Prefix) {
+			if !strings.Contains(u.Note, "--allow-downgrade") || !strings.Contains(u.Note, "xattr -l") || len(u.Tools) != 3 || u.Tools[2] != "scripts/install-release.sh <tag> "+d.Prefix || u.Tools[0] != "make install PREFIX="+d.Prefix || !strings.HasPrefix(u.Tools[1], "make install-release VERSION=<tag> PREFIX="+d.Prefix) {
 				t.Errorf("tools %q", u.Tools)
 			}
 			// with both helpers there, the step is reachable and offers the command

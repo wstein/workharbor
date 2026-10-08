@@ -402,6 +402,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 					ui.Action("or:")
 					ui.Command(t)
 				}
+				if u.Note != "" {
+					ui.Note(u.Note)
+				}
 				out := Outcome{Step: s.Name, Status: doctor.NotVerified, Detail: detail, Asked: true, NeedsHuman: o.Unattended, Remedy: bare, Next: shown}
 				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: append([]string{shown}, u.Tools[min(1, len(u.Tools)):]...)}
 				outs = append(outs, out)
