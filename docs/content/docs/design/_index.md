@@ -32,6 +32,7 @@ The design is split by topic. Section numbers (§) are the same on every page, s
 | [Per-client API credentials](api-clients.md) | §5.12 Named API clients and audit actors (#364) |
 | [Security](security.md) | §6 Policy and autonomy, §7 Security |
 | [Host egress allowlist](egress-allowlist.md) | Design note under §7: allowed destinations, rule sketches, doctor check (#361) |
+| [Pull request landing](pr-flow-landing.md) | Design note: landing through pull requests, gate workflow and statuses (#407) |
 | [Interfaces](interfaces.md) | §9 CLI, scripting contract, web UI, notifications, onboarding, mobile clients; §10 Forge, CI and identity |
 | [Roadmap](roadmap.md) | §11 Existing platforms, §12 Open decisions and spikes, §13 Delivery |
 
