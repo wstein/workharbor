@@ -244,17 +244,35 @@ func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
 	}
 }
 
-// noGH is a PATH without gh: links to the tools the script needs, plus the fake uname.
+// noGH is a PATH without gh: links to exactly the tools the script runs, plus the
+// helpers GNU tar execs by name (gzip) and the interpreter behind shasum (perl).
+// A tool missing on the machine fails the test with its name. The fakes in r.bin
+// (uname, id) win over the real tools; gh is never linked.
 func (r release) noGH(t *testing.T) []string {
 	t.Helper()
 	farm := t.TempDir()
-	for _, name := range []string{"bash", "env", "awk", "sed", "sort", "head", "wc", "find", "cp", "rm", "mv", "mkdir", "install", "tar", "shasum", "perl", "mktemp", "cat", "dirname", "tr", "grep", "touch", "chmod", "id"} {
-		if p, err := exec.LookPath(name); err == nil {
-			_ = os.Symlink(p, filepath.Join(farm, name))
+	for _, name := range []string{"bash", "env", "awk", "sort", "head", "wc", "find", "cp", "rm", "mv", "mkdir", "install", "tar", "gzip", "shasum", "perl", "mktemp", "id", "uname"} {
+		p, err := exec.LookPath(name)
+		if err != nil {
+			t.Fatalf("the test needs %s on PATH: %v", name, err)
+		}
+		if err := os.Symlink(p, filepath.Join(farm, name)); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink(filepath.Join(r.bin, "uname"), filepath.Join(farm, "uname")); err != nil {
+	fakes, err := os.ReadDir(r.bin)
+	if err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range fakes {
+		if f.Name() == "gh" || strings.HasSuffix(f.Name(), ".log") || f.Name() == "installed-whr-ran" {
+			continue
+		}
+		link := filepath.Join(farm, f.Name())
+		_ = os.Remove(link)
+		if err := os.Symlink(filepath.Join(r.bin, f.Name()), link); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return []string{"PATH=" + farm, "WHR_RELEASE_DIR=" + r.dir}
 }
