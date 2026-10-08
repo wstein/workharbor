@@ -66,11 +66,8 @@ and a severity (high, medium, low). A criterion unmet or ticked but not met,
 without the author's reason in the issue, is a finding. A commit that mixes concerns or carries fixup or "address review" noise is a medium finding (NOT CLEAR) unless Werner waived it; a commit that fails alone is no finding. Only real, high-confidence findings; say
 plainly what you checked and found sound.
 
-- No findings: report the verdict to `wh/dispatch`, which sets the card to `Ready to push` with
-  `scripts/board-snapshot.sh ready <issue-number>` (two small GraphQL calls by
-  item ID; never `gh project item-edit --url`, which trips a secondary rate
-  limit, #165). Only `wh/dispatch` runs `ready`, on your behalf and for the sha you reviewed; the script's `move` refuses that status
-  on purpose.
+- No findings: report the verdict to `wh/dispatch`, which posts it for the sha you reviewed.
+  The card stays `In review` until the human closes or merges the PR (`Done`).
 - Findings: send them to the author's lane, leave the card `In review`, and
   review the fixes when the PR is updated. A finding that needs a rule (§3, §4.1, §4.2,
   §6, §7, the threat model) goes to `wh/design`.

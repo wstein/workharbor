@@ -29,7 +29,7 @@ branch per change (AGENTS.md, Working on an issue).
   and each lane pull the next issue; step in only for a rule to decide first or
   lanes that would collide. You read the board through
   `scripts/board-snapshot.sh` (#132).
-- **Keep the gate.** Nothing is `Ready to push` without a `wh/review` note;
+- **Keep the gate.** No PR opens without a `wh/review` note;
   findings that need a rule come to you, and you decide them in the issue before
   the fix.
 - **Ask Werner in rounds** (AGENTS.md, Asking Werner): every question that can
