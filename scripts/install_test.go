@@ -409,6 +409,20 @@ func TestSourceInstallDestdirStagesUnderDestdirOnly(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(s.repo, "newprefix")); !os.IsNotExist(err) {
 		t.Errorf("install escaped DESTDIR through the symlink: %v", err)
 	}
+	// A real checkout below DESTDIR is where mkdir -p would write: refused.
+	inner := t.TempDir()
+	if err := os.Mkdir(filepath.Join(inner, "repo"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s.git(t, "-C", filepath.Join(inner, "repo"), "init", "-q")
+	cmd = exec.CommandContext(context.Background(), "make", "install", "PREFIX=/repo/newprefix", "DESTDIR="+inner) //nolint:gosec // fixture-controlled arguments, no shell
+	cmd.Dir, cmd.Env = s.repo, s.env
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Errorf("a Git working tree below DESTDIR must be refused:\n%s", out)
+	}
+	if _, err := os.Lstat(filepath.Join(inner, "repo", "newprefix")); !os.IsNotExist(err) {
+		t.Errorf("install wrote into the checkout below DESTDIR: %v", err)
+	}
 	for _, bad := range []string{"relative/dir", destdir + "/", "/", filepath.Join(destdir, "missing")} {
 		if out, err := run("DESTDIR=" + bad); err == nil {
 			t.Errorf("DESTDIR=%q must be refused:\n%s", bad, out)
