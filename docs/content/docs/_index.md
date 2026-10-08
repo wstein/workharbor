@@ -16,7 +16,7 @@ workharbor is a self-hosted supervisor for AI coding agents: isolated workspaces
 
 ## What you need
 
-An Apple-silicon Mac with macOS and Apple Container, a GitHub App for your repositories and an agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file. The [manual](manual/_index.md) covers each; it is a draft until the first release.
+An Apple-silicon Mac with macOS and Apple Container, a GitHub App for your repositories and an agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file. The [manual](manual/_index.md) covers each; it is a draft until `v0.1.0`; only pre-releases (`v0.1.0-alpha.N`) are published so far.
 
 ## CLI (provisional)
 

@@ -19,7 +19,7 @@ The managed dogfood or reference-host supervisor runs an installed binary built 
 
 ## Before `v0.1.0`: a draft release
 
-Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its draft is never published. Install it as the **administrator**, not as `workharbor`:
+Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (`v0.1.0-alpha.1` to `v0.1.0-alpha.3` are, {{< status unverified >}} for the pre-release flag beyond `gh release list` on 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`:
 
 ```bash
 make install-release VERSION=v0.1.0-alpha.1            # prefix /opt/whr
