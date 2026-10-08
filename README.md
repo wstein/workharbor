@@ -9,6 +9,8 @@
 [![Status: dogfooding release 1](https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg)](docs/content/docs/design/roadmap.md)
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
+WorkHarbor lets AI coding agents work on your repository issues in isolated workspaces on your own Mac, and nothing leaves your machine until you approve it. You follow and steer every agent from one dashboard on your phone, tablet or computer.
+
 > [!WARNING]
 > **Work in progress: pre-releases only.** The `v0.1.0-alpha.N` pre-releases are published on GitHub for dogfooding; `v0.1.0` is still the first release. The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
 
@@ -28,7 +30,7 @@ The command-line tool is **`whr`**.
 
 ## What goes wrong when agents run unsupervised
 
-Each failure below has an answer in the design. Release 1 is still being built, so these are the intended behaviour, not a track record.
+Each failure below has an answer in the design. The `v0.1.0-alpha.N` pre-releases are published and `v0.1.0` is the first release, but it is still being built, so these are the intended behaviour, not a track record.
 
 - **Nothing stops a push.** An agent can push its own work. Here an agent's commits leave as a bundle and go to the forge only after you approve the exact commit; merge, tag, release and deploy stay forbidden for agents ([approval boundaries](#concept), [security](docs/content/docs/manual/security.md)).
 - **No isolation.** An agent runs with your host's files and network. Here each workspace has its own environment, and its agents reach the internet only through an allowlist proxy ([isolated by default](#concept)).
@@ -58,7 +60,7 @@ whr approve <decision>
 whr answer <decision> <option>
 ```
 
-These are the stable commands of the first slice (design D37); they exist but have not run against a release yet. Others (`whr ws`, `whr agent`, `whr console`, `whr setup`, `whr doctor`, …) are provisional; see the [manual](https://wstein.github.io/workharbor/docs/manual/).
+These are the stable commands of the first slice (design D37); they exist, but have not run against a `v0.1.0` release yet (only the `v0.1.0-alpha.N` pre-releases are published). Others (`whr ws`, `whr agent`, `whr console`, `whr setup`, `whr doctor`, …) are provisional; see the [manual](https://wstein.github.io/workharbor/docs/manual/).
 
 ## Build
 
@@ -93,4 +95,4 @@ Contributions are welcome, especially design reviews and the open spikes. Please
 
 ## License
 
-[EUPL-1.2](LICENSE)
+WorkHarbor is free software under the European Union Public Licence, [EUPL-1.2](LICENSE).
