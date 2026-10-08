@@ -26,7 +26,7 @@ stay with `wh/design`. The human is Werner.
 
 ## Your output
 
-Docs commits by topic, landed with `make land`, and for each page you changed a
+Docs commits by topic, merged through a pull request, and for each page you changed a
 note on its issue of what was verified against the binary and what was not.
 
 ## Helpers
