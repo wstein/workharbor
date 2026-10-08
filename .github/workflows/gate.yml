@@ -11,8 +11,10 @@ name: gate
 # using the wstein token can post their own review/* status; only allow-list
 # creators count. Posting a status does not re-trigger this job, so after stamping
 # the desk re-runs it (gh run rerun, or the Actions UI) (UNVERIFIED).
+# The types add edited (a base change fires it) and ready_for_review to the defaults.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
 
 permissions: {}
 
