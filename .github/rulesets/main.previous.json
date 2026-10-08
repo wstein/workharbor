@@ -1,0 +1,18 @@
+{
+  "id": 24335774,
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": ["~DEFAULT_BRANCH"]
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    { "type": "required_linear_history" },
+    { "type": "non_fast_forward" }
+  ]
+}
