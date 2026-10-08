@@ -33,6 +33,10 @@ whr answer <decision> <option>
 
 These are the stable commands of the first slice ([D37](design/decisions.md)); they exist but have not run against a release yet, and every other command is provisional.
 
+## Security
+
+To report a vulnerability, follow the [security policy](https://github.com/wstein/workharbor/blob/main/.github/SECURITY.md).
+
 ## Stack
 
 Go, a single static binary, SQLite, and a server-rendered web UI built with `templ`, htmx and server-sent events.
