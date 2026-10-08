@@ -232,6 +232,17 @@ Only a human tags, signs and publishes (D24, §6); an agent never does.
 
 1. `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release)`. It does not tag.
 2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: `whr`, the guest binaries, `checksums.txt`, an SBOM, a build-provenance attestation and its bundle (`whr_<tag>.intoto.jsonl`).
+
+    Sign with the signing key, the one whose public half is in `.github/release-signers`, not with your login key, and check the tag locally before you push it:
+
+    ```sh
+    git -c gpg.format=ssh -c user.signingkey=$HOME/.ssh/id_ed25519_signing.pub \
+      tag -s vX.Y.Z -m vX.Y.Z <commit>
+    git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=.github/release-signers \
+      tag -v vX.Y.Z
+    ```
+
+    The error `No principal matched` means a key outside `.github/release-signers` signed the tag. The workflow reads `.github/release-signers` from the **tagged** commit, so a tag that failed stays failed: fix the cause on `main`, wait for green CI, and create a **new** tag on the fixed commit. Only a human tags; an agent never does.
 3. Check the draft: install it on your own prefix with `make install-release VERSION=vX.Y.Z`, which verifies the checksums and the attestation, and read the notes.
 4. Publish it. For a release (not a prerelease) the `tap` workflow renders the formula and pushes it to `wstein/homebrew-tap`; a prerelease never updates the tap.
 
