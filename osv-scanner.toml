@@ -1,0 +1,5 @@
+# Review by 2027-04-08. See docs/content/docs/design/security.md ("Known dependency advisory") and issue #435.
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-04-08
+reason = "golang.org/x/crypto/openpgp is unmaintained and has no fixed version. golang.org/x/crypto is required for golang.org/x/crypto/ssh; no workharbor package imports openpgp, and govulncheck reports the code unaffected."
