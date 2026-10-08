@@ -67,7 +67,7 @@ and active readers do not occupy source-author capacity. New P2 content and
 The following Priority/Session assignments use the scoped crewbook project 10
 adapter (owner `wstein`, project `PVT_kwHNjWrOAZaiCg`, prefix `cb`). Priority
 ranks pending work, not completion. Dispatch owns status changes and claims;
-review alone owns Ready to push, with the exact independent reviewed SHA.
+review alone clears a change for its PR, with the exact independent reviewed SHA.
 
 | Crewbook item | Priority / Session | Current state and next gate |
 | --- | --- | --- |

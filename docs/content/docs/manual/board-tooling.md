@@ -110,14 +110,14 @@ API does not provide those mutations.
 
 In project 10, open the project menu, choose **Workflows**, inspect **Item
 closed**, and verify that only issue closure sets Status to **Done**. Disable
-any workflow that sets **Ready to push**, sets **Done** on merge or another
+any workflow that sets **Done** on merge or another
 trigger, or closes an issue when Status changes. Save changes, reload and record
 the settings in crewbook #7. Inspect each enabled workflow's trigger and action;
 an enabled flag alone is insufficient evidence. Verify a real closure only when
 the human has authorized closing that issue.
 
-`move` still refuses `Ready to push` and `Done`; only the explicit `ready`
-operation represents the independent review gate. Configuration never promotes
+`move` still refuses `Done`, which follows from the human closing or merging
+the PR. The board's own **Ready to push** option is unused. Configuration never promotes
 cards. Dispatch enforces worker limits from the project profile. Board column
 limits are visual aids and do not enforce concurrency; verify profile limits
 and saved board settings separately.
