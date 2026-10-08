@@ -8,33 +8,35 @@ summary to 4-6 lines. The comments are not rendered.
 - **Highlights:** the changes a user notices, with issue numbers.
 - **You can now:** what a user can do that they could not before.
 - **Known limits:** what is known broken or unverified; say "unverified" when it is.
-- **Verify provenance:** `grep ' install-release.sh$' checksums.txt | shasum -a 256 -c -` (see Install); provenance is `whr_<tag>.intoto.jsonl`, checked with `gh attestation verify`.
+- **Verify provenance:** `shasum -a 256 -c` on the archive (see Install); provenance is `whr_<tag>.intoto.jsonl`, checked with `gh attestation verify`.
 
 ## Install
 
-macOS on Apple silicon; needs only `curl`, `shasum`, `tar` and `install`. Replace `<tag>` and run as the administrator; the prefix is `/opt/whr` (add another path as a second argument). The last command of the first block prints `install-release.sh: OK`; any other output is a failure, do not go on.
+macOS on Apple silicon; needs only `curl`, `shasum`, `tar`, `install` and `sudo`. One archive holds `bin/whr`, the Linux guest binaries in `guest/` (payload, never run on the Mac) and `install.sh`. Replace `<tag>`. The first block must print `whr_<version>_darwin_arm64.tar.gz: OK`; any other output is a failure, do not go on.
 
 ```bash
 cd "$(mktemp -d)"
 tag=<tag>; base=https://github.com/wstein/workharbor/releases/download/$tag
-curl -fsSLO "$base/install-release.sh" -O "$base/checksums.txt" &&
-grep ' install-release.sh$' checksums.txt | shasum -a 256 -c -
+f=whr_${tag#v}_darwin_arm64.tar.gz
+curl -fsSLO "$base/$f" -O "$base/checksums.txt" &&
+grep " $f\$" checksums.txt | shasum -a 256 -c -
 ```
 
-With the GitHub CLI (`gh`) installed and signed in (optional; skip this step otherwise), verify the script itself next, because the installer runs as root and its own attestation check proves nothing if the script was swapped:
+Then unpack and run the installer as the administrator; the prefix is `/opt/whr` (add another path as a second argument). Nothing is downloaded and no `gh` is needed:
+
+```bash
+tar -xzf "$f" &&
+sudo ./install.sh "$tag"
+```
+
+Optional, once `gh` is installed (setup installs it) and signed in: verify who built the archive.
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
-gh attestation verify install-release.sh --repo wstein/workharbor \
+gh attestation verify "$f" --repo wstein/workharbor \
   --signer-workflow wstein/workharbor/.github/workflows/release.yml \
   --source-ref refs/tags/$tag --source-digest "$commit" \
   --deny-self-hosted-runners
 ```
 
-Then run the installer as the administrator:
-
-```bash
-sudo bash install-release.sh "$tag"
-```
-
-Under `sudo` the script usually has no `gh` login, so it usually checks the checksums only. The `gh attestation verify install-release.sh` step above proves only the script, not the archives or `checksums.txt`. The script verifies the archives' attestation only when it can run `gh` itself; without `gh`, or with a `gh` that cannot read the tag (not signed in, or no login under `sudo`), only the checksums are checked and the script says so; that proves the download is intact, not who built it. The `workharbor` user must not be able to write the prefix. Full guide: [Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
+`install.sh` checks no attestation and does not tie the tag to the archive. The `workharbor` user must not be able to write the prefix. Full guide: [Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).

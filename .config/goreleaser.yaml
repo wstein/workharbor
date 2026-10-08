@@ -11,12 +11,10 @@ before:
 builds:
   - id: whr
     main: ./cmd/whr
-    binary: whr
+    binary: bin/whr
     env: [CGO_ENABLED=0]
-    goos: [darwin, linux]
-    goarch: [arm64, amd64]
-    ignore:
-      - {goos: darwin, goarch: amd64} # darwin/arm64 first; Intel Macs are not a target
+    goos: [darwin]
+    goarch: [arm64] # Apple silicon only; no Intel or Linux host build is released
     flags: [-trimpath]
     ldflags: &ldflags
       - -X github.com/wstein/workharbor/internal/version.Version={{.Tag}}
@@ -27,7 +25,7 @@ builds:
   # on Apple silicon (what `make install` builds too).
   - id: whr-shim
     main: ./cmd/whr-shim
-    binary: whr-shim
+    binary: whr-shim-linux-arm64
     env: [CGO_ENABLED=0]
     goos: [linux]
     goarch: [arm64]
@@ -35,32 +33,37 @@ builds:
     ldflags: *ldflags
   - id: whr-proxy
     main: ./cmd/whr-proxy
-    binary: whr-proxy
+    binary: whr-proxy-linux-arm64
     env: [CGO_ENABLED=0]
     goos: [linux]
     goarch: [arm64]
     flags: [-trimpath]
     ldflags: *ldflags
 
+# One archive per release (#489): the host binary, the Linux guest binaries as
+# payload (never run on the host) and the installer, built from the same commit.
+# The guest binaries come from dist/ by glob: the build ids above fix the paths.
 archives:
   - id: whr
     ids: [whr]
     formats: [tar.gz]
     name_template: "whr_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, README.md]
-  - id: guest
-    ids: [whr-shim, whr-proxy]
-    formats: [tar.gz]
-    name_template: "whr-guest_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE]
+    files:
+      - LICENSE
+      - README.md
+      - src: scripts/install-release.sh
+        dst: install.sh
+        info: {mode: 0755}
+      - src: dist/whr-shim_linux_arm64*/whr-shim-linux-arm64
+        dst: guest
+        info: {mode: 0755}
+      - src: dist/whr-proxy_linux_arm64*/whr-proxy-linux-arm64
+        dst: guest
+        info: {mode: 0755}
 
 checksum:
   name_template: checksums.txt
   algorithm: sha256
-  # The installer is a release asset (#459): listing it here puts it in
-  # checksums.txt, so the attestation (subject-checksums) covers it.
-  extra_files:
-    - glob: scripts/install-release.sh
 
 # One SBOM of the module's dependencies (CycloneDX), from a pinned tool. It
 # runs in dist/, hence the module path "..", and reads the main module's
@@ -91,6 +94,3 @@ sboms:
 release:
   draft: true
   prerelease: auto
-  # Uploaded next to the archives, so the installer needs no clone (#459).
-  extra_files:
-    - glob: scripts/install-release.sh
