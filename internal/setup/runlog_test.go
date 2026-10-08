@@ -105,3 +105,37 @@ func TestFailureSummaryCauseIsTheToolsLastLineAndTheCommandIsNotWrapped(t *testi
 		t.Errorf("command wrapped:\n%s", got)
 	}
 }
+
+// The tool's last line is the cause only when a command failed; an error of
+// whr's own (here a Do) keeps its reason.
+func TestCauseIsTheReasonWhenNoCommandFailed(t *testing.T) {
+	lg, err := runlog.Open(filepath.Join(t.TempDir(), "run.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lg.Close() }()
+	var fixed bool
+	bad := step("account", doctor.PhaseHost, &fixed, &doctor.Fix{Do: func(context.Context, doctor.Prompter) error {
+		lg.Command([]string{"earlier"}, 0, "EARLIER-OUTPUT\n", "")
+		return errors.New("could not write the file")
+	}})
+	h := &silentFailHost{fakeHost{answers: []string{"y"}}}
+	var so, se strings.Builder
+	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
+	got := se.String()
+	if !strings.Contains(got, "cause  could not write the file") || strings.Contains(got, "cause  EARLIER-OUTPUT") {
+		t.Errorf("cause:\n%s", got)
+	}
+}
+
+// A builder-only fix whose command is not known yet says so, and never
+// announces commands with nothing under it.
+func TestABuilderOnlyFixWithoutAPreviewSaysWhatItDoes(t *testing.T) {
+	var fixed bool
+	s := step("tool-store", doctor.PhaseUser, &fixed, &doctor.Fix{Build: func(context.Context, doctor.Prompter) ([]doctor.Cmd, error) { return nil, nil }})
+	h := &fakeHost{answers: []string{"n"}}
+	_, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser, DryRun: true})
+	if strings.Contains(errOut, "run these commands") || !strings.Contains(errOut, "run the commands this step builds from your configuration") {
+		t.Errorf("output:\n%s", errOut)
+	}
+}

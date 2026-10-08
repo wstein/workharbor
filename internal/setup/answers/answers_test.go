@@ -471,3 +471,21 @@ func TestCheckSavePathRefusesWhatSaveWouldNotWriteOrWouldOverwrite(t *testing.T)
 		t.Fatalf("a git tree: %v", err)
 	}
 }
+
+// A saved answer binds to the command the preview shows (Show), so a changed
+// shim or prefix asks again.
+func TestDigestCoversTheShownCommand(t *testing.T) {
+	mk := func(arg string) doctor.Check {
+		return doctor.Check{Name: "tool-store", Phase: doctor.PhaseUser, Fix: &doctor.Fix{
+			Show:  func() []doctor.Cmd { return []doctor.Cmd{{Argv: []string{"whr", "tools", "build", "-shim", arg}}} },
+			Build: func(context.Context, doctor.Prompter) ([]doctor.Cmd, error) { return nil, nil },
+		}}
+	}
+	a, b, again := FixDigest(mk("/a/shim")), FixDigest(mk("/b/shim")), FixDigest(mk("/a/shim"))
+	if a == b {
+		t.Error("the digest ignores the shown command")
+	}
+	if a != again {
+		t.Error("the digest is not stable")
+	}
+}

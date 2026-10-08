@@ -40,7 +40,7 @@ func FixDigest(c doctor.Check) string {
 		in.Build = c.Fix.Build != nil
 		in.Do = c.Fix.Do != nil
 		in.Desc = c.Fix.Desc
-		for _, cmd := range c.Fix.Cmds {
+		for _, cmd := range c.Fix.Preview() {
 			in.Cmds = append(in.Cmds, append([]string{}, cmd.Full()...))
 		}
 	}
@@ -70,7 +70,7 @@ func Eligible(c doctor.Check) (ok bool, reason string) {
 	case c.Fix.Irreversible, irreversible[c.Name]:
 		return false, "the step is irreversible and is always asked"
 	}
-	for _, cmd := range c.Fix.Cmds {
+	for _, cmd := range c.Fix.Preview() {
 		if cmd.Sudo {
 			return false, "the step runs a command with sudo"
 		}

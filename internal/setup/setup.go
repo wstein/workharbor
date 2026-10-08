@@ -526,7 +526,11 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				ui.Tool(tool)
 			}
 			o.RunLog.Step(s.Name, "fail", reason)
-			FailureSummaryCmd(ui, o.RunLog, causeOf(o.RunLog, reason), "fix the cause, then run:", nextCommand(o, s.Name, names(chosen[i:])))
+			cause := reason
+			if res.exit != nil && *res.exit != 0 { // a command failed: its own last line says why
+				cause = causeOf(o.RunLog, reason)
+			}
+			FailureSummaryCmd(ui, o.RunLog, cause, "fix the cause, then run:", nextCommand(o, s.Name, names(chosen[i:])))
 		}
 		out.Asked = !res.fixed
 		out.NeedsHuman = res.outcome == protocol.OutNeedsHuman
@@ -746,6 +750,8 @@ func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
 		}
 	case f.Desc != "":
 		plan(f.Desc)
+	case len(f.Preview()) == 0:
+		plan("run the commands this step builds from your configuration")
 	case len(f.Preview()) == 1:
 		plan("run this command")
 	default:
