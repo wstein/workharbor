@@ -12,6 +12,16 @@ Report it privately through GitHub: open the [Security tab](https://github.com/w
 
 This is a small project maintained by one person. Reports are handled on a best-effort basis: expect an acknowledgement, not a guaranteed timeline for a fix. The aim is to acknowledge every report within 14 days; this is a goal, not a promise. Please allow reasonable time to fix an issue before disclosing it publicly.
 
+## Response process
+
+What happens after a report arrives. The timings are goals, not promises, in line with the best-effort wording above.
+
+1. **Triage.** The maintainer acknowledges the report (goal: within 14 days), reproduces it and judges severity and whether it is in scope. The reporter is told the outcome, and asked for more detail if needed.
+2. **Private fix.** The fix is prepared out of public view, in the private temporary fork of the report's GitHub security advisory or in a draft advisory, so that nothing public points at the problem before a fix exists. The reporter may be invited to review it.
+3. **Release.** The fix is released in a new alpha, the latest one being the only supported release (see Status).
+4. **Advisory.** After the release, the advisory is published on GitHub with the affected and fixed versions. The reporter is credited by name or handle if they want it, and stays unnamed if they prefer.
+5. **Disclosure timeline.** The goal is to publish within 90 days of the report, sooner when a fix is ready. A complex fix or a dependency on a third party can take longer; the reporter is told when that happens and the date is agreed with them where possible.
+
 ## Scope
 
 In scope:
