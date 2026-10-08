@@ -7,7 +7,7 @@ toc: true
 
 ## Landing through pull requests (#407)
 
-{{< status open >}} Design only; no workflow, ruleset change or script exists yet. Human decision (8 October 2026): landing is fragile and hurts DX, so it moves to the standard GitHub pull request flow. Until the first PR-flow merge succeeded, `make land` stays the only way to land.
+{{< status open >}} Design only; no workflow, ruleset change or script exists yet. Human decision (8 October 2026): landing is fragile and hurts DX, so it moves to the standard GitHub pull request flow. `make land` stays the default way until step 4 succeeded.
 
 Each item of the issue checklist is marked here as verified (how) or unverified. Verified on 8 October 2026 with read-only `gh api` GET calls, the repository files, or GitHub documentation as recalled (named as such).
 
@@ -72,7 +72,7 @@ CLEAR is bound to a head SHA. A rebase changes every SHA after the first changed
 
 In this repository: `scripts/land.sh` and its tests (`scripts/land_*_test.go`, `scripts/linear_land_test.go`, `scripts/land_confirmation_test.go`); the Makefile targets `land`, `land-list`, `land-next`, `land-all`, `land-preview` (and `.PHONY`); the `land` pointer branch and its deprecated name `landing` (`.agents/design.md`, `.agents/helper.md`, `.agents/review.md`); `refs/notes/review` and `refs/notes/confirm` and `docs/confirmation-record.md` with `internal/confirm` (decide: keep as history or retire); `TO_LAND.md` (kept by the dispatcher outside git here; not present in the tree); `scripts/index-state.sh` and `.claude/settings.json` allowances that mention landing; `AGENTS.md` (commands line, "Merge into `main` only through `make land`", board statuses); `.agents/code.md`, `.agents/docs.md`, `.agents/dispatch.md`, `.agents/review.md`; `docs/content/docs/manual/sessions-and-agents.md` (landing, landing order, `land-preview`); and `CONTRIBUTING.md`.
 
-In crewbook (merged mode): `docs/git-history.md#landing-pointer` and `#rebase-re-review`, and the `tools/review_lines.py` gate, plus the same landing text in its agent docs. {{< status unverified >}} I could not read those files; the desk files that issue (checklist 9).
+In crewbook (merged mode): `docs/git-history.md#landing-pointer` and `#rebase-re-review`, and the `tools/review_lines.py` gate, plus the same landing text in its agent docs. {{< status unverified >}} Those files could not be read; the desk files that issue (checklist 9).
 
 ### Migration plan
 
