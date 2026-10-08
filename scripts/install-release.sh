@@ -111,7 +111,7 @@ if [ -n "${WHR_RELEASE_DIR:-}" ]; then
 else
   base="https://github.com/$repo/releases/download/$tag"
   fetch() { # fetch <file>: curl, then gh for a draft
-    if command -v curl >/dev/null && curl -fsSL --proto '=https' -o "$work/$1" "$base/$1" 2>/dev/null; then
+    if command -v curl >/dev/null && curl -fsSL --proto '=https' --tlsv1.2 --max-redirs 5 -o "$work/$1" "$base/$1"; then
       return 0
     fi
     [ "$have_gh" -eq 1 ] && gh release download "$tag" --repo "$repo" --dir "$work" --pattern "$1" 2>/dev/null
@@ -133,7 +133,7 @@ fi
 if [ "$have_gh" -eq 1 ]; then
   # The tag's commit, so an attestation made for another commit does not pass.
   commit="$(gh api "repos/$repo/commits/refs/tags/$tag" --jq .sha 2>/dev/null)" || commit=""
-  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "cannot read the commit of tag $tag in $repo"
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "cannot read the commit of tag $tag in $repo (is gh signed in? gh auth login)"
   for f in "$mac" "$guest"; do
     gh attestation verify "$work/$f" --repo "$repo" \
       --signer-workflow "$repo/.github/workflows/release.yml" \
@@ -145,11 +145,13 @@ else
   echo "install-release: caveat: only the checksums were verified, not the origin (no attestation check without gh)" >&2
 fi
 
-# The whr user must not be able to write what root runs: refuse a prefix tree that
-# is group- or world-writable.
+# The whr user must not be able to write what root runs: refuse an existing prefix
+# directory (judged by its target when it is a symlink) that is group- or
+# world-writable or not owned by the user running this script.
+me="$(id -u)"
 for d in "$prefix" "$prefix/bin" "$prefix/libexec" "$prefix/libexec/whr"; do
-  if [ -d "$d" ] && [ -n "$(find "$d" -maxdepth 0 \( -perm -020 -o -perm -002 \) 2>/dev/null)" ]; then
-    die "$d is group- or world-writable: the whr user must not be able to write the prefix"
+  if [ -d "$d" ] && [ -n "$(find -H "$d" -maxdepth 0 \( -perm -020 -o -perm -002 -o ! -user "$me" \) 2>/dev/null)" ]; then
+    die "$d is group- or world-writable or not owned by uid $me: the whr user must not be able to write the prefix"
   fi
 done
 
