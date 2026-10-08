@@ -53,25 +53,25 @@ func (d Deps) inspectFolder(ctx context.Context, root string) (folder, Status, s
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || shown != root {
 		return folder{}, Fail, "the workspace root " + shown + " is not a clean absolute path"
 	}
-	anc := root
+	ancestor := root
 	for {
-		if _, err := os.Lstat(anc); err == nil {
+		if _, err := os.Lstat(ancestor); err == nil {
 			break
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return folder{}, NotVerified, "the workspace root " + shown + " cannot be looked at: " + oneLine(err.Error())
 		}
-		anc = filepath.Dir(anc)
+		ancestor = filepath.Dir(ancestor)
 	}
-	if res, err := filepath.EvalSymlinks(anc); err != nil || res != anc {
-		return folder{}, Fail, "the workspace root " + shown + " is under a symbolic link (" + textsafe.Escape(anc) + "): give the real path"
+	if res, err := filepath.EvalSymlinks(ancestor); err != nil || res != ancestor {
+		return folder{}, Fail, "the workspace root " + shown + " is under a symbolic link (" + textsafe.Escape(ancestor) + "): give the real path"
 	}
-	out, err := d.output(ctx, "df", "-P", anc)
+	out, err := d.output(ctx, "df", "-P", ancestor)
 	if err != nil {
-		return folder{}, NotVerified, "df did not say which disk " + textsafe.Escape(anc) + " is on: " + oneLine(err.Error())
+		return folder{}, NotVerified, "df did not say which disk " + textsafe.Escape(ancestor) + " is on: " + oneLine(err.Error())
 	}
 	m := dfMount.FindStringSubmatch(out)
 	if m == nil {
-		return folder{}, NotVerified, "df's answer for " + textsafe.Escape(anc) + " could not be read"
+		return folder{}, NotVerified, "df's answer for " + textsafe.Escape(ancestor) + " could not be read"
 	}
 	mount := strings.TrimSpace(m[1])
 	if rest, ok := strings.CutPrefix(root, "/Volumes/"); ok {
@@ -84,7 +84,7 @@ func (d Deps) inspectFolder(ctx context.Context, root string) (folder, Status, s
 		return folder{}, Fail, "the workspace root " + shown + " is outside its volume " + textsafe.Escape(mount)
 	}
 	f := folder{Path: root}
-	if anc != root {
+	if ancestor != root {
 		return f, Fail, "the workspace root " + shown + " does not exist"
 	}
 	if fi, err := os.Lstat(root); err != nil || !fi.IsDir() {

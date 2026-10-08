@@ -139,8 +139,8 @@ func TestAVolumeThatIsNotMountedIsRefused(t *testing.T) {
 	if err := os.WriteFile(d.ConfigPath, []byte(`{"roots":{"workspaces":["/Volumes/NoSuchDisk395/workspaces"]}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, anc := range []string{"/Volumes", "/"} {
-		r["df -P "+anc] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
+	for _, ancestor := range []string{"/Volumes", "/"} {
+		r["df -P "+ancestor] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
 	}
 	st, msg := folderStep(t, d).Run(context.Background())
 	if st != Fail || !strings.Contains(msg, "is not mounted") {

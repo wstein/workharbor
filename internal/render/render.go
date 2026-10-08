@@ -328,7 +328,7 @@ var secretPrompt = regexp.MustCompile(`(?i)\b(pass(word|phrase|code|wort)|kennwo
 
 // promptError spots a line that reports a failure and merely names the
 // password ("invalid password for user:"): it is a real error, not a prompt.
-var promptError = regexp.MustCompile(`(?i)\b(invalid|incorrect|wrong|fail(ed|ure)?|error|denied|sorry|unknown|ung[uü]ltig|falsch\w*|fehler)\b`)
+var promptError = regexp.MustCompile(`(?i)\b(invalid|incorrect|wrong|failed|failure|fail|error|denied|sorry|unknown|ung[uü]ltig|falsch\w*|fehler)\b`)
 
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 

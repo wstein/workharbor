@@ -40,7 +40,7 @@ design owner is the `wh/design` session; the human is Werner.
   see it fail for the reason the issue names, then write the code that makes
   it pass. For a bug, first reproduce it with one command, before any
   hypothesis; that command becomes the regression test.
-- Tests clean their temp dirs and HOMEs with `t.TempDir()`; never `os.MkdirTemp` without cleanup.
+- Tests clean their temp dirs and home directories with `t.TempDir()`; never `os.MkdirTemp` without cleanup.
 - Commits: atomic Conventional Commits, so an issue usually lands as several
   (a test goes in the commit with the code that makes it pass, keeping every
   commit green), with `Refs: #N` (`Closes: #N` on the
