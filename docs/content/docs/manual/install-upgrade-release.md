@@ -19,14 +19,14 @@ The managed dogfood or reference-host supervisor runs an installed binary built 
 
 ## Before `v0.1.0`: a draft release
 
-Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (`v0.1.0-alpha.1` to `v0.1.0-alpha.3` are, {{< status unverified >}} for the pre-release flag beyond `gh release list` on 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`:
+Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (the `v0.1.0-alpha.N` pre-releases are, per `gh release list`, 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`:
 
 ```bash
 make install-release VERSION=v0.1.0-alpha.1            # prefix /opt/whr
 make install-release VERSION=v0.1.0-alpha.1 PREFIX=/some/prefix
 ```
 
-You need `gh` (`brew install gh`), signed in as a writer of the repository: a draft can be downloaded only by a writer. The script downloads the macOS archive (`whr_<tag>_darwin_arm64.tar.gz`), the guest archive (`whr-guest_<tag>_linux_arm64.tar.gz`) and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
+You need `gh` (`brew install gh`), signed in (`gh auth login`); a draft of a final release can be downloaded only by a writer, a published pre-release does not need that. The script downloads the macOS archive (`whr_<tag>_darwin_arm64.tar.gz`), the guest archive (`whr-guest_<tag>_linux_arm64.tar.gz`) and `checksums.txt`, checks both archives against the checksums and against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
 
 ### Verify a download yourself
 

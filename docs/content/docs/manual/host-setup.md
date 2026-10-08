@@ -304,9 +304,9 @@ chmod 600 ~/.config/whr/github-app.pem
 
 ## 13. Install and configure whr (dogfood)
 
-Until `v0.1.0` the host runs a **dogfood draft release**: a signed prerelease tag `v0.1.0-alpha.N` on `main` that CI built and attested and that is published as a pre-release ([design D24, D34](../design/decisions.md)). Nothing is built on the host. Only pre-releases exist so far. From `v0.1.0` on, `brew install wstein/tap/whr` replaces step 1.
+Until `v0.1.0` the host runs a **dogfood pre-release**: a signed prerelease tag `v0.1.0-alpha.N` on `main` that CI built and attested and that is published as a pre-release ([design D24, D34](../design/decisions.md)). Nothing is built on the host. Only pre-releases exist so far. From `v0.1.0` on, `brew install wstein/tap/whr` replaces step 1.
 
-1. **Install, as the administrator.** A draft can be downloaded only by a writer of the repository, so this runs with your own GitHub login (`gh auth login`), never in `workharbor`'s account. The prefix belongs to the administrator, so nothing running as `workharbor`, an agent that escaped included, can replace the supervisor. If `workharbor` itself is the administrator that runs this, the prefix belongs to `root` instead (`sudo install -d -o root -g wheel -m 755 /opt/whr`), and `whr doctor` fails a prefix, `bin` or `bin/whr` owned by the account the supervisor runs as (D49):
+1. **Install, as the administrator.** The published pre-release needs only a `gh` login (a draft of a final release can be downloaded only by a writer), so this runs with your own GitHub login (`gh auth login`), never in `workharbor`'s account. The prefix belongs to the administrator, so nothing running as `workharbor`, an agent that escaped included, can replace the supervisor. If `workharbor` itself is the administrator that runs this, the prefix belongs to `root` instead (`sudo install -d -o root -g wheel -m 755 /opt/whr`), and `whr doctor` fails a prefix, `bin` or `bin/whr` owned by the account the supervisor runs as (D49):
 
     ```bash
     sudo install -d -o "$(id -un)" -g admin -m 755 /opt/whr
