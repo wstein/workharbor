@@ -10,7 +10,7 @@ Please **do not open a public issue** for a security problem.
 
 Report it privately through GitHub: open the [Security tab](https://github.com/wstein/workharbor/security/advisories/new) and choose **Report a vulnerability**. Include what you found, where, and how to reproduce it.
 
-This is a small project maintained by one person. Reports are handled on a best-effort basis: expect an acknowledgement, not a guaranteed timeline. Please allow reasonable time to fix an issue before disclosing it publicly.
+This is a small project maintained by one person. Reports are handled on a best-effort basis: expect an acknowledgement, not a guaranteed timeline for a fix. The aim is to acknowledge every report within 14 days; this is a goal, not a promise. Please allow reasonable time to fix an issue before disclosing it publicly.
 
 ## Scope
 
