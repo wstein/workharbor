@@ -453,3 +453,81 @@ func TestAFailingAttestationInstallsNothing(t *testing.T) {
 		t.Errorf("the checksum-only caveat was printed:\n%s", out)
 	}
 }
+
+// firstBashBlock returns the first ```bash block after the line that starts with heading.
+func firstBashBlock(t *testing.T, path, heading string) string {
+	t.Helper()
+	b, err := os.ReadFile(path) //nolint:gosec // a repository path
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	i := strings.Index(s, "\n"+heading)
+	if i < 0 {
+		t.Fatalf("%s: no heading %q", path, heading)
+	}
+	s = s[i:]
+	start := strings.Index(s, "```bash\n")
+	end := strings.Index(s[start+8:], "```")
+	if start < 0 || end < 0 {
+		t.Fatalf("%s: no bash block after %q", path, heading)
+	}
+	return s[start+8 : start+8+end]
+}
+
+// The pasted download blocks of the notes template and the install page run in
+// stock interactive zsh (where a # line is not a comment) against a local
+// file:// "release", and pass, or fail, on the checksum of install-release.sh.
+func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
+	t.Parallel()
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("no zsh")
+	}
+	blocks := map[string]string{
+		"template": firstBashBlock(t, "../docs/releases/TEMPLATE.md", "## Install"),
+		"manual":   firstBashBlock(t, "../docs/content/docs/manual/install-upgrade-release.md", "### Install without a clone or `gh`"),
+	}
+	sum := func(b string) string { h := sha256.Sum256([]byte(b)); return hex.EncodeToString(h[:]) }
+	for name, block := range blocks {
+		for _, line := range strings.Split(block, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") || strings.Contains(line, " #") {
+				t.Errorf("%s: a comment in a pasted block: %q", name, line)
+			}
+		}
+		if !strings.Contains(block, `cd "$(mktemp -d)"`) {
+			t.Errorf("%s: the block does not start in a fresh directory", name)
+		}
+		block = strings.ReplaceAll(block, "<tag>", "v0.2.0")
+		block = strings.Replace(block, "https://github.com/wstein/workharbor/releases/download/$tag", "file://$REL", 1)
+		if !strings.Contains(block, "file://$REL") {
+			t.Fatalf("%s: the download base was not found", name)
+		}
+		cases := map[string]struct {
+			files map[string]string
+			ok    bool
+		}{
+			"match":   {map[string]string{"install-release.sh": "echo hi\n", "checksums.txt": sum("x") + "  a.tar.gz\n" + sum("echo hi\n") + "  install-release.sh\n"}, true},
+			"changed": {map[string]string{"install-release.sh": "echo evil\n", "checksums.txt": sum("echo hi\n") + "  install-release.sh\n"}, false},
+			"no line": {map[string]string{"install-release.sh": "echo hi\n", "checksums.txt": sum("x") + "  a.tar.gz\n"}, false},
+			"no sums": {map[string]string{"install-release.sh": "echo hi\n"}, false},
+		}
+		for cname, c := range cases {
+			rel := t.TempDir()
+			for f, body := range c.files {
+				if err := os.WriteFile(filepath.Join(rel, f), []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.CommandContext(context.Background(), zsh, "-f", "-i", "-c", block) //nolint:gosec // a test script
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "REL=" + rel}
+			out, err := cmd.CombinedOutput()
+			if c.ok && (err != nil || !strings.Contains(string(out), "install-release.sh: OK")) {
+				t.Errorf("%s/%s: %v\n%s", name, cname, err, out)
+			}
+			if !c.ok && err == nil {
+				t.Errorf("%s/%s: the block passed:\n%s", name, cname, out)
+			}
+		}
+	}
+}
