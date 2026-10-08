@@ -189,7 +189,7 @@ func TestClaudePortablePermissions(t *testing.T) {
 		"Read(//Library/Keychains/**)", "Bash(cat /Library/Keychains:*)",
 		"Bash(grep -r /Library/Keychains:*)", "Bash(rg /Library/Keychains:*)",
 		"Bash(security:*)", "Bash(gh auth:*)", "Bash(git credential:*)",
-		"Bash(sudo:*)", "Bash(launchctl:*)", "Bash(git push:*)",
+		"Bash(sudo:*)", "Bash(launchctl:*)",
 		"Bash(git merge:*)", "Bash(git tag:*)", "Bash(gh pr merge:*)",
 		"Bash(gh release create:*)", "Bash(gh release edit:*)",
 		"Bash(gh release delete:*)", "Bash(gh release upload:*)",
@@ -199,6 +199,45 @@ func TestClaudePortablePermissions(t *testing.T) {
 			t.Errorf("missing retained command/system deny %s", rule)
 		}
 	}
+	// #448: the blanket Bash(git push:*) deny is replaced by scoped denies
+	// plus topic-branch allow rules.
+	if slices.Contains(settings.Permissions.Deny, "Bash(git push:*)") {
+		t.Errorf("blanket Bash(git push:*) deny must stay replaced by the scoped denies (#448)")
+	}
+	for _, rule := range gitPushScopedDenies {
+		if !slices.Contains(settings.Permissions.Deny, rule) {
+			t.Errorf("missing scoped git push deny %s (#448)", rule)
+		}
+	}
+	for _, rule := range gitPushTopicAllows {
+		if !slices.Contains(settings.Permissions.Allow, rule) {
+			t.Errorf("missing topic-branch push allow %s (#448)", rule)
+		}
+	}
+}
+
+// gitPushScopedDenies replace the blanket git push deny (#448): force forms,
+// +/: refspecs, main/master, HEAD, refs/, tags, delete, mirror, all, prune,
+// no-verify, and the git -C/-c/--git-dir/--work-tree bypasses.
+var gitPushScopedDenies = []string{
+	"Bash(git push*--force*)", "Bash(git push* -f*)", "Bash(git push* -uf*)",
+	"Bash(git push* -fu*)", "Bash(git push*+*)", "Bash(git push*:**)",
+	"Bash(git push*--delete*)", "Bash(git push* -d*)", "Bash(git push*--mirror*)",
+	"Bash(git push*--all*)", "Bash(git push*--tags*)", "Bash(git push*--follow-tags*)",
+	"Bash(git push*--prune*)", "Bash(git push*--no-verify*)",
+	"Bash(git push* main*)", "Bash(git push* master*)", "Bash(git push*HEAD*)",
+	"Bash(git push*refs/*)", "Bash(git push* tag *)",
+	"Bash(git -C * push*)", "Bash(git -c * push*)",
+	"Bash(git --git-dir* push*)", "Bash(git --work-tree* push*)",
+}
+
+// gitPushTopicAllows are the only push allow rules (#448): topic branches.
+var gitPushTopicAllows = []string{
+	"Bash(git push origin docs/*)", "Bash(git push -u origin docs/*)",
+	"Bash(git push origin fix/*)", "Bash(git push -u origin fix/*)",
+	"Bash(git push origin feat/*)", "Bash(git push -u origin feat/*)",
+	"Bash(git push origin chore/*)", "Bash(git push -u origin chore/*)",
+	"Bash(git push origin ci/*)", "Bash(git push -u origin ci/*)",
 }
 
 // TestClaudeSharedAllowExcludesBoardWrites is a negative guard: the dispatcher's
@@ -274,6 +313,16 @@ var allowedWildcardRules = []string{
 	"Bash(gh release list:*)",
 	"Bash(scripts/board-snapshot.sh card:*)",
 	"Bash(scripts/board-snapshot.sh queue:*)",
+	// #448: read-only CI watching.
+	"Bash(gh run watch:*)",
+	"Bash(gh pr checks:*)",
+	// #448: topic-branch pushes; main, master, force, refspec and bypass
+	// forms are denied by the scoped git push denies.
+	"Bash(git push origin docs/*)", "Bash(git push -u origin docs/*)",
+	"Bash(git push origin fix/*)", "Bash(git push -u origin fix/*)",
+	"Bash(git push origin feat/*)", "Bash(git push -u origin feat/*)",
+	"Bash(git push origin chore/*)", "Bash(git push -u origin chore/*)",
+	"Bash(git push origin ci/*)", "Bash(git push -u origin ci/*)",
 }
 
 // allowRuleHasKnownFirstWord is a static guard on the rule text, not a
