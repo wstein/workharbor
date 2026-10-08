@@ -68,6 +68,18 @@ Goal (human): fast local development, a loop under 5 minutes; Opus review before
 
 CLEAR is bound to a head SHA. A rebase changes every SHA after the first changed base, so each later PR needs new statuses. The patch-id inheritance of `land.sh` (#365) is lost: for an unchanged patch the desk re-posts the CLEAR on the new head together with a `git range-diff` showing the patches equal. Chained PR bases keep the diff small, but retargeting after the base merges still rebases. Expect one status round per PR per rebase; the fast lane (#405) needs one PR per lane.
 
+Measured on 2026-10-08 in `wstein/pr-stack-lab`, a lab repository with a copy of the real gate scripts from `main` 848057e (`gh stack` v0.2.0; ruleset requires only `gate` from the GitHub Actions app, rebase-only):
+
+1. The per-PR class works in a stack: a README PR on `main` is ordinary, a scripts PR on the parent branch is carve-out. Without a status both fail; with `review/sonnet` only, ordinary passes and carve-out fails; with `review/opus` the carve-out PR passes after a rerun.
+2. Posting a status does not start the gate; `gh run rerun` is needed, and a rerun of a still-running run is refused.
+3. The `ready_for_review` type fires the gate; a still-queued gate blocks `gh stack merge` atomically.
+4. With `gate` success on both heads, `gh stack merge` merged both PRs. Required checks are enforced per PR inside the atomic stack merge, so an unreviewed lower PR blocks the whole stack. A gate must use `base.sha`, never `base_ref` (in a stacked PR run `base_ref` was `main` while the PR base was the parent branch).
+5. After merging only the bottom PR, GitHub retargets the next PR to `main` and moves its head; the new head has no statuses and is blocked, so each remaining PR needs its review status re-posted on the new head plus a gate rerun after every merge below it.
+
+A status from a second account could not be measured alone; the allow-list check is unit-tested only {{< status unverified >}}.
+
+Rule: the human merges with `gh stack merge`; agents never merge. After every merge below a PR the head moves and its statuses are gone: the desk runs `scripts/stack-status.sh` (dry run first, then `--apply`), which re-posts `review/<tier>` on each current head, accepts a moved head only with a `git range-diff` proof that all patches are unchanged (`=`), and reruns the gate. A changed patch needs a new review.
+
 ### What must change at retirement
 
 In this repository: `scripts/land.sh` and its tests (`scripts/land_*_test.go`, `scripts/linear_land_test.go`, `scripts/land_confirmation_test.go`); the Makefile targets `land`, `land-list`, `land-next`, `land-all`, `land-preview` (and `.PHONY`); the `land` pointer branch and its deprecated name `landing` (`.agents/design.md`, `.agents/helper.md`, `.agents/review.md`); `refs/notes/review` and `refs/notes/confirm` and `docs/confirmation-record.md` with `internal/confirm` (decide: keep as history or retire); `TO_LAND.md` (kept by the dispatcher outside git here; not present in the tree); `scripts/index-state.sh` and `.claude/settings.json` allowances that mention landing; `AGENTS.md` (commands line, "Merge into `main` only through `make land`", board statuses); `.agents/code.md`, `.agents/docs.md`, `.agents/dispatch.md`, `.agents/review.md`; `docs/content/docs/manual/sessions-and-agents.md` (landing, landing order, `land-preview`); and `CONTRIBUTING.md`.
