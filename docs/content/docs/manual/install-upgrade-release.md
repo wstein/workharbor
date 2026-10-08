@@ -34,17 +34,27 @@ From the release after `v0.1.0-alpha.3` (which is immutable and has no such asse
 
 ```bash
 tag=v0.1.0-alpha.4   # example
-curl -fsSLO "https://github.com/wstein/workharbor/releases/download/$tag/install-release.sh"
-curl -fsSLO "https://github.com/wstein/workharbor/releases/download/$tag/checksums.txt"
-shasum -a 256 -c checksums.txt --ignore-missing   # install-release.sh: OK
-sudo bash install-release.sh "$tag"               # prefix /opt/whr, or add a prefix
+base=https://github.com/wstein/workharbor/releases/download/$tag
+curl -fsSLO "$base/install-release.sh" -O "$base/checksums.txt" &&
+shasum -a 256 -c checksums.txt --ignore-missing &&   # install-release.sh: OK
+sudo bash install-release.sh "$tag"                  # prefix /opt/whr, or add a prefix
 ```
 
-Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Install `gh` and rerun for the attestation. The `workharbor` user must not be able to write the prefix: the script refuses a prefix tree that is group- or world-writable. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable prefix) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
+With `gh`, verify the script itself first, before the `sudo` line: it runs as root, and its own attestation check proves nothing if the script was swapped.
+
+```bash
+commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
+gh attestation verify install-release.sh --repo wstein/workharbor \
+  --signer-workflow wstein/workharbor/.github/workflows/release.yml \
+  --source-ref refs/tags/$tag --source-digest "$commit" \
+  --deny-self-hosted-runners
+```
+
+Without `gh` the script checks `checksums.txt` only and prints a caveat: that proves the download is intact, not who built it. Install `gh` and rerun for the attestation. The `workharbor` user must not be able to write the prefix: the script refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it. Measured: the script's tests (`go test ./scripts`: no `gh`, checksum mismatch, downgrade, writable prefix) and a GoReleaser snapshot that lists the script in `checksums.txt`. {{< status unverified >}} until a release carries it: the upload as a release asset, the attestation over it and an install on a clean Apple-silicon Mac (#459).
 
 ### Verify a download yourself
 
-The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl` (from `v0.1.0-alpha.3`; alpha.1 and alpha.2 have none, so use the online form for them). The attestation covers the archives and the SBOM listed in `checksums.txt`, not `checksums.txt` itself: verify an archive, and check `checksums.txt` only with `shasum`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
+The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl` (from `v0.1.0-alpha.3`; alpha.1 and alpha.2 have none, so use the online form for them). The attestation covers the archives, the SBOM and (from the release after `v0.1.0-alpha.3`) `install-release.sh`, all listed in `checksums.txt`, not `checksums.txt` itself: verify an archive, and check `checksums.txt` only with `shasum`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
 
 ```bash
 tag=v0.1.0-alpha.3
