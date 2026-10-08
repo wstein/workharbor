@@ -232,6 +232,11 @@ func newLandBranchRepo(t *testing.T, moveMain bool) *landBranchRepo {
 		t.Fatal(err)
 	}
 	r.write(filepath.Join(r.dir, "scripts", "land.sh"), string(landScript))
+	classScript, err := os.ReadFile("path-class.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.write(filepath.Join(r.dir, "scripts", "path-class.sh"), string(classScript))
 	if err := os.Chmod(filepath.Join(r.dir, "scripts", "index-state.sh"), 0o700); err != nil { //nolint:gosec // the copied test script must be executable
 		t.Fatal(err)
 	}

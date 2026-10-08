@@ -28,7 +28,7 @@ Each item of the issue checklist is marked here as verified (how) or unverified.
 - **ordinary** (any CLEAR): `internal/exitcode/*`, `internal/version/*`, `internal/docscheck/*`, `docs/*.md`, `readme.md`, `changelog.md`, `contributing.md`, `license`.
 - One carve-out path makes the whole branch a carve-out. A carve-out tip with a Sonnet CLEAR passes only when every commit of `main..tip` is covered by its own Opus CLEAR or an equal patch-id (#365).
 
-Proposal: move the path matcher into one file, `scripts/path-class.sh` (POSIX sh, reads paths on stdin, prints `ordinary` or `carve-out`). The gate runs it from the base branch checkout (never from the PR head, so a PR cannot change the rule applied to itself), and `land.sh` calls it until retirement. Patch-id inheritance is not part of the gate (see Stacking cost).
+The path matcher is one file, `scripts/path-class.sh` (POSIX sh, reads newline-separated paths on stdin, prints `ordinary` or `carve-out`; a name containing a newline splits into fragments that fall to carve-out). The gate will run it from the base branch checkout (never from the PR head, so a PR cannot change the rule applied to itself), and `land.sh` calls it until retirement. Patch-id inheritance is not part of the gate (see Stacking cost).
 
 ### Verified and unverified
 

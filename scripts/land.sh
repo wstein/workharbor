@@ -248,22 +248,11 @@ if [ "$command" = resolve ]; then
   [ ! -e "$cgit/refs/notes/confirm.lock" ] || die "the confirmation notes ref is locked ($cgit/refs/notes/confirm.lock): refusing before main moves"
 fi
 files="$(git -c core.quotepath=off diff --no-renames --name-only -z "$base" "$full" | tr '\0' '\n')" || die "cannot diff against main"
-class=ordinary
-while IFS= read -r p; do
-  [ -n "$p" ] || continue
-  lp="$(printf '%s' "$p" | tr 'A-Z' 'a-z')"
-  # Ordinary is an allow-list on the lowercased path; carve-outs are matched first.
-  case "$lp" in
-  agents.md | */agents.md | claude.md | */claude.md | .claude/* | */.claude/* | .agents/* | */.agents/* | .github/*) class=carve-out ;;
-  docs/content/*design* | docs/content/*threat*) class=carve-out ;;
-  internal/exitcode/* | internal/version/* | internal/docscheck/*) ;;
-  docs/*.md) ;;
-  readme.md | changelog.md | contributing.md | license) ;;
-  *) class=carve-out ;;
-  esac
-done <<EOT
-$files
-EOT
+# The path matcher has one copy, scripts/path-class.sh (#410), taken from main's blob
+# like this script, never from the candidate. It gets the same newline-separated list.
+pcs="$(git --no-replace-objects show refs/heads/main:scripts/path-class.sh)" || die "cannot read main's scripts/path-class.sh"
+class="$(printf '%s\n' "$files" | sh -c "$pcs" path-class.sh)" || die "cannot derive the path class"
+case "$class" in ordinary | carve-out) ;; *) die "unexpected path class" ;; esac
 # Landing order and patch-id inheritance (#365). A commit is covered when it has
 # its own CLEAR of the needed tier (Opus for a carve-out, any model otherwise) or its
 # verbatim patch-id (whitespace counts) equals that of another noted commit with such
