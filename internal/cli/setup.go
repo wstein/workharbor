@@ -46,6 +46,10 @@ type SetupEnv struct {
 	// NoRunLog skips the default run log (issue #379) so a test's output stays
 	// fixed; an explicit --log-file is still written.
 	NoRunLog bool
+	// NoDeveloperHint skips the check that a whr owned by the account that
+	// runs it was started with --dev; a test whose binary sits in a directory of
+	// the test's own user sets it, because every file there is owned by it.
+	NoDeveloperHint bool
 }
 
 // installedPrefixes are the admin-owned places a whr may be installed (D24): the
@@ -207,6 +211,14 @@ func newSetup(st *state) *cobra.Command {
 			ui.Rule()
 		}
 		ctx := cmd.Context()
+		if hint := env.developerHint(exe); phase == doctor.PhaseUser && env.User == whrUser && !dev && !managed && hint != "" {
+			// --dev is chosen on purpose, never inferred, and --yes cannot take
+			// the choice: the run stops here, a dry run only says so
+			if !dryRun {
+				return usageError{hint}
+			}
+			ui.Note("note (dry run): " + hint)
+		}
 		if phase == doctor.PhaseHost {
 			admin := false
 			if env.User == whrUser {
@@ -622,4 +634,11 @@ func reportRunAs(phase doctor.Phase, notWhr bool, whrUser string) string {
 		return whrUser
 	}
 	return ""
+}
+
+func (e SetupEnv) developerHint(exe string) string {
+	if e.NoDeveloperHint {
+		return ""
+	}
+	return developerInstallHint(exe, e.UID)
 }

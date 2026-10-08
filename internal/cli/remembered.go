@@ -2,6 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -47,4 +50,29 @@ func rememberedPrefix(cmd *cobra.Command, dev, managed bool, configPath, exe str
 // set and neither --dev nor --prefix was given.
 func useRemembered(cmd *cobra.Command, dev bool, key string) bool {
 	return key != "" && !dev && !cmd.Flags().Changed("prefix")
+}
+
+// developerInstallHint is the sentence for a whr that looks like a developer
+// installation but was not selected with --dev: the account that runs
+// the supervisor owns the binary, so it could replace its own supervisor (D24,
+// D49), which only a development installation accepts, and only by name. It is
+// empty for anything else. The manual (installation, "development installation")
+// says --dev is selected explicitly and never inferred, so setup refuses and
+// doctor says so; neither carries on as if it were a managed install.
+func developerInstallHint(exe string, uid int) string {
+	if exe == "" || uid == 0 {
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return ""
+	}
+	fi, err := os.Stat(resolved)
+	if err != nil {
+		return ""
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != uid {
+		return ""
+	}
+	return fmt.Sprintf("this looks like a developer install: %s is owned by the account that runs whr, so it could replace its own supervisor; run it with --dev (see the manual, install-upgrade-release: development installation), or install whr with an administrator account", resolved)
 }

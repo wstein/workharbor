@@ -79,6 +79,9 @@ func newDoctor(st *state) *cobra.Command {
 				fmt.Fprintln(st.env.Stderr, developmentWarning)
 				ui.Rule()
 			}
+			if hint := env.developerHint(exe); env.User == whrUser && !dev && hint != "" {
+				ui.Note("note: " + hint)
+			}
 			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
 				ConfigPath: path,
