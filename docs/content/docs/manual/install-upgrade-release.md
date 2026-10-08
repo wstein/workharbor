@@ -109,6 +109,9 @@ or start a service. Remove `--only config-base` to run the other setup steps.
 by that user and lacks the managed installation's replacement protection.
 The account and remote-access checks still apply, and running as root or from a
 Git working tree is still refused.
+The user part of `whr setup` also refuses a `whr` that the `workharbor` account
+owns when `--dev` was not given (a `--prefix` in its own home is not a managed
+installation); `whr doctor` says so in a note. `--yes` does not take that choice.
 
 An explicit `--prefix /absolute/path` takes precedence over `$HOME/.local`.
 Use the same prefix with `make install`, setup and doctor. Symlinks are resolved
