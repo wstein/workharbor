@@ -30,24 +30,25 @@ You need `gh` (`brew install gh`), signed in as a writer of the repository: a dr
 
 ### Verify a download yourself
 
-The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
+The release signature is the keyless Sigstore build-provenance attestation the release job makes (D24): it binds each file to the release workflow, the tag and the tagged commit. The attestation bundle is attached to the release as `whr_<tag>.intoto.jsonl` (from `v0.1.0-alpha.3`; alpha.1 and alpha.2 have none, so use the online form for them). The attestation covers the archives and the SBOM listed in `checksums.txt`, not `checksums.txt` itself: verify an archive, and check `checksums.txt` only with `shasum`. Pin the workflow, the tag and the commit, not just the repository: without `--source-ref` and `--source-digest`, an older release's archive with its own `checksums.txt` passes (a downgrade).
 
 ```bash
-tag=v0.1.0-alpha.1
+tag=v0.1.0-alpha.3
+file=whr_0.1.0-alpha.3_darwin_arm64.tar.gz
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha)
-gh attestation verify <file> --repo wstein/workharbor \
+gh attestation verify "$file" --repo wstein/workharbor \
   --signer-workflow wstein/workharbor/.github/workflows/release.yml \
   --source-ref refs/tags/$tag --source-digest "$commit" \
   --deny-self-hosted-runners
 # offline, with the attached bundle:
-gh attestation verify <file> --repo wstein/workharbor --bundle whr_$tag.intoto.jsonl \
+gh attestation verify "$file" --repo wstein/workharbor --bundle whr_$tag.intoto.jsonl \
   --signer-workflow wstein/workharbor/.github/workflows/release.yml \
   --source-ref refs/tags/$tag --source-digest "$commit" \
   --deny-self-hosted-runners
 ```
 
 
-Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-release` does both. The exact `gh` flags (`--source-ref`, `--source-digest`, `--deny-self-hosted-runners` included), the offline check with `--bundle` and whether OpenSSF Scorecard counts the attached bundle as a signature are {{< status unverified >}} until a real draft release has been checked (#180).
+Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-release` does both. {{< status verified >}} on 2026-10-08 with `tag=v0.1.0-alpha.3` and `whr_0.1.0-alpha.3_darwin_arm64.tar.gz`: both forms above exit 0 (the repository is public, so the public Sigstore instance applies and the offline form needs no extra trust root), and the same command on `checksums.txt` fails with HTTP 404 because no attestation exists for its digest. Whether OpenSSF Scorecard counts the attached bundle as a signature is {{< status unverified >}} (#180).
 
 Then, as `workharbor`, build the tool store with the guest launcher (the script prints the exact command):
 
