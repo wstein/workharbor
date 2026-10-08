@@ -72,7 +72,7 @@ func newSourceInstall(t *testing.T) sourceInstall {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fake := "#!/bin/sh\nif [ \"$1\" = run ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\ndest=$1\nif [ -d \"$dest\" ]; then dest=$dest/whr; fi\nprintf '#!/bin/sh\\necho fixture-version\\n' > \"$dest\"\nchmod 700 \"$dest\"\n"
+	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\ndest=$1\nif [ -d \"$dest\" ]; then dest=$dest/whr; fi\nprintf '#!/bin/sh\\necho fixture-version\\n' > \"$dest\"\nchmod 700 \"$dest\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestSourceInstallSmokeFailureNamesCodesign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fake := "#!/bin/sh\nif [ \"$1\" = run ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\nprintf '#!/bin/sh\\nexit 137\\n' > \"$1\"\nchmod 700 \"$1\"\n"
+	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\nprintf '#!/bin/sh\\nexit 137\\n' > \"$1\"\nchmod 700 \"$1\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
 		t.Fatal(err)
 	}
