@@ -45,12 +45,11 @@ jobs:
           v="${TAG#v}"
           mkdir -p "$RUNNER_TEMP/rel"
           gh release download "$TAG" --repo "$REPO" --dir "$RUNNER_TEMP/rel" \
-            --pattern "whr_${v}_darwin_arm64.tar.gz" --pattern "whr-guest_${v}_linux_arm64.tar.gz" --pattern checksums.txt
+            --pattern "whr_${v}_darwin_arm64.tar.gz" --pattern checksums.txt
           cd "$RUNNER_TEMP/rel"
-          for f in "whr_${v}_darwin_arm64.tar.gz" "whr-guest_${v}_linux_arm64.tar.gz"; do
-            awk -v f="$f" '$2 == f' checksums.txt | sha256sum -c -
-            gh attestation verify "$f" --repo "$REPO" --signer-workflow "$REPO/.github/workflows/release.yml"
-          done
+          f="whr_${v}_darwin_arm64.tar.gz"
+          awk -v f="$f" '$2 == f' checksums.txt | sha256sum -c -
+          gh attestation verify "$f" --repo "$REPO" --signer-workflow "$REPO/.github/workflows/release.yml"
       - name: Render the formula
         run: scripts/homebrew-formula.sh "$TAG" "$RUNNER_TEMP/rel/checksums.txt" > "$RUNNER_TEMP/whr.rb"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
