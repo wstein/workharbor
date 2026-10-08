@@ -46,7 +46,7 @@ func (d Deps) publicURLStep() Check {
 			n, err := config.NormalizePublicURL(raw)
 			if err != nil || n != strings.TrimSuffix(raw, "/") {
 				if err == nil {
-					return Fail, "public_url " + textsafe.Escape(raw) + " is not in its normal form; this step writes " + n
+					return Fail, "public_url " + textsafe.Escape(raw) + " is not in its normal form; the fix writes " + n
 				}
 				return Fail, "public_url " + textsafe.Escape(raw) + ": " + oneLine(err.Error())
 			}
