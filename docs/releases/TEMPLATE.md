@@ -17,11 +17,10 @@ macOS on Apple silicon; needs only `curl`, `shasum`, `tar` and `install`. Replac
 ```bash
 tag=<tag>; base=https://github.com/wstein/workharbor/releases/download/$tag
 curl -fsSLO "$base/install-release.sh" -O "$base/checksums.txt" &&
-shasum -a 256 -c checksums.txt --ignore-missing &&   # install-release.sh: OK
-sudo bash install-release.sh "$tag"
+shasum -a 256 -c checksums.txt --ignore-missing   # install-release.sh: OK
 ```
 
-With the GitHub CLI (`gh`) installed, first verify the script itself, because the installer runs as root and its own attestation check proves nothing if the script was swapped. Run this before the `sudo` line:
+With the GitHub CLI (`gh`) installed, verify the script itself next, because the installer runs as root and its own attestation check proves nothing if the script was swapped:
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -29,6 +28,12 @@ gh attestation verify install-release.sh --repo wstein/workharbor \
   --signer-workflow wstein/workharbor/.github/workflows/release.yml \
   --source-ref refs/tags/$tag --source-digest "$commit" \
   --deny-self-hosted-runners
+```
+
+Then run the installer as the administrator:
+
+```bash
+sudo bash install-release.sh "$tag"
 ```
 
 The script then also verifies the archives' attestation; without `gh` only the checksums are checked, which proves the download is intact, not who built it. The `workharbor` user must not be able to write the prefix. Full guide: [Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
