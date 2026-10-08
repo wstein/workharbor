@@ -75,9 +75,9 @@ These tool sets are no longer enforced: the deleted `wh-helper*` prompts restric
 - Board: only the design lane runs the board-wide drift check; every other
   lane checks `scripts/board-snapshot.sh card <n>` and reports drift to
   `wh/dispatch`. The drift to look for: a closed issue whose card is not
-  `Done`; an open issue whose card is `Done`; `Ready to push` without a
-  `CLEAR <full sha> role=review model=<m>` comment or with a sha not in `main`;
-  `In review` or `Ready to push` whose commits are already on `origin/main`
+  `Done`; an open issue whose card is `Done`; a PR opened without a
+  `CLEAR <full sha> role=review model=<m>` comment;
+  `In review` whose commits are already on `origin/main`
   while the issue is open; `In progress` with no commit for a day or no
   `Session`; a criterion ticked without a commit or comment that shows it, or
   a closed issue with unticked criteria and no comment saying why; an open
