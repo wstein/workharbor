@@ -344,3 +344,59 @@ func TestSourceInstallRejectsUnsafeInputs(t *testing.T) {
 		})
 	}
 }
+
+// DESTDIR stages the install (#473): every write lands under it, the real PREFIX
+// (here a path that does not exist, so it would be refused without DESTDIR) is never
+// touched, and the staged tree carries no trace of DESTDIR in what it installs.
+func TestSourceInstallDestdirStagesUnderDestdirOnly(t *testing.T) {
+	s := newSourceInstall(t)
+	const prefix = "/whr-473-destdir-prefix"
+	destdir := t.TempDir()
+	run := func(args ...string) (string, error) {
+		cmd := exec.CommandContext(context.Background(), "make", append([]string{"install", "PREFIX=" + prefix}, args...)...) //nolint:gosec // fixture-controlled arguments, no shell
+		cmd.Dir, cmd.Env = s.repo, s.env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(); err == nil {
+		t.Fatalf("a missing PREFIX without DESTDIR must be refused:\n%s", out)
+	}
+	staleVersion := filepath.Join(destdir, prefix, "libexec", "whr", "VERSION")
+	if err := os.MkdirAll(filepath.Dir(staleVersion), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staleVersion, []byte("old-release\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run("DESTDIR=" + destdir)
+	if err != nil {
+		t.Fatalf("staged install: %v\n%s", err, out)
+	}
+	for _, name := range []string{"bin/whr", "libexec/whr/whr-shim-linux-arm64", "libexec/whr/whr-proxy-linux-arm64"} {
+		if _, err := os.Stat(filepath.Join(destdir, prefix, name)); err != nil {
+			t.Errorf("missing staged %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(staleVersion); !os.IsNotExist(err) {
+		t.Errorf("staged VERSION was kept: %v", err)
+	}
+	if _, err := os.Lstat(prefix); !os.IsNotExist(err) {
+		t.Errorf("the real PREFIX was touched: %v", err)
+	}
+	if !strings.Contains(out, prefix+"/bin/whr setup") || strings.Contains(out, destdir+prefix+"/bin/whr setup") {
+		t.Errorf("messages must name PREFIX, not DESTDIR:\n%s", out)
+	}
+	// Staging into a fresh DESTDIR, where the prefix does not exist yet, works too.
+	fresh := t.TempDir()
+	if out, err := run("DESTDIR=" + fresh); err != nil {
+		t.Fatalf("staged install into an empty DESTDIR: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(fresh, prefix, "bin", "whr")); err != nil {
+		t.Errorf("missing staged whr in an empty DESTDIR: %v", err)
+	}
+	for _, bad := range []string{"relative/dir", destdir + "/", "/", filepath.Join(destdir, "missing")} {
+		if out, err := run("DESTDIR=" + bad); err == nil {
+			t.Errorf("DESTDIR=%q must be refused:\n%s", bad, out)
+		}
+	}
+}
