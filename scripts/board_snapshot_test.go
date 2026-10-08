@@ -1029,7 +1029,6 @@ func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
 		{"priority", "x", "P1"},
 		{"add", "12 13"},
 		{"add", "12", "x"},
-		{"ready", "12", "13", "Done"},
 		{"move", "12", "13", "Done"},
 		{"move", "12", "13", "Merged"},
 		{"move", "12", "x", "Todo"},
@@ -1053,7 +1052,7 @@ func TestBoardSnapshotWriteRejectsBadValues(t *testing.T) {
 	}
 }
 
-func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
+func TestBoardSnapshotMoveRefusesDone(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow: runs in the full suite (make test)")
@@ -1063,10 +1062,10 @@ func TestBoardSnapshotMoveRefusesReviewGateStatuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := b.calls(t)
-	for _, st := range []string{"Ready to push", "Done"} {
+	for _, st := range []string{"Done"} {
 		_, se, err := b.run(t, "move", "20", st)
-		if err == nil || !strings.Contains(se, "wh/review") || !strings.Contains(se, "board-snapshot.sh ready") {
-			t.Fatalf("move %q: err %v, stderr %q; want a refusal naming wh/review and ready", st, err, se)
+		if err == nil || !strings.Contains(se, "does not set") {
+			t.Fatalf("move %q: err %v, stderr %q; want a refusal", st, err, se)
 		}
 	}
 	if b.calls(t) != base {
@@ -1115,28 +1114,6 @@ func TestBoardSnapshotStaleLockTakeoverConcurrent(t *testing.T) {
 	}
 	if got := len(b.lines(t)); got < 1+3*len(nums) || got > 1+4*len(nums) {
 		t.Errorf("gh calls = %d, want %d to %d", got, 1+3*len(nums), 1+4*len(nums))
-	}
-}
-
-func TestBoardSnapshotReadySetsReadyToPush(t *testing.T) {
-	t.Parallel()
-	b := newBoard(t)
-	if _, _, err := b.run(t); err != nil {
-		t.Fatal(err)
-	}
-	if _, se, err := b.run(t, "ready", "20"); err != nil {
-		t.Fatalf("ready: %v %s", err, se)
-	}
-	if got := b.card(t, "20"); !strings.Contains(got, "\tReady to push\t") {
-		t.Fatalf("card = %q", got)
-	}
-	if !strings.Contains(strings.Join(b.lines(t), "\n"), "-f o=O_rp") {
-		t.Fatalf("gh calls = %q", b.lines(t))
-	}
-	for _, args := range [][]string{{"ready"}, {"ready", "20", "Done"}, {"ready", "x"}} {
-		if _, _, err := b.run(t, args...); err == nil {
-			t.Errorf("%q accepted", args)
-		}
 	}
 }
 
@@ -1250,13 +1227,12 @@ func TestBoardSnapshotSeveralIssues(t *testing.T) {
 		{"move", "10", "20", "30", "Blocked"},
 		{"session", "10", "20", "Werner"},
 		{"priority", "10", "20", "P3"},
-		{"ready", "10", "20", "20"},
 	} {
 		if _, se, err := b.run(t, args...); err != nil {
 			t.Fatalf("%v: %v %s", args, err, se)
 		}
 	}
-	if got := b.card(t, "10"); !strings.HasPrefix(got, "#10\tReady to push\tWerner\tP3\t") {
+	if got := b.card(t, "10"); !strings.HasPrefix(got, "#10\tBlocked\tWerner\tP3\t") {
 		t.Fatalf("card 10 = %q", got)
 	}
 	if got := b.card(t, "30"); !strings.HasPrefix(got, "#30\tBlocked\t") {
