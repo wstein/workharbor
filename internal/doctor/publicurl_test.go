@@ -220,3 +220,23 @@ func TestTheTailscalePortIsOnlyEverAPlainPortNumber(t *testing.T) {
 		t.Errorf("65535 gave %q", got)
 	}
 }
+
+func TestTheTailscaleCommandRunIsTheOneThatWasShown(t *testing.T) {
+	d := tailscaleDeps(t, `{"listen":"127.0.0.1:9191"}`, scripted{}, "tailscale")
+	c := steps(t, d)["tailscale-serve"]
+	shown := c.Fix.Preview()
+	if err := os.WriteFile(d.ConfigPath, []byte(`{"listen":"127.0.0.1:9292"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmds, err := c.Fix.Build(context.Background(), &answers{})
+	if err != nil || strings.Join(cmds[0].Argv, " ") != strings.Join(shown[0].Argv, " ") {
+		t.Errorf("shown %+v, built %+v, %v", shown, cmds, err)
+	}
+}
+
+func TestAnUnnormalisedPublicURLNamesTheFixAsTheWriter(t *testing.T) {
+	c := steps(t, publicDeps(t, `{"public_url":"https://W.ts.net/"}`, scripted{}))["public-url"]
+	if st, detail := status(c); st != Fail || !strings.Contains(detail, "the fix writes") {
+		t.Errorf("%s %q", st, detail)
+	}
+}

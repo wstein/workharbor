@@ -6,6 +6,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"sync"
 )
 
 // brewPath is the Homebrew the setup steps call (the brew-pin step does too).
@@ -105,12 +106,19 @@ func (d Deps) lookPath(name string) (string, error) {
 // `tailscale serve --bg <port>`, the port from the configuration's listen. It
 // never uses funnel and holds no key.
 func (d Deps) tailscaleServeStep() Check {
+	// The first call decides the command; the preview and the run share it, so
+	// a configuration edit in between cannot run something other than what was shown.
+	var once sync.Once
+	var fixed []Cmd
 	cmds := func() []Cmd {
-		bin, ok := d.tailscaleBin()
-		if !ok {
-			bin = "tailscale"
-		}
-		return []Cmd{{Argv: []string{bin, "serve", "--bg", d.listenPort()}}}
+		once.Do(func() {
+			bin, ok := d.tailscaleBin()
+			if !ok {
+				bin = "tailscale"
+			}
+			fixed = []Cmd{{Argv: []string{bin, "serve", "--bg", d.listenPort()}}}
+		})
+		return fixed
 	}
 	return Check{
 		Name: "tailscale-serve", Phase: PhaseHost, Step: 7, Title: "Tailscale forwards whr's port with HTTPS (manual step 7)", Optional: true,
