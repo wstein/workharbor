@@ -16,11 +16,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: install-source <existing development prefix>")
+	if len(os.Args) != 2 && len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: install-source <development prefix> [<staging DESTDIR>]")
 		os.Exit(2)
 	}
-	if err := check(os.Args[1]); err != nil {
+	destdir := ""
+	if len(os.Args) == 3 {
+		destdir = os.Args[2]
+	}
+	if err := check(os.Args[1], destdir); err != nil {
 		fmt.Fprintln(os.Stderr, "refusing source install:", err)
 		os.Exit(1)
 	}
@@ -55,19 +59,40 @@ func within(path, root string) bool {
 	}
 }
 
-func check(prefix string) error {
+// check validates prefix, the path the installed files are meant for. With a
+// non-empty destdir the files are written under destdir+prefix instead, so the
+// lexical prefix rules still apply to prefix, and the filesystem rules (exists,
+// owned, writable, outside Git) apply to the staged location.
+func check(prefix, destdir string) error {
 	if os.Getuid() == 0 || os.Geteuid() == 0 {
 		return fmt.Errorf("root must use the signed managed install-release path")
 	}
 	if !filepath.IsAbs(prefix) || filepath.Clean(prefix) != prefix || strings.ContainsAny(prefix, "\n\r\t") {
 		return fmt.Errorf("development prefix must be an absolute clean path")
 	}
+	if destdir != "" {
+		if !filepath.IsAbs(destdir) || filepath.Clean(destdir) != destdir || destdir == string(filepath.Separator) || strings.ContainsAny(destdir, "\n\r\t") {
+			return fmt.Errorf("DESTDIR must be an absolute clean path other than / (no trailing slash)")
+		}
+		di, err := os.Stat(destdir)
+		if err != nil || !di.IsDir() {
+			return fmt.Errorf("DESTDIR must be an existing directory")
+		}
+	}
 	for _, managed := range []string{"/opt/whr", "/opt/homebrew", "/usr/local"} {
 		if prefix == managed || strings.HasPrefix(prefix, managed+string(filepath.Separator)) || within(prefix, managed) {
 			return fmt.Errorf("managed prefix requires signed install-release")
 		}
 	}
-	resolved, err := filepath.EvalSymlinks(prefix)
+	stage, staged := prefix, false
+	if destdir != "" {
+		stage = destdir + prefix
+		if _, err := os.Lstat(stage); os.IsNotExist(err) {
+			// mkdir -p creates the staged prefix; check the DESTDIR it lands in.
+			stage, staged = destdir, true
+		}
+	}
+	resolved, err := filepath.EvalSymlinks(stage)
 	if err != nil {
 		return fmt.Errorf("development prefix must already exist: %w", err)
 	}
@@ -157,6 +182,9 @@ func check(prefix string) error {
 		if p == filepath.Dir(p) {
 			break
 		}
+	}
+	if staged {
+		return nil
 	}
 	for _, rel := range []string{"bin", "libexec", "libexec/whr", "bin/whr", "libexec/whr/whr-shim-linux-arm64", "libexec/whr/whr-proxy-linux-arm64", "libexec/whr/VERSION"} {
 		path := filepath.Join(resolved, rel)
