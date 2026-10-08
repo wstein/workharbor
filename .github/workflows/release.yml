@@ -109,7 +109,17 @@ jobs:
           go-version: '1.27.x'
           cache: false # a release job must not restore a cache an earlier run could have poisoned
       - name: Release notes from git-cliff
-        run: npx --yes git-cliff@2.14.2 --config .config/cliff.toml --current --strip header --output "$RUNNER_TEMP/notes.md"
+        run: |
+          # docs/releases/<tag>.md is the reviewed summary. A missing file fails the
+          # job before anything is built: the release is a draft, but a draft with
+          # no summary is easy to publish by mistake, and the tag cannot be moved.
+          summary="docs/releases/${TAG}.md"
+          if [ ! -s "$summary" ]; then
+            echo "::error::$summary is missing or empty; commit it before tagging (see docs/releases/TEMPLATE.md)"
+            exit 1
+          fi
+          npx --yes git-cliff@2.14.2 --config .config/cliff.toml --current --strip header --output "$RUNNER_TEMP/changes.md"
+          { cat "$summary"; echo; cat "$RUNNER_TEMP/changes.md"; } > "$RUNNER_TEMP/notes.md"
       - name: Build and create the draft release
         run: go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --config .config/goreleaser.yaml --clean --release-notes "$RUNNER_TEMP/notes.md"
       - name: Attest build provenance of every artifact
