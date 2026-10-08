@@ -8,7 +8,6 @@
 <a href="https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge"></a>
 <a href="https://www.bestpractices.dev/projects/15300"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/15300/badge"></a>
 <a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white&style=flat-square"></a>
-<a href="docs/content/docs/design/roadmap.md"><img alt="Status: dogfooding release 1" src="https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg?style=flat-square"></a>
 <a href="docs/content/docs/design/_index.md"><img alt="Platform: macOS (Apple silicon)" src="https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white&style=flat-square"></a>
 </p>
 
