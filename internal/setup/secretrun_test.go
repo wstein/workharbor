@@ -154,8 +154,11 @@ func TestRunLogNeverHoldsTheSecret(t *testing.T) {
 			t.Errorf("log lacks %q: %q", want, got)
 		}
 	}
-	if strings.Contains(got[strings.Index(got, "tool output:"):], "User password") {
+	if strings.Contains(got[strings.Index(got, "exit 5"):], "User password") {
 		t.Errorf("the tool's secret prompt reached the log: %q", got)
+	}
+	if strings.Contains(got, "tool output:") || strings.Contains(lg.Tail(20), "| ") {
+		t.Errorf("the log holds the terminal's frame, which the failure tail adds once: %q", got)
 	}
 	if lg.Tail(2) == "" {
 		t.Error("no tail for the failure summary")

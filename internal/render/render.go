@@ -243,6 +243,16 @@ func Command(s Style, cmd string) string {
 	return line
 }
 
+// ActionCmd is an ACTION line that ends in a command: "text cmd" when it fits
+// the width, otherwise the text as an ACTION and the command on a line of its
+// own, because a command is never wrapped.
+func ActionCmd(s Style, text, cmd string) string {
+	if utf8.RuneCountInString(text)+1+utf8.RuneCountInString(cmd)+10 <= s.cols() {
+		return Action(s, text+" "+cmd)
+	}
+	return Action(s, text) + Command(s, cmd)
+}
+
 // Cmd is Command under the name of the other typed helpers.
 func Cmd(s Style, cmd string) string { return Command(s, cmd) }
 
@@ -273,7 +283,13 @@ func Question(s Style, text string) string {
 
 // ToolOutput sets what an outside tool printed apart: a label line, then each
 // line indented behind a marker. It is empty for empty text.
-func ToolOutput(s Style, text string) string {
+func ToolOutput(s Style, text string) string { return toolBlock(s, text, true) }
+
+// ToolTail is ToolOutput without its label, for text a line of its own
+// already introduces (the "last output:" of a failure).
+func ToolTail(s Style, text string) string { return toolBlock(s, text, false) }
+
+func toolBlock(s Style, text string, label bool) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
@@ -283,7 +299,9 @@ func ToolOutput(s Style, text string) string {
 		mark = "│"
 	}
 	var b strings.Builder
-	b.WriteString("    " + s.paint(RoleTool, "tool output:") + "\n")
+	if label {
+		b.WriteString("    " + s.paint(RoleTool, "tool output:") + "\n")
+	}
 	for _, l := range strings.Split(text, "\n") {
 		if strings.TrimSpace(l) == "" {
 			continue
@@ -317,6 +335,7 @@ type ToolWriter struct {
 	pend    []byte // incomplete trailing UTF-8 of the last Write
 	line    string // text of the current line so far, to spot a split prompt
 	skipNL  bool   // the newline that follows a dropped prompt is dropped too
+	bare    bool   // no label and no marker: the filtered text alone (for the log)
 }
 
 // secretPrompt matches a line a tool prints to ask for a secret ("Password:",
@@ -359,6 +378,28 @@ const NeutralPromptLine = "(a prompt for a secret is not shown: whr asks for pas
 
 // NewToolWriter returns a ToolWriter on w.
 func NewToolWriter(w io.Writer, s Style) *ToolWriter { return &ToolWriter{w: w, s: s, atStart: true} }
+
+// NewBareToolWriter is a ToolWriter that adds neither the "tool output:" label
+// nor the marker: it filters and escapes as the terminal one does and keeps the
+// text as the tool wrote it, for the run log. The failure tail shown later sets
+// that text apart once, so the log must not hold the frame already.
+func NewBareToolWriter(w io.Writer) *ToolWriter {
+	return &ToolWriter{w: w, atStart: true, bare: true}
+}
+
+func (t *ToolWriter) label() string {
+	if t.bare {
+		return ""
+	}
+	return "    " + t.s.paint(RoleTool, "tool output:") + "\n"
+}
+
+func (t *ToolWriter) lead(mark string) string {
+	if t.bare {
+		return ""
+	}
+	return "    " + t.s.paint(RoleTool, mark) + " "
+}
 
 // Write implements io.Writer. An incomplete UTF-8 character at the end is held
 // until the next Write (or End), so one split across writes stays whole.
@@ -404,13 +445,13 @@ func (t *ToolWriter) write(p []byte) error {
 		}
 		if t.line += strings.TrimRight(seg, "\r\n"); isSecretPrompt(t.line) {
 			if !t.started {
-				out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
+				out += t.label()
 				t.started = true
 			}
 			if !t.atStart {
 				out += "\n"
 			}
-			out += "    " + t.s.paint(RoleTool, mark+" "+NeutralPromptLine) + "\n"
+			out += t.lead(mark) + NeutralPromptLine + "\n"
 			t.line, t.atStart, t.skipNL = "", true, !nl
 			if _, err := io.WriteString(t.w, out); err != nil {
 				return err
@@ -421,11 +462,11 @@ func (t *ToolWriter) write(p []byte) error {
 			t.line = ""
 		}
 		if !t.started {
-			out += "    " + t.s.paint(RoleTool, "tool output:") + "\n"
+			out += t.label()
 			t.started = true
 		}
 		if t.atStart {
-			out += "    " + t.s.paint(RoleTool, mark) + " "
+			out += t.lead(mark)
 		}
 		// Tool output is untrusted: an escape sequence or a bare carriage
 		// return would act on the terminal, so every control is shown escaped.
@@ -570,6 +611,12 @@ func (w Writer) Note(text string) { w.put(Note(w.S, text)) }
 
 // Command writes a copyable command.
 func (w Writer) Command(cmd string) { w.put(Command(w.S, cmd)) }
+
+// ActionCmd writes ActionCmd.
+func (w Writer) ActionCmd(text, cmd string) { w.put(ActionCmd(w.S, text, cmd)) }
+
+// ToolTail writes ToolTail.
+func (w Writer) ToolTail(text string) { w.put(ToolTail(w.S, text)) }
 
 // Tool writes an outside tool's output apart from whr's own text.
 func (w Writer) Tool(text string) { w.put(ToolOutput(w.S, text)) }

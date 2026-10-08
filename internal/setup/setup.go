@@ -517,7 +517,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				ui.Tool(tool)
 			}
 			o.RunLog.Step(s.Name, "fail", reason)
-			FailureSummary(ui, o.RunLog, reason, "fix the cause, then run: "+nextCommand(o, s.Name, names(chosen[i:])))
+			FailureSummaryCmd(ui, o.RunLog, causeOf(o.RunLog, reason), "fix the cause, then run:", nextCommand(o, s.Name, names(chosen[i:])))
 		}
 		out.Asked = !res.fixed
 		out.NeedsHuman = res.outcome == protocol.OutNeedsHuman
@@ -539,7 +539,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			dataLine(o, st, s.Name, detail)
 			report(ui, o, st, detail)
 			if st == doctor.Fail {
-				FailureSummary(ui, o.RunLog, oneLine(detail), "fix the cause, then run: "+nextCommand(o, s.Name, names(chosen[i:])))
+				FailureSummaryCmd(ui, o.RunLog, oneLine(detail), "fix the cause, then run:", nextCommand(o, s.Name, names(chosen[i:])))
 			}
 		}
 		if ctxErr := Interrupted(ctx, h); ctxErr != nil && !out.Fixed { // also during the re-check, which has no error to return; a step that fixed itself stays fixed

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/wstein/workharbor/internal/doctor"
+	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/runlog"
 )
 
@@ -78,5 +79,29 @@ func TestFailureTailIsNotTheOutputOfAnEarlierStep(t *testing.T) {
 	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
 	if strings.Contains(se.String(), stale) {
 		t.Errorf("the failure shows an earlier step's output:\n%s", se.String())
+	}
+}
+
+// Issue #397: the cause is the tool's last line, the output is framed once,
+// and the command that ends the next action is never wrapped.
+func TestFailureSummaryCauseIsTheToolsLastLineAndTheCommandIsNotWrapped(t *testing.T) {
+	lg, err := runlog.Open(filepath.Join(t.TempDir(), "run.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lg.Close() }()
+	long := "/Users/workharbor/.local/libexec/whr/whr-shim-linux-arm64"
+	lg.Command([]string{"whr", "tools", "build"}, 1, "whr tools build: open "+long+": no such file or directory\n", "")
+	var b strings.Builder
+	FailureSummaryCmd(render.Writer{W: &b}, lg, causeOf(lg, "whr tools build failed: exit status 1"), "fix the cause, then run:", "whr setup --from tool-store --prefix "+long+"/with/a/long/prefix/that/passes/eighty/columns")
+	got := b.String()
+	if !strings.Contains(strings.Join(strings.Fields(got), " "), "cause whr tools build: open "+long+": no such file or directory") {
+		t.Errorf("cause:\n%s", got)
+	}
+	if strings.Count(got, "tool output:") != 0 || strings.Count(got, "last output:") != 1 || strings.Contains(got, "| |") {
+		t.Errorf("output framed wrongly:\n%s", got)
+	}
+	if !strings.Contains(got, "$ whr setup --from tool-store --prefix "+long+"/with/a/long/prefix/that/passes/eighty/columns\n") {
+		t.Errorf("command wrapped:\n%s", got)
 	}
 }

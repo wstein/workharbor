@@ -391,3 +391,28 @@ func TestTodoPrintsCommandsBeforeFollowUp(t *testing.T) {
 		t.Errorf("command must come before the follow-up text: %q", got)
 	}
 }
+
+func TestBareToolWriterKeepsTheTextWithoutTheFrame(t *testing.T) {
+	var b bytes.Buffer
+	w := NewBareToolWriter(&b)
+	_, _ = w.Write([]byte("a\nPassword:\nb\x1b[2J\n"))
+	w.End()
+	if got := b.String(); got != "a\n"+NeutralPromptLine+"\nb\\x1b[2J\n" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestToolTailHasNoLabelAndActionCmdNeverWrapsTheCommand(t *testing.T) {
+	s := Style{}
+	if got := ToolTail(s, "x\ny"); got != "    | x\n    | y\n" {
+		t.Errorf("tail %q", got)
+	}
+	if got := ActionCmd(s, "run:", "whr a"); !strings.Contains(got, "ACTION  run: whr a\n") {
+		t.Errorf("short %q", got)
+	}
+	cmd := "whr " + strings.Repeat("x", 100)
+	got := ActionCmd(s, "fix the cause, then run:", cmd)
+	if !strings.Contains(got, "$ "+cmd+"\n") || !strings.Contains(got, "ACTION  fix the cause, then run:\n") {
+		t.Errorf("long %q", got)
+	}
+}

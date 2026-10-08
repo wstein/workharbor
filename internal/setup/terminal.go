@@ -291,7 +291,7 @@ func (t Terminal) runOnce(ctx context.Context, c doctor.Cmd, pw string, seen *by
 			masked = strings.ReplaceAll(masked, pw, "***")
 		}
 		var logged bytes.Buffer
-		lw := render.NewToolWriter(&logged, render.Style{})
+		lw := render.NewBareToolWriter(&logged)
 		_, _ = lw.Write([]byte(masked))
 		lw.End() // flush the held-back partial text
 		t.Log.CommandShown(argv, exitCodeOf(err), logged.String(), pw)
