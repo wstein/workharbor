@@ -53,6 +53,26 @@ A decision that loosens a Hard rule or a security control, changes release scope
 
 A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note, and no separate `wh/review` session is needed. The reviewer also appends that same line to the local review note, `git notes --ref=review append -m 'CLEAR <full sha> role=review model=<m>' <sha>` (it asks for approval), because `make land` reads the note, not the comment. The designated dispatcher then sets `Ready to push` on its behalf, only for the reviewed sha and only when the comment has no open findings. The author never starts the review of its own change in its own context, and a dispatcher never reviews. A security-relevant change needs the Opus reviewer. You push only `Ready to push` work.
 
+## Pull request flow (#412)
+
+Design: [pr-flow-landing](../design/pr-flow-landing/) (Flow, Turnaround budget, Stacking cost, Migration plan). Until the first PR-flow merge succeeded, `make land` stays the only way to land; during migration step 3 the PR statuses and comments run in parallel with the review notes above, and the notes stay what `make land` reads.
+
+1. **Draft PR.** For each branch the dispatcher runs `gh pr create --draft --base main --head <branch> --title "<issue title>" --body-file <file>`. The body holds `Closes #N`, the acceptance summary and a placeholder line `Verdict evidence: pending`. The PR stays a draft until CLEAR; then `gh pr ready <n>`.
+2. **Pre-PR review.** The Opus review runs on the local branch diff within the turnaround budget (design note, Turnaround budget); the PR is then ready with `review/opus` set.
+3. **Status.** The desk posts the verdict on the PR head SHA:
+
+```sh
+gh api repos/wstein/workharbor/statuses/<sha> \
+  -f state=success -f context=review/opus -f description="CLEAR role=review model=opus"
+```
+
+`<sha>` is the full head SHA of the PR (a status on any other SHA gates nothing). `state` is `success` for CLEAR; `failure` for NOT CLEAR. `context` is `review/sonnet` or `review/opus`, the names the `gate` workflow looks up. `description` is a short human-readable line, at most 140 characters (from the GitHub docs, unverified here); the gate never trusts it. The gate checks the status creator, so the call runs under the human or desk identity (a token the design note names), never an agent token. Any newer status with the same context replaces the older one (from the GitHub docs, unverified here). Posting a status does not re-trigger the `gate` job, so after stamping the desk re-runs it (`gh run rerun <run-id>` or the Actions UI) {{< status unverified >}} (GitHub docs and recall, not measured).
+4. **Evidence comment.** The desk posts one PR comment naming the full head SHA, the tier (`review/sonnet` or `review/opus`), the verdict and the evidence link or summary. After merge this comment is the only audit trail, since the rebase merge changes the SHAs.
+5. **Re-posting after a rebase.** A rebase changes the head SHA, so the statuses are posted again on the new head. For an unchanged patch series the comment includes the output of `git range-diff <old-base>..<old-head> <new-base>..<new-head>` showing every commit as equal (`=`); any other marker means a new review, not a re-post.
+6. **Merge.** The human merges with rebase and merge (the only merge method allowed). CI-watch reads the PR checks (`gh pr checks <n>`), and a red check on `main` after the merge is a defect issue as before.
+
+Statuses are not signatures: anyone with write access can set one with any context; only the creator check in the gate separates them (design note, Security consequences). Known limits of the gate {{< status unverified >}}: a PR can edit `.github/workflows/gate.yml` itself (a carve-out path, so it needs `review/opus` and the human sees it in the diff), and any holder of the human's token can post a `review/*` status.
+
 ## Setup steps
 
 1. Run `make hooks` in every clone and worktree.
@@ -177,7 +197,7 @@ Use the actual exposed model ID (`unknown` if unavailable), never a guessed mode
 
 Fold a fix into its commit with `git commit --fixup` and an autosquash rebase (`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash main`), never a "fix the previous commit" commit. Until the beta, a fix to an already-pushed commit may be folded in the same way.
 
-`Refs` and `Closes` also accept `owner/repo#12` and comma lists. The canonical form is the trailer `Closes: #12`; commitlint also accepts Close, Closes, Closed, Fix, Fixes, Fixed, Resolve, Resolves, Resolved, Refs and Related in any letter case with the colon optional (`CLOSES #12`), and refuses them in the subject. That GitHub closes the issue for these spellings is taken from its docs, not measured here. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
+`Refs` and `Closes` also accept `owner/repo#12` and comma lists. The closing line has two phases. In the PR flow `Closes #N` goes in the PR body and every commit keeps `Refs: #N` only (human decision, 2026-10-08). Until the human switches the ruleset (#413) on, `make land` still requires the canonical trailer `Closes: #12` on the last commit of a branch, so branches started before the switch keep it. The trailer spellings: commitlint also accepts Close, Closes, Closed, Fix, Fixes, Fixed, Resolve, Resolves, Resolved, Refs and Related in any letter case with the colon optional (`CLOSES #12`), and refuses them in the subject. That GitHub closes the issue for these spellings is taken from its docs, not measured here. The changelog lists `feat`, `fix`, `perf`, `revert` and breaking changes. The repository allows only rebase merges, so every commit lands on `main` as written. Only Werner force-pushes, by lifting the `main` ruleset for it.
 
 ### Spike pages
 

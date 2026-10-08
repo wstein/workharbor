@@ -18,7 +18,7 @@ Each item of the issue checklist is marked here as verified (how) or unverified.
 3. **No required approvals.** A solo maintainer cannot approve his own PR. The desk sets commit statuses `review/sonnet` and `review/opus` on the PR head SHA (`POST /repos/{r}/statuses/{sha}`); the evidence goes into a PR comment. This replaces `refs/notes/review` and `TO_LAND.md`.
 4. **A `gate` workflow.** On `pull_request`, read-only, pinned actions, job-level `permissions: {contents: read, statuses: read}` (`statuses` is a documented permission scope, {{< status unverified >}} until a workflow runs). It lists the changed files, derives the class, reads `GET /repos/{r}/commits/{head}/statuses`, and fails unless the required tier is present and its `creator.login` is the human or the desk identity.
 5. **Stacking.** Small independent PRs merged in order, each rebased on the new `main`. A chain of PR bases is optional; the fast lane (#405) maps onto one PR per lane.
-6. **Roles.** The dispatcher opens a draft PR per branch until CLEAR; the desk sets the statuses and posts the evidence comment; CI-watch reads the checks of the PR; the human marks it ready and merges (or enables auto-merge once the checks are green).
+6. **Roles.** The dispatcher opens a draft PR per branch until CLEAR; the desk sets the statuses and posts the evidence comment; CI-watch reads the checks of the PR; the human marks it ready and merges (or enables auto-merge once the checks are green). Commands and the closing-line policy are in the [manual](../../manual/sessions-and-agents/#pull-request-flow-412).
 
 ### Class logic and its single copy
 
