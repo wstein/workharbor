@@ -82,6 +82,16 @@ jobs:
         run: git -c tag.gpgsign=false tag v0.0.0-snapshot
       - name: Build a snapshot
         run: go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --config .config/goreleaser.yaml --snapshot --clean --skip=publish
+      - name: The archive holds the host binary, the guest binaries and the installer
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/*.tar.gz)
+          [ "${#archives[@]}" -eq 1 ] || { echo "::error::expected one archive, found ${#archives[@]}"; exit 1; }
+          listing=$(tar -tzf "${archives[0]}")
+          for m in bin/whr guest/whr-shim-linux-arm64 guest/whr-proxy-linux-arm64 install.sh; do
+            printf '%s\n' "$listing" | grep -qx "$m" || { echo "::error::$m is not in the archive"; exit 1; }
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: snapshot
