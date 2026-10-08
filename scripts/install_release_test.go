@@ -248,7 +248,7 @@ func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
 func (r release) noGH(t *testing.T) []string {
 	t.Helper()
 	farm := t.TempDir()
-	for _, name := range []string{"bash", "env", "awk", "sed", "sort", "head", "wc", "find", "cp", "rm", "mv", "mkdir", "install", "tar", "shasum", "perl", "mktemp", "cat", "dirname", "tr", "grep", "touch", "chmod"} {
+	for _, name := range []string{"bash", "env", "awk", "sed", "sort", "head", "wc", "find", "cp", "rm", "mv", "mkdir", "install", "tar", "shasum", "perl", "mktemp", "cat", "dirname", "tr", "grep", "touch", "chmod", "id"} {
 		if p, err := exec.LookPath(name); err == nil {
 			_ = os.Symlink(p, filepath.Join(farm, name))
 		}
@@ -320,5 +320,67 @@ func TestAWritablePrefixIsRefused(t *testing.T) {
 	out, err := r.run(t, "v0.2.0", r.prefix)
 	if err == nil || !strings.Contains(out, "must not be able to write the prefix") {
 		t.Fatalf("a group-writable prefix was accepted: %v\n%s", err, out)
+	}
+}
+
+// A symlinked prefix is judged by its target.
+func TestASymlinkedWritablePrefixIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	target := filepath.Join(t.TempDir(), "real")
+	if err := os.Mkdir(target, 0o755); err != nil { //nolint:gosec // widened below
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o777); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.run(t, "v0.2.0", link)
+	if err == nil || !strings.Contains(out, "must not be able to write the prefix") {
+		t.Fatalf("a symlink to a writable dir was accepted: %v\n%s", err, out)
+	}
+}
+
+// A prefix not owned by the installing user is refused; a fake id stands in for
+// another user, as the real setup needs root.
+func TestAPrefixOfAnotherOwnerIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	if err := os.MkdirAll(r.prefix, 0o755); err != nil { //nolint:gosec // a test dir
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.bin, "id"), []byte("#!/bin/sh\necho 4242\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	out, err := r.run(t, "v0.2.0", r.prefix)
+	if err == nil || !strings.Contains(out, "not owned by uid 4242") {
+		t.Fatalf("a prefix of another owner was accepted: %v\n%s", err, out)
+	}
+}
+
+// A gh that is present but fails never falls back to the checksum-only path.
+func TestAFailingGHInstallsNothing(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"attestation": "#!/bin/sh\nif [ \"$1\" = api ]; then echo 0123456789abcdef0123456789abcdef01234567; exit 0; fi\nexit 1\n",
+		"api":         "#!/bin/sh\nexit 1\n",
+	} {
+		r := newRelease(t, "0.2.0", "")
+		if err := os.WriteFile(filepath.Join(r.bin, "gh"), []byte(body), 0o700); err != nil { //nolint:gosec // an executable test fake
+			t.Fatal(err)
+		}
+		out, err := r.run(t, "v0.2.0", r.prefix)
+		if err == nil {
+			t.Errorf("%s: a failing gh passed:\n%s", name, out)
+		}
+		if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err == nil {
+			t.Errorf("%s: whr was installed", name)
+		}
+		if strings.Contains(out, "only the checksums were verified") {
+			t.Errorf("%s: the checksum-only caveat was printed:\n%s", name, out)
+		}
 	}
 }
