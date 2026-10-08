@@ -103,3 +103,21 @@ func TestGateClass(t *testing.T) {
 		})
 	}
 }
+
+func TestGateClassTrFailsClosed(t *testing.T) {
+	t.Parallel()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tr"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil { //nolint:gosec // test stub
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(t.Context(), "sh", "gate-class.sh") //nolint:gosec // fixed script
+	cmd.Stdin = strings.NewReader("LICENSE\x00")
+	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + t.TempDir()}
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "carve-out" {
+		t.Fatalf("got %q, want carve-out", got)
+	}
+}

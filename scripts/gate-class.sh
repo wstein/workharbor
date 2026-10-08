@@ -7,7 +7,11 @@
 set -u
 dir=$(dirname "$0")
 # Map newline inside a path to 0x01 and the NUL separator to newline.
-lines=$(LC_ALL=C tr '\n\0' '\001\n'; printf x)
+# A failing tr must not read as an empty, ordinary change: fail closed.
+if ! lines=$(LC_ALL=C tr '\n\0' '\001\n' && printf x); then
+  echo carve-out
+  exit 0
+fi
 lines=${lines%x}
 case "$lines" in
 *"$(printf '\001')"*)
