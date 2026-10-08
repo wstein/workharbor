@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# Install whr, whr-shim and whr-proxy from a release of this repository, a
-# draft included (design D24, D34, §13 Releases). Run it as the administrator:
-# a draft is downloadable only by a repository writer, and PREFIX should be one
-# the whr user cannot write.
+# Install whr, whr-shim and whr-proxy from a release of this repository (design
+# D24, D34, §13 Releases). The script is self-contained and is a release asset
+# itself: download it from the release, no clone needed. Run it as the
+# administrator; PREFIX must be one the whr user cannot write.
 #
-#   scripts/install-release.sh <tag> [prefix]
+#   install-release.sh <tag> [prefix]
 #
-# It downloads the macOS archive, the guest archive and checksums.txt with gh,
-# checks both archives against checksums.txt and against the build-provenance
-# attestation of this repository's release workflow for exactly this tag (the
-# attestation must come from the release workflow run on refs/tags/<tag>, at the
-# tag's commit, on a GitHub-hosted runner), and installs nothing unless every check
-# passes. It refuses an older tag than the one installed unless --allow-downgrade
-# is given: the attested archives of an old, vulnerable release are still validly
-# attested. WHR_RELEASE_DIR names a folder that already holds the three files, to
-# skip the download; the checks still run. WHR_RELEASE_REPO changes the repository
-# whose attestations are trusted (a fork, say): it must be owner/name and is refused
-# unless --trust-release-repo confirms it; the script says which one it trusts.
-# The installed version is read from $prefix/libexec/whr/VERSION, which this script
-# writes after a verified install: the installed whr is never run before the checks
-# (an install from before that file existed needs --allow-downgrade once).
+# It downloads the macOS archive, the guest archive and checksums.txt with curl (gh
+# is used as a fallback for a draft, which only a repository writer can download)
+# and checks both archives against checksums.txt. With gh installed it also checks
+# the build-provenance attestation of this repository's release workflow for
+# exactly this tag (run on refs/tags/<tag>, at the tag's commit, on a GitHub-hosted
+# runner). Without gh only the checksums are checked: that proves the download is
+# intact, not who built it, and the script says so. Nothing is installed unless every
+# check passes. It refuses an older tag than the one installed unless
+# --allow-downgrade is given: the archives of an old, vulnerable release are still
+# validly attested. WHR_RELEASE_DIR names a folder that already holds the three
+# files, to skip the download; the checks still run. WHR_RELEASE_REPO changes the
+# repository whose attestations are trusted (a fork, say): it must be owner/name and
+# is refused unless --trust-release-repo confirms it. The installed version is read
+# from $prefix/libexec/whr/VERSION, which this script writes after a verified
+# install: the installed whr is never run before the checks (an install from before
+# that file existed needs --allow-downgrade once).
 set -euo pipefail
 
 die() {
@@ -71,8 +73,13 @@ prefix="${args[1]:-/opt/whr}"
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "usage: $0 vX.Y.Z[-pre] [prefix] (got '$tag')"
 [[ "$prefix" = /* ]] || die "the prefix must be an absolute path (got '$prefix')"
 [ "$(uname -s)/$(uname -m)" = Darwin/arm64 ] || die "whr releases are for macOS on Apple silicon"
-command -v gh >/dev/null || die "needs gh (brew install gh), signed in as a writer of $repo"
-echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
+have_gh=0
+command -v gh >/dev/null && have_gh=1
+if [ "$have_gh" -eq 1 ]; then
+  echo "install-release: trusting attestations of $repo for $tag (release workflow on refs/tags/$tag)" >&2
+else
+  echo "install-release: gh not found: checking checksums.txt only. That proves the download is intact, not who built it (install gh to verify the attestation of $repo)." >&2
+fi
 
 # Never go back to an older release silently.
 # The version comes from the file the installer wrote, never from running the binary.
@@ -102,9 +109,16 @@ if [ -n "${WHR_RELEASE_DIR:-}" ]; then
     cp "$WHR_RELEASE_DIR/$f" "$work/" || die "$f is not in $WHR_RELEASE_DIR"
   done
 else
-  gh release download "$tag" --repo "$repo" --dir "$work" \
-    --pattern "$mac" --pattern "$guest" --pattern checksums.txt ||
-    die "cannot download $tag from $repo (a draft needs a writer's gh login)"
+  base="https://github.com/$repo/releases/download/$tag"
+  fetch() { # fetch <file>: curl, then gh for a draft
+    if command -v curl >/dev/null && curl -fsSL --proto '=https' -o "$work/$1" "$base/$1" 2>/dev/null; then
+      return 0
+    fi
+    [ "$have_gh" -eq 1 ] && gh release download "$tag" --repo "$repo" --dir "$work" --pattern "$1" 2>/dev/null
+  }
+  for f in "$mac" "$guest" checksums.txt; do
+    fetch "$f" || die "cannot download $f of $tag from $repo (a draft needs a writer's gh login)"
+  done
 fi
 
 # Exactly one line per archive, checked with the file names fixed above.
@@ -116,15 +130,27 @@ fi
   done
 )
 
-# The tag's commit, so an attestation made for another commit does not pass.
-commit="$(gh api "repos/$repo/commits/refs/tags/$tag" --jq .sha 2>/dev/null)" || commit=""
-[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "cannot read the commit of tag $tag in $repo"
-for f in "$mac" "$guest"; do
-  gh attestation verify "$work/$f" --repo "$repo" \
-    --signer-workflow "$repo/.github/workflows/release.yml" \
-    --source-ref "refs/tags/$tag" --source-digest "$commit" \
-    --deny-self-hosted-runners >/dev/null ||
-    die "$f has no valid build-provenance attestation from $repo's release workflow run on tag $tag at $commit"
+if [ "$have_gh" -eq 1 ]; then
+  # The tag's commit, so an attestation made for another commit does not pass.
+  commit="$(gh api "repos/$repo/commits/refs/tags/$tag" --jq .sha 2>/dev/null)" || commit=""
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "cannot read the commit of tag $tag in $repo"
+  for f in "$mac" "$guest"; do
+    gh attestation verify "$work/$f" --repo "$repo" \
+      --signer-workflow "$repo/.github/workflows/release.yml" \
+      --source-ref "refs/tags/$tag" --source-digest "$commit" \
+      --deny-self-hosted-runners >/dev/null ||
+      die "$f has no valid build-provenance attestation from $repo's release workflow run on tag $tag at $commit"
+  done
+else
+  echo "install-release: caveat: only the checksums were verified, not the origin (no attestation check without gh)" >&2
+fi
+
+# The whr user must not be able to write what root runs: refuse a prefix tree that
+# is group- or world-writable.
+for d in "$prefix" "$prefix/bin" "$prefix/libexec" "$prefix/libexec/whr"; do
+  if [ -d "$d" ] && [ -n "$(find "$d" -maxdepth 0 \( -perm -020 -o -perm -002 \) 2>/dev/null)" ]; then
+    die "$d is group- or world-writable: the whr user must not be able to write the prefix"
+  fi
 done
 
 mkdir -p "$work/mac" "$work/guest"
@@ -148,7 +174,8 @@ echo "installed whr $("$prefix/bin/whr" version), whr-shim and whr-proxy (linux-
 echo "next, as whr: $prefix/bin/whr tools build -store <tool store> -shim $prefix/libexec/whr/whr-shim-linux-arm64" >&2
 }
 
-# Run main unless the file is sourced (the tests source it for semver_lt).
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+# Run main unless the file is sourced (the tests source it for semver_lt). Piped
+# into bash there is no BASH_SOURCE: run main then too.
+if [ -z "${BASH_SOURCE[0]:-}" ] || [ "${BASH_SOURCE[0]}" = "$0" ]; then
   main "$@"
 fi
