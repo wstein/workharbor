@@ -1,0 +1,6 @@
+# SHA-256 of the pinned Hugo v0.165.0 extended release assets, copied from the
+# official hugo_0.165.0_checksums.txt and cross-checked against the downloaded
+# files and the digests the GitHub release API reports. Read by scripts/hugo.sh.
+f43494894cdf4a8630a201d5c828051c77f523cc66bb3938b30806835470ac20  hugo_extended_0.165.0_linux-amd64.tar.gz
+f40ebc44dfda3896cecd3ae7ed44f5c44c4b4a30a2b7d976ece6da62da699a58  hugo_extended_0.165.0_linux-arm64.tar.gz
+538be8435ded71e561cdc0bc42b9c9822c855b768e7028bc3f7f624b6e2c5185  hugo_extended_0.165.0_darwin-universal.pkg

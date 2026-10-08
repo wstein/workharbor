@@ -1,7 +1,8 @@
-# Tool versions are pinned; tools run via `go run`, so nothing needs installing.
+# Tool versions are pinned; tools run via `go run`, except Hugo (prebuilt, see below).
 GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
-# Hugo extended builds with cgo, so a C++ compiler is needed the first time.
-HUGO := go run -tags extended github.com/gohugoio/hugo@v0.165.0
+# Hugo is the pinned prebuilt extended release, downloaded and checksum-verified by
+# scripts/hugo.sh into .cache/hugo on first use.
+HUGO := $(CURDIR)/scripts/hugo.sh
 EDITORCONFIG_CHECKER := github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.11.3
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 # The secret scans go install gitleaks first (a failed install means the scan could not
