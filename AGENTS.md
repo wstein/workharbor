@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working on workharbor (CLI: `whr`).
+Guidance for AI coding agents working on WorkHarbor (CLI: `whr`).
 
 ## Project
 
@@ -24,7 +24,7 @@ In `internal/`, each package has a package comment: `service/` is the layer the 
 - Do not assume Docker semantics in the runtime adapter. Report capabilities explicitly.
 - GitHub Actions: pin each to a full commit SHA with its version in a comment (`uses: owner/action@<sha> # vX.Y.Z`), keep job-level least-privilege `permissions`, never use `pull_request_target`, and pass event data to scripts through `env`, not `${{ }}` in `run`. Dependabot and Renovate commits are exempt from the subject length and `Signed-off-by` rules.
 - Terms: use the words of the [glossary](docs/content/docs/glossary.md) and avoid the ones it lists.
-- Name: the product is **workharbor**, lowercase, in prose, code, paths, URLs and packages, and the CLI is `whr`. Only the wordmark (logo, banner, social preview) sets it as **WorkHarbor**; never write WorkHarbor, Workharbor or Work Harbor in text. Logos, icons, banners and fonts follow [`assets/BRAND.md`](assets/BRAND.md).
+- Name: **WorkHarbor** in prose, titles, display names and the wordmark; never `Workharbor` or `Work Harbor`. Identifiers stay lowercase: the `workharbor` repository, module and package, paths, URLs, labels such as `workharbor.temp`, file names and config keys; the CLI is `whr`. Logos, icons, banners and fonts follow [`assets/BRAND.md`](assets/BRAND.md).
 - README: a short landing page; detail goes in `docs/`; provisional commands are marked.
 
 ## Hard rules

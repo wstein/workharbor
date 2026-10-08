@@ -1,7 +1,7 @@
-# workharbor brand rule
+# WorkHarbor brand rule
 
 One rule for every asset, so the banner, the social preview, the docs navbar and
-the icons look like one product (#142). Name and casing: AGENTS.md, Conventions.
+the icons look like one product (#142). Name and casing: **WorkHarbor** in prose, titles and the wordmark, lowercase `workharbor` for identifiers (AGENTS.md, Conventions).
 
 ## Two forms, never mixed
 
