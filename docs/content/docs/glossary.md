@@ -1,10 +1,10 @@
 ---
 title: Glossary
-description: The words workharbor uses, each with a pointer to the design section that defines it.
+description: The words WorkHarbor uses, each with a pointer to the design section that defines it.
 weight: 4
 ---
 
-The words workharbor uses for its objects and modes. Each entry gives the short meaning and points to the [design](design/_index.md) section that defines it; the design wins where the two differ.
+The words WorkHarbor uses for its objects and modes. Each entry gives the short meaning and points to the [design](design/_index.md) section that defines it; the design wins where the two differ.
 
 ## Work
 
@@ -123,14 +123,14 @@ Owner label
 
 ## Names
 
-The product is **workharbor**, lowercase, in prose, code, paths, URLs and packages; the command is `whr`. Only the wordmark (the logo, the banner and the social preview) sets it as WorkHarbor. Avoid Workharbor, Work Harbor and WorkHarbor in text, alt text and titles.
+The product is **WorkHarbor** in prose, titles, display names and the wordmark (the logo, the banner and the social preview); the command is `whr`. Identifiers stay lowercase: the `workharbor` repository, module and package, paths, URLs, labels such as `workharbor.temp`, file names and config keys. Avoid Workharbor and Work Harbor in text, alt text and titles.
 
 `wh`, `whr` and `cb` prefixes
-: `wh` and `whr` belong to workharbor. The CLI is `whr`, its helper binaries include `whr-shim` and `whr-proxy`, its account is `whr`, and its temporary resources use `whtmp-`.
+: `wh` and `whr` belong to WorkHarbor. The CLI is `whr`, its helper binaries include `whr-shim` and `whr-proxy`, its account is `whr`, and its temporary resources use `whtmp-`.
 
 : `cb` belongs to crewbook, a separate tool. Its public skill is `crewbook` and its UI name is Crew Book.
 
-: Avoid: `wh` or `whr` for crewbook identities, and `cb` for workharbor identities.
+: Avoid: `wh` or `whr` for crewbook identities, and `cb` for WorkHarbor identities.
 
 ## Marking claims
 
