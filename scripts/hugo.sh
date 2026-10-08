@@ -26,6 +26,7 @@ Darwin-*) asset=hugo_extended_${version}_darwin-universal.pkg ;;
   ;;
 esac
 
+# A cached binary is trusted on -x alone: the cache is a local directory the user owns.
 bin=$cache/v$version/hugo
 if [ ! -x "$bin" ]; then
   line=$(grep -F "  $asset" "$sums") || {
@@ -35,7 +36,9 @@ if [ ! -x "$bin" ]; then
   mkdir -p "$cache"
   tmp=$(mktemp -d "$cache/tmp.XXXXXX")
   trap 'rm -rf "$tmp"' EXIT
-  curl -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset"
+  proto=(--proto '=https' --tlsv1.2)
+  [ -z "${HUGO_BASE_URL:-}" ] || proto=()
+  curl "${proto[@]}" -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset"
   (cd "$tmp" && printf '%s\n' "$line" | shasum -a 256 -c - >&2)
   mkdir "$tmp/out"
   case $asset in
@@ -48,5 +51,7 @@ if [ ! -x "$bin" ]; then
   chmod 0755 "$tmp/out/hugo"
   mkdir -p "$cache/v$version"
   mv "$tmp/out/hugo" "$bin"
+  rm -rf "$tmp"
+  trap - EXIT
 fi
 exec "$bin" "$@"
