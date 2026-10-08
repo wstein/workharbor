@@ -86,8 +86,13 @@ type Check struct {
 // no account name, no prose) when it is a step of the other phase, and Where
 // says in words who runs it. The prose belongs in Why and Where, never in a
 // command line the person copies.
+//
+// Tools are ways out that are not whr commands at all (make install ...): each
+// is shown as it is, with none of the run's flags added, and the first is the
+// remedy in the report.
 type Unreachable struct {
 	Why, Step, Command, Where string
+	Tools                     []string
 }
 
 // basic is a check as the list below writes it; base fills in the rest.

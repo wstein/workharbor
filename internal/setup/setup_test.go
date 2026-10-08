@@ -715,3 +715,43 @@ func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
 		t.Errorf("protocol %+v", lg.entries)
 	}
 }
+
+// Issue #397: a remedy that is not a whr command (make install) is shown as it
+// is, whole, with none of the run's flags; the step is no failure.
+func TestAnUnreachableStepNamesToolsWithoutRunFlags(t *testing.T) {
+	var fixed bool
+	s := step("tool-store", doctor.PhaseUser, &fixed, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"whr", "tools", "build"}}}})
+	prefix := "/Users/workharbor/.local/with/a/long/prefix/that/is/far/beyond/eighty/columns"
+	s.Reach = func(context.Context) *doctor.Unreachable {
+		return &doctor.Unreachable{Why: "only the whr binary is installed", Tools: []string{"make install PREFIX=" + prefix, "make install-release VERSION=<tag> PREFIX=" + prefix}}
+	}
+	h := &fakeHost{answers: []string{"y"}}
+	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser, Resume: []string{"whr", "setup", "--dev", "--user", "me"}})
+	if len(h.ran) != 0 || len(outs) != 1 || outs[0].Status != doctor.NotVerified || outs[0].Remedy != "make install PREFIX="+prefix {
+		t.Errorf("ran %v outcome %+v", h.ran, outs)
+	}
+	for _, want := range []string{"$ make install PREFIX=" + prefix + "\n", "$ make install-release VERSION=<tag> PREFIX=" + prefix + "\n", "ACTION  or:"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("lacks %q:\n%s", want, errOut)
+		}
+	}
+	if strings.Contains(errOut, "--dev --user") || strings.Contains(errOut, "fix the cause") {
+		t.Errorf("flags added or reported as a failure:\n%s", errOut)
+	}
+}
+
+// The preview of a fix is shown once: the real command a builder returns is not
+// printed again when the preview already was it.
+func TestARealPreviewIsNotShownTwice(t *testing.T) {
+	var fixed bool
+	cmd := doctor.Cmd{Argv: []string{"whr", "tools", "build", "-store", "/real/store"}}
+	s := step("tool-store", doctor.PhaseUser, &fixed, &doctor.Fix{
+		Show:  func() []doctor.Cmd { return []doctor.Cmd{cmd} },
+		Build: func(context.Context, doctor.Prompter) ([]doctor.Cmd, error) { return []doctor.Cmd{cmd}, nil },
+	})
+	h := &fakeHost{answers: []string{"y"}}
+	_, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser})
+	if n := strings.Count(errOut, "$ whr tools build -store /real/store"); n != 1 || strings.Contains(errOut, "<") {
+		t.Errorf("shown %d times:\n%s", n, errOut)
+	}
+}

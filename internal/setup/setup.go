@@ -368,7 +368,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				// bare is the remedy without this run's flags (the report adds them), shown
 				// is what the person copies, with the run's flags.
 				bare, shown := u.Command, ""
-				if u.Step != "" {
+				if len(u.Tools) > 0 {
+					bare, shown = u.Tools[0], u.Tools[0] // not whr commands: no run flags added
+				} else if u.Step != "" {
 					bare = "whr setup host --only " + u.Step
 					if o.Phase != doctor.PhaseHost {
 						bare = "whr setup --only " + u.Step
@@ -396,8 +398,12 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				}
 				ui.Action(first + ":")
 				ui.Command(shown)
+				for _, t := range u.Tools[min(1, len(u.Tools)):] {
+					ui.Action("or:")
+					ui.Command(t)
+				}
 				out := Outcome{Step: s.Name, Status: doctor.NotVerified, Detail: detail, Asked: true, NeedsHuman: o.Unattended, Remedy: bare, Next: shown}
-				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: []string{shown}}
+				out.Todo = render.TodoItem{Text: title + ": " + u.Why, Commands: append([]string{shown}, u.Tools[min(1, len(u.Tools)):]...)}
 				outs = append(outs, out)
 				outcome := protocol.OutNotRun
 				if o.Unattended {
@@ -737,12 +743,12 @@ func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
 		}
 	case f.Desc != "":
 		plan(f.Desc)
-	case len(f.Cmds) == 1:
+	case len(f.Preview()) == 1:
 		plan("run this command")
 	default:
 		plan("run these commands")
 	}
-	for _, c := range f.Cmds {
+	for _, c := range f.Preview() {
 		ui.Command(QuoteArgv(c.Full()))
 	}
 	if hasCommands(f) && f.Open != "" {
@@ -762,7 +768,7 @@ func todoFor(title string, f *doctor.Fix) render.TodoItem {
 		if f.Desc != "" {
 			it.Text += ": " + f.Desc
 		}
-		for _, c := range f.Cmds {
+		for _, c := range f.Preview() {
 			it.Commands = append(it.Commands, QuoteArgv(c.Full()))
 		}
 		it.After = oneLine(f.Guide) // after the commands: the person acts first
@@ -1102,8 +1108,14 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 		if cmds, err = f.Build(ctx, r.p); err != nil {
 			return res, err
 		}
+		shownBefore := map[string]bool{}
+		for _, c := range f.Preview() {
+			shownBefore[QuoteArgv(c.Full())] = true
+		}
 		for _, c := range cmds { // the real commands, shown before they run
-			ui.Command(QuoteArgv(c.Full()))
+			if !shownBefore[QuoteArgv(c.Full())] { // not twice
+				ui.Command(QuoteArgv(c.Full()))
+			}
 		}
 		if source == protocol.SourceAnswers && anySudo(cmds) {
 			// the digest does not cover what a builder returns: a file never

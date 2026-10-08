@@ -1548,3 +1548,89 @@ func TestConfigFirstIsTheFirstHostStepAndTheReadersNeedIt(t *testing.T) {
 		t.Errorf("spotlight as admin: %+v", u)
 	}
 }
+
+// Issue #397: the tool-store step looks for the guest helpers next to the
+// binary before it offers `whr tools build`, and names the real remedy.
+// toolStoreDeps is a user-phase Deps with a valid configuration that names
+// a tool store.
+func toolStoreDeps(t *testing.T) Deps {
+	t.Helper()
+	dir := t.TempDir()
+	for _, n := range []string{"ws", "tools"} {
+		if err := os.Mkdir(filepath.Join(dir, n), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := filepath.Join(dir, "key.pem")
+	if err := os.WriteFile(key, []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"account":"shared","repositories":[{"name":"own/repo"}],"listen":"127.0.0.1:8484","api_token_file":"` + key + `","github":{"app_id":1,"key_file":"` + key + `"},"roots":{"workspaces":["` + dir + `/ws"],"tool_store":"` + dir + `/tools"}}`
+	d := hostDeps(nil)
+	d.ConfigPath = filepath.Join(dir, "config.json")
+	if err := os.WriteFile(d.ConfigPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func TestToolStoreIsNotReachableWithoutTheGuestHelpers(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		have         []string
+		wantMissing  string
+		wantNotNamed string
+	}{
+		{"shim missing", []string{proxyName}, shimName, proxyName},
+		{"proxy missing", []string{shimName}, proxyName, shimName},
+		{"both missing", nil, shimName + " and " + proxyName, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := toolStoreDeps(t)
+			d.Prefix = t.TempDir()
+			d.Whr = filepath.Join(d.Prefix, "bin", "whr")
+			lib := filepath.Join(d.Prefix, "libexec", "whr")
+			if err := os.MkdirAll(lib, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for _, n := range tc.have {
+				if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c := steps(t, d)["tool-store"]
+			u := c.Reach(context.Background())
+			if u == nil {
+				t.Fatal("reachable although a helper is missing")
+			}
+			if !strings.HasPrefix(u.Why, "only the whr binary is installed; the guest helpers "+tc.wantMissing+" are missing under "+lib) {
+				t.Errorf("why %q", u.Why)
+			}
+			if tc.wantNotNamed != "" && strings.Contains(u.Why, tc.wantNotNamed) {
+				t.Errorf("names a helper that is there: %q", u.Why)
+			}
+			if len(u.Tools) != 2 || u.Tools[0] != "make install PREFIX="+d.Prefix || !strings.HasPrefix(u.Tools[1], "make install-release VERSION=<tag> PREFIX="+d.Prefix) {
+				t.Errorf("tools %q", u.Tools)
+			}
+			// with both helpers there, the step is reachable and offers the command
+			for _, n := range []string{shimName, proxyName} {
+				if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if u := c.Reach(context.Background()); u != nil {
+				t.Errorf("unreachable with both helpers: %+v", u)
+			}
+		})
+	}
+}
+
+func TestToolStoreShowsTheRealCommandNotThePlaceholder(t *testing.T) {
+	d := toolStoreDeps(t)
+	d.Whr = "/p/bin/whr"
+	d.Prefix = "/p"
+	cmds := steps(t, d)["tool-store"].Fix.Preview()
+	if len(cmds) != 1 || strings.Contains(strings.Join(cmds[0].Argv, " "), "<") || cmds[0].Argv[len(cmds[0].Argv)-1] != "/p/libexec/whr/"+shimName {
+		t.Errorf("preview %v", cmds)
+	}
+}

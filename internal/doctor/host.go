@@ -1033,6 +1033,93 @@ func configBaseStep(d Deps, name string, phase Phase, tokenPath, envPath string)
 	}
 }
 
+// toolStoreCheck is the tool-store step's check: a profile, and every tool
+// matching the hash recorded when it was installed.
+func (d Deps) toolStoreCheck(context.Context) (Status, string) {
+	c, err := config.Load(d.ConfigPath)
+	if err != nil {
+		return Fail, "needs a valid configuration (the config-file step)"
+	}
+	ents, err := os.ReadDir(filepath.Join(c.Roots.ToolStore, "profiles"))
+	if err != nil || len(ents) == 0 {
+		return Fail, "the tool store " + c.Roots.ToolStore + " has no profile"
+	}
+	// The tools are what every environment runs: check them against the
+	// hashes recorded when they were installed.
+	var severe []string
+	unchecked := 0
+	for _, p := range (&toolstore.Store{Root: c.Roots.ToolStore}).Verify() {
+		if p.Severe {
+			severe = append(severe, p.String())
+		} else {
+			unchecked++
+		}
+	}
+	if len(severe) > 0 {
+		return Fail, "the tool store does not verify: " + oneLine(strings.Join(severe, "; "))
+	}
+	if unchecked > 0 {
+		return OK, fmt.Sprintf("the tool store has a profile; %d tool(s) have no full hash recorded and were checked only by the hash in their name", unchecked)
+	}
+	return OK, "the tool store has a profile and every tool matches its recorded hash"
+}
+
+// toolsBuild is the command that builds the tool store, with the shim of this
+// installation: the same path the guest-helper check looks at.
+func (d Deps) toolsBuild(store string) Cmd {
+	return Cmd{Argv: []string{d.Whr, "tools", "build", "-store", store, "-shim", filepath.Join(d.libexec(), shimName)}}
+}
+
+const (
+	shimName  = "whr-shim-linux-arm64"
+	proxyName = "whr-proxy-linux-arm64"
+)
+
+func (d Deps) libexec() string { return filepath.Join(d.prefix(), "libexec", "whr") }
+
+// guestHelpersReach is the Reach of the tool-store step: the shim and the proxy
+// are installed next to the binary by `make install` and the release installer,
+// never by a copy of the whr binary alone. When one is missing and the step has
+// work to do, the command that builds the store could only fail, so the step is
+// not reachable (never FAIL, #394) and the way to install them is named. A store
+// that already verifies, or a configuration that does not load, is left to the
+// check itself.
+func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) func(context.Context) *Unreachable {
+	return func(ctx context.Context) *Unreachable {
+		var missing []string
+		for _, n := range []string{shimName, proxyName} {
+			if _, err := os.Stat(filepath.Join(d.libexec(), n)); err != nil {
+				missing = append(missing, n)
+			}
+		}
+		if len(missing) == 0 {
+			return nil
+		}
+		if _, err := config.Load(d.ConfigPath); err != nil {
+			return nil
+		}
+		if st, _ := check(ctx); st == OK {
+			return nil
+		}
+		return &Unreachable{
+			Why:   "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec(),
+			Where: "from the source tree, as the account that can write " + d.prefix() + " (or, for a release, the second command)",
+			Tools: []string{
+				"make install PREFIX=" + shellWord(d.prefix()),
+				"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
+			},
+		}
+	}
+}
+
+// shellWord quotes a word for a copied command line only when it needs it.
+func shellWord(w string) string {
+	if w != "" && !strings.ContainsAny(w, " \t\"'$`\\<>|&;*?()#~") {
+		return w
+	}
+	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+}
+
 func userSteps(d Deps) []Check {
 	dir := d.configDir()
 	tokenPath := filepath.Join(dir, "api.token")
@@ -1267,42 +1354,22 @@ func userSteps(d Deps) []Check {
 		},
 		{
 			Name: "tool-store", Phase: PhaseUser, Step: 4, Title: "the tool store with Claude Code (manual step 13)",
-			Run: func(context.Context) (Status, string) {
-				c, err := config.Load(d.ConfigPath)
-				if err != nil {
-					return Fail, "needs a valid configuration (the config-file step)"
-				}
-				ents, err := os.ReadDir(filepath.Join(c.Roots.ToolStore, "profiles"))
-				if err != nil || len(ents) == 0 {
-					return Fail, "the tool store " + c.Roots.ToolStore + " has no profile"
-				}
-				// The tools are what every environment runs: check them against the
-				// hashes recorded when they were installed.
-				var severe []string
-				unchecked := 0
-				for _, p := range (&toolstore.Store{Root: c.Roots.ToolStore}).Verify() {
-					if p.Severe {
-						severe = append(severe, p.String())
-					} else {
-						unchecked++
-					}
-				}
-				if len(severe) > 0 {
-					return Fail, "the tool store does not verify: " + oneLine(strings.Join(severe, "; "))
-				}
-				if unchecked > 0 {
-					return OK, fmt.Sprintf("the tool store has a profile; %d tool(s) have no full hash recorded and were checked only by the hash in their name", unchecked)
-				}
-				return OK, "the tool store has a profile and every tool matches its recorded hash"
-			},
+			Reach: d.guestHelpersReach(d.toolStoreCheck),
+			Run:   d.toolStoreCheck,
 			Fix: &Fix{
-				Cmds: []Cmd{{Argv: []string{d.Whr, "tools", "build", "-store", "<tool_store>", "-shim", filepath.Join(d.prefix(), "libexec", "whr", "whr-shim-linux-arm64")}}},
+				Show: func() []Cmd {
+					c, err := config.Load(d.ConfigPath)
+					if err != nil {
+						return nil
+					}
+					return []Cmd{d.toolsBuild(c.Roots.ToolStore)}
+				},
 				Build: func(context.Context, Prompter) ([]Cmd, error) {
 					c, err := config.Load(d.ConfigPath)
 					if err != nil {
 						return nil, errors.New("needs a valid configuration first (config-base, github-app, config-github)")
 					}
-					return []Cmd{{Argv: []string{d.Whr, "tools", "build", "-store", c.Roots.ToolStore, "-shim", filepath.Join(d.prefix(), "libexec", "whr", "whr-shim-linux-arm64")}}}, nil
+					return []Cmd{d.toolsBuild(c.Roots.ToolStore)}, nil
 				},
 			},
 		},

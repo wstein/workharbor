@@ -62,6 +62,11 @@ type Fix struct {
 	// Build, if set, asks for what the commands need and returns the real ones.
 	// It runs after the confirmation, so nothing is asked in a dry run.
 	Build func(ctx context.Context, p Prompter) ([]Cmd, error)
+	// Show, if set, gives the real commands for display where they are known
+	// before the fix asks for anything (the tool store's path from the
+	// configuration). It replaces Cmds as the preview, so a placeholder is never
+	// shown; nil means the preview is Cmds.
+	Show func() []Cmd
 	// Do is an in-process action (writing a secret, a configuration), described
 	// by Desc. It runs before Cmds.
 	Do   func(ctx context.Context, p Prompter) error
@@ -83,4 +88,15 @@ type Runner interface {
 	// Output runs a read-only command and returns what it printed. It attaches no
 	// terminal and never uses sudo.
 	Output(ctx context.Context, argv ...string) ([]byte, error)
+}
+
+// Preview is what the wizard shows before the fix runs: Show, else Cmds.
+func (f *Fix) Preview() []Cmd {
+	if f.Show != nil {
+		if c := f.Show(); len(c) > 0 {
+			return c
+		}
+		return nil
+	}
+	return f.Cmds
 }
