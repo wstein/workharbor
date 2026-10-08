@@ -7,7 +7,7 @@ toc: true
 
 ## 5.6.1 General utility profiles (D19, D44; #284)
 
-{{< status decided >}} Werner requests general utilities through workharbor's
+{{< status decided >}} Werner requests general utilities through WorkHarbor's
 verified read-only tool store, independently of external skill sets. This
 contract specializes §5.6: it selects no mandatory catalogue or new default,
 grants no installation permission, and changes neither D44's git-in-image rule

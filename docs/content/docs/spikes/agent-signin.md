@@ -118,7 +118,7 @@ In both cases:
 
 When two separate environments run concurrently under the same user account:
 - **Independent Logins (D40 compliant)**: When each environment completes its own in-guest login flow, Anthropic/OpenAI generates a distinct OAuth authorization code and distinct refresh token pair. In `test-concurrency.sh`, two containers running simultaneously on internal IPs `192.168.128.3` and `192.168.128.4` performed concurrent agent calls through the shared `whr-proxy` sidecar (340 ms) without port, socket, or token conflicts.
-- **Cloned Volumes (Hazard)**: If an agent-home volume is copied or cloned, both environments share the same refresh token. Because Claude Code uses **Refresh Token Rotation (RTR)**, the first environment to refresh its token revokes the previous refresh token. The second environment's subsequent refresh attempt fails with `401 unauthorized` (`refresh_token_dead`). workharbor must never clone an agent-home volume between environments.
+- **Cloned Volumes (Hazard)**: If an agent-home volume is copied or cloned, both environments share the same refresh token. Because Claude Code uses **Refresh Token Rotation (RTR)**, the first environment to refresh its token revokes the previous refresh token. The second environment's subsequent refresh attempt fails with `401 unauthorized` (`refresh_token_dead`). WorkHarbor must never clone an agent-home volume between environments.
 
 ---
 

@@ -7,7 +7,7 @@ toc: true
 
 ## 5.9 Native Codex supervision (D53)
 
-{{< status decided >}} Werner requests full Codex support in both workharbor and
+{{< status decided >}} Werner requests full Codex support in both WorkHarbor and
 crewbook as P1, with Antigravity afterward. [crewbook #9](https://github.com/wstein/crewbook/issues/9)
 records this batch and the D53 reservation. This amends D12's implementation
 ordering and D52's minimal text-only loading path for Codex. It does not change
@@ -78,7 +78,7 @@ settings; the [configuration reference](https://learn.chatgpt.com/docs/config-fi
 also documents role `config_file` bindings. Version-check the chosen mechanism
 against the target schema and binary. Crewbook supplies declarative role names,
 descriptions, instructions and model/effort intent from canonical content;
-workharbor validates them and supplies the native binding to inventoried
+WorkHarbor validates them and supplies the native binding to inventoried
 read-only resources. Do not load arbitrary TOML settings from a package: native
 role configuration is a projection of approved fields, not an exception to
 D52's ban on package-supplied security configuration, hooks, tools or MCP.
@@ -93,7 +93,7 @@ Record child ownership and exact bindings before execution; children inherit
 the same enforced ceiling, not the parent's authority to widen it. Cancellation
 and restart must account for every owned child. The selected external workflow
 and project contribution rules own reviewer eligibility and author/reviewer
-separation. workharbor records generic child identity and binding evidence and
+separation. WorkHarbor records generic child identity and binding evidence and
 enforces admission and capability ceilings without assigning authority to a
 workflow name; human approval of the exact artifact remains a separate host gate.
 
@@ -121,7 +121,7 @@ Apply and verify the same restrictions on child creation and every resume.
 If a pinned CLI cannot provide this split and suppression, it is incompatible.
 
 Workflow recommendations belong to crewbook or another selected external skill
-set. workharbor treats workflow names as opaque identifiers: it validates the
+set. WorkHarbor treats workflow names as opaque identifiers: it validates the
 explicit requested and resolved client/model/effort tuple against operator
 approval and generic capability constraints. A workflow name determines no
 model grade, child admission, approval authority, concurrency or tool privilege.

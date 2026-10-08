@@ -12,7 +12,7 @@ weight: 10
 
 ## Question
 
-#129 proposes an agent-facing workharbor MCP on exactly one transport: an SDK-type MCP server that the supervisor answers over the agent's existing stdio control channel (the channel of approvals, D26), with no listener and no token in the guest. Whether Claude Code serves SDK MCP tools in headless `stream-json` mode with `--strict-mcp-config` is {{< status unverified >}}.
+#129 proposes an agent-facing WorkHarbor MCP on exactly one transport: an SDK-type MCP server that the supervisor answers over the agent's existing stdio control channel (the channel of approvals, D26), with no listener and no token in the guest. Whether Claude Code serves SDK MCP tools in headless `stream-json` mode with `--strict-mcp-config` is {{< status unverified >}}.
 
 ## What will be measured
 

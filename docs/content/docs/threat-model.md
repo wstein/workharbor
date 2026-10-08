@@ -1,6 +1,6 @@
 ---
 title: Threat model
-description: Assets, trust boundaries, threats, controls and accepted risks for workharbor.
+description: Assets, trust boundaries, threats, controls and accepted risks for WorkHarbor.
 weight: 2
 toc: true
 ---
@@ -9,7 +9,7 @@ toc: true
 
 ## Scope and assumptions
 
-workharbor runs on one developer's Apple-silicon Mac. It drives coding agents in Apple Container environments and talks to one forge, GitHub (D15). Claude Code is implemented; native Codex is the P1 full-support target, not yet built (#35, [D53](design/native-codex.md)); Antigravity follows. The developer reaches it from a laptop or phone over a VPN.
+WorkHarbor runs on one developer's Apple-silicon Mac. It drives coding agents in Apple Container environments and talks to one forge, GitHub (D15). Claude Code is implemented; native Codex is the P1 full-support target, not yet built (#35, [D53](design/native-codex.md)); Antigravity follows. The developer reaches it from a laptop or phone over a VPN.
 
 - **One trusted human.** The developer and the Mac's macOS account are trusted. Protecting the developer from themselves is out of scope.
 - **The agent is not trusted.** Its model output follows whatever text reaches it, including issue text written by strangers, so every agent and everything it writes is treated as potentially hostile.
@@ -101,7 +101,7 @@ The console has no threat ID of its own: T16 covers access into it and the accep
 | A3 | A malicious dependency or tool in the environment | Same reach as the agent |
 | A4 | Someone on the LAN or holding a lost phone | The supervisor API, sessions, notifications |
 | A5 | A compromised upstream: an agent CLI release, a plugin, a CI action | Code that runs with the supervisor's or the agent's rights |
-| A6 | workharbor itself, used beyond a vendor's terms | A feature that handles a subscription credential or starts runs without the human |
+| A6 | WorkHarbor itself, used beyond a vendor's terms | A feature that handles a subscription credential or starts runs without the human |
 
 ## Threats and controls
 
@@ -152,7 +152,7 @@ These are accepted for a single-developer, watched personal tool. Each has a lim
 ## Open items
 
 - Guests reach the host's LAN address and every service on all interfaces (#69): the `pf` rule blocking container subnets and the hardening of macOS's own services are not yet measured. T1 is partly implemented: issues from untrusted authors are held for a Decision before any run (#53); T15's front ends come with #24 and #30.  T7's transport is verified by spike #7, including the crash and deadline cases.
-- Links inside a secrets directory are followed one level and the locations found in review are rejected (#58). Mounts can also be limited to the workspace roots workharbor owns, as a second layer behind the deny-list (`CheckMountsWithin`). Accepted: a hard link to a secret inside a project, and links more than one level deep inside a secrets directory.
+- Links inside a secrets directory are followed one level and the locations found in review are rejected (#58). Mounts can also be limited to the workspace roots WorkHarbor owns, as a second layer behind the deny-list (`CheckMountsWithin`). Accepted: a hard link to a secret inside a project, and links more than one level deep inside a secrets directory.
 - Webhook signature verification and the author association used for trust tiers are part of the forge adapter, #27.
 - Whether an image build can be confined to an allowlist, for example through a proxy reachable from the builder VM or a later `container build` network option ({{< status open >}}).
 - This page is reviewed whenever a D-row changes a boundary, and before release 1.

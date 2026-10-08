@@ -9,7 +9,7 @@ toc: true
 
 {{< status decided >}} Werner approved this boundary in
 [crewbook #20](https://github.com/wstein/crewbook/issues/20), which tracks
-implementation in workharbor. MCP exposes a bounded set of forge operations
+implementation in WorkHarbor. MCP exposes a bounded set of forge operations
 through invocation-scoped policy checks, the forge Guard and provider API
 adapters. GitHub is tier 1; GitLab and Codeberg are tier 2. These tiers set
 implementation order and grant no policy exemption. D15's release 1 forge

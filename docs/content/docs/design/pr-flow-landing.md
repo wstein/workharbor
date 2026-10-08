@@ -44,7 +44,7 @@ The path matcher is one file, `scripts/path-class.sh` (POSIX sh, reads newline-s
 | 4 | Workflow can read statuses | unverified | `statuses: read` is a documented `permissions` scope; not run here |
 | 5 | Merge queue on a personal repository | unverified | recalled from the documentation: merge queue is for organization-owned repositories; the owner here is type User. Plan without it |
 | 7 | Migration | decided | below |
-| 9 | crewbook files | unverified | not readable from this worktree (`/Users/werner/workspaces` holds only workharbor) |
+| 9 | crewbook files | unverified | not readable from this worktree (`/Users/werner/workspaces` holds only WorkHarbor) |
 
 ### Security consequences
 

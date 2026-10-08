@@ -5,14 +5,14 @@ weight: 9
 ---
 
 `scripts/board-snapshot.sh` is the host-side access path for project reads and
-writes. Keep it in workharbor; consuming repositories supply a mapping rather
+writes. Keep it in WorkHarbor; consuming repositories supply a mapping rather
 than copying an executable board adapter. All commands below are provisional.
 
 ## Target mapping
 
 With no mapping, the adapter uses `wstein/workharbor`, user `wstein`, project 6
 and `wh/` sessions. A different repository requires an explicit project number
-or node ID. It cannot target workharbor project 6. Explicit owner, number and ID
+or node ID. It cannot target WorkHarbor project 6. Explicit owner, number and ID
 combinations are checked against GitHub before item mutations.
 
 | Environment variable | Meaning |

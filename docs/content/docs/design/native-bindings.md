@@ -37,7 +37,7 @@ The complete allowed shapes are:
 | Object | Allowed fields and meaning |
 | --- | --- |
 | Manifest | `contract_version: 2`, `identity`, `entrypoint`, `required_project_inputs`, `clients`, `roles`, `files` |
-| Client | `name`: exact workharbor adapter name; `version`: exact native CLI version |
+| Client | `name`: exact WorkHarbor adapter name; `version`: exact native CLI version |
 | Role | `name`, `description`, `instructions`: one inventoried text path, `bindings`, `tools` |
 | Role binding | `client`: a declared client name; `model`: explicit requested model selection; `effort`: explicit requested reasoning effort |
 | Inventory entry | `path`, `sha256`, as in v1 |
@@ -67,7 +67,7 @@ refuse; nothing is truncated. Retain v1 manifest/file/total size limits.
 The operator selects the root role in supervisor-owned configuration. The
 package cannot select the running role, worktree, project policy or child
 admission. Reviewer eligibility and author/reviewer separation belong to the
-selected external workflow under the project's contribution rules; workharbor
+selected external workflow under the project's contribution rules; WorkHarbor
 treats role names as opaque metadata. The host retains generic child identity,
 admission, capability ceilings, binding evidence and human artifact approval;
 workflow eligibility grants no host permission. The root entrypoint supplies

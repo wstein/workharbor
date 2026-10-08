@@ -1,11 +1,11 @@
 ---
 title: Sessions and agents
-description: Which sessions to keep open while you build workharbor with agents, which model each runs on, and why.
+description: Which sessions to keep open while you build WorkHarbor with agents, which model each runs on, and why.
 weight: 4
 toc: true
 ---
 
-How to set up the sessions and subagents that build workharbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them, except the procedure detail that left `AGENTS.md` to keep it under the 24,000-byte cap of Antigravity's always-on rules {{< status unverified >}} (the last section; #233). A rule or prohibition always stays stated in `AGENTS.md` itself. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
+How to set up the sessions and subagents that build WorkHarbor itself. This is about the development workflow in this repository, not about running agents with `whr`. The rules are in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (Project board, Models, Context and cost, GitHub rate limit) and in the lane prompts in [`.agents/`](https://github.com/wstein/workharbor/tree/main/.agents); this page does not copy them, except the procedure detail that left `AGENTS.md` to keep it under the 24,000-byte cap of Antigravity's always-on rules {{< status unverified >}} (the last section; #233). A rule or prohibition always stays stated in `AGENTS.md` itself. `wh/dispatch` has not run yet, so what it does here is {{< status unverified >}}.
 
 ## Sessions to keep open
 
@@ -19,7 +19,7 @@ The lane agents, the reviewers and the helpers are subagents that `wh/dispatch` 
 
 ## Development branch names
 
-New issue-work branches for developing workharbor use
+New issue-work branches for developing WorkHarbor use
 `<category>/<issue>-<slug>`. The category is an existing Conventional Commit
 type (`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`,
 `style` or `revert`), or `spike` for measurement work. The issue is the actual
