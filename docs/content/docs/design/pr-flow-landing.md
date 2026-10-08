@@ -55,6 +55,15 @@ Proposal: move the path matcher into one file, `scripts/path-class.sh` (POSIX sh
 - **Rebase merge changes the SHAs.** Statuses sit on the PR head SHA and do not carry to the new commits on `main`; they gate the merge only. After the merge, `main` carries no review record except the PR comment, so the evidence comment is the audit trail, and it must name the head SHA and the tier.
 - **Weaker than today in one respect.** `land.sh` runs `check-local`, `commitlint` and the secrets range on the exact tip locally; PR checks run on a merge ref or head in CI instead. The required list in the ruleset must include `commits` and `secrets`.
 
+### Turnaround budget
+
+Goal (human): fast local development, a loop under 5 minutes; Opus review before the PR, or earlier on demand. The gate stays path-class based (same logic as `land.sh`), so the budget changes only when checks and reviews run.
+
+1. **Local loop.** Author time in minutes. Local checks are the targeted tests of the touched packages, `typos` and lint; no `-race ./...`, and `./scripts` tests only when `scripts/` changed. The heavy full run is the `ci` workflow on the PR, not a local gate.
+2. **Pre-PR Opus review, under 5 minutes.** It runs on the local branch diff before the PR is opened. The result is a verdict line plus evidence. The PR is then opened ready with `review/opus` set, and CI runs in parallel with nothing else blocking. An earlier Opus review of a commit range is allowed at any time (desk command or agent brief).
+3. **What keeps Opus under 5 minutes.** Small PRs: at most 10 commits and about 500 changed lines; larger work splits into several PRs. The reviewer gets the diff, the issue acceptance and the author's checklist result, reads only what the diff touches, runs at most `go vet` plus targeted tests once (private `GOCACHE`, deleted afterwards), does no mutation and no full test, and does not re-review an unchanged SHA.
+4. **Measured data and assumption.** In the sessions so far, first Opus reviews took about 2.5 to over 10 minutes, and 5 of 12 first rounds were NOT CLEAR. Assumption {{< status unverified >}}: a pre-review author checklist (#405 B) lowers the NOT CLEAR rate, and review rounds, not CI, are the main time cost. The checklist is only worth keeping if the rate drops.
+
 ### Stacking cost
 
 CLEAR is bound to a head SHA. A rebase changes every SHA after the first changed base, so each later PR needs new statuses. The patch-id inheritance of `land.sh` (#365) is lost: for an unchanged patch the desk re-posts the CLEAR on the new head together with a `git range-diff` showing the patches equal. Chained PR bases keep the diff small, but retargeting after the base merges still rebases. Expect one status round per PR per rebase; the fast lane (#405) needs one PR per lane.
@@ -69,7 +78,7 @@ In crewbook (merged mode): `docs/git-history.md#landing-pointer` and `#rebase-re
 
 1. **Ruleset check.** Decide the required check set from the table; add the PR and required-checks rules in evaluate mode if available, else only after step 3. Exit: the ruleset lists the checks and a test PR shows them.
 2. **Shared path script and `gate`.** Add `scripts/path-class.sh`, make `land.sh` call it (tests unchanged), add the `gate` workflow. Exit: `make check-local` green, and on a test PR the gate fails without a status, fails with a status from another account, passes with the right one for each class.
-3. **Statuses and comments.** The desk posts `review/*` statuses and the evidence comment next to the notes (both, in parallel). Exit: three PRs show the same verdict as the note.
+3. **Statuses and comments.** The desk posts `review/*` statuses and the evidence comment next to the notes (both, in parallel). Exit: three PRs show the same verdict as the note. Also measure the pre-PR Opus review time and the NOT CLEAR rate on those PRs against the budget above.
 4. **First PR-flow merge** of a real branch, with `make land` untouched. Exit: it merged by rebase, branch deleted, `main` linear.
 5. **Enforce.** Turn on the PR rule and required checks; `make land` stops working for direct pushes, so keep it only until step 4 succeeded. Exit: a direct push to `main` is refused.
 6. **Retire** `land.sh`, the targets, the `land` pointer, `TO_LAND.md` and the notes, and update the files above. Exit: `docscheck` and `make check-local` green, no remaining reference found by `grep -rn "make land\|land.sh\|refs/notes/review"`.
