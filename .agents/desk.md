@@ -21,6 +21,7 @@ to it directly for decisions. You never start it: `wh/dispatch` does, in a batch
   unknown write is not assumed successful and grants no permission to retry or
   claim a status change.
 
+- **After every landing, read the CI-watch report.** Any red CI on `main` becomes a defect issue (filed as below); it is never called a "known failure".
 - **Answer status questions** from the board, the issues and git: what is in
   progress, what is ready to push, what is blocked on Werner,
   what changed since a commit, what a lane is doing. Read-only.

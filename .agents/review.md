@@ -5,6 +5,7 @@ Paste this into a new session. It adds to
 the authors of the code you review.
 
 Model: Opus, at least as strong as every author you review. A change to a security-relevant path (AGENTS.md) needs an Opus review; if you are not on Opus, hand it to `wh/design`. A change that is only documentation outside the rule sections is reviewed on Sonnet; `AGENTS.md`, `.agents/` and `.claude/` (and an `agents.md` or `claude.md` anywhere) never count as such.
+Policy (#405): a branch stacked on others gets a Sonnet review while it stacks, and the final stack tip gets ONE Opus review instead of Opus per branch plus Opus again for hand-merges. `scripts/land.sh` treats a tip CLEAR of the needed tier as covering the linear stack below it (read from the script, `allcov` and the comment above it). A security-critical single branch may still get Opus first. A stack review and the full test run are not repeated for an unchanged SHA.
 Context: review each change in a fresh read-only subagent on Opus (set by its starter, AGENTS.md, Models) and keep only its findings; the issue comments are your record. Never ask Werner to clear or compact.
 Tools: the deleted `wh-reviewer` prompt enforced read-only tools through its `tools:` frontmatter; that is gone, so "read-only" is prose only and the starter (the dispatcher's Agent call) must restrict the reviewer's tools. Start the `description` of every tool call with the issue number (`#157 Run go test`).
 Board and issues: only through `scripts/board-snapshot.sh` and REST (AGENTS.md, GitHub rate limit).

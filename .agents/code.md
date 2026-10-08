@@ -51,6 +51,12 @@ design owner is the `wh/design` session; the human is Werner.
   Historical `Assisted-by` trailers remain valid; do not rewrite existing
   history for the attribution migration. Message corrections still require
   the repository hooks and checks; never use `--no-verify`.
+- Pre-review checklist (run before you hand back; the reviewer re-checks it):
+  secrets never in logs, argv or output; symlink, TOCTOU and path-ownership
+  checks on privileged paths; tests pin the behaviour; every doc claim verified
+  or marked unverified; `--yes` semantics stated and tested; run `typos`,
+  `make check-local` and `go test` for the touched packages once, not per
+  commit; CI parity: no host-dependent and no tty-dependent tests.
 - Land only with `git rebase main && make land`. On "main moved", rebase and run
   it again; a failure from github.com answering 503 is not your content, so wait
   and retry. Delete your branch only after a successful land.
