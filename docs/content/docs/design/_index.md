@@ -1,6 +1,6 @@
 ---
 title: Design
-description: Architecture, security model and delivery plan for workharbor.
+description: Architecture, security model and delivery plan for WorkHarbor.
 weight: 1
 toc: true
 ---
@@ -50,7 +50,7 @@ A self-hosted service in which AI coding agents carry out project work independe
 
 The central concept is an **agent task supervisor with managed workspaces**, not an editor-centred dev environment.
 
-**Positioning.** workharbor is a self-hosted, agent-agnostic remote for coding agents. From a phone or a browser the developer starts a task, chats with the agent, watches progress, answers its questions and pauses or cancels it, with Claude Code, Codex CLI and later other agents behind one interface (§5.2). It runs on the developer's own machine with their existing agent logins, so there is no hosted service in the middle. Hosted remote offerings from the agent vendors cover one vendor each; where they fall short for a given agent (for example a missing mobile or remote client) is {{< status unverified >}} and is checked in the §12 spike. The boundary stays: agents never merge, tag, release or deploy (§6).
+**Positioning.** WorkHarbor is a self-hosted, agent-agnostic remote for coding agents. From a phone or a browser the developer starts a task, chats with the agent, watches progress, answers its questions and pauses or cancels it, with Claude Code, Codex CLI and later other agents behind one interface (§5.2). It runs on the developer's own machine with their existing agent logins, so there is no hosted service in the middle. Hosted remote offerings from the agent vendors cover one vendor each; where they fall short for a given agent (for example a missing mobile or remote client) is {{< status unverified >}} and is checked in the §12 spike. The boundary stays: agents never merge, tag, release or deploy (§6).
 
 ## 2. Requirements
 

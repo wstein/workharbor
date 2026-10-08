@@ -44,12 +44,12 @@ proposals are preserved separately in [Pending policy proposal](pending-policy-p
 - Record a source commit on main approved for the extraction and an exact file manifest. Check for ongoing lane changes and choose a coordinated cutover point.
 - Audit dependencies on `AGENTS.md`, relative links, worktree names, board identifiers, repository URLs, Make targets, permissions, model names and Go checks.
 - Inspect historical names in an isolated clone; path filtering does not automatically follow renames. Include former paths where needed.
-- Separate generic team coordination from workharbor's local contribution/security policy. One source owns each rule. Preserve every existing security control unless Werner explicitly approves a change.
+- Separate generic team coordination from WorkHarbor's local contribution/security policy. One source owns each rule. Preserve every existing security control unless Werner explicitly approves a change.
 - Route changes to decision table/rule sections/threat model through wh/design. Read the design history before proposing those edits.
 
 ### 2. Extract history in a disposable clone
 - Use a fresh dedicated clone, never the shared checkout or an active lane worktree. Use the shared isolated git environment/credential controls; do not access the human's keychain or credential stores.
-- Filter the agreed directories/files with repeated `--path` arguments (and agreed historical paths); use path renames only where the destination layout requires them. Never use `--invert-paths` on the original repository, bypass the fresh-clone check with `--force`, or force-push workharbor.
+- Filter the agreed directories/files with repeated `--path` arguments (and agreed historical paths); use path renames only where the destination layout requires them. Never use `--invert-paths` on the original repository, bypass the fresh-clone check with `--force`, or force-push WorkHarbor.
 - Select main as the initial lineage; do not import unrelated product branches or release tags into crewbook without a documented reason.
 - Preserve relevant authorship, messages and history. Extracted commit IDs will change. Retain the filter-repo commit map and record the source repository, source commit, manifest and reproducible extraction command as provenance.
 - Scan the extracted tree, retained history and commit messages for secrets and personal/machine data before publication. Do not print matches; stop and report a finding. Preserve the existing EUPL-1.2 licence and attribution; do not infer a licence change.
@@ -57,22 +57,22 @@ proposals are preserved separately in [Pending policy proposal](pending-policy-p
 
 ### 3. Make crewbook portable
 - Add a short README, install/update/uninstall instructions, role documentation and a real skill entry point (`SKILL.md`) if distributing as a skill. Read the applicable skill-creator instructions before implementing that package.
-- Use explicit project configuration for repository identity, board, lane/worktree names, check/land commands and local policies. Ship a workharbor example without personal absolute paths or credentials.
+- Use explicit project configuration for repository identity, board, lane/worktree names, check/land commands and local policies. Ship a WorkHarbor example without personal absolute paths or credentials.
 - Keep tool-specific entry points thin and resolve links against the installed layout. Define how project-specific `AGENTS.md` is loaded and how conflicting instructions are handled without weakening local hard rules.
 - Record Werner's authorized Codex model mapping: Sonnet roles -> `gpt-6.1-sol` with low reasoning; Opus roles -> `gpt-6.1-sol` with medium reasoning; Haiku roles -> `gpt-6-luna` with medium reasoning. Set model and effort explicitly. Document tool-specific mappings separately rather than claiming those model IDs work in Claude Code.
 - Establish the integration contract: required commands, supported tool/version assumptions, installation location, local overrides and compatibility/version checking.
 
-### 4. Integrate and cut over workharbor
+### 4. Integrate and cut over WorkHarbor
 - Choose an explicit immutable crewbook commit pin. Decide installation/vendoring separately from extraction; subtree vendoring is an option, not a requirement. Never load an unreviewed latest version automatically.
 - Preserve a working invocation path for all lanes and commands. Update relative links, manual pages and generated documentation where applicable.
 - Resolve `internal/doctor/laneagents.go`, which discovers `.claude/agents/wh-*.md`, and `internal/docscheck/agents_test.go` and related checks. Keep detection and missing-permission diagnostics valid for the chosen installation layout; do not silence checks to make the split pass.
-- Retain project-specific rules and permissions in workharbor. Remove duplicated reusable sources only after the pinned integration works, through a normal reviewed commit, keeping original history intact.
+- Retain project-specific rules and permissions in WorkHarbor. Remove duplicated reusable sources only after the pinned integration works, through a normal reviewed commit, keeping original history intact.
 - Define rollback to the pre-cutover source commit/pinned version. Existing sessions must be able to finish or explicitly restart using the agreed version.
 
 ### 5. Validate and hand over
 - Verify the extracted manifest, relevant file history, provenance, licence, secret scans, links and install/update/uninstall behaviour.
-- Exercise the workharbor workflow and a second minimal project example to demonstrate portability; do not claim unmeasured behaviour as verified.
-- Add focused meaningful tests for changed discovery/configuration/policy behaviour. Run `make check-local` and focused checks before each workharbor commit; record scope, outcomes and exact candidate SHA for independent review. Full local suites require an explicit human request before push. Never bypass hooks.
+- Exercise the WorkHarbor workflow and a second minimal project example to demonstrate portability; do not claim unmeasured behaviour as verified.
+- Add focused meaningful tests for changed discovery/configuration/policy behaviour. Run `make check-local` and focused checks before each WorkHarbor commit; record scope, outcomes and exact candidate SHA for independent review. Full local suites require an explicit human request before push. Never bypass hooks.
 - Security-relevant changes receive independent wh/review at the authorized Opus-equivalent model strength (`gpt-6.1-sol`, medium). Authors never review their own changes. Rule changes remain wh/design's responsibility.
 - Werner controls publication, pushing, release and final cutover. Desk prepares and routes; dispatch starts workers only when routed. Board writes use `scripts/board-snapshot.sh` exclusively.
 
@@ -93,14 +93,14 @@ The expanded scope also concerns architecture §5.2 (agent adapter/settings), §
 - [x] Work item assigned to `wstein`; project Status `Todo`, Priority `P1`, Session `Werner`.
 - [ ] Source commit, extraction manifest, historical paths and ownership boundary recorded.
 - [ ] Cleanup removes only files/content identified in the approved extraction manifest; broader removal has a separately explicit file boundary from Werner.
-- [ ] Relevant workflow history extracted with filter-repo in an isolated clone; workharbor history unchanged.
+- [ ] Relevant workflow history extracted with filter-repo in an isolated clone; WorkHarbor history unchanged.
 - [ ] EUPL-1.2 licence, attribution, provenance and commit map retained; tree/history/message scans pass.
 - [ ] Reusable workflow and tool entry points packaged with configuration and documented model mappings.
 - [ ] Installation/update/uninstall, immutable pin and rollback documented and exercised.
-- [ ] workharbor consumes the pin; lane discovery, links, local policies and permissions remain functional.
+- [ ] WorkHarbor consumes the pin; lane discovery, links, local policies and permissions remain functional.
 - [ ] A second project example demonstrates reuse; unmeasured claims are marked unverified.
 - [ ] Required checks and independent review pass; wh/design resolves any rule changes.
-- [ ] Raw crewbook import published (complete); remaining workharbor integration/cutover checks, review and final handover complete. Further pushes remain separately authorized.
+- [ ] Raw crewbook import published (complete); remaining WorkHarbor integration/cutover checks, review and final handover complete. Further pushes remain separately authorized.
 
 ## Method references
 
@@ -318,14 +318,14 @@ Review files supplied locally to Werner. A machine-local path is not a public at
 
 Required crewbook files/artifacts, created in ordinary reviewed commits after raw extraction:
 
-- `README.md`: purpose, relationship to workharbor and package scope.
+- `README.md`: purpose, relationship to WorkHarbor and package scope.
 - `LICENSE`: EUPL-1.2 and preserved attribution.
 - A real `SKILL.md` entry point and referenced role/manual resources; consult skill-creator instructions first. Tool-specific launchers must use the installed resource layout.
-- Generic team operating manual and a documented configuration example, without personal absolute paths, secrets or assumed workharbor project identity.
+- Generic team operating manual and a documented configuration example, without personal absolute paths, secrets or assumed WorkHarbor project identity.
 - A documented package/layout/compatibility contract and manifest covering skill-set identity/version, resources and checksums as agreed by wh/design. Do not invent unsupported platform configuration keys.
 - Install/select/pin/update/uninstall and rollback instructions; explicit model mappings and instruction precedence.
 - `PROVENANCE.md` (or equivalent) with source SHA, selection/section manifests, extraction command/tool version and verification summary.
-- Crewbook-appropriate validation/CI, contribution guidance and secret scanning; do not inherit workharbor supervisor checks blindly or bypass its imported instructions. Executable tools remain workharbor-side.
+- Crewbook-appropriate validation/CI, contribution guidance and secret scanning; do not inherit WorkHarbor supervisor checks blindly or bypass its imported instructions. Executable tools remain workharbor-side.
 
 After required checks/review and **Werner's explicit authorization for this push**, import main only. Human-only command outline, with human-managed authentication; do not use the credential-disabled extraction wrapper as an authenticated agent push workaround:
 
@@ -371,7 +371,7 @@ Implement external skill-set storage and the agreed runtime container mount, wit
 
 Record what runtime loading is actually delivered and test it; configuration/docs-only integration must not be described as working runtime provisioning. If runtime implementation exceeds this issue's agreed scope, split it into an explicitly linked follow-up before claiming this acceptance criterion complete. Further crewbook development remains separate work.
 
-Run focused behavioural/integration checks, independent review and the required workharbor checks. Remove only the approved current-source files after import verification and integration tests; edit mixed manual pages according to the section map. Use normal reviewed workharbor commits and the authorized landing process; never rewrite product history or bypass hooks. Update acceptance criteria and final provenance in #283 through REST. All pushes remain Werner-controlled.
+Run focused behavioural/integration checks, independent review and the required WorkHarbor checks. Remove only the approved current-source files after import verification and integration tests; edit mixed manual pages according to the section map. Use normal reviewed WorkHarbor commits and the authorized landing process; never rewrite product history or bypass hooks. Update acceptance criteria and final provenance in #283 through REST. All pushes remain Werner-controlled.
 
 
 ## Runtime-loading integration acceptance (desk recommendation)

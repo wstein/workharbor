@@ -75,7 +75,7 @@ Reboot considerations also include power-loss/UPS behaviour and macOS auto-updat
 
 ### Release 1: one vertical slice
 
-Built CLI first (D12): the slice is the core loop through `whr`; the web UI and the phone client come after it. The [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5) comes first: the subset that lets workharbor run its own issues (D34). Werner's subsequent [D53](native-codex.md) prioritizes full native Codex support across workharbor and crewbook as P1, before Antigravity; its contract and measurements do not wait for #28. The release boundary and measured capability gates stay in force.
+Built CLI first (D12): the slice is the core loop through `whr`; the web UI and the phone client come after it. The [Dogfood milestone](https://github.com/wstein/workharbor/milestone/5) comes first: the subset that lets WorkHarbor run its own issues (D34). Werner's subsequent [D53](native-codex.md) prioritizes full native Codex support across WorkHarbor and crewbook as P1, before Antigravity; its contract and measurements do not wait for #28. The release boundary and measured capability gates stay in force.
 
 - [ ] Apple Container backend, one host, native adapter
 - [ ] Built-in agent adapters for Claude Code (first, built) and Codex CLI (a target: not built, #35; §5.2, §5.5), with observed progress and validated recovery

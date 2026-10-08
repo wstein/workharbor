@@ -1,5 +1,5 @@
 ---
-title: workharbor
+title: WorkHarbor
 layout: hextra-home
 ---
 

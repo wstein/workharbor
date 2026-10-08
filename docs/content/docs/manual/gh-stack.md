@@ -22,6 +22,6 @@ Measured by the desk on a real repository with crewbook pull requests 85 and 89 
 
 The desk posts the `review/<tier>` status on each head SHA as usual; `scripts/stack-status.sh` does this for a stack.
 
-## Status in workharbor
+## Status in WorkHarbor
 
-{{< status unverified >}} The same run has not been repeated on a workharbor pull request. The lab findings are in issue 421.
+{{< status unverified >}} The same run has not been repeated on a WorkHarbor pull request. The lab findings are in issue 421.

@@ -62,4 +62,4 @@ whr usage [--by task|run|repo|agent|model|day|month|all] [--repo owner/name] [--
 
 `whr kill-all` stops every run, cancels every unfinished task and revokes the forge tokens the supervisor holds. It cannot revoke the agent's own credentials, which stay with you. Without `--yes` it asks you to type `kill-all`.
 
-The board script (`scripts/board-snapshot.sh`) belongs to the workflow that builds workharbor, not to running agents with `whr`; it is described in [Sessions and agents](sessions-and-agents.md#the-project-board).
+The board script (`scripts/board-snapshot.sh`) belongs to the workflow that builds WorkHarbor, not to running agents with `whr`; it is described in [Sessions and agents](sessions-and-agents.md#the-project-board).

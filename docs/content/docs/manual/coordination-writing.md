@@ -7,7 +7,7 @@ toc: true
 
 This page supports AGENTS.md's writing rules and the approved reporting scope
 in [crewbook #13](https://github.com/wstein/crewbook/issues/13). The immediate
-workharbor rules apply now. Full reusable crewbook templates remain future
+WorkHarbor rules apply now. Full reusable crewbook templates remain future
 M3 work after full native Codex support, before Antigravity.
 
 ## Issues and comments
