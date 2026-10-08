@@ -122,7 +122,7 @@ a{color:inherit;text-decoration:none}
                 <span style="color: {{ c.fg }}; font-size: 13px; text-align: right">{{ c.state }}</span>
               </div>
             </sc-for>
-            <a href="Setup.dc.html" style="padding: 12px 18px; background: #0b1626; color: #5eead4; font-size: 13px">Statuses: ok, warn, fail, not_verified, skipped. Open the full setup status page</a>
+            <a href="Setup.dc.html" style="padding: 12px 18px; background: #0b1626; color: #5eead4; font-size: 13px">Statuses as whr doctor prints them: ok, WARN, FAIL, unverified, skip (the report key is not_verified). Open the full setup status page</a>
           </div>
         </sc-if>
 
@@ -191,7 +191,7 @@ class Component extends DCLogic {
       { title: 'Sign in', sub: 'Server and access token', lead: 'Connect this browser to your supervisor on the Mac mini. You do this once.' },
       { title: 'Install the GitHub App', sub: 'Repositories and forge limits', lead: 'Install the workharbor GitHub App on the repositories you choose. It is the bot identity the supervisor pushes and opens pull requests with; what it may do is enforced on GitHub.' },
       { title: 'Agents and login', sub: 'Agents, sign-in, default mode', lead: 'Choose the agents, how they sign in and the default permission mode. Claude Code takes live messages and approvals; Codex CLI runs in a labelled degraded mode. No agent can pause cooperatively, so pause interrupts and resume relaunches from the session.' },
-      { title: 'Check the host', sub: 'Runtime and isolation', lead: 'The same checks as whr doctor. Anything not verified yet is marked, not assumed.' },
+      { title: 'Check the host', sub: 'Runtime and isolation', lead: 'The same checks as whr doctor (host steps, user steps and shared checks). Anything not verified yet is marked, not assumed. Check names and wording here are a proposal; the doctor names win.' },
       { title: 'Phone notifications', sub: 'ntfy', lead: 'Agents run for 15 to 60 minutes or longer while you are away. Get a push when one needs you.' },
       { title: 'Ready', sub: 'Summary', lead: 'Your harbor is set up.' },
     ];
@@ -235,7 +235,7 @@ class Component extends DCLogic {
       Object.assign({ label: 'Forbidden mounts rejected', note: 'The adapter rejects your home folder, ~/.ssh, other secrets and runtime sockets. The runtime alone would accept them.', state: 'ok' }, ok),
       Object.assign({ label: 'Default-deny egress', note: 'Measured: an internal network plus a proxy sidecar; allowed hosts pass, everything else is blocked and logged.', state: 'ok' }, ok),
       Object.assign({ label: 'Escape tests', note: 'Measured: the guest cannot reach the host, and mounted unix sockets are unusable.', state: 'ok' }, ok),
-      Object.assign({ label: 'Tool store', note: 'Read-only store mounted: claude 2.1.286, codex 0.159.3.', state: 'ok' }, ok),
+      Object.assign({ label: 'Tool store', note: 'Read-only store mounted: claude 2.1.286, codex 0.159.3 (UNVERIFIED example: the doctor step is tool-store, with no version text in the goldens).', state: 'ok' }, ok),
       Object.assign({ label: 'Capacity: 4 concurrent environments', note: 'Memory at 1 then 4 instances is not measured yet; an idle agent container used about 290 MiB.', state: 'not_verified' }, nv),
       Object.assign({ label: 'Recovery after a Mac reboot', note: 'Environments and the agent session survive a service restart and a rebuild. A reboot itself was not tested.', state: 'not_verified' }, nv),
     ];
@@ -252,7 +252,7 @@ class Component extends DCLogic {
       { k: 'Server', v: 'https://mac-mini.example.net' },
       { k: 'Forge', v: 'GitHub · wstein/workharbor · workharbor GitHub App' },
       { k: 'Agents', v: (mode === 'sub' ? 'Claude Code, subscription login' : 'API key from a 0600 file on the host') + ' · default mode ' + presetDefs.find((d) => d.key === pm).label },
-      { k: 'Host checks', v: '6 ok, 2 not_verified' },
+      { k: 'Host checks', v: '6 ok, 2 unverified' },
       { k: 'Notifications', v: (prov === 'self' ? 'Self-hosted ntfy' : 'ntfy.sh') + (sent ? ' · test push sent' : ' · no test push yet') },
     ];
 

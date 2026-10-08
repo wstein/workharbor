@@ -11,7 +11,7 @@ Interactive mock of the workharbor web UI and the `whr` CLI, made as a customer 
 | `Chat.dc.html` | Phone chat: live transcript, approve or deny, message the agent |
 | `Push.dc.html` | Phone push notifications (ntfy): task ID, event kind and a link only |
 | `Onboarding.dc.html` | First-run web wizard (after v0: release 1 onboards through `whr login`, `whr doctor` and a config file, §9.5): sign in, install the workharbor GitHub App and verify the forge limits, agents and default mode, host checks, ntfy |
-| `Setup.dc.html` | Read-only setup status page (`/setup`), as states: all ok, a fail with a copyable fix command, the not-verified list, a running check with live rows, the redacted report download, the guarded "run user-phase fixes" button with its confirmation modal (deferred), and the host-phase card (the browser never runs host steps); the fail-count badge on the Main link is static |
+| `Setup.dc.html` | Read-only setup status page (`/setup`), as states: all ok, a FAIL with its fix as a bare command block (as `whr doctor` prints it: blank line above and below, no `$`, 4-space indent), the unverified list including Tailscale, a running check with live rows, the redacted report download, the guarded "run user-phase fixes" button with its confirmation modal (deferred), the host-phase card (the browser never runs host steps) and the final "What you need to do now" block of `whr setup host` (flags `--yes`, `--dry-run`, `--only`, `--from`, `--dev`; the wording of lines the goldens do not cover is marked UNVERIFIED); the fail-count badge on the Main link is static |
 | `CLI.dc.html` | A `whr` terminal session: `ls`, `inbox`, `approve` (including a push), `usage`, `purge` and exit codes |
 
 `canvas.json` holds the layout of the artboards on the canvas.
@@ -20,7 +20,7 @@ Interactive mock of the workharbor web UI and the `whr` CLI, made as a customer 
 
 These are the source files of a Claude Design canvas. Each `.dc.html` artboard loads the canvas runtime through `./support.js`, which is not part of this repository, so the files render only inside that editor and not when opened directly in a browser.
 
-The mock follows the design in [`docs/content/docs/design/_index.md`](../../docs/content/docs/design/_index.md). In v0 the web UI is a remote for the agent (live chat, send, start, pause, resume, cancel, decisions and approvals). What is planned for after v0 (open in editor, takeover) carries an "after v0" mark. Host checks that spike #2 did not measure carry the status `not_verified`. The design document is the source of truth; the mock is an illustration and may lag behind it.
+The mock follows the design in [`docs/content/docs/design/_index.md`](../../docs/content/docs/design/_index.md). In v0 the web UI is a remote for the agent (live chat, send, start, pause, resume, cancel, decisions and approvals). What is planned for after v0 (open in editor, takeover) carries an "after v0" mark. Host checks that spike #2 did not measure carry the status `not_verified` in the report JSON; `whr doctor` and `whr setup` print it as `? unverified`, and a missing Tailscale is `unverified`, never `FAIL`. The design document is the source of truth; the mock is an illustration and may lag behind it.
 
 ## Not yet in the mock
 
