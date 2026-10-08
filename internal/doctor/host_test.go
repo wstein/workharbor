@@ -1575,53 +1575,65 @@ func toolStoreDeps(t *testing.T) Deps {
 }
 
 func TestToolStoreIsNotReachableWithoutTheGuestHelpers(t *testing.T) {
-	for _, tc := range []struct {
-		name         string
-		have         []string
-		wantMissing  string
-		wantNotNamed string
-	}{
-		{"shim missing", []string{proxyName}, shimName, proxyName},
-		{"proxy missing", []string{shimName}, proxyName, shimName},
-		{"both missing", nil, shimName + " and " + proxyName, ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			d := toolStoreDeps(t)
-			d.Prefix = t.TempDir()
-			d.Whr = filepath.Join(d.Prefix, "bin", "whr")
-			lib := filepath.Join(d.Prefix, "libexec", "whr")
-			if err := os.MkdirAll(lib, 0o700); err != nil {
-				t.Fatal(err)
-			}
-			for _, n := range tc.have {
-				if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
+	for _, dev := range []bool{false, true} {
+		for _, tc := range []struct {
+			name         string
+			have         []string
+			wantMissing  string
+			wantNotNamed string
+		}{
+			{"shim missing", []string{proxyName}, shimName, proxyName},
+			{"proxy missing", []string{shimName}, proxyName, shimName},
+			{"both missing", nil, shimName + " and " + proxyName, ""},
+		} {
+			t.Run(fmt.Sprintf("dev=%v/%s", dev, tc.name), func(t *testing.T) {
+				d := toolStoreDeps(t)
+				d.Dev = dev
+				d.Prefix = t.TempDir()
+				d.Whr = filepath.Join(d.Prefix, "bin", "whr")
+				lib := filepath.Join(d.Prefix, "libexec", "whr")
+				if err := os.MkdirAll(lib, 0o700); err != nil {
 					t.Fatal(err)
 				}
-			}
-			c := steps(t, d)["tool-store"]
-			u := c.Reach(context.Background())
-			if u == nil {
-				t.Fatal("reachable although a helper is missing")
-			}
-			if !strings.HasPrefix(u.Why, "only the whr binary is installed; the guest helpers "+tc.wantMissing+" are missing under "+lib) {
-				t.Errorf("why %q", u.Why)
-			}
-			if tc.wantNotNamed != "" && strings.Contains(u.Why, tc.wantNotNamed) {
-				t.Errorf("names a helper that is there: %q", u.Why)
-			}
-			if !strings.Contains(u.Note, "--allow-downgrade") || !strings.Contains(u.Note, "xattr -l") || len(u.Tools) != 3 || u.Tools[2] != "scripts/install-release.sh <tag> "+d.Prefix || u.Tools[0] != "make install PREFIX="+d.Prefix || !strings.HasPrefix(u.Tools[1], "make install-release VERSION=<tag> PREFIX="+d.Prefix) {
-				t.Errorf("tools %q", u.Tools)
-			}
-			// with both helpers there, the step is reachable and offers the command
-			for _, n := range []string{shimName, proxyName} {
-				if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
-					t.Fatal(err)
+				for _, n := range tc.have {
+					if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
+						t.Fatal(err)
+					}
 				}
-			}
-			if u := c.Reach(context.Background()); u != nil {
-				t.Errorf("unreachable with both helpers: %+v", u)
-			}
-		})
+				c := steps(t, d)["tool-store"]
+				u := c.Reach(context.Background())
+				if u == nil {
+					t.Fatal("reachable although a helper is missing")
+				}
+				if !strings.HasPrefix(u.Why, "only the whr binary is installed; the guest helpers "+tc.wantMissing+" are missing under "+lib) {
+					t.Errorf("why %q", u.Why)
+				}
+				if tc.wantNotNamed != "" && strings.Contains(u.Why, tc.wantNotNamed) {
+					t.Errorf("names a helper that is there: %q", u.Why)
+				}
+				if dev {
+					// a development prefix is installed from a checkout, by its owner
+					if len(u.Tools) != 1 || u.Tools[0] != "make install PREFIX="+d.Prefix || !strings.Contains(u.Where, "owns "+d.Prefix) || !strings.Contains(u.Note, "signs only the macOS whr") {
+						t.Errorf("dev: %q %q %q", u.Tools, u.Where, u.Note)
+					}
+				} else {
+					// a managed prefix is never a make install target
+					if len(u.Tools) != 2 || u.Tools[0] != "make install-release VERSION=<tag> PREFIX="+d.Prefix || u.Tools[1] != "scripts/install-release.sh <tag> "+d.Prefix ||
+						!strings.Contains(u.Note, "--allow-downgrade") || !strings.Contains(u.Note, "xattr -l") || strings.Contains(strings.Join(u.Tools, ";"), "make install PREFIX") {
+						t.Errorf("managed: %q %q", u.Tools, u.Note)
+					}
+				}
+				// with both helpers there, the step is reachable and offers the command
+				for _, n := range []string{shimName, proxyName} {
+					if err := os.WriteFile(filepath.Join(lib, n), []byte("x"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if u := c.Reach(context.Background()); u != nil {
+					t.Errorf("unreachable with both helpers: %+v", u)
+				}
+			})
+		}
 	}
 }
 

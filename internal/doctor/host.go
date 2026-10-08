@@ -1101,16 +1101,24 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 		if st, _ := check(ctx); st == OK {
 			return nil
 		}
-		return &Unreachable{
-			Why:   "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec(),
-			Where: "as an administrator who can write " + d.prefix() + ", in the source tree",
-			Tools: []string{
-				"make install PREFIX=" + shellWord(d.prefix()),
-				"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
-				"scripts/install-release.sh <tag> " + shellWord(d.prefix()),
-			},
-			Note: "The first builds the binary and both helpers from the source tree and signs them ad hoc. The other two install a release (gh signed in as a writer of the repository): <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute; check it with `xattr -l <whr>` (unverified).",
+		u := &Unreachable{Why: "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec()}
+		if d.Dev {
+			// make install refuses a prefix the running account does not own, and
+			// builds only from a clean checkout of current main
+			u.Where = "as the account that owns " + d.prefix() + ", in a checkout of current main"
+			u.Tools = []string{"make install PREFIX=" + shellWord(d.prefix())}
+			u.Note = "It builds whr, the shim and the proxy from the source tree and signs only the macOS whr (ad hoc); the helpers are renamed into place. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
+			return u
 		}
+		// a managed prefix (/opt/whr, /usr/local, Homebrew) is never a make install
+		// target: the source preflight refuses it, so a release is installed
+		u.Where = "as the administrator, in the source tree"
+		u.Tools = []string{
+			"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
+			"scripts/install-release.sh <tag> " + shellWord(d.prefix()),
+		}
+		u.Note = "Both install a verified release (gh signed in as a writer of the repository). <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
+		return u
 	}
 }
 
