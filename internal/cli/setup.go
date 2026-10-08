@@ -35,6 +35,9 @@ type SetupEnv struct {
 	IsTerminal func() bool
 	Executable func() (string, error)
 	Manager    *launchd.Manager
+	// LookPath finds a program on the PATH; nil is the real PATH. A test
+	// replaces it so a report does not depend on what the machine has installed.
+	LookPath func(string) (string, error)
 	// Identity is the build identity answer files are bound to; nil is
 	// answers.Identity. OpenLog opens the setup protocol of the account whose
 	// home directory is given; nil is protocol.Open. A test replaces both.
@@ -74,6 +77,9 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 	if e.Executable == nil {
 		e.Executable = os.Executable
 	}
+	if e.LookPath == nil {
+		e.LookPath = doctor.DefaultLookPath
+	}
 	if e.Host == nil {
 		e.Host = setup.Terminal{In: bufio.NewReader(st.env.Stdin), Err: st.env.Stderr, Stdin: os.Stdin, Style: style, Sig: &setup.Interrupts{}, Probes: &setup.Probes{}}
 	}
@@ -104,7 +110,7 @@ func newSetup(st *state) *cobra.Command {
 			home := st.env.Getenv("HOME")
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
-				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: doctor.DefaultLookPath,
+				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: env.LookPath,
 				Runner: env.Host, Yes: yes, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev, Managed: managed,
 			})
 		}

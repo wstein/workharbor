@@ -98,6 +98,8 @@ func newSetupRig(t *testing.T) *setupRig {
 		NoRunLog: true,
 		OpenLog:  func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
 		Host:     r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
+		// the same answer on every machine: a golden must not depend on what is installed
+		LookPath:   func(string) (string, error) { return "/opt/homebrew/bin/container", nil },
 		Executable: func() (string, error) { return exe, nil },
 		Manager:    &launchd.Manager{R: aquaOnly{"Aqua"}, UID: 501, GOOS: "darwin"},
 	}
