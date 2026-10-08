@@ -105,3 +105,10 @@ The text and example data follow the design as of D43: workspaces with named age
 - **The console** (D43): a terminal in the console environment with the workspaces mounted read-only and one read-write, reached from the web app and from `whr console`.
 - **Sign-in inside the environment** (D40): the console showing the agent's own login, with no credential passing through workharbor's pages.
 
+- **A merge-review view for the PR flow** (#423): the mock has never drawn the old landing (`make land`, typed short SHA, confirm step, refusal pages, confirmation record), so there is nothing to convert; the "Ready to push?" review in `Inbox.dc.html` ends with the supervisor opening the PR, and merging stays with the human on GitHub. A view for the part after that would show only what the [PR flow](../../docs/content/docs/design/pr-flow-landing.md) and the [manual](../../docs/content/docs/manual/sessions-and-agents.md#pull-request-flow-412) specify:
+  - the commit statuses `review/sonnet` and `review/opus` on the full PR head SHA (state `success` for CLEAR, `failure` for NOT CLEAR), set by the desk;
+  - the evidence comment naming the head SHA, the tier, the verdict and the evidence; after a rebase merge it is the only audit trail;
+  - the result of the `gate` check, which derives the required tier from the changed paths (carve-out needs `review/opus`, ordinary accepts either) and accepts only a status whose creator is on the allow-list;
+  - the merge by rebase, done by the human on GitHub (or `gh stack merge`); no typed SHA and no terminal step.
+
+  Not specified, therefore unverified and not to be invented: the layout of such a view, any queue ordering, wording of refusal messages (the gate shows a failing check; no refusal page is specified), and whether the web UI shows these statuses at all. The layout, colour and onboarding step 3 decisions of #323 stay proposals.
