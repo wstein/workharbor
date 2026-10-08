@@ -1,6 +1,6 @@
 #!/bin/sh
 # Path class of a change (#410, design pr-flow-landing "Class logic and its single copy").
-# Reads changed paths on stdin, ONE PER LINE (newline-separated, like land.sh's
+# Reads changed paths on stdin, ONE PER LINE (newline-separated, as the old landing script did
 # `git diff --name-only -z | tr '\0' '\n'`), and prints `ordinary` or `carve-out`.
 # A path that itself contains a newline therefore arrives as several fragments;
 # a fragment matches no allow-list entry unless it is one, so it falls to
