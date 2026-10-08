@@ -397,13 +397,12 @@ func TestAnUnansweredPromptIsDeniedAfterItsDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var mu sync.Mutex
 	var events []agent.Event
+	collected := make(chan struct{})
 	go func() {
+		defer close(collected)
 		for e := range s.Events() {
-			mu.Lock()
 			events = append(events, e)
-			mu.Unlock()
 		}
 	}()
 	waitUntil(t, "the denial", func() bool { return len(r.written()) >= 2 })
@@ -412,8 +411,9 @@ func TestAnUnansweredPromptIsDeniedAfterItsDeadline(t *testing.T) {
 	}
 	_ = s.Stop(context.Background())
 	_, _ = s.Wait()
-	mu.Lock()
-	defer mu.Unlock()
+	// Wait returns once the events channel is closed, not once the collector
+	// has appended the last event it received: wait for the collector.
+	<-collected
 	if recs := approvals(events); len(recs) != 1 || recs[0].Allow {
 		t.Errorf("approval records %+v, want one denial", recs)
 	}
@@ -461,14 +461,13 @@ func TestBadToolNamesAndAFloodAreDeniedWithoutAsking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var emu sync.Mutex
 	var recs []agent.ApprovalRecord
+	collected := make(chan struct{})
 	go func() {
+		defer close(collected)
 		for e := range s.Events() {
 			if e.Approval != nil {
-				emu.Lock()
 				recs = append(recs, *e.Approval)
-				emu.Unlock()
 			}
 		}
 	}()
@@ -488,14 +487,21 @@ func TestBadToolNamesAndAFloodAreDeniedWithoutAsking(t *testing.T) {
 	close(release)
 	waitUntil(t, "all answers", func() bool { return len(r.written()) >= 1+1+maxOpenPrompts+2 })
 	_ = s.Stop(context.Background())
+	_, _ = s.Wait()
+	<-collected // the events are closed; every record is in recs
 	if n != maxOpenPrompts {
 		t.Errorf("the human was asked %d times, want %d", n, maxOpenPrompts)
 	}
-	emu.Lock()
-	defer emu.Unlock()
+	seen := false
 	for _, rec := range recs {
-		if rec.ID == "bad" && (rec.Allow || !strings.Contains(rec.Reason, "not a tool name")) {
-			t.Errorf("the bad tool name got %+v", rec)
+		if rec.ID == "bad" {
+			seen = true
+			if rec.Allow || !strings.Contains(rec.Reason, "not a tool name") {
+				t.Errorf("the bad tool name got %+v", rec)
+			}
 		}
+	}
+	if !seen {
+		t.Errorf("no approval record for the bad tool name in %+v", recs)
 	}
 }
