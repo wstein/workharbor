@@ -76,3 +76,30 @@ func TestGateCheck(t *testing.T) {
 		})
 	}
 }
+
+func TestGateClass(t *testing.T) {
+	t.Parallel()
+	tests := []struct{ name, input, want string }{
+		{"empty", "", "ordinary"},
+		{"ordinary", "LICENSE\x00internal/version/x.go\x00", "ordinary"},
+		{"carve-out", "LICENSE\x00.github/workflows/x.yml\x00", "carve-out"},
+		{"newline in path", "LICENSE\ninternal/version/x.go\x00", "carve-out"},
+		{"control byte in path", "LICENSE\x01\x00", "carve-out"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd := exec.CommandContext(t.Context(), "sh", "gate-class.sh") //nolint:gosec // fixed script
+			cmd.Dir = "."
+			cmd.Stdin = strings.NewReader(tc.input)
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.TrimSpace(string(out)); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

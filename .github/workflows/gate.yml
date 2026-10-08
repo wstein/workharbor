@@ -1,0 +1,64 @@
+name: gate
+
+# Required review tier (#411, design pr-flow-landing). Trigger is pull_request only,
+# never pull_request_target. The class rule and the decision script come from the
+# BASE commit, never from the PR head, so a PR cannot change those scripts.
+# Known limit: a pull_request run uses the workflow file of the PR's own merge
+# ref, so a same-repo PR can edit this file (GATE_HUMAN, an early exit 0) and the
+# edited gate reports a pass. Such a PR touches .github/* (carve-out), so it needs
+# review/opus and the human merging sees it. Rulesets cannot pin a required
+# workflow to a ref on a user-owned repo (UNVERIFIED, recalled as org-only). Anyone
+# using the wstein token can post their own review/* status; only allow-list
+# creators count. Posting a status does not re-trigger this job, so after stamping
+# the desk re-runs it (gh run rerun, or the Actions UI) (UNVERIFIED).
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
+    env:
+      # Accounts whose review/* statuses count. All sessions share the human's
+      # token, so only wstein is accepted and GATE_DESK stays empty. A separate
+      # desk identity (machine user or GitHub App) is a possible later
+      # hardening; its login would go into GATE_DESK.
+      GATE_HUMAN: wstein
+      GATE_DESK: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Derive class and check review status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -eu
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "gate: fork PRs are outside the flow" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin "$HEAD_SHA"
+          # --no-renames lists old and new path; the rule script is the base copy.
+          # A file, not a pipe: a failing git diff must fail the gate, not yield an
+          # empty list that classifies as ordinary.
+          git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/paths.z" ||
+            { echo "gate: git diff failed" >&2; exit 1; }
+          class=$(sh scripts/gate-class.sh < "$RUNNER_TEMP/paths.z")
+          echo "gate: class $class"
+          gh api --paginate --slurp "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" > "$RUNNER_TEMP/statuses.json"
+          sh scripts/gate-check.sh "$class" "$RUNNER_TEMP/statuses.json" "$GATE_HUMAN" "$GATE_DESK"
