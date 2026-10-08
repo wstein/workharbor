@@ -25,6 +25,17 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Download Go modules (retried, #461)
+        # A proxy.golang.org stream error failed make vet once; retry the fetch
+        # up to 3 times, 10 s apart, so only a persistent failure fails the job.
+        run: |
+          for attempt in 1 2 3; do
+            go mod download && exit 0
+            [ "$attempt" -lt 3 ] && { echo "::warning::go mod download failed, retrying in 10s ($attempt/3)"; sleep 10; }
+          done
+          exit 1
       - name: Check format, lint, editorconfig and tests
         if: matrix.go == '1.27.x'
         run: make check
