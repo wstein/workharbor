@@ -848,17 +848,8 @@ func hostSteps(d Deps) []Check {
 			},
 		},
 
-		{
-			Name: "tailscale", Phase: PhaseHost, Step: 7, Title: "Tailscale signed in (manual step 7)", Optional: true,
-			Run: func(context.Context) (Status, string) {
-				return NotVerified, "signing in is the human's; whr does not check a third party's state"
-			},
-			Fix: &Fix{
-				Guide: "Open the Tailscale app, sign in, and forward whr's name to its loopback port with HTTPS (the command below, manual step 7); or use another option of that step.",
-				Try:   []string{"tailscale serve"},
-				Open:  "https://login.tailscale.com",
-			},
-		},
+		d.tailscaleStep(),
+		d.tailscaleServeStep(),
 	}
 }
 

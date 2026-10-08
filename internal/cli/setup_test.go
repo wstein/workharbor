@@ -564,3 +564,37 @@ func TestTheDeveloperInstallRefusalHasItsExemptions(t *testing.T) {
 		t.Error("uid 0 is flagged")
 	}
 }
+
+func TestTailscaleIsInstalledWithBrewOnlyAfterTheConfirmation(t *testing.T) {
+	missing := func(name string) (string, error) {
+		if name == "/opt/homebrew/bin/brew" {
+			return name, nil
+		}
+		return "", errors.New("not found")
+	}
+	const install = "/opt/homebrew/bin/brew install --cask tailscale-app"
+
+	r := newSetupRig(t)
+	r.env.LookPath = missing
+	code, out, errOut := r.run("setup", "host", "--dry-run", "--only", "tailscale")
+	if len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(out, "fail\ttailscale\t") || !strings.Contains(errOut, "$ "+install+"\n") {
+		t.Errorf("dry run: exit %d, ran %v, asked %d\nout %q\nerr %q", code, r.host.ran, r.host.asked, out, errOut)
+	}
+	if strings.Contains(errOut, "$ sudo") || !strings.Contains(errOut, "UNVERIFIED") || !strings.Contains(errOut, "$ open -a Tailscale\n") {
+		t.Errorf("dry run text:\n%s", errOut)
+	}
+
+	r = newSetupRig(t) // --yes skips the prompt
+	r.env.LookPath = missing
+	r.run("setup", "host", "--yes", "--only", "tailscale")
+	if len(r.host.ran) != 1 || r.host.ran[0] != install {
+		t.Errorf("--yes ran %v", r.host.ran)
+	}
+
+	r = newSetupRig(t) // the prompt says no: nothing runs
+	r.env.LookPath = missing
+	r.run("setup", "host", "--only", "tailscale")
+	if len(r.host.ran) != 0 {
+		t.Errorf("a declined install ran %v", r.host.ran)
+	}
+}

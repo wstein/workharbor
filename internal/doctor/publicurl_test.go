@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,5 +112,98 @@ func TestTheGitHubAppStepUsesTheConfiguredNameOrAsksAndNormalises(t *testing.T) 
 	}
 	if _, err := steps(t, d)["github-app"].Fix.Build(ctx, &answers{lines: []string{"http://w.example"}}); err == nil {
 		t.Error("http accepted")
+	}
+}
+
+func tailscaleDeps(t *testing.T, cfg string, r scripted, tools ...string) Deps {
+	t.Helper()
+	d := publicDeps(t, cfg, r)
+	d.LookPath = func(name string) (string, error) {
+		for _, tool := range tools {
+			if name == tool {
+				return name, nil
+			}
+		}
+		return "", errors.New("not found")
+	}
+	return d
+}
+
+func TestTheTailscaleStepInstallsTheCaskOnlyByArgvAndNeverAsRoot(t *testing.T) {
+	ctx := context.Background()
+	d := tailscaleDeps(t, "", scripted{}, brewPath)
+	c := steps(t, d)["tailscale"]
+	if st, detail := status(c); st != Fail || !strings.Contains(detail, "not installed") {
+		t.Fatalf("missing: %s %q", st, detail)
+	}
+	want := []string{brewPath, "install", "--cask", "tailscale-app"}
+	if len(c.Fix.Cmds) != 1 || c.Fix.Cmds[0].Sudo || strings.Join(c.Fix.Cmds[0].Argv, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("cmds %+v", c.Fix.Cmds)
+	}
+	if err := c.Fix.Do(ctx, &answers{}); err != nil {
+		t.Errorf("an administrator with brew: %v", err)
+	}
+	if !strings.Contains(c.Fix.Guide, "UNVERIFIED") || len(c.Fix.Try) != 1 || strings.Contains(c.Fix.Guide, "open -a") {
+		t.Errorf("guide %q try %q", c.Fix.Guide, c.Fix.Try)
+	}
+
+	root := d
+	root.UID = 0
+	if err := steps(t, root)["tailscale"].Fix.Do(ctx, &answers{}); err == nil || !strings.Contains(err.Error(), "root") {
+		t.Errorf("root: %v", err)
+	}
+	nobrew := tailscaleDeps(t, "", scripted{})
+	if err := steps(t, nobrew)["tailscale"].Fix.Do(ctx, &answers{}); err == nil || !strings.Contains(err.Error(), "brew is not at") {
+		t.Errorf("no brew: %v", err)
+	}
+
+	for _, tool := range []string{"tailscale", tailscaleApp} {
+		have := steps(t, tailscaleDeps(t, "", scripted{}, tool))["tailscale"]
+		if st, _ := status(have); st != NotVerified || have.Fix.Cmds != nil || have.Fix.Do != nil {
+			t.Errorf("%s present: %s, fix %+v", tool, st, have.Fix)
+		}
+	}
+}
+
+func TestTheTailscaleServeStepUsesTheConfiguredPortAndStaysReadOnly(t *testing.T) {
+	ctx := context.Background()
+	const bin = "tailscale"
+	cfg := `{"listen":"127.0.0.1:9191"}`
+	cases := []struct {
+		name  string
+		r     scripted
+		tools []string
+		want  Status
+		reach bool
+	}{
+		{"no tailscale", scripted{}, nil, "", true},
+		{"not signed in", scripted{}, []string{bin}, "", true},
+		{"not forwarded", scripted{"tailscale serve status": "No serve config"}, []string{bin}, Fail, false},
+		{"other port", scripted{"tailscale serve status": "https://w.ts.net (tailnet only)\n|-- / proxy http://127.0.0.1:8787"}, []string{bin}, Fail, false},
+		{"forwarded", scripted{"tailscale serve status": "|-- / proxy http://127.0.0.1:9191"}, []string{bin}, OK, false},
+	}
+	for _, tc := range cases {
+		c := steps(t, tailscaleDeps(t, cfg, tc.r, tc.tools...))["tailscale-serve"]
+		if u := c.Reach(ctx); (u != nil) != tc.reach {
+			t.Errorf("%s: reach %+v", tc.name, u)
+			continue
+		}
+		if !tc.reach {
+			if st, detail := status(c); st != tc.want {
+				t.Errorf("%s: %s %q", tc.name, st, detail)
+			}
+		}
+	}
+	c := steps(t, tailscaleDeps(t, cfg, scripted{}, bin))["tailscale-serve"]
+	cmds, err := c.Fix.Build(ctx, &answers{})
+	if err != nil || len(cmds) != 1 || cmds[0].Sudo || strings.Join(cmds[0].Argv, " ") != "tailscale serve --bg 9191" {
+		t.Errorf("build %+v %v", cmds, err)
+	}
+	if shown := c.Fix.Preview(); strings.Join(shown[0].Argv, " ") != "tailscale serve --bg 9191" {
+		t.Errorf("preview %+v", shown)
+	}
+	def := steps(t, tailscaleDeps(t, "", scripted{}, bin))["tailscale-serve"]
+	if got := def.Fix.Preview()[0].Argv[3]; got != "8787" {
+		t.Errorf("default port %s", got)
 	}
 }
