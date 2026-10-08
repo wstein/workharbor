@@ -535,3 +535,32 @@ func TestADeveloperInstallWithoutDevIsRefused(t *testing.T) {
 		t.Error("a binary of another owner is flagged")
 	}
 }
+
+// The refusal has four exemptions, each held by a test: --managed, the host
+// phase, another account, and root (which has its own refusal).
+func TestTheDeveloperInstallRefusalHasItsExemptions(t *testing.T) {
+	for _, tc := range []struct {
+		name, user string
+		uid        int
+		args       []string
+	}{
+		{"managed", "workharbor", os.Getuid(), []string{"setup", "--managed", "--only", "development-key"}},
+		{"host phase", "workharbor", os.Getuid(), []string{"setup", "host", "--dry-run"}},
+		{"another account", "werner", os.Getuid(), []string{"setup", "--only", "tool-store"}},
+		{"root", "workharbor", 0, []string{"setup", "--only", "tool-store"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newSetupRig(t)
+			r.env.User, r.env.UID, r.env.NoDeveloperHint = tc.user, tc.uid, false
+			r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "no workharbor is NOT a member of admin"
+			_, _, errOut := r.run(tc.args...)
+			if strings.Contains(errOut, "developer install") {
+				t.Errorf("refused or noted: %q", errOut)
+			}
+		})
+	}
+	r := newSetupRig(t)
+	if developerInstallHint(r.exe, 0) != "" {
+		t.Error("uid 0 is flagged")
+	}
+}
