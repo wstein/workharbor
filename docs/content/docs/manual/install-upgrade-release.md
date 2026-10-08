@@ -234,6 +234,7 @@ Tasks already started keep the policy they started under. Repository names are n
 
 Only a human tags, signs and publishes (D24, §6); an agent never does.
 
+0. Write the release summary `docs/releases/vX.Y.Z.md` from `docs/releases/TEMPLATE.md` (4-6 lines: highlights, what users can do now, what is known broken or unverified, how to verify provenance; then the `## Install` block) and commit it on `main`, reviewed like any file. The release workflow prepends it to the generated lists. If the file is missing or empty the release job fails before it builds anything; the tag cannot be moved, so fix `main` and create a new tag. The generated lists (features, bug fixes, ...) are folded in `<details>` with counts.
 1. `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release)`. It does not tag.
 2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: `whr`, the guest binaries, `checksums.txt`, an SBOM, a build-provenance attestation and its bundle (`whr_<tag>.intoto.jsonl`).
 
