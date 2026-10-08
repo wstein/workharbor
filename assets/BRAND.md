@@ -8,7 +8,7 @@ the icons look like one product (#142). Name and casing: **WorkHarbor** in prose
 - **App icon** (square places only: `favicon.svg`, `favicon.ico`, the
   `favicon-*.png`, `apple-touch-icon.png`, the `android-chrome-*.png`,
   `logo.svg`/`logo.png`): the teal anchor on a rounded navy tile. Tile corner
-  radius 13.28 of 64 units (about 21 % of the side); the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. Every rounded tile, wherever it appears (the app icons, `logo.svg`, the banner, the social preview, the navbar logo), has a visible outline: 1.6 units in the 64-unit tile box (2.5 % of the side), colour `#2a4a7a`, drawn inside the tile's edge (#147). `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
+  radius 13.28 of 64 units (about 21 % of the side) for the inset tile rect, 22 % at the outer corner including the stroke; the anchor's drawn height 70 % of the side, centred, so it stays legible at 16 px. Every rounded tile, wherever it appears (the app icons, `logo.svg`, the banner, the social preview, the navbar logo), has a visible outline: 1.6 units in the 64-unit tile box (2.5 % of the side), colour `#2a4a7a`, drawn inside the tile's edge (#147). `apple-touch-icon.png` is the exception: an opaque, full-bleed navy square with no rounded corners and no transparency, because iOS applies its own mask and fills transparent pixels with black.
 - **Horizontal lockup** (any wide place): the bare teal anchor, no tile, then the
   wordmark. The README banner, the social preview and the docs navbar are the
   exception and use the tile lockup (next section). A lockup never appears in a
@@ -35,7 +35,7 @@ wordmark, colours and type).
 | Wordmark | "WorkHarbor" in Bricolage Grotesque Bold, outlined: "Work" in the text colour, "Harbor" in teal |
 | Anchor | drawn height 2.4 × C, vertically centred on the wordmark's cap height; stroke 5.5 in the anchor's 64-unit drawing (4 in the app icon), so it holds its own beside the bold wordmark |
 | Gap anchor to wordmark | 0.6 × C |
-| Tagline (optional) | "Supervise AI coding agents. Stay in the loop.", IBM Plex Sans, outlined, cap height 0.47 × C in the README banner and 0.4 × C in the social preview, teal; baseline 0.85 × C below the wordmark's baseline in the banner and 1.06 × C in the social preview (which carries a third line), left-aligned with the wordmark |
+| Tagline (optional) | "Supervise AI coding agents. Stay in the loop.", IBM Plex Sans, outlined, cap height 0.47 × C in the README banner and 0.38 × C in the social preview, teal; baseline 0.85 × C below the wordmark's baseline in the banner and 1.06 × C in the social preview (which carries a third line), left-aligned with the wordmark |
 | Third line | none, except the social preview ("Self-hosted · isolated workspaces", #147) |
 | Clear space | 0.6 × C to the left and right; at least 0.45 × C above and below the whole block (anchor and text), except in the README banner, where its fixed 150 px height allows 0.33 × C |
 
