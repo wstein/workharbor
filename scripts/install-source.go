@@ -89,7 +89,7 @@ func check(prefix, destdir string) error {
 		stage = destdir + prefix
 		// mkdir -p follows a symlink in any component below DESTDIR, which would land
 		// the install outside the checked location: refuse any such symlink.
-		cur := destdir
+		cur, last := destdir, destdir
 		for _, part := range strings.Split(strings.Trim(prefix, string(filepath.Separator)), string(filepath.Separator)) {
 			if part == "" {
 				continue
@@ -105,10 +105,12 @@ func check(prefix, destdir string) error {
 			if fi.Mode()&os.ModeSymlink != 0 {
 				return fmt.Errorf("%s below DESTDIR is a symlink: the staged install must not leave DESTDIR", cur)
 			}
+			last = cur
 		}
 		if _, err := os.Lstat(stage); os.IsNotExist(err) {
-			// mkdir -p creates the staged prefix; check the DESTDIR it lands in.
-			stage, staged = destdir, true
+			// mkdir -p creates the rest of the staged prefix below the deepest
+			// existing directory: check that one, where the files really land.
+			stage, staged = last, true
 		}
 	}
 	resolved, err := filepath.EvalSymlinks(stage)

@@ -115,9 +115,14 @@ including private worktrees stored there. Check the actual binary destinations
 too: an existing symlink must not redirect a write into a refused directory.
 `make install DESTDIR=/absolute/stage` stages the install: every file is written
 under `$DESTDIR$PREFIX`, and nothing is written at the real `PREFIX`. `DESTDIR`
-must be an existing absolute, clean directory path (no trailing slash, no `.` or `..`, no newline, carriage return or tab) and not `/`. A symlink in any existing component between `DESTDIR` and `DESTDIR/PREFIX` is refused, because `mkdir -p` would follow it out of the stage. `PREFIX=/` with a `DESTDIR` stages to `$DESTDIR/bin` and `$DESTDIR/libexec/whr`. The
+must be an existing absolute, clean directory path (no trailing slash, no `.`
+or `..`, no newline, carriage return or tab) and not `/`. A symlink in any
+existing component between `DESTDIR` and `DESTDIR/PREFIX` is refused, because
+`mkdir -p` would follow it out of the stage. `PREFIX=/` with a `DESTDIR` stages
+to `$DESTDIR/bin` and `$DESTDIR/libexec/whr`. The
 prefix rules above still apply to `PREFIX` itself, and the ownership, writability
-and Git-location rules apply to the staged location. `DESTDIR` is never embedded
+and Git-location rules apply to the staged location, or to the deepest
+existing directory above it when `mkdir -p` has to create the prefix. `DESTDIR` is never embedded
 in a binary or in the messages, which name `PREFIX` only. Unset or empty `DESTDIR`
 installs straight to `PREFIX`, as before. `make install-release` does not take
 `DESTDIR`.
