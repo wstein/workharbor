@@ -3,13 +3,13 @@
 </h1>
 
 <p>
-<a href="LICENSE"><img height="16" alt="License: EUPL-1.2" src="https://img.shields.io/badge/license-EUPL--1.2-blue.svg?style=flat-square"></a>
-<a href="https://github.com/wstein/workharbor/actions/workflows/ci.yml"><img height="16" alt="CI" src="https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-<a href="https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor"><img height="16" alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge"></a>
-<a href="https://www.bestpractices.dev/projects/15300"><img height="16" alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/15300/badge"></a>
-<a href="go.mod"><img height="16" alt="Go" src="https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white&style=flat-square"></a>
-<a href="docs/content/docs/design/roadmap.md"><img height="16" alt="Status: dogfooding release 1" src="https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg?style=flat-square"></a>
-<a href="docs/content/docs/design/_index.md"><img height="16" alt="Platform: macOS (Apple silicon)" src="https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white&style=flat-square"></a>
+<a href="LICENSE"><img alt="License: EUPL-1.2" src="https://img.shields.io/badge/license-EUPL--1.2-blue.svg?style=flat-square"></a>
+<a href="https://github.com/wstein/workharbor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+<a href="https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge"></a>
+<a href="https://www.bestpractices.dev/projects/15300"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/15300/badge"></a>
+<a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white&style=flat-square"></a>
+<a href="docs/content/docs/design/roadmap.md"><img alt="Status: dogfooding release 1" src="https://img.shields.io/badge/status-dogfooding%20release%201-orange.svg?style=flat-square"></a>
+<a href="docs/content/docs/design/_index.md"><img alt="Platform: macOS (Apple silicon)" src="https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white&style=flat-square"></a>
 </p>
 
 WorkHarbor lets AI coding agents work on your repository issues in isolated workspaces on your own Mac, and nothing leaves your machine until you approve it. You follow and steer every agent from one dashboard on your phone, tablet or computer.
