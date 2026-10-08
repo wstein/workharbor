@@ -12,7 +12,7 @@ Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. [AGENTS.md](../AGEN
 
 ## Development setup
 
-You need Go (see `go.mod`) and, for the docs, a C++ compiler the first time Hugo is built. Nothing else needs installing: tools run through pinned `go run` or `npx` commands.
+You need Go (see `go.mod`) and, for the docs, `curl` and `shasum` (macOS: also `pkgutil`). Hugo needs no install: the first `make docs` downloads the pinned prebuilt Hugo v0.165.0 extended release into `.cache/hugo` and verifies its SHA-256 (`.config/hugo.sha256`) before use. Other tools run through pinned `go run` or `npx` commands.
 
 ```bash
 git clone https://github.com/wstein/workharbor
