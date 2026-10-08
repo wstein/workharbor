@@ -113,6 +113,14 @@ resolved aliases. Resolve symlinks and the nearest existing parent before
 creating a missing prefix, and reject Git metadata as well as working trees,
 including private worktrees stored there. Check the actual binary destinations
 too: an existing symlink must not redirect a write into a refused directory.
+`make install DESTDIR=/absolute/stage` stages the install: every file is written
+under `$DESTDIR$PREFIX`, and nothing is written at the real `PREFIX`. `DESTDIR`
+must be an existing absolute directory with no trailing slash and not `/`. The
+prefix rules above still apply to `PREFIX` itself, and the ownership, writability
+and Git-location rules apply to the staged location. `DESTDIR` is never embedded
+in a binary or in the messages, which name `PREFIX` only. Unset or empty `DESTDIR`
+installs straight to `PREFIX`, as before. `make install-release` does not take
+`DESTDIR`.
 A refused destination is an error, never a fallback to another prefix. Use `make install-release` for a managed destination; its signature,
 checksum and attestation requirements remain in force.
 
