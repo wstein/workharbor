@@ -259,6 +259,39 @@ Since migration `0016`, the recorded workflow of a repository includes its **int
 
 Tasks already started keep the policy they started under. Repository names are now matched without regard to case, so a name written in another case is the same repository.
 
+## Uninstall
+
+There is no `make uninstall` target and no `whr uninstall` command; removal is by hand, in this order. Run the first steps as `workharbor` (or the account that runs `whr`, `--user` in a development setup) and the prefix removal as the administrator.
+{{< status unverified >}} No uninstall has been run against a release; each path below is read from the code.
+
+### What is installed
+
+| Route | Files placed |
+| --- | --- |
+| `make install-release` (default `PREFIX=/opt/whr`) | `<prefix>/bin/whr`, `<prefix>/libexec/whr/whr-shim-linux-arm64`, `<prefix>/libexec/whr/whr-proxy-linux-arm64` and the marker `<prefix>/libexec/whr/VERSION` (`scripts/install-release.sh`). |
+| `make install` (default `PREFIX=$HOME/.local`) | The same three binaries; it deletes `libexec/whr/VERSION` instead of writing it (`Makefile`). |
+| `brew install wstein/tap/whr` | `bin/whr`, `libexec/whr/whr-shim-linux-arm64` and `libexec/whr/whr-proxy-linux-arm64` in the formula's Cellar, linked under the Homebrew prefix, plus the shell completions (`scripts/homebrew-formula.sh`). |
+
+The installers create no other file: no launchd job, no configuration, no state.
+
+### What stays behind
+
+Removing the binaries leaves all of this, because `whr` keeps it outside the prefix (paths are the defaults; the configuration may set others, see [Back up, upgrade and restore](#back-up-upgrade-and-restore)):
+
+- the launchd job `~/Library/LaunchAgents/io.github.wstein.workharbor.plist` and its logs in `~/Library/Logs/whr/` (`whr.out.log`, `whr.err.log`, never rotated);
+- the configuration directory `~/.config/whr` (with `config.json.bak` after a setup run) and every secret file the configuration names (API token, GitHub App key, signing keys, ntfy files);
+- the state directory `~/.local/state/whr`, or `state_dir`: the database `workharbor.db` with `-wal` and `-shm`, `topics`, the API socket;
+- the workspace folders below `roots.workspaces`, the tool store (`roots.tool_store`), and the agent-home volumes and container images of Apple Container, which hold the agents' vendor logins ([design §7.3](../design/security.md));
+- the `workharbor` account and the host settings of [Prepare the Mac mini](host-setup.md).
+
+### Order
+
+1. **Back up anything you want to keep**, as in [Back up, upgrade and restore](#back-up-upgrade-and-restore). Removal below is not undoable.
+2. **Stop the service**: `whr service uninstall` unloads the job and removes the plist; the logs stay. Stop a hand-run `whr serve` too, and check that no `whr serve` process is left. This must come first: with the binary gone, launchd restarts a failing job at most every 30 seconds ([Run the supervisor](run-the-supervisor.md)). Stop the workspace environments as well; `whr` has no single command for that in this draft ({{< status unverified >}}).
+3. **Delete the data you no longer want**, as `workharbor`: `rm -r ~/.local/state/whr ~/.config/whr ~/Library/Logs/whr`, the secret files the configuration named if they lie elsewhere, and the workspace folders (they hold unexported agent commits). Removing the agent-home volumes and images uses Apple Container's own commands ({{< status unverified >}}: `whr` has no command for it).
+4. **Remove the binaries**, as the administrator. Homebrew: `brew uninstall whr` (unpin first with `brew unpin whr` if it was pinned), then `brew untap wstein/tap` if you no longer want the tap. Release or source install: `rm -r <prefix>/bin/whr <prefix>/libexec/whr`, then the prefix directory itself if it is empty (`/opt/whr` is created by the installer).
+5. **Remove the account, optionally**: [Remove the WorkHarbor account](host-setup.md#remove-the-workharbor-account) (`whr offboard host`, a dry run unless `--delete`). It deletes the account and its home folder, so run it after step 3 or after the backup. It does not unload launchd jobs or touch the prefix or workspace volumes, so do steps 2 and 4 first.
+
 ## Cut a release (the maintainer)
 
 Only a human tags, signs and publishes (D24, §6); an agent never does.
