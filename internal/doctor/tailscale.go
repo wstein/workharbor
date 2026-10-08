@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
-	"strings"
+	"regexp"
+	"strconv"
 )
 
 // brewPath is the Homebrew the setup steps call (the brew-pin step does too).
@@ -29,7 +30,7 @@ func (d Deps) tailscaleBin() (string, bool) {
 }
 
 // listenPort is the port `whr serve` binds, from the configuration's listen
-// (the default when it is unset or unreadable); the forwarder points at it.
+// (the default when it is unset, unreadable or not a port from 1 to 65535); the forwarder points at it.
 func (d Deps) listenPort() string {
 	listen := defaultListen
 	if m, err := readConfigMap(d.ConfigPath); err == nil {
@@ -37,8 +38,11 @@ func (d Deps) listenPort() string {
 			listen = l
 		}
 	}
-	if _, port, err := net.SplitHostPort(listen); err == nil && port != "" {
-		return port
+	// only a plain port number reaches an argv: never a value that could be a flag
+	if _, port, err := net.SplitHostPort(listen); err == nil {
+		if n, err := strconv.Atoi(port); err == nil && n >= 1 && n <= 65535 && port == strconv.Itoa(n) {
+			return port
+		}
 	}
 	_, port, _ := net.SplitHostPort(defaultListen)
 	return port
@@ -56,7 +60,7 @@ func (d Deps) tailscaleStep() Check {
 				return NotVerified, "not checked: " + errNotHere.Error()
 			}
 			if _, ok := d.tailscaleBin(); !ok {
-				return Fail, "Tailscale is not installed: neither tailscale on the PATH nor " + tailscaleApp + " was found"
+				return NotVerified, "Tailscale is not installed: neither tailscale on the PATH nor " + tailscaleApp + " was found"
 			}
 			return NotVerified, "signing in is the human's; whr does not check a third party's state"
 		},
@@ -134,10 +138,10 @@ func (d Deps) tailscaleServeStep() Check {
 			if err != nil {
 				return NotVerified, "tailscale serve status did not answer: " + oneLine(err.Error())
 			}
-			if strings.Contains(status, "127.0.0.1:"+port) || strings.Contains(status, "localhost:"+port) {
+			if regexp.MustCompile(`(?:127\.0\.0\.1|localhost):` + port + `\b`).MatchString(status) {
 				return OK, "tailscale serve status shows a forward to port " + port + " (the status text's format is unverified)"
 			}
-			return Fail, "tailscale serve status shows no forward to port " + port + " (the status text's format is unverified)"
+			return NotVerified, "tailscale serve status shows no forward to port " + port + " (the status text's format is unverified)"
 		},
 		Fix: &Fix{
 			Desc:  "forward whr's loopback port to the tailnet with HTTPS (never funnel)",

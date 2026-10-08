@@ -133,7 +133,7 @@ func TestTheTailscaleStepInstallsTheCaskOnlyByArgvAndNeverAsRoot(t *testing.T) {
 	ctx := context.Background()
 	d := tailscaleDeps(t, "", scripted{}, brewPath)
 	c := steps(t, d)["tailscale"]
-	if st, detail := status(c); st != Fail || !strings.Contains(detail, "not installed") {
+	if st, detail := status(c); st != NotVerified || !strings.Contains(detail, "not installed") {
 		t.Fatalf("missing: %s %q", st, detail)
 	}
 	want := []string{brewPath, "install", "--cask", "tailscale-app"}
@@ -178,8 +178,9 @@ func TestTheTailscaleServeStepUsesTheConfiguredPortAndStaysReadOnly(t *testing.T
 	}{
 		{"no tailscale", scripted{}, nil, "", true},
 		{"not signed in", scripted{}, []string{bin}, "", true},
-		{"not forwarded", scripted{"tailscale serve status": "No serve config"}, []string{bin}, Fail, false},
-		{"other port", scripted{"tailscale serve status": "https://w.ts.net (tailnet only)\n|-- / proxy http://127.0.0.1:8787"}, []string{bin}, Fail, false},
+		{"not forwarded", scripted{"tailscale serve status": "No serve config"}, []string{bin}, NotVerified, false},
+		{"other port", scripted{"tailscale serve status": "https://w.ts.net (tailnet only)\n|-- / proxy http://127.0.0.1:8787"}, []string{bin}, NotVerified, false},
+		{"longer port", scripted{"tailscale serve status": "|-- / proxy http://127.0.0.1:91910"}, []string{bin}, NotVerified, false},
 		{"forwarded", scripted{"tailscale serve status": "|-- / proxy http://127.0.0.1:9191"}, []string{bin}, OK, false},
 	}
 	for _, tc := range cases {
@@ -205,5 +206,17 @@ func TestTheTailscaleServeStepUsesTheConfiguredPortAndStaysReadOnly(t *testing.T
 	def := steps(t, tailscaleDeps(t, "", scripted{}, bin))["tailscale-serve"]
 	if got := def.Fix.Preview()[0].Argv[3]; got != "8787" {
 		t.Errorf("default port %s", got)
+	}
+}
+
+func TestTheTailscalePortIsOnlyEverAPlainPortNumber(t *testing.T) {
+	for _, listen := range []string{"127.0.0.1:--https=443", "127.0.0.1:0", "127.0.0.1:70000", "127.0.0.1:+80", "127.0.0.1:080", "nonsense"} {
+		d := tailscaleDeps(t, `{"listen":"`+listen+`"}`, scripted{}, "tailscale")
+		if got := d.listenPort(); got != "8787" {
+			t.Errorf("%s gave %q, want the default", listen, got)
+		}
+	}
+	if got := tailscaleDeps(t, `{"listen":"127.0.0.1:65535"}`, scripted{}).listenPort(); got != "65535" {
+		t.Errorf("65535 gave %q", got)
 	}
 }

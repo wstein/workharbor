@@ -577,7 +577,7 @@ func TestTailscaleIsInstalledWithBrewOnlyAfterTheConfirmation(t *testing.T) {
 	r := newSetupRig(t)
 	r.env.LookPath = missing
 	code, out, errOut := r.run("setup", "host", "--dry-run", "--only", "tailscale")
-	if len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(out, "fail\ttailscale\t") || !strings.Contains(errOut, "$ "+install+"\n") {
+	if len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(out, "not_verified\ttailscale\t") || !strings.Contains(errOut, "$ "+install+"\n") {
 		t.Errorf("dry run: exit %d, ran %v, asked %d\nout %q\nerr %q", code, r.host.ran, r.host.asked, out, errOut)
 	}
 	if strings.Contains(errOut, "$ sudo") || !strings.Contains(errOut, "UNVERIFIED") || !strings.Contains(errOut, "$ open -a Tailscale\n") {
