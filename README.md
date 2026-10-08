@@ -10,7 +10,7 @@
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
 > [!WARNING]
-> **Work in progress: no release yet.** The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
+> **Work in progress: pre-releases only.** The pre-releases `v0.1.0-alpha.1` to `v0.1.0-alpha.3` are published on GitHub for dogfooding; `v0.1.0` is still the first release. The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
 
 A self-hosted supervisor for AI coding agents: isolated workspaces, your approval for every push, one dashboard on every device. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
@@ -43,7 +43,7 @@ Each failure below has an answer in the design. Release 1 is still being built, 
 - An agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file.
 - Go 1.26.0 or later, only to build from source. CI checks the latest Go 1.26 and 1.27 patches separately from the module minimum. Documentation, release and documentation vulnerability tools require Go 1.27; the development image uses Go 1.27.1.
 
-The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until the first release.
+The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until `v0.1.0`.
 
 ## CLI (provisional)
 
@@ -67,7 +67,7 @@ make build         # bin/whr
 make install       # whr, whr-shim and whr-proxy from a clean commit on origin/main
 ```
 
-The dogfood host installs a draft release instead (`make install-release VERSION=<tag>`); from `v0.1.0` on, `brew install wstein/tap/whr`.
+The dogfood host installs a pre-release instead (`make install-release VERSION=<tag>`); from `v0.1.0` on, `brew install wstein/tap/whr`.
 
 Setting up the host is in the [manual](https://wstein.github.io/workharbor/docs/manual/); installing, upgrading and releasing are on its [install page](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
 
