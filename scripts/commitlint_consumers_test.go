@@ -126,7 +126,7 @@ func TestLandRunsAndHonoursTheConsumerGate(t *testing.T) {
 		r := newLandBranchRepo(t, false)
 		r.stubChecks("check-local commitlint test-commitlint-consumers check-generated secrets-range:\n\t@echo $@ >> checks-ran\n")
 		wt := r.topic("topic")
-		if out, err := r.land(wt, nil); err != nil {
+		if out, err := r.land(wt, nil, "BRANCH=topic"); err != nil {
 			t.Fatalf("land: %v\n%s", err, out)
 		}
 		logged, err := os.ReadFile(filepath.Join(wt, "checks-ran")) //nolint:gosec // fixed gate log in an isolated test repository
@@ -142,7 +142,7 @@ func TestLandRunsAndHonoursTheConsumerGate(t *testing.T) {
 		r.stubChecks("check-local commitlint check-generated secrets-range:\n\t@echo $@ >> checks-ran\n" +
 			"test-commitlint-consumers:\n\t@echo consumer-test-failed >&2; exit 1\n")
 		wt := r.topic("topic")
-		r.wantRefused(wt, "consumer-test-failed")
+		r.wantRefused(wt, "consumer-test-failed", "BRANCH=topic")
 		logged, _ := os.ReadFile(filepath.Join(wt, "checks-ran")) //nolint:gosec // fixed gate log in an isolated test repository
 		if strings.Contains(string(logged), "secrets-range") {
 			t.Fatalf("later gates ran after the consumer failure: %q", logged)
@@ -155,7 +155,7 @@ func TestLandRunsAndHonoursTheConsumerGate(t *testing.T) {
 		wt := r.topic("topic")
 		base := r.git(r.dir, "rev-parse", "main")
 		// The outer -i ignores the recipe's exit status, so only the output and main count.
-		out, err := r.land(wt, []string{"MAKEFLAGS=i"}, "-i")
+		out, err := r.land(wt, []string{"MAKEFLAGS=i"}, "-i", "BRANCH=topic")
 		if !strings.Contains(out, "consumer-test-failed") {
 			t.Fatalf("want the consumer failure, got %v\n%s", err, out)
 		}
@@ -180,7 +180,7 @@ func TestLandRunsAndHonoursTheConsumerGate(t *testing.T) {
 			r.stubChecks("check-local commitlint check-generated secrets-range:\n\t@:\n" + consumerTarget(t))
 			wt := r.topic("topic")
 			base := r.git(r.dir, "rev-parse", "main")
-			out, err := r.land(wt, env)
+			out, err := r.land(wt, env, "BRANCH=topic")
 			if err == nil || !strings.Contains(out, "consumer broke") {
 				t.Fatalf("%v: want the consumer failure, got %v\n%s", env, err, out)
 			}
