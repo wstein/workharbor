@@ -60,8 +60,9 @@ Use the actual model exposed by the session (`unknown` if unavailable), never a 
 
 ## Releases
 
-Only the maintainer releases (design D24). Until `v0.1.0`, dogfood builds are prerelease tags `v0.1.0-alpha.N` whose draft is never published: skip step 1, tag a green commit of `main` (step 2), and install the draft on the host with `make install-release VERSION=v0.1.0-alpha.N` ([Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/) in the manual).
+Only the maintainer releases (design D24). Until `v0.1.0`, dogfood builds are prerelease tags `v0.1.0-alpha.N` whose draft is never published: skip step 1 but not step 0, tag a green commit of `main` (step 2), and install the draft on the host with `make install-release VERSION=v0.1.0-alpha.N` ([Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/) in the manual).
 
+0. **Summary.** Commit `docs/releases/vX.Y.Z.md` (from `docs/releases/TEMPLATE.md`) on `main` first, also for alpha tags. The release job prepends it to the notes and fails without it (missing or empty file), and a tag cannot be moved.
 1. **Prepare.** On a branch: `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release): prepare vX.Y.Z`. Merge it and wait for CI on `main`.
 2. **Tag.** The maintainer signs and annotates it: `git tag -s vX.Y.Z` on that commit, then pushes the tag. It may be pushed together with `main`: the workflow waits for CI on that commit (polling every 15 seconds, for up to 15 minutes) and stops if CI fails, is cancelled, does not finish in time or never started. It also waits up to 5 minutes for the tagged commit to appear on `main`, and stops unless the tag is annotated, signed by a key in `.github/release-signers` (SSH signatures) and on `main`. Agents never tag.
 3. **Check the draft.** The `release` workflow builds `whr` (darwin/arm64, linux/arm64, linux/amd64) and the guest helpers, checksums, an SBOM and provenance attestations, with notes from git-cliff, into a **draft** release. Download the assets, `gh attestation verify` one, and read the notes.
