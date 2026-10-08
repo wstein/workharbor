@@ -11,17 +11,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* Theme tokens: dark is the default; light follows the system (prefers-color-scheme) or the toggle (data-theme on the root). */
+:root{--bg-page:#07111f;--bg-side:#0a1322;--bg-panel:#0b1626;--bg-head:#0f2038;--bg-active:#13294a;--line-soft:#172a48;--line:#1f3556;--bg-unv:#1b2a4a;--bg-queued:#1b2a42;--bg-skip:#1a2538;--bg-ok:#11331f;--bg-warn:#3a2d0b;--bg-fail:#3b1212;--bg-fail-2:#3a1518;--bg-run:#10294d;--bg-review:#0f3733;--fg:#e6edf7;--fg-2:#c7d3e6;--fg-muted:#9fb3c8;--fg-faint:#6b819e;--ok:#4ade80;--warn:#fbbf24;--fail:#f87171;--unv:#93c5fd;--accent:#5eead4;--run:#60a5fa;--on-accent:#06231f;--on-fail:#1a0707;--on-warn:#1a1305;--fg-strong:#ffffff;}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg-page:#f3f6fb;--bg-side:#e8edf5;--bg-panel:#ffffff;--bg-head:#eef2f8;--bg-active:#d6e4fb;--line-soft:#e1e7f0;--line:#7a8ba3;--bg-unv:#e0eafc;--bg-queued:#e6ebf3;--bg-skip:#e6ebf3;--bg-ok:#dcf5e4;--bg-warn:#fdefc7;--bg-fail:#fde0e0;--bg-fail-2:#fde0e3;--bg-run:#dbeafe;--bg-review:#d3f4ee;--fg:#0f1b2d;--fg-2:#26364d;--fg-muted:#475a73;--fg-faint:#566a84;--ok:#166534;--warn:#7a4a00;--fail:#b42318;--unv:#1d4ed8;--accent:#0f766e;--run:#1d4ed8;--on-accent:#ffffff;--on-fail:#ffffff;--on-warn:#ffffff;--fg-strong:#0b1626;}}
+:root[data-theme="light"]{--bg-page:#f3f6fb;--bg-side:#e8edf5;--bg-panel:#ffffff;--bg-head:#eef2f8;--bg-active:#d6e4fb;--line-soft:#e1e7f0;--line:#7a8ba3;--bg-unv:#e0eafc;--bg-queued:#e6ebf3;--bg-skip:#e6ebf3;--bg-ok:#dcf5e4;--bg-warn:#fdefc7;--bg-fail:#fde0e0;--bg-fail-2:#fde0e3;--bg-run:#dbeafe;--bg-review:#d3f4ee;--fg:#0f1b2d;--fg-2:#26364d;--fg-muted:#475a73;--fg-faint:#566a84;--ok:#166534;--warn:#7a4a00;--fail:#b42318;--unv:#1d4ed8;--accent:#0f766e;--run:#1d4ed8;--on-accent:#ffffff;--on-fail:#ffffff;--on-warn:#ffffff;--fg-strong:#0b1626;}
 body{margin:0}
 a{color:inherit;text-decoration:none}
 </style>
 </helmet>
-<div style="width: 1360px; height: 1100px; box-sizing: border-box; display: flex; flex-direction: column; background: #0b1626; color: #e6edf7; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
-  <header style="display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; border-bottom: 1px solid #1f3556; background: #0a1322">
+<div style="position: relative; width: 1360px; height: 1100px; box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg-panel, #0b1626); color: var(--fg, #e6edf7); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <button type="button" aria-label="Toggle light and dark theme" onclick="var r=document.documentElement,l=r.getAttribute('data-theme')?r.getAttribute('data-theme')==='light':matchMedia('(prefers-color-scheme: light)').matches;r.setAttribute('data-theme',l?'dark':'light')" style="position: absolute; top: 6px; right: 8px; padding: 3px 10px; border: 1px solid var(--line, #1f3556); border-radius: 6px; background: var(--bg-head, #0f2038); color: var(--fg-2, #c7d3e6); font: inherit; font-size: 12px; cursor: pointer">Light / dark</button>
+  <header style="display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; border-bottom: 1px solid var(--line, #1f3556); background: var(--bg-side, #0a1322)">
     <div style="display: flex; align-items: center; gap: 10px">
-      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><g fill="none" stroke="{{accent}}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/><path d="M6 43L12 37L18 43"/><path d="M46 43L52 37L58 43"/></g></svg>
+      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><g fill="none" style="stroke: {{accent}}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="5.5"/><path d="M32 18V54"/><path d="M22 28H42"/><path d="M12 38Q12 55 32 55Q52 55 52 38"/><path d="M6 43L12 37L18 43"/><path d="M46 43L52 37L58 43"/></g></svg>
       <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em">workharbor setup</span>
     </div>
-    <a href="Main.dc.html" style="color: #9fb3c8">Skip for now</a>
+    <a href="Main.dc.html" style="color: var(--fg-muted, #9fb3c8)">Skip for now</a>
   </header>
 
   <div style="flex-grow: 1; min-height: 0; display: flex; gap: 40px; padding: 36px 48px; box-sizing: border-box">
@@ -29,30 +34,30 @@ a{color:inherit;text-decoration:none}
       <sc-for list="{{ steps }}" as="st" hint-placeholder-count="6">
         <button onClick="{{ st.go }}" style="display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid {{ st.border }}; background: {{ st.bg }}; color: {{ st.fg }}; font: inherit; cursor: pointer">
           <span style="width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: {{ st.dotBg }}; color: {{ st.dotFg }}; font-size: 13px; font-weight: 600">{{ st.mark }}</span>
-          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ st.title }}</span><span style="font-size: 12px; color: #9fb3c8">{{ st.sub }}</span></span>
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ st.title }}</span><span style="font-size: 12px; color: var(--fg-muted, #9fb3c8)">{{ st.sub }}</span></span>
         </button>
       </sc-for>
     </nav>
 
     <main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
-      <section style="flex-grow: 1; min-height: 0; padding: 32px; border-radius: 14px; border: 1px solid #1f3556; background: #0f2038; display: flex; flex-direction: column; gap: 20px; overflow: hidden">
+      <section style="flex-grow: 1; min-height: 0; padding: 32px; border-radius: 14px; border: 1px solid var(--line, #1f3556); background: var(--bg-head, #0f2038); display: flex; flex-direction: column; gap: 20px; overflow: hidden">
         <div style="display: flex; flex-direction: column; gap: 6px">
-          <span style="color: #9fb3c8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Step {{ stepNo }} of 6</span>
+          <span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Step {{ stepNo }} of 6</span>
           <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.015em">{{ head.title }}</h1>
-          <div style="color: #c7d3e6; line-height: 1.6; max-width: 760px">{{ head.lead }}</div>
+          <div style="color: var(--fg-2, #c7d3e6); line-height: 1.6; max-width: 760px">{{ head.lead }}</div>
         </div>
 
         <sc-if value="{{ s0 }}" hint-placeholder-val="{{ true }}">
           <div style="display: flex; flex-direction: column; gap: 16px; max-width: 640px">
             <div style="display: flex; flex-direction: column; gap: 6px">
               <label for="server" style="font-weight: 500">Server</label>
-              <input id="server" value="https://mac-mini.example.net" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #9fb3c8; font: inherit; font-family: 'IBM Plex Mono', monospace">
-              <span style="color: #6b819e; font-size: 12px">Reached over your VPN. The API is not exposed publicly.</span>
+              <input id="server" value="https://mac-mini.example.net" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line, #1f3556); background: var(--bg-panel, #0b1626); color: var(--fg-muted, #9fb3c8); font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: var(--fg-faint, #6b819e); font-size: 12px">Reached over your VPN. The API is not exposed publicly.</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 6px">
               <label for="token" style="font-weight: 500">Access token</label>
-              <input id="token" value="{{ token }}" onInput="{{ onToken }}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #e6edf7; font: inherit; font-family: 'IBM Plex Mono', monospace">
-              <span style="color: #6b819e; font-size: 12px">Release 1 uses a single static token, stored encrypted. OAuth sign-in comes later. The CLI uses the same login: whr login --server &lt;url&gt;.</span>
+              <input id="token" value="{{ token }}" onInput="{{ onToken }}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line, #1f3556); background: var(--bg-panel, #0b1626); color: var(--fg, #e6edf7); font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: var(--fg-faint, #6b819e); font-size: 12px">Release 1 uses a single static token, stored encrypted. OAuth sign-in comes later. The CLI uses the same login: whr login --server &lt;url&gt;.</span>
             </div>
           </div>
         </sc-if>
@@ -60,23 +65,23 @@ a{color:inherit;text-decoration:none}
         <sc-if value="{{ s1 }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 16px; max-width: 700px">
             <div style="display: flex; gap: 10px">
-              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid {{accent}}; background: #13294a"><div style="font-weight: 600">GitHub</div><div style="color: #9fb3c8; font-size: 12px; margin-top: 2px">workharbor GitHub App, release 1</div></div>
-              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid #1f3556; opacity: 0.55"><div style="font-weight: 600">Gitea · Forgejo · GitLab</div><div style="color: #9fb3c8; font-size: 12px; margin-top: 2px">Later</div></div>
+              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid {{accent}}; background: var(--bg-active, #13294a)"><div style="font-weight: 600">GitHub</div><div style="color: var(--fg-muted, #9fb3c8); font-size: 12px; margin-top: 2px">workharbor GitHub App, release 1</div></div>
+              <div style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid var(--line, #1f3556); opacity: 0.55"><div style="font-weight: 600">Gitea · Forgejo · GitLab</div><div style="color: var(--fg-muted, #9fb3c8); font-size: 12px; margin-top: 2px">Later</div></div>
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-radius: 10px; background: var(--bg-panel, #0b1626); border: 1px solid var(--line, #1f3556)">
               <div style="display: flex; flex-direction: column; gap: 4px">
                 <span style="font-weight: 500">Installed on <span style="font-family: 'IBM Plex Mono', monospace">wstein/workharbor</span></span>
-                <span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">Contents, pull requests and issues write; metadata read. Installation tokens last about an hour and cover only these repositories. The App's private key stays in the credential service.</span>
+                <span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.5">Contents, pull requests and issues write; metadata read. Installation tokens last about an hour and cover only these repositories. The App's private key stays in the credential service.</span>
               </div>
               <button style="flex: none; padding: 9px 16px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">Choose repositories</button>
             </div>
-            <div style="padding: 16px; border-radius: 10px; background: #0b1626; border: 1px solid #1f3556; display: flex; flex-direction: column; gap: 10px">
+            <div style="padding: 16px; border-radius: 10px; background: var(--bg-panel, #0b1626); border: 1px solid var(--line, #1f3556); display: flex; flex-direction: column; gap: 10px">
               <span style="font-weight: 600">Limits enforced on the forge, not in prompts</span>
-              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #c7d3e6">
-                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>The App can push agent/* branches and open pull requests. The supervisor uses it only after you approve "Ready to push?"; agents never push.</div>
-                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>A ruleset on main requires a human review before merge, with no bypass for the App.</div>
-                <div style="display: flex; gap: 10px"><span style="color: #fbbf24">!</span>That the App's token cannot bypass the ruleset is not tested yet (#27).</div>
-                <div style="display: flex; gap: 10px"><span style="color: #4ade80">✓</span>Merge, tag, release and deploy stay forbidden: a fixed floor no repository policy can loosen.</div>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--fg-2, #c7d3e6)">
+                <div style="display: flex; gap: 10px"><span style="color: var(--ok, #4ade80)">✓</span>The App can push agent/* branches and open pull requests. The supervisor uses it only after you approve "Ready to push?"; agents never push.</div>
+                <div style="display: flex; gap: 10px"><span style="color: var(--ok, #4ade80)">✓</span>A ruleset on main requires a human review before merge, with no bypass for the App.</div>
+                <div style="display: flex; gap: 10px"><span style="color: var(--warn, #fbbf24)">!</span>That the App's token cannot bypass the ruleset is not tested yet (#27).</div>
+                <div style="display: flex; gap: 10px"><span style="color: var(--ok, #4ade80)">✓</span>Merge, tag, release and deploy stay forbidden: a fixed floor no repository policy can loosen.</div>
               </div>
             </div>
           </div>
@@ -84,10 +89,10 @@ a{color:inherit;text-decoration:none}
 
         <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 12px; max-width: 760px">
-            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr) 150px; gap: 8px 14px; padding: 14px 16px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556; font-size: 13px">
-              <span style="font-weight: 600">Claude Code</span><span style="color: #c7d3e6">Live messages, approvals routed to you, token streaming</span><span style="color: #4ade80; text-align: right">Release 1, first</span>
-              <span style="font-weight: 600">Codex CLI</span><span style="color: #c7d3e6">Degraded mode: messages become resumed turns, no host approvals (fixed allowlist)</span><span style="color: #4ade80; text-align: right">Release 1, second</span>
-              <span style="font-weight: 600">Antigravity</span><span style="color: #c7d3e6">Degraded mode: headless print mode, no approval channel</span><span style="color: #9fb3c8; text-align: right">After release 1</span>
+            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr) 150px; gap: 8px 14px; padding: 14px 16px; border-radius: 12px; background: var(--bg-panel, #0b1626); border: 1px solid var(--line, #1f3556); font-size: 13px">
+              <span style="font-weight: 600">Claude Code</span><span style="color: var(--fg-2, #c7d3e6)">Live messages, approvals routed to you, token streaming</span><span style="color: var(--ok, #4ade80); text-align: right">Release 1, first</span>
+              <span style="font-weight: 600">Codex CLI</span><span style="color: var(--fg-2, #c7d3e6)">Degraded mode: messages become resumed turns, no host approvals (fixed allowlist)</span><span style="color: var(--ok, #4ade80); text-align: right">Release 1, second</span>
+              <span style="font-weight: 600">Antigravity</span><span style="color: var(--fg-2, #c7d3e6)">Degraded mode: headless print mode, no approval channel</span><span style="color: var(--fg-muted, #9fb3c8); text-align: right">After release 1</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px">
               <span style="font-weight: 600">Default permission mode</span>
@@ -96,80 +101,80 @@ a{color:inherit;text-decoration:none}
                   <button onClick="{{ pr.pick }}" style="padding: 7px 14px; border-radius: 999px; border: 1px solid {{ pr.border }}; background: {{ pr.bg }}; color: {{ pr.fg }}; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer">{{ pr.label }}</button>
                 </sc-for>
               </div>
-              <span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ presetNote }} Bypassing all prompts is never offered here.</span>
+              <span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.5">{{ presetNote }} Bypassing all prompts is never offered here.</span>
             </div>
             <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
-              <button onClick="{{ m.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 16px; border-radius: 12px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: #e6edf7; font: inherit; cursor: pointer">
+              <button onClick="{{ m.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 16px; border-radius: 12px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: var(--fg, #e6edf7); font: inherit; cursor: pointer">
                 <span style="width: 16px; height: 16px; margin-top: 3px; flex: none; border-radius: 999px; border: 2px solid {{ m.ring }}; background: {{ m.dot }}"></span>
-                <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">{{ m.title }}</span><span style="color: #c7d3e6; line-height: 1.5">{{ m.text }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ m.note }}</span></span>
+                <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">{{ m.title }}</span><span style="color: var(--fg-2, #c7d3e6); line-height: 1.5">{{ m.text }}</span><span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.5">{{ m.note }}</span></span>
               </button>
             </sc-for>
             <sc-if value="{{ isSub }}" hint-placeholder-val="{{ true }}">
-              <div style="padding: 16px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556; display: flex; align-items: center; justify-content: space-between; gap: 16px">
-                <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Sign in to Claude Code inside the environment</span><span style="color: #9fb3c8; font-size: 12px">Open the console, start claude and use its own login. workharbor never sees the credential.</span></div>
-                <span style="padding: 8px 14px; border-radius: 8px; background: #13294a; font-family: 'IBM Plex Mono', monospace; font-size: 14px">whr console &lt;workspace&gt;</span>
+              <div style="padding: 16px; border-radius: 12px; background: var(--bg-panel, #0b1626); border: 1px solid var(--line, #1f3556); display: flex; align-items: center; justify-content: space-between; gap: 16px">
+                <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-weight: 600">Sign in to Claude Code inside the environment</span><span style="color: var(--fg-muted, #9fb3c8); font-size: 12px">Open the console, start claude and use its own login. workharbor never sees the credential.</span></div>
+                <span style="padding: 8px 14px; border-radius: 8px; background: var(--bg-active, #13294a); font-family: 'IBM Plex Mono', monospace; font-size: 14px">whr console &lt;workspace&gt;</span>
               </div>
             </sc-if>
           </div>
         </sc-if>
 
         <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
-          <div style="display: flex; flex-direction: column; max-width: 820px; border: 1px solid #1f3556; border-radius: 12px; overflow: hidden">
+          <div style="display: flex; flex-direction: column; max-width: 820px; border: 1px solid var(--line, #1f3556); border-radius: 12px; overflow: hidden">
             <sc-for list="{{ checks }}" as="c" hint-placeholder-count="8">
-              <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) 150px; gap: 14px; align-items: start; padding: 14px 18px; border-bottom: 1px solid #172a48; background: #0b1626">
+              <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) 150px; gap: 14px; align-items: start; padding: 14px 18px; border-bottom: 1px solid var(--line-soft, #172a48); background: var(--bg-panel, #0b1626)">
                 <span style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: {{ c.bg }}; color: {{ c.fg }}; font-size: 12px; font-weight: 600">{{ c.mark }}</span>
-                <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ c.label }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ c.note }}</span></span>
+                <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{ c.label }}</span><span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.5">{{ c.note }}</span></span>
                 <span style="color: {{ c.fg }}; font-size: 13px; text-align: right">{{ c.state }}</span>
               </div>
             </sc-for>
-            <a href="Setup.dc.html" style="padding: 12px 18px; background: #0b1626; color: #5eead4; font-size: 13px">Statuses as whr doctor prints them: ok, WARN, FAIL, unverified, skip (the report key is not_verified). Open the full setup status page</a>
+            <a href="Setup.dc.html" style="padding: 12px 18px; background: var(--bg-panel, #0b1626); color: var(--accent, #5eead4); font-size: 13px">Statuses as whr doctor prints them: ok, WARN, FAIL, unverified, skip (the report key is not_verified). Open the full setup status page</a>
           </div>
         </sc-if>
 
         <sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 14px; max-width: 700px">
             <sc-for list="{{ providers }}" as="p" hint-placeholder-count="2">
-              <button onClick="{{ p.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; color: #e6edf7; font: inherit; cursor: pointer">
+              <button onClick="{{ p.pick }}" style="display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; color: var(--fg, #e6edf7); font: inherit; cursor: pointer">
                 <span style="width: 16px; height: 16px; margin-top: 3px; flex: none; border-radius: 999px; border: 2px solid {{ p.ring }}; background: {{ p.dot }}"></span>
-                <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{ p.title }}</span><span style="color: #9fb3c8; font-size: 12px; line-height: 1.5">{{ p.note }}</span></span>
+                <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">{{ p.title }}</span><span style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.5">{{ p.note }}</span></span>
               </button>
             </sc-for>
             <div style="display: flex; flex-direction: column; gap: 6px">
               <label for="topic" style="font-weight: 500">Topic</label>
-              <input id="topic" value="wh-k7q2m9x4p1d8v3ztn6" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid #1f3556; background: #0b1626; color: #e6edf7; font: inherit; font-family: 'IBM Plex Mono', monospace">
-              <span style="color: #6b819e; font-size: 12px">Long and random, kept in the credential service. Subscribe to it in the ntfy app on your phone.</span>
+              <input id="topic" value="wh-k7q2m9x4p1d8v3ztn6" readonly style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line, #1f3556); background: var(--bg-panel, #0b1626); color: var(--fg, #e6edf7); font: inherit; font-family: 'IBM Plex Mono', monospace">
+              <span style="color: var(--fg-faint, #6b819e); font-size: 12px">Long and random, kept in the credential service. Subscribe to it in the ntfy app on your phone.</span>
             </div>
             <div style="display: flex; align-items: center; gap: 14px">
               <button onClick="{{ sendTest }}" style="padding: 10px 18px; border-radius: 8px; border: 1px solid {{accent}}; background: transparent; color: {{accent}}; font: inherit; font-weight: 600; cursor: pointer">Send test push</button>
               <span style="color: {{ testFg }}">{{ testText }}</span>
             </div>
-            <div style="color: #9fb3c8; font-size: 12px; line-height: 1.6">Pushes carry the task ID, the event kind and a link only. The link opens over your VPN, so keep it on when you are away.</div>
+            <div style="color: var(--fg-muted, #9fb3c8); font-size: 12px; line-height: 1.6">Pushes carry the task ID, the event kind and a link only. The link opens over your VPN, so keep it on when you are away.</div>
           </div>
         </sc-if>
 
         <sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
           <div style="display: flex; flex-direction: column; gap: 18px; max-width: 760px">
-            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px 16px; padding: 18px; border-radius: 12px; background: #0b1626; border: 1px solid #1f3556">
+            <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px 16px; padding: 18px; border-radius: 12px; background: var(--bg-panel, #0b1626); border: 1px solid var(--line, #1f3556)">
               <sc-for list="{{ summary }}" as="r" hint-placeholder-count="5">
-                <span style="color: #9fb3c8">{{ r.k }}</span><span>{{ r.v }}</span>
+                <span style="color: var(--fg-muted, #9fb3c8)">{{ r.k }}</span><span>{{ r.v }}</span>
               </sc-for>
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px">
               <span style="font-weight: 600">Start your first task</span>
-              <div style="padding: 12px 16px; border-radius: 8px; background: #07111f; border: 1px solid #1f3556; font-family: 'IBM Plex Mono', monospace"><span style="color: #5eead4">$</span> whr run https://github.com/wstein/workharbor/issues/15</div>
-              <span style="color: #9fb3c8; font-size: 12px">Then chat with the agent, detach, and wait for your phone to ring. Merge, release and deploy always stay with you.</span>
+              <div style="padding: 12px 16px; border-radius: 8px; background: var(--bg-page, #07111f); border: 1px solid var(--line, #1f3556); font-family: 'IBM Plex Mono', monospace"><span style="color: var(--accent, #5eead4)">$</span> whr run https://github.com/wstein/workharbor/issues/15</div>
+              <span style="color: var(--fg-muted, #9fb3c8); font-size: 12px">Then chat with the agent, detach, and wait for your phone to ring. Merge, release and deploy always stay with you.</span>
             </div>
           </div>
         </sc-if>
       </section>
 
       <div style="display: flex; justify-content: space-between; align-items: center">
-        <button onClick="{{ back }}" style="padding: 11px 20px; border-radius: 8px; border: 1px solid #1f3556; background: transparent; color: #c7d3e6; font: inherit; cursor: pointer; opacity: {{ backOpacity }}">Back</button>
+        <button onClick="{{ back }}" style="padding: 11px 20px; border-radius: 8px; border: 1px solid var(--line, #1f3556); background: transparent; color: var(--fg-2, #c7d3e6); font: inherit; cursor: pointer; opacity: {{ backOpacity }}">Back</button>
         <sc-if value="{{ notLast }}" hint-placeholder-val="{{ true }}">
-          <button onClick="{{ next }}" style="padding: 11px 26px; border: 0; border-radius: 8px; background: {{accent}}; color: #06231f; font: inherit; font-weight: 600; cursor: pointer">Continue</button>
+          <button onClick="{{ next }}" style="padding: 11px 26px; border: 0; border-radius: 8px; background: {{accent}}; color: var(--on-accent, #06231f); font: inherit; font-weight: 600; cursor: pointer">Continue</button>
         </sc-if>
         <sc-if value="{{ isLast }}" hint-placeholder-val="{{ false }}">
-          <a href="Main.dc.html" style="padding: 11px 26px; border-radius: 8px; background: {{accent}}; color: #06231f; font-weight: 600">Open the Harbor</a>
+          <a href="Main.dc.html" style="padding: 11px 26px; border-radius: 8px; background: {{accent}}; color: var(--on-accent, #06231f); font-weight: 600">Open the Harbor</a>
         </sc-if>
       </div>
     </main>
@@ -179,7 +184,7 @@ a{color:inherit;text-decoration:none}
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5eead4","options":["#5eead4","#60a5fa","#fbbf24","#f472b6"]},"$preview":{"width":1360,"height":1100}}'>
 class Component extends DCLogic {
   renderVals() {
-    const accent = this.props.accent ?? '#5eead4';
+    const accent = (this.props.accent && this.props.accent !== '#5eead4') ? this.props.accent : 'var(--accent, #5eead4)';
     const step = this.state.step ?? 0;
     const mode = this.state.mode ?? 'sub';
     const prov = this.state.prov ?? 'self';
@@ -201,8 +206,8 @@ class Component extends DCLogic {
       return {
         title: d.title, sub: d.sub,
         mark: done ? '✓' : String(i + 1),
-        bg: cur ? '#13294a' : 'transparent', border: cur ? accent : 'transparent', fg: cur ? '#ffffff' : '#c7d3e6',
-        dotBg: done ? '#11331f' : (cur ? accent : '#1b2a42'), dotFg: done ? '#4ade80' : (cur ? '#06231f' : '#9fb3c8'),
+        bg: cur ? 'var(--bg-active, #13294a)' : 'transparent', border: cur ? accent : 'transparent', fg: cur ? 'var(--fg-strong, #ffffff)' : 'var(--fg-2, #c7d3e6)',
+        dotBg: done ? 'var(--bg-ok, #11331f)' : (cur ? accent : 'var(--bg-queued, #1b2a42)'), dotFg: done ? 'var(--ok, #4ade80)' : (cur ? 'var(--on-accent, #06231f)' : 'var(--fg-muted, #9fb3c8)'),
         go: () => this.setState({ step: i }),
       };
     });
@@ -213,7 +218,7 @@ class Component extends DCLogic {
     ];
     const modes = modeDefs.map((m) => {
       const on = m.key === mode;
-      return { title: m.title, text: m.text, note: m.note, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ mode: m.key }) };
+      return { title: m.title, text: m.text, note: m.note, bg: on ? 'var(--bg-active, #13294a)' : 'var(--bg-panel, #0b1626)', border: on ? accent : 'var(--line, #1f3556)', ring: on ? accent : 'var(--fg-faint, #6b819e)', dot: on ? accent : 'transparent', pick: () => this.setState({ mode: m.key }) };
     });
 
     const presetDefs = [
@@ -224,11 +229,11 @@ class Component extends DCLogic {
     ];
     const presets = presetDefs.map((d) => {
       const on = d.key === pm;
-      return { label: d.label, bg: on ? '#13294a' : 'transparent', border: on ? accent : '#1f3556', fg: on ? '#ffffff' : '#9fb3c8', pick: () => this.setState({ pm: d.key }) };
+      return { label: d.label, bg: on ? 'var(--bg-active, #13294a)' : 'transparent', border: on ? accent : 'var(--line, #1f3556)', fg: on ? 'var(--fg-strong, #ffffff)' : 'var(--fg-muted, #9fb3c8)', pick: () => this.setState({ pm: d.key }) };
     });
     const presetNote = presetDefs.find((d) => d.key === pm).note;
-    const ok = { mark: '✓', bg: '#11331f', fg: '#4ade80' };
-    const nv = { mark: '?', bg: '#1b2a4a', fg: '#93c5fd' };
+    const ok = { mark: '✓', bg: 'var(--bg-ok, #11331f)', fg: 'var(--ok, #4ade80)' };
+    const nv = { mark: '?', bg: 'var(--bg-unv, #1b2a4a)', fg: 'var(--unv, #93c5fd)' };
     const checks = [
       Object.assign({ label: 'Container services running', note: 'Apple Container on the Mac mini. After a login, container system start has to run; the supervisor does it.', state: 'ok' }, ok),
       Object.assign({ label: 'Limits enforced, one VM per environment', note: 'CPU and memory limits hold; a runaway allocation is killed and the environment survives.', state: 'ok' }, ok),
@@ -245,7 +250,7 @@ class Component extends DCLogic {
     ];
     const providers = provDefs.map((p) => {
       const on = p.key === prov;
-      return { title: p.title, note: p.note, bg: on ? '#13294a' : '#0b1626', border: on ? accent : '#1f3556', ring: on ? accent : '#6b819e', dot: on ? accent : 'transparent', pick: () => this.setState({ prov: p.key, sent: false }) };
+      return { title: p.title, note: p.note, bg: on ? 'var(--bg-active, #13294a)' : 'var(--bg-panel, #0b1626)', border: on ? accent : 'var(--line, #1f3556)', ring: on ? accent : 'var(--fg-faint, #6b819e)', dot: on ? accent : 'transparent', pick: () => this.setState({ prov: p.key, sent: false }) };
     });
 
     const summary = [
@@ -264,7 +269,7 @@ class Component extends DCLogic {
       isSub: mode === 'sub',
       token,
       testText: sent ? 'Sent. Check your phone.' : 'Sends a harmless test message.',
-      testFg: sent ? '#4ade80' : '#9fb3c8',
+      testFg: sent ? 'var(--ok, #4ade80)' : 'var(--fg-muted, #9fb3c8)',
       notLast: step < 5, isLast: step === 5,
       backOpacity: step === 0 ? 0.4 : 1,
       onToken: (e) => this.setState({ token: e.target.value }),
