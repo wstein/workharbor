@@ -11,8 +11,6 @@
 #   board-snapshot.sh sync [--dry-run] [--registry <path>] [--root <dir>]  reconcile open cards (rule table: docs, "Board move and sync")
 #   board-snapshot.sh budget                      lowest remaining and total cost, last 24 hours (no gh call)
 #
-#   board-snapshot.sh ready <number>...           set Ready to push (wh/dispatch for wh/review)
-#
 # Every write mode takes several issues (at most 50) in one call: one value
 # for all, one cache patch for the ones that succeeded. Who may write, and what
 # asks for permission, is set in AGENTS.md (GitHub rate limit). A failure on one issue is reported on stderr, the rest
@@ -22,10 +20,8 @@
 # it refuses to write (exit 1) when its refresh failed and only an old snapshot is left.
 # move reads each card back after the write (a fresh query of that one card) and
 # exits 1 on a mismatch; a card already at the status gets no write ("already").
-# move sets only Todo, In progress, Blocked and In review: Ready to push
-# (wh/review) and Done (closing the issue, the human) are refused before any gh
-# call. `ready` sets Ready to push through wh/dispatch on behalf of wh/review
-# for the reviewed sha (the review gate, AGENTS.md). Done is set by the human or by closing the issue.
+# move sets only Todo, In progress, Blocked and In review: Done (the human
+# closing or merging the PR) is refused before any gh call.
 #
 # Writes use the item-ID route, never `gh project item-edit --url`, whose
 # project-wide item lookup trips GitHub's secondary rate limit (#165): one call
@@ -130,7 +126,7 @@ queue) [ -n "${args[1]:-}" ] || die "usage: board-snapshot.sh queue <lane>" ;;
 card)
   case ${args[1]:-} in '' | *[!0-9]*) die "usage: board-snapshot.sh card <number>" ;; esac
   ;;
-move | session | priority | add | ready)
+move | session | priority | add)
   # move, session and priority end with one value shared by every issue; add
   # and ready take only issue numbers. All input is checked before any gh call.
   nums=("${args[@]:1}")
@@ -152,8 +148,8 @@ move | session | priority | add | ready)
   move)
     case $value in
     "Todo" | "In progress" | "Blocked" | "In review") ;;
-    "Ready to push" | "Done")
-      die "move does not set \"$value\": Ready to push is set by board-snapshot.sh ready <number> ... (approved by wh/review, written by wh/dispatch for the reviewed sha) and Done by closing the issue or by the human" ;;
+    "Done")
+      die "move does not set \"$value\": Done follows from the human closing or merging the PR" ;;
     *) die "status must be one of: Todo, In progress, Blocked, In review" ;;
     esac
     ;;
@@ -181,7 +177,7 @@ sync)
   refresh=1
   ;;
 budget) ;;
-*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, ready, sync, budget)" ;;
+*) die "unknown mode $mode (print, queue <lane>, card <number>, move, session, priority, add, sync, budget)" ;;
 esac
 
 dir=$(dirname "$file")
@@ -622,13 +618,12 @@ lookup_item() {
 }
 
 case $mode in
-move | session | priority | add | ready)
+move | session | priority | add)
   rate_warn
   failed=0 done_nums=() done_json="[]"
   if [ "$mode" != add ]; then
     case $mode in
     move) field=Status key=status ;;
-    ready) field=Status key=status value="Ready to push" ;;
     session) field=Session key=session ;;
     priority) field=Priority key=priority ;;
     esac
