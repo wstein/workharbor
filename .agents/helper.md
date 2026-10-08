@@ -35,7 +35,7 @@ is the board check, which a helper does not run, and card writes go through `wh/
 - **Checks:** `make check-local`, `make fmt-check`, focused `go test -race` on named packages.
   Never `make check-ci` or a generator (`make generate`). The checks' own Go
   toolchain downloads are accepted; direct network use (`curl`, `wget`,
-  `go get`, `go mod`, npm, pip, brew, `gh`) is not.
+  `go get`, `go mod`, npm, pip, brew, `gh`) is not, except the read-only CI watcher the brief names (`gh run watch <id> --exit-status`, `gh run view <id> --log-failed`; [trial rule](../docs/content/docs/manual/sessions-and-agents.md#desk-push-trial-439)).
 
 Not a helper's: any security-relevant path (AGENTS.md, Security-relevant
 paths: it lists them, the rule sections and the threat model among them), a
