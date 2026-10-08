@@ -11,8 +11,8 @@ import (
 // srRepo is a temp repo with three commits a<-b<-c on branch topic, a fake make
 // on PATH that records its arguments, and a side commit outside the tip's history.
 type srRepo struct {
-	dir, bin, makeLog string
-	a, b, c, side     string
+	dir, bin, makeLog   string
+	a, b, c, side, base string
 }
 
 func (r *srRepo) git(t *testing.T, args ...string) string {
@@ -37,7 +37,7 @@ func newSRRepo(t *testing.T) *srRepo {
 			t.Fatal(err)
 		}
 	}
-	fake := "#!/bin/sh\necho \"$*\" >> '" + r.makeLog + "'\n"
+	fake := "#!/bin/sh\necho \"$*\" >> '" + r.makeLog + "'\ncat '" + filepath.Join(root, "preview.txt") + "' >&2 2>/dev/null\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(r.bin, "make"), []byte(fake), 0o755); err != nil { //nolint:gosec // fake executable
 		t.Fatal(err)
 	}
@@ -46,6 +46,8 @@ func newSRRepo(t *testing.T) *srRepo {
 		r.git(t, "commit", "-q", "--allow-empty", "-m", n)
 		return r.git(t, "rev-parse", "HEAD")
 	}
+	root0 := commit("root")
+	r.base = root0
 	r.git(t, "checkout", "-q", "-b", "topic")
 	r.a, r.b, r.c = commit("a"), commit("b"), commit("c")
 	r.git(t, "checkout", "-q", "-b", "other", r.a)
@@ -82,7 +84,7 @@ func (r *srRepo) note(t *testing.T, sha string) string {
 
 func TestStackReadyAppendsOnceAndPrints(t *testing.T) {
 	r := newSRRepo(t)
-	args := []string{r.c, "--opus", r.c, r.b, "--sonnet", r.a}
+	args := []string{r.c, "--issues", "#401 #404", "--opus", r.c, r.b, "--sonnet", r.a}
 	out, err := r.run(t, args...)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
@@ -93,7 +95,8 @@ func TestStackReadyAppendsOnceAndPrints(t *testing.T) {
 	if got := r.note(t, r.a); got != "CLEAR "+r.a+" role=review model=sonnet\n" {
 		t.Errorf("a note = %q", got)
 	}
-	if !strings.Contains(out, "- topic "+r.c+": make land SHA="+r.c[:7]) {
+	want := "- workharbor STACK on `land`, tip " + r.c[:7] + ", 3 commits on main " + r.base[:7] + " (#401 #404). Opus CLEAR"
+	if !strings.Contains(out, want) || !strings.Contains(out, "\n  `cd /Users/werner/workspaces/workharbor/workharbor && make land SHA="+r.c+"`\n") || strings.Contains(out, "carve-out") {
 		t.Errorf("no READY entry:\n%s", out)
 	}
 	if log, _ := os.ReadFile(r.makeLog); string(log) != "land-preview SHA="+r.c+"\n" {
@@ -136,5 +139,20 @@ func TestStackReadyRefusals(t *testing.T) {
 				t.Error("make ran despite refusal")
 			}
 		})
+	}
+}
+
+func TestStackReadyCarveOut(t *testing.T) {
+	r := newSRRepo(t)
+	preview := filepath.Join(filepath.Dir(r.bin), "preview.txt")
+	if err := os.WriteFile(preview, []byte("land: path class: carve-out (from the changed paths, not from the note)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.run(t, r.c, "--opus", r.c)
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "verified by the desk (carve-out: type the short SHA `"+r.c[:7]+"`):") {
+		t.Errorf("no carve-out text:\n%s", out)
 	}
 }
