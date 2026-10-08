@@ -50,6 +50,11 @@ LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(
 # libexec/whr/VERSION, which only install-release writes: after a source install
 # the version is unknown, and install-release then needs --allow-downgrade.
 PREFIX ?= $(HOME)/.local
+# DESTDIR stages the install: every path make install writes is prefixed with it, while
+# PREFIX alone is what the messages and the safety checks name. It is never embedded in a
+# binary or file. Empty (the default) installs straight to PREFIX; otherwise it must be an
+# existing absolute clean directory (scripts/install-source.go refuses anything else).
+DESTDIR ?=
 INSTALL_GO = GOWORK=off GOFLAGS= go
 # Quote operator-selected paths as shell data, including spaces and apostrophes.
 install-quote = '$(subst ','"'"',$(1))'
@@ -69,17 +74,17 @@ check-main:
 
 .PHONY: check-install-source
 check-install-source:
-	@$(INSTALL_GO) run scripts/install-source.go $(call install-quote,$(PREFIX))
+	@$(INSTALL_GO) run scripts/install-source.go $(call install-quote,$(PREFIX)) $(call install-quote,$(DESTDIR))
 
 # Stamp the guarded checkout even when the caller has inherited Git selectors
 # or configuration. Ordinary make build retains its existing behavior.
 install: VERSION_GIT = env -i PATH=$(call install-quote,$(PATH)) HOME=$(call install-quote,$(HOME)) GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0 GIT_NO_REPLACE_OBJECTS=1 git -c credential.helper= -c core.fsmonitor=false
 install: GIT_STATUS_FLAGS = --porcelain --untracked-files=all
 install: check-install-source
-	mkdir -p $(call install-quote,$(PREFIX)/bin) $(call install-quote,$(PREFIX)/libexec/whr)
-	rm -f $(call install-quote,$(PREFIX)/libexec/whr/VERSION)
+	mkdir -p $(call install-quote,$(DESTDIR)$(PREFIX)/bin) $(call install-quote,$(DESTDIR)$(PREFIX)/libexec/whr)
+	rm -f $(call install-quote,$(DESTDIR)$(PREFIX)/libexec/whr/VERSION)
 	set -e; \
-	bin=$(call install-quote,$(PREFIX)/bin); lib=$(call install-quote,$(PREFIX)/libexec/whr); \
+	bin=$(call install-quote,$(DESTDIR)$(PREFIX)/bin); lib=$(call install-quote,$(DESTDIR)$(PREFIX)/libexec/whr); \
 	tmp=$$(mktemp -d "$$bin/.whr-install.XXXXXX"); tmplib=$$(mktemp -d "$$lib/.whr-install.XXXXXX"); \
 	trap 'rm -rf "$$tmp" "$$tmplib"' EXIT; \
 	$(INSTALL_GO) build -trimpath -ldflags "$(LDFLAGS)" -o "$$tmp/whr" ./cmd/whr; \
@@ -89,7 +94,7 @@ install: check-install-source
 	mv -f "$$tmp/whr" "$$bin/whr"; \
 	mv -f "$$tmplib/whr-shim-linux-arm64" "$$lib/whr-shim-linux-arm64"; \
 	mv -f "$$tmplib/whr-proxy-linux-arm64" "$$lib/whr-proxy-linux-arm64"
-	@version=$$($(call install-quote,$(PREFIX)/bin/whr) version) || { echo "the installed whr did not run (zsh shows 'killed' with no output when macOS rejects its signature): run codesign -v and xattr -l on $(PREFIX)/bin/whr, see the troubleshooting page, then rebuild with make install" >&2; exit 1; }; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
+	@version=$$($(call install-quote,$(DESTDIR)$(PREFIX)/bin/whr) version) || { echo "the installed whr did not run (zsh shows 'killed' with no output when macOS rejects its signature): run codesign -v and xattr -l on $(PREFIX)/bin/whr, see the troubleshooting page, then rebuild with make install" >&2; exit 1; }; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
 	@printf '%s\n' $(call install-quote,development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual))
 	@printf '%s\n' $(call install-quote,next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64)
 
