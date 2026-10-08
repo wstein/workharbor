@@ -48,7 +48,7 @@ A decision that loosens a Hard rule or a security control, changes release scope
 
 ## The review gate
 
-A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note, and no separate `wh/review` session is needed. The desk also posts it as the `review/*` status on the PR head SHA (Pull request flow below). The designated dispatcher then sets `Ready to push` on its behalf, only for the reviewed sha and only when the comment has no open findings. The author never starts the review of its own change in its own context, and a dispatcher never reviews. A security-relevant change needs the Opus reviewer. You push only `Ready to push` work.
+A review subagent is `wh/review`: its comment `CLEAR <full sha> role=review model=<m>` with no open findings is the review note, and no separate `wh/review` session is needed. The desk also posts it as the `review/*` status on the PR head SHA (Pull request flow below). The desk pushes the topic branch and opens the PR only after a CLEAR note with no open findings. The author never starts the review of its own change in its own context, and a dispatcher never reviews. A security-relevant change needs the Opus reviewer. You push only reviewed work.
 
 ## Pull request flow (#412)
 
@@ -133,7 +133,7 @@ scripts/board-snapshot.sh --refresh           # force a query
 scripts/board-snapshot.sh budget              # refreshes, their cost and the lowest GraphQL budget left, last 24 hours; no gh call (#186)
 ```
 
-Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit): authors, reviewers, design and `wh/desk` report outcomes to the dispatcher. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Ready to push` and `Done` before any call. `Ready to push` is approved only by `wh/review` after its review comment and written by the designated dispatcher on its behalf for the reviewed sha, with `scripts/board-snapshot.sh ready <number>`; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
+Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://github.com/wstein/workharbor/blob/main/AGENTS.md) (GitHub rate limit): authors, reviewers, design and `wh/desk` report outcomes to the dispatcher. `move` sets `Todo`, `In progress`, `Blocked` and `In review`; it refuses `Done` before any call. A card stays `In review` until the human closes or merges the PR; `Done` follows when the issue closes. A card moved by hand in the browser is not seen until the snapshot is 5 minutes old or a read passes `--refresh`.
 
 ### Board move and sync
 
@@ -146,7 +146,7 @@ Who may write cards, and what still asks, is set once in [`AGENTS.md`](https://g
 | Card `In progress` with neither a worktree nor such a phase (idle) | Move to `Todo` |
 | Anything else, including phase `done` and no signal | Card unchanged |
 
-`In review` and `Ready to push` are never set or lowered by sync: the dispatcher moves a card to `In review` when the PR opens and to `Ready to push` with `ready` only after the review. `Done` is never set; closed issues and `Done` cards are left alone. The registry is read up to its `Resume:` line; sync stops without changes when it is missing or unreadable. A reused worktree still on a stale `<n>-` branch counts as a signal, so detach an idle worktree. Call points: the dispatcher runs `sync` at its start and after every hand-back; run `sync --dry-run` first when unsure. Sync is a card write and follows the same permission rule as the other non-`move` writes, and the card-owner rule above.
+`In review` is never set or lowered by sync: the dispatcher moves a card to `In review` when the PR opens. `Done` is never set; closed issues and `Done` cards are left alone. The registry is read up to its `Resume:` line; sync stops without changes when it is missing or unreadable. A reused worktree still on a stale `<n>-` branch counts as a signal, so detach an idle worktree. Call points: the dispatcher runs `sync` at its start and after every hand-back; run `sync --dry-run` first when unsure. Sync is a card write and follows the same permission rule as the other non-`move` writes, and the card-owner rule above.
 
 ## Rules of thumb
 
