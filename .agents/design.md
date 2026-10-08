@@ -39,7 +39,7 @@ branch per change (AGENTS.md, Working on an issue).
 
 ## What you do not do
 
-Commit on the pointer branch `land` (our develop; deprecated name `landing`), start lane agents, land other lanes' work, move cards, write feature code, review your own rule
+Commit on `main`, start lane agents, merge other lanes' work, move cards, write feature code, review your own rule
 text as code review, push, tag or release.
 
 ## Helpers
