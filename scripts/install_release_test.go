@@ -243,3 +243,82 @@ func TestSourceInstallRemovesAStaleVersionFile(t *testing.T) {
 		t.Errorf("the install target does not remove the stale VERSION file:\n%s", out)
 	}
 }
+
+// noGH is a PATH without gh: links to the tools the script needs, plus the fake uname.
+func (r release) noGH(t *testing.T) []string {
+	t.Helper()
+	farm := t.TempDir()
+	for _, name := range []string{"bash", "env", "awk", "sed", "sort", "head", "wc", "find", "cp", "rm", "mv", "mkdir", "install", "tar", "shasum", "perl", "mktemp", "cat", "dirname", "tr", "grep", "touch", "chmod"} {
+		if p, err := exec.LookPath(name); err == nil {
+			_ = os.Symlink(p, filepath.Join(farm, name))
+		}
+	}
+	if err := os.Symlink(filepath.Join(r.bin, "uname"), filepath.Join(farm, "uname")); err != nil {
+		t.Fatal(err)
+	}
+	return []string{"PATH=" + farm, "WHR_RELEASE_DIR=" + r.dir}
+}
+
+// Without gh the checksums are checked and the script says that the origin is not.
+func TestWithoutGHOnlyTheChecksumsAreChecked(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	env := r.noGH(t)
+	out, err := bash(t, env, "./install-release.sh v0.2.0 "+r.prefix)
+	if err != nil {
+		t.Fatalf("install without gh: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "not who built it") || !strings.Contains(out, "only the checksums were verified, not the origin") {
+		t.Errorf("the caveat is missing:\n%s", out)
+	}
+	if v, err := os.ReadFile(filepath.Join(r.prefix, "libexec", "whr", "VERSION")); err != nil || string(v) != "v0.2.0\n" {
+		t.Errorf("VERSION = %q, %v", v, err)
+	}
+	if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err != nil {
+		t.Errorf("nothing was installed: %v", err)
+	}
+	if _, err := os.Stat(r.ghlog); err == nil {
+		t.Error("gh was called")
+	}
+}
+
+// A changed archive fails the checksum check and installs nothing, with or without gh.
+func TestAChecksumMismatchInstallsNothing(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	mac := filepath.Join(r.dir, "whr_0.2.0_darwin_arm64.tar.gz")
+	tarball(t, mac, map[string]string{"whr": "#!/bin/sh\necho tampered\n"})
+	out, err := bash(t, r.noGH(t), "./install-release.sh v0.2.0 "+r.prefix)
+	if err == nil || !strings.Contains(out, "does not match checksums.txt") {
+		t.Fatalf("a tampered archive was accepted: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err == nil {
+		t.Error("a tampered archive was installed")
+	}
+}
+
+// The downgrade guard does not depend on gh.
+func TestWithoutGHAnOlderReleaseIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.1.0", "v0.2.0")
+	out, err := bash(t, r.noGH(t), "./install-release.sh v0.1.0 "+r.prefix)
+	if err == nil || !strings.Contains(out, "older than the installed v0.2.0") {
+		t.Fatalf("a downgrade was not refused: %v\n%s", err, out)
+	}
+}
+
+// A prefix the whr user could write is refused.
+func TestAWritablePrefixIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	if err := os.MkdirAll(r.prefix, 0o755); err != nil { //nolint:gosec // the test needs a group-writable dir below
+		t.Fatal(err)
+	}
+	if err := os.Chmod(r.prefix, 0o775); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	out, err := r.run(t, "v0.2.0", r.prefix)
+	if err == nil || !strings.Contains(out, "must not be able to write the prefix") {
+		t.Fatalf("a group-writable prefix was accepted: %v\n%s", err, out)
+	}
+}
