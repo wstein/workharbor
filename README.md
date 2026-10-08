@@ -10,7 +10,7 @@
 [![Platform: macOS (Apple silicon)](https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white)](docs/content/docs/design/_index.md)
 
 > [!WARNING]
-> **Work in progress: pre-releases only.** The pre-releases `v0.1.0-alpha.1` to `v0.1.0-alpha.3` are published on GitHub for dogfooding; `v0.1.0` is still the first release. The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
+> **Work in progress: pre-releases only.** The `v0.1.0-alpha.N` pre-releases are published on GitHub for dogfooding; `v0.1.0` is still the first release. The supervisor (`whr serve`), the CLI, the web UI and the Apple Container and Claude Code adapters exist and are tested, mostly against fakes; the first end-to-end run of a real issue (#28) is next. Command names outside the stable set and parts of the architecture will still change. Do not use it to supervise real work yet. Documentation: <https://wstein.github.io/workharbor/>.
 
 A self-hosted supervisor for AI coding agents: isolated workspaces, your approval for every push, one dashboard on every device. Agents work on repository issues independently in managed, isolated workspaces; you stay in the loop to answer questions, intervene, review and approve.
 
