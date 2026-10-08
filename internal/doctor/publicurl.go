@@ -58,7 +58,8 @@ func (d Deps) publicURLStep() Check {
 			Do: func(_ context.Context, p Prompter) error {
 				return d.writePublicURL(p)
 			},
-			Guide: "Forward whr's name to its loopback port with HTTPS (`tailscale serve`, manual step 7); the name is the one the forwarder prints, for example whr.example.ts.net. whr does not guess it: reading it would need the network.",
+			Guide: "Forward whr's name to its loopback port with HTTPS (the command below, manual step 7); the name is the one the forwarder prints, for example whr.example.ts.net. whr does not guess it: reading it would need the network.",
+			Try:   []string{"tailscale serve"},
 		},
 	}
 }

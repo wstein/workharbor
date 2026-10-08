@@ -107,9 +107,10 @@ func TestHostAccountDefaultAndExplicitOverride(t *testing.T) {
 			if tc.want != "workharbor" {
 				wantSetup += " --user '" + strings.ReplaceAll(tc.want, "'", "'\"'\"'") + "'"
 			}
-			if !strings.Contains(c.Fix.Guide, "run `"+wantSetup+"` there") {
-				t.Errorf("setup command missing from guide %q", c.Fix.Guide)
+			if !reflect.DeepEqual(c.Fix.Try, []string{wantSetup}) {
+				t.Errorf("setup command missing from the commands to try: %q", c.Fix.Try)
 			}
+			noWrappedCommand(t, c.Name, c.Fix)
 			d.Runner = scripted{"dscl . -read /Users/" + tc.want + " UniqueID": "ERR:exit status 56", "dscl . -read /Users/whr UniqueID": "ERR:exit status 56"}
 			if got, detail := status(steps(t, d)["workharbor-user"]); got != Fail || detail != "there is no user "+tc.want {
 				t.Errorf("missing: %s %q", got, detail)
@@ -1080,9 +1081,10 @@ func TestMissingWorkharborWithLegacyWhrPointsAtUserWhr(t *testing.T) {
 			t.Errorf("addUser offered: %+v", cmd)
 		}
 	}
-	if !strings.Contains(c.Fix.Guide, "--user whr") || strings.Contains(c.Fix.Guide, "sysadminctl") {
-		t.Errorf("guide = %q", c.Fix.Guide)
+	if !strings.Contains(strings.Join(c.Fix.Try, "\n"), "--user whr") || strings.Contains(c.Fix.Guide, "sysadminctl") {
+		t.Errorf("guide = %q, try = %q", c.Fix.Guide, c.Fix.Try)
 	}
+	noWrappedCommand(t, c.Name, c.Fix)
 }
 
 func TestMissingWorkharborOffersAddUserOnlyWhenLegacyIsAbsent(t *testing.T) {
@@ -1218,7 +1220,7 @@ func (m *mutableRunner) Output(ctx context.Context, argv ...string) ([]byte, err
 }
 
 func TestTheAgentKeyStepSaysItAsksForAnAPIKeyNotALogin(t *testing.T) {
-	for _, s := range []string{"from the vendor's console", "ANTHROPIC_API_KEY", "not a `claude setup-token` or login token", "not echoed"} {
+	for _, s := range []string{"from the vendor's console", "ANTHROPIC_API_KEY", "not a setup-token or login token", "not echoed"} {
 		if !strings.Contains(agentKeyPrompt, s) {
 			t.Errorf("prompt lacks %q: %s", s, agentKeyPrompt)
 		}

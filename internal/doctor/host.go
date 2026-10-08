@@ -187,8 +187,8 @@ func userStep(d Deps, setupCommand string) Check {
 		Sudo: true, Argv: []string{"sysadminctl", "-addUser", d.account(), "-fullName", "WorkHarbor", "-password", "-"},
 		SecretPrompt: "New password for " + d.account() + " (not shown)", SecretConfirm: true,
 	}}
-	createGuide := "whr asks you for the new user's password without echo and hands it to sysadminctl on its input, never in the command line. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run `" + setupCommand + "` there."
-	fix := &Fix{Cmds: create, Guide: createGuide}
+	createGuide := "whr asks you for the new user's password without echo and hands it to sysadminctl on its input, never in the command line. Then log in as " + d.account() + " on the Mac (or over Screen Sharing) and run, there:"
+	fix := &Fix{Cmds: create, Guide: createGuide, Try: []string{setupCommand}}
 	legacy := false // set by the last Run: only the Fail with a found whr
 	return Check{
 		Name: "workharbor-user", Phase: PhaseHost, Step: 2, Title: "the standard user " + d.account() + " (manual step 2)",
@@ -242,13 +242,15 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 	switch {
 	case err == nil:
 		fix.Cmds = nil
-		fix.Guide = "Nothing is created, renamed or deleted. Run `whr setup host --user " + LegacyUser + "` and `whr doctor --user " + LegacyUser + "` to keep using the legacy account."
+		fix.Guide = "Nothing is created, renamed or deleted. To keep using the legacy account, run:"
+		fix.Try = []string{"whr setup host --user " + LegacyUser, "whr doctor --user " + LegacyUser}
 		return Fail, missing + ", but the legacy account " + LegacyUser + " exists: run `whr setup host --user " + LegacyUser + "` or `whr doctor --user " + LegacyUser + "` to use it instead of creating a second account", true
 	case DSCLNotFound(err):
 		return Fail, missing, false
 	}
 	fix.Cmds = nil
-	fix.Guide = "Inspect the legacy account lookup failure, then retry `whr setup host --only workharbor-user`. Account creation is unavailable until the lookup confirms that " + LegacyUser + " does not exist."
+	fix.Try = []string{"whr setup host --only workharbor-user"}
+	fix.Guide = "Inspect the legacy account lookup failure, then retry. Account creation is unavailable until the lookup confirms that " + LegacyUser + " does not exist."
 	return NotVerified, "there is no user " + d.account() + ", and dscl did not say whether the legacy account " + LegacyUser + " exists: " + oneLine(err.Error()), false
 }
 
@@ -478,7 +480,8 @@ func hostSteps(d Deps) []Check {
 					}
 					return cmds, nil
 				},
-				Guide: "Ownership is turned on for you (sudo diskutil enableOwnership <volume>). Encryption is not: it needs a passphrase that only you may know, so erase the volume as APFS (Encrypted) in Disk Utility, or run `diskutil apfs encryptVolume /Volumes/<ssd> -user disk` yourself, and keep the passphrase in your password manager (manual step 3).",
+				Guide: "Ownership is turned on for you. Encryption is not: it needs a passphrase that only you may know, so erase the volume as APFS (Encrypted) in Disk Utility, or encrypt it yourself with the command below, and keep the passphrase in your password manager (manual step 3).",
+				Try:   []string{"diskutil apfs encryptVolume /Volumes/<ssd> -user disk"},
 				Open:  "/System/Applications/Utilities/Disk Utility.app",
 			},
 		},
@@ -622,7 +625,8 @@ func hostSteps(d Deps) []Check {
 					}
 					return cmds, nil
 				},
-				Guide: "On a workspace volume of its own, `sudo mdutil -i off <volume>` turns indexing off. A root on the internal disk cannot be turned off that way: add it in System Settings → Spotlight → Search Privacy.",
+				Guide: "On a workspace volume of its own, the command below turns indexing off. A root on the internal disk cannot be turned off that way: add it in System Settings → Spotlight → Search Privacy.",
+				Try:   []string{"sudo mdutil -i off <volume>"},
 				Open:  "x-apple.systempreferences:com.apple.Siri-Settings.extension",
 			},
 		},
@@ -718,7 +722,8 @@ func hostSteps(d Deps) []Check {
 				return NotVerified, "fdesetup's answer is not one this check knows: " + oneLine(out)
 			},
 			Fix: &Fix{
-				Guide: "Enabling FileVault is interactive and prints a recovery key that must be yours alone, so whr does not run it. Run `sudo fdesetup enable` yourself in this terminal (or use System Settings → Privacy & Security → FileVault) and keep the key safe.",
+				Guide: "Enabling FileVault is interactive and prints a recovery key that must be yours alone, so whr does not run it. Run the command below yourself in this terminal (or use System Settings → Privacy & Security → FileVault) and keep the key safe.",
+				Try:   []string{"sudo fdesetup enable"},
 				Open:  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
 			},
 		},
@@ -735,7 +740,8 @@ func hostSteps(d Deps) []Check {
 				return OK, "Homebrew is installed"
 			},
 			Fix: &Fix{
-				Guide: "Install the Xcode Command Line Tools (`xcode-select --install`) and Homebrew from https://brew.sh as your administrator. Its installer is a script from the internet, so whr does not run it for you.",
+				Guide: "Install the Xcode Command Line Tools (the command below) and Homebrew from https://brew.sh as your administrator. Its installer is a script from the internet, so whr does not run it for you.",
+				Try:   []string{"xcode-select --install"},
 				Open:  "https://brew.sh",
 			},
 		},
@@ -828,10 +834,7 @@ func hostSteps(d Deps) []Check {
 				}
 				return OK, d.prefix() + " exists and only the administrator writes it"
 			},
-			Fix: &Fix{
-				Cmds:  prefixInstallCommands(d),
-				Guide: prefixInstallGuide(d),
-			},
+			Fix: prefixFix(d),
 		},
 
 		{
@@ -851,7 +854,8 @@ func hostSteps(d Deps) []Check {
 				return NotVerified, "signing in is the human's; whr does not check a third party's state"
 			},
 			Fix: &Fix{
-				Guide: "Open the Tailscale app, sign in, and forward whr's name to its loopback port with HTTPS (`tailscale serve`, manual step 7); or use another option of that step.",
+				Guide: "Open the Tailscale app, sign in, and forward whr's name to its loopback port with HTTPS (the command below, manual step 7); or use another option of that step.",
+				Try:   []string{"tailscale serve"},
 				Open:  "https://login.tailscale.com",
 			},
 		},
@@ -1216,7 +1220,10 @@ func userSteps(d Deps) []Check {
 				}
 				return OK, "the container services answer in gui/" + strconv.Itoa(d.UID)
 			},
-			Fix: &Fix{Guide: "Run `container system start --disable-kernel-install` in " + d.desktopSession() + ", not over SSH or sudo. If it fails with a permission or bootstrap error for this standard user, note the message in issue #38."},
+			Fix: &Fix{
+				Guide: "Run the command below in " + d.desktopSession() + ", not over SSH or sudo. If it fails with a permission or bootstrap error for this standard user, note the message in issue #38.",
+				Try:   []string{"container system start --disable-kernel-install"},
+			},
 		},
 
 		{
@@ -1340,7 +1347,8 @@ func userSteps(d Deps) []Check {
 					p.Show("the link will use " + textsafe.Escape(u))
 					return []Cmd{{Argv: []string{d.Whr, "github", "app", "create", "--config", d.ConfigPath, "--public-url", u}}}, nil
 				},
-				Guide: "whr github app create prints a link: open it, press Continue to GitHub and confirm. Then install the App on your selected repositories and check that main's ruleset does not list it as a bypass actor (D15). The link uses public_url from the configuration (the public-url step), or the name you give here. If it times out, check the name and the forwarder; `whr github app create --local` gives a link for a browser on this Mac.",
+				Guide: "whr github app create prints a link: open it, press Continue to GitHub and confirm. Then install the App on your selected repositories and check that main's ruleset does not list it as a bypass actor (D15). The link uses public_url from the configuration (the public-url step), or the name you give here. If it times out, check the name and the forwarder; the command below gives a link for a browser on this Mac.",
+				Try:   []string{"whr github app create --local"},
 				Open:  "https://github.com/settings/apps",
 			},
 		},
@@ -1986,6 +1994,11 @@ func (d Deps) developmentPrefix(ctx context.Context) (Status, string) {
 	return Warn, prefix + ": development installation; a user-writable supervisor lacks managed-install replacement protection"
 }
 
+func prefixFix(d Deps) *Fix {
+	guide, try := prefixInstallGuide(d)
+	return &Fix{Cmds: prefixInstallCommands(d), Guide: guide, Try: try}
+}
+
 func prefixTitle(d Deps) string {
 	if d.Dev {
 		return "the development prefix " + d.prefix()
@@ -1993,11 +2006,11 @@ func prefixTitle(d Deps) string {
 	return "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)"
 }
 
-func prefixInstallGuide(d Deps) string {
+func prefixInstallGuide(d Deps) (string, []string) {
 	if d.Dev {
-		return "Install approved source with `make install` using the selected PREFIX, then run `whr doctor --dev` with the same --prefix."
+		return "Install approved source with make install using the selected PREFIX, then check it with the same --prefix:", []string{"whr doctor --dev --prefix <prefix>"}
 	}
-	return "Then install whr there from a draft release: `make install-release VERSION=<tag>` (manual step 13)."
+	return "Then install whr there from a draft release (manual step 13):", []string{"make install-release VERSION=<tag>"}
 }
 
 // directoryHome is the home directory of the account that runs whr, from
@@ -2069,4 +2082,4 @@ func (d Deps) homeOrDefault() string {
 
 // agentKeyPrompt says what the agent-key step asks for: an API key, never a
 // subscription login (D40, issue #348).
-const agentKeyPrompt = "Agent API key from the vendor's console (ANTHROPIC_API_KEY; not a `claude setup-token` or login token; not echoed)"
+const agentKeyPrompt = "Agent API key from the vendor's console (ANTHROPIC_API_KEY; not a setup-token or login token; not echoed)"
