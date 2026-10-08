@@ -13,5 +13,3 @@ summary to 4-6 lines. The comments are not rendered.
 ## Install
 
 <!-- install-block: filled by #459 (install instructions for this tag); keep this heading. -->
-
-## Changes
