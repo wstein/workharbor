@@ -12,7 +12,7 @@ GITLEAKS_FOUND := 42
 
 .DEFAULT_GOAL := build
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range test-commitlint-consumers land land-list land-next land-all land-preview temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range temp-ls temp-clean
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -107,8 +107,8 @@ build:
 test:
 	go test ./...
 
-# The inner loop: skips the slowest tests (each guarded by testing.Short). make check,
-# make land and CI run the whole suite.
+# The inner loop: skips the slowest tests (each guarded by testing.Short). make check
+# and CI run the whole suite.
 test-short:
 	go test -short ./...
 
@@ -257,125 +257,6 @@ check-hooks:
 	@if [ "$$(git config core.hooksPath)" != ".githooks" ]; then \
 		echo "the repository's hooks are not enabled in this clone: run make hooks" >&2; exit 1; \
 	fi
-
-# The packages that consume internal/commitlint (the commit-msg hook, hostgit's
-# commit checks, the serve and service fixtures that build commits). check-local
-# runs no tests, so a commitlint change that breaks a consumer reached CI (#329).
-# make land runs this on every landing, not only when internal/commitlint changes:
-# the consumers also break through their own changes, and a path trigger is one more
-# thing to get wrong; the timeout bounds a hang. GOENV=off GOFLAGS= pins the go
-# environment: a caller's GOFLAGS (-run=NONE, -exec=true, -skip) or a go env -w
-# file must not turn the gate into a pass.
-CONSUMER_PKGS := ./internal/commitlint ./cmd/commitlint ./internal/hostgit ./internal/serve ./internal/service
-CONSUMER_TEST_TIMEOUT := 300s
-test-commitlint-consumers:
-	GOENV=off GOFLAGS= go test -count=1 -timeout $(CONSUMER_TEST_TIMEOUT) $(CONSUMER_PKGS)
-
-# The sub-makes of land go through LAND_MAKE: the recipe line must not contain
-# $(MAKE) itself, or make -n, -t and -q would run it for real (merge included).
-override LAND_MAKE := $(MAKE)
-# They also run without the caller's MAKEFLAGS: -i or a command-line override such
-# as GITLEAKS_FOUND=0 would otherwise turn a failing check into a pass. Both are
-# override variables so that no command-line or -e setting replaces them.
-# An absolute executable also prevents an exported env shell function from
-# swallowing the sub-makes. This is narrow hardening, not a shell sandbox.
-override LAND_CLEAN := /usr/bin/env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS
-
-# Queue order is lexical branch name; preview/list never confirm or land.
-# Decisions always use main's resolver, just like land SHA=.
-# Refuse a caller's SHELL while expanding the recipe, before that shell can
-# suppress execution with -n. GNU make treats its built-in /bin/sh as file
-# origin when it ignores a normal inherited SHELL; that case remains supported.
-land-list land-next land-all land-preview:
-	$(if $(filter default file,$(origin SHELL)),,$(error land: SHELL is set by the caller: refusing))
-	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
-	lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || exit 1; \
-	case "$@" in land-preview) [ "$(origin SHA)" = "command line" ] || { echo "usage: make land-preview SHA=<sha>" >&2; exit 1; }; sh -c "$$lsh" land.sh preview "$$SHA";; \
-	*) sh -c "$$lsh" land.sh "$(patsubst land-%,%,$@)";; esac
-
-# No arguments starts the human wizard using main's resolver. Explicit BRANCH=<name>
-# lands a branch from a session's own worktree (BRANCH=<name>
-# from any checkout: land the worktree that has it checked out; SHA=<full sha>:
-# refuse unless the candidate is that commit; see the manual): refuse unless
-# the shared checkout is on main (a detached HEAD there once swallowed merges),
-# the branch is rebased onto main, and local checks and candidate scans pass; then
-# fast-forward main, unless main moved during the checks (rebase and run again).
-land:
-	$(if $(filter default file,$(origin SHELL)),,$(error land: SHELL is set by the caller: refusing))
-	@if [ "$(origin MAKE)" != default ] || [ "$(origin MAKE_COMMAND)" != default ] || [ -n '$(subst ','\'',$(MAKEFILES))' ]; then echo "land: MAKE or MAKEFILES is set by the caller: refusing" >&2; exit 1; fi; \
-	if [ "$(origin SHA)" != "command line" ] && [ "$(origin BRANCH)" != "command line" ]; then \
-		lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || { echo "land: cannot read main resolver: refusing" >&2; exit 1; }; \
-		sh -c "$$lsh" land.sh wizard; exit $$?; fi; \
-	want=""; wb=""; \
-	short=""; det=""; tmp=""; \
-	if [ "$(origin SHA)" = "command line" ]; then \
-		case "$$SHA" in ""|*[!0-9a-f]*) echo "land: SHA must be 7 to 40 lowercase hex characters (the full 40-character id with BRANCH=)" >&2; exit 1;; esac; \
-		if [ "$${#SHA}" -lt 7 ] || [ "$${#SHA}" -gt 40 ]; then echo "land: SHA must be 7 to 40 lowercase hex characters (the full 40-character id with BRANCH=)" >&2; exit 1; fi; \
-		if [ "$${#SHA}" != 40 ] && [ "$(origin BRANCH)" = "command line" ]; then echo "land: with BRANCH= the SHA must be the full 40-character lowercase hex commit id" >&2; exit 1; fi; \
-		if [ "$(origin BRANCH)" != "command line" ]; then \
-			lsh="$$(git --no-replace-objects show refs/heads/main:scripts/land.sh)" || { echo "land: main has no scripts/land.sh: refusing" >&2; exit 1; }; \
-			res="$$(sh -c "$$lsh" land.sh resolve "$$SHA")" || exit 1; \
-			set -f; set -- $$res; set +f; \
-			[ "$$#" = 8 ] || { echo "land: invalid resolver confirmation: refusing" >&2; exit 1; }; \
-			short=1; want="$$1"; BRANCH="$$2"; confirm_mode="$$3"; confirm_answer="$$4"; confirm_at="$$5"; confirm_review="$$6"; confirm_base="$$7"; confirm_class="$$8"; \
-		else want="$$SHA"; fi; fi; \
-	if [ "$(origin BRANCH)" = "command line" ] || [ -n "$$short" ]; then \
-		wb="$$BRANCH"; \
-		case "$$wb" in "") echo "land: BRANCH is empty" >&2; exit 1;; main) echo "land: BRANCH=main: never land main" >&2; exit 1;; -*) echo "land: BRANCH must not start with a dash" >&2; exit 1;; esac; \
-		git check-ref-format "refs/heads/$$wb" || { echo "land: BRANCH is not a valid branch name (give the short name, not refs/heads/...)" >&2; exit 1; }; \
-		if [ "$$(git rev-parse --is-bare-repository)" != false ]; then echo "land: run it from a checkout, not a bare repository" >&2; exit 1; fi; \
-		found="$$(git worktree list --porcelain -z | tr '\n\0' '\001\n' | awk -v ref="refs/heads/$$wb" 'function flush() { if (isbr) print (prun ? "P " : "W ") cur; isbr = 0; prun = 0 } /^worktree / { cur = substr($$0, 10) } $$0 == "branch " ref { isbr = 1 } /^prunable/ { prun = 1 } /^$$/ { flush() } END { flush() }')" || { echo "land: cannot list the worktrees" >&2; exit 1; }; \
-		if [ -z "$$found" ] && [ -z "$$short" ]; then echo "land: no worktree has $$wb checked out: check it out in a worktree first (never in the shared checkout)" >&2; exit 1; fi; \
-		if [ -z "$$found" ]; then \
-			det=1; sc="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
-			tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/land.XXXXXX")" || { echo "land: cannot create a temporary directory" >&2; exit 1; }; \
-			tmpc="$$(cd -P "$$tmp" && pwd -P)" || exit 1; \
-			trap 'cd /; git -C "$$sc" worktree remove --force "$$tmp/wt" >/dev/null 2>&1; rm -rf "$$tmp"; if [ -e "$$tmp" ] || git -C "$$sc" worktree list --porcelain | grep -qxF "worktree $$tmpc/wt"; then echo "land: could not remove the temporary worktree $$tmp/wt: stop and tell the human" >&2; exit 1; fi' EXIT; \
-			trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP; \
-			git worktree add -q --detach "$$tmp/wt" "$$want" || { echo "land: cannot create the temporary worktree" >&2; exit 1; }; \
-			[ -d "$$tmp/wt" ] || { echo "land: the temporary worktree was not created" >&2; exit 1; }; \
-			cd "$$tmp/wt" || exit 1; \
-		else \
-		if [ "$$(printf '%s\n' "$$found" | wc -l | tr -d ' ')" != 1 ]; then echo "land: $$wb is checked out in more than one worktree: stop and tell the human" >&2; exit 1; fi; \
-		case "$$found" in "P "*) echo "land: the worktree of $$wb is prunable (its directory is gone): stop and tell the human" >&2; exit 1;; esac; \
-		wt="$$(printf '%s' "$${found#W }" | tr '\001' '\n')"; \
-		[ -d "$$wt" ] || { echo "land: the worktree of $$wb is missing" >&2; exit 1; }; \
-		cd "$$wt" || exit 1; \
-		if [ "$$(git symbolic-ref -q --short HEAD)" != "$$wb" ]; then echo "land: the worktree $$wt does not have $$wb checked out" >&2; exit 1; fi; \
-		fi; \
-	fi; \
-	shared="$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")"; \
-	if [ -n "$$det" ]; then branch="$$wb"; else branch="$$(git symbolic-ref -q --short HEAD)"; fi || { echo "land: check out the branch to land first" >&2; exit 1; }; \
-	if [ -n "$$wb" ] && [ "$$branch" != "$$wb" ]; then echo "land: the worktree switched away from $$wb: stop and tell the human" >&2; exit 1; fi; \
-	if [ "$$branch" = main ]; then echo "land: run it on a topic branch in your own worktree, not on main" >&2; exit 1; fi; \
-	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then \
-		echo "land: the shared checkout $$shared is not on main: stop and tell the human (never switch it yourself)" >&2; exit 1; fi; \
-	base="$$(git rev-parse --verify refs/heads/main)"; \
-	if [ -n "$$short" ] && [ "$$base" != "$$confirm_base" ]; then echo "land: main moved since confirmation: run make land again" >&2; exit 1; fi; \
-	candidate="$$(git rev-parse --verify HEAD^{commit})" || { echo "land: cannot read the candidate commit" >&2; exit 1; }; \
-	if [ -n "$$want" ] && [ "$$candidate" != "$$want" ]; then echo "land: the candidate is $$candidate, not the requested SHA $$want: refusing" >&2; exit 1; fi; \
-	git merge-base --is-ancestor "$$base" "$$candidate" || { echo "land: $$branch is not on top of main: git rebase main first" >&2; exit 1; }; \
-	merges="$$(git rev-list --merges "$$base".."$$candidate")" || { echo "land: cannot read the candidate history" >&2; exit 1; }; \
-	if [ -n "$$merges" ]; then echo "land: $$branch introduces merge commits: rebase to a linear history before landing" >&2; exit 1; fi; \
-	$(LAND_CLEAN) $(LAND_MAKE) -s check-local commitlint || exit 1; \
-	$(LAND_CLEAN) $(LAND_MAKE) -s test-commitlint-consumers || exit 1; \
-	$(LAND_CLEAN) $(LAND_MAKE) -s secrets-range RANGE="$$base..$$candidate" TIP="$$candidate" || exit 1; \
-	generated="$$(git diff --name-only "$$base" "$$candidate" -- 'internal/web/*.templ' 'internal/web/*_templ.go')" || exit 1; \
-	generated_check=0; if [ -n "$$generated" ]; then $(LAND_CLEAN) $(LAND_MAKE) -s check-generated || exit 1; generated_check=1; fi; \
-	if { [ -z "$$det" ] && [ "$$(git symbolic-ref -q --short HEAD)" != "$$branch" ]; } || [ "$$(git rev-parse --verify HEAD^{commit})" != "$$candidate" ] || [ "$$(git rev-parse --verify "refs/heads/$$branch^{commit}")" != "$$candidate" ]; then \
-		echo "land: candidate moved during the checks: run make land again on the intended unchanged branch" >&2; exit 1; fi; \
-	if [ "$$(git rev-parse --verify refs/heads/main)" != "$$base" ]; then echo "land: main moved during the checks: git rebase main and run make land again" >&2; exit 1; fi; \
-	if [ "$$(git -C "$$shared" symbolic-ref -q HEAD)" != refs/heads/main ]; then echo "land: the shared checkout left main during the checks: stop and tell the human" >&2; exit 1; fi; \
-	scripts/index-state.sh "$$shared"; state=$$?; \
-	if [ "$$state" = 3 ]; then \
-		echo "land: the shared checkout's index is stale (every path that differs from HEAD equals HEAD in the tree): repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; fi; \
-	if [ "$$state" != 0 ] && [ "$$state" != 4 ]; then echo "land: cannot read the shared checkout's index" >&2; exit 1; fi; \
-	git -C "$$shared" merge -q --ff-only "$$candidate" || exit 1; \
-	if [ -n "$$short" ]; then \
-		sh -c "$$lsh" land.sh record "$$candidate" "$$branch" "$$confirm_mode" "$$confirm_answer" "$$confirm_at" "$$confirm_review" "$$confirm_base" "$$confirm_class" "$$generated_check" || { echo "land: main moved to $$candidate, but its confirmation note was not recorded: stop and tell the human" >&2; exit 1; }; \
-	fi; \
-	echo "land: main is now $$(git rev-parse --short refs/heads/main)"; \
-	if [ "$$state" = 0 ]; then scripts/index-state.sh "$$shared" || { echo "land: main moved, but the shared checkout's index differs from HEAD after the merge: repair it with: git -C $$shared reset -q -- <files shown by git -C $$shared diff --cached --name-only HEAD>" >&2; exit 1; }; fi
 
 # Scan the commits of a git log range for secrets, their changes and their
 # messages, and the message of the annotated tag TIP (gitleaks git reads patches
