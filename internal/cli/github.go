@@ -18,6 +18,7 @@ import (
 	"github.com/wstein/workharbor/internal/exitcode"
 	"github.com/wstein/workharbor/internal/githubapp"
 	"github.com/wstein/workharbor/internal/redact"
+	"github.com/wstein/workharbor/internal/render"
 )
 
 func newGitHub(st *state) *cobra.Command {
@@ -125,7 +126,7 @@ It listens on the configuration's "listen" address while it waits, so stop
 			var lc net.ListenConfig
 			ln, err := lc.Listen(cmd.Context(), "tcp", listen)
 			if err != nil {
-				return fmt.Errorf("listen on %s: %w (is `whr serve` running? stop it for the setup)", listen, err)
+				return fmt.Errorf("listen on %s: %w (is the supervisor running? stop it for the setup)", listen, err)
 			}
 			srv := &http.Server{Handler: setup.Handler(), ReadHeaderTimeout: 10 * time.Second}
 			go func() { _ = srv.Serve(ln) }()
@@ -140,7 +141,12 @@ It listens on the configuration's "listen" address while it waits, so stop
 			if local {
 				fmt.Fprintln(st.env.Stderr, "This link points at the loopback listener: open it in a browser on this Mac. GitHub's redirect back to it is unverified.")
 			} else {
-				fmt.Fprintf(st.env.Stderr, "If the link times out, the name or the forwarder is at fault, not this command:\nwhr waits on http://%s (loopback only). As workharbor, run\n`tailscale serve status` (read-only) to see whether the name maps to that port;\n`tailscale serve --bg %s` creates the mapping. Do not use `tailscale funnel`.\nOr use --local on this Mac.\n", listen, port)
+				fmt.Fprintf(st.env.Stderr, "If the link times out, the name or the forwarder is at fault, not this command:\nwhr waits on http://%s (loopback only). As workharbor, see whether the name maps to that port (read-only):\n", listen)
+				ui := render.Writer{W: st.env.Stderr, S: st.style(st.env.Stderr, false)}
+				ui.Command("tailscale serve status")
+				fmt.Fprintln(st.env.Stderr, "To create the mapping (never use a public funnel):")
+				ui.Command("tailscale serve --bg " + port)
+				fmt.Fprintln(st.env.Stderr, "Or use --local on this Mac.")
 			}
 
 			wctx, cancel := context.WithDeadline(cmd.Context(), exp)

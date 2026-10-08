@@ -20,13 +20,13 @@ func (d Deps) developmentModeCheck() func(context.Context) (Status, string) {
 		prefix, err := config.ReadDevelopmentPrefix(d.ConfigPath)
 		switch {
 		case err != nil:
-			return Fail, problems(err) + ": `whr setup --managed` removes the key"
+			return Fail, problems(err) + ": the managed setup removes the key"
 		case prefix == "":
 			return OK, "no " + config.DevelopmentPrefixKey + " in " + d.ConfigPath + ": a managed installation"
 		case d.Whr != "" && config.UnderManagedPrefix(d.Whr):
-			return Fail, d.Whr + " runs from a managed prefix, which refuses " + config.DevelopmentPrefixKey + " in " + d.ConfigPath + ": `whr setup --managed` removes it"
+			return Fail, d.Whr + " runs from a managed prefix, which refuses " + config.DevelopmentPrefixKey + " in " + d.ConfigPath + ": the managed setup removes it"
 		}
-		return Warn, config.DevelopmentPrefixKey + " " + prefix + " is set in " + d.ConfigPath + ": a development installation, whose user-writable supervisor lacks managed-install replacement protection; `whr setup --managed` (or deleting the key) leaves it"
+		return Warn, config.DevelopmentPrefixKey + " " + prefix + " is set in " + d.ConfigPath + ": a development installation, whose user-writable supervisor lacks managed-install replacement protection; the managed setup (or deleting the key) leaves it"
 	}
 }
 
@@ -71,7 +71,7 @@ func (d Deps) developmentKeyFix(prefix string) *Fix {
 	}
 	return &Fix{Desc: desc, Do: func(_ context.Context, p Prompter) error {
 		if !d.Managed && !d.Dev {
-			return errors.New("the development_prefix key is written only by `whr setup --dev`")
+			return errors.New("the development_prefix key is written only by the development setup")
 		}
 		m, err := readConfigMap(d.ConfigPath)
 		if err != nil {
@@ -117,7 +117,7 @@ func (d Deps) developmentKeyFix(prefix string) *Fix {
 		if d.Managed {
 			p.Show("whr removed " + config.DevelopmentPrefixKey + " from " + d.ConfigPath + ": this is a managed installation again")
 		} else {
-			p.Show("whr wrote " + config.DevelopmentPrefixKey + " " + prefix + " to " + d.ConfigPath + ": `whr doctor` warns on every run while it is set, and `whr setup --managed` removes it")
+			p.Show("whr wrote " + config.DevelopmentPrefixKey + " " + prefix + " to " + d.ConfigPath + ": the doctor warns on every run while it is set, and the managed setup removes it")
 		}
 		return nil
 	}}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"golang.org/x/term"
@@ -101,6 +102,17 @@ func printQuit(ui render.Writer, q *setup.QuitError) {
 	ui.Command(q.Resume)
 }
 
+// runAsNote ends a fix that another account runs: "<command> (run as <user>)".
+var runAsNote = regexp.MustCompile(`^(.*) \((run as [^()]*)\)$`)
+
+// splitRunAs separates that note from the command, which must stay bare.
+func splitRunAs(fix string) (cmd, note string) {
+	if m := runAsNote.FindStringSubmatch(fix); m != nil {
+		return m[1], m[2]
+	}
+	return fix, ""
+}
+
 // printDoctorHuman is the readable report of `whr doctor` on stderr: grouped by
 // phase, the names aligned, each problem once, the fix as a copyable command,
 // a one-line summary and the numbered list of what to do now.
@@ -147,10 +159,15 @@ func printDoctorHuman(ui render.Writer, rs []doctor.Result, verbose bool) {
 				counts.Skipped++
 			}
 			if r.Fix != "" {
-				fix := clean(r.Fix)
+				fix, note := splitRunAs(clean(r.Fix))
 				ui.Action("to fix " + r.Check + ", run")
 				ui.Command(fix)
-				todo = append(todo, render.TodoItem{Text: r.Check + ": " + reason, Commands: []string{fix}})
+				text := r.Check + ": " + reason
+				if note != "" { // prose belongs beside the command, not in it
+					ui.Note(note)
+					text += " (" + note + ")"
+				}
+				todo = append(todo, render.TodoItem{Text: text, Commands: []string{fix}})
 			}
 		}
 	}

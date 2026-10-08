@@ -70,7 +70,7 @@ func CheckDevelopmentPrefix(v string) string {
 	case !filepath.IsAbs(v) || filepath.Clean(v) != v:
 		return "must be an absolute, clean path"
 	case isManagedPrefix(v):
-		return "is a managed prefix (a managed installation takes no development_prefix): run `whr setup --managed`"
+		return "is a managed prefix (a managed installation takes no development_prefix): switch the installation back to managed"
 	}
 	return ""
 }

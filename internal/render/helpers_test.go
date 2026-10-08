@@ -65,15 +65,15 @@ func TestWidthIsTheTerminalCappedAt80(t *testing.T) {
 	}
 }
 
-func TestCmdIsNeverWrappedAndALongOneIsMarked(t *testing.T) {
+func TestCmdIsNeverWrapped(t *testing.T) {
 	short := Cmd(Style{}, "ls -l")
-	if short != "|   $ ls -l\n" {
+	if short != "\n    ls -l\n\n" {
 		t.Errorf("short: %q", short)
 	}
 	long := "sudo dseditgroup -o edit -d workharbor -t user " + strings.Repeat("com.apple.access_ssh ", 5)
 	got := Cmd(Style{}, long)
-	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "one long line") || lines[1] != "|   $ "+long {
+	lines := strings.Split(got, "\n")
+	if len(lines) != 4 || lines[0] != "" || lines[1] != "    "+long || lines[2] != "" {
 		t.Errorf("long command:\n%s", got)
 	}
 }

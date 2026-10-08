@@ -101,7 +101,7 @@ func TestFailureSummaryCauseIsTheToolsLastLineAndTheCommandIsNotWrapped(t *testi
 	if strings.Count(got, "tool output:") != 0 || strings.Count(got, "last output:") != 1 || strings.Contains(got, "| |") {
 		t.Errorf("output framed wrongly:\n%s", got)
 	}
-	if !strings.Contains(got, "$ whr setup --from tool-store --prefix "+long+"/with/a/long/prefix/that/passes/eighty/columns\n") {
+	if !strings.Contains(got, "\n    whr setup --from tool-store --prefix "+long+"/with/a/long/prefix/that/passes/eighty/columns\n") {
 		t.Errorf("command wrapped:\n%s", got)
 	}
 }

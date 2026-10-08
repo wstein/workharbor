@@ -145,7 +145,7 @@ func TestGitHubAppCreateRefusesWhatIsNotSafeOrPossible(t *testing.T) {
 	}
 	defer func() { _ = ln.Close() }()
 	code, errOut := run("github", "app", "create", "--public-url", "https://whr.example.test", "--listen", addr, "--key-dir", t.TempDir())
-	if code != exitcode.Error || !strings.Contains(errOut, "whr serve") {
+	if code != exitcode.Error || !strings.Contains(errOut, "supervisor") {
 		t.Errorf("exit %d, stderr %q", code, errOut)
 	}
 }
@@ -165,7 +165,7 @@ func TestGitHubAppCreateTakesThePublicNameFromTheConfigurationAndAddsHTTPS(t *te
 	if !strings.Contains(out, "https://whr.example.test/github/app/new?state=") {
 		t.Errorf("the link does not use the normalised public name: %q", out)
 	}
-	if !strings.Contains(out, "If the link times out") || !strings.Contains(out, "tailscale serve --bg "+port) || !strings.Contains(out, "Do not use `tailscale funnel`") {
+	if !strings.Contains(out, "If the link times out") || !strings.Contains(out, "tailscale serve --bg "+port) || !strings.Contains(out, "never use a public funnel") {
 		t.Errorf("no hint for a link that times out: %q", out)
 	}
 

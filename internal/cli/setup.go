@@ -326,7 +326,7 @@ func newSetup(st *state) *cobra.Command {
 					if err := recordAccountStop(setupLog, env.User, phase, resume, st.env.Getenv("HOME"), c, protocol.AnswerNone, protocol.SourceNone, protocol.OutNeedsHuman, protocol.RunNeedsHuman); err != nil {
 						return err
 					}
-					return needsHumanError{"unattended: account risk needs your confirmation; run `whr setup` in a terminal"}
+					return needsHumanError{"unattended: account risk needs your confirmation; run the setup in a terminal"}
 				}
 				// accepting a risk is not undoable by running it again: Enter is no
 				a, err := setup.Ask(env.Host, "Go on without a dedicated standard account, knowing this?", render.DefaultNo)
@@ -401,7 +401,7 @@ func newSetup(st *state) *cobra.Command {
 			return quietError{}
 		}
 		if left := needsPerson(outs); unattended && len(left) > 0 {
-			return needsHumanError{"unattended: " + strings.Join(left, ", ") + " need a person (the answers file does not decide them); run `whr setup` in a terminal"}
+			return needsHumanError{"unattended: " + strings.Join(left, ", ") + " need a person (the answers file does not decide them); run the setup in a terminal"}
 		}
 		if managed {
 			// leaving development mode: the key is gone (or was refused above), and
@@ -411,7 +411,7 @@ func newSetup(st *state) *cobra.Command {
 					stt, detail := c.Run(ctx)
 					fmt.Fprintf(st.env.Stderr, "prefix: %s: %s\n", stt, clean(strings.TrimSpace(detail)))
 					if stt == doctor.Fail {
-						fmt.Fprintln(st.env.Stderr, "whr: the managed prefix is not ready: `whr setup host --only prefix` as the administrator prepares it")
+						fmt.Fprintln(st.env.Stderr, "whr: the managed prefix is not ready: the prefix step of the host setup, run as the administrator, prepares it")
 						return quietError{}
 					}
 				}
@@ -422,11 +422,11 @@ func newSetup(st *state) *cobra.Command {
 				if dryRun {
 					return quietError{}
 				}
-				fmt.Fprintln(st.env.Stderr, "whr: some steps are not done; run `whr setup` again after you have dealt with them")
+				fmt.Fprintln(st.env.Stderr, "whr: some steps are not done; run the setup again after you have dealt with them")
 				return quietError{}
 			}
 		}
-		fmt.Fprintln(st.env.Stderr, "all selected steps are done (or were not checked: see the lines marked not_verified); `whr doctor` checks the rest")
+		fmt.Fprintln(st.env.Stderr, "all selected steps are done (or were not checked: see the lines marked not_verified); the doctor checks the rest")
 		return nil
 	}
 	flags := func(c *cobra.Command) {
@@ -480,7 +480,7 @@ func newSetup(st *state) *cobra.Command {
 
 // Development mode is explicit on each setup/doctor invocation. The LaunchAgent
 // retains the selected executable, so restart needs no mode flag or config key.
-const developmentWarning = "warning: development installation: no managed-install replacement protection\n  to leave it: `whr setup --managed`"
+const developmentWarning = "warning: development installation: no managed-install replacement protection\n  to leave it, run the managed setup"
 
 func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string) (string, error) {
 	if cmd.Flags().Changed("prefix") {

@@ -187,7 +187,7 @@ func (d Deps) accountCheck() func(context.Context) (Status, string) {
 		}
 		hint := ""
 		if admin && !shared {
-			hint = "; `whr setup --only drop-admin` removes the privilege after setup"
+			hint = "; the drop-admin step removes the privilege after setup"
 		}
 		return Warn, desc + ", with no remote access configured: allowed, weaker than a dedicated standard user (D49)." + gave + hint
 	}

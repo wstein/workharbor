@@ -76,10 +76,10 @@ func (d Deps) tailscaleStep() Check {
 		Desc: "install the Tailscale app with Homebrew (a cask: it needs no sudo, and brew never runs as root)",
 		Do: func(context.Context, Prompter) error {
 			if d.UID == 0 {
-				return errors.New("brew refuses to run as root, and whr does not try: run `whr setup host` as your administrator account")
+				return errors.New("brew refuses to run as root, and whr does not try: run the host setup as your administrator account")
 			}
 			if _, err := d.lookPath(brewPath); err != nil {
-				return errors.New("brew is not at " + brewPath + ": run the brew steps of `whr setup host` first")
+				return errors.New("brew is not at " + brewPath + ": run the brew steps of the host setup first")
 			}
 			return nil
 		},
@@ -136,12 +136,12 @@ func (d Deps) tailscaleServeStep() Check {
 			}
 			status, err := d.output(ctx, bin, "serve", "status")
 			if err != nil {
-				return NotVerified, "tailscale serve status did not answer: " + oneLine(err.Error())
+				return NotVerified, "the tailscale forward list did not answer: " + oneLine(err.Error())
 			}
 			if regexp.MustCompile(`(?:127\.0\.0\.1|localhost):` + port + `\b`).MatchString(status) {
-				return OK, "tailscale serve status shows a forward to port " + port + " (the status text's format is unverified)"
+				return OK, "the tailscale forward list shows a forward to port " + port + " (the status text's format is unverified)"
 			}
-			return NotVerified, "tailscale serve status shows no forward to port " + port + " (the status text's format is unverified)"
+			return NotVerified, "the tailscale forward list shows no forward to port " + port + " (the status text's format is unverified)"
 		},
 		Fix: &Fix{
 			Desc:  "forward whr's loopback port to the tailnet with HTTPS (never funnel)",

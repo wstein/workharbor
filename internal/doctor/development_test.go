@@ -43,7 +43,7 @@ func TestDevelopmentModeWarnsOnEveryRunWhileTheKeyIsSet(t *testing.T) {
 	}{
 		{"no key", 0o600, nil, OK, "managed installation"},
 		{"empty key is none", 0o600, map[string]any{"development_prefix": ""}, OK, "managed installation"},
-		{"key set", 0o600, map[string]any{"development_prefix": prefix}, Warn, "whr setup --managed"},
+		{"key set", 0o600, map[string]any{"development_prefix": prefix}, Warn, "the managed setup"},
 		{"relative value", 0o600, map[string]any{"development_prefix": "dev"}, Fail, "absolute"},
 		{"managed value", 0o600, map[string]any{"development_prefix": "/opt/whr"}, Fail, "managed prefix"},
 		{"group writable file", 0o660, map[string]any{"development_prefix": prefix}, Fail, "group or other"},
@@ -166,7 +166,7 @@ func TestDevelopmentKeyFixWritesAndRemovesOnlyTheKey(t *testing.T) {
 		t.Errorf("after the write: %v", m)
 	}
 	shown := strings.Join(yes.shown, "\n")
-	if !strings.Contains(shown, "+ ") || !strings.Contains(shown, "whr wrote development_prefix") || !strings.Contains(shown, "whr setup --managed") {
+	if !strings.Contains(shown, "+ ") || !strings.Contains(shown, "whr wrote development_prefix") || !strings.Contains(shown, "the managed setup removes it") {
 		t.Errorf("the diff and the notice that it was written: %q", shown)
 	}
 	if got, _ := status(steps(t, d)["development-key"]); got != OK {
@@ -196,7 +196,7 @@ func TestDevelopmentKeyFixRefusals(t *testing.T) {
 	// neither --dev nor --managed: the fix writes nothing, whatever calls it
 	d := devConfig(t, 0o600, nil)
 	d.Prefix = t.TempDir()
-	if err := steps(t, d)["development-key"].Fix.Do(ctx, &answers{confirm: true}); err == nil || !strings.Contains(err.Error(), "only by `whr setup --dev`") {
+	if err := steps(t, d)["development-key"].Fix.Do(ctx, &answers{confirm: true}); err == nil || !strings.Contains(err.Error(), "only by the development setup") {
 		t.Errorf("a managed call = %v", err)
 	}
 	if _, ok := readKeys(t, d.ConfigPath)["development_prefix"]; ok {

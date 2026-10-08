@@ -33,7 +33,7 @@ func scene(s Style) string {
 	w.Question("Ready to create the account?", DefaultYes)
 	b.WriteString("\n")
 	w.Summary(Counts{OK: 1, Fail: 1, NotVerified: 1, Warn: 1, Skipped: 1})
-	w.Todo([]TodoItem{{Text: "create the account", Commands: []string{"sudo sysadminctl -addUser workharbor"}}, {Text: "log in as workharbor and run whr setup"}})
+	w.Todo([]TodoItem{{Text: "create the account", Commands: []string{"sudo sysadminctl -addUser workharbor"}}, {Text: "log in as workharbor and run the setup again"}})
 	return b.String()
 }
 
@@ -152,7 +152,7 @@ func renderRole(s Style, r Role) string {
 	case RoleAction:
 		return Action(s, "x")
 	case RoleCommand:
-		return Command(s, "x")
+		return Command(s, "a command you can copy")
 	case RoleTool:
 		return ToolOutput(s, "x")
 	case RoleHeader:
@@ -386,7 +386,7 @@ func TestNotVerifiedShowsAWord(t *testing.T) {
 
 func TestTodoPrintsTheCommandsAFollowUpLeadsToAfterIt(t *testing.T) {
 	got := Todo(Style{}, []TodoItem{{Text: "create the user", Commands: []string{"sudo a"}, After: "then, as that user, run:", Then: []string{"whr setup --user 'a b'"}}})
-	i, j, k := strings.Index(got, "$ sudo a"), strings.Index(got, "then, as that user, run:"), strings.Index(got, "$ whr setup --user 'a b'")
+	i, j, k := strings.Index(got, "    sudo a"), strings.Index(got, "then, as that user, run:"), strings.Index(got, "    whr setup --user 'a b'")
 	if i < 0 || j < i || k < j {
 		t.Errorf("order:\n%s", got)
 	}
@@ -394,7 +394,7 @@ func TestTodoPrintsTheCommandsAFollowUpLeadsToAfterIt(t *testing.T) {
 
 func TestTodoPrintsCommandsBeforeFollowUp(t *testing.T) {
 	got := Todo(Style{}, []TodoItem{{Text: "user", Commands: []string{"sudo add"}, After: "Then log in."}})
-	c, a := strings.Index(got, "$ sudo add"), strings.Index(got, "Then log in.")
+	c, a := strings.Index(got, "    sudo add"), strings.Index(got, "Then log in.")
 	if c < 0 || a < 0 || c > a {
 		t.Errorf("command must come before the follow-up text: %q", got)
 	}
@@ -415,12 +415,12 @@ func TestToolTailHasNoLabelAndActionCmdNeverWrapsTheCommand(t *testing.T) {
 	if got := ToolTail(s, "x\ny"); got != "    | x\n    | y\n" {
 		t.Errorf("tail %q", got)
 	}
-	if got := ActionCmd(s, "run:", "whr a"); !strings.Contains(got, "ACTION  run: whr a\n") {
+	if got := ActionCmd(s, "run:", "whr a"); got != "| ACTION  run:\n\n    whr a\n\n" {
 		t.Errorf("short %q", got)
 	}
 	cmd := "whr " + strings.Repeat("x", 100)
 	got := ActionCmd(s, "fix the cause, then run:", cmd)
-	if !strings.Contains(got, "$ "+cmd+"\n") || !strings.Contains(got, "ACTION  fix the cause, then run:\n") {
+	if !strings.Contains(got, "    "+cmd+"\n") || !strings.Contains(got, "ACTION  fix the cause, then run:\n") {
 		t.Errorf("long %q", got)
 	}
 }

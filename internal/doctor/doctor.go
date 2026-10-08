@@ -189,7 +189,7 @@ func Checks(d Deps) []Check {
 				return NotVerified, "no client"
 			}
 			if err := d.Probe(ctx); err != nil {
-				return Fail, "the supervisor did not accept the token: " + oneLine(err.Error()) + " (is `whr serve` running?)"
+				return Fail, "the supervisor did not accept the token: " + oneLine(err.Error()) + " (is the supervisor running?)"
 			}
 			return OK, "the supervisor answered with the configured token"
 		}},

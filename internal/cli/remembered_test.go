@@ -91,7 +91,7 @@ func TestDoctorReadsTheRememberedDevelopmentInstallation(t *testing.T) {
 			line = l
 		}
 	}
-	for _, want := range []string{"development_prefix " + prefix + " is set in " + cfgPathOf(home) + ":", "whr setup --managed"} {
+	for _, want := range []string{"development_prefix " + prefix + " is set in " + cfgPathOf(home) + ":", "the managed setup"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the warn line lacks %q: %q", want, line)
 		}

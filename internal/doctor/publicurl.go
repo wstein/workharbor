@@ -41,7 +41,7 @@ func (d Deps) publicURLStep() Check {
 			}
 			raw, _ := m["public_url"].(string)
 			if raw == "" {
-				return NotVerified, "no public_url: whr github app create has no link a phone can open. Set it with this step, or open the link on this Mac with `whr github app create --local` (http://" + listen + ")"
+				return NotVerified, "no public_url: whr github app create has no link a phone can open. Set it with this step, or open the link on this Mac with the --local flag of the github app create command (http://" + listen + ")"
 			}
 			n, err := config.NormalizePublicURL(raw)
 			if err != nil || n != strings.TrimSuffix(raw, "/") {
@@ -50,8 +50,7 @@ func (d Deps) publicURLStep() Check {
 				}
 				return Fail, "public_url " + textsafe.Escape(raw) + ": " + oneLine(err.Error())
 			}
-			_, port, _ := net.SplitHostPort(listen)
-			return OK, "public_url " + n + ", listening on loopback " + listen + "; " + d.firewallNote(ctx) + "; whether the forwarder serves the name to that port is not checked (it needs the network); `tailscale serve status` (read-only) shows it, and `tailscale serve --bg " + port + "` as workharbor creates it; never `tailscale funnel`"
+			return OK, "public_url " + n + ", listening on loopback " + listen + "; " + d.firewallNote(ctx) + "; whether the forwarder serves the name to that port is not checked (it needs the network); the tailscale-serve step shows the mapping (read-only) and creates it as workharbor, never a public funnel"
 		},
 		Fix: &Fix{
 			Desc: "ask for whr's public name, show it normalised, and after a y add public_url to " + d.ConfigPath + " (written atomically, other keys kept)",

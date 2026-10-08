@@ -207,10 +207,10 @@ func TestADryRunPrintsEveryFixAndChangesNothing(t *testing.T) {
 		t.Fatalf("a dry run ran %v opened %v asked %d", r.host.ran, r.host.opened, r.host.asked)
 	}
 	for _, want := range []string{
-		"$ sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0",
-		"$ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
-		"$ sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -",
-		"$ sudo install -m 0644 -o root -g wheel",
+		"    sudo pmset -a sleep 0 disksleep 0 autorestart 1 womp 1 powernap 0",
+		"    sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
+		"    sudo sysadminctl -addUser workharbor -fullName WorkHarbor -password -",
+		"    sudo install -m 0644 -o root -g wheel",
 		"sudo fdesetup enable",
 	} {
 		if !strings.Contains(errOut, want) {
@@ -295,7 +295,7 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 		t.Errorf("power fix %q", got)
 	}
 	// run as werner, not whr: the user phase says so, and says to run as workharbor
-	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "run `whr doctor` as workharbor") || f[3] != "whr setup --only config-base (run as workharbor)" {
+	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "check it as workharbor") || f[3] != "whr setup --only config-base (run as workharbor)" {
 		t.Errorf("config-base: %q", f)
 	}
 	if f := lines["config"]; f[0] != "fail" || !strings.Contains(f[3], "whr setup") {
@@ -304,7 +304,7 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if f := lines["egress"]; f[3] != "" {
 		t.Errorf("a check no step fixes names no command: %q", f)
 	}
-	if !strings.Contains(errOut, "$ whr setup host --only power") {
+	if !strings.Contains(errOut, "    whr setup host --only power") {
 		t.Errorf("stderr lacks the fix: %q", errOut)
 	}
 	// read-only: nothing ran, nothing opened, nobody asked, no sudo among the reads
@@ -361,7 +361,7 @@ func TestAccountStepCanonicalAndLegacySelection(t *testing.T) {
 			}
 			// once in the step, and once more in the closing "What you need to do now"
 			body, todo, found := strings.Cut(text, "What you need to do now")
-			if !found || strings.Count(body, "$ sudo sysadminctl -addUser operator") != 1 || strings.Count(todo, "$ sudo sysadminctl -addUser operator") != 1 {
+			if !found || strings.Count(body, "    sudo sysadminctl -addUser operator") != 1 || strings.Count(todo, "    sudo sysadminctl -addUser operator") != 1 {
 				t.Fatalf("account fix repeated or missing: %s", text)
 			}
 			if len(r.host.ran) != 0 {
@@ -420,7 +420,7 @@ func TestAccountStepLegacyFrom(t *testing.T) {
 	r.dsclSays("operator", errors.New("exit status 56"))
 	r.dsclSays("whr", errors.New("exit status 56"))
 	code, out, errOut := r.run("setup", "host", "--dry-run", "--from", "whr-user", "--only", "workharbor-user", "--user", "operator")
-	if code != 1 || !strings.Contains(out+errOut, "$ sudo sysadminctl -addUser operator") {
+	if code != 1 || !strings.Contains(out+errOut, "    sudo sysadminctl -addUser operator") {
 		t.Fatalf("code %d: %s%s", code, out, errOut)
 	}
 	if len(r.host.ran) != 0 {
@@ -577,10 +577,10 @@ func TestTailscaleIsInstalledWithBrewOnlyAfterTheConfirmation(t *testing.T) {
 	r := newSetupRig(t)
 	r.env.LookPath = missing
 	code, out, errOut := r.run("setup", "host", "--dry-run", "--only", "tailscale")
-	if len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(out, "not_verified\ttailscale\t") || !strings.Contains(errOut, "$ "+install+"\n") {
+	if len(r.host.ran) != 0 || r.host.asked != 0 || !strings.Contains(out, "not_verified\ttailscale\t") || !strings.Contains(errOut, "    "+install+"\n") {
 		t.Errorf("dry run: exit %d, ran %v, asked %d\nout %q\nerr %q", code, r.host.ran, r.host.asked, out, errOut)
 	}
-	if strings.Contains(errOut, "$ sudo") || !strings.Contains(errOut, "UNVERIFIED") || !strings.Contains(errOut, "$ open -a Tailscale\n") {
+	if strings.Contains(errOut, "    sudo") || !strings.Contains(errOut, "UNVERIFIED") || !strings.Contains(errOut, "    open -a Tailscale\n") {
 		t.Errorf("dry run text:\n%s", errOut)
 	}
 

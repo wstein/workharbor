@@ -244,7 +244,7 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 		fix.Cmds = nil
 		fix.Guide = "Nothing is created, renamed or deleted. To keep using the legacy account, run:"
 		fix.Try = []string{"whr setup host --user " + LegacyUser, "whr doctor --user " + LegacyUser}
-		return Fail, missing + ", but the legacy account " + LegacyUser + " exists: run `whr setup host --user " + LegacyUser + "` or `whr doctor --user " + LegacyUser + "` to use it instead of creating a second account", true
+		return Fail, missing + ", but the legacy account " + LegacyUser + " exists; the commands below use it instead of creating a second account", true
 	case DSCLNotFound(err):
 		return Fail, missing, false
 	}
@@ -276,7 +276,7 @@ func (d Deps) desktopSession() string {
 // desktop session of the target account, where the container services do not
 // answer (#156).
 func (d Deps) desktopOnly() string {
-	return "Apple Container answers only in " + d.desktopSession() + "; run this check there, or use `whr ls` or `whr show <task>` over SSH"
+	return "Apple Container answers only in " + d.desktopSession() + "; run this check there, or look at tasks with the list and show commands of whr over SSH"
 }
 
 // inDesktop asks launchd.CheckSession whether this is the Aqua session, before a
@@ -1297,12 +1297,12 @@ func userSteps(d Deps) []Check {
 				if _, err := os.Stat(caPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return NotVerified, "could not read " + caPath + ": " + oneLine(err.Error())
 				} else if err != nil {
-					return OK, "no SSH authority: `whr ssh` is off"
+					return OK, "no SSH authority: whr ssh is off"
 				}
 				if _, err := sshca.Load(caPath); err != nil {
 					return Fail, oneLine(err.Error())
 				}
-				return OK, caPath + " is a private authority key; set console.ssh_ca_key_file to it in the configuration to turn `whr ssh` on"
+				return OK, caPath + " is a private authority key; set console.ssh_ca_key_file to it in the configuration to turn whr ssh on"
 			},
 			Fix: &Fix{Desc: "generate an Ed25519 authority key into " + caPath + " (0600, never overwritten, never shown); add \"console\": {\"ssh_ca_key_file\": \"" + caPath + "\"} to the configuration to use it", Do: func(context.Context, Prompter) error {
 				return sshca.Generate(caPath)
@@ -1999,7 +1999,7 @@ func prefixTitle(d Deps) string {
 
 func prefixInstallGuide(d Deps) (string, []string) {
 	if d.Dev {
-		return "Install approved source with make install using the selected PREFIX, then check it with the same --prefix:", []string{"whr doctor --dev --prefix <prefix>"}
+		return "As the account that owns the prefix, in a checkout of current main, install the approved source, then check it with the same prefix:", []string{"make install PREFIX=<prefix>", "whr doctor --dev --prefix <prefix>"}
 	}
 	return "Then install whr there from a draft release (manual step 13):", []string{"make install-release VERSION=<tag>"}
 }

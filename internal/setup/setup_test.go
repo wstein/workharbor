@@ -135,7 +135,7 @@ func TestAFixIsShownThenRunsAfterAYesAndTheCheckRunsAgain(t *testing.T) {
 	s.Fix = &wrapped
 	outs, out, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost})
 	// shown before it ran, as argument vectors
-	for _, want := range []string{"make the directory", "$ echo 'has space' 'it'\\''s'", "$ sudo pmset -a sleep 0", "$ sudo -v"} {
+	for _, want := range []string{"make the directory", "    echo 'has space' 'it'\\''s'", "    sudo pmset -a sleep 0", "    sudo -v"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("the fix was not shown: lacks %q\n%s", want, errOut)
 		}
@@ -199,7 +199,7 @@ func TestDryRunChecksForRealAndChangesNothing(t *testing.T) {
 	if checked != 1 || len(h.ran) != 0 || len(h.opened) != 0 || len(h.asked) != 0 {
 		t.Errorf("checked %d ran %v opened %v asked %v", checked, h.ran, h.opened, h.asked)
 	}
-	if !strings.Contains(errOut, "$ sudo pmset -a sleep 0") || !strings.Contains(errOut, "dry run") || !strings.Contains(out, "fail\tpower\toff") {
+	if !strings.Contains(errOut, "    sudo pmset -a sleep 0") || !strings.Contains(errOut, "dry run") || !strings.Contains(out, "fail\tpower\toff") {
 		t.Errorf("out %q err %q", out, errOut)
 	}
 }
@@ -620,7 +620,7 @@ func TestAnUnreachableStepIsNotAFailureAndAsksNoPassword(t *testing.T) {
 	if len(outs) != 1 || outs[0].Status != doctor.NotVerified || !outs[0].Asked {
 		t.Errorf("outcome %+v", outs)
 	}
-	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "$ whr setup host --dev --only first") {
+	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "    whr setup host --dev --only first") {
 		t.Errorf("output %q", errOut)
 	}
 	if strings.Contains(errOut, "fix the cause") {
@@ -694,7 +694,7 @@ func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
 	lg := &memLog{}
 	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--dev"}, Log: lg}
 	outs, _, errOut := run(t, &fakeHost{}, []doctor.Check{s}, o)
-	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "$ whr setup --only config-base --dev\n") {
+	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "    whr setup --only config-base --dev\n") {
 		t.Errorf("output %q", errOut)
 	}
 	if outs[0].Remedy != "whr setup --only config-base" || outs[0].Next != "whr setup --only config-base --dev" {
@@ -730,7 +730,7 @@ func TestAnUnreachableStepNamesToolsWithoutRunFlags(t *testing.T) {
 	if len(h.ran) != 0 || len(outs) != 1 || outs[0].Status != doctor.NotVerified || outs[0].Remedy != "make install PREFIX="+prefix {
 		t.Errorf("ran %v outcome %+v", h.ran, outs)
 	}
-	for _, want := range []string{"$ make install PREFIX=" + prefix + "\n", "$ make install-release VERSION=<tag> PREFIX=" + prefix + "\n", "ACTION  or:"} {
+	for _, want := range []string{"    make install PREFIX=" + prefix + "\n", "    make install-release VERSION=<tag> PREFIX=" + prefix + "\n", "ACTION  or:"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("lacks %q:\n%s", want, errOut)
 		}
@@ -751,7 +751,7 @@ func TestARealPreviewIsNotShownTwice(t *testing.T) {
 	})
 	h := &fakeHost{answers: []string{"y"}}
 	_, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser})
-	if n := strings.Count(errOut, "$ whr tools build -store /real/store"); n != 1 || strings.Contains(errOut, "<") {
+	if n := strings.Count(errOut, "    whr tools build -store /real/store"); n != 1 || strings.Contains(errOut, "<") {
 		t.Errorf("shown %d times:\n%s", n, errOut)
 	}
 }

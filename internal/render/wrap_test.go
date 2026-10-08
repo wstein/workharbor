@@ -29,7 +29,7 @@ func TestWrap(t *testing.T) {
 		t.Errorf("long word split: %q", got)
 	}
 	cmd := strings.Repeat("sudo thing ", 12)
-	if got := Command(Style{}, cmd); !strings.Contains(got, "$ "+cmd+"\n") {
+	if got := Command(Style{}, cmd); !strings.Contains(got, "    "+cmd+"\n") {
 		t.Errorf("command wrapped: %q", got)
 	}
 }

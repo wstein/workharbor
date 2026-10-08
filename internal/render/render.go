@@ -71,7 +71,7 @@ var Palette = map[Role]Colour{
 	RoleWarn:        {"33", "WARN"},
 	RoleSkipped:     {"2", "skip"},
 	RoleAction:      {"1;33", "ACTION"},
-	RoleCommand:     {"36", "$"},
+	RoleCommand:     {"36", "command"},
 	RoleTool:        {"2", "tool output"},
 	RoleHeader:      {"1", "Step"},
 	RoleTodo:        {"1", "What you need to do now"},
@@ -231,25 +231,33 @@ func Plan(s Style, text string) string {
 	return s.paint(RoleAction, s.bar()+" PLAN") + "    " + indent(wrapAt(text, 10, s.cols()), "          ") + "\n"
 }
 
-// Command is text to copy, behind the action bar and a "$".
-//
-// A command is never wrapped, so a copy gets it whole. One that does not fit
-// goes on its own line behind a line that says so.
-func Command(s Style, cmd string) string {
-	line := s.paint(RoleAction, s.bar()) + "   " + s.paint(RoleCommand, "$ "+cmd) + "\n"
-	if utf8.RuneCountInString(cmd)+6 > s.cols() {
-		line = s.paint(RoleAction, s.bar()) + "   (one long line, copy it whole)\n" + line
+// cmdIndent is the column of every command block.
+const cmdIndent = "    "
+
+// Command is a command block (issue #416): a blank line, the command alone on
+// its line at one indent with no marker, so a copy is the bare command, a
+// blank line. A command is never
+// wrapped, so a copy gets it whole, however wide the terminal is.
+func Command(s Style, cmd string) string { return Commands(s, cmd) }
+
+// Commands is Command for several commands in a row: one blank line above the
+// first, one between two, one below the last.
+func Commands(s Style, cmds ...string) string { return commandBlock(s, cmdIndent, cmds) }
+
+func commandBlock(s Style, pad string, cmds []string) string {
+	if len(cmds) == 0 {
+		return ""
 	}
-	return line
+	var b strings.Builder
+	b.WriteString("\n")
+	for _, c := range cmds {
+		b.WriteString(pad + s.paint(RoleCommand, c) + "\n\n")
+	}
+	return b.String()
 }
 
-// ActionCmd is an ACTION line that ends in a command: "text cmd" when it fits
-// the width, otherwise the text as an ACTION and the command on a line of its
-// own, because a command is never wrapped.
+// ActionCmd is an ACTION line and the command it names as a command block.
 func ActionCmd(s Style, text, cmd string) string {
-	if utf8.RuneCountInString(text)+1+utf8.RuneCountInString(cmd)+10 <= s.cols() {
-		return Action(s, text+" "+cmd)
-	}
 	return Action(s, text) + Command(s, cmd)
 }
 
@@ -568,15 +576,11 @@ func Todo(s Style, items []TodoItem) string {
 		prefix := fmt.Sprintf("  %d. ", i+1)
 		pad := strings.Repeat(" ", len(prefix))
 		fmt.Fprintf(&b, "%s%s\n", prefix, indent(wrap(it.Text, len(prefix)), pad))
-		for _, c := range it.Commands {
-			fmt.Fprintf(&b, "%s%s\n", pad, s.paint(RoleCommand, "$ "+c))
-		}
+		b.WriteString(commandBlock(s, pad, it.Commands))
 		if it.After != "" {
 			fmt.Fprintf(&b, "%s%s\n", pad, indent(wrap(it.After, len(prefix)), pad))
 		}
-		for _, c := range it.Then {
-			fmt.Fprintf(&b, "%s%s\n", pad, s.paint(RoleCommand, "$ "+c))
-		}
+		b.WriteString(commandBlock(s, pad, it.Then))
 	}
 	return b.String()
 }
@@ -615,6 +619,9 @@ func (w Writer) Note(text string) { w.put(Note(w.S, text)) }
 
 // Command writes a copyable command.
 func (w Writer) Command(cmd string) { w.put(Command(w.S, cmd)) }
+
+// Commands writes Commands.
+func (w Writer) Commands(cmds ...string) { w.put(Commands(w.S, cmds...)) }
 
 // ActionCmd writes ActionCmd.
 func (w Writer) ActionCmd(text, cmd string) { w.put(ActionCmd(w.S, text, cmd)) }

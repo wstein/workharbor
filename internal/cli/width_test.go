@@ -22,7 +22,7 @@ const (
 // checkWidth fails for every line of text over the hard limit, and for every
 // line over the wrap limit that has spaces to break at. An audit record
 // ("log: ...") is one unbroken line by design and is skipped, and so is a
-// copyable command line (render.Cmd, "$ ..."), which is never wrapped.
+// copyable command block (render.Cmd), which is never wrapped.
 func checkWidth(t *testing.T, name, text string) {
 	t.Helper()
 	for _, m := range widthProblems(name, text, wrapLimit, hardLimit) {
@@ -33,10 +33,12 @@ func checkWidth(t *testing.T, name, text string) {
 // widthProblems is checkWidth for any limits, returning the messages.
 func widthProblems(name, text string, wrapAt, hardAt int) []string {
 	var out []string
-	for _, l := range strings.Split(escape.ReplaceAllString(text, ""), "\n") {
+	lines := strings.Split(escape.ReplaceAllString(text, ""), "\n")
+	cmd := commandBlockLines(lines)
+	for i, l := range lines {
 		n := utf8.RuneCountInString(l)
 		switch {
-		case strings.HasPrefix(strings.TrimSpace(l), "log:"), isCmdLine(l):
+		case strings.HasPrefix(strings.TrimSpace(l), "log:"), cmd[i]:
 		case n > hardAt:
 			out = append(out, fmt.Sprintf("%s: %d columns (hard limit %d): %q", name, n, hardAt, l))
 		case n > wrapAt && strings.Contains(strings.TrimSpace(l), " "):
@@ -88,23 +90,34 @@ func TestHumanOutputStaysNarrow(t *testing.T) {
 	checkWidth(t, "purge prompt", errOut)
 }
 
-// isCmdLine is a line made by render.Cmd or a "$ command" line of help text.
-func isCmdLine(l string) bool {
-	l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "|▌"))
-	return strings.HasPrefix(l, "$ ")
+// commandBlockLines marks the lines of command blocks (render.Command): a
+// line indented at least four columns with a blank line above and below. A
+// "$ command" line of help text counts too.
+func commandBlockLines(lines []string) []bool {
+	out := make([]bool, len(lines))
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "$ ") {
+			out[i] = true
+			continue
+		}
+		out[i] = strings.HasPrefix(l, "    ") && strings.TrimSpace(l) != "" &&
+			i > 0 && strings.TrimSpace(lines[i-1]) == "" &&
+			i+1 < len(lines) && strings.TrimSpace(lines[i+1]) == ""
+	}
+	return out
 }
 
-// The "$ " exemption: a long copyable command line passes, the same text
-// without it fails, and so does a long prose line.
-func TestWidthCheckExemptsCommandLines(t *testing.T) {
-	cmd := "$ " + strings.Repeat("word ", 30)
-	if p := widthProblems("x", cmd, 80, 90); len(p) != 0 {
-		t.Errorf("a command line must pass: %v", p)
+// The block exemption: a long command alone in a block passes, the same text
+// without the blank lines around it fails, and so does a long prose line.
+func TestWidthCheckExemptsCommandBlocks(t *testing.T) {
+	cmd := "    " + strings.Repeat("word ", 30)
+	if p := widthProblems("x", "run:\n\n"+cmd+"\n\nthen", 80, 90); len(p) != 0 {
+		t.Errorf("a command block must pass: %v", p)
 	}
-	if p := widthProblems("x", "  "+cmd, 80, 90); len(p) != 0 {
-		t.Errorf("an indented command line must pass: %v", p)
+	if p := widthProblems("x", "run:\n"+cmd+"\nthen", 80, 90); len(p) != 1 {
+		t.Errorf("an indented line outside a block must fail: %v", p)
 	}
-	if p := widthProblems("x", strings.TrimPrefix(cmd, "$ "), 80, 90); len(p) != 1 {
+	if p := widthProblems("x", "\n"+strings.TrimSpace(cmd)+"\n", 80, 90); len(p) != 1 {
 		t.Errorf("prose over the limit must fail: %v", p)
 	}
 }

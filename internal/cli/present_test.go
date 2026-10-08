@@ -164,7 +164,7 @@ func TestEveryColouredLineHasItsTextLabel(t *testing.T) {
 			t.Errorf("colour %q has no label in the palette", seq)
 		}
 	}
-	for _, label := range []string{"FAIL", "?", "ACTION", "$"} {
+	for _, label := range []string{"FAIL", "?", "ACTION", "command"} {
 		if !strings.Contains(escape.ReplaceAllString(errOut, ""), label) {
 			t.Errorf("label %q missing", label)
 		}
@@ -242,7 +242,7 @@ func TestQuitExitsWithItsOwnCodeAndAResumeHint(t *testing.T) {
 	if code != exitcode.Quit || code == exitcode.Error || code == exitcode.OK {
 		t.Errorf("exit %d, want %d, a code of its own\n%s", code, exitcode.Quit, errOut)
 	}
-	if !regexp.MustCompile(`\$ whr setup host .*--only power`).MatchString(errOut) || !strings.Contains(errOut, "stopped at your request") {
+	if !regexp.MustCompile(`\n +whr setup host .*--only power`).MatchString(errOut) || !strings.Contains(errOut, "stopped at your request") {
 		t.Errorf("no resume hint:\n%s", errOut)
 	}
 	if len(h.ran) != 0 {
@@ -299,7 +299,7 @@ func TestInterruptExitsWithItsOwnCode(t *testing.T) {
 	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "whr: interrupted") || strings.Contains(last, "context") {
 		t.Errorf("final line %q", last)
 	}
-	if !regexp.MustCompile(`to check it and go on, run\n(?:.*one long line.*\n)?.*\$ whr setup host .*--only power`).MatchString(errOut) {
+	if !regexp.MustCompile(`to check it and go on, run\n\n +whr setup host .*--only power`).MatchString(errOut) {
 		t.Errorf("no resume command:\n%s", errOut)
 	}
 }

@@ -105,7 +105,7 @@ func newDoctor(st *state) *cobra.Command {
 				for i, c := range checks {
 					if c.Phase == doctor.PhaseUser {
 						checks[i].Run = func(context.Context) (doctor.Status, string) {
-							return doctor.NotVerified, fmt.Sprintf("this check describes the account %s runs as: run `whr doctor` as %s", whrUser, whrUser)
+							return doctor.NotVerified, fmt.Sprintf("this check describes the account %s runs as: check it as %s", whrUser, whrUser)
 						}
 					}
 				}
@@ -168,7 +168,8 @@ func newDoctor(st *state) *cobra.Command {
 				}
 			}
 			if doctor.Failed(rs) {
-				fmt.Fprintln(st.env.Stderr, "whr: some checks failed; fix them and run `whr doctor` again")
+				fmt.Fprintln(st.env.Stderr, "whr: some checks failed; fix them and check again with:")
+				ui.Command("whr doctor")
 				if reportErr != nil {
 					return reportErr
 				}
@@ -185,7 +186,7 @@ func newDoctor(st *state) *cobra.Command {
 	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
 	cmd.Flags().StringVar(&logFile, "log-file", "", "write the run log to this `path` (default: a new file under the state directory logs/); follow it with tail -f in a second terminal")
-	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run `whr doctor` again to include it")
+	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run the doctor again to include it")
 	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
 	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {

@@ -802,7 +802,7 @@ func TestContainerChecksNeedTheDesktopSession(t *testing.T) {
 		st := steps(t, hostDeps(r))
 		for _, name := range names {
 			got, detail := status(st[name])
-			if got != NotVerified || !strings.Contains(detail, "workharbor's own desktop session (Screen Sharing)") || !strings.Contains(detail, "`whr ls`") || !strings.Contains(detail, "`whr show <task>`") || strings.Contains(detail, "whr service status") {
+			if got != NotVerified || !strings.Contains(detail, "workharbor's own desktop session (Screen Sharing)") || !strings.Contains(detail, "list and show commands") || strings.Contains(detail, "whr service status") {
 				t.Errorf("%s over %s = %s %q", name, session, got, detail)
 			}
 		}
@@ -1068,7 +1068,10 @@ func TestMissingWorkharborWithLegacyWhrPointsAtUserWhr(t *testing.T) {
 	if got != Fail {
 		t.Errorf("status = %s, want fail", got)
 	}
-	for _, want := range []string{"there is no user workharbor", "legacy", "whr setup host --user whr", "whr doctor --user whr"} {
+	if try := strings.Join(c.Fix.Try, "|"); try != "whr setup host --user whr|whr doctor --user whr" {
+		t.Errorf("Try = %q", try)
+	}
+	for _, want := range []string{"there is no user workharbor", "legacy"} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("detail %q lacks %q", detail, want)
 		}

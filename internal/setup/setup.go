@@ -398,9 +398,9 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				}
 				ui.Action(first + ":")
 				ui.Command(shown)
-				for _, t := range u.Tools[min(1, len(u.Tools)):] {
+				if rest := u.Tools[min(1, len(u.Tools)):]; len(rest) > 0 {
 					ui.Action("or:")
-					ui.Command(t)
+					ui.Commands(rest...)
 				}
 				if u.Note != "" {
 					ui.Note(u.Note)
@@ -739,9 +739,7 @@ func hasCommands(f *doctor.Fix) bool {
 // tryLines shows the commands the person runs themself, each whole on a line
 // of its own.
 func tryLines(ui render.Writer, f *doctor.Fix) {
-	for _, c := range f.Try {
-		ui.Command(c)
-	}
+	ui.Commands(f.Try...)
 }
 
 // showFix prints what a fix does as ACTION lines and the exact commands as
@@ -767,12 +765,19 @@ func showFix(ui render.Writer, f *doctor.Fix, dry bool) {
 	default:
 		plan("run these commands")
 	}
-	for _, c := range f.Preview() {
-		ui.Command(QuoteArgv(c.Full()))
-	}
+	ui.Commands(quoted(f.Preview())...)
 	if hasCommands(f) && f.Open != "" {
 		ui.Action("this opens:\n" + f.Open)
 	}
+}
+
+// quoted is the shell form of each command.
+func quoted(cmds []doctor.Cmd) []string {
+	var out []string
+	for _, c := range cmds {
+		out = append(out, QuoteArgv(c.Full()))
+	}
+	return out
 }
 
 // todoFor is what the person has to do for a step that is left.
@@ -1134,11 +1139,13 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 		for _, c := range f.Preview() {
 			shownBefore[QuoteArgv(c.Full())] = true
 		}
+		var fresh []string
 		for _, c := range cmds { // the real commands, shown before they run
 			if !shownBefore[QuoteArgv(c.Full())] { // not twice
-				ui.Command(QuoteArgv(c.Full()))
+				fresh = append(fresh, QuoteArgv(c.Full()))
 			}
 		}
+		ui.Commands(fresh...)
 		if source == protocol.SourceAnswers && anySudo(cmds) {
 			// the digest does not cover what a builder returns: a file never
 			// decides sudo, so ask again
@@ -1275,7 +1282,7 @@ func GuardHost(user string, uid int, whrUser string, admin bool) error {
 		return ErrRoot
 	}
 	if user == whrUser && !admin {
-		return fmt.Errorf("%w: %s is workharbor's own standard account, which must not change the host; run `whr setup host` as your administrator", ErrWrongUser, user)
+		return fmt.Errorf("%w: %s is workharbor's own standard account, which must not change the host; run the host setup as your administrator", ErrWrongUser, user)
 	}
 	return nil
 }
