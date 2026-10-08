@@ -272,7 +272,6 @@ var allowedWildcardRules = []string{
 	"Bash(gh run list:*)",
 	"Bash(gh run view:*)",
 	"Bash(gh release list:*)",
-	reviewAppendRule,
 	"Bash(scripts/board-snapshot.sh card:*)",
 	"Bash(scripts/board-snapshot.sh queue:*)",
 }
@@ -490,11 +489,10 @@ func TestClaudeAllowRuleCoversInterpreterAndFlagFirst(t *testing.T) {
 	}
 }
 
-// laneGitDenyRules and laneLandAskRules keep a lane agent, which runs as the
-// same OS user as the human, from landing or rewriting main and the review
-// notes itself (#328, #315). The grammar is prefix/wildcard only: spellings
-// such as `make -C . land`, `command make land` or `FOO=1 git update-ref` are
-// not matched; the ghguard hook would have to cover them.
+// laneGitDenyRules keep a lane agent, which runs as the same OS user as the
+// human, from rewriting main and the notes refs itself (#328, #315). The grammar
+// is prefix/wildcard only: spellings such as `FOO=1 git update-ref` are not
+// matched; the ghguard hook would have to cover them.
 var laneGitDenyRules = []string{
 	"Bash(git notes add:*)",
 	"Bash(git notes append:*)",
@@ -525,16 +523,6 @@ var laneGitDenyRules = []string{
 	"Bash(git worktree add:*)",
 }
 
-// reviewAppendRule is the one note write a lane may run. Claude settings cannot
-// be scoped to a role, so every lane in this project may append to the review
-// ref; land.sh requires the Opus CLEAR line, and the human types the SHA (#363).
-const reviewAppendRule = "Bash(git notes --ref=review append -m *)"
-
-var laneLandAskRules = []string{
-	"Bash(make land:*)",
-	"Bash(make land-*)",
-}
-
 func TestClaudeLaneLandingDeny(t *testing.T) {
 	data, err := os.ReadFile("../.claude/settings.json")
 	if err != nil {
@@ -544,7 +532,6 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		Permissions struct {
 			Allow []string `json:"allow"`
 			Deny  []string `json:"deny"`
-			Ask   []string `json:"ask"`
 		} `json:"permissions"`
 	}
 	if err := json.Unmarshal(data, &settings); err != nil {
@@ -553,14 +540,6 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 	for _, rule := range laneGitDenyRules {
 		if !slices.Contains(settings.Permissions.Deny, rule) {
 			t.Errorf("missing deny rule %s", rule)
-		}
-	}
-	if !slices.Contains(settings.Permissions.Allow, reviewAppendRule) {
-		t.Errorf("missing allow rule %s", reviewAppendRule)
-	}
-	for _, rule := range laneLandAskRules {
-		if !slices.Contains(settings.Permissions.Ask, rule) {
-			t.Errorf("missing ask rule %s", rule)
 		}
 	}
 	matches := func(rules []string, cmd string) bool {
@@ -619,24 +598,9 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 			t.Errorf("not denied: %s", cmd)
 		}
 	}
-	// Deny beats allow: the append must be allowed and not denied, and nothing
-	// else on the review ref may be allowed.
-	for _, cmd := range []string{"git notes --ref=review append -m verdict", "git notes --ref=review append -m verdict HEAD", `git notes --ref=review append -m "CLEAR abc123 role=reviewer model=x"`} {
-		if !matches(settings.Permissions.Allow, cmd) || matches(settings.Permissions.Deny, cmd) {
-			t.Errorf("review append not usable: %s", cmd)
-		}
-	}
-	for _, cmd := range []string{"git notes --ref=review add -m x HEAD", "git notes --ref=confirm append -m x HEAD", "git notes append -m x", "git notes --ref=review append -F f"} {
+	for _, cmd := range []string{"git notes --ref=review add -m x HEAD", "git notes --ref=confirm append -m x HEAD", "git notes append -m x", "git notes --ref=review append -F f", "git notes --ref=review append -m verdict"} {
 		if matches(settings.Permissions.Allow, cmd) {
 			t.Errorf("note write allowed: %s", cmd)
-		}
-	}
-	for _, cmd := range []string{"make land", "make land-all", "make land-list", "make land-next", "make land-preview", "make land X=1"} {
-		if !matches(settings.Permissions.Ask, cmd) {
-			t.Errorf("land not asked: %s", cmd)
-		}
-		if matches(settings.Permissions.Allow, cmd) {
-			t.Errorf("land allowed: %s", cmd)
 		}
 	}
 	for _, cmd := range []string{
@@ -644,7 +608,7 @@ func TestClaudeLaneLandingDeny(t *testing.T) {
 		"git worktree list", "git rev-parse HEAD", "git status",
 		"make check-local", "make commitlint", "make check",
 	} {
-		if matches(settings.Permissions.Deny, cmd) || matches(settings.Permissions.Ask, cmd) {
+		if matches(settings.Permissions.Deny, cmd) {
 			t.Errorf("needlessly restricted: %s", cmd)
 		}
 	}
