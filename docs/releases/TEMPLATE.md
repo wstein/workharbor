@@ -22,14 +22,7 @@ curl -fsSLO "$base/$f" -O "$base/checksums.txt" &&
 grep " $f\$" checksums.txt | shasum -a 256 -c -
 ```
 
-Then unpack and run the installer as the administrator; the prefix is `/opt/whr` (add another path as a second argument). Nothing is downloaded and no `gh` is needed:
-
-```bash
-tar -xzf "$f" &&
-sudo ./install.sh "$tag"
-```
-
-Optional, once `gh` is installed (setup installs it) and signed in: verify who built the archive.
+Optional, and before the installer: verify who built the archive with `gh`. Skip it on a first install, when `gh` is not installed yet (setup installs it); on an upgrade `gh` is there, so run it. It needs `gh` signed in.
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -39,4 +32,17 @@ gh attestation verify "$f" --repo wstein/workharbor \
   --deny-self-hosted-runners
 ```
 
-`install.sh` checks no attestation and does not tie the tag to the archive. The `workharbor` user must not be able to write the prefix. Full guide: [Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
+Then unpack and run the installer as the administrator; the prefix is `/opt/whr` (add another path as a second argument). Nothing is downloaded and no `gh` is needed:
+
+```bash
+tar -xzf "$f" &&
+sudo ./install.sh "$tag"
+```
+
+With `checksums.txt` next to it, the tag must name that archive and match its checksum, or `install.sh` installs nothing; the files come from the checked archive, and its entries should be `root:wheel` (unverified on the release runner, see Known limits). `install.sh` itself checks no attestation (that is the `gh` step above). The `workharbor` user must not be able to write the prefix.
+
+Next, as the administrator: `/opt/whr/bin/whr setup` (`/opt/whr/bin` is not on the administrator's `PATH`; `/opt/whr/bin/whr version` shows the tag). It now also initializes the `workharbor` account's base configuration (#529; this changes the first-install order of alpha.4). The word `host` is gone from the command; `whr setup host` still works as an alias. Then, as `workharbor` in its desktop session, not over SSH: `export PATH=/opt/whr/bin:$PATH` in `~/.zprofile`, and `whr setup` again for the steps that need that session (API token, container system, GitHub App keys, tool store, service).
+
+In a later shell, `cd` back to the unpacked directory and set `tag` and `f` again; the blocks use them.
+
+Full guide: [Install, upgrade and release](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
