@@ -270,7 +270,7 @@ func Checks(d Deps) []Check {
 			case len(rep.MissingStatuses) > 0:
 				return Fail, "the project's Status field lacks the options " + strings.Join(rep.MissingStatuses, ", ")
 			}
-			return NotVerified, "the project and its four Status options were found; writing a card is not tested until a task changes state"
+			return NotVerified, "the project and its three Status options were found; writing a card is not tested until a task changes state"
 		}},
 		{"forge-workflow", 2, func(ctx context.Context) (Status, string) {
 			c, err := load()
