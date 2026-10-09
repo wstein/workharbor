@@ -22,7 +22,7 @@
       }
     },
     "listen": { "type": "string", "description": "Loopback address of the web UI, for example 127.0.0.1:8787." },
-    "public_url": { "type": "string", "pattern": "^https://" },
+    "public_url": { "type": "string", "pattern": "^[hH][tT][tT][pP][sS]://" },
     "repositories": {
       "type": "array",
       "items": {
@@ -105,14 +105,14 @@
       "properties": {
         "per_run": { "$ref": "#/$defs/budgetLimit" },
         "per_task": { "$ref": "#/$defs/budgetLimit" },
-        "soft_percent": { "type": "integer", "minimum": 1, "maximum": 99 }
+        "soft_percent": { "type": "integer", "minimum": 0, "maximum": 99 }
       }
     },
     "limits": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "warn_percent": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "warn_percent": { "type": "integer", "minimum": 0, "maximum": 99 },
         "low_balance_usd": { "type": "number", "minimum": 0 }
       }
     },
@@ -120,8 +120,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "first_port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
-        "last_port": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+        "first_port": { "type": "integer", "anyOf": [{ "enum": [0] }, { "minimum": 1024, "maximum": 65535 }], "description": "0 (both ports) turns previews off; otherwise a port from 1024 to 65535." },
+        "last_port": { "type": "integer", "anyOf": [{ "enum": [0] }, { "minimum": 1024, "maximum": 65535 }], "description": "0 (both ports) turns previews off; otherwise a port from 1024 to 65535." }
       }
     },
     "tool_profile": { "type": "string" },
@@ -137,7 +137,7 @@
         "session_field": { "type": "string" },
         "link_field": { "type": "string" },
         "queue_status": { "type": "string" },
-        "public_url": { "type": "string", "pattern": "^https://" }
+        "public_url": { "type": "string", "pattern": "^[hH][tT][tT][pP][sS]://" }
       }
     },
     "ntfy": {

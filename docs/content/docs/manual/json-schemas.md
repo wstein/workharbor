@@ -25,11 +25,13 @@ the published file differs from the source), next to
 | `customizations.workharbor` in `devcontainer.json` | `https://wstein.github.io/workharbor/schemas/devcontainer-workharbor.v0-provisional.schema.json` |
 
 **Versions.** `v0-provisional` is the name of the configuration these files
-map: the known structure as of 2026-10. A published file never changes. When the
-configuration changes, the schema gets a new name (`v1-provisional`, later a
-stable `v1`) and the old file and its URL stay, so a file that names an older
-version keeps working in an editor. That the published file is never edited is
-a rule of review; no test checks it against history.
+map: the known structure as of 2026-10. A published file never changes once a
+stable name is chosen; the provisional files may still be corrected until then
+(no one relies on them yet). When the configuration changes, the schema gets a
+new name (`v1-provisional`, later a stable `v1`) and the old file and its URL
+stay, so a file that names an older version keeps working in an editor. That a
+published file is never edited is a rule of review; no test checks it against
+history.
 
 **How they are kept honest.** A Go test compares each schema recursively with
 the Go struct the product reads (every key at every depth on both sides, types

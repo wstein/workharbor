@@ -91,13 +91,70 @@ func TestSchemaAcceptsGoodExamplesAndRejectsWrongOnes(t *testing.T) {
 		"missing":         {mutate(func(m map[string]any) { delete(nested(m, "roots"), "tool_store") }), `missing required key "tool_store"`},
 		"enum":            {mutate(func(m map[string]any) { m["account"] = "private" }), "$.account: "},
 		"enum in a list":  {mutate(func(m map[string]any) { m["repositories"].([]any)[0].(map[string]any)["workflow"] = "yolo" }), "$.repositories[0].workflow: "},
-		"range":           {mutate(func(m map[string]any) { m["preview"] = map[string]any{"first_port": 80, "last_port": 90} }), "$.preview.first_port: 80 violates minimum"},
+		"range":           {mutate(func(m map[string]any) { m["preview"] = map[string]any{"first_port": 80, "last_port": 90} }), "$.preview.first_port: matches none of the alternatives"},
 		"percent":         {mutate(func(m map[string]any) { m["budgets"] = map[string]any{"soft_percent": 100} }), "$.budgets.soft_percent: 100 violates maximum"},
 		"list item type":  {mutate(func(m map[string]any) { m["agent_allowed_tools"] = []any{"Read", 7} }), "$.agent_allowed_tools[1]: want string"},
 		"empty workspace": {mutate(func(m map[string]any) { nested(m, "roots")["workspaces"] = []any{} }), "fewer than 1 items"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := strings.Join(schematest.Validate(s, tc.doc), "\n")
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("problems = %q, want one containing %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSchemaAcceptsWhatTheLoaderAccepts pins the values the loader takes that
+// a stricter schema would flag: 0 means "default" or "off" for the percents and
+// the preview range, and url.Parse lowercases the scheme. Each document is also
+// parsed by the loader, so the schema cannot drift from it. Out-of-range values
+// must keep failing in the schema.
+func TestSchemaAcceptsWhatTheLoaderAccepts(t *testing.T) {
+	s := schematest.Load(t, configSchemaPath)
+	base, _ := json.Marshal(newRig(t).cfg)
+	with := func(edit func(m map[string]any)) []byte {
+		var m map[string]any
+		if err := json.Unmarshal(base, &m); err != nil {
+			t.Fatal(err)
+		}
+		edit(m)
+		raw, _ := json.Marshal(m)
+		return raw
+	}
+	ok := map[string]func(m map[string]any){
+		"soft_percent 0":    func(m map[string]any) { m["budgets"] = map[string]any{"soft_percent": 0} },
+		"warn_percent 0":    func(m map[string]any) { m["limits"] = map[string]any{"warn_percent": 0} },
+		"preview off":       func(m map[string]any) { m["preview"] = map[string]any{"first_port": 0, "last_port": 0} },
+		"public_url scheme": func(m map[string]any) { m["public_url"] = "HTTPS://whr.example.ts.net" },
+		"board scheme": func(m map[string]any) {
+			m["board"] = map[string]any{"owner": "octo", "number": 1, "public_url": "Https://whr.example.ts.net"}
+		},
+	}
+	for name, edit := range ok {
+		t.Run("accepts "+name, func(t *testing.T) {
+			doc := with(edit)
+			if p := schematest.Validate(s, doc); len(p) != 0 {
+				t.Errorf("schema rejects a document the loader accepts: %v", p)
+			}
+			if _, err := Parse(doc); err != nil {
+				t.Errorf("loader rejects the document: %v", err)
+			}
+		})
+	}
+	bad := map[string]struct {
+		edit func(m map[string]any)
+		want string
+	}{
+		"soft_percent -1":  {func(m map[string]any) { m["budgets"] = map[string]any{"soft_percent": -1} }, "violates minimum"},
+		"warn_percent 100": {func(m map[string]any) { m["limits"] = map[string]any{"warn_percent": 100} }, "violates maximum"},
+		"preview 1023":     {func(m map[string]any) { m["preview"] = map[string]any{"first_port": 1023, "last_port": 2000} }, "matches none"},
+		"preview 65536":    {func(m map[string]any) { m["preview"] = map[string]any{"first_port": 2000, "last_port": 65536} }, "matches none"},
+		"public_url http":  {func(m map[string]any) { m["public_url"] = "http://whr.example.ts.net" }, "does not match"},
+	}
+	for name, tc := range bad {
+		t.Run("rejects "+name, func(t *testing.T) {
+			got := strings.Join(schematest.Validate(s, with(tc.edit)), "\n")
 			if !strings.Contains(got, tc.want) {
 				t.Errorf("problems = %q, want one containing %q", got, tc.want)
 			}
