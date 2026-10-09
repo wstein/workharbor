@@ -38,7 +38,8 @@ if [ ! -x "$bin" ]; then
   trap 'rm -rf "$tmp"' EXIT
   proto=(--proto '=https' --tlsv1.2)
   [ -z "${HUGO_BASE_URL:-}" ] || proto=()
-  curl "${proto[@]}" -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset"
+  # An empty array is unbound under set -u in bash 3.2 (macOS), hence the ${proto[@]+...} form.
+  curl ${proto[@]+"${proto[@]}"} -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset"
   (cd "$tmp" && printf '%s\n' "$line" | shasum -a 256 -c - >&2)
   mkdir "$tmp/out"
   case $asset in
