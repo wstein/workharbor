@@ -1135,12 +1135,12 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 		u := &Unreachable{Why: "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec()}
 		// a managed prefix (/opt/whr, /usr/local, Homebrew) is never a make install
 		// target: the source preflight refuses it, so a release is installed
-		u.Where = "as the administrator, in the source tree"
+		u.Where = "as the administrator, in the unpacked release archive (the second command: in a clone)"
 		u.Tools = []string{
+			"sudo ./install.sh <tag> " + shellWord(d.prefix()),
 			"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
-			"scripts/install-release.sh <tag> " + shellWord(d.prefix()),
 		}
-		u.Note = "Both install a verified release into <prefix>, with the guest helpers next to the binary; whr serve looks for them at " + d.libexec() + " (relative to the running whr), so a whr copied alone does not start: install the release there, or place the two guest binaries in that directory by hand. Both commands need gh signed in as a writer of the repository). <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
+		u.Note = "Both install a release into <prefix>, with the guest helpers next to the binary; whr serve looks for them at " + d.libexec() + " (relative to the running whr), so a whr copied alone does not start: install the release there, or place the two guest binaries in that directory by hand. The first needs only the unpacked release archive (manual, Install from the release archive); the second runs from a clone and needs gh signed in as a writer of the repository for a draft. <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
 		return u
 	}
 }
