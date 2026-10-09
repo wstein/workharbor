@@ -1,7 +1,7 @@
 ---
 title: First run
 description: The path from a prepared Mac mini to the first task, with the commands in order.
-weight: 2
+weight: 1
 toc: true
 ---
 
