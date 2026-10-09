@@ -243,3 +243,17 @@ func TestTheWorkspaceFoldersFixSaysItNeedsSudo(t *testing.T) {
 		t.Error("the workspace-folders fix does not declare NeedsSudo")
 	}
 }
+
+func TestWorkspaceVolumesEscapesARootInItsMessages(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "gone\x1b[31m")
+	cfg := filepath.Join(base, "config.json")
+	if err := os.WriteFile(cfg, []byte(`{"roots":{"workspaces":["`+strings.ReplaceAll(root, "\x1b", `\u001b`)+`"]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := Deps{GOOS: "darwin", Runner: scripted{}, ConfigPath: cfg, Home: base}
+	_, st, msg := d.workspaceVolumes(context.Background())
+	if st != NotVerified || strings.ContainsRune(msg, 0x1b) {
+		t.Errorf("%s %q", st, msg)
+	}
+}

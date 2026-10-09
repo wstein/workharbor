@@ -1804,15 +1804,15 @@ func (d Deps) workspaceVolumes(ctx context.Context) ([]string, Status, string) {
 	for _, root := range roots {
 		resolved, err := filepath.EvalSymlinks(root)
 		if err != nil {
-			return nil, NotVerified, "the workspace root " + root + " cannot be resolved, so its disk is not known: " + oneLine(err.Error())
+			return nil, NotVerified, "the workspace root " + textsafe.Escape(root) + " cannot be resolved, so its disk is not known: " + textsafe.Escape(oneLine(err.Error()))
 		}
 		out, err := d.output(ctx, "df", "-P", resolved)
 		if err != nil {
-			return nil, NotVerified, "df did not say which disk " + resolved + " is on: " + oneLine(err.Error())
+			return nil, NotVerified, "df did not say which disk " + textsafe.Escape(resolved) + " is on: " + textsafe.Escape(oneLine(err.Error()))
 		}
 		m := dfMount.FindStringSubmatch(out)
 		if m == nil {
-			return nil, NotVerified, "df's answer for " + resolved + " could not be read"
+			return nil, NotVerified, "df's answer for " + textsafe.Escape(resolved) + " could not be read"
 		}
 		mount := strings.TrimSpace(m[1])
 		if internalMounts[mount] || seen[mount] {

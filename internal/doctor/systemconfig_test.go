@@ -181,6 +181,11 @@ func TestWorkspaceRootsLookupOrder(t *testing.T) {
 		if u := d.needsRoots(t.Context()); u != nil {
 			t.Fatalf("roots steps unreachable: %+v", u)
 		}
+		for _, name := range []string{"workspace-folders", "workspace-volume", "spotlight"} {
+			if u := steps(t, d)[name].Reach(t.Context()); u != nil {
+				t.Errorf("%s must be reachable by the roots rule: %+v", name, u)
+			}
+		}
 		if u := steps(t, d)["system-config"].Reach(t.Context()); u == nil {
 			t.Fatal("system-config must stay unreachable: it needs the full user config")
 		}
