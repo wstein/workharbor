@@ -214,6 +214,13 @@ func TestClaudePortablePermissions(t *testing.T) {
 			t.Errorf("missing topic-branch push allow %s (#448)", rule)
 		}
 	}
+	// Nothing else may allow a push: an exact allow such as Bash(git push origin)
+	// would pass the first-word check and match no deny (#399).
+	for _, rule := range settings.Permissions.Allow {
+		if strings.HasPrefix(rule, "Bash(git push") && !slices.Contains(gitPushTopicAllows, rule) {
+			t.Errorf("allow rule %s is not one of the topic-branch push allows (#399)", rule)
+		}
+	}
 }
 
 // gitPushScopedDenies replace the blanket git push deny (#448): force forms,
