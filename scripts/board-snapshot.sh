@@ -533,10 +533,11 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
     schema_fetch || die "could not read complete schema metadata; no configuration changed"
   fi
   desired=$(jq -cn --arg prefix "$lane_prefix" --arg roles "$roles" --argjson fields "$schema_fields" '{
-    Status:["Todo","In progress","Blocked","In review","Ready to push","Done"],
+    Status:["Todo","In progress","Blocked","In review","Done"],
     Priority:["P1","P2","P3"],
     Session:($roles | split(",") | map($prefix + "/" + .))
-  } | if $prefix == "wh" or any($fields[]; .name == "Session" and any(.options[]?; .name == "Werner")) then .Session += ["Werner"] else . end')
+  } | if any($fields[]; .name == "Status" and any(.options[]?; .name == "Ready to push")) then .Status = ["Todo","In progress","Blocked","In review","Ready to push","Done"] else . end
+  | if $prefix == "wh" or any($fields[]; .name == "Session" and any(.options[]?; .name == "Werner")) then .Session += ["Werner"] else . end')
   normalized_fields=$(printf '%s' "$schema_fields" | jq -c --arg prefix "$lane_prefix" 'map(if .name == "Session" then
     .options |= map(if (.name | startswith("wh/")) then .name = ($prefix + "/" + (.name | ltrimstr("wh/"))) else . end)
     else . end)')
@@ -581,9 +582,10 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
     "Active work") status="In progress" ;;
     "Review queue") status="In review" ;;
     "Blocked work") status=Blocked ;;
-    "Release and milestones") status="Ready to push" ;;
+    "Release and milestones") status="" ;;
     esac
-    filter="repo:$repository is:issue -is:closed status:\"$status\""
+    filter="repo:$repository is:issue -is:closed"
+    [ -z "$status" ] || filter="$filter status:\"$status\""
     current=$(printf '%s' "$schema_views" | jq -c --arg name "$name" '[.[] | select(.name == $name)][0] // {}')
     vid=$(printf '%s' "$current" | jq -r '.id // empty')
     if [ -z "$vid" ]; then
@@ -599,9 +601,9 @@ if [ "$mode" = configure ] || [ "$mode" = configure-fields ]; then
   schema_fetch || die "configuration may be partial: final metadata readback failed"
   printf '%s' "$schema_fields" | jq -e --argjson desired "$desired" '. as $fields | all(["Status","Priority","Session"][]; . as $name | [$fields[] | select(.name == $name)] | length == 1 and (.[0].options | map(.name)) == $desired[$name])' >/dev/null || die "configuration readback does not match required options"
   printf '%s' "$schema_views" | jq -e --arg repo "$repository" --argjson visible "$visible" '. as $views |
-    {"Dispatch queue":"Todo","Active work":"In progress","Review queue":"In review","Blocked work":"Blocked","Release and milestones":"Ready to push"} | to_entries |
+    {"Dispatch queue":"Todo","Active work":"In progress","Review queue":"In review","Blocked work":"Blocked","Release and milestones":""} | to_entries |
     all(.[]; . as $expected | [$views[] | select(.name == $expected.key)] | length == 1 and
-      .[0].filter == ("repo:" + $repo + " is:issue -is:closed status:\"" + $expected.value + "\"") and .[0].layout == "TABLE_LAYOUT" and
+      .[0].filter == ("repo:" + $repo + " is:issue -is:closed" + (if $expected.value == "" then "" else " status:\"" + $expected.value + "\"" end)) and .[0].layout == "TABLE_LAYOUT" and
       ([.[0].configuration.visibleFields.nodes[].id] == $visible))' >/dev/null || die "configuration readback does not match required views"
   schema_print
   exit 0
