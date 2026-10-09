@@ -41,8 +41,8 @@ LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(
 
 # make install builds whr, the launcher whr-shim and the egress proxy whr-proxy
 # (both linux-arm64: the tool store and the sidecar) from the current commit,
-# with the version stamp, and installs them under PREFIX. It refuses a dirty
-# tree and HEAD differing from current local main. The operator obtains
+# with the version stamp, and installs them under PREFIX. It warns about a dirty
+# tree and HEAD differing from current local main (alpha policy, #504). The operator obtains
 # independent review of that exact commit (D24, D34); Git equality cannot prove
 # approval. Unpublished main is accepted only for a development installation.
 # It builds with GOWORK=off and no GOFLAGS, so

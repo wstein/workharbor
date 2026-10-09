@@ -223,10 +223,11 @@ func TestToolsBuild(t *testing.T) {
 }
 
 // make install builds from the committed tree: it installs whr, the shim and
-// the proxy with the version stamp. It accepts only a clean HEAD equal to the
+// the proxy with the version stamp. It expects a clean HEAD equal to the
 // current local main (with a development notice, since main may be unpublished)
-// and refuses a dirty tree and any other commit (D34, #299).
-func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
+// and warns, without refusing, about a dirty tree and any other commit (D34,
+// #299, #504).
+func TestMakeInstallBuildsCommittedCodeAndWarnsAboutADirtyTree(t *testing.T) {
 	for _, tool := range []string{"make", "git", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skipf("%s is not available", tool)
@@ -279,7 +280,8 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 		t.Errorf("the installed whr reports %s (%v): it must be stamped and clean", out, err)
 	}
 
-	// A dirty tree is refused, and nothing new is installed.
+	// A dirty tree installs with a warning (alpha policy, #504), and the
+	// installed whr says so in its version stamp.
 	if err := os.Remove(filepath.Join(prefix, "bin", "whr")); err != nil {
 		t.Fatal(err)
 	}
@@ -287,11 +289,15 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg, err := install()
-	if err == nil || !strings.Contains(string(msg), "dirty tree") {
-		t.Fatalf("make install on a dirty tree = %v\n%s", err, msg)
+	if err != nil || !strings.Contains(string(msg), "working tree is not clean") {
+		t.Fatalf("make install on a dirty tree = %v, want success with a warning\n%s", err, msg)
 	}
-	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
-		t.Error("a dirty tree still installed whr")
+	out, err = exec.CommandContext(t.Context(), filepath.Join(prefix, "bin", "whr"), "version", "--json").Output() //nolint:gosec // the binary just built
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out, &got); err != nil || !got.Dirty {
+		t.Errorf("the whr built from a dirty tree reports %s (%v): it must be stamped dirty", out, err)
 	}
 
 	if err := os.Remove(filepath.Join(clone, "stray.txt")); err != nil {
@@ -302,27 +308,21 @@ func TestMakeInstallBuildsCommittedCodeAndRefusesADirtyTree(t *testing.T) {
 			"commit", "--quiet", "--allow-empty", "-m", msg)
 	}
 
-	// A clean commit ahead of local main (a topic branch) is refused.
+	// A clean commit ahead of local main (a topic branch) installs with a warning.
 	gitIn(clone, "checkout", "--quiet", "-b", "topic")
 	commit("test: a topic commit")
 	msg, err = install()
-	if err == nil || !strings.Contains(string(msg), "HEAD must equal the current local main commit") {
-		t.Fatalf("make install of a commit ahead of main = %v\n%s", err, msg)
-	}
-	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
-		t.Error("a commit ahead of main still installed whr")
+	if err != nil || !strings.Contains(string(msg), "not the current local main") {
+		t.Fatalf("make install of a commit ahead of main = %v, want success with a warning\n%s", err, msg)
 	}
 
-	// So is an older commit that is not the tip of main.
+	// So does an older commit that is not the tip of main.
 	gitIn(clone, "checkout", "--quiet", "main")
 	commit("test: a new main tip")
 	gitIn(clone, "checkout", "--quiet", "--detach", "HEAD~1")
 	msg, err = install()
-	if err == nil || !strings.Contains(string(msg), "HEAD must equal the current local main commit") {
-		t.Fatalf("make install of a non-tip commit = %v\n%s", err, msg)
-	}
-	if _, err := os.Stat(filepath.Join(prefix, "bin", "whr")); err == nil {
-		t.Error("a non-tip commit still installed whr")
+	if err != nil || !strings.Contains(string(msg), "not the current local main") {
+		t.Fatalf("make install of a non-tip commit = %v, want success with a warning\n%s", err, msg)
 	}
 
 	// A clean, unpublished local main tip installs, with a development notice.
