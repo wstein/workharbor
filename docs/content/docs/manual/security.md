@@ -1,7 +1,7 @@
 ---
 title: Security notes
 description: What you accept by running coding agents under WorkHarbor, and how to limit it.
-weight: 2
+weight: 6
 toc: true
 ---
 

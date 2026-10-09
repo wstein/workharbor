@@ -1,7 +1,7 @@
 ---
 title: Daily use
 description: Start a task, follow it, answer what the agent asks, pause, resume and clean up.
-weight: 3
+weight: 5
 toc: true
 ---
 

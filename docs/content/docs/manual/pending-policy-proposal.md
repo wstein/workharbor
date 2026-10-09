@@ -1,7 +1,7 @@
 ---
 title: Pending policy proposal
 description: "Unapproved project-policy authority options and conditional reader contract."
-weight: 15
+weight: 16
 toc: true
 ---
 

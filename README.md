@@ -24,8 +24,8 @@ The command-line tool is **`whr`**.
 
 - **A supervisor with a dashboard, not an IDE.** Tasks, runs, workspaces and environments are separate objects you watch and steer from the dashboard (web, phone) or the CLI; attaching or detaching an editor never interrupts the agent.
 - **Workspaces with named agents.** A workspace is a folder with its own isolated environment; each named agent (`<workspace>/<role>`) works on its own branch there. A console environment gives you a shell next to them, without logging in to the host.
-- **Human in the loop.** Agents raise decisions (questions, approvals, reviews); you answer them from your phone, the web app or the CLI.
-- **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each workspace gets its own environment (a lightweight VM), reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. The agents of one workspace share that environment; put agents that must not touch each other in separate workspaces. Other runtimes follow through adapters.
+- **Human in the loop.** Agents raise Decisions (questions, approvals, reviews); you answer them from your phone, the web app or the CLI.
+- **Isolated by default.** First target is Apple Container on an Apple-silicon Mac mini: each workspace gets its own environment, reaching the internet only through an allowlist proxy, with short-lived, per-run forge credentials. The agents of one workspace share that environment; put agents that must not touch each other in separate workspaces. Other runtimes follow through adapters.
 - **Your agent, your login, within its terms.** Claude Code first, with your own subscription or an API key. You sign in inside each environment; `whr` never handles a subscription login, and only you start runs ([vendor terms](docs/content/docs/manual/vendor-terms.md)).
 - **Approval boundaries are policy.** Agents commit inside their environment; the host never runs git there. An agent's commits leave as a git bundle, are checked on the host against a supervisor-owned mirror of the repository, and are pushed only after you approve the exact commit ("Ready to push?"). Merge, tag, release and deploy stay with you, enforced by the forge adapter, not by prompts.
 - **One service layer.** The `whr` CLI (over the JSON API) and the server-rendered web UI share the same service layer.
@@ -68,10 +68,10 @@ These are the stable commands of the first slice (design D37); they exist, but h
 
 ```bash
 make build         # bin/whr
-make install       # whr, whr-shim and whr-proxy from a clean commit on origin/main
+make install       # whr, whr-shim and whr-proxy from the local main (warns on a dirty tree or another HEAD)
 ```
 
-The dogfood host installs a pre-release instead (`make install-release VERSION=<tag>`); from `v0.1.0` on, `brew install wstein/tap/whr`.
+The dogfood host installs a pre-release instead: download the release archive and `checksums.txt`, verify them and run `sudo ./install.sh <tag>` (no clone, no `gh`; the commands are in the release notes and on the [install page](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/)). `make install-release VERSION=<tag>` is the route from a clone. From `v0.1.0` on, `brew install wstein/tap/whr`.
 
 Setting up the host is in the [manual](https://wstein.github.io/workharbor/docs/manual/); installing, upgrading and releasing are on its [install page](https://wstein.github.io/workharbor/docs/manual/install-upgrade-release/).
 

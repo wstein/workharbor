@@ -1,7 +1,7 @@
 ---
 title: API reference
 description: The provisional HTTP API contract and its relationship to CLI JSON output.
-weight: 12
+weight: 11
 toc: true
 ---
 
