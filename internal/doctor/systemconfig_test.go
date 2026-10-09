@@ -101,3 +101,88 @@ func TestSystemConfigCommandsAndMissingConfig(t *testing.T) {
 		t.Errorf("missing config: %s %q", st, msg)
 	}
 }
+
+// Issue #510: the host steps find the workspace roots in the user config, then
+// in the system config, and warn (not_verified, never fail) when neither reads.
+func TestWorkspaceRootsLookupOrder(t *testing.T) {
+	write := func(t *testing.T, path, body string, mode os.FileMode) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), mode); err != nil { //nolint:gosec // a test path under t.TempDir
+			t.Fatal(err)
+		}
+	}
+	const sys = `{"version":1,"user":"workharbor","workspaces":["/Volumes/Sys/ws"]}`
+
+	t.Run("user config readable wins", func(t *testing.T) {
+		d := adminDeps(t)
+		write(t, d.SystemConfigFile, sys, 0o644)
+		roots, st, msg := d.workspaceRoots()
+		if st != "" || len(roots) != 1 || roots[0] != "/Volumes/Work/ws" {
+			t.Fatalf("roots %v, %q, %q", roots, st, msg)
+		}
+	})
+	t.Run("only the system config readable", func(t *testing.T) {
+		d := adminDeps(t)
+		if os.Geteuid() == 0 {
+			t.Skip("root reads every file")
+		}
+		write(t, d.SystemConfigFile, sys, 0o644)
+		if err := os.Chmod(d.ConfigPath, 0); err != nil {
+			t.Fatal(err)
+		}
+		roots, st, msg := d.workspaceRoots()
+		if st != "" || len(roots) != 1 || roots[0] != "/Volumes/Sys/ws" {
+			t.Fatalf("roots %v, %q, %q", roots, st, msg)
+		}
+	})
+	t.Run("neither readable warns", func(t *testing.T) {
+		d := adminDeps(t)
+		if os.Geteuid() == 0 {
+			t.Skip("root reads every file")
+		}
+		if err := os.Chmod(d.ConfigPath, 0); err != nil {
+			t.Fatal(err)
+		}
+		_, st, msg := d.workspaceRoots()
+		if st != NotVerified || !strings.Contains(msg, d.ConfigPath) || !strings.Contains(msg, d.SystemConfigFile) {
+			t.Fatalf("%s: %q", st, msg)
+		}
+		c := steps(t, d)["workspace-folders"]
+		if st, _ := status(c); st == Fail {
+			t.Fatal("the step must not fail when no config is readable")
+		}
+	})
+	t.Run("missing user config does not fall back", func(t *testing.T) {
+		d := adminDeps(t)
+		d.User = d.account() // the whr account's own run
+		write(t, d.SystemConfigFile, sys, 0o644)
+		if err := os.Remove(d.ConfigPath); err != nil {
+			t.Fatal(err)
+		}
+		if _, st, _ := d.workspaceRoots(); st != NotVerified {
+			t.Fatalf("status %s", st)
+		}
+	})
+	t.Run("administrator run, default path without a config", func(t *testing.T) {
+		d := adminDeps(t)
+		d.User = "admin"
+		d.Account = "workharbor"
+		write(t, d.SystemConfigFile, sys, 0o644)
+		if err := os.Remove(d.ConfigPath); err != nil {
+			t.Fatal(err)
+		}
+		roots, st, msg := d.workspaceRoots()
+		if st != "" || len(roots) != 1 || roots[0] != "/Volumes/Sys/ws" {
+			t.Fatalf("roots %v, %q, %q", roots, st, msg)
+		}
+		if u := d.needsRoots(t.Context()); u != nil {
+			t.Fatalf("roots steps unreachable: %+v", u)
+		}
+		if u := steps(t, d)["system-config"].Reach(t.Context()); u == nil {
+			t.Fatal("system-config must stay unreachable: it needs the full user config")
+		}
+	})
+}
