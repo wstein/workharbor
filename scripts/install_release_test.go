@@ -658,7 +658,7 @@ func TestUnpackedWrongTagIsRefused(t *testing.T) {
 	r := newRelease(t, "0.2.0", "v0.2.0")
 	root := r.unpacked(t, true)
 	out, err := r.runUnpacked(t, root, "./install.sh v0.3.0 "+r.prefix)
-	if err == nil || !strings.Contains(out, "does not match the downloaded archive") {
+	if err == nil || !strings.Contains(out, "is not next to checksums.txt") {
 		t.Fatalf("a wrong tag was accepted: %v\n%s", err, out)
 	}
 	if v, _ := os.ReadFile(r.versionFile()); string(v) != "v0.2.0\n" {
@@ -731,5 +731,24 @@ func TestPipedScriptUsesUnpackedModeInAnUnpackedDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(r.prefix, "libexec", "whr", "whr-shim-linux-arm64")); err != nil {
 		t.Errorf("nothing was installed: %v", err)
+	}
+}
+
+// With checksums.txt beside the script the archive's files are installed, not a
+// stray unpacked tree next to it.
+func TestUnpackedInstallsTheArchiveNotTheStrayTree(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, true)
+	if err := os.WriteFile(filepath.Join(root, "bin", "whr"), []byte("#!/bin/sh\necho stray\n"), 0o700); err != nil { //nolint:gosec // an executable test fake
+		t.Fatal(err)
+	}
+	out, err := r.runUnpacked(t, root, "./install.sh v0.2.0 "+r.prefix)
+	if err != nil {
+		t.Fatalf("install: %v\n%s", err, out)
+	}
+	b, _ := os.ReadFile(filepath.Join(r.prefix, "bin", "whr")) //nolint:gosec // a test path
+	if strings.Contains(string(b), "stray") || !strings.Contains(string(b), "v0.2.0") {
+		t.Errorf("the stray tree was installed:\n%s", b)
 	}
 }
