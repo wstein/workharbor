@@ -170,13 +170,16 @@ tar -xzf "$work/$archive" -C "$work/x" bin/whr guest/whr-shim-linux-arm64 guest/
 root="$work/x"
 fi
 
-# The whr user must not be able to write what root runs: refuse an existing prefix
-# directory (judged by its target when it is a symlink) that is group- or
-# world-writable or not owned by the user running this script.
+# Refuse an existing prefix directory (judged by its target when it is a symlink)
+# that is group- or world-writable. One that the running user does not own is
+# only a warning in the alpha (#493), revisited at beta.
 me="$(id -u)"
 for d in "$prefix" "$prefix/bin" "$prefix/libexec" "$prefix/libexec/whr"; do
-  if [ -d "$d" ] && [ -n "$(find -H "$d" -maxdepth 0 \( -perm -020 -o -perm -002 -o ! -user "$me" \) 2>/dev/null)" ]; then
-    die "$d is group- or world-writable or not owned by uid $me: the whr user must not be able to write the prefix"
+  if [ -d "$d" ] && [ -n "$(find -H "$d" -maxdepth 0 \( -perm -020 -o -perm -002 \) 2>/dev/null)" ]; then
+    die "$d is group- or world-writable: the whr user must not be able to write the prefix"
+  fi
+  if [ -d "$d" ] && [ -n "$(find -H "$d" -maxdepth 0 ! -user "$me" 2>/dev/null)" ]; then
+    echo "install-release: warning: $d is not owned by uid $me; alpha policy (#493), revisit at beta" >&2
   fi
 done
 
