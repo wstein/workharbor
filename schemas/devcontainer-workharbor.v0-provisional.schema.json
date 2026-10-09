@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/workharbor/schemas/devcontainer-workharbor.v0-provisional.schema.json",
+  "title": "devcontainer.json customizations.workharbor (v0-provisional)",
+  "description": "PROVISIONAL, hand-written editor aid for the value of customizations.workharbor in a repository's devcontainer.json. These keys only suggest: the supervisor's own configuration decides, and a bad value is ignored with a note rather than refused. This schema checks structure only and flags unknown keys so an editor shows a typo, although the loader ignores them. This version is immutable once published and later versions get a new name.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "egress": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Exact host names the repository asks to reach. A wildcard is refused; the human answers each as a Decision."
+    },
+    "check": { "type": "string", "description": "The command that checks the work before a review is asked for. The supervisor's own configuration wins." },
+    "previewPorts": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          { "type": "integer", "minimum": 1, "maximum": 65535 },
+          { "type": "string", "pattern": "^[0-9]{1,5}$" }
+        ]
+      }
+    },
+    "agent": { "type": "string", "description": "The name of the agent to prefer." },
+    "tools": { "type": "array", "items": { "type": "string" }, "description": "Tools to allow the agent, by name." }
+  }
+}

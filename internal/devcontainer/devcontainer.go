@@ -436,6 +436,16 @@ func ports(key string, v json.RawMessage, notes []string) ([]int, []string) {
 // ValidHost reports whether name can be requested as an egress host.
 func ValidHost(name string) bool { return domain.ValidHost(name) }
 
+// workharborBlock is the value of customizations.workharbor. A test compares it
+// with schemas/devcontainer-workharbor.v0-provisional.schema.json.
+type workharborBlock struct {
+	Egress       []string        `json:"egress,omitempty"`
+	Check        string          `json:"check,omitempty"`
+	PreviewPorts json.RawMessage `json:"previewPorts,omitempty"`
+	Agent        string          `json:"agent,omitempty"`
+	Tools        []string        `json:"tools,omitempty"`
+}
+
 func customizations(v json.RawMessage, notes []string) ([]string, Hints, []string) {
 	var c map[string]json.RawMessage
 	if json.Unmarshal(v, &c) != nil {
@@ -448,13 +458,7 @@ func customizations(v json.RawMessage, notes []string) ([]string, Hints, []strin
 			notes = append(notes, "customizations."+tool+": ignored")
 			continue
 		}
-		var w struct {
-			Egress       []string        `json:"egress"`
-			Check        string          `json:"check"`
-			PreviewPorts json.RawMessage `json:"previewPorts"`
-			Agent        string          `json:"agent"`
-			Tools        []string        `json:"tools"`
-		}
+		var w workharborBlock
 		if err := json.Unmarshal(body, &w); err != nil {
 			notes = append(notes, "customizations.workharbor: unreadable, ignored")
 			continue
