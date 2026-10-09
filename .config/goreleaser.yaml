@@ -48,18 +48,21 @@ archives:
     ids: [whr]
     formats: [tar.gz]
     name_template: "whr_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info: {mode: 0755, owner: root, group: wheel}
     files:
-      - LICENSE
-      - README.md
+      - src: LICENSE
+        info: {owner: root, group: wheel}
+      - src: README.md
+        info: {owner: root, group: wheel}
       - src: scripts/install-release.sh
         dst: install.sh
-        info: {mode: 0755}
+        info: {mode: 0755, owner: root, group: wheel}
       - src: dist/whr-shim_linux_arm64*/whr-shim-linux-arm64
         dst: guest
-        info: {mode: 0755}
+        info: {mode: 0755, owner: root, group: wheel}
       - src: dist/whr-proxy_linux_arm64*/whr-proxy-linux-arm64
         dst: guest
-        info: {mode: 0755}
+        info: {mode: 0755, owner: root, group: wheel}
 
 checksum:
   name_template: checksums.txt
