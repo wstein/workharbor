@@ -89,6 +89,26 @@ func TestAGoodConfigLoads(t *testing.T) {
 	}
 }
 
+// development_prefix was retired (issue #493): an older config.json that still
+// has it loads, and the value is ignored, whatever it is.
+func TestARetiredDevelopmentPrefixKeyIsIgnored(t *testing.T) {
+	r := newRig(t)
+	raw, _ := json.Marshal(r.cfg)
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["development_prefix"] = "/not/absolute/../and/unchecked"
+	raw, _ = json.Marshal(m)
+	path := filepath.Join(r.dir, "whr.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err != nil {
+		t.Fatalf("an old development_prefix key broke loading: %v", err)
+	}
+}
+
 // Every problem is reported at once, with the key it is about.
 func TestEveryProblemIsReportedWithItsKey(t *testing.T) {
 	r := newRig(t)

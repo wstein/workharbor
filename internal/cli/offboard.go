@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/workharbor/internal/doctor"
 	"github.com/wstein/workharbor/internal/exitcode"
+	"github.com/wstein/workharbor/internal/launchd"
 	"github.com/wstein/workharbor/internal/offboard"
 	"github.com/wstein/workharbor/internal/render"
 	"github.com/wstein/workharbor/internal/setup"
@@ -29,8 +30,6 @@ type OffboardEnv struct {
 	Stat    offboard.StatFunc
 	ReadDir func(string) ([]string, error)
 	Now     func() time.Time
-	// Prefix is where an installed whr lives; empty means the default prefix.
-	Prefix string
 }
 
 const offboardLong = `Remove the workharbor macOS account that "whr setup host" created (provisional).
@@ -113,15 +112,12 @@ func offboardRun(cmd *cobra.Command, st *state, env SetupEnv, in offboard.Invoca
 	}
 	ctx := cmd.Context()
 	exe, exeErr := env.Executable()
-	if exeErr == nil && st.dev && st.env.Offboard.Prefix == "" && !filepath.IsAbs(st.env.Getenv("HOME")) {
-		exeErr = usageError{"--dev needs an absolute HOME"} // as setup and doctor refuse
-	}
 	if exeErr == nil {
-		exeErr = setup.CheckInstalled(exe, installedPrefixes(prefixOf(st.env.Offboard, st.dev, st.env.Getenv("HOME")))...)
+		exeErr = launchd.CheckBinary(exe)
 	}
 	if exeErr != nil {
 		if in.Delete {
-			return stop([]offboard.Refusal{{Guard: "installed", Code: exitcode.Usage, Msg: oneLineError(exeErr)}})
+			return stop([]offboard.Refusal{{Guard: "executable", Code: exitcode.Usage, Msg: oneLineError(exeErr)}})
 		}
 		o.Note("note (dry run): %s", oneLineError(exeErr))
 	}
@@ -237,14 +233,4 @@ func offboardCause(code int, started bool) string {
 		return fmt.Sprintf("the delete did not start: nothing was removed (exit %d)", code)
 	}
 	return fmt.Sprintf("removing the account did not finish cleanly, part of it may be done (exit %d)", code)
-}
-
-func prefixOf(e OffboardEnv, dev bool, home string) string {
-	if e.Prefix != "" {
-		return e.Prefix
-	}
-	if dev && filepath.IsAbs(home) {
-		return filepath.Join(home, ".local")
-	}
-	return doctor.DefaultPrefix
 }

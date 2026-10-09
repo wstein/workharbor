@@ -136,7 +136,7 @@ func TestSetupConfiguredHTTPSOriginThroughHTTPForwarder(t *testing.T) {
 
 func TestSetupIdempotencyCooldownAndDownload(t *testing.T) {
 	calls := 0
-	report := doctor.PresentResults([]doctor.Result{{Check: "power", Status: doctor.Fail, Phase: doctor.PhaseHost, Detail: "wrong", Fix: "whr setup host --only power"}}).Artifact(t0, "v0.0.0", "web", "", "workharbor", false, "", "")
+	report := doctor.PresentResults([]doctor.Result{{Check: "power", Status: doctor.Fail, Phase: doctor.PhaseHost, Detail: "wrong", Fix: "whr setup host --only power"}}).Artifact(t0, "v0.0.0", "web", "", "workharbor", "", "")
 	s, now := setupRig(t, setupFunc(func(context.Context) (doctor.Artifact, error) { calls++; return report, nil }))
 	for i := 0; i < 2; i++ {
 		if got := setupRequest(s, "POST", "/setup/check", setupForm("same"), true, "http://setup.test"); got.Code != 303 {
@@ -240,7 +240,7 @@ func TestSetupBadgesFixesAndUnverifiedDetailsAreEscaped(t *testing.T) {
 	for _, status := range []doctor.Status{doctor.OK, doctor.Warn, doctor.Fail, doctor.NotVerified, doctor.Skipped} {
 		results = append(results, doctor.Result{Check: string(status), Status: status, Phase: doctor.PhaseHost, Detail: `<script>bad()</script>`, Fix: `whr setup host --only power <img src=x onerror=bad()>`})
 	}
-	report := doctor.PresentResults(results).Artifact(t0, "v0.0.0", "web", "", "workharbor", false, "", "")
+	report := doctor.PresentResults(results).Artifact(t0, "v0.0.0", "web", "", "workharbor", "", "")
 	s, _ := setupRig(t, setupFunc(func(context.Context) (doctor.Artifact, error) { return report, nil }))
 	_ = setupRequest(s, "POST", "/setup/check", setupForm("one"), true, "http://setup.test")
 	got := setupRequest(s, "GET", "/setup", nil, true, "")

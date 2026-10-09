@@ -14,29 +14,18 @@ import (
 	"github.com/wstein/workharbor/internal/redact"
 )
 
-func TestNewServeSetupUsesConfiguredInstallationPrefix(t *testing.T) {
-	for _, development := range []bool{false, true} {
-		t.Run(map[bool]string{false: "managed", true: "development"}[development], func(t *testing.T) {
-			dir := t.TempDir()
-			tokenFile := filepath.Join(dir, "api-token")
-			if err := os.WriteFile(tokenFile, []byte("test-supervisor-token-long-enough"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			cfg := &config.Config{APITokenFile: tokenFile}
-			want := doctor.DefaultPrefix
-			if development {
-				want = filepath.Join(dir, "development")
-				cfg.DevelopmentPrefix = want
-			}
-			adapter, err := newServeSetup(cfg, filepath.Join(dir, "config.json"), filepath.Join(want, "bin", "whr"), dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			deps := adapter.(*serveSetup).deps
-			if deps.Prefix != want || deps.Dev != development {
-				t.Fatalf("prefix %q, dev %v; want %q, %v", deps.Prefix, deps.Dev, want, development)
-			}
-		})
+func TestNewServeSetupUsesTheDefaultInstallationPrefix(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(dir, "api-token")
+	if err := os.WriteFile(tokenFile, []byte("test-supervisor-token-long-enough"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := newServeSetup(&config.Config{APITokenFile: tokenFile}, filepath.Join(dir, "config.json"), filepath.Join(dir, "whr"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := adapter.(*serveSetup).deps.Prefix; got != doctor.DefaultPrefix {
+		t.Fatalf("prefix %q; want %q", got, doctor.DefaultPrefix)
 	}
 }
 

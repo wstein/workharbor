@@ -258,11 +258,9 @@ type Config struct {
 	// the human's statement: nothing guesses it. `whr doctor` warns about a
 	// shared account and about an administrator.
 	Account string `json:"account,omitempty"`
-	// DevelopmentPrefix remembers a development installation (D24, issue
-	// #276): the absolute prefix `whr setup --dev` was given. Only that command
-	// writes it, and `whr setup --managed` or an edit removes it; absent means a
-	// managed installation. It never loosens a --dev check, and the file that
-	// holds it is checked as Load describes. `whr doctor` warns while it is set.
+	// DevelopmentPrefix is a retired key (the --dev installation was removed in
+	// the alpha, issue #493). It is still accepted, so an older config.json
+	// loads, and nothing reads it.
 	DevelopmentPrefix string `json:"development_prefix,omitempty"`
 	// AgentPermissionMode is how the agent's permission prompts are handled:
 	// "dontAsk" (the default) never asks and runs only AgentAllowedTools, and
@@ -442,23 +440,16 @@ func (e *Error) Error() string {
 // Load reads and validates the file at path. The error is an *Error for a
 // configuration problem and an ordinary error for an unreadable file.
 func Load(path string) (*Config, error) {
-	cf, err := openConfig(path)
+	f, err := os.Open(path) //nolint:gosec // the operator names the config file
 	if err != nil {
 		return nil, err
 	}
-	c, err := Parse(cf.raw)
+	defer func() { _ = f.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(f, 1<<20))
 	if err != nil {
 		return nil, err
 	}
-	// The file that holds development_prefix is checked on its descriptor, and
-	// only when the key is set (D24, issue #276). Parse has already checked the
-	// value; the file is what Parse cannot see.
-	if c.DevelopmentPrefix != "" {
-		if p := checkDevelopmentFile(path, cf.info, cf.linked, os.Getuid(), c.Roots.Workspaces); len(p) > 0 { //nolint:gosec // a uid fits an int
-			return nil, &Error{Problems: p}
-		}
-	}
-	return c, nil
+	return Parse(raw)
 }
 
 // Parse decodes and validates a configuration.
@@ -485,12 +476,6 @@ func (c *Config) Validate() error {
 
 	if err := checkListen(c.Listen); err != "" {
 		add("listen: %s", err)
-	}
-
-	if c.DevelopmentPrefix != "" {
-		if msg := CheckDevelopmentPrefix(c.DevelopmentPrefix); msg != "" {
-			add("%s: %s", DevelopmentPrefixKey, msg)
-		}
 	}
 
 	if p := c.Preview; p != (Preview{}) {

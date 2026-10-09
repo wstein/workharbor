@@ -46,22 +46,6 @@ type SetupEnv struct {
 	// NoRunLog skips the default run log (issue #379) so a test's output stays
 	// fixed; an explicit --log-file is still written.
 	NoRunLog bool
-	// NoDeveloperHint skips the check that a whr owned by the account that
-	// runs it was started with --dev; a test whose binary sits in a directory of
-	// the test's own user sets it, because every file there is owned by it.
-	NoDeveloperHint bool
-}
-
-// installedPrefixes are the admin-owned places a whr may be installed (D24): the
-// chosen prefix, and Homebrew's.
-func installedPrefixes(prefix string) []string {
-	out := []string{prefix}
-	for _, p := range []string{"/opt/homebrew/opt/whr", "/opt/homebrew/Cellar/whr", "/usr/local/opt/whr"} {
-		if p != prefix {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
@@ -97,8 +81,6 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 func newSetup(st *state) *cobra.Command {
 	var (
 		dryRun  bool
-		dev     bool
-		managed bool
 		only    []string
 		from    string
 		whrUser string
@@ -115,7 +97,7 @@ func newSetup(st *state) *cobra.Command {
 			exe, _ := env.Executable()
 			return doctor.Checks(doctor.Deps{
 				ConfigPath: path, Home: home, FS: rt.OSFS{}, LookPath: env.LookPath,
-				Runner: env.Host, Yes: yes, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev, Managed: managed,
+				Runner: env.Host, Yes: yes, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
 			})
 		}
 	)
@@ -126,15 +108,14 @@ func newSetup(st *state) *cobra.Command {
 		return DefaultConfigPath(st.env.Getenv)
 	}
 	run := func(cmd *cobra.Command, phase doctor.Phase) (runErr error) {
-		dev = st.dev
 		var reportSteps []doctor.Check
 		var reportOutcomes []setup.Outcome
-		var remembered, notWhr bool // notWhr: the administrator, not whr's account, runs this
+		var notWhr bool // notWhr: the administrator, not whr's account, runs this
 		defer func() {
 			if dryRun {
 				return
 			}
-			repair := repairContext{Dev: dev && !remembered, Managed: managed, Account: whrUser}
+			repair := repairContext{Account: whrUser}
 			if cmd.Flags().Changed("prefix") {
 				repair.Prefix = prefix
 			}
@@ -147,7 +128,7 @@ func newSetup(st *state) *cobra.Command {
 				}
 				presentation = doctor.Present(append(presentation.Checks, doctor.ReportCheck{Result: doctor.Result{Check: "setup", Phase: phase, Status: doctor.Fail, Detail: detail}}))
 			}
-			if reportErr := writeSetupReport(st, configPath(), presentation, "setup", phase, whrUser, dev); reportErr != nil {
+			if reportErr := writeSetupReport(st, configPath(), presentation, "setup", phase, whrUser); reportErr != nil {
 				fmt.Fprintf(st.env.Stderr, "warning: %s\n", oneLineError(reportErr))
 			}
 		}()
@@ -180,45 +161,17 @@ func newSetup(st *state) *cobra.Command {
 				return usageError{"--save-answers: " + clean(err.Error()) + " (an existing file is never overwritten; remove it first)"}
 			}
 		}
-		if dev && managed {
-			return usageError{"--dev and --managed cannot be combined: --dev remembers a development installation, --managed removes the memory"}
-		}
 		runLog, err := st.startRunLog(&env, "setup", logFile, verbose)
 		if err != nil {
 			return err
 		}
 		defer st.finishRunLog(runLog, style)
 		exe, exeErr := env.Executable()
-		key, err := rememberedPrefix(cmd, dev, managed, configPath(), exe)
+		prefix, err = installationPrefix(cmd, prefix)
 		if err != nil {
 			return err
 		}
-		remembered = useRemembered(cmd, dev, key)
-		if remembered {
-			dev, prefix = true, key
-		} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
-			return err
-		}
-		// a rule sets the development warning apart from the steps (#320)
-		switch {
-		case remembered:
-			ui.Rule()
-			fmt.Fprintln(st.env.Stderr, rememberedWarning(configPath()))
-			ui.Rule()
-		case dev:
-			ui.Rule()
-			fmt.Fprintln(st.env.Stderr, developmentWarning)
-			ui.Rule()
-		}
 		ctx := cmd.Context()
-		if hint := env.developerHint(exe); phase == doctor.PhaseUser && env.User == whrUser && !dev && !managed && hint != "" {
-			// --dev is chosen on purpose, never inferred, and --yes cannot take
-			// the choice: the run stops here, a dry run only says so
-			if !dryRun {
-				return usageError{hint}
-			}
-			ui.Note("note (dry run): " + hint)
-		}
 		if phase == doctor.PhaseHost {
 			admin := false
 			if env.User == whrUser {
@@ -242,49 +195,17 @@ func newSetup(st *state) *cobra.Command {
 		if exeErr != nil {
 			return exeErr
 		}
-		// --managed from a binary that is not installed (a source build, a user-writable
-		// whr) may only leave development mode: the development-key step and the managed
-		// prefix check run, every other step is refused as without --managed
-		onlyKey := len(only) == 1 && only[0] == "development-key"
-		if err := setup.CheckInstalled(exe, setupPrefixes(prefix, dev)...); err != nil {
-			switch {
-			case managed && onlyKey:
-				fmt.Fprintf(st.env.Stderr, "note: %s; only the development-key step runs from this binary, and the managed prefix is checked afterwards\n", oneLineError(err))
-			default:
-				if managed {
-					err = fmt.Errorf("%w; from this binary --managed runs only `--only development-key`: install the release for the other steps (manual, host setup step 13)", err)
-				} else if !dev {
-					err = fmt.Errorf("%w; for a source installation use --dev (or select its --prefix)", err)
-				}
-				if !dryRun {
-					return usageError{err.Error()}
-				}
-				fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
+		if err := launchd.CheckBinary(exe); err != nil {
+			if !dryRun {
+				return usageError{err.Error()}
 			}
+			fmt.Fprintf(st.env.Stderr, "note (dry run): %s\n", oneLineError(err))
 		}
 		steps := doctorOn(env, configPath())
 		reportSteps = steps
-		if dev && !dryRun {
-			for _, c := range steps {
-				if c.Name == "prefix" {
-					if status, detail := c.Run(ctx); status == doctor.Fail {
-						if setup.Interrupted(ctx, env.Host) != nil { // Ctrl-C cut the check short, or killed its command first: not a usage error
-							return interruptedError{}
-						}
-						return usageError{detail}
-					}
-				}
-			}
-		}
 		resume := []string{"whr", "setup"}
 		if phase == doctor.PhaseHost {
 			resume = append(resume, "host")
-		}
-		if dev && !remembered {
-			resume = append(resume, "--dev")
-		}
-		if managed {
-			resume = append(resume, "--managed")
 		}
 		if cmd.Flags().Changed("user") {
 			resume = append(resume, "--user", whrUser)
@@ -403,20 +324,6 @@ func newSetup(st *state) *cobra.Command {
 		if left := needsPerson(outs); unattended && len(left) > 0 {
 			return needsHumanError{"unattended: " + strings.Join(left, ", ") + " need a person (the answers file does not decide them); run the setup in a terminal"}
 		}
-		if managed {
-			// leaving development mode: the key is gone (or was refused above), and
-			// the managed prefix is what the installation now relies on
-			for _, c := range steps {
-				if c.Name == "prefix" {
-					stt, detail := c.Run(ctx)
-					fmt.Fprintf(st.env.Stderr, "prefix: %s: %s\n", stt, clean(strings.TrimSpace(detail)))
-					if stt == doctor.Fail {
-						fmt.Fprintln(st.env.Stderr, "whr: the managed prefix is not ready: the prefix step of the host setup, run as the administrator, prepares it")
-						return quietError{}
-					}
-				}
-			}
-		}
 		for _, o := range outs {
 			if o.Status == doctor.Fail {
 				if dryRun {
@@ -431,7 +338,6 @@ func newSetup(st *state) *cobra.Command {
 	}
 	flags := func(c *cobra.Command) {
 		f := c.Flags()
-		f.BoolVar(&managed, "managed", false, "leave development mode: remove development_prefix from the configuration (`--only development-key` does only that), then check the managed prefix; not with --dev")
 		f.BoolVar(&dryRun, "dry-run", false, "run the read-only checks for real and print every fix without running any")
 		f.BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal; also no fzf")
 		f.BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a step ran")
@@ -443,7 +349,7 @@ func newSetup(st *state) *cobra.Command {
 		f.StringVar(&savePath, "save-answers", "", "save your run/skip answers of this run to this file (0600; never a password, token or key)")
 		f.BoolVar(&yes, "yes", false, "answer yes to the questions you can undo; still ask before anything that cannot be undone, and sudo still asks for its password; the backup it makes covers only config.json (not the launchd plist or the tool store)")
 		f.BoolVar(&unattended, "unattended", false, "ask nothing: run what --answers decides, leave the rest for you and exit 6 (user part only)")
-		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
+		f.StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr; any absolute directory works, the doctor warns when it is not administrator-owned)")
 		names := func(phase doctor.Phase) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 				var out []string
@@ -478,21 +384,11 @@ func newSetup(st *state) *cobra.Command {
 	return root
 }
 
-// Development mode is explicit on each setup/doctor invocation. The LaunchAgent
-// retains the selected executable, so restart needs no mode flag or config key.
-const developmentWarning = "warning: development installation: no managed-install replacement protection\n  to leave it, run the managed setup"
-
-func installationPrefix(cmd *cobra.Command, prefix string, dev bool, home string) (string, error) {
+func installationPrefix(cmd *cobra.Command, prefix string) (string, error) {
 	if cmd.Flags().Changed("prefix") {
 		if err := plainFlag("--prefix", prefix); err != nil {
 			return "", err
 		}
-	}
-	if dev && !cmd.Flags().Changed("prefix") {
-		if !filepath.IsAbs(home) {
-			return "", usageError{"--dev needs an absolute HOME or an explicit --prefix"}
-		}
-		prefix = filepath.Join(home, ".local")
 	}
 	if !filepath.IsAbs(prefix) {
 		return "", usageError{"--prefix must be absolute"}
@@ -508,13 +404,6 @@ func plainFlag(name, value string) error {
 		return usageError{name + " must not contain a control, bidirectional or separator character"}
 	}
 	return nil
-}
-
-func setupPrefixes(prefix string, dev bool) []string {
-	if dev {
-		return []string{prefix}
-	}
-	return installedPrefixes(prefix)
 }
 
 // runFailure is the error of a run that stopped: a usage error when the wizard
@@ -634,11 +523,4 @@ func reportRunAs(phase doctor.Phase, notWhr bool, whrUser string) string {
 		return whrUser
 	}
 	return ""
-}
-
-func (e SetupEnv) developerHint(exe string) string {
-	if e.NoDeveloperHint {
-		return ""
-	}
-	return developerInstallHint(exe, e.UID)
 }

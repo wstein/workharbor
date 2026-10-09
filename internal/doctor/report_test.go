@@ -16,7 +16,7 @@ func exampleReport() Artifact {
 		{Result: Result{Check: "power", Step: 1, Status: Warn, Detail: "check /home/operator/power on example-host", Phase: PhaseHost, Fix: "whr setup host --only power"}},
 		{Result: Result{Check: "config", Step: 2, Status: OK, Detail: "ready", Phase: PhaseUser}, Fixed: &fixed, Asked: &asked},
 		{Result: Result{Check: "capacity", Status: NotVerified, Detail: "not measured"}},
-	}).Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0.1.0", "setup", PhaseUser, "operator", true, "/home/operator", "example-host")
+	}).Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0.1.0", "setup", PhaseUser, "operator", "/home/operator", "example-host")
 }
 
 func TestReportV1GoldenAndRedaction(t *testing.T) {
@@ -178,7 +178,7 @@ func TestReportRedactionBoundaries(t *testing.T) {
 		{"sk-short", "sk-short"},
 	} {
 		p := PresentResults([]Result{{Check: "c", Detail: tc.in}})
-		got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "alice", false, "/home/op", "mac").Checks[0].Detail
+		got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "alice", "/home/op", "mac").Checks[0].Detail
 		if got != tc.want {
 			t.Errorf("%q -> %q; want %q", tc.in, got, tc.want)
 		}
@@ -191,7 +191,7 @@ func TestReportRedactionDegenerateHome(t *testing.T) {
 		defer close(done)
 		for _, home := range []string{"", "/", "//", "///"} {
 			p := PresentResults([]Result{{Check: "c", Detail: "/a//b /home/x"}})
-			got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", false, home, "").Checks[0].Detail
+			got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", home, "").Checks[0].Detail
 			if got != "/a//b /home/x" {
 				t.Errorf("home %q: %q", home, got)
 			}
@@ -247,7 +247,7 @@ func TestReplaceComponentStartIsTheInputStart(t *testing.T) {
 
 func TestReportEmptyAccountLeavesRootsAlone(t *testing.T) {
 	p := PresentResults([]Result{{Check: "c", Detail: "/home/ x /Users/ x"}})
-	got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", false, "/srv/h", "").Checks[0].Detail
+	got := p.Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0", "doctor", "", "", "/srv/h", "").Checks[0].Detail
 	if got != "/home/ x /Users/ x" {
 		t.Fatalf("%q", got)
 	}

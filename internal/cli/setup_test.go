@@ -95,9 +95,9 @@ func newSetupRig(t *testing.T) *setupRig {
 	r := &setupRig{t: t, host: &setupHost{outputs: map[string]string{}}, exe: exe}
 	r.home = filepath.Join(dir, "home")
 	r.env = SetupEnv{
-		NoRunLog: true, NoDeveloperHint: true,
-		OpenLog: func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
-		Host:    r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
+		NoRunLog: true,
+		OpenLog:  func(string) (*protocol.Log, error) { return protocol.Open(r.home, nil, nil) },
+		Host:     r.host, User: "werner", UID: 501, GOOS: "darwin", IsTerminal: func() bool { return true },
 		// the same answer on every machine: a golden must not depend on what is installed
 		LookPath:   func(string) (string, error) { return "/opt/homebrew/bin/container", nil },
 		Executable: func() (string, error) { return exe, nil },
@@ -179,20 +179,26 @@ func TestTheUserPartNeedsWhrInItsDesktopSession(t *testing.T) {
 	}
 }
 
-// A whr that is not the installed one is refused; a dry run says so and goes on.
-func TestOnlyTheInstalledBinaryRunsTheWizard(t *testing.T) {
+// A whr may lie anywhere (alpha, #493); only a file that is not executable is refused.
+func TestTheWizardRunsFromAnyExecutableBinary(t *testing.T) {
 	r := newSetupRig(t)
 	other := filepath.Join(t.TempDir(), "whr")
 	if err := os.WriteFile(other, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // an executable test file
 		t.Fatal(err)
 	}
 	r.env.Executable = func() (string, error) { return other, nil }
-	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "not an installed binary") {
-		t.Errorf("a binary outside the prefix: exit %d, stderr %q", code, errOut)
+	for _, args := range [][]string{{"setup", "host", "--dry-run"}, {"setup", "host", "--only", "power"}} {
+		if code, _, errOut := r.run(args...); code == exitcode.Usage && strings.Contains(errOut, other) || strings.Contains(errOut, "not an installed binary") || strings.Contains(errOut, "note (dry run): "+other) {
+			t.Errorf("%v: a binary outside the prefix was refused: exit %d, %q", args, code, errOut)
+		}
 	}
-	code, _, errOut := r.run("setup", "host", "--dry-run")
-	if code == exitcode.Usage || !strings.Contains(errOut, "note (dry run)") {
-		t.Errorf("a dry run: exit %d, stderr %q", code, errOut)
+	plain := filepath.Join(t.TempDir(), "whr")
+	if err := os.WriteFile(plain, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.env.Executable = func() (string, error) { return plain, nil }
+	if code, _, errOut := r.run("setup", "host"); code != exitcode.Usage || !strings.Contains(errOut, "not an executable file") {
+		t.Errorf("a file that is not executable: exit %d, stderr %q", code, errOut)
 	}
 }
 
@@ -506,62 +512,6 @@ func TestResolveWiresTheInterruptSignalHolder(t *testing.T) {
 	term, ok := e.Host.(setup.Terminal)
 	if !ok || term.Sig == nil {
 		t.Errorf("Host %#v: want a setup.Terminal with Sig set", e.Host)
-	}
-}
-
-// A whr owned by the account that runs it is a developer install: without
-// --dev the user part refuses, --yes included, and with --dev it goes on.
-func TestADeveloperInstallWithoutDevIsRefused(t *testing.T) {
-	r := newSetupRig(t)
-	r.env.User, r.env.UID, r.env.NoDeveloperHint = "workharbor", os.Getuid(), false
-	r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "no workharbor is NOT a member of admin"
-	code, _, errOut := r.run("setup", "--yes", "--only", "tool-store")
-	if code != exitcode.Usage || !strings.Contains(errOut, "this looks like a developer install") || !strings.Contains(errOut, "--dev") {
-		t.Errorf("without --dev: exit %d, stderr %q", code, errOut)
-	}
-	if len(r.host.ran) != 0 || r.host.asked != 0 {
-		t.Errorf("something ran or was asked: %v %d", r.host.ran, r.host.asked)
-	}
-	_, _, errOut = r.run("setup", "--dev", "--dry-run", "--only", "tool-store")
-	if strings.Contains(errOut, "developer install") {
-		t.Errorf("with --dev: %q", errOut)
-	}
-	_, _, errOut = r.run("setup", "--dry-run", "--only", "tool-store")
-	if !strings.Contains(errOut, "note (dry run): this looks like a developer install") {
-		t.Errorf("dry run says nothing: %q", errOut)
-	}
-	// another account's binary is not a developer install
-	if developerInstallHint(r.exe, os.Getuid()+1) != "" {
-		t.Error("a binary of another owner is flagged")
-	}
-}
-
-// The refusal has four exemptions, each held by a test: --managed, the host
-// phase, another account, and root (which has its own refusal).
-func TestTheDeveloperInstallRefusalHasItsExemptions(t *testing.T) {
-	for _, tc := range []struct {
-		name, user string
-		uid        int
-		args       []string
-	}{
-		{"managed", "workharbor", os.Getuid(), []string{"setup", "--managed", "--only", "development-key"}},
-		{"host phase", "workharbor", os.Getuid(), []string{"setup", "host", "--dry-run"}},
-		{"another account", "werner", os.Getuid(), []string{"setup", "--only", "tool-store"}},
-		{"root", "workharbor", 0, []string{"setup", "--only", "tool-store"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := newSetupRig(t)
-			r.env.User, r.env.UID, r.env.NoDeveloperHint = tc.user, tc.uid, false
-			r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "no workharbor is NOT a member of admin"
-			_, _, errOut := r.run(tc.args...)
-			if strings.Contains(errOut, "developer install") {
-				t.Errorf("refused or noted: %q", errOut)
-			}
-		})
-	}
-	r := newSetupRig(t)
-	if developerInstallHint(r.exe, 0) != "" {
-		t.Error("uid 0 is flagged")
 	}
 }
 

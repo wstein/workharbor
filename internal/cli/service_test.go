@@ -148,19 +148,15 @@ func TestServiceInstallRefusesWhatWouldNotWork(t *testing.T) {
 	noPlist("outside the GUI session")
 	r.launchctl.manager = "Aqua"
 
-	// a whr built in a git working tree
-	tree := filepath.Join(filepath.Dir(filepath.Dir(r.whr)), "tree")
-	if err := os.MkdirAll(filepath.Join(tree, ".git"), 0o750); err != nil {
+	// a whr that is not an executable file
+	plain := filepath.Join(filepath.Dir(filepath.Dir(r.whr)), "plain")
+	if err := os.WriteFile(plain, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	built := filepath.Join(tree, "whr")
-	if err := os.WriteFile(built, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // an executable test file
-		t.Fatal(err)
+	if code, _, errOut := r.run(t, "service", "install", "--whr", plain); code != exitcode.Usage || !strings.Contains(errOut, "not an executable file") {
+		t.Errorf("a file that is not executable: exit %d, stderr %q", code, errOut)
 	}
-	if code, _, errOut := r.run(t, "service", "install", "--whr", built); code != exitcode.Usage || !strings.Contains(errOut, "git working tree") {
-		t.Errorf("a worktree binary: exit %d, stderr %q", code, errOut)
-	}
-	noPlist("a worktree binary")
+	noPlist("a file that is not executable")
 
 	// a configuration that would not start
 	if err := os.WriteFile(r.cfg, []byte(`{"listen":"0.0.0.0:1"}`), 0o600); err != nil {

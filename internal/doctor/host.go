@@ -260,7 +260,7 @@ const serviceContainerSystem = "container-system"
 
 // desktopSession names the session the container steps run in for the person
 // reading the guide: this one when the target account is the current user (for
-// example `--dev --user <you>`), else the target account's own.
+// example `--user <you>`), else the target account's own.
 func (d Deps) desktopSession() string {
 	account := d.Account
 	if account == "" {
@@ -800,19 +800,26 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "prefix", Phase: PhaseHost, Step: 13, Title: prefixTitle(d),
-			Run: func(ctx context.Context) (Status, string) {
-				if d.Dev {
-					return d.developmentPrefix(ctx)
-				}
+			Run: func(context.Context) (Status, string) {
 				fi, err := os.Stat(d.prefix())
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return NotVerified, "could not read " + d.prefix() + ": " + oneLine(err.Error())
 				}
+				outside := d.Whr != "" && !underDir(d.Whr, d.prefix())
 				if err != nil {
+					if outside { // alpha policy (#493): whr runs from elsewhere, so the prefix is not needed
+						return Warn, "whr runs from " + d.Whr + ", outside " + d.prefix() + ", which does not exist: fine for the alpha, a weaker point than an administrator-owned prefix; revisit at beta (#493)"
+					}
 					return Fail, d.prefix() + " does not exist"
 				}
-				if !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
-					return Fail, d.prefix() + " is not a directory only its owner can write"
+				if !fi.IsDir() {
+					return Fail, d.prefix() + " is not a directory"
+				}
+				// alpha policy (#493): who owns or writes the prefix and where the
+				// binary lies are one warning, never a failure; revisit at beta
+				var weak []string
+				if fi.Mode().Perm()&0o022 != 0 {
+					weak = append(weak, d.prefix()+" can be written by others than its owner")
 				}
 				for _, p := range []string{d.prefix(), filepath.Join(d.prefix(), "bin"), filepath.Join(d.prefix(), "bin", "whr")} {
 					own, err := ownedBy(p, d.account())
@@ -822,15 +829,19 @@ func hostSteps(d Deps) []Check {
 					if err != nil {
 						return NotVerified, "could not read the owner of " + p + ": " + oneLine(err.Error())
 					}
-					// never the configured account, administrator or not: it could
-					// replace its own supervisor, and D24 would not come back after
-					// drop-admin (D49)
 					if own {
-						return Fail, p + " belongs to " + d.account() + ", the account the supervisor runs as, which could then replace its own supervisor: it must belong to root or another administrator"
+						weak = append(weak, p+" belongs to "+d.account()+", the account the supervisor runs as")
+					} else if p != d.prefix() {
+						if fi, err := os.Lstat(p); err == nil && fi.Mode().Perm()&0o022 != 0 {
+							weak = append(weak, p+" can be written by others than its owner")
+						}
 					}
-					if fi, err := os.Lstat(p); err == nil && fi.Mode().Perm()&0o022 != 0 {
-						return Fail, p + " can be written by others than its owner"
-					}
+				}
+				if outside {
+					weak = append(weak, "whr runs from "+d.Whr+", outside "+d.prefix())
+				}
+				if len(weak) > 0 {
+					return Warn, oneLine(strings.Join(weak, "; ")) + ": fine for the alpha, a weaker point than an administrator-owned prefix; revisit at beta (#493)"
 				}
 				return OK, d.prefix() + " exists and only the administrator writes it"
 			},
@@ -1070,7 +1081,19 @@ const (
 	proxyName = "whr-proxy-linux-arm64"
 )
 
-func (d Deps) libexec() string { return filepath.Join(d.prefix(), "libexec", "whr") }
+// libexec is where `whr serve` looks for the guest helpers: relative to the
+// running binary, <dir(dir(binary))>/libexec/whr (service.InstalledProxy), which
+// is under the prefix for an installed whr and elsewhere for a copied one.
+func (d Deps) libexec() string {
+	if d.Whr == "" {
+		return filepath.Join(d.prefix(), "libexec", "whr")
+	}
+	bin := d.Whr
+	if r, err := filepath.EvalSymlinks(bin); err == nil {
+		bin = r
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(bin)), "libexec", "whr")
+}
 
 // guestHelpersReach is the Reach of the tool-store step: the shim and the proxy
 // are installed next to the binary by `make install` and the release installer,
@@ -1097,14 +1120,6 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 			return nil
 		}
 		u := &Unreachable{Why: "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec()}
-		if d.Dev {
-			// make install refuses a prefix the running account does not own, and
-			// builds only from a clean checkout of current main
-			u.Where = "as the account that owns " + d.prefix() + ", in a checkout of current main"
-			u.Tools = []string{"make install PREFIX=" + shellWord(d.prefix())}
-			u.Note = "It builds whr, the shim and the proxy from the source tree and signs only the macOS whr (ad hoc); the helpers are renamed into place. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
-			return u
-		}
 		// a managed prefix (/opt/whr, /usr/local, Homebrew) is never a make install
 		// target: the source preflight refuses it, so a release is installed
 		u.Where = "as the administrator, in the source tree"
@@ -1112,7 +1127,7 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 			"make install-release VERSION=<tag> PREFIX=" + shellWord(d.prefix()),
 			"scripts/install-release.sh <tag> " + shellWord(d.prefix()),
 		}
-		u.Note = "Both install a verified release (gh signed in as a writer of the repository). <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
+		u.Note = "Both install a verified release into <prefix>, with the guest helpers next to the binary; whr serve looks for them at " + d.libexec() + " (relative to the running whr), so a whr copied alone does not start: install the release there, or place the two guest binaries in that directory by hand. Both commands need gh signed in as a writer of the repository). <prefix> must be the prefix the binary sits in, <prefix>/bin/whr. A whr copied there by hand has no libexec/whr/VERSION, so the installer refuses until --allow-downgrade (make: ALLOW_DOWNGRADE=1) is given, and then replaces it. A binary downloaded with a browser may carry the quarantine attribute: check it with `xattr -l <whr>` (unverified)."
 		return u
 	}
 }
@@ -1383,7 +1398,6 @@ func userSteps(d Deps) []Check {
 			},
 		},
 
-		d.developmentKeyStep(),
 		{
 			Name: "service-install", Phase: PhaseUser, Step: 4, Title: "whr serve as a LaunchAgent (manual step 13)",
 			Run: func(ctx context.Context) (Status, string) {
@@ -1413,7 +1427,7 @@ func userSteps(d Deps) []Check {
 // that needs a service says so with Needs, and a test holds the order to it.
 var userOrder = []string{
 	"config-dir", "api-token", "agent-key", "ssh-ca", "container-start", "container-kernel", "standard-user-check",
-	"config-base", "development-key", "public-url", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
+	"config-base", "public-url", "github-app", "config-github", "tool-store", "service-install", "drop-admin",
 }
 
 // ordered returns the checks in the given order. A name with no check is a bug
@@ -1438,8 +1452,6 @@ type runnerAdapter struct{ r Runner }
 func (a runnerAdapter) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return a.r.Output(ctx, append([]string{name}, args...)...)
 }
-
-func marshalConfig(m map[string]any) ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
 
 func readConfigMap(path string) (map[string]any, error) {
 	raw, err := os.ReadFile(path) //nolint:gosec // the operator's own configuration file
@@ -1912,165 +1924,39 @@ func colonLines(out string) map[string]string {
 }
 
 func prefixInstallCommands(d Deps) []Cmd {
-	if d.Dev {
-		return nil
-	}
 	return []Cmd{{Sudo: true, Argv: d.prefixInstallArgv()}}
 }
 
 func serviceInstallArgv(d Deps) []string {
 	args := []string{d.Whr, "service", "install", "--config", d.ConfigPath}
-	if d.Dev {
-		args = append(args, "--whr", d.Whr)
-	}
 	return args
 }
 
-func (d Deps) developmentPrefix(ctx context.Context) (Status, string) {
-	if d.UID == 0 {
-		return Fail, "whr never runs as root"
-	}
-	if !filepath.IsAbs(d.Home) { // without the home, "too broad" cannot be judged
-		return Fail, "a development installation needs an absolute HOME: it is how the prefix is kept from holding the home directory"
-	}
-	// $HOME is the caller's word (`HOME=/tmp/x whr doctor --dev`, or one kept by
-	// `sudo -u`): the account's home comes from the directory service too, and
-	// without it the check fails closed (#278).
-	accountHome, err := d.directoryHome(ctx)
-	if err != nil {
-		return Fail, "a development installation needs the account's home from the directory service, to keep the prefix from holding it: " + err.Error()
-	}
-	if err := launchd.CheckBinary(d.Whr); err != nil {
-		return Fail, err.Error()
-	}
-	prefix, err := filepath.EvalSymlinks(d.prefix())
-	if err != nil {
-		return Fail, err.Error()
-	}
-	binary, err := filepath.EvalSymlinks(d.Whr)
-	if err != nil {
-		return Fail, err.Error()
-	}
-	rel, err := filepath.Rel(prefix, binary)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return Fail, binary + " is not under " + prefix
-	}
-	if prefix == "/" || prefix == filepath.Dir(prefix) || prefixHoldsDir(prefix, d.Home) || prefixHoldsDir(prefix, accountHome) {
-		return Fail, prefix + " is too broad for a development prefix (the home directory and every directory above it are refused): name a directory of its own, such as " + filepath.Join(d.homeOrDefault(), ".local")
-	}
-	// The binary up to the prefix, then every directory above it: none may be
-	// written by group or other (a sticky directory above the prefix, such as
-	// /tmp, only lets an owner replace its own entries), and each belongs to
-	// the account that runs whr or to root, so no other account can replace
-	// the supervisor binary.
-	inside := true
-	for p := binary; ; p = filepath.Dir(p) {
-		fi, err := os.Stat(p)
-		if err != nil {
-			return Fail, err.Error()
-		}
-		if fi.Mode().Perm()&0o022 != 0 && (inside || fi.Mode()&os.ModeSticky == 0) {
-			return Fail, p + " can be written by others than its owner"
-		}
-		if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != d.UID && st.Uid != 0 {
-			return Fail, p + " belongs to another account than " + d.User + " or root"
-		}
-		if p == prefix {
-			inside = false
-		}
-		if p == filepath.Dir(p) {
-			break
-		}
-	}
-	return Warn, prefix + ": development installation; a user-writable supervisor lacks managed-install replacement protection"
-}
-
 func prefixFix(d Deps) *Fix {
-	guide, try := prefixInstallGuide(d)
+	guide, try := prefixInstallGuide()
 	return &Fix{Cmds: prefixInstallCommands(d), Guide: guide, Try: try}
 }
 
 func prefixTitle(d Deps) string {
-	if d.Dev {
-		return "the development prefix " + d.prefix()
-	}
 	return "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)"
 }
 
-func prefixInstallGuide(d Deps) (string, []string) {
-	if d.Dev {
-		return "As the account that owns the prefix, in a checkout of current main, install the approved source, then check it with the same prefix:", []string{"make install PREFIX=<prefix>", "whr doctor --dev --prefix <prefix>"}
-	}
+func prefixInstallGuide() (string, []string) {
 	return "Then install whr there from a draft release (manual step 13):", []string{"make install-release VERSION=<tag>"}
-}
-
-// directoryHome is the home directory of the account that runs whr, from
-// `/usr/bin/dscl . -read /Users/<user> NFSHomeDirectory`, run by its absolute
-// path because $PATH is the caller's word as much as $HOME is (no shell; the
-// runner's timeout and scrubbed environment apply). An error names why the answer
-// is not an absolute path.
-func (d Deps) directoryHome(ctx context.Context) (string, error) {
-	out, err := d.output(ctx, "/usr/bin/dscl", ".", "-read", "/Users/"+d.User, "NFSHomeDirectory")
-	if err != nil {
-		return "", errors.New("dscl NFSHomeDirectory for " + d.User + " failed: " + err.Error())
-	}
-	_, val, ok := strings.Cut(out, "NFSHomeDirectory:")
-	val = strings.TrimSpace(val)
-	if !ok || !filepath.IsAbs(val) {
-		return "", errors.New("dscl gave no absolute NFSHomeDirectory for " + d.User)
-	}
-	return val, nil
-}
-
-// statDir is how prefixHoldsDir looks at the file system; a test swaps it to
-// stand in for a spelling no temporary directory has (a firmlink).
-var statDir = os.Stat
-
-// prefixHoldsDir reports whether prefix is dir or a directory above it. It
-// compares by identity, never by spelling: it stats prefix once, then dir and
-// every directory above it, and answers true when os.SameFile matches. So
-// `/users` on a case-insensitive volume, or `/System/Volumes/Data/Users`
-// through the firmlink, is refused as `/Users` is (D24, #278). A directory
-// that does not exist is skipped (it cannot be the prefix, and its parents are
-// still walked); any other stat error, and an empty or relative dir, fails
-// closed. #276's file checks reuse it.
-func prefixHoldsDir(prefix, dir string) bool {
-	if dir == "" {
-		return false
-	}
-	pfi, err := statDir(prefix)
-	if err != nil {
-		return true
-	}
-	if !filepath.IsAbs(dir) {
-		return true
-	}
-	if r, err := filepath.EvalSymlinks(dir); err == nil {
-		dir = r
-	}
-	for p := filepath.Clean(dir); ; p = filepath.Dir(p) {
-		fi, err := statDir(p)
-		switch {
-		case err == nil:
-			if os.SameFile(pfi, fi) {
-				return true
-			}
-		case !errors.Is(err, fs.ErrNotExist):
-			return true
-		}
-		if p == filepath.Dir(p) {
-			return false
-		}
-	}
-}
-
-func (d Deps) homeOrDefault() string {
-	if d.Home != "" {
-		return d.Home
-	}
-	return "$HOME"
 }
 
 // agentKeyPrompt says what the agent-key step asks for: an API key, never a
 // subscription login (D40, issue #348).
 const agentKeyPrompt = "Agent API key from the vendor's console (ANTHROPIC_API_KEY; not a setup-token or login token; not echoed)"
+
+// underDir reports whether path lies in dir, after symbolic links.
+func underDir(path, dir string) bool {
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		path = r
+	}
+	if r, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = r
+	}
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
