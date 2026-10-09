@@ -243,13 +243,13 @@ func (d Deps) missingUser(ctx context.Context, fix *Fix) (st Status, msg string,
 	case err == nil:
 		fix.Cmds = nil
 		fix.Guide = "Nothing is created, renamed or deleted. To keep using the legacy account, run:"
-		fix.Try = []string{"whr setup host --user " + LegacyUser, "whr doctor --user " + LegacyUser}
+		fix.Try = []string{"whr setup --user " + LegacyUser, "whr doctor --user " + LegacyUser}
 		return Fail, missing + ", but the legacy account " + LegacyUser + " exists; the commands below use it instead of creating a second account", true
 	case DSCLNotFound(err):
 		return Fail, missing, false
 	}
 	fix.Cmds = nil
-	fix.Try = []string{"whr setup host --only workharbor-user"}
+	fix.Try = []string{"whr setup --only workharbor-user"}
 	fix.Guide = "Inspect the legacy account lookup failure, then retry. Account creation is unavailable until the lookup confirms that " + LegacyUser + " does not exist."
 	return NotVerified, "there is no user " + d.account() + ", and dscl did not say whether the legacy account " + LegacyUser + " exists: " + oneLine(err.Error()), false
 }
@@ -324,9 +324,8 @@ func (d Deps) needsConfigFile(context.Context) *Unreachable {
 		return nil
 	}
 	u := &Unreachable{Why: "the workspace roots are read from " + d.ConfigPath + ", which is not written yet", Step: "config-first"}
-	if d.User != "" && d.User != d.account() {
-		u.Step, u.Command, u.Where = "", "whr setup --only config-base", "as "+d.account()+", in its desktop session"
-		u.Why += " (the administrator's run still cannot read it: open question)"
+	if d.adminRun() {
+		u.Why = "the workspace roots are read from " + d.systemConfigFile() + ", which the config-first step writes with " + d.account() + "'s base configuration"
 	}
 	return u
 }
@@ -372,22 +371,15 @@ func hostSteps(d Deps) []Check {
 	}
 	configFirst := configBaseStep(d, "config-first", PhaseHost, filepath.Join(d.configDir(), "api.token"), filepath.Join(d.configDir(), "agent.env"))
 	configFirst.SetupOnly = true
-	configFirst.Reach = func(context.Context) *Unreachable {
-		// The configuration is the whr account's file (0600, in its home). Only an
-		// account that is the whr account writes it here; the administrator of a
-		// separate workharbor account never writes into that home (least privilege).
-		if d.User != "" && d.User != d.account() {
-			return &Unreachable{
-				Why:     "the configuration belongs to " + d.account() + ", and " + d.User + " does not write it (the administrator's run still cannot read it: open question)",
-				Command: "whr setup --only config-base",
-				Where:   "as " + d.account() + ", in its desktop session",
-			}
-		}
-		return nil
+	if d.adminRun() {
+		configFirst = d.accountConfigStep()
 	}
-	return []Check{
-		configFirst,
-		userStep(d, setupCommand),
+	first, second := []Check{configFirst}, []Check{}
+	if d.adminRun() {
+		// the account must exist before its file can be owned by it
+		first, second = second, first
+	}
+	rest := []Check{
 		loginPictureStep(d),
 		d.workspaceFoldersStep(),
 
@@ -875,6 +867,9 @@ func hostSteps(d Deps) []Check {
 		d.tailscaleStep(),
 		d.tailscaleServeStep(),
 	}
+	out := append(first, userStep(d, setupCommand))
+	out = append(out, second...)
+	return append(out, rest...)
 }
 
 func orNone(s string) string {
@@ -1495,18 +1490,44 @@ func readConfigMap(path string) (map[string]any, error) {
 // whole configuration: github comes later (config-github), so it is not validated
 // as one.
 func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath string) error {
+	raw, mkdirs, err := composeConfigBase(ctx, d, p, tokenPath, envPath, false)
+	if err != nil {
+		return err
+	}
+	for _, dir := range append(mkdirs, filepath.Dir(d.ConfigPath)) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			var pe *fs.PathError
+			if errors.As(err, &pe) {
+				err = pe.Err
+			}
+			return errors.New("could not create " + textsafe.Escape(dir) + ": " + oneLine(err.Error()) + "; nothing was written")
+		}
+	}
+	return replaceWithBackup(p, d.ConfigPath, raw)
+}
+
+// composeConfigBase asks the questions and returns the file's text after the
+// person confirmed it, and the folders inside d.ConfigPath's account to make.
+// fresh is the administrator's run for a separate account: the account's file
+// is not read (it is not the administrator's to read), so every key is asked
+// for and nothing is merged.
+func composeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath string, fresh bool) ([]byte, []string, error) {
 	// An existing file keeps every key it has: only what is missing is asked
 	// for and added, and the summary is read back from the merged result.
-	m, err := readConfigMap(d.ConfigPath)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		m = map[string]any{}
-	case err != nil:
-		return err
+	m := map[string]any{}
+	if !fresh {
+		var err error
+		m, err = readConfigMap(d.ConfigPath)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			m = map[string]any{}
+		case err != nil:
+			return nil, nil, err
+		}
 	}
 	roots, _ := m["roots"].(map[string]any)
 	if m["roots"] != nil && roots == nil {
-		return errors.New(textsafe.Escape(d.ConfigPath) + " has a roots entry that is not an object; nothing was written")
+		return nil, nil, errors.New(textsafe.Escape(d.ConfigPath) + " has a roots entry that is not an object; nothing was written")
 	}
 	var mkdirs []string
 	added := 0
@@ -1518,18 +1539,18 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 	if _, ok := m["repositories"]; !ok {
 		repo, err := p.Line("Repository to work on (owner/name)")
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		repo = strings.TrimSpace(repo)
 		if !ownerNameRE.MatchString(repo) {
-			return errors.New("that is not owner/name; nothing was written")
+			return nil, nil, errors.New("that is not owner/name; nothing was written")
 		}
 		set("repositories", []map[string]any{{"name": repo}})
 	}
 	if _, ok := roots["workspaces"]; !ok {
 		ws, err := d.chooseWorkspaces(ctx, p)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		if roots == nil {
 			roots = map[string]any{}
@@ -1553,29 +1574,29 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 	if _, ok := m["account"]; !ok {
 		acct, err := p.Line("Is " + d.account() + " dedicated to workharbor, or your own account that you also work in (D49)? [dedicated/shared, default dedicated]")
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		acct = strings.ToLower(strings.TrimSpace(acct))
 		if acct == "" {
 			acct = config.AccountDedicated
 		}
 		if acct != config.AccountDedicated && acct != config.AccountShared {
-			return errors.New("that is not dedicated or shared; nothing was written")
+			return nil, nil, errors.New("that is not dedicated or shared; nothing was written")
 		}
 		set("account", acct)
 	}
 	set("listen", "127.0.0.1:8787")
 	set("api_token_file", tokenPath)
 	set("agent_allowed_tools", []string{"Read", "Edit", "Write", "Bash(git status:*)", "Bash(make check:*)"})
-	if _, err := os.Stat(envPath); err == nil {
+	if _, err := os.Stat(envPath); !fresh && err == nil {
 		set("agent_api_key_env_file", envPath)
 	}
 	if added == 0 {
-		return fmt.Errorf("%s already has these settings: not overwritten", d.ConfigPath)
+		return nil, nil, fmt.Errorf("%s already has these settings: not overwritten", d.ConfigPath)
 	}
 	raw, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	p.Show(configSummary(m))
 	if d.Yes {
@@ -1584,18 +1605,9 @@ func writeConfigBase(ctx context.Context, d Deps, p Prompter, tokenPath, envPath
 		if err == nil {
 			err = errors.New("not written")
 		}
-		return err
+		return nil, nil, err
 	}
-	for _, dir := range append(mkdirs, filepath.Dir(d.ConfigPath)) {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			var pe *fs.PathError
-			if errors.As(err, &pe) {
-				err = pe.Err
-			}
-			return errors.New("could not create " + textsafe.Escape(dir) + ": " + oneLine(err.Error()) + "; nothing was written")
-		}
-	}
-	return replaceWithBackup(p, d.ConfigPath, append(raw, '\n'))
+	return append(raw, '\n'), mkdirs, nil
 }
 
 // configSummary shows what the file will say, read from the merged map, so the

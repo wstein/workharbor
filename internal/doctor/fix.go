@@ -8,7 +8,7 @@ import "context"
 type Phase string
 
 const (
-	PhaseHost Phase = "host" // `whr setup host`, as the administrator
+	PhaseHost Phase = "host" // `whr setup`, as the administrator
 	PhaseUser Phase = "user" // `whr setup`, as workharbor in its desktop session
 )
 

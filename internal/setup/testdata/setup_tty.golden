@@ -38,7 +38,7 @@ preflight: tools found: sudo; missing: brew, container. State: a new run. Next:
  [2m– skip[0m   dry run: nothing is run
 ────────────────────────────────────────────────────────────
 Summary: 1 ok, 2 need action, 1 not verified (dry run: nothing was changed)
-  next: whr setup host --from workharbor-user
+  next: whr setup --from workharbor-user
 
 [1mWhat you need to do now[0m
   1. title of workharbor-user

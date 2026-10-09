@@ -88,9 +88,9 @@ func TestNestedConfirmationQuitStopsDoAndBuild(t *testing.T) {
 				fixStep("config-github", doctor.Fail, "configuration missing", fix),
 				{Name: "later", Phase: doctor.PhaseHost, Run: func(context.Context) (doctor.Status, string) { later = true; return doctor.OK, "done" }},
 			}
-			outs, err := Run(context.Background(), steps, h, Options{Phase: doctor.PhaseHost, Out: &output, Err: &report, Log: log, Resume: []string{"whr", "setup", "host"}})
+			outs, err := Run(context.Background(), steps, h, Options{Phase: doctor.PhaseHost, Out: &output, Err: &report, Log: log, Resume: []string{"whr", "setup"}})
 			var quit *QuitError
-			if !errors.As(err, &quit) || quit.Step != "config-github" || quit.Resume != "whr setup host --from config-github" || len(outs) != 0 {
+			if !errors.As(err, &quit) || quit.Step != "config-github" || quit.Resume != "whr setup --from config-github" || len(outs) != 0 {
 				t.Fatalf("quit: %v, outcomes: %+v", err, outs)
 			}
 			data, readErr := os.ReadFile(path) //nolint:gosec // the fixture in this test's private directory

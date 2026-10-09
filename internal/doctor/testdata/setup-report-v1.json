@@ -21,7 +21,7 @@
       "status": "warn",
       "detail": "check ~/power on [host]",
       "phase": "host",
-      "fix": "whr setup host --only power"
+      "fix": "whr setup --only power"
     },
     {
       "check": "config",

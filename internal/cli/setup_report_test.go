@@ -18,7 +18,7 @@ import (
 func TestSetupReportOutcomes(t *testing.T) {
 	p := setupPresentation([]doctor.Check{{Name: "power", Step: 3, Phase: doctor.PhaseHost, Fix: &doctor.Fix{}}}, []setup.Outcome{{Step: "power", Status: doctor.Fail, Detail: "off", Asked: true}}, doctor.PhaseHost, repairContext{})
 	r := p.Checks[0]
-	if r.Step != 3 || r.Phase != doctor.PhaseHost || r.Fix != "whr setup host --only power" || r.Asked == nil || !*r.Asked || r.Fixed == nil || *r.Fixed || p.OK {
+	if r.Step != 3 || r.Phase != doctor.PhaseHost || r.Fix != "whr setup --only power" || r.Asked == nil || !*r.Asked || r.Fixed == nil || *r.Fixed || p.OK {
 		t.Fatalf("outcome lost: %+v", p)
 	}
 }
@@ -86,9 +86,9 @@ func TestSetupReportRepairContext(t *testing.T) {
 		useUser string
 		want    string
 	}{
-		{"prefix", repairContext{Prefix: "/opt/custom install", Account: "operator"}, "", "whr setup host --only power --prefix '/opt/custom install' --user 'operator'"},
-		{"step account", repairContext{Prefix: "/opt/custom", Account: "operator"}, "legacy", "whr setup host --only power --prefix '/opt/custom' --user 'legacy'"},
-		{"plain", repairContext{Account: "operator"}, "", "whr setup host --only power --user 'operator'"},
+		{"prefix", repairContext{Prefix: "/opt/custom install", Account: "operator"}, "", "whr setup --only power --prefix '/opt/custom install' --user 'operator'"},
+		{"step account", repairContext{Prefix: "/opt/custom", Account: "operator"}, "legacy", "whr setup --only power --prefix '/opt/custom' --user 'legacy'"},
+		{"plain", repairContext{Account: "operator"}, "", "whr setup --only power --user 'operator'"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := setupPresentation(steps, []setup.Outcome{{Step: "power", Status: doctor.Fail, UseUser: tc.useUser}}, doctor.PhaseHost, tc.context)
@@ -207,10 +207,10 @@ func reportWriteFailure(t *testing.T, pass bool) {
 // setup command for itself (#394).
 func TestSetupPresentationNamesTheRemedyOfAnUnreachableStep(t *testing.T) {
 	steps := doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json", User: "werner", Account: "werner"}), doctor.PhaseHost)
-	outs := []setup.Outcome{{Step: "workspace-volume", Status: doctor.NotVerified, Detail: "not reachable: x", Remedy: "whr setup host --only config-first"}}
+	outs := []setup.Outcome{{Step: "workspace-volume", Status: doctor.NotVerified, Detail: "not reachable: x", Remedy: "whr setup --only config-first"}}
 	p := setupPresentation(steps, outs, doctor.PhaseHost, repairContext{Account: "werner"})
 	got := p.Checks[0].Fix
-	if got != "whr setup host --only config-first --user 'werner'" {
+	if got != "whr setup --only config-first --user 'werner'" {
 		t.Errorf("fix %q", got)
 	}
 }

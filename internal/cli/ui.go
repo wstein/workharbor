@@ -128,7 +128,7 @@ func printDoctorHuman(ui render.Writer, rs []doctor.Result, verbose bool) {
 		phase doctor.Phase
 		title string
 	}{
-		{doctor.PhaseHost, "Host steps (whr setup host, as the administrator)"},
+		{doctor.PhaseHost, "Host steps (whr setup, as the administrator)"},
 		{doctor.PhaseUser, "User steps (whr setup, as workharbor)"},
 		{"", "Shared checks"},
 	} {

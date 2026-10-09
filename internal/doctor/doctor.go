@@ -41,7 +41,7 @@ type Result struct {
 	// Phase is "host" or "user" for a setup step and empty for a shared check.
 	Phase Phase `json:"phase,omitempty"`
 	// Fix is the setup command that fixes a failing or not verified check, for
-	// example "whr setup host --only power"; empty when passing or when no setup
+	// example "whr setup --only power"; empty when passing or when no setup
 	// step fixes it. `whr doctor` only names it, it never runs it.
 	Fix string `json:"fix,omitempty"`
 }
@@ -116,6 +116,8 @@ func base(in []basic) []Check {
 type Deps struct {
 	ConfigPath string
 	Home       string
+	// AccountHome overrides the whr account's home folder in an administrator run (tests).
+	AccountHome string
 	// RepoDir is the checkout `whr doctor` runs in; empty skips the lane-agents check.
 	RepoDir string
 	FS      runtime.FS
@@ -347,24 +349,24 @@ var sharedFixes = map[string]string{
 	"config":    "whr setup --only config-base",
 	"server":    "whr setup --only service-install",
 	"forge-key": "whr setup --only github-app",
-	"runtime":   "whr setup host --only brew-packages",
+	"runtime":   "whr setup --only brew-packages",
 }
 
 // needsConfig is what a shared check says when the configuration is unusable.
 const needsConfig = "needs a valid configuration"
 
 // FixCommand returns the setup command that fixes this check, or "" when none
-// does. A step with a fix names `whr setup host --only <id>` or `whr setup
+// does. A step with a fix names `whr setup --only <id>` or `whr setup
 // --only <id>`; a shared check that cannot run without the configuration points
 // at `whr setup`. It only names the command.
 func (c Check) FixCommand(detail string) string {
 	if c.Phase == PhaseHost && strings.HasPrefix(detail, needsConfig) {
-		return "whr setup --only config-base"
+		return "whr setup --only config-first"
 	}
 	switch c.Phase {
 	case PhaseHost:
 		if c.Fix != nil {
-			return "whr setup host --only " + c.Name
+			return "whr setup --only " + c.Name
 		}
 	case PhaseUser:
 		if c.Fix != nil {
@@ -407,7 +409,7 @@ func Run(ctx context.Context, checks []Check, skip map[string]bool) []Result {
 			r.Fix = c.FixCommand(detail)
 			if c.UseUser != nil {
 				if u := c.UseUser(st); u != "" {
-					r.Fix = "whr setup host --user " + u
+					r.Fix = "whr setup --user " + u
 				}
 			}
 		}

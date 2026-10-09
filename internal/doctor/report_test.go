@@ -13,7 +13,7 @@ import (
 func exampleReport() Artifact {
 	fixed, asked := true, false
 	return Present([]ReportCheck{
-		{Result: Result{Check: "power", Step: 1, Status: Warn, Detail: "check /home/operator/power on example-host", Phase: PhaseHost, Fix: "whr setup host --only power"}},
+		{Result: Result{Check: "power", Step: 1, Status: Warn, Detail: "check /home/operator/power on example-host", Phase: PhaseHost, Fix: "whr setup --only power"}},
 		{Result: Result{Check: "config", Step: 2, Status: OK, Detail: "ready", Phase: PhaseUser}, Fixed: &fixed, Asked: &asked},
 		{Result: Result{Check: "capacity", Status: NotVerified, Detail: "not measured"}},
 	}).Artifact(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC), "v0.1.0", "setup", PhaseUser, "operator", "/home/operator", "example-host")

@@ -1068,7 +1068,7 @@ func TestMissingWorkharborWithLegacyWhrPointsAtUserWhr(t *testing.T) {
 	if got != Fail {
 		t.Errorf("status = %s, want fail", got)
 	}
-	if try := strings.Join(c.Fix.Try, "|"); try != "whr setup host --user whr|whr doctor --user whr" {
+	if try := strings.Join(c.Fix.Try, "|"); try != "whr setup --user whr|whr doctor --user whr" {
 		t.Errorf("Try = %q", try)
 	}
 	for _, want := range []string{"there is no user workharbor", "legacy"} {
@@ -1117,7 +1117,7 @@ func TestMissingWorkharborOffersAddUserOnlyWhenLegacyIsAbsent(t *testing.T) {
 			if !tc.addUser && len(c.Fix.Cmds) != 0 {
 				t.Errorf("creation offered when legacy existence is unknown: %+v", c.Fix.Cmds)
 			}
-			if !tc.addUser && strings.Contains(detail, "whr setup host --user whr") {
+			if !tc.addUser && strings.Contains(detail, "whr setup --user whr") {
 				t.Errorf("points at whr without finding it: %q", detail)
 			}
 		})
@@ -1169,7 +1169,7 @@ func userResult(t *testing.T, d Deps) Result {
 
 func TestLegacyFixCommandOnlyOnTheFoundCase(t *testing.T) {
 	found := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "UniqueID: 502"}))
-	if found.Status != Fail || found.Fix != "whr setup host --user whr" {
+	if found.Status != Fail || found.Fix != "whr setup --user whr" {
 		t.Errorf("legacy found = %s fix %q", found.Status, found.Fix)
 	}
 	unread := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "ERR:exit status 1: Operation not permitted"}))
@@ -1177,7 +1177,7 @@ func TestLegacyFixCommandOnlyOnTheFoundCase(t *testing.T) {
 		t.Errorf("legacy unreadable = %s fix %q", unread.Status, unread.Fix)
 	}
 	none := userResult(t, hostDeps(scripted{dsclWorkharbor: "ERR:exit status 56", dsclLegacy: "ERR:exit status 56"}))
-	if none.Fix != "whr setup host --only workharbor-user" {
+	if none.Fix != "whr setup --only workharbor-user" {
 		t.Errorf("neither = %q", none.Fix)
 	}
 }
@@ -1490,7 +1490,7 @@ func TestConfigDependentHostChecksWaitForTheConfiguration(t *testing.T) {
 		if st != NotVerified || !strings.HasPrefix(detail, needsConfig) || strings.Contains(detail, "no such file") || strings.Contains(detail, "open ") {
 			t.Errorf("%s, no configuration: %s %q", name, st, detail)
 		}
-		if got := c.FixCommand(detail); got != "whr setup --only config-base" {
+		if got := c.FixCommand(detail); got != "whr setup --only config-first" {
 			t.Errorf("%s: next action %q", name, got)
 		}
 		if _, st, detail = check("{", true); st != NotVerified || !strings.HasPrefix(detail, needsConfig) || !strings.Contains(detail, "cannot be read") {
@@ -1522,7 +1522,7 @@ func TestConfigFirstIsTheFirstHostStepAndTheReadersNeedIt(t *testing.T) {
 	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
 	d.User, d.Account = "werner", "werner"
 	hs := Steps(Checks(d), PhaseHost)
-	if hs[0].Name != "config-first" || !hs[0].SetupOnly || hs[0].Reach(context.Background()) != nil {
+	if hs[0].Name != "config-first" || !hs[0].SetupOnly || hs[0].Reach != nil {
 		t.Fatalf("first host step %+v", hs[0])
 	}
 	for _, name := range []string{"workspace-volume", "spotlight"} {
@@ -1542,15 +1542,78 @@ func TestConfigFirstIsTheFirstHostStepAndTheReadersNeedIt(t *testing.T) {
 	if u := steps(t, d)["workspace-volume"].Reach(context.Background()); u != nil {
 		t.Errorf("with a file: %+v", u)
 	}
-	// an administrator who is not the whr account does not write its configuration
+	// an administrator who is not the whr account initializes its configuration
+	// with sudo install (the file is never read or overwritten), after the account exists
 	d.User, d.Account = "admin", "workharbor"
 	d.ConfigPath = filepath.Join(t.TempDir(), "none.json")
-	cf := Steps(Checks(d), PhaseHost)[0]
-	if u := cf.Reach(context.Background()); u == nil || u.Command != "whr setup --only config-base" || !strings.Contains(u.Where, "as workharbor") {
+	d.AccountHome = t.TempDir()
+	d.SystemConfigFile = filepath.Join(t.TempDir(), "etc", "config.json")
+	hs = Steps(Checks(d), PhaseHost)
+	var cf Check
+	for i, c := range hs {
+		if c.Name == "config-first" {
+			cf = c
+			if i == 0 || hs[i-1].Name != "workharbor-user" {
+				t.Errorf("config-first must follow the account step, got %v", hs[i-1].Name)
+			}
+		}
+	}
+	if u := cf.Reach(context.Background()); u != nil {
 		t.Errorf("admin: %+v", u)
 	}
-	if u := steps(t, d)["spotlight"].Reach(context.Background()); u == nil || u.Step != "" || u.Command != "whr setup --only config-base" || !strings.Contains(u.Where, "as workharbor") {
+	if st, _ := cf.Run(context.Background()); st != Fail {
+		t.Errorf("no file: %s", st)
+	}
+	cmds := cf.Fix.Cmds
+	if len(cmds) != 6 {
+		t.Fatalf("commands %+v", cmds)
+	}
+	for _, c := range cmds {
+		if !c.Sudo {
+			t.Errorf("not a sudo command: %v", c.Argv)
+		}
+		// root never writes inside the account's home: those commands run as the account
+		inHome := false
+		for _, a := range c.Argv {
+			inHome = inHome || strings.HasPrefix(a, d.AccountHome)
+		}
+		if inHome && (c.Argv[0] != "-u" || c.Argv[1] != "workharbor") {
+			t.Errorf("a command touches the account's home as root: %v", c.Argv)
+		}
+	}
+	if got := strings.Join(cmds[1].Argv, " "); got != "-u workharbor /bin/mkdir -p -m 0700 "+d.AccountHome+"/.config/whr" {
+		t.Errorf("folders: %s", got)
+	}
+	if got := strings.Join(cmds[3].Argv, " "); !strings.HasPrefix(got, "-u workharbor /bin/cp -n ") || !strings.HasSuffix(got, d.AccountHome+"/.config/whr/config.json") {
+		t.Errorf("file copy: %s", got)
+	}
+	if u := steps(t, d)["spotlight"].Reach(context.Background()); u == nil || u.Step != "config-first" {
 		t.Errorf("spotlight as admin: %+v", u)
+	}
+	// a linked .config is refused before anything is installed
+	{
+		h := t.TempDir()
+		dd := d
+		dd.AccountHome = h
+		if err := os.Symlink(t.TempDir(), filepath.Join(h, ".config")); err != nil {
+			t.Fatal(err)
+		}
+		if err := dd.checkAccountPath(); err == nil || !strings.Contains(err.Error(), "link") {
+			t.Errorf("symlinked .config: %v", err)
+		}
+	}
+	// an existing file is present, never read or replaced
+	if err := os.MkdirAll(filepath.Join(d.AccountHome, ".config", "whr"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d.AccountHome, ".config", "whr", "config.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := cf.Run(context.Background()); st != OK {
+		t.Errorf("present file: %s", st)
+	}
+	if _, err := cf.Fix.Build(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "not overwritten") {
+		t.Errorf("build over an existing file: %v", err)
 	}
 }
 

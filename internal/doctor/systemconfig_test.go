@@ -97,7 +97,7 @@ func TestSystemConfigCommandsAndMissingConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, msg := status(steps(t, d)["system-config"])
-	if st != NotVerified || !strings.HasPrefix(msg, needsConfig) {
+	if st != NotVerified || !strings.Contains(msg, "config-first") {
 		t.Errorf("missing config: %s %q", st, msg)
 	}
 }
@@ -186,8 +186,8 @@ func TestWorkspaceRootsLookupOrder(t *testing.T) {
 				t.Errorf("%s must be reachable by the roots rule: %+v", name, u)
 			}
 		}
-		if u := steps(t, d)["system-config"].Reach(t.Context()); u == nil {
-			t.Fatal("system-config must stay unreachable: it needs the full user config")
+		if u := steps(t, d)["system-config"].Reach(t.Context()); u != nil {
+			t.Fatalf("system-config in an administrator run only reports what config-first wrote: %+v", u)
 		}
 	})
 }

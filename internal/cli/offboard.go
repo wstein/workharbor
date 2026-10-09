@@ -32,7 +32,7 @@ type OffboardEnv struct {
 	Now     func() time.Time
 }
 
-const offboardLong = `Remove the workharbor macOS account that "whr setup host" created (provisional).
+const offboardLong = `Remove the workharbor macOS account that "whr setup" created (provisional).
 
 The default is a dry run: it inspects read-only and prints exactly what would be
 removed. --delete removes the account and its home folder with

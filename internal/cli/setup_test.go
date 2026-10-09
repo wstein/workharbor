@@ -165,7 +165,7 @@ func TestTheHostPartRefusesRootAndTheWhrUser(t *testing.T) {
 
 func TestTheUserPartNeedsWhrInItsDesktopSession(t *testing.T) {
 	r := newSetupRig(t)
-	if code, _, errOut := r.run("setup"); code != exitcode.Usage || !strings.Contains(errOut, "it is for workharbor, and this is werner") {
+	if code, _, errOut := r.run("setup", "--only", "api-token"); code != exitcode.Usage || !strings.Contains(errOut, "it is for workharbor, and this is werner") {
 		t.Errorf("another user: exit %d, stderr %q", code, errOut)
 	}
 	r.env.User, r.env.UID = "workharbor", 502
@@ -253,15 +253,15 @@ func TestAnUnknownStepIsAUsageErrorThatListsTheKnownOnes(t *testing.T) {
 
 func TestTheStepsCompleteInTheShell(t *testing.T) {
 	r := newSetupRig(t)
-	out := r.runBare("__complete", "setup", "host", "--only", "")
+	out := r.runBare("__complete", "setup", "--only", "")
 	for _, want := range []string{"power", "firewall", "filevault", "brew-packages"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("--only does not complete %q:\n%s", want, out)
 		}
 	}
 	out = r.runBare("__complete", "setup", "--from", "")
-	if !strings.Contains(out, "config-base") || strings.Contains(out, "firewall") {
-		t.Errorf("--from of the user part:\n%s", out)
+	if !strings.Contains(out, "config-base") || !strings.Contains(out, "firewall") {
+		t.Errorf("--from of setup (both parts):\n%s", out)
 	}
 }
 
@@ -298,11 +298,11 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 		t.Errorf("host steps, then user steps, in the wizard's order: %v", order)
 	}
 	pfx := " --prefix " + shellArgument(filepath.Dir(filepath.Dir(r.exe)))
-	if got := lines["power"][3]; got != "whr setup host --only power"+pfx {
+	if got := lines["power"][3]; got != "whr setup --only power"+pfx {
 		t.Errorf("power fix %q", got)
 	}
 	// run as werner, not whr: the user phase says so, and says to run as workharbor
-	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "check it as workharbor") || f[3] != "whr setup --only config-base"+pfx+" (run as workharbor)" {
+	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "check it as workharbor") || f[3] != "whr setup --only config-first"+pfx {
 		t.Errorf("config-base: %q", f)
 	}
 	if f := lines["config"]; f[0] != "fail" || !strings.Contains(f[3], "whr setup") {
@@ -311,7 +311,7 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if f := lines["egress"]; f[3] != "" {
 		t.Errorf("a check no step fixes names no command: %q", f)
 	}
-	if !strings.Contains(errOut, "    whr setup host --only power") {
+	if !strings.Contains(errOut, "    whr setup --only power") {
 		t.Errorf("stderr lacks the fix: %q", errOut)
 	}
 	// read-only: nothing ran, nothing opened, nobody asked, no sudo among the reads
@@ -416,7 +416,7 @@ func TestAccountStepUnknownSelectionRejected(t *testing.T) {
 
 func TestAccountStepCompletionIsCanonical(t *testing.T) {
 	r := newSetupRig(t)
-	out := r.runBare("__complete", "setup", "host", "--only", "")
+	out := r.runBare("__complete", "setup", "--only", "")
 	if !strings.Contains(out, "workharbor-user\t") || strings.Contains(out, "\nwhr-user\t") {
 		t.Fatalf("completion %q", out)
 	}
@@ -454,7 +454,7 @@ func TestDoctorRepairsKeepSelectedAccount(t *testing.T) {
 		if account != "workharbor" {
 			suffix += " --user " + shellArgument(account)
 		}
-		want := "whr setup host --only workharbor-user" + suffix
+		want := "whr setup --only workharbor-user" + suffix
 		if !strings.Contains(out, want) {
 			t.Fatalf("repair lacks selected account %q: %s", account, out)
 		}
@@ -471,7 +471,7 @@ func TestSetupHostNextPointsAtLegacyUserWhr(t *testing.T) {
 	r.host.outputs["dscl . -read /Users/whr UniqueID"] = "UniqueID: 502"
 	_, out, errOut := r.run("setup", "host", "--dry-run", "--only", "workharbor-user")
 	text := out + errOut
-	if strings.Contains(text, "-addUser") || strings.Contains(text, "--only workharbor-user") || !strings.Contains(text, "next: whr setup host ") || !strings.Contains(text, " --user whr\n") {
+	if strings.Contains(text, "-addUser") || strings.Contains(text, "--only workharbor-user") || !strings.Contains(text, "next: whr setup ") || !strings.Contains(text, " --user whr\n") {
 		t.Errorf("legacy next line wrong:\n%s", text)
 	}
 	if strings.Contains(text, "--user whr --user") {

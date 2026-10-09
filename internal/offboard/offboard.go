@@ -1,4 +1,4 @@
-// Package offboard removes the workharbor macOS account that `whr setup host`
+// Package offboard removes the workharbor macOS account that `whr setup`
 // created (issue #346, provisional). It inspects read-only, checks the guards as
 // a pure function over the facts, shows a plan, and only on request and after
 // the typed word runs `sudo sysadminctl -deleteUser workharbor`, then verifies.
@@ -82,7 +82,7 @@ func DeleteCmd(admin string) doctor.Cmd {
 	}
 }
 
-// PictureCmd removes the login picture that `whr setup host` installed outside
+// PictureCmd removes the login picture that `whr setup` installed outside
 // the home (#382); sysadminctl -deleteUser only removes the account record and
 // its home. The path is the constant directory of the setup step, never an
 // argument. UNVERIFIED on a real host, like every command here.

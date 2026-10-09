@@ -376,13 +376,13 @@ func TestSummaryNextCommandKeepsThePhaseAndFlags(t *testing.T) {
 		want string
 	}{
 		{"user phase", Options{}, "next: whr setup --from container-kernel\n"},
-		{"host phase", Options{Resume: []string{"whr", "setup", "host"}}, "next: whr setup host --from container-kernel\n"},
+		{"host phase", Options{Resume: []string{"whr", "setup"}}, "next: whr setup --from container-kernel\n"},
 		{
 			"user flag",
 			Options{Resume: []string{"whr", "setup", "--user", "werner", "--prefix", "/Users/me/my prefix"}},
 			"next: whr setup --user werner --prefix '/Users/me/my prefix' --from container-kernel\n",
 		},
-		{"host", Options{Resume: []string{"whr", "setup", "host", "--user", "werner"}}, "next: whr setup host --user werner --from container-kernel\n"},
+		{"host", Options{Resume: []string{"whr", "setup", "--user", "werner"}}, "next: whr setup --user werner --from container-kernel\n"},
 		// --from would also run steps nobody selected: name the steps left instead
 		{
 			"only",
@@ -578,14 +578,14 @@ func TestAnUnreachableStepIsNotAFailureAndAsksNoPassword(t *testing.T) {
 		return &doctor.Unreachable{Why: "the file is not written yet", Step: "first"}
 	}
 	h := &fakeHost{answers: []string{"y"}}
-	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--user", "u"}})
+	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "--user", "u"}})
 	if len(h.ran) != 0 || len(h.asked) != 0 {
 		t.Errorf("something ran or was asked: %v %v", h.ran, h.asked)
 	}
 	if len(outs) != 1 || outs[0].Status != doctor.NotVerified || !outs[0].Asked {
 		t.Errorf("outcome %+v", outs)
 	}
-	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "    whr setup host --user u --only first") {
+	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "    whr setup --user u --only first") {
 		t.Errorf("output %q", errOut)
 	}
 	if strings.Contains(errOut, "fix the cause") {
@@ -657,7 +657,7 @@ func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
 		return &doctor.Unreachable{Why: "belongs to workharbor", Command: "whr setup --only config-base", Where: "as workharbor, in its desktop session"}
 	}
 	lg := &memLog{}
-	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--user", "u"}, Log: lg}
+	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "--user", "u"}, Log: lg}
 	outs, _, errOut := run(t, &fakeHost{}, []doctor.Check{s}, o)
 	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "    whr setup --only config-base --user u\n") {
 		t.Errorf("output %q", errOut)
