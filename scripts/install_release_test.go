@@ -364,8 +364,8 @@ func TestWithoutGHAnOlderReleaseIsRefused(t *testing.T) {
 	}
 }
 
-// A prefix the whr user could write is refused.
-func TestAWritablePrefixIsRefused(t *testing.T) {
+// A prefix the whr user could write installs with a warning (alpha, #504).
+func TestAWritablePrefixWarns(t *testing.T) {
 	t.Parallel()
 	r := newRelease(t, "0.2.0", "")
 	if err := os.MkdirAll(r.prefix, 0o755); err != nil { //nolint:gosec // the test needs a group-writable dir below
@@ -375,13 +375,13 @@ func TestAWritablePrefixIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := r.run(t, "v0.2.0", r.prefix)
-	if err == nil || !strings.Contains(out, "must not be able to write the prefix") {
-		t.Fatalf("a group-writable prefix was accepted: %v\n%s", err, out)
+	if err != nil || !strings.Contains(out, "warning: "+r.prefix+" is group- or world-writable") {
+		t.Fatalf("a group-writable prefix was refused or not reported: %v\n%s", err, out)
 	}
 }
 
 // A symlinked prefix is judged by its target.
-func TestASymlinkedWritablePrefixIsRefused(t *testing.T) {
+func TestASymlinkedWritablePrefixWarns(t *testing.T) {
 	t.Parallel()
 	r := newRelease(t, "0.2.0", "")
 	target := filepath.Join(t.TempDir(), "real")
@@ -396,8 +396,8 @@ func TestASymlinkedWritablePrefixIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := r.run(t, "v0.2.0", link)
-	if err == nil || !strings.Contains(out, "must not be able to write the prefix") {
-		t.Fatalf("a symlink to a writable dir was accepted: %v\n%s", err, out)
+	if err != nil || !strings.Contains(out, "warning: "+link+" is group- or world-writable") {
+		t.Fatalf("a symlink to a writable dir was refused or not reported: %v\n%s", err, out)
 	}
 }
 
