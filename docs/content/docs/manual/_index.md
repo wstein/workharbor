@@ -17,6 +17,7 @@ How to set up and run WorkHarbor. WorkHarbor is building release 1. The service 
   {{< card link="sessions-and-agents" title="Sessions and agents" subtitle="Which sessions to keep open, their models, the review gate (draft)." icon="users" >}}
   {{< card link="gh-stack" title="Stack pull requests" subtitle="Related issues as a gh stack: who runs what, adopting branches (provisional)." icon="collection" >}}
   {{< card link="operations-digest" title="Operations digest" subtitle="An index of decisions, procedures, how-tos and known gaps, linked to their sources." icon="collection" >}}
+  {{< card link="json-schemas" title="JSON Schemas" subtitle="Provisional editor schemas for config.json and the devcontainer block." icon="document-text" >}}
 {{< /cards >}}
 
 The drafts are checked against the first release, `v0.1.0` (issue #65).

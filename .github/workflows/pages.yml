@@ -6,6 +6,7 @@ on:
     paths:
       - docs/**
       - internal/api/openapi.json
+      - schemas/**
       - scripts/docs_schema_test.go
       - Makefile
       - scripts/hugo.sh
