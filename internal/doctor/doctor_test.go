@@ -292,7 +292,7 @@ func TestForgeBoardNamesARefusalAndNeverCallsAReadAWrite(t *testing.T) {
 	r.graphql = func() string { return boardProject }
 	rs := run(r.deps())
 	// the project is found, but a write was never tried: not verified, not passed
-	if st := statuses(rs)["forge-board"]; st != NotVerified || !strings.Contains(forgeBoardDetail(rs), "not tested") {
+	if st := statuses(rs)["forge-board"]; st != NotVerified || !strings.Contains(forgeBoardDetail(rs), "not tested") || !strings.Contains(forgeBoardDetail(rs), "three Status options") {
 		t.Errorf("a readable board: %s %q", st, forgeBoardDetail(rs))
 	}
 

@@ -1955,7 +1955,7 @@ func prefixTitle(d Deps) string {
 }
 
 func prefixInstallGuide() (string, []string) {
-	return "Then install whr there from a draft release (manual step 13):", []string{"make install-release VERSION=<tag>"}
+	return "Then install whr there from the release archive (manual, Install from the release archive): download whr_<version>_darwin_arm64.tar.gz and checksums.txt, check the archive against the checksums, unpack it, and in the unpacked folder run, as the administrator:", []string{"sudo ./install.sh <tag>"}
 }
 
 // agentKeyPrompt says what the agent-key step asks for: an API key, never a
