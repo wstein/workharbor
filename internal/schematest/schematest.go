@@ -46,6 +46,7 @@ func Validate(root Schema, raw []byte) []string {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return []string{"not JSON: " + err.Error()}
 	}
+	checkKeywords(root, "$")
 	var problems []string
 	validate(root, root, doc, "$", &problems)
 	return problems
@@ -63,6 +64,38 @@ func resolve(root, s object) object {
 		panic("schematest: unresolved $ref " + ref)
 	}
 	return target
+}
+
+// supported lists the keywords validate evaluates; annotations are the others
+// that are allowed.
+var supported = []string{"type", "enum", "minimum", "maximum", "maxLength", "pattern", "minItems", "items", "anyOf", "required", "additionalProperties", "properties", "$ref"}
+
+// checkKeywords walks the whole schema once, whether or not a document reaches
+// a subschema, and panics on any keyword that is neither supported nor an
+// annotation. It follows properties, items, anyOf and $defs; a schema-valued
+// additionalProperties is unsupported (only false and true are evaluated).
+func checkKeywords(s object, path string) {
+	for k, v := range s {
+		if !slices.Contains(supported, k) && !slices.Contains(annotations, k) {
+			panic("schematest: unsupported keyword " + k + " at " + path)
+		}
+		switch k {
+		case "properties", "$defs":
+			for name, sub := range v.(object) {
+				checkKeywords(sub.(object), path+"."+k+"."+name)
+			}
+		case "items":
+			checkKeywords(v.(object), path+".items")
+		case "anyOf":
+			for i, sub := range v.([]any) {
+				checkKeywords(sub.(object), fmt.Sprintf("%s.anyOf[%d]", path, i))
+			}
+		case "additionalProperties":
+			if _, ok := v.(bool); !ok {
+				panic("schematest: additionalProperties must be a boolean at " + path)
+			}
+		}
+	}
 }
 
 func validate(root, s object, v any, path string, out *[]string) {
@@ -184,6 +217,7 @@ func typeMatches(want string, v any) bool {
 // nested objects, arrays and pointers.
 func CompareStruct(t testing.TB, root Schema, typ reflect.Type, extraOptional map[string]string, rawAny ...string) {
 	t.Helper()
+	checkKeywords(root, "$")
 	compare(t, root, root, typ, "$", extraOptional, rawAny)
 }
 

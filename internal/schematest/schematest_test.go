@@ -70,3 +70,23 @@ func (r *recorder) Helper() {}
 func (r *recorder) Errorf(format string, args ...any) {
 	r.errs = append(r.errs, fmt.Sprintf(format, args...))
 }
+
+func TestUnsupportedKeywordInUnreachedSubschemaPanics(t *testing.T) {
+	for name, doc := range map[string]string{
+		"property":   `{"type":"object","properties":{"a":{"type":"array","uniqueItems":true,"items":{"type":"string"}}}}`,
+		"def":        `{"type":"object","$defs":{"d":{"type":"string","minLength":4}},"properties":{"a":{"$ref":"#/$defs/d"}}}`,
+		"anyOf":      `{"type":"object","properties":{"a":{"anyOf":[{"type":"string"},{"type":"integer","multipleOf":2}]}}}`,
+		"items":      `{"type":"object","properties":{"a":{"type":"array","items":{"type":"string","format":"uri"}}}}`,
+		"additional": `{"type":"object","additionalProperties":{"type":"string","minLength":1}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("an unsupported keyword in a subschema no document reaches must panic")
+				}
+			}()
+			// The document reaches none of the subschemas.
+			Validate(schema(t, doc), []byte(`{}`))
+		})
+	}
+}
