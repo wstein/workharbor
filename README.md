@@ -7,7 +7,7 @@
 <a href="https://github.com/wstein/workharbor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/wstein/workharbor/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/wstein/workharbor"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/wstein/workharbor/badge"></a>
 <a href="https://www.bestpractices.dev/projects/15300"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/15300/badge"></a>
-<a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/go-1.26.0%2B-00ADD8?logo=go&logoColor=white&style=flat-square"></a>
+<a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/go-1.26.9%2B-00ADD8?logo=go&logoColor=white&style=flat-square"></a>
 <a href="docs/content/docs/design/_index.md"><img alt="Platform: macOS (Apple silicon)" src="https://img.shields.io/badge/platform-macOS%20Apple%20silicon-lightgrey?logo=apple&logoColor=white&style=flat-square"></a>
 </p>
 
@@ -45,7 +45,7 @@ Each failure below has an answer in the design. The `v0.1.0-alpha.N` pre-release
 - An Apple-silicon Mac mini (or Mac) running macOS with [Apple Container](https://github.com/apple/container), the first runtime. Release 1 supports no other host.
 - A GitHub App for the repositories the agents work on: `whr github app create` makes it from a manifest.
 - An agent login: a Claude subscription, signed in inside the environment and never given to `whr`, or an API key, which `whr` keeps in a `0600` file.
-- Go 1.26.0 or later, only to build from source. CI checks the latest Go 1.26 and 1.27 patches separately from the module minimum. Documentation, release and documentation vulnerability tools require Go 1.27; the development image uses Go 1.27.1.
+- Go 1.26.9 or later, only to build from source. CI checks Go 1.26.9 and 1.27.2 separately. Documentation, release and documentation vulnerability tools require Go 1.27; the development image uses Go 1.27.1.
 
 The [manual](https://wstein.github.io/workharbor/docs/manual/) walks through the host, the App and the first run. It is a draft until `v0.1.0`.
 
