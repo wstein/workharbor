@@ -1,11 +1,11 @@
 ---
 title: Install, upgrade and release
-description: Install whr from a draft release or the tap, upgrade it, and what the operator checks before a release is published.
-weight: 4
+description: Install whr from the release archive, a clone or the tap, upgrade it, and what the operator checks before a release is published.
+weight: 3
 toc: true
 ---
 
-For the operator: the person who installs `whr` on the Mac mini and cuts releases. **A draft: nothing on this page has been run against a release yet** ({{< status unverified >}}; the first install is issue #62, the first release `v0.1.0` follows the slice demo, issue #28). The design is [D24](../design/decisions.md) and [Releases](../design/roadmap.md).
+For the operator: the person who installs `whr` on the Mac mini and cuts releases. **A draft: the install has not been run on a clean Mac yet** ({{< status unverified >}}; the first install is issue #62, the first release `v0.1.0` follows the slice demo, issue #28). Measured so far: the script tests and the attestation check of `v0.1.0-alpha.3` (below). The design is [D24](../design/decisions.md) and [Releases](../design/roadmap.md).
 
 ## Where `whr` comes from
 
@@ -17,20 +17,13 @@ The managed dogfood or reference-host supervisor runs an installed binary built 
 | `<prefix>/libexec/whr/whr-shim-linux-arm64` | the in-guest launcher |
 | `<prefix>/libexec/whr/whr-proxy-linux-arm64` | the egress allowlist proxy |
 
-## Before `v0.1.0`: a draft release
+## Before `v0.1.0`: pre-releases
 
-Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (the `v0.1.0-alpha.N` pre-releases are, per `gh release list`, 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`; the first command uses the prefix `/opt/whr`, the second another one:
+Until the first release, a signed prerelease tag `v0.1.0-alpha.N` on a green commit of `main` gives a dogfood build. Its release is published as a pre-release (the `v0.1.0-alpha.N` pre-releases are, per `gh release list`, 2026-10-08), and the tap ignores it. Install it as the **administrator**, not as `workharbor`. The first route is the release archive below: it needs no clone, no `gh` and no Command Line Tools. `make install-release` is the second route, from a clone.
 
-```bash
-make install-release VERSION=<tag>
-make install-release VERSION=<tag> PREFIX=/some/prefix
-```
+### Install from the release archive (the first install)
 
-`gh` is optional: with it (`brew install gh`, signed in; a draft can be downloaded only by a writer) the script also verifies the attestation, without it only the checksums. A `gh` that is installed but cannot read the tag (not signed in, or no login under `sudo`) counts as absent: the script prints that and checks the checksums only. The fallback and the `grep ... | shasum` step are covered by script tests with stubbed tools; a run on a clean Mac (no `gh`, Homebrew or Command Line Tools) and the paste into stock zsh are {{< status unverified >}}. This single-archive script installs releases after `v0.1.0-alpha.4`; for `v0.1.0-alpha.4` and earlier, use the script of that tag (`git show <tag>:scripts/install-release.sh`). From a clone the script downloads the release archive (`whr_<version>_darwin_arm64.tar.gz`) and `checksums.txt`, checks the archive against the checksums and, when `gh` is present, against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
-
-### Install from the release archive
-
-From the release after `v0.1.0-alpha.4` (alpha.4 and earlier keep the old layout: separate host and guest archives, and for alpha.4 a loose `install-release.sh`) a release is **one archive**, `whr_<version>_darwin_arm64.tar.gz`, next to `checksums.txt`, the SBOM and the attestation bundle. The archive holds `bin/whr`, `guest/whr-shim-linux-arm64` and `guest/whr-proxy-linux-arm64` (Linux binaries, payload for the guests, never run on the Mac), `install.sh` (the same script as `scripts/install-release.sh`), `LICENSE` and `README.md`. `checksums.txt` lists that one archive (and the SBOM), so one checksum line and one attestation cover both the host and the guest binaries, built from the same commit. The first install needs only what stock macOS ships: `curl`, `tar`, `shasum`, `install` and `sudo`; no `gh`, no Homebrew; `whr setup host --only homebrew` then installs Homebrew after your confirmation (see [Prepare the Mac mini](host-setup.md), step 5; a clean Mac is {{< status unverified >}}). Replace `<tag>` (zsh reads a literal `<tag>` as a redirect) and run it as the administrator:
+From the release after `v0.1.0-alpha.4` (alpha.4 and earlier keep the old layout: separate host and guest archives, and for alpha.4 a loose `install-release.sh`) a release is **one archive**, `whr_<version>_darwin_arm64.tar.gz`, next to `checksums.txt`, the SBOM and the attestation bundle. The archive holds `bin/whr`, `guest/whr-shim-linux-arm64` and `guest/whr-proxy-linux-arm64` (Linux binaries, payload for the guests, never run on the Mac), `install.sh` (the same script as `scripts/install-release.sh`), `LICENSE` and `README.md`. `checksums.txt` lists that one archive (and the SBOM), so one checksum line and one attestation cover both the host and the guest binaries, built from the same commit. The first install needs only what stock macOS ships: `curl`, `tar`, `shasum`, `install` and `sudo`; no `gh`, no Homebrew; `whr setup host --only homebrew` then installs Homebrew after your confirmation (see [Prepare the Mac mini](host-setup.md), step 5; a clean Mac is {{< status unverified >}}). Replace `<tag>` (zsh reads a literal `<tag>` as a redirect) and run it as the administrator. The `install.sh` step uses `sudo`, so the account must be an administrator; on a Mac with one account that account is both the administrator and the one `whr` runs as (supported, not recommended):
 
 ```bash
 cd "$(mktemp -d)"
@@ -42,7 +35,7 @@ grep " $f\$" checksums.txt | shasum -a 256 -c -
 
 The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on.
 
-If `gh` is installed and signed in (an upgrade: `whr setup` installs it), check who built the archive **before** `sudo ./install.sh`: the unpacked mode never checks the attestation, even when `gh` works, so without this an upgrade installs as root on the checksum and TLS alone. A first install has no `gh` yet: skip this block, it trusts the checksums and TLS, and can run the check afterwards.
+If `gh` is installed and signed in (an upgrade: `whr setup` installs it), check who built the archive **before** `sudo ./install.sh`: the unpacked mode never checks the attestation, even when `gh` works, so without this an upgrade installs as root on the checksum and TLS alone. A first install has no `gh` yet: skip this block, it trusts the checksums and TLS, and can run the check afterwards. In a new shell, `cd` back into the folder that holds the archive and set `tag` and `f` again as in the first block before you run it.
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -62,6 +55,20 @@ sudo ./install.sh "$tag"
 `install.sh` unpacks the archive next to it (the one for its tag) and installs those files, and downloads nothing; the prefix is `/opt/whr` unless you add a path. It warns, and goes on, about an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or that the user running it does not own (alpha policy, issues #493 and #504): whoever can write the prefix can replace the binary that root runs, so keep it writable by the administrator only.
 
 The tag of `install.sh <tag>` names the version written to `<prefix>/libexec/whr/VERSION`. When `checksums.txt` sits next to `install.sh` (the flow above), the archive of that tag must sit there too and match its checksum line, or the script stops before it installs anything or writes `VERSION`, and it installs the files of that archive, not of a loose `bin/` beside it; without `checksums.txt` the tag cannot be checked, and the script says so. The unpacked mode checks no attestation: that is the `gh` check above. The script also runs piped as `cat install.sh | bash -s -- <tag>` from the unpacked directory (the tested form); `/bin/bash -s` piped is not tested and may fall into download mode. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, the tag matched against the archive next to the script, `cat install.sh | bash -s` in an unpacked directory, checksum mismatch, downgrade, writable (warned) or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
+
+**Next, as the administrator:** `/opt/whr/bin/whr setup host`. `/opt/whr/bin` is not on the administrator's `PATH` (the installer changes no shell file), so the administrator's commands here spell the full path: `/opt/whr/bin/whr version` shows the tag, and `/opt/whr/bin/whr setup host --only homebrew` installs Homebrew. If you would rather type `whr`, add `export PATH=/opt/whr/bin:$PATH` to the administrator's `~/.zprofile`. After `whr setup host`, `workharbor` runs `whr setup` in its desktop session ([Prepare the Mac mini](host-setup.md)). The order of a first install is: this archive, `/opt/whr/bin/whr setup host` as the administrator, then `whr setup` as `workharbor`.
+
+### From a clone: `make install-release`
+
+This route needs a clone, `git` and `make` (Command Line Tools); with `gh` signed in (`brew install gh`; a draft release, not yet published, can be downloaded only by a writer) it also verifies the attestation, and it is how you verify a draft release. Run it as the **administrator**; the first command uses the prefix `/opt/whr`, the second another one:
+
+```bash
+make install-release VERSION=<tag>
+make install-release VERSION=<tag> PREFIX=/some/prefix
+```
+
+`gh` is optional: with it the script also verifies the attestation, without it only the checksums. A `gh` that is installed but cannot read the tag (not signed in, or no login under `sudo`) counts as absent: the script prints that and checks the checksums only. The fallback and the `grep ... | shasum` step are covered by script tests with stubbed tools; a run on a clean Mac (no `gh`, Homebrew or Command Line Tools) is {{< status unverified >}}. This single-archive script installs releases after `v0.1.0-alpha.4`; for `v0.1.0-alpha.4` and earlier, use the script of that tag (`git show <tag>:scripts/install-release.sh`). From a clone the script downloads the release archive (`whr_<version>_darwin_arm64.tar.gz`) and `checksums.txt`, checks the archive against the checksums and, when `gh` is present, against the build-provenance attestation of this repository's release workflow, and installs **nothing** unless every check passes. It refuses anything but macOS on Apple silicon. It reads the installed version from `<prefix>/libexec/whr/VERSION`, which it writes after a verified install, and never runs the installed `whr` before the checks; an older tag, or an install without that file, needs `--allow-downgrade` (`make install` from source removes that file, so the version after a source install is unknown) (`make install-release ... ALLOW_DOWNGRADE=1`). `WHR_RELEASE_REPO=owner/name` changes whose attestations are trusted (a fork); the script refuses it unless you also pass `--trust-release-repo` to `scripts/install-release.sh`.
+
 
 ### Verify a download yourself
 
@@ -87,7 +94,8 @@ Also check the file against `checksums.txt` (`shasum -a 256 -c`). `make install-
 Then, as `workharbor`, build the tool store with the guest launcher (the script prints the exact command):
 
 ```bash
-/opt/whr/bin/whr tools build -store <tool store> -shim /opt/whr/libexec/whr/whr-shim-linux-arm64
+store=/Users/workharbor/tools
+/opt/whr/bin/whr tools build -store "$store" -shim /opt/whr/libexec/whr/whr-shim-linux-arm64
 ```
 
 ### Development installation from source
@@ -141,7 +149,7 @@ The source installer builds all three binaries with `GOWORK=off` and empty
 `GOFLAGS`, stamps the source commit, and removes the release-only
 `libexec/whr/VERSION` marker. These are developer-built binaries without release
 provenance. Implementation and live installation of the amended source gate are
-{{< status unverified >}} until #299 supplies its checked code and installation
+{{< status unverified >}} until a run on the reference host records its
 evidence.
 
 There is no development mode: `whr setup`, `whr doctor` and `whr service` take
@@ -213,7 +221,7 @@ One procedure serves all three: stop, copy or replace, start. Run it as the `wor
 
 1. **Stop the supervisor.** `whr service uninstall` unloads the job (the logs stay); if you run `whr serve` by hand, stop that. Check that no `whr serve` process is left. Stopping the supervisor does not stop the environments: an agent can keep running in its environment while `whr serve` is down, so the workspace folders and `topics` may change under your copy ([design §4.1](../design/domain.md)). Stop the environments first (`whr` has no single command for it in this draft; stop each workspace's environment, {{< status unverified >}}), or accept that the copy may be mid-change. Runs resume after the start ({{< status unverified >}}).
 2. **Back up** every path in the table, to an encrypted destination for the secret files. Prefer a manual copy of the paths above while the supervisor is stopped. Time Machine cannot be timed to a stopped supervisor, and whether its snapshot covers the database and its two WAL files at one instant is not measured ({{< status unverified >}}).
-3. **Upgrade (skip for a plain backup).** Read the release notes and the upgrade notes below, then install the new version as the administrator (`make install-release` or `brew upgrade whr`).
+3. **Upgrade (skip for a plain backup).** Read the release notes and the upgrade notes below, then install the new version as the administrator: the archive block of [Install from the release archive](#install-from-the-release-archive-the-first-install) with the new tag (the tap never gets a prerelease), `make install-release` from a clone, or `brew upgrade whr` from `v0.1.0` on.
 4. **Restore (skip unless restoring).** With the supervisor still stopped, put back the configuration directory, the state directory (the database file with its `-wal` and `-shm` files, together from one backup, or none of the three), the secret files at the paths the configuration names, and the workspace folders. Remove stale `-wal` and `-shm` files that do not belong to the restored database.
 5. **Start the supervisor.** `whr service install` (the `whr service` group is provisional, like every command here) writes the plist for the current binary; the database migrates on the first start of a new version.
 6. **Check.** `whr doctor`, then `whr version`.
