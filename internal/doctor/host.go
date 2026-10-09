@@ -847,6 +847,7 @@ func hostSteps(d Deps) []Check {
 			},
 			Fix: prefixFix(d),
 		},
+		d.adminRecordStep(), // after prefix: the file goes into that directory
 
 		{
 			Name: "screen-sharing", Phase: PhaseHost, Step: 8, Title: "Screen Sharing for whr's desktop session (manual steps 2 and 8)", Optional: true,
