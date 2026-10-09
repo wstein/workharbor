@@ -540,6 +540,7 @@ func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 			t.Errorf("%s: the block does not start in a fresh directory", name)
 		}
 		block = strings.ReplaceAll(block, "<tag>", "v0.2.0")
+		block = strings.ReplaceAll(block, "tag=v0.1.0-alpha.5;", "tag=v0.2.0;")
 		block = strings.Replace(block, "https://github.com/wstein/workharbor/releases/download/$tag", "file://$REL", 1)
 		if !strings.Contains(block, "file://$REL") {
 			t.Fatalf("%s: the download base was not found", name)
