@@ -59,6 +59,9 @@ type Fix struct {
 	// they are only the preview shown before it, with a placeholder where a value
 	// is still to be asked.
 	Cmds []Cmd
+	// NeedsSudo says the fix will use sudo although its preview does not show
+	// it, so a run without sudo can list it before Build does any work (#507).
+	NeedsSudo bool
 	// Build, if set, asks for what the commands need and returns the real ones.
 	// It runs after the confirmation, so nothing is asked in a dry run.
 	Build func(ctx context.Context, p Prompter) ([]Cmd, error)

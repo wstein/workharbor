@@ -59,8 +59,9 @@ func (d Deps) homebrewFix() *Fix {
 		return []Cmd{{Argv: []string{"/usr/bin/env", "NONINTERACTIVE=1", "/bin/bash", script}}}
 	}
 	return &Fix{
-		Desc: "download Homebrew's install.sh to a private file, show its SHA-256, and run it only after you confirm",
-		Cmds: run("<the downloaded install.sh>"),
+		Desc:      "download Homebrew's install.sh to a private file, show its SHA-256, and run it only after you confirm",
+		Cmds:      run("<the downloaded install.sh>"),
+		NeedsSudo: true, // known before Build downloads anything (#507)
 		Build: func(ctx context.Context, p Prompter) ([]Cmd, error) {
 			dl := d.Download
 			if dl == nil {
