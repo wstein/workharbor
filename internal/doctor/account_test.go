@@ -347,11 +347,14 @@ func TestDropAdminIsIrreversible(t *testing.T) {
 // The prefix guide sends a first install to the release archive, not to a
 // clone and make (which needs git, make and a prefix the account owns).
 func TestPrefixInstallGuideNamesTheArchiveRoute(t *testing.T) {
-	guide, try := prefixInstallGuide()
+	guide, try := prefixInstallGuide("/opt/whr")
 	if !strings.Contains(guide, "release archive") || !strings.Contains(guide, "checksums.txt") {
 		t.Errorf("guide = %q", guide)
 	}
 	if len(try) != 1 || try[0] != "sudo ./install.sh <tag>" || strings.Contains(guide+try[0], "make install-release") {
 		t.Errorf("try = %q", try)
+	}
+	if _, try := prefixInstallGuide("/Volumes/x y/whr"); len(try) != 1 || try[0] != "sudo ./install.sh <tag> '/Volumes/x y/whr'" {
+		t.Errorf("another prefix: %q", try)
 	}
 }
