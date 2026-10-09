@@ -1,7 +1,7 @@
 ---
 title: Operations digest
 description: "An index of long-lived operating knowledge: decisions, recurring procedures, how-tos and known gaps, as pointers to their sources."
-weight: 16
+weight: 17
 toc: true
 ---
 

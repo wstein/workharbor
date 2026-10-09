@@ -22,7 +22,7 @@ An Apple-silicon Mac with macOS and Apple Container, a GitHub App for your repos
 
 ```bash
 whr serve
-whr run <issue-url>
+whr run <issue-url> --agent <workspace>/<role>
 whr ls
 whr logs <task> -f
 whr say <task> "use the existing retry helper"

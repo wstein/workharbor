@@ -1,7 +1,7 @@
 ---
 title: Agent vendor terms
 description: What the agent vendors' terms mean for a subscription login under WorkHarbor, with links to the sources.
-weight: 3
+weight: 7
 toc: true
 ---
 

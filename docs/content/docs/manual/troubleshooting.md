@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 description: What to check when whr fails to start.
-weight: 17
+weight: 8
 toc: true
 ---
 
@@ -14,7 +14,7 @@ codesign -v <path>     # no output and exit 0 means the signature is valid
 xattr -l <path>        # lists extended attributes such as com.apple.quarantine
 ```
 
-Fix: rebuild with `make install` from the clean current `main`. It signs the new `whr` ad hoc and replaces the old file by rename.
+Fix: on a release-installed host, install the release again with the archive block of [Install, upgrade and release](install-upgrade-release.md) (`sudo ./install.sh <tag>` replaces the file by rename). On a developer's source install, rebuild with `make install` from the current local `main`; it signs the new `whr` ad hoc and replaces the old file by rename.
 
 ## The GitHub App link times out
 

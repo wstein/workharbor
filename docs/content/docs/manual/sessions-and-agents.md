@@ -1,7 +1,7 @@
 ---
 title: Sessions and agents
 description: Which sessions to keep open while you build WorkHarbor with agents, which model each runs on, and why.
-weight: 4
+weight: 10
 toc: true
 ---
 
