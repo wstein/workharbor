@@ -366,7 +366,7 @@ func TestBoardSnapshotConfigureRepeatPreservesOptions(t *testing.T) {
 		}
 		for _, field := range metadata.Fields {
 			if field.Name == "Status" {
-				if len(field.Options) != 6 || field.Options[0].ID != "O_todo" || field.Options[5].ID != "O_done" {
+				if len(field.Options) != 5 || field.Options[0].ID != "O_todo" || field.Options[4].ID != "O_done" {
 					t.Fatalf("status identities changed: %+v", field.Options)
 				}
 			}
@@ -462,7 +462,7 @@ func sessionSchemaFixture(t *testing.T, options string) board {
 		current := field.(map[string]any)
 		if current["name"] == "Status" {
 			statuses := []map[string]any{}
-			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Ready to push", "Done"} {
+			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Done"} {
 				statuses = append(statuses, map[string]any{"id": "status-" + strconv.Itoa(index), "name": name, "color": "GRAY", "description": ""})
 			}
 			current["options"] = statuses
@@ -580,7 +580,7 @@ case "$*" in
 *updateProjectV2ItemFieldValue*)
 	for a in "$@"; do case "$a" in i=PVTI_*) item=${a#i=PVTI_} ;; o=*) opt=${a#o=} ;; f=*) fld=${a#f=} ;; esac; done
 	if [ -z "$FAKE_NOAPPLY" ] && [ "$fld" = F_status ]; then
-		case "$opt" in O_todo) st=Todo ;; O_ip) st="In progress" ;; O_bl) st=Blocked ;; O_ir) st="In review" ;; O_rp) st="Ready to push" ;; esac
+		case "$opt" in O_todo) st=Todo ;; O_ip) st="In progress" ;; O_bl) st=Blocked ;; O_ir) st="In review" ;; esac
 		printf '%s' "$st" > "` + b.bin + `/cur.$item"
 	fi
 	echo '{"data":{}}'; exit 0 ;;
@@ -590,7 +590,7 @@ case "$*" in
 	status=null
 	if [ -f "` + b.bin + `/cur.$number" ]; then status="{\"name\":\"$(cat "` + b.bin + `/cur.$number")\"}"; fi
 	echo '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_other","project":{"id":"PVT_other"}},{"id":"PVTI_'$number'","project":{"id":"PVT_kwHNjWrOAZVCuA"},"status":'"$status"'}]}}}}}'; exit 0 ;;
-*"fields(first"*) echo '{"data":{"node":{"id":"PVT_kwHNjWrOAZVCuA","fields":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"},{"id":"O_rp","name":"Ready to push"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
+*"fields(first"*) echo '{"data":{"node":{"id":"PVT_kwHNjWrOAZVCuA","fields":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{},{"id":"F_status","name":"Status","options":[{"id":"O_todo","name":"Todo"},{"id":"O_ip","name":"In progress"},{"id":"O_bl","name":"Blocked"},{"id":"O_ir","name":"In review"}]},{"id":"F_sess","name":"Session","options":[{"id":"O_s1","name":"wh/review"},{"id":"O_s2","name":"Werner"}]},{"id":"F_prio","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p3","name":"P3"}]}]}}}}'; exit 0 ;;
 *"items(first"*)
 	cur=first
 	for a in "$@"; do case "$a" in after=*) cur=${a#after=} ;; esac; done
@@ -1507,5 +1507,43 @@ func TestBoardSnapshotSyncRefusesAStaleSnapshot(t *testing.T) {
 	so, _, err := b.runEnv(t, fail, append(args, "--dry-run")...)
 	if err != nil || strings.TrimSpace(so) == "" {
 		t.Fatalf("a dry run may read a stale snapshot: %v %q", err, so)
+	}
+}
+
+func TestBoardSnapshotConfigureToleratesLegacyReadyToPush(t *testing.T) {
+	t.Parallel()
+	fixture := sessionSchemaFixture(t, `[{"id":"s-werner","name":"Werner","color":"GRAY","description":"Human maintainer"}]`)
+	path := filepath.Join(fixture.bin, "schema.json")
+	data, err := os.ReadFile(path) //nolint:gosec // a test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range state["fields"].([]any) {
+		current := field.(map[string]any)
+		if current["name"] == "Status" {
+			statuses := []map[string]any{}
+			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Ready to push", "Done"} {
+				statuses = append(statuses, map[string]any{"id": "status-" + strconv.Itoa(index), "name": name, "color": "GRAY", "description": ""})
+			}
+			current["options"] = statuses
+		}
+	}
+	updated, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, updated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := fixture.runEnv(t, schemaEnv(fixture), "configure", "PVT_crewbook")
+	if err != nil {
+		t.Fatalf("configure on a board that still has the option: %v %s", err, stderr)
+	}
+	if !strings.Contains(stdout, `"Ready to push"`) {
+		t.Fatalf("legacy option was dropped: %s", stdout)
 	}
 }

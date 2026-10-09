@@ -72,8 +72,7 @@ bash scripts/board-snapshot.sh configure PVT_kwHNjWrOAZaiCg
 bash scripts/board-snapshot.sh metadata schema
 ```
 
-The schema is Status (`Todo`, `In progress`, `Blocked`, `In review`, `Ready to
-push`, `Done`), Priority (`P1`, `P2`, `P3`) and Session (configured project lanes).
+The schema is Status (`Todo`, `In progress`, `Blocked`, `In review`, `Done`), Priority (`P1`, `P2`, `P3`) and Session (configured project lanes).
 Views show Title, Status, Priority, built-in Assignees, Session and Milestone.
 Assignees identify the accountable human; configuration does not change issue
 assignees. Assign a human only with the appropriate authorization.
@@ -91,9 +90,10 @@ population alone does not establish that an issue has reached review.
 | Active work | In progress |
 | Review queue | In review |
 | Blocked work | Blocked |
-| Release and milestones | Ready to push |
+| Release and milestones | (all open issues) |
 
-Each filter restricts results to open Issues in the configured repository.
+Each filter restricts results to open Issues in the configured repository;
+**Release and milestones** adds no Status clause.
 The [documented Projects API](https://docs.github.com/en/graphql/reference/projects)
 supports view layout, visible fields and filters. In the UI, open **Dispatch
 queue**, choose **Sort**, set **Priority** ascending (`P1`, `P2`, `P3`) and save
@@ -117,7 +117,8 @@ an enabled flag alone is insufficient evidence. Verify a real closure only when
 the human has authorized closing that issue.
 
 `move` still refuses `Done`, which follows from the human closing or merging
-the PR. The board's own **Ready to push** option is unused. Configuration never promotes
-cards. Dispatch enforces worker limits from the project profile. Board column
+the PR. Configuration never promotes
+cards. A board that still has a legacy `Ready to push` option keeps it (configuration
+does not remove it); `move` never sets it. Dispatch enforces worker limits from the project profile. Board column
 limits are visual aids and do not enforce concurrency; verify profile limits
 and saved board settings separately.
