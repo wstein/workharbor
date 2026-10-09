@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.x'
+          go-version: '1.27.2'
           cache: false
       - name: Tag the runner's copy only, for the SBOM's version (never pushed)
         run: git -c tag.gpgsign=false tag v0.0.0-snapshot
@@ -106,7 +106,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.x'
+          go-version: '1.27.2'
           cache: false # a release job must not restore a cache an earlier run could have poisoned
       - name: Release notes from git-cliff
         run: |
