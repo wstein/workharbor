@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/workharbor/schemas/config.v0-provisional.schema.json",
+  "title": "WorkHarbor config.json (v0-provisional)",
+  "description": "PROVISIONAL, hand-written editor aid for the supervisor's config.json. It checks structure only (keys, types, enums, ranges). Ownership, permissions and runtime policy are decided by `whr doctor` and `whr serve`, never by this schema. The configuration is not stable before the beta; this version is immutable once published and later versions get a new name.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["listen", "repositories", "roots", "github", "api_token_file"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint naming this schema. The loader ignores it and never fetches it."
+    },
+    "skill_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "store": { "type": "string" },
+        "selection": { "type": "string", "enum": ["none", "default", "package"] },
+        "default": { "$ref": "#/$defs/skillPin" },
+        "package": { "$ref": "#/$defs/skillPin" }
+      }
+    },
+    "listen": { "type": "string", "description": "Loopback address of the web UI, for example 127.0.0.1:8787." },
+    "public_url": { "type": "string", "pattern": "^https://" },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "owner/name" },
+          "clone_depth": { "type": "integer", "minimum": 0, "description": "0 keeps the full history. The loader accepts the key missing and reads it as 0." },
+          "workflow": { "type": "string", "enum": ["prototype", "integration", "published"] },
+          "integration_branch": { "type": "string" },
+          "check": { "type": "string", "maxLength": 4096 },
+          "commit_lint": { "type": "string", "enum": ["conventional", "workharbor"] }
+        }
+      }
+    },
+    "roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspaces", "tool_store"],
+      "properties": {
+        "workspaces": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "tool_store": { "type": "string" }
+      }
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_id", "key_file"],
+      "properties": {
+        "app_id": { "type": "integer", "minimum": 1 },
+        "key_file": { "type": "string" },
+        "api_url": { "type": "string" }
+      }
+    },
+    "agent_api_key_env_file": { "type": "string" },
+    "bot_signing_key_file": { "type": "string" },
+    "api_token_file": { "type": "string" },
+    "api_clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "token_file"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+          "token_file": { "type": "string" }
+        }
+      }
+    },
+    "state_dir": { "type": "string" },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": { "type": "string" },
+        "base": { "type": "string", "enum": ["fedora", "ubuntu"] },
+        "egress_allow": { "type": "array", "items": { "type": "string" } },
+        "cpus": { "type": "integer", "minimum": 0 },
+        "memory_mb": { "type": "integer", "minimum": 0 },
+        "disk_mb": { "type": "integer", "minimum": 0 },
+        "post_create_timeout": { "type": "string", "description": "A Go duration from 1s to 6h, such as 10m; the range is checked by the loader." }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "egress_allow": { "type": "array", "items": { "type": "string" } },
+        "cpus": { "type": "integer", "minimum": 0 },
+        "memory_mb": { "type": "integer", "minimum": 0 },
+        "disk_mb": { "type": "integer", "minimum": 0 },
+        "ssh_ca_key_file": { "type": "string" },
+        "base": { "type": "string", "enum": ["fedora", "ubuntu", "alpine"] }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "per_run": { "$ref": "#/$defs/budgetLimit" },
+        "per_task": { "$ref": "#/$defs/budgetLimit" },
+        "soft_percent": { "type": "integer", "minimum": 1, "maximum": 99 }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "warn_percent": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "low_balance_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "first_port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "last_port": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+      }
+    },
+    "tool_profile": { "type": "string" },
+    "board": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "number"],
+      "properties": {
+        "owner": { "type": "string" },
+        "number": { "type": "integer", "minimum": 1 },
+        "organization": { "type": "boolean" },
+        "status_field": { "type": "string" },
+        "session_field": { "type": "string" },
+        "link_field": { "type": "string" },
+        "queue_status": { "type": "string" },
+        "public_url": { "type": "string", "pattern": "^https://" }
+      }
+    },
+    "ntfy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic_file"],
+      "properties": {
+        "server": { "type": "string" },
+        "topic_file": { "type": "string" },
+        "token_file": { "type": "string" }
+      }
+    },
+    "account": { "type": "string", "enum": ["dedicated", "shared"] },
+    "development_prefix": { "type": "string", "description": "Retired; accepted so older files load, and ignored." },
+    "agent_permission_mode": { "type": "string", "enum": ["dontAsk", "manual"] },
+    "agent_allowed_tools": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "budgetLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_duration": { "type": "string" },
+        "max_tokens": { "type": "integer", "minimum": 0 },
+        "max_cost_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "skillPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "source", "commit", "manifest_sha256", "inventory_sha256", "contract_version"],
+      "properties": {
+        "identity": { "type": "string" },
+        "source": { "type": "string" },
+        "commit": { "type": "string" },
+        "manifest_sha256": { "type": "string" },
+        "inventory_sha256": { "type": "string" },
+        "contract_version": { "type": "integer", "enum": [1] }
+      }
+    }
+  }
+}

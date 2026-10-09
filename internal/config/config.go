@@ -199,6 +199,10 @@ func APISocketPath(stateDir, home string) string {
 
 // Config is the whole file.
 type Config struct {
+	// Schema is the optional editor hint `$schema`, the URL of the published JSON
+	// Schema (issue #268). It is data only: nothing resolves, fetches or checks
+	// it, and its value never affects loading or validation.
+	Schema   string          `json:"$schema,omitempty"`
 	SkillSet skillset.Config `json:"skill_set,omitzero"`
 	// Listen is the address `whr serve` binds: a loopback address (D29).
 	Listen string `json:"listen"`
