@@ -12,10 +12,20 @@ env:
 
 jobs:
   check:
+    # Explicit name: the ruleset requires `check (1.26.x)` and `check (1.27.x)`, and a
+    # name containing a matrix expression gets no automatic matrix suffix.
+    name: check (${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         go: ['1.26.x', '1.27.x']
+        # setup-go's manifest lags go.dev, so a range resolves to a vulnerable patch (#497);
+        # `include` only adds `version` to the matching `go` entries.
+        include:
+          - go: '1.26.x'
+            version: '1.26.9'
+          - go: '1.27.x'
+            version: '1.27.2'
     permissions:
       contents: read
     steps:
@@ -24,7 +34,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ matrix.go }}
+          go-version: ${{ matrix.version }}
           cache: true
           cache-dependency-path: go.sum
       - name: Download Go modules (retried, #461)
@@ -61,7 +71,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.9'
       - name: Install the pinned Claude Code CLI
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
@@ -86,7 +96,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.9'
       - name: Check commit messages
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
