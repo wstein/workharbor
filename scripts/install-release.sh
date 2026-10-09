@@ -11,8 +11,9 @@
 # install.sh. Next to bin/ and guest/ the script installs them as they are: the
 # archive was checked against checksums.txt by the user (shasum -a 256 -c), nothing
 # is downloaded and gh is not needed. When checksums.txt sits next to the script, the
-# archive of <tag> must sit there too and match its line, so a wrong tag is refused
-# before it can reach VERSION; the attestation is the user's to check beforehand. From a clone it downloads the archive and
+# archive of <tag> must sit there too and match its line, and that archive (not the
+# loose files) is what gets installed, so tag, archive and files are one thing; the
+# attestation is the user's to check beforehand. From a clone it downloads the archive and
 # checksums.txt with curl (gh is the fallback for a draft, which only a repository
 # writer can download), checks the archive against checksums.txt and, with gh
 # installed, the build-provenance attestation of this repository's release workflow
@@ -64,6 +65,14 @@ check_archive() {
     [ "$(awk -v f="$archive" '$2 == f' checksums.txt | wc -l)" -eq 1 ] || die "checksums.txt has no single line for $archive"
     awk -v f="$archive" '$2 == f' checksums.txt | shasum -a 256 -c - >/dev/null || die "$archive does not match checksums.txt"
   )
+}
+
+# extract_archive <archive> <tag>: unpack the files to install into $work/x.
+extract_archive() {
+  mkdir -p "$work/x"
+  [ -n "$(tar -tzf "$1" bin/whr 2>/dev/null)" ] ||
+    die "$1 has no bin/whr: $2 has the old layout (separate host and guest archives); use that tag's own script: git show $2:scripts/install-release.sh"
+  tar -xzf "$1" -C "$work/x" bin/whr guest/whr-shim-linux-arm64 guest/whr-proxy-linux-arm64 || die "cannot unpack $1"
 }
 
 main() {
@@ -130,14 +139,16 @@ if [ "$unpacked" -eq 1 ]; then
     # The documented flow unpacks next to the downloaded archive and checksums.txt:
     # the tag must name that archive, or a wrong tag would be written to VERSION
     # and corrupt the downgrade guard.
-    [ -f "$here/$archive" ] || die "checksums.txt is next to the script but $archive is not: $tag does not match the downloaded archive"
+    [ -f "$here/$archive" ] || die "$archive is not next to checksums.txt (wrong tag, or the archive was removed)"
     check_archive "$here"
-    echo "install: the tag $tag matches $archive next to the script (checksum ok)" >&2
+    extract_archive "$here/$archive" "$tag"
+    root="$work/x"
+    echo "install: the tag $tag matches $archive next to the script (checksum ok); installing the files of that archive" >&2
   else
     echo "install: no checksums.txt next to the script: the tag $tag is not checked against the archive" >&2
   fi
-  echo "install: from the unpacked archive in $here (its checksum is the user's to check; with gh, verify its attestation before running this script)" >&2
-  root="$here"
+  echo "install: from the unpacked archive in $here (with gh, verify its attestation before running this script)" >&2
+  [ -n "${root:-}" ] || root="$here"
 else
 if [ -n "${WHR_RELEASE_DIR:-}" ]; then
   for f in "$archive" checksums.txt; do
@@ -180,10 +191,7 @@ if [ "$have_gh" -eq 1 ]; then
 else
   echo "install-release: caveat: only the checksums were verified, not the origin (no attestation check without gh)" >&2
 fi
-mkdir -p "$work/x"
-[ -n "$(tar -tzf "$work/$archive" bin/whr 2>/dev/null)" ] ||
-  die "$archive has no bin/whr: $tag has the old layout (separate host and guest archives); use that tag's own script: git show $tag:scripts/install-release.sh"
-tar -xzf "$work/$archive" -C "$work/x" bin/whr guest/whr-shim-linux-arm64 guest/whr-proxy-linux-arm64 || die "cannot unpack $archive"
+extract_archive "$work/$archive" "$tag"
 root="$work/x"
 fi
 
