@@ -90,9 +90,9 @@ run as operator
 
  [34m✓ ok[0m     prefix               <tmp>/whr
           exists and only the administrator writes it
- [35m? unverified[0m  admin-record         needs a valid configuration: the admin
-               record is built from it, and it is not written yet
-[1;33m▌ ACTION[0m  to fix admin-record, run
+ [35m? unverified[0m  system-config        needs a valid configuration: the system
+               config is built from it, and it is not written yet
+[1;33m▌ ACTION[0m  to fix system-config, run
 
     [36mwhr setup --only config-base --user 'operator'[0m
 
@@ -376,8 +376,8 @@ Summary: 3 ok, 14 FAIL, 34 not verified (?), 0 WARN, 0 skipped
 
       [36mwhr setup host --only brew-pin --user 'operator'[0m
 
-  15. admin-record: needs a valid configuration: the admin record is built from
-      it, and it is not written yet (run as operator)
+  15. system-config: needs a valid configuration: the system config is built
+      from it, and it is not written yet (run as operator)
 
       [36mwhr setup --only config-base --user 'operator'[0m
 

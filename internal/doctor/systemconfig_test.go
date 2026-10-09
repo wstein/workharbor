@@ -14,8 +14,8 @@ const adminCfg = `{"listen":"127.0.0.1:8484",` +
 	`"github":{"app_id":1,"private_key_file":"/x/SECRETPEM"},` +
 	`"roots":{"workspaces":["/Volumes/Work/ws"],"tool_store":"/x/tools"}}`
 
-func TestAdminRecordContentHasNoSecrets(t *testing.T) {
-	b, err := adminRecordOf([]byte(adminCfg), "workharbor")
+func TestSystemConfigContentHasNoSecrets(t *testing.T) {
+	b, err := systemConfigOf([]byte(adminCfg), "workharbor")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,16 +35,16 @@ func adminDeps(t *testing.T) Deps {
 	t.Setenv("HOME", t.TempDir())
 	d := hostDeps(scripted{})
 	d.ConfigPath = filepath.Join(t.TempDir(), "config.json")
-	d.AdminRecordFile = filepath.Join(t.TempDir(), "etc", "whr", AdminRecordName)
+	d.SystemConfigFile = filepath.Join(t.TempDir(), "etc", "whr", SystemConfigName)
 	if err := os.WriteFile(d.ConfigPath, []byte(adminCfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return d
 }
 
-func TestAdminRecordStepIdempotentAndNeverFails(t *testing.T) {
+func TestSystemConfigStepIdempotentAndNeverFails(t *testing.T) {
 	d := adminDeps(t)
-	c := steps(t, d)["admin-record"]
+	c := steps(t, d)["system-config"]
 	if st, _ := status(c); st != Warn {
 		t.Fatalf("missing record: %s", st)
 	}
@@ -54,14 +54,14 @@ func TestAdminRecordStepIdempotentAndNeverFails(t *testing.T) {
 	if err := c.Fix.Do(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(adminRecordTemp()) // what sudo install would copy
+	b, err := os.ReadFile(systemConfigTemp()) // what sudo install would copy
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(d.AdminRecordFile), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(d.SystemConfigFile), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(d.AdminRecordFile, b, 0o600); err != nil { //nolint:gosec // a test path under t.TempDir
+	if err := os.WriteFile(d.SystemConfigFile, b, 0o600); err != nil { //nolint:gosec // a test path under t.TempDir
 		t.Fatal(err)
 	}
 	if st, msg := status(c); st != OK {
@@ -71,32 +71,32 @@ func TestAdminRecordStepIdempotentAndNeverFails(t *testing.T) {
 	if err := os.WriteFile(d.ConfigPath, []byte(changed), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := status(steps(t, d)["admin-record"]); st != Warn {
+	if st, _ := status(steps(t, d)["system-config"]); st != Warn {
 		t.Errorf("stale record: %s, want warn", st)
 	}
 }
 
-func TestAdminRecordCommandsAndMissingConfig(t *testing.T) {
+func TestSystemConfigCommandsAndMissingConfig(t *testing.T) {
 	d := adminDeps(t)
-	c := steps(t, d)["admin-record"]
+	c := steps(t, d)["system-config"]
 	if len(c.Fix.Cmds) != 2 {
 		t.Fatalf("want two commands, got %d", len(c.Fix.Cmds))
 	}
 	dir, inst := c.Fix.Cmds[0], c.Fix.Cmds[1]
-	if !dir.Sudo || strings.Join(dir.Argv[:8], " ") != "install -d -m 0755 -o root -g wheel" || dir.Argv[8] != filepath.Dir(d.AdminRecordFile) {
+	if !dir.Sudo || strings.Join(dir.Argv[:8], " ") != "install -d -m 0755 -o root -g wheel" || dir.Argv[8] != filepath.Dir(d.SystemConfigFile) {
 		t.Errorf("directory command: %v", dir)
 	}
 	a := inst.Argv
-	if !inst.Sudo || len(a) != 9 || strings.Join(a[:7], " ") != "install -m 0644 -o root -g wheel" || a[8] != d.AdminRecordFile {
+	if !inst.Sudo || len(a) != 9 || strings.Join(a[:7], " ") != "install -m 0644 -o root -g wheel" || a[8] != d.SystemConfigFile {
 		t.Errorf("install command: %v", inst)
 	}
-	if got := (Deps{}).adminRecordFile(); got != "/etc/whr/admin.json" {
+	if got := (Deps{}).systemConfigFile(); got != "/etc/whr/config.json" {
 		t.Errorf("default path %q", got)
 	}
 	if err := os.Remove(d.ConfigPath); err != nil {
 		t.Fatal(err)
 	}
-	st, msg := status(steps(t, d)["admin-record"])
+	st, msg := status(steps(t, d)["system-config"])
 	if st != NotVerified || !strings.HasPrefix(msg, needsConfig) {
 		t.Errorf("missing config: %s %q", st, msg)
 	}

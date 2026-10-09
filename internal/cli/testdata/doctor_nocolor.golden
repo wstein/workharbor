@@ -90,9 +90,9 @@ run as operator
 
  + ok     prefix               <tmp>/whr
           exists and only the administrator writes it
- ? unverified  admin-record         needs a valid configuration: the admin
-               record is built from it, and it is not written yet
-| ACTION  to fix admin-record, run
+ ? unverified  system-config        needs a valid configuration: the system
+               config is built from it, and it is not written yet
+| ACTION  to fix system-config, run
 
     whr setup --only config-base --user 'operator'
 
@@ -376,8 +376,8 @@ What you need to do now
 
       whr setup host --only brew-pin --user 'operator'
 
-  15. admin-record: needs a valid configuration: the admin record is built from
-      it, and it is not written yet (run as operator)
+  15. system-config: needs a valid configuration: the system config is built
+      from it, and it is not written yet (run as operator)
 
       whr setup --only config-base --user 'operator'
 

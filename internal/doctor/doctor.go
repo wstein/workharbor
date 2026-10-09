@@ -121,8 +121,8 @@ type Deps struct {
 	FS      runtime.FS
 	// SSHDFile overrides the sshd drop-in the ssh-keys-only check reads (tests).
 	SSHDFile string
-	// AdminRecordFile overrides /etc/whr/admin.json (tests).
-	AdminRecordFile string
+	// SystemConfigFile overrides /etc/whr/config.json (tests).
+	SystemConfigFile string
 	// PictureFile overrides where the login picture is installed and read (tests).
 	PictureFile string
 	LookPath    func(string) (string, error)
