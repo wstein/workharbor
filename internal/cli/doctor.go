@@ -104,6 +104,9 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
 			repair := repairContext{Account: whrUser}
+			if cmd.Flags().Changed("prefix") {
+				repair.Prefix = prefix
+			}
 			for i, r := range rs {
 				context := repair
 				if other { // command adds it to the fixes that are for whr's account only

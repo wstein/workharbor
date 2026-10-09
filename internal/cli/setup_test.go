@@ -297,11 +297,12 @@ func TestDoctorRunsEveryCheckReadOnlyAndNamesTheFix(t *testing.T) {
 	if idx("power") >= idx("config-dir") || idx("config-dir") >= idx("service-install") {
 		t.Errorf("host steps, then user steps, in the wizard's order: %v", order)
 	}
-	if got := lines["power"][3]; got != "whr setup host --only power" {
+	pfx := " --prefix " + shellArgument(filepath.Dir(filepath.Dir(r.exe)))
+	if got := lines["power"][3]; got != "whr setup host --only power"+pfx {
 		t.Errorf("power fix %q", got)
 	}
 	// run as werner, not whr: the user phase says so, and says to run as workharbor
-	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "check it as workharbor") || f[3] != "whr setup --only config-base (run as workharbor)" {
+	if f := lines["config-base"]; f[0] != "not_verified" || !strings.Contains(f[2], "check it as workharbor") || f[3] != "whr setup --only config-base"+pfx+" (run as workharbor)" {
 		t.Errorf("config-base: %q", f)
 	}
 	if f := lines["config"]; f[0] != "fail" || !strings.Contains(f[3], "whr setup") {
@@ -448,9 +449,10 @@ func TestDoctorRepairsKeepSelectedAccount(t *testing.T) {
 	for _, account := range []string{"workharbor", "whr", "operator", "operator's"} {
 		r := newSetupRig(t)
 		_, out, _ := r.run("doctor", "--user", account)
-		suffix := ""
+		// the doctor keeps the prefix it was given (issue #399)
+		suffix := " --prefix " + shellArgument(filepath.Dir(filepath.Dir(r.exe)))
 		if account != "workharbor" {
-			suffix = " --user " + shellArgument(account)
+			suffix += " --user " + shellArgument(account)
 		}
 		want := "whr setup host --only workharbor-user" + suffix
 		if !strings.Contains(out, want) {

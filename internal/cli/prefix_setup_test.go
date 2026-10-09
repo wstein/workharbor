@@ -267,4 +267,11 @@ func TestAUserOwnedPrefixWorksWithAWarning(t *testing.T) {
 	if !strings.Contains(out, "warn\tprefix\t") || strings.Contains(out, "fail\tprefix\t") && !strings.Contains(out, "does not exist") {
 		t.Fatalf("stdout %q, stderr %q", out, errOut)
 	}
+	// a fix line that names whr setup keeps the prefix the doctor was given
+	// (issue #399)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whr setup") && !strings.Contains(line, "--prefix") {
+			t.Errorf("a fix line lacks the prefix: %q", line)
+		}
+	}
 }
