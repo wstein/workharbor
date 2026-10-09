@@ -459,3 +459,41 @@ echo "nul: $(git log --format=%B refs/heads/nul | tr '\0' ' ' | grep -c FAKEKEY 
 		t.Errorf("git log shows the original message despite the replace ref: the test shows nothing:\n%s", got)
 	}
 }
+
+// TestPreCommitLintsWorkflowsOnlyWhenStaged: the pre-commit hook runs the
+// actionlint target when the commit stages a file under .github/workflows/
+// and never otherwise. A fake make records its targets.
+func TestPreCommitLintsWorkflowsOnlyWhenStaged(t *testing.T) {
+	t.Parallel()
+	hook, err := filepath.Abs("../.githooks/pre-commit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		file string
+		want bool
+	}{
+		{".github/workflows/ci.yml", true},
+		{"main.go", false},
+		{".github/CONTRIBUTING.md", false},
+	} {
+		t.Run(c.file, func(t *testing.T) {
+			t.Parallel()
+			bin, repo, log := t.TempDir(), t.TempDir(), filepath.Join(t.TempDir(), "make.log")
+			fake := "#!/bin/sh\necho \"$@\" >>\"$FAKE_MAKE_LOG\"\n"
+			if err := os.WriteFile(filepath.Join(bin, "make"), []byte(fake), 0o700); err != nil { //nolint:gosec // a test stub
+				t.Fatal(err)
+			}
+			env := append(gittest.Env(t.TempDir(), gittest.Identity...), "PATH="+bin+":"+os.Getenv("PATH"), "FAKE_MAKE_LOG="+log)
+			script := "cd " + repo + " && git init -q && mkdir -p $(dirname " + c.file + ") && echo x >" + c.file +
+				" && git add . && " + hook
+			if out, err := bash(t, env, script); err != nil {
+				t.Fatalf("hook failed: %v\n%s", err, out)
+			}
+			got, _ := os.ReadFile(log) //nolint:gosec // a test path
+			if has := strings.Contains(string(got), "actionlint"); has != c.want {
+				t.Fatalf("actionlint run = %v, want %v; make calls:\n%s", has, c.want, got)
+			}
+		})
+	}
+}
