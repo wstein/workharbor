@@ -1134,7 +1134,8 @@ func (d Deps) guestHelpersReach(check func(context.Context) (Status, string)) fu
 		}
 		u := &Unreachable{Why: "only the whr binary is installed; the guest helpers " + strings.Join(missing, " and ") + " are missing under " + d.libexec()}
 		// a managed prefix (/opt/whr, /usr/local, Homebrew) is never a make install
-		// target: the source preflight refuses it, so a release is installed
+		// target: the source preflight only warns about it, but a managed prefix
+		// belongs to the administrator, so a release is installed
 		u.Where = "as the administrator, in the unpacked release archive (the second command: in a clone)"
 		u.Tools = []string{
 			"sudo ./install.sh <tag> " + shellWord(d.prefix()),
@@ -1946,7 +1947,7 @@ func serviceInstallArgv(d Deps) []string {
 }
 
 func prefixFix(d Deps) *Fix {
-	guide, try := prefixInstallGuide()
+	guide, try := prefixInstallGuide(d.prefix())
 	return &Fix{Cmds: prefixInstallCommands(d), Guide: guide, Try: try}
 }
 
@@ -1954,8 +1955,12 @@ func prefixTitle(d Deps) string {
 	return "the admin-owned prefix " + d.prefix() + " (manual step 13, D24)"
 }
 
-func prefixInstallGuide() (string, []string) {
-	return "Then install whr there from the release archive (manual, Install from the release archive): download whr_<version>_darwin_arm64.tar.gz and checksums.txt, check the archive against the checksums, unpack it, and in the unpacked folder run, as the administrator:", []string{"sudo ./install.sh <tag>"}
+func prefixInstallGuide(prefix string) (string, []string) {
+	install := "sudo ./install.sh <tag>"
+	if prefix != "/opt/whr" {
+		install += " " + shellWord(prefix)
+	}
+	return "Then install whr there from the release archive (manual, Install from the release archive): download whr_<version>_darwin_arm64.tar.gz and checksums.txt, check the archive against the checksums, unpack it, and in the unpacked folder run, as the administrator:", []string{install}
 }
 
 // agentKeyPrompt says what the agent-key step asks for: an API key, never a
