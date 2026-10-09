@@ -331,6 +331,22 @@ func (d Deps) needsConfigFile(context.Context) *Unreachable {
 	return u
 }
 
+// needsRoots is the Reach of the steps that only read the workspace roots
+// (workspace-folders, workspace-volume, spotlight): needsConfigFile, except that
+// an administrator run is reachable when the system config names the roots
+// (issue #510). The system-config step keeps needsConfigFile, because it
+// writes the file from the full user config.
+func (d Deps) needsRoots(ctx context.Context) *Unreachable {
+	if d.adminRun() {
+		if _, err := os.Stat(d.ConfigPath); errors.Is(err, fs.ErrNotExist) {
+			if _, st, _ := d.systemConfigRoots(err); st == "" {
+				return nil
+			}
+		}
+	}
+	return d.needsConfigFile(ctx)
+}
+
 func (d Deps) configDir() string { return filepath.Dir(d.ConfigPath) }
 
 // kv reads "name value" lines, as `pmset -g` prints them.
@@ -422,7 +438,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "workspace-volume", Phase: PhaseHost, Step: 3, Title: "workspace volumes encrypted, with ownership honoured (manual step 3)",
-			Reach: d.needsConfigFile,
+			Reach: d.needsRoots,
 			Run: func(ctx context.Context) (Status, string) {
 				if d.GOOS != "darwin" || d.Runner == nil {
 					return NotVerified, "not checked: " + errNotHere.Error()
@@ -575,7 +591,7 @@ func hostSteps(d Deps) []Check {
 
 		{
 			Name: "spotlight", Phase: PhaseHost, Step: 4, Title: "Spotlight does not index the workspaces (manual step 4, headless Mac)",
-			Reach: d.needsConfigFile,
+			Reach: d.needsRoots,
 			Run: func(ctx context.Context) (Status, string) {
 				if d.GOOS != "darwin" || d.Runner == nil {
 					return NotVerified, "not checked: " + errNotHere.Error()

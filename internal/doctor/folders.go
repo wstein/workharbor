@@ -24,22 +24,57 @@ type folder struct {
 	Mode   string // octal, as `stat -f %Lp` prints it
 }
 
-// workspaceRoots reads roots.workspaces from the configuration without
-// validating the rest of it, like the volume check. A status other than ""
-// means they are not known.
+// workspaceRoots reads roots.workspaces without validating the rest of the
+// configuration, like the volume check. Lookup order (issue #510): the user
+// configuration of the whr account; when the running account cannot read it
+// (a separate administrator), the system config /etc/whr/config.json; when
+// neither is readable, a not_verified that explains both, never a failure. A
+// user config that does not exist yet is the config-first step's business and
+// does not fall back, except in an administrator run (--user names another
+// account): there the default path is the administrator's own home, which
+// never holds the whr account's config, so a missing file falls back too. A status other than "" means the roots are not known.
 func (d Deps) workspaceRoots() ([]string, Status, string) {
 	raw, err := os.ReadFile(d.ConfigPath)
 	if errors.Is(err, os.ErrNotExist) {
+		if d.adminRun() {
+			if roots, st, _ := d.systemConfigRoots(err); st == "" {
+				return roots, "", ""
+			}
+		}
 		return nil, NotVerified, needsConfig + ": the workspace roots are read from it, and it is not written yet"
 	}
 	if err != nil {
-		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read, " + oneLine(err.Error())
+		return d.systemConfigRoots(err)
 	}
 	roots, err := rootsOf(raw)
 	if err != nil {
 		return nil, NotVerified, needsConfig + ": the workspace roots cannot be read from it, " + oneLine(err.Error())
 	}
 	return roots, "", ""
+}
+
+// adminRun is a host run by an account other than the whr account (--user).
+func (d Deps) adminRun() bool { return d.User != "" && d.User != d.account() }
+
+// systemConfigRoots is the fallback of workspaceRoots: userErr is why the user
+// configuration could not be read. The system config is read only for the
+// roots; it is informational and never whr's own configuration.
+func (d Deps) systemConfigRoots(userErr error) ([]string, Status, string) {
+	file := d.systemConfigFile()
+	why := needsConfig + ": the workspace roots cannot be read from " + d.ConfigPath + " (" + oneLine(userErr.Error()) + ")"
+	raw, err := os.ReadFile(file) //nolint:gosec // the fixed system config path or a test override
+	if err != nil {
+		return nil, NotVerified, why + " and not from " + file + " (" + oneLine(err.Error()) +
+			"); the system-config step writes it from a run that can read the user config, or run this step as " + d.account()
+	}
+	var sc SystemConfig
+	if err := json.Unmarshal(raw, &sc); err != nil {
+		return nil, NotVerified, why + " and " + file + " is not valid: " + oneLine(err.Error())
+	}
+	if len(sc.Workspaces) == 0 {
+		return nil, NotVerified, why + " and " + file + " names no workspace root"
+	}
+	return sc.Workspaces, "", ""
 }
 
 // inspectFolder looks at a workspace root without changing anything. A path
@@ -130,7 +165,7 @@ func (d Deps) folderCmds(f folder) []Cmd {
 func (d Deps) workspaceFoldersStep() Check {
 	return Check{
 		Name: "workspace-folders", Phase: PhaseHost, Step: 3, Title: "workspace folders exist, owned by the whr account, mode 0700 (manual step 3)",
-		Reach: d.needsConfigFile,
+		Reach: d.needsRoots,
 		Run: func(ctx context.Context) (Status, string) {
 			if d.GOOS != "darwin" || d.Runner == nil {
 				return NotVerified, "not checked: " + errNotHere.Error()
