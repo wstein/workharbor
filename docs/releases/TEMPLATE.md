@@ -7,7 +7,7 @@ summary to 4-6 lines. The comments are not rendered.
 
 - **Highlights:** the changes a user notices, with issue numbers.
 - **You can now:** what a user can do that they could not before.
-- **Known limits:** what is known broken or unverified; say "unverified" when it is.
+- **Known limits:** what is known broken or unverified; say "unverified" when it is (the first release with a new pipeline step lists it here; see the manual's release profile).
 - **Verify provenance:** `shasum -a 256 -c` on the archive (see Install); provenance is `whr_<tag>.intoto.jsonl`, checked with `gh attestation verify`.
 
 ## Install
