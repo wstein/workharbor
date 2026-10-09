@@ -10,6 +10,8 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 # non-zero exit into 1, and gitleaks itself exits 1 on any fatal error. Nothing
 # in the environment replaces the scanner; a test puts a fake go on the PATH.
 GITLEAKS_FOUND := 42
+# The one pin of actionlint: security.yml, check-ci, check-local and the pre-commit hook all run `make actionlint`.
+ACTIONLINT := github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 .DEFAULT_GOAL := build
 
@@ -189,11 +191,15 @@ lint:
 editorconfig:
 	go run $(EDITORCONFIG_CHECKER)
 
+# Lint the workflow files as CI does.
+actionlint:
+	go run $(ACTIONLINT)
+
 check: fmt-check vet lint editorconfig test race
 
 # Local mechanical gates; focused behaviour/regression evidence is reviewed
 # separately for the exact candidate. Full CI aggregates remain unchanged.
-check-local: fmt-check lint editorconfig check-hooks
+check-local: fmt-check lint editorconfig actionlint check-hooks
 
 # Check commits on this branch that are not on origin/main.
 commitlint:
@@ -225,7 +231,7 @@ release-snapshot:
 # workflows (actionlint). typos and lychee come from Homebrew
 # (brew install typos-cli lychee); the rest run through pinned `go run`.
 TYPOS_VERSION := 1.50.3
-check-ci: docs check-hooks check-generated
+check-ci: docs check-hooks check-generated actionlint
 	@command -v typos >/dev/null || { echo "typos is missing: brew install typos-cli (CI pins $(TYPOS_VERSION))" >&2; exit 1; }
 	@command -v lychee >/dev/null || { echo "lychee is missing: brew install lychee" >&2; exit 1; }
 	typos --config .config/typos.toml .
@@ -234,7 +240,6 @@ check-ci: docs check-hooks check-generated
 		'*.md' '.github/*.md' 'docs/content/**/*.md' 'design/**/*.md'
 	go run $(GITLEAKS) git --no-banner --redact --config .gitleaks.toml --log-opts=HEAD .
 	@m=$$(mktemp) && trap 'rm -f "$$m"' EXIT && scripts/messages.sh "" HEAD >"$$m" && go run $(GITLEAKS) stdin --no-banner --redact --config .gitleaks.toml <"$$m"
-	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 # The web UI's templates (internal/web/*.templ, D8) are compiled to Go by templ,
 # pinned here; the generated files are committed. check-generated fails when a

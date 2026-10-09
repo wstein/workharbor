@@ -10,3 +10,8 @@ unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL MAKEFILES
 # `command` itself), like PATH and --no-verify: the hooks guard the committer's
 # own machine against accidents, and CI scans too (#190).
 command make secrets-staged fmt-check lint editorconfig
+# Workflow files are linted as CI does (one pin, in the Makefile), only when
+# the commit stages one: any other commit pays nothing.
+if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
+    command make actionlint
+fi
