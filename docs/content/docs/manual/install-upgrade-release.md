@@ -45,7 +45,7 @@ tar -xzf "$f" &&
 sudo ./install.sh "$tag"
 ```
 
-The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable, and only warns about one that the user running it does not own (alpha policy, issue #493): the `workharbor` user must not be able to write the prefix. Once `gh` is installed, signed in, check who built the archive (a later check; the first install trusts the checksums and TLS):
+The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It warns, and goes on, about an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or that the user running it does not own (alpha policy, issues #493 and #504): whoever can write the prefix can replace the binary that root runs, so keep it writable by the administrator only. Once `gh` is installed, signed in, check who built the archive (a later check; the first install trusts the checksums and TLS):
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -55,7 +55,7 @@ gh attestation verify "$f" --repo wstein/workharbor \
   --deny-self-hosted-runners
 ```
 
-The tag of `install.sh <tag>` only names the version written to `<prefix>/libexec/whr/VERSION`; it is not checked against the archive. The unpacked mode checks no attestation and does not tie the tag to the archive: that is what the checksum step and the later `gh` check are for. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, checksum mismatch, downgrade, writable or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
+The tag of `install.sh <tag>` only names the version written to `<prefix>/libexec/whr/VERSION`; it is not checked against the archive. The unpacked mode checks no attestation and does not tie the tag to the archive: that is what the checksum step and the later `gh` check are for. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, checksum mismatch, downgrade, writable (warned) or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
 
 ### Verify a download yourself
 
@@ -87,12 +87,12 @@ Then, as `workharbor`, build the tool store with the guest launcher (the script 
 ### Development installation from source
 
 {{< status decided >}} Werner's development-source exception (issue #299) lets
-ordinary `make install` build from the clean current local `main`, including a
+ordinary `make install` build from the current local `main`, including a
 commit not yet published to `origin/main`. No extra install target or development
 flag is required. Before installing, obtain independent review of the exact
-commit you will build. The installer requires `HEAD` to equal `refs/heads/main`
-exactly and refuses a dirty tree or any different commit, including an older
-`main` commit, a topic commit or one ahead of local `main`. A detached checkout
+commit you will build. The installer expects `HEAD` to equal `refs/heads/main`
+exactly and warns about a dirty tree or any different commit, including an older
+`main` commit, a topic commit or one ahead of local `main` (alpha policy, issue #504). A detached checkout
 or a differently named branch at the identical current `main` commit passes;
 the branch label does not change the code being installed. Equality with a local
 ref cannot prove that a review took place. The
@@ -114,8 +114,9 @@ Alpha policy (issue #493): where the prefix lies and who owns it do not refuse
 the install. A prefix in `/opt/whr`, `/opt/homebrew` or `/usr/local`, in another
 Git working tree, or not owned by you or open to group and other writers prints
 a warning on standard error and goes on; this is revisited at beta
-{{< status unverified >}} on a real host. The origin rules stay: `HEAD` must equal the
-local `main` and the tree must be clean, and root must use `make install-release`.
+{{< status unverified >}} on a real host. A dirty tree or a `HEAD` that is not the
+local `main` prints a warning too (issue #504): what gets installed is then not a
+reviewed commit. Root must still use `make install-release`.
 `make install DESTDIR=/absolute/stage` stages the install: every file is written
 under `$DESTDIR$PREFIX`, and nothing is written at the real `PREFIX`. `DESTDIR`
 must be an existing absolute, clean directory path (no trailing slash, no `.`
