@@ -7,7 +7,7 @@ toc: true
 
 ## Installing Homebrew from setup (#491)
 
-**Status:** proposed, awaiting the maintainer's decision. **D-row:** to be assigned by the design lane. Nothing is implemented; this page records the options so the human can decide. Claims about Homebrew, the Command Line Tools (CLT) and macOS were not measured on this host and are marked {{< status unverified >}}; sources are Homebrew's [installation page](https://docs.brew.sh/Installation) and [FAQ](https://docs.brew.sh/FAQ).
+**Status:** {{< status decided >}} option C (D59; Werner's decision of 2026-10-09, issue #505), built as `whr setup host --only homebrew` in a4d798c8. The page keeps the options as they were weighed. Claims about Homebrew, the Command Line Tools (CLT) and macOS were not measured on this host and are marked {{< status unverified >}}; sources are Homebrew's [installation page](https://docs.brew.sh/Installation) and [FAQ](https://docs.brew.sh/FAQ).
 
 ### Context
 
