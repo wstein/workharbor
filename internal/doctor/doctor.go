@@ -139,7 +139,10 @@ type Deps struct {
 	Whr     string // the running whr binary
 	Prefix  string // the selected installation prefix, "/opt/whr" by default
 	Brewing string // the Brewfile's text; empty means the one in this package
-	Yes     bool   // `whr setup --yes`: take the default of a choice, never a destructive option
+	// Download fetches a small file over HTTPS for the Homebrew step; nil uses
+	// net/http. Tests pass a fake.
+	Download func(ctx context.Context, url string) ([]byte, error)
+	Yes      bool // `whr setup --yes`: take the default of a choice, never a destructive option
 }
 
 // VendorTerms is where the manual explains a subscription login (D40).

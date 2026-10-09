@@ -1121,6 +1121,9 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 	if err := Interrupted(ctx, r.h); err != nil { // Ctrl-C came during the question: Do and Build never start
 		return res, err
 	}
+	if f.Cleanup != nil {
+		defer f.Cleanup()
+	}
 	if f.Do != nil {
 		if err := f.Do(ctx, r.p); err != nil {
 			return res, err
