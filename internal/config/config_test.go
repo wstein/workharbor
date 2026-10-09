@@ -8,7 +8,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/policy"
 )
@@ -544,5 +546,23 @@ func TestNaturalLessOrdersIndexesNumerically(t *testing.T) {
 	want := []string{"api_clients[1]: x", "api_clients[2]: x", "api_clients[10]: x", "api_token_file: x"}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// A FIFO named as the configuration must not hang the process (#493).
+func TestLoadDoesNotHangOnAFIFO(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "config.json")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skip(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := Load(fifo); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("a FIFO loaded as a configuration")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Load hangs on a FIFO")
 	}
 }

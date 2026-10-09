@@ -444,7 +444,8 @@ func (e *Error) Error() string {
 // Load reads and validates the file at path. The error is an *Error for a
 // configuration problem and an ordinary error for an unreadable file.
 func Load(path string) (*Config, error) {
-	f, err := os.Open(path) //nolint:gosec // the operator names the config file
+	// O_NONBLOCK: opening a FIFO must not wait for a writer
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // the operator names the config file
 	if err != nil {
 		return nil, err
 	}
