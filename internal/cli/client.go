@@ -66,10 +66,23 @@ type Client struct {
 // web UI's address (only `whr github app create` uses it): the API is on a unix
 // socket in the state directory (D29, §7.5).
 type ClientConfig struct {
-	Listen       string `json:"listen"`
-	APITokenFile string `json:"api_token_file"`
-	StateDir     string `json:"state_dir"`
-	PublicURL    string `json:"public_url"`
+	Listen       string        `json:"listen"`
+	APITokenFile string        `json:"api_token_file"`
+	StateDir     string        `json:"state_dir"`
+	PublicURL    lenientString `json:"public_url"`
+}
+
+// lenientString decodes a JSON string and leaves any other value empty, so a
+// malformed public_url cannot make every client command fail; `whr serve`
+// validates the whole file.
+type lenientString string
+
+func (l *lenientString) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*l = lenientString(s)
+	}
+	return nil
 }
 
 // ReadClientConfig reads listen, api_token_file and state_dir from the
