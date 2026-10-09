@@ -7,7 +7,7 @@ toc: true
 
 ## `zsh: killed` with no output
 
-Running `whr` (for example `whr --dev setup host`) prints only `zsh: killed`. The suspected cause is a macOS code signature that is invalid or stale after the binary was copied or rewritten in place over a previous one. That cause is {{< status unverified >}} until `codesign -v` and `xattr -l` output from the affected host confirms it (issue #393). Check the binary:
+Running `whr` (for example `whr setup host`) prints only `zsh: killed`. The suspected cause is a macOS code signature that is invalid or stale after the binary was copied or rewritten in place over a previous one. That cause is {{< status unverified >}} until `codesign -v` and `xattr -l` output from the affected host confirms it (issue #393). Check the binary:
 
 ```text
 codesign -v <path>     # no output and exit 0 means the signature is valid
