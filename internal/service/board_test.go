@@ -19,7 +19,7 @@ func TestTaskStatesMapToBoardStatuses(t *testing.T) {
 	for state, want := range map[domain.TaskState]string{
 		domain.TaskAwaitingGuidance: forge.StatusNeedsYou,
 		domain.TaskRunning:          forge.StatusInProgress,
-		domain.TaskReadyForReview:   forge.StatusReadyToPush,
+		domain.TaskReadyForReview:   forge.StatusNeedsYou,
 		domain.TaskCompleted:        forge.StatusDone,
 		domain.TaskFailed:           forge.StatusNeedsYou, // a human has to look
 		domain.TaskCancelled:        forge.StatusTodo,     // no card stays In progress for a stopped task
@@ -138,9 +138,9 @@ func TestTheCardNamesTheAgent(t *testing.T) {
 	a := domain.NewTaskAggregate(domain.Task{ID: "t7", Repo: "wstein/workharbor", Issue: "#7", AgentID: "a9", State: domain.TaskRunning, CreatedAt: t0})
 	_, err = r.store.SaveTask(bg, a)
 	must(t, err)
-	must(t, r.svc.writeCard(boardJob{task: "t7", status: forge.StatusReadyToPush}))
+	must(t, r.svc.writeCard(boardJob{task: "t7", status: forge.StatusNeedsYou}))
 	got := fake.CardsSeen()
-	if len(got) != 1 || got[0].Update.Session != "docs-ws/runtime" || got[0].Update.Status != forge.StatusReadyToPush || got[0].Issue != 7 {
+	if len(got) != 1 || got[0].Update.Session != "docs-ws/runtime" || got[0].Update.Status != forge.StatusNeedsYou || got[0].Issue != 7 {
 		t.Errorf("cards %+v", got)
 	}
 }

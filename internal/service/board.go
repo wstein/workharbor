@@ -21,7 +21,7 @@ func boardStatus(state domain.TaskState) string {
 	case domain.TaskRunning:
 		return forge.StatusInProgress
 	case domain.TaskReadyForReview:
-		return forge.StatusReadyToPush
+		return forge.StatusNeedsYou // a human has to review (D30)
 	case domain.TaskCompleted:
 		return forge.StatusDone
 	case domain.TaskFailed:

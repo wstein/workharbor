@@ -74,7 +74,7 @@ func (b *fakeBoard) handler(t *testing.T, f *fakeGitHub) func(http.ResponseWrite
 					map[string]any{"id": "F-status", "name": "Status", "dataType": "SINGLE_SELECT", "options": []map[string]string{
 						{"id": "O-needs", "name": "Needs you"},
 						{"id": "O-prog", "name": "In progress"},
-						{"id": "O-ready", "name": "Ready to push"},
+						{"id": "O-ready", "name": "Ready to push"}, // an old board keeps its unused option
 						{"id": "O-done", "name": "Done"},
 					}},
 					session,
@@ -317,7 +317,7 @@ func TestCheckBoardReadsTheProjectWithoutWriting(t *testing.T) {
 		t.Errorf("fields the project lacks: %+v, %v", rep, err)
 	}
 	c3, _, _ := boardRig(t, func(_ *fakeBoard, cfg *Config) { cfg.Board.StatusField = "Stage" })
-	if rep, err := c3.CheckBoard(bg); err != nil || len(rep.MissingStatuses) != 4 {
+	if rep, err := c3.CheckBoard(bg); err != nil || len(rep.MissingStatuses) != 3 {
 		t.Errorf("no status field: %+v, %v", rep, err)
 	}
 }
