@@ -28,7 +28,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "refusing source install:", err)
 		os.Exit(1)
 	}
-	fmt.Fprintln(os.Stderr, "development installation: user-writable supervisor from current local main; obtain independent review of this exact commit before installing; use setup --dev (never the managed dogfood or reference host)")
+	fmt.Fprintln(os.Stderr, "development installation: user-writable supervisor from current local main; obtain independent review of this exact commit before installing; then run whr setup --prefix <dir> (never the managed dogfood or reference host)")
 }
 
 func git(dir string, args ...string) (string, error) {
@@ -79,11 +79,6 @@ func check(prefix, destdir string) error {
 			return fmt.Errorf("DESTDIR must be an existing directory")
 		}
 	}
-	for _, managed := range []string{"/opt/whr", "/opt/homebrew", "/usr/local"} {
-		if prefix == managed || strings.HasPrefix(prefix, managed+string(filepath.Separator)) || within(prefix, managed) {
-			return fmt.Errorf("managed prefix requires signed install-release")
-		}
-	}
 	stage, staged := prefix, false
 	if destdir != "" {
 		stage = destdir + prefix
@@ -119,7 +114,7 @@ func check(prefix, destdir string) error {
 	}
 	for _, managed := range []string{"/opt/whr", "/opt/homebrew", "/usr/local"} {
 		if within(resolved, managed) {
-			return fmt.Errorf("managed prefix requires signed install-release")
+			fmt.Fprintf(os.Stderr, "warning: %s is a managed location; alpha policy (#493) allows a source install there, revisit at beta\n", resolved)
 		}
 	}
 	home := os.Getenv("HOME")
@@ -136,9 +131,7 @@ func check(prefix, destdir string) error {
 	if err != nil || !pi.IsDir() {
 		return fmt.Errorf("development prefix must be a directory")
 	}
-	if err := owned(resolved, pi); err != nil {
-		return err
-	}
+	warnOwner(resolved, pi)
 	if err := syscall.Access(resolved, 2); err != nil {
 		return fmt.Errorf("development prefix is not writable: %w", err)
 	}
@@ -191,7 +184,7 @@ func check(prefix, destdir string) error {
 	// configuration: walk directory entries instead of executing git there.
 	for p := resolved; ; p = filepath.Dir(p) {
 		if _, err := os.Lstat(filepath.Join(p, ".git")); err == nil {
-			return fmt.Errorf("development prefix must be outside Git working trees")
+			fmt.Fprintf(os.Stderr, "warning: %s is inside the Git working tree %s; alpha policy (#493), revisit at beta\n", resolved, p)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("cannot inspect prefix Git ancestry: %w", err)
 		}
@@ -219,9 +212,7 @@ func check(prefix, destdir string) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("install destination %s is a symlink", rel)
 		}
-		if err := owned(path, info); err != nil {
-			return err
-		}
+		warnOwner(path, info)
 		directory := rel == "bin" || rel == "libexec" || rel == "libexec/whr"
 		if directory && !info.IsDir() {
 			return fmt.Errorf("install destination %s must be a directory", rel)
@@ -233,10 +224,11 @@ func check(prefix, destdir string) error {
 	return nil
 }
 
-func owned(path string, info os.FileInfo) error {
+// warnOwner says, and does not refuse, that a destination is not user-owned or
+// is open to group or other writers (alpha policy, #493; revisited at beta).
+func warnOwner(path string, info os.FileInfo) {
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || int(st.Uid) != os.Getuid() || info.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("development destination %s must be user-owned and closed to group and other writers", path)
+		fmt.Fprintf(os.Stderr, "warning: %s is not user-owned or is open to group or other writers; alpha policy (#493), revisit at beta\n", path)
 	}
-	return nil
 }

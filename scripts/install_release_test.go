@@ -401,9 +401,9 @@ func TestASymlinkedWritablePrefixIsRefused(t *testing.T) {
 	}
 }
 
-// A prefix not owned by the installing user is refused; a fake id stands in for
-// another user, as the real setup needs root.
-func TestAPrefixOfAnotherOwnerIsRefused(t *testing.T) {
+// A prefix not owned by the installing user is accepted with a warning in the
+// alpha (#493); a fake id stands in for another user, as the real setup needs root.
+func TestAPrefixOfAnotherOwnerWarns(t *testing.T) {
 	t.Parallel()
 	r := newRelease(t, "0.2.0", "")
 	if err := os.MkdirAll(r.prefix, 0o755); err != nil { //nolint:gosec // a test dir
@@ -413,8 +413,8 @@ func TestAPrefixOfAnotherOwnerIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := r.run(t, "v0.2.0", r.prefix)
-	if err == nil || !strings.Contains(out, "not owned by uid 4242") {
-		t.Fatalf("a prefix of another owner was accepted: %v\n%s", err, out)
+	if err != nil || !strings.Contains(out, "not owned by uid 4242") {
+		t.Fatalf("a prefix of another owner was refused or not reported: %v\n%s", err, out)
 	}
 }
 

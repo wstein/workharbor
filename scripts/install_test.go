@@ -282,22 +282,7 @@ func TestSourceInstallRejectsUnsafeInputs(t *testing.T) {
 		{"home-prefix", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = s.home }},
 		{"home-ancestor", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = filepath.Dir(s.home) }},
 		{"root-prefix", "ancestor of HOME", func(_ *testing.T, s *sourceInstall) { s.prefix = "/" }},
-		{"managed-unpublished", "signed install-release", func(_ *testing.T, s *sourceInstall) { s.prefix = "/opt/whr" }},
-		{"managed-alias", "signed install-release", func(t *testing.T, s *sourceInstall) {
-			s.prefix = filepath.Join(s.home, "managed")
-			if err := os.Symlink("/usr/local", s.prefix); err != nil {
-				t.Fatal(err)
-			}
-		}},
-		{"managed-descendant-alias", "signed install-release", func(t *testing.T, s *sourceInstall) {
-			if _, err := os.Stat("/usr/local/bin"); err != nil {
-				t.Skip("no existing managed descendant")
-			}
-			s.prefix = filepath.Join(s.home, "managed-bin")
-			if err := os.Symlink("/usr/local/bin", s.prefix); err != nil {
-				t.Fatal(err)
-			}
-		}},
+		{"missing-prefix", "must already exist", func(_ *testing.T, s *sourceInstall) { s.prefix = "/whr-493-no-such-prefix" }},
 		{"binary-directory", "regular single-link file", func(t *testing.T, s *sourceInstall) {
 			if err := os.MkdirAll(filepath.Join(s.prefix, "bin", "whr"), 0o700); err != nil {
 				t.Fatal(err)
@@ -409,7 +394,7 @@ func TestSourceInstallDestdirStagesUnderDestdirOnly(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(s.repo, "newprefix")); !os.IsNotExist(err) {
 		t.Errorf("install escaped DESTDIR through the symlink: %v", err)
 	}
-	// A real checkout below DESTDIR is where mkdir -p would write: refused.
+	// A real checkout below DESTDIR: accepted with a warning (alpha policy, #493).
 	inner := t.TempDir()
 	if err := os.Mkdir(filepath.Join(inner, "repo"), 0o700); err != nil {
 		t.Fatal(err)
@@ -417,15 +402,31 @@ func TestSourceInstallDestdirStagesUnderDestdirOnly(t *testing.T) {
 	s.git(t, "-C", filepath.Join(inner, "repo"), "init", "-q")
 	cmd = exec.CommandContext(context.Background(), "make", "install", "PREFIX=/repo/newprefix", "DESTDIR="+inner) //nolint:gosec // fixture-controlled arguments, no shell
 	cmd.Dir, cmd.Env = s.repo, s.env
-	if out, err := cmd.CombinedOutput(); err == nil {
-		t.Errorf("a Git working tree below DESTDIR must be refused:\n%s", out)
-	}
-	if _, err := os.Lstat(filepath.Join(inner, "repo", "newprefix")); !os.IsNotExist(err) {
-		t.Errorf("install wrote into the checkout below DESTDIR: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "inside the Git working tree") {
+		t.Errorf("a Git working tree below DESTDIR must install with a warning: %v\n%s", err, out)
 	}
 	for _, bad := range []string{"relative/dir", destdir + "/", "/", filepath.Join(destdir, "missing")} {
 		if out, err := run("DESTDIR=" + bad); err == nil {
 			t.Errorf("DESTDIR=%q must be refused:\n%s", bad, out)
 		}
+	}
+}
+
+// Where the prefix lies and who owns it do not refuse a source install in the
+// alpha (#493): a prefix in another Git working tree installs with a warning.
+func TestSourceInstallWarnsAboutAPrefixInAnotherWorkingTree(t *testing.T) {
+	s := newSourceInstall(t)
+	other := filepath.Join(s.home, "other")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s.git(t, "-C", other, "init", "-q")
+	s.prefix = other
+	out, err := s.install(t)
+	if err != nil || !strings.Contains(out, "inside the Git working tree") {
+		t.Fatalf("err %v, want a warning:\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(other, "bin", "whr")); err != nil {
+		t.Errorf("not installed: %v", err)
 	}
 }

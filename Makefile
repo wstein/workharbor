@@ -95,7 +95,7 @@ install: check-install-source
 	mv -f "$$tmplib/whr-shim-linux-arm64" "$$lib/whr-shim-linux-arm64"; \
 	mv -f "$$tmplib/whr-proxy-linux-arm64" "$$lib/whr-proxy-linux-arm64"
 	@version=$$($(call install-quote,$(DESTDIR)$(PREFIX)/bin/whr) version) || { echo "the installed whr did not run (zsh shows 'killed' with no output when macOS rejects its signature): run codesign -v and xattr -l on $(PREFIX)/bin/whr, see the troubleshooting page, then rebuild with make install" >&2; exit 1; }; printf 'installed whr %s, whr-shim and whr-proxy (linux-arm64) under %s\n' "$$version" $(call install-quote,$(PREFIX))
-	@printf '%s\n' $(call install-quote,development setup: $(PREFIX)/bin/whr setup --dev --prefix $(PREFIX) --user <your-account> (user-writable supervisor; see the installation manual))
+	@printf '%s\n' $(call install-quote,development setup: $(PREFIX)/bin/whr setup --prefix $(PREFIX) --user <your-account> (user-writable supervisor, the doctor warns; see the installation manual))
 	@printf '%s\n' $(call install-quote,next: $(PREFIX)/bin/whr tools build -store <tool store> -shim $(PREFIX)/libexec/whr/whr-shim-linux-arm64)
 
 # Install a release, a dogfood draft included (D24, D34), as the administrator
