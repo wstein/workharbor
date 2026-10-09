@@ -16,7 +16,7 @@ Most commands accept `--config <file>` (default `$WHR_CONFIG`, then `~/.config/w
 - `whr ssh` prints no envelope in any mode and ignores `--json`. Its own `--config` is a different flag: it prints a `~/.ssh/config` block (below) and does not name a configuration file, so `whr ssh --proxy` and `--refresh` cannot be pointed at a configuration file with `--config`: they use `$WHR_CONFIG`, or `~/.config/whr/config.json` when that is unset, and the `ProxyCommand` that `whr ssh --config` prints never passes `--config`.
 - `whr console` without `--status` or `--close` opens an interactive shell and prints no envelope.
 - `whr completion` (the shell completion scripts, with `bash`, `zsh`, `fish` and `powershell`) and `whr help` print a script or the help text, not an envelope.
-- `whr setup`, `whr setup host` and `whr service uninstall` print no envelope. `whr service install` prints the path of the plist as plain text.
+- `whr setup` and `whr service uninstall` print no envelope. `whr service install` prints the path of the plist as plain text.
 
 ## Check first: `whr doctor`
 
@@ -31,8 +31,8 @@ for the alpha policy and the service behavior.
 
 Two wizards, each checking a step first, showing the exact commands of its fix and running them only after you answer `y`:
 
-- `whr setup host`, as your administrator account (run `/opt/whr/bin/whr setup host`, because `/opt/whr/bin` is not on its `PATH`): the base configuration (`config-first`), the `workharbor` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), Homebrew, the Brewfile packages, the `/opt/whr` prefix, the system config, the workspace folders and the workspace volume.
-- `whr setup`, as `workharbor` in its desktop session, not over SSH: the container system, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo), the base configuration.
+- `whr setup`, as your administrator account (run `/opt/whr/bin/whr setup`, because `/opt/whr/bin` is not on its `PATH`): the base configuration (`config-first`), the `workharbor` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), Homebrew, the Brewfile packages, the `/opt/whr` prefix, the system config, the workspace folders and the workspace volume.
+- `whr setup` again, as `workharbor` in its desktop session, not over SSH: the container system, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo).
 
 `--dry-run` runs the read-only checks and prints every fix without running one. `--only <step>` and `--from <step>` choose steps. Secrets are written with mode `0600` and never printed.
 
