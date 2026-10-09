@@ -343,7 +343,7 @@ func (c *Client) CheckBoard(ctx context.Context) (BoardReport, error) {
 	statusName, sessionName, linkName := b.fields()
 	var rep BoardReport
 	status, ok := fields[strings.ToLower(statusName)]
-	for _, want := range []string{forge.StatusNeedsYou, forge.StatusInProgress, forge.StatusReadyToPush, forge.StatusDone} {
+	for _, want := range []string{forge.StatusNeedsYou, forge.StatusInProgress, forge.StatusDone} {
 		if !ok || status.DataType != "SINGLE_SELECT" || status.Options[want] == "" {
 			rep.MissingStatuses = append(rep.MissingStatuses, want)
 		}
