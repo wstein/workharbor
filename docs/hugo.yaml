@@ -9,6 +9,8 @@ module:
       target: static
     - source: ../internal/api/openapi.json
       target: static/openapi.json
+    - source: ../schemas
+      target: static/schemas
     - source: assets
       target: assets
     - source: ../internal/api/openapi.json
