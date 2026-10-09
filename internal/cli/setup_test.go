@@ -565,7 +565,7 @@ func TestTheHostPartWarnsWhenTheAccountCannotSudo(t *testing.T) {
 	if code == exitcode.OK || code == exitcode.Usage {
 		t.Errorf("non-admin: exit %d, stderr %q", code, errOut)
 	}
-	for _, want := range []string{"cannot sudo", "sudo pmset", "an administrator"} {
+	for _, want := range []string{"cannot sudo", "sudo pmset", "an administrator", "need an administrator (sudo)", "this run is not complete"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("non-admin: stderr lacks %q: %q", want, errOut)
 		}
