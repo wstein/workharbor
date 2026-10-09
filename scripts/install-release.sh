@@ -146,9 +146,9 @@ if [ "$unpacked" -eq 1 ]; then
     echo "install: the tag $tag matches $archive next to the script (checksum ok); installing the files of that archive" >&2
   else
     echo "install: no checksums.txt next to the script: the tag $tag is not checked against the archive" >&2
+    root="$here"
   fi
   echo "install: from the unpacked archive in $here (with gh, verify its attestation before running this script)" >&2
-  [ -n "${root:-}" ] || root="$here"
 else
 if [ -n "${WHR_RELEASE_DIR:-}" ]; then
   for f in "$archive" checksums.txt; do
