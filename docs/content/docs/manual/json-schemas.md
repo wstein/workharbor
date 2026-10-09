@@ -1,7 +1,7 @@
 ---
 title: JSON Schemas
 description: Provisional JSON Schemas for config.json and the devcontainer customizations.workharbor block, for editor completion.
-weight: 13
+weight: 19
 toc: true
 ---
 
