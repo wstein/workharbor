@@ -441,7 +441,16 @@ func TestBoardSnapshotConfigureFieldsIndependentOfViews(t *testing.T) {
 	}
 }
 
+var defaultStatuses = []string{"Todo", "In progress", "Blocked", "In review", "Done"}
+
 func sessionSchemaFixture(t *testing.T, options string) board {
+	t.Helper()
+	return sessionSchemaFixtureWithStatuses(t, options, defaultStatuses)
+}
+
+// sessionSchemaFixtureWithStatuses gives the Status field the named options as
+// status-0, status-1, ... in order.
+func sessionSchemaFixtureWithStatuses(t *testing.T, options string, statusNames []string) board {
 	t.Helper()
 	fixture := newSchemaBoard(t)
 	path := filepath.Join(fixture.bin, "schema.json")
@@ -462,7 +471,7 @@ func sessionSchemaFixture(t *testing.T, options string) board {
 		current := field.(map[string]any)
 		if current["name"] == "Status" {
 			statuses := []map[string]any{}
-			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Done"} {
+			for index, name := range statusNames {
 				statuses = append(statuses, map[string]any{"id": "status-" + strconv.Itoa(index), "name": name, "color": "GRAY", "description": ""})
 			}
 			current["options"] = statuses
@@ -1062,10 +1071,10 @@ func TestBoardSnapshotMoveRefusesDone(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := b.calls(t)
-	for _, st := range []string{"Done", "Ready to push"} {
+	for st, want := range map[string]string{"Done": "does not set", "Ready to push": "status must be one of"} {
 		_, se, err := b.run(t, "move", "20", st)
-		if err == nil || se == "" {
-			t.Fatalf("move %q: err %v, stderr %q; want a refusal", st, err, se)
+		if err == nil || !strings.Contains(se, want) {
+			t.Fatalf("move %q: err %v, stderr %q; want a refusal saying %q", st, err, se, want)
 		}
 	}
 	if b.calls(t) != base {
@@ -1512,38 +1521,50 @@ func TestBoardSnapshotSyncRefusesAStaleSnapshot(t *testing.T) {
 
 func TestBoardSnapshotConfigureToleratesLegacyReadyToPush(t *testing.T) {
 	t.Parallel()
-	fixture := sessionSchemaFixture(t, `[{"id":"s-werner","name":"Werner","color":"GRAY","description":"Human maintainer"}]`)
-	path := filepath.Join(fixture.bin, "schema.json")
-	data, err := os.ReadFile(path) //nolint:gosec // a test fixture path
-	if err != nil {
-		t.Fatal(err)
-	}
-	var state map[string]any
-	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatal(err)
-	}
-	for _, field := range state["fields"].([]any) {
-		current := field.(map[string]any)
-		if current["name"] == "Status" {
-			statuses := []map[string]any{}
-			for index, name := range []string{"Todo", "In progress", "Blocked", "In review", "Ready to push", "Done"} {
-				statuses = append(statuses, map[string]any{"id": "status-" + strconv.Itoa(index), "name": name, "color": "GRAY", "description": ""})
-			}
-			current["options"] = statuses
-		}
-	}
-	updated, err := json.Marshal(state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, updated, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	legacy := []string{"Todo", "In progress", "Blocked", "In review", "Ready to push", "Done"}
+	fixture := sessionSchemaFixtureWithStatuses(t, `[{"id":"s-werner","name":"Werner","color":"GRAY","description":"Human maintainer"}]`, legacy)
 	stdout, stderr, err := fixture.runEnv(t, schemaEnv(fixture), "configure", "PVT_crewbook")
 	if err != nil {
 		t.Fatalf("configure on a board that still has the option: %v %s", err, stderr)
 	}
 	if !strings.Contains(stdout, `"Ready to push"`) {
 		t.Fatalf("legacy option was dropped: %s", stdout)
+	}
+	// The option IDs survive in order: status-0..5, so no card loses its Status.
+	data, err := os.ReadFile(filepath.Join(fixture.bin, "schema.json")) //nolint:gosec // a test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state struct {
+		Fields []struct {
+			ID      string
+			Name    string
+			Options []struct{ ID, Name string }
+		}
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range state.Fields {
+		if field.Name != "Status" {
+			continue
+		}
+		if len(field.Options) != len(legacy) {
+			t.Fatalf("Status options changed: %+v", field.Options)
+		}
+		for index, option := range field.Options {
+			if option.ID != "status-"+strconv.Itoa(index) || option.Name != legacy[index] {
+				t.Errorf("Status option %d is %+v; want status-%d %q", index, option, index, legacy[index])
+			}
+		}
+	}
+	logged, err := os.ReadFile(fixture.log) //nolint:gosec // a test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(logged), "\n") {
+		if strings.Contains(line, "updateProjectV2Field") && strings.Contains(line, `"fieldId":"F_status"`) {
+			t.Errorf("configure rewrote the Status field: %s", line)
+		}
 	}
 }
