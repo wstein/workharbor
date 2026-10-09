@@ -588,3 +588,148 @@ func TestAnOldLayoutArchiveIsNamed(t *testing.T) {
 		t.Errorf("the old layout was not named: %v\n%s", err, out)
 	}
 }
+
+// unpacked extracts the archive of a release the way the notes do (tar -xzf in the
+// download folder) and returns the folder: the script next to bin/, guest/, the
+// archive and checksums.txt.
+func (r release) unpacked(t *testing.T, withSums bool) string {
+	t.Helper()
+	const version = "0.2.0"
+	root := t.TempDir()
+	mac := "whr_" + version + "_darwin_arm64.tar.gz"
+	b, err := os.ReadFile(filepath.Join(r.dir, mac)) //nolint:gosec // a test path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, mac), b, 0o600); err != nil { //nolint:gosec // a test path
+		t.Fatal(err)
+	}
+	if withSums {
+		sums, _ := os.ReadFile(filepath.Join(r.dir, "checksums.txt"))                           //nolint:gosec // a test path
+		if err := os.WriteFile(filepath.Join(root, "checksums.txt"), sums, 0o600); err != nil { //nolint:gosec // a test path
+			t.Fatal(err)
+		}
+	}
+	for name, body := range map[string]string{"bin/whr": "#!/bin/sh\necho v" + version + " abc\n", "guest/whr-shim-linux-arm64": "x", "guest/whr-proxy-linux-arm64": "y"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o700); err != nil { //nolint:gosec // an executable test fake
+			t.Fatal(err)
+		}
+	}
+	script, err := os.ReadFile("install-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "install.sh"), script, 0o700); err != nil { //nolint:gosec // the installer under test
+		t.Fatal(err)
+	}
+	return root
+}
+
+func (r release) runUnpacked(t *testing.T, root, script string) (string, error) {
+	t.Helper()
+	return bash(t, []string{"PATH=" + r.bin + ":" + os.Getenv("PATH")}, "cd '"+root+"' && "+script)
+}
+
+func (r release) versionFile() string {
+	return filepath.Join(r.prefix, "libexec", "whr", "VERSION")
+}
+
+// With the archive and checksums.txt next to install.sh, the matching tag installs.
+func TestUnpackedTagMatchingTheArchivePasses(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, true)
+	out, err := r.runUnpacked(t, root, "./install.sh v0.2.0 "+r.prefix)
+	if err != nil || !strings.Contains(out, "matches whr_0.2.0_darwin_arm64.tar.gz") {
+		t.Fatalf("a matching tag was refused: %v\n%s", err, out)
+	}
+	if v, err := os.ReadFile(r.versionFile()); err != nil || string(v) != "v0.2.0\n" {
+		t.Errorf("VERSION = %q, %v", v, err)
+	}
+}
+
+// A tag that names another archive than the one next to the script is refused and
+// writes neither files nor VERSION.
+func TestUnpackedWrongTagIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "v0.2.0")
+	root := r.unpacked(t, true)
+	out, err := r.runUnpacked(t, root, "./install.sh v0.3.0 "+r.prefix)
+	if err == nil || !strings.Contains(out, "does not match the downloaded archive") {
+		t.Fatalf("a wrong tag was accepted: %v\n%s", err, out)
+	}
+	if v, _ := os.ReadFile(r.versionFile()); string(v) != "v0.2.0\n" {
+		t.Errorf("VERSION was changed to %q", v)
+	}
+}
+
+// The archive next to the script must match its checksums.txt line.
+func TestUnpackedTamperedArchiveIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, true)
+	if err := os.WriteFile(filepath.Join(root, "whr_0.2.0_darwin_arm64.tar.gz"), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.runUnpacked(t, root, "./install.sh v0.2.0 "+r.prefix)
+	if err == nil || !strings.Contains(out, "does not match checksums.txt") {
+		t.Fatalf("a tampered archive was accepted: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(r.versionFile()); err == nil {
+		t.Error("VERSION was written")
+	}
+}
+
+// Without checksums.txt next to the script the tag cannot be checked: behaviour as
+// before, with a note.
+func TestUnpackedWithoutChecksumsSaysTheTagIsUnchecked(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, false)
+	out, err := r.runUnpacked(t, root, "./install.sh v0.2.0 "+r.prefix)
+	if err != nil || !strings.Contains(out, "is not checked against the archive") {
+		t.Fatalf("install without checksums.txt: %v\n%s", err, out)
+	}
+}
+
+// Unpacked mode does not refuse a writable prefix in the alpha (#493, #504): it
+// installs and warns, as the download mode does.
+func TestUnpackedWritablePrefixWarns(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, true)
+	if err := os.MkdirAll(r.prefix, 0o755); err != nil { //nolint:gosec // widened below
+		t.Fatal(err)
+	}
+	if err := os.Chmod(r.prefix, 0o775); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	out, err := r.runUnpacked(t, root, "./install.sh v0.2.0 "+r.prefix)
+	if err != nil || !strings.Contains(out, "warning: "+r.prefix+" is group- or world-writable") {
+		t.Fatalf("a writable prefix was refused or not reported: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(r.prefix, "bin", "whr")); err != nil {
+		t.Errorf("nothing was installed: %v", err)
+	}
+}
+
+// Piped into bash there is no BASH_SOURCE: the script then looks at the current
+// directory, and switches to unpacked mode when it holds bin/whr and guest/.
+func TestPipedScriptUsesUnpackedModeInAnUnpackedDirectory(t *testing.T) {
+	t.Parallel()
+	r := newRelease(t, "0.2.0", "")
+	root := r.unpacked(t, true)
+	out, err := r.runUnpacked(t, root, "cat install.sh | bash -s -- v0.2.0 "+r.prefix)
+	if err != nil || !strings.Contains(out, "from the unpacked archive in ") {
+		t.Fatalf("piped install: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(r.ghlog); err == nil {
+		t.Error("gh was called: the piped script did not use the unpacked mode")
+	}
+	if _, err := os.Stat(filepath.Join(r.prefix, "libexec", "whr", "whr-shim-linux-arm64")); err != nil {
+		t.Errorf("nothing was installed: %v", err)
+	}
+}
