@@ -752,3 +752,21 @@ func TestUnpackedInstallsTheArchiveNotTheStrayTree(t *testing.T) {
 		t.Errorf("the stray tree was installed:\n%s", b)
 	}
 }
+
+// An exported root in the caller's environment never decides where the files come
+// from: the loose tree without checksums.txt, the archive with it.
+func TestUnpackedIgnoresAnExportedRoot(t *testing.T) {
+	t.Parallel()
+	for _, withSums := range []bool{false, true} {
+		r := newRelease(t, "0.2.0", "")
+		root := r.unpacked(t, withSums)
+		elsewhere := t.TempDir()
+		out, err := bash(t, []string{"PATH=" + r.bin + ":" + os.Getenv("PATH"), "root=" + elsewhere}, "cd '"+root+"' && ./install.sh v0.2.0 "+r.prefix)
+		if err != nil {
+			t.Fatalf("withSums=%v: %v\n%s", withSums, err, out)
+		}
+		if b, _ := os.ReadFile(filepath.Join(r.prefix, "bin", "whr")); !strings.Contains(string(b), "v0.2.0") { //nolint:gosec // a test path
+			t.Errorf("withSums=%v: wrong whr installed:\n%s", withSums, b)
+		}
+	}
+}
