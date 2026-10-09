@@ -24,6 +24,16 @@ var (
 	siteErr  error
 )
 
+// TestMain removes the site this package built itself; a site given with
+// -docs-site belongs to the caller and stays.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if siteDir != "" {
+		_ = os.RemoveAll(siteDir)
+	}
+	os.Exit(code)
+}
+
 // builtSite returns the already built site of -docs-site, else builds it once
 // for all tests of this package.
 func builtSite(t *testing.T) string {
