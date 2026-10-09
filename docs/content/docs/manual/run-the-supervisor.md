@@ -1,7 +1,7 @@
 ---
 title: Run the supervisor
 description: Start whr serve as a service, make workspaces and agents, set up passkeys, and check the host with whr doctor.
-weight: 2
+weight: 4
 toc: true
 ---
 
@@ -31,7 +31,7 @@ for the alpha policy and the service behavior.
 
 Two wizards, each checking a step first, showing the exact commands of its fix and running them only after you answer `y`:
 
-- `whr setup host`, as your administrator account: the `workharbor` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), the workspace volume.
+- `whr setup host`, as your administrator account (run `/opt/whr/bin/whr setup host`, because `/opt/whr/bin` is not on its `PATH`): the base configuration (`config-first`), the `workharbor` user, power settings, firewall, SSH, FileVault (guided), automatic log-out (guided), Homebrew, the Brewfile packages, the `/opt/whr` prefix, the system config, the workspace folders and the workspace volume.
 - `whr setup`, as `workharbor` in its desktop session, not over SSH: the container system, the private `~/.config/whr`, the API token (generated, never shown), an optional API key (typed without echo), the base configuration.
 
 `--dry-run` runs the read-only checks and prints every fix without running one. `--only <step>` and `--from <step>` choose steps. Secrets are written with mode `0600` and never printed.
