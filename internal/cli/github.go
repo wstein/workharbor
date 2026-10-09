@@ -86,16 +86,17 @@ It listens on the configuration's "listen" address while it waits, so stop
 			if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
 				return usageError{fmt.Sprintf("--listen %q is not a loopback address: the forwarder reaches whr there (D29)", listen)}
 			}
+			fromFlag := publicURL != ""
 			switch {
 			case local:
 				publicURL = "http://" + listen
 			case publicURL == "" && ccErr == nil:
-				publicURL = cc.PublicURL
+				publicURL = string(cc.PublicURL)
 			}
 			if publicURL == "" {
 				return usageError{"no public name: set public_url in the configuration (whr setup asks for it) or pass --public-url whr.example.ts.net; to try it on the host itself, pass --local and open the link in a browser on this Mac"}
 			}
-			if !local && !loopbackHTTP(publicURL) {
+			if !local && (!fromFlag || !loopbackHTTP(publicURL)) {
 				n, err := config.NormalizePublicURL(publicURL)
 				if err != nil {
 					return usageError{"public name: " + err.Error()}
@@ -145,7 +146,9 @@ It listens on the configuration's "listen" address while it waits, so stop
 				ui := render.Writer{W: st.env.Stderr, S: st.style(st.env.Stderr, false)}
 				ui.Command("tailscale serve status")
 				fmt.Fprintln(st.env.Stderr, "To create the mapping (never use a public funnel):")
-				ui.Command("tailscale serve --bg " + port)
+				if isDigits(port) {
+					ui.Command("tailscale serve --bg " + port)
+				}
 				fmt.Fprintln(st.env.Stderr, "Or use --local on this Mac.")
 			}
 
@@ -185,8 +188,21 @@ It listens on the configuration's "listen" address while it waits, so stop
 	return cmd
 }
 
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // loopbackHTTP is an explicit http:// address on a loopback host: a test double
-// or a local trial, which githubapp.CheckBaseURL still checks.
+// or a local trial named with --public-url only (a configuration value is normalised
+// like config.Load and the doctor do), which githubapp.CheckBaseURL still checks.
 func loopbackHTTP(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "http" {

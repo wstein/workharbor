@@ -195,3 +195,31 @@ func TestGitHubAppCreateWithoutAPublicNameSaysWhatToDo(t *testing.T) {
 		t.Errorf("--local: %q", stderr.String())
 	}
 }
+
+// A loopback http:// public name is a test double the flag may name; a
+// configuration value goes through the same normalisation as config.Load and
+// the doctor (issue #399).
+func TestGitHubAppCreateRefusesAnHTTPPublicURLFromTheConfiguration(t *testing.T) {
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.json")
+	body := fmt.Sprintf(`{"listen": %q, "api_token_file": "/x", "public_url": "http://127.0.0.1:9"}`, addr)
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done, _, stderr := runCLIAsync("github", "app", "create", "--config", cfg, "--ttl", "1s", "--key-dir", dir)
+	if code := <-done; code != exitcode.Usage || !strings.Contains(stderr.String(), "public name") {
+		t.Errorf("exit %d, stderr %q", code, stderr.String())
+	}
+}
+
+func TestReadClientConfigIgnoresANonStringPublicURL(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(cfg, []byte(`{"api_token_file": "/x", "public_url": 5}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cc, err := ReadClientConfig(cfg)
+	if err != nil || cc.PublicURL != "" {
+		t.Fatalf("got %+v, %v", cc, err)
+	}
+}
