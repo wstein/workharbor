@@ -28,7 +28,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "refusing source install:", err)
 		os.Exit(1)
 	}
-	fmt.Fprintln(os.Stderr, "development installation: user-writable supervisor from current local main; obtain independent review of this exact commit before installing; then run whr setup --prefix <dir> (never the managed dogfood or reference host)")
+	fmt.Fprintln(os.Stderr, "development installation: user-writable supervisor from this checkout (current local main is the reviewed state); obtain independent review of this exact commit before installing; then run whr setup --prefix <dir> (never the managed dogfood or reference host)")
 }
 
 func git(dir string, args ...string) (string, error) {
@@ -161,7 +161,7 @@ func check(prefix, destdir string) error {
 		return err
 	}
 	if status != "" {
-		return fmt.Errorf("dirty tree: commit or stash first")
+		fmt.Fprintln(os.Stderr, "warning: the working tree is not clean; what gets installed is not a reviewed commit, and `whr version` will say dirty; alpha policy (#504), revisit at beta")
 	}
 	head, err := git(".", "rev-parse", "--verify", "HEAD^{commit}")
 	if err != nil {
@@ -169,7 +169,7 @@ func check(prefix, destdir string) error {
 	}
 	main, err := git(".", "rev-parse", "--verify", "refs/heads/main^{commit}")
 	if err != nil || head != main {
-		return fmt.Errorf("HEAD must equal the current local main commit (older, topic and ahead commits are refused)")
+		fmt.Fprintln(os.Stderr, "warning: HEAD is not the current local main commit; what gets installed is not a reviewed commit (older, topic and ahead commits are not what main reviewed); alpha policy (#504), revisit at beta")
 	}
 	for _, query := range [][]string{{"rev-parse", "--show-toplevel"}, {"rev-parse", "--path-format=absolute", "--git-common-dir"}, {"rev-parse", "--absolute-git-dir"}} {
 		root, err := git(".", query...)

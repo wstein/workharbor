@@ -234,22 +234,6 @@ func TestSourceInstallRejectsUnsafeInputs(t *testing.T) {
 		want   string
 		change func(*testing.T, *sourceInstall)
 	}{
-		{"dirty", "dirty tree", func(t *testing.T, s *sourceInstall) {
-			if err := os.WriteFile(filepath.Join(s.repo, "dirty"), []byte("x"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}},
-		{"topic", "current local main", func(t *testing.T, s *sourceInstall) {
-			s.git(t, "switch", "-c", "topic")
-			s.git(t, "commit", "--allow-empty", "-m", "unmerged")
-		}},
-		{"outdated", "current local main", func(t *testing.T, s *sourceInstall) { s.git(t, "checkout", "--detach", "HEAD~1") }},
-		{"hidden-untracked", "dirty tree", func(t *testing.T, s *sourceInstall) {
-			s.git(t, "config", "status.showUntrackedFiles", "no")
-			if err := os.WriteFile(filepath.Join(s.repo, "source.go"), []byte("untracked source"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}},
 		{"alternate-worktree", "physical source checkout", func(t *testing.T, s *sourceInstall) {
 			alternate := t.TempDir()
 			for _, name := range []string{"Makefile", "scripts/install-source.go"} {
@@ -325,6 +309,41 @@ func TestSourceInstallRejectsUnsafeInputs(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(binary, "whr")); err == nil {
 				t.Fatal("refused install built a nested binary")
+			}
+		})
+	}
+}
+
+// A dirty tree or a HEAD that is not the local main installs with a warning in
+// the alpha (#504); the stderr text does not change the exit code.
+func TestSourceInstallWarnsAboutADirtyTreeAndANonMainHead(t *testing.T) {
+	cache := t.TempDir()
+	for _, tc := range []struct {
+		name   string
+		want   string
+		change func(*testing.T, *sourceInstall)
+	}{
+		{"dirty", "working tree is not clean", func(t *testing.T, s *sourceInstall) {
+			if err := os.WriteFile(filepath.Join(s.repo, "dirty"), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"topic", "not the current local main", func(t *testing.T, s *sourceInstall) {
+			s.git(t, "switch", "-c", "topic")
+			s.git(t, "commit", "--allow-empty", "-m", "unmerged")
+		}},
+		{"outdated", "not the current local main", func(t *testing.T, s *sourceInstall) { s.git(t, "checkout", "--detach", "HEAD~1") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSourceInstall(t)
+			s.env = append(s.env, "GOCACHE="+cache)
+			tc.change(t, &s)
+			out, err := s.install(t)
+			if err != nil || !strings.Contains(out, "warning: ") || !strings.Contains(out, tc.want) || !strings.Contains(out, "not a reviewed commit") {
+				t.Fatalf("err %v, want a warning %q:\n%s", err, tc.want, out)
+			}
+			if _, err := os.Stat(filepath.Join(s.prefix, "bin", "whr")); err != nil {
+				t.Errorf("not installed: %v", err)
 			}
 		})
 	}
