@@ -104,3 +104,17 @@ func TestHomebrewFailedDownloadIsReported(t *testing.T) {
 		t.Errorf("ran %v after a failed download", h.ran)
 	}
 }
+
+// Issue #507: without sudo nothing is downloaded or asked for Homebrew; the
+// run says to hand it to an administrator.
+func TestHomebrewIsNotDownloadedWhenTheAccountCannotSudo(t *testing.T) {
+	h := &fakeHost{answers: []string{"y", "y"}}
+	steps := homebrewStep(t, h, func(context.Context, string) ([]byte, error) {
+		t.Error("the installer was downloaded")
+		return nil, errors.New("no")
+	})
+	outs, out, _ := runHomebrew(h, steps, Options{NoSudo: true, Resume: []string{"whr", "setup", "host"}})
+	if len(outs) != 1 || !outs[0].NeedsAdmin || len(h.ran) != 0 || !strings.Contains(out, "whr setup host --only homebrew") {
+		t.Errorf("outs %+v ran %v out %q", outs, h.ran, out)
+	}
+}

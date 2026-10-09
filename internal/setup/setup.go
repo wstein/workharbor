@@ -159,6 +159,9 @@ type Options struct {
 	// when the Host is a Pauser. Off for runs that must not block (no terminal,
 	// unattended, dry run).
 	Paged bool
+	// NoSudo: the account is not an administrator (#507). Read-only checks run;
+	// a step whose fix needs sudo is listed with its exact commands, not run.
+	NoSudo bool
 
 	// Answers is the answer file of a user-phase run (issue #337); nil asks
 	// every step. A host-phase run never uses one, whatever it is given: the
@@ -213,6 +216,9 @@ type Outcome struct {
 	// Next the same with this run's flags: the report and the summary name them
 	// instead of a command for the step itself.
 	Remedy, Next string
+	// NeedsAdmin: the step needs sudo, the account cannot use it (Options.NoSudo),
+	// and the commands were listed for an administrator instead of run (#507).
+	NeedsAdmin bool
 }
 
 // Select returns the steps to run: those of the phase, from --from on, or only
@@ -468,6 +474,17 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			continue
 		}
 		showFix(ui, s.Fix, o.DryRun)
+		if o.NoSudo && (usesSudo(s.Fix) || s.Fix.NeedsSudo) {
+			ui.Action("or, as an administrator, run:")
+			ui.Command(nextCommand(Options{Resume: o.Resume, Only: []string{s.Name}}, s.Name, []string{s.Name}))
+			ui.Report(render.LevelSkipped, "not run: this account cannot sudo; hand the command above to an administrator")
+			out.Asked, out.NeedsAdmin = true, true
+			outs = append(outs, out)
+			if err := after(protocol.OutNotRun, nil, nil); err != nil {
+				return stop(err)
+			}
+			continue
+		}
 		needsMissing := s.Needs != "" && !provided[s.Needs] && !o.DryRun && !providedElsewhere(ctx, steps, chosen, s.Needs)
 		if needsMissing {
 			if err := Interrupted(ctx, h); err != nil { // the check was cut short: "not provided" means nothing, so resume must run this step
@@ -531,6 +548,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 			FailureSummaryCmd(ui, o.RunLog, cause, "fix the cause, then run:", nextCommand(o, s.Name, names(chosen[i:])))
 		}
 		out.Asked = !res.fixed
+		out.NeedsAdmin = res.needsAdmin
 		out.NeedsHuman = res.outcome == protocol.OutNeedsHuman
 		if res.decision != "" {
 			out.Decision, out.Fix = res.decision, answers.FixDigest(s)
@@ -965,6 +983,9 @@ type applied struct {
 	outcome string     // the protocol outcome when it did not (declined, needs_human, fix_failed ...)
 	exit    *int       // the exit status of the last command, when one ran
 	ran     [][]string // the argument vectors that ran, sudo included
+	// needsAdmin: a builder returned sudo commands and the account cannot sudo
+	// (Options.NoSudo): they were listed, not run (#507).
+	needsAdmin bool
 	// decision is the answer of the outer prompt that --save-answers may keep:
 	// from the person or the file, and not one the wizard had to ask again.
 	decision string
@@ -1164,6 +1185,13 @@ func (r *runner) apply(ctx context.Context, s doctor.Check, out *Outcome) (res a
 				return res, err
 			}
 		}
+	}
+	if f.Build != nil && anySudo(cmds) && r.o.NoSudo {
+		ui.Action("this account cannot sudo: hand these commands to an administrator")
+		ui.Commands(quoted(cmds)...)
+		ui.Report(render.LevelSkipped, "not run: this account cannot sudo")
+		res.needsAdmin = true
+		return res, nil
 	}
 	if f.Build != nil && anySudo(cmds) {
 		// the commands a builder returns were not known before: validate sudo now

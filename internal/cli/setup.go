@@ -109,6 +109,7 @@ func newSetup(st *state) *cobra.Command {
 	}
 	run := func(cmd *cobra.Command, phase doctor.Phase) (runErr error) {
 		var reportSteps []doctor.Check
+		noSudo := false
 		var reportOutcomes []setup.Outcome
 		var notWhr bool // notWhr: the administrator, not whr's account, runs this
 		defer func() {
@@ -173,12 +174,15 @@ func newSetup(st *state) *cobra.Command {
 		}
 		ctx := cmd.Context()
 		if phase == doctor.PhaseHost {
-			admin := false
-			if env.User == whrUser {
-				admin, _, _ = doctor.Membership(ctx, env.Host, env.User)
-			}
+			member, known, _ := doctor.Membership(ctx, env.Host, env.User)
+			admin := member && env.User == whrUser // GuardHost needs the answer for the whr account only
+			// an unreadable answer is no reason to warn (#507); root is refused below
+			noSudo = known && !member
 			if err := setup.GuardHost(env.User, env.UID, whrUser, admin); err != nil {
 				return usageError{err.Error()}
+			}
+			if noSudo {
+				ui.Report(render.LevelWarn, env.User+" is not an administrator and cannot sudo: the read-only checks run, each step that needs sudo is listed with its exact command for an administrator and not run, and the exit code is non-zero while steps are open")
 			}
 		} else {
 			m := launchd.Manager{R: launchd.ExecRunner{}, UID: env.UID, GOOS: env.GOOS}
@@ -277,7 +281,7 @@ func newSetup(st *state) *cobra.Command {
 		so := setup.Options{
 			Phase: phase, DryRun: dryRun, Only: only, From: from, Resume: resume, Out: st.env.Stdout, Err: st.env.Stderr, Style: style, Verbose: verbose,
 			Unattended: unattended, Yes: yes, Account: env.User, Home: st.env.Getenv("HOME"),
-			Paged: !dryRun && !unattended && env.IsTerminal(),
+			NoSudo: noSudo, Paged: !dryRun && !unattended && env.IsTerminal(),
 		}
 		if answersPath != "" {
 			f, digest, err := loadAnswers(env, answersPath, st.env.Stderr)
@@ -323,6 +327,16 @@ func newSetup(st *state) *cobra.Command {
 		}
 		if left := needsPerson(outs); unattended && len(left) > 0 {
 			return needsHumanError{"unattended: " + strings.Join(left, ", ") + " need a person (the answers file does not decide them); run the setup in a terminal"}
+		}
+		var admin []string
+		for _, o := range outs {
+			if o.NeedsAdmin {
+				admin = append(admin, o.Step)
+			}
+		}
+		if len(admin) > 0 {
+			fmt.Fprintf(st.env.Stderr, "whr: %s need an administrator (sudo): hand them the commands above; this run is not complete\n", strings.Join(admin, ", "))
+			return quietError{}
 		}
 		for _, o := range outs {
 			if o.Status == doctor.Fail {

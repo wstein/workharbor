@@ -548,3 +548,48 @@ func TestTailscaleIsInstalledWithBrewOnlyAfterTheConfirmation(t *testing.T) {
 		t.Errorf("a declined install ran %v", r.host.ran)
 	}
 }
+
+// Issue #507: an account that cannot sudo gets one warning, the read-only
+// checks run, and each step that needs sudo is listed, not run; the exit code
+// is non-zero. root and the standard whr account stay refused.
+func TestTheHostPartWarnsWhenTheAccountCannotSudo(t *testing.T) {
+	const member = "dseditgroup -o checkmember -m werner admin"
+	setup := func(answer string) *setupRig {
+		r := newSetupRig(t)
+		r.host.outputs[member] = answer
+		r.host.outputs["pmset -g"] = " sleep 10\n autorestart 0\n"
+		return r
+	}
+	r := setup("no werner is NOT a member of admin")
+	code, _, errOut := r.run("setup", "host", "--only", "power")
+	if code == exitcode.OK || code == exitcode.Usage {
+		t.Errorf("non-admin: exit %d, stderr %q", code, errOut)
+	}
+	for _, want := range []string{"cannot sudo", "sudo pmset", "an administrator"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("non-admin: stderr lacks %q: %q", want, errOut)
+		}
+	}
+	if len(r.host.ran) != 0 || r.host.asked != 0 {
+		t.Errorf("non-admin ran %v and asked %d", r.host.ran, r.host.asked)
+	}
+	r = setup("yes werner is a member of admin")
+	if _, _, errOut := r.run("setup", "host", "--only", "power"); strings.Contains(errOut, "cannot sudo") {
+		t.Errorf("an administrator was warned: %q", errOut)
+	}
+	r = setup("unreadable")
+	if _, _, errOut := r.run("setup", "host", "--only", "power"); strings.Contains(errOut, "cannot sudo") {
+		t.Errorf("an unreadable answer warned: %q", errOut)
+	}
+	r = setup("no werner is NOT a member of admin")
+	r.env.User, r.env.UID = "root", 0
+	if code, _, errOut := r.run("setup", "host", "--only", "power"); code != exitcode.Usage || strings.Contains(errOut, "cannot sudo") {
+		t.Errorf("root: exit %d, stderr %q", code, errOut)
+	}
+	r = setup("")
+	r.env.User, r.env.UID = "workharbor", 502
+	r.host.outputs["dseditgroup -o checkmember -m workharbor admin"] = "no workharbor is NOT a member of admin"
+	if code, _, errOut := r.run("setup", "host", "--only", "power"); code != exitcode.Usage || !strings.Contains(errOut, "own standard account") {
+		t.Errorf("the whr user: exit %d, stderr %q", code, errOut)
+	}
+}

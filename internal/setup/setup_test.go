@@ -720,3 +720,20 @@ func TestARealPreviewIsNotShownTwice(t *testing.T) {
 		t.Errorf("shown %d times:\n%s", n, errOut)
 	}
 }
+
+// Issue #507: a fix that only builds sudo commands is listed for an
+// administrator when the account cannot sudo, with no sudo -v.
+func TestABuiltSudoFixIsListedNotRunWithoutSudo(t *testing.T) {
+	var a bool
+	fix := &doctor.Fix{Build: func(context.Context, doctor.Prompter) ([]doctor.Cmd, error) {
+		return []doctor.Cmd{{Sudo: true, Argv: []string{"mkdir", "-p", "/x"}}}, nil
+	}}
+	h := &fakeHost{answers: []string{"y"}}
+	outs, _, errOut := run(t, h, []doctor.Check{step("one", doctor.PhaseHost, &a, fix)}, Options{Phase: doctor.PhaseHost, NoSudo: true})
+	if len(h.ran) != 0 {
+		t.Errorf("ran %v", h.ran)
+	}
+	if len(outs) != 1 || !outs[0].NeedsAdmin || !strings.Contains(errOut, "sudo mkdir -p /x") {
+		t.Errorf("outs %+v, stderr %q", outs, errOut)
+	}
+}
