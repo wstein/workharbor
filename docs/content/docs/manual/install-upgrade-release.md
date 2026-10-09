@@ -9,7 +9,7 @@ For the operator: the person who installs `whr` on the Mac mini and cuts release
 
 ## Where `whr` comes from
 
-The managed dogfood or reference-host supervisor runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34). The installer puts three files in a prefix that the `workharbor` user cannot write, so nothing running as `workharbor`, an agent's escape included, can replace the binary:
+The managed dogfood or reference-host supervisor runs an installed binary built by CI from a signed tag on `main`, never a working tree (D34); in the alpha `whr` does not refuse to run from elsewhere (issue #493), and the doctor only warns. The installer puts three files in a prefix that the `workharbor` user cannot write, so nothing running as `workharbor`, an agent's escape included, can replace the binary:
 
 | File | Role |
 | --- | --- |
@@ -45,7 +45,7 @@ tar -xzf "$f" &&
 sudo ./install.sh "$tag"
 ```
 
-The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or not owned by the user running it: the `workharbor` user must not be able to write the prefix. Once `gh` is installed, signed in, check who built the archive (a later check; the first install trusts the checksums and TLS):
+The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It refuses an existing prefix directory (a symlink is judged by its target) that is group- or world-writable, and only warns about one that the user running it does not own (alpha policy, issue #493): the `workharbor` user must not be able to write the prefix. Once `gh` is installed, signed in, check who built the archive (a later check; the first install trusts the checksums and TLS):
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -104,29 +104,31 @@ that either host is ready.
 `make install` builds each binary into a temporary directory next to its destination, signs the macOS `whr` ad hoc (`codesign --force --sign -`, macOS only) and moves it into place by rename, so a running or cached binary is never overwritten in place. `whr-shim` and `whr-proxy` are Linux files and are renamed, not signed. It ends by running `whr version` and fails with a message naming `codesign -v` and `xattr -l` if that does not run. Whether an invalid signature after an in-place overwrite is what killed `whr` on the real host is {{< status unverified >}} until the output of those two commands is known (issue #393); see [Troubleshooting](troubleshooting.md).
 
 `make install` defaults to `$HOME/.local`. An explicit `PREFIX=/absolute/path`
-chooses another development prefix. The destination must be user-owned and
-writable, outside Git working trees and source checkouts. It refuses `/`, your
-home or a directory above your home, and the built-in managed prefixes
-`/opt/whr`, `/opt/homebrew` and `/usr/local`, including their descendants and
-resolved aliases. Resolve symlinks and the nearest existing parent before
-creating a missing prefix, and reject Git metadata as well as working trees,
-including private worktrees stored there. Check the actual binary destinations
-too: an existing symlink must not redirect a write into a refused directory.
+chooses another prefix. The prefix must already exist, be a directory and be
+writable by you. The installer refuses `/`, your home or a directory above your
+home, the source checkout being built from and Git metadata. It resolves symlinks
+and the nearest existing parent before creating a missing prefix, and checks the
+actual binary destinations too: an existing symlink must not redirect a write
+elsewhere, and a destination must be a regular single-link file or a directory.
+Alpha policy (issue #493): where the prefix lies and who owns it do not refuse
+the install. A prefix in `/opt/whr`, `/opt/homebrew` or `/usr/local`, in another
+Git working tree, or not owned by you or open to group and other writers prints
+a warning on standard error and goes on; this is revisited at beta
+{{< status unverified >}} on a real host. The origin rules stay: `HEAD` must equal the
+local `main` and the tree must be clean, and root must use `make install-release`.
 `make install DESTDIR=/absolute/stage` stages the install: every file is written
 under `$DESTDIR$PREFIX`, and nothing is written at the real `PREFIX`. `DESTDIR`
 must be an existing absolute, clean directory path (no trailing slash, no `.`
 or `..`, no newline, carriage return or tab) and not `/`. A symlink in any
 existing component between `DESTDIR` and `DESTDIR/PREFIX` is refused, because
 `mkdir -p` would follow it out of the stage. `PREFIX=/` with a `DESTDIR` stages
-to `$DESTDIR/bin` and `$DESTDIR/libexec/whr`. The
-prefix rules above still apply to `PREFIX` itself, and the ownership, writability
-and Git-location rules apply to the staged location, or to the deepest
-existing directory above it when `mkdir -p` has to create the prefix. `DESTDIR` is never embedded
-in a binary or in the messages, which name `PREFIX` only. Unset or empty `DESTDIR`
-installs straight to `PREFIX`, as before. `make install-release` does not take
-`DESTDIR`.
-A refused destination is an error, never a fallback to another prefix. Use `make install-release` for a managed destination; its signature,
-checksum and attestation requirements remain in force.
+to `$DESTDIR/bin` and `$DESTDIR/libexec/whr`. The checks above apply to `PREFIX`
+itself and, for existence and writability, to the staged location, or to the
+deepest existing directory above it when `mkdir -p` has to create the prefix.
+`DESTDIR` is never embedded in a binary or in the messages, which name `PREFIX`
+only. Unset or empty `DESTDIR` installs straight to `PREFIX`, as before.
+`make install-release` does not take `DESTDIR`.
+A refused destination is an error, never a fallback to another prefix.
 
 The source installer builds all three binaries with `GOWORK=off` and empty
 `GOFLAGS`, stamps the source commit, and removes the release-only
@@ -134,81 +136,41 @@ The source installer builds all three binaries with `GOWORK=off` and empty
 provenance. Implementation and live installation of the amended source gate are
 {{< status unverified >}} until #299 supplies its checked code and installation
 evidence.
-Select that installation explicitly when running setup or doctor (provisional;
-{{< status unverified >}} on the reference host):
+
+There is no development mode: `whr setup`, `whr doctor` and `whr service` take
+no `--dev` or `--managed` flag, and no environment variable or configuration key
+selects an installation. A `development_prefix` key left in an older
+`config.json` is accepted and ignored. Use the same installation the usual way,
+with `--prefix` when it is not `/opt/whr`
+(provisional; {{< status unverified >}} on the reference host):
 
 ```bash
-whr setup --dev --user "$USER" --only config-base --dry-run
-whr setup --dev --user "$USER" --only config-base
-whr doctor --dev --user "$USER"
+whr setup --prefix "$HOME/.local" --user "$USER" --only config-base --dry-run
+whr setup --prefix "$HOME/.local" --user "$USER" --only config-base
+whr doctor --user "$USER"
 ```
 
-`whr setup host --dev --user "$USER"` creates this configuration itself as its first step (`config-first`, the same code as `config-base`, issue #394), so the commands above are needed first only to run the user part alone or to preview it. Without `--user`, `workharbor` is the account and the administrator does not write its configuration: the steps that read it are reported as not reachable, with the command to run as `workharbor`.
+`whr setup host --user "$USER"` creates this configuration itself as its first step (`config-first`, the same code as `config-base`, issue #394), so the commands above are needed first only to run the user part alone or to preview it. Without `--user`, `workharbor` is the account and the administrator does not write its configuration: the steps that read it are reported as not reachable, with the command to run as `workharbor`.
 
 `config-base` writes the usual `~/.config/whr/config.json`; it does not install
 or start a service. Remove `--only config-base` to run the other setup steps.
-`--dev` prints a warning: a supervisor in a user-writable prefix can be replaced
-by that user and lacks the managed installation's replacement protection.
-The account and remote-access checks still apply, and running as root or from a
-Git working tree is still refused.
-The user part of `whr setup` also refuses a `whr` that the `workharbor` account
-owns when `--dev` was not given (a `--prefix` in its own home is not a managed
-installation); `whr doctor` says so in a note. `--yes` does not take that choice.
 
-An explicit `--prefix /absolute/path` takes precedence over `$HOME/.local`.
-Use the same prefix with `make install`, setup and doctor. Symlinks are resolved
-before checking the binary's location. The prefix must be a directory of its
-own (not `/`, your home or any directory above your home), and the binary, the
-prefix and every directory above it must belong to the account that runs `whr`
-or to root and be closed to group and other writers. One exception: a sticky
-directory above the prefix, such as `/tmp`, may be writable by others, because
-it only lets an owner replace its own entries; a sticky directory between the
-prefix and the binary is still refused. Without `--dev`, setup retains the
-managed prefix list; `--prefix` alone selects a custom managed installation,
-whose ownership doctor checks separately.
+Alpha policy (issue #493): `whr` runs from wherever it lies, also from a Git
+working tree, a directory you can write or a prefix the account owns. Setup,
+`whr service install` and `whr offboard` refuse only root and a file that is not
+an executable regular file after symbolic links. `whr doctor` reports where
+`whr` runs from, and who owns or can write the prefix, as one `warn` that does not change
+the exit code; a supervisor the account can replace lacks the replacement
+protection of an administrator-owned prefix, and that weaker point is accepted
+for the dogfood account and revisited at beta. `whr serve` looks for the guest
+helpers next to the running binary, in `<dir>/../libexec/whr`, so a `whr`
+copied alone does not start: the doctor looks there and reports the tool-store
+step as not reachable until they are in place.
 
-Development mode is chosen by the flag `--dev` or by one key in the
-configuration, never by an environment variable (`WORKHARBOR_DEV` and the like
-change nothing). An explicit `whr setup --dev` remembers the choice: after you
-confirm a diff, it writes `development_prefix`, the absolute prefix, as a
-top-level key of `config.json`, and says so. From then on `whr setup`,
-`whr doctor` and `whr service install` read the key as `--dev --prefix <value>`
-and `whr serve` only logs a warning at start, so `--dev` need not be typed
-again; an explicit `--dev` or `--prefix` wins, and `--prefix` without `--dev` is
-a managed call that ignores the key. `whr doctor` reports `warn` on every run
-while the key is set, naming the key, the file and the way out. The key loosens
-nothing beyond `--dev`: `whr setup` and `whr doctor` run every check of the
-prefix again on each read (owner, writer, home, binary under the prefix), and
-`whr service install` runs the configuration's checks of the key and its file,
-the refusal of a managed whr and the test that its binary lies under the prefix,
-but not the owner, writer and home walk.
-
-The key is refused, as a configuration error (setup and doctor fail, `whr serve`
-does not start), when its value is not an absolute path or is a managed prefix
-(`/opt/whr`, `/opt/homebrew`, `/usr/local`), when `whr` itself runs from a
-managed prefix, or when the configuration file is not a regular file with one
-link, owned by you or root, closed to group and other writers, outside every
-workspace root and git working tree. The file is opened without following a
-link and checked on the open file. These checks guard against a mistake: the
-account can write its own configuration, so anything running as it can write
-the key too, and the workspace-root check reads its roots from the same file, so
-it catches a stray file, not a crafted one. What limits the key is that a
-managed installation refuses it.
-
-To leave development mode run `whr setup --managed` (`--only development-key`
-does just that step). It shows a diff, removes `development_prefix` after your
-`y`, keeps every other key, and then checks the managed prefix; it cannot be
-combined with `--dev`. From a whr that is not an installed binary (a source build
-or a user-writable one) it runs only `--only development-key`: every other step
-is refused, so install the release first. It removes every spelling of the key
-that differs only in case. Deleting the key by hand does the same. `--dry-run` writes
-nothing, and `whr doctor` and `whr serve` never write the key.
-
-When setup reaches `service-install`, it passes the chosen executable through
-`whr service install --whr <binary>`, and `whr service install` with the key set
-requires that binary under `development_prefix`. The LaunchAgent retains that
-executable path, so stopping and starting it needs no development flag. The default production
-procedure remains the administrator-owned release installation above.
+When setup reaches `service-install`, it runs `whr service install --config <file>`
+with the running executable. The LaunchAgent retains that executable path, so
+stopping and starting it needs no flag. The default production procedure remains
+the administrator-owned release installation above.
 
 
 ## From `v0.1.0`: the tap
