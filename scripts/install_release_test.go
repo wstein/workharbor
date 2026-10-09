@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -570,6 +571,50 @@ func TestThePastedDownloadBlocksRunInZsh(t *testing.T) {
 				t.Errorf("%s/%s: the block passed:\n%s", name, cname, out)
 			}
 		}
+	}
+}
+
+// Every bash block of the host setup page parses in stock zsh (zsh -n: no
+// unbalanced quote), has no comment line or trailing comment (a # line is not
+// a comment in interactive zsh) and no literal <placeholder> in a command.
+func TestHostSetupPasteBlocksAreZshSafe(t *testing.T) {
+	t.Parallel()
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("no zsh")
+	}
+	b, err := os.ReadFile("../docs/content/docs/manual/host-setup.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(string(b), "\n")
+	n := 0
+	for i := 0; i < len(parts); i++ {
+		if fence := strings.TrimSpace(parts[i]); fence != "```bash" && fence != "```sh" {
+			continue
+		}
+		var block []string
+		for i++; i < len(parts) && strings.TrimSpace(parts[i]) != "```"; i++ {
+			block = append(block, parts[i])
+		}
+		n++
+		text := strings.Join(block, "\n")
+		for _, line := range block {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") || strings.Contains(line, " #") {
+				t.Errorf("a comment in a pasted block: %q", line)
+			}
+			if regexp.MustCompile(`<[a-z][a-z -]*>`).MatchString(line) {
+				t.Errorf("a literal placeholder in a pasted block: %q", line)
+			}
+		}
+		cmd := exec.CommandContext(context.Background(), zsh, "-f", "-n", "-c", text) //nolint:gosec // a test script
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("zsh -n rejects the block %q: %v\n%s", text, err, out)
+		}
+	}
+	if n == 0 {
+		t.Fatal("no bash block found")
 	}
 }
 
