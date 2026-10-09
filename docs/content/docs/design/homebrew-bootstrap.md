@@ -7,7 +7,7 @@ toc: true
 
 ## Installing Homebrew from setup (#491)
 
-**Status:** {{< status decided >}} option C (D59; Werner's decision of 2026-10-09, issue #505), built as `whr setup host --only homebrew` in a4d798c8. The page keeps the options as they were weighed. Claims about Homebrew, the Command Line Tools (CLT) and macOS were not measured on this host and are marked {{< status unverified >}}; sources are Homebrew's [installation page](https://docs.brew.sh/Installation) and [FAQ](https://docs.brew.sh/FAQ).
+**Status:** {{< status decided >}} option C (D59; Werner's decision of 2026-10-09, issue #505), built in a4d798c8 as the step `whr setup --only homebrew` runs (the administrator's run, D61). The page keeps the options as they were weighed. Claims about Homebrew, the Command Line Tools (CLT) and macOS were not measured on this host and are marked {{< status unverified >}}; sources are Homebrew's [installation page](https://docs.brew.sh/Installation) and [FAQ](https://docs.brew.sh/FAQ).
 
 ### Context
 
@@ -18,7 +18,7 @@ Product goal (2026-10-09): a freshly unpacked Mac mini, OS updated and logged in
 - **Command Line Tools.** Homebrew's installation page says that on Apple Silicon casks and bottles install without developer tools, and that the CLT (or Xcode) are needed for source builds and on Intel {{< status unverified >}}. Two separate reasons remain: `install.sh` installs the CLT itself, headless via `softwareupdate -i` with `xcode-select --install` as the fallback, when they are missing (read from the script, not run) {{< status unverified >}}; and WorkHarbor wants the CLT for `make` (manual step 5), whatever Homebrew needs. `xcode-select --install` alone opens a graphical dialog and cannot be answered from SSH {{< status unverified >}}.
 - **Installer and sudo.** The official command is `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`. It must run as an administrator, not as root, and it asks for the password through `sudo` to create `/opt/homebrew` {{< status unverified >}}. Setting `NONINTERACTIVE=1` skips its confirmation prompts, but it still needs sudo to work without a prompt (a cached ticket from `sudo -v`) {{< status unverified >}}.
 - **Prefix ownership.** `/opt/homebrew` ends up owned by the installing administrator (Homebrew FAQ; `install.sh` chowns it to `$USER:admin`) {{< status unverified >}}; the standard `workharbor` account can run `brew`-installed binaries but cannot install, upgrade or pin (manual step 5 already says so). That is the intended split and does not change with any option; whether `workharbor` can read and execute everything under the prefix by default is {{< status unverified >}}.
-- **Where it runs.** `whr setup host` runs as the administrator, so it could run the installer as that user. Not tested on a host with no CLT, no Homebrew and no `gh`.
+- **Where it runs.** The administrator's `whr setup` (D61; `whr setup host` is a hidden alias) runs as the administrator, so it could run the installer as that user. Not tested on a host with no CLT, no Homebrew and no `gh`.
 
 ### Options
 
