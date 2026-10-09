@@ -16,7 +16,7 @@ base=${2:-origin/main}
 # A failing git diff must not read as an empty, ordinary change.
 tmp=$(mktemp) || exit 2
 trap 'rm -f "$tmp"' EXIT
-if ! git diff --name-only --no-renames -z "$base...$branch" >"$tmp"; then
+if ! git diff --name-only --no-renames -z --end-of-options "$base...$branch" >"$tmp"; then
   echo "review-class: git diff failed" >&2
   exit 2
 fi
