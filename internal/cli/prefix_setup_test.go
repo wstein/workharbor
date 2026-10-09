@@ -28,7 +28,6 @@ func userPrefixRig(t *testing.T) (*setupRig, string) {
 	}
 	r.env.Executable = func() (string, error) { return r.exe, nil }
 	r.env.UID = os.Getuid() // the checks compare owners with the running account
-	r.host.outputs["/usr/bin/dscl . -read /Users/werner NFSHomeDirectory"] = "NFSHomeDirectory: " + home + "\n"
 	return r, home
 }
 

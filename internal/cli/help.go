@@ -12,7 +12,7 @@ import (
 )
 
 // descColumn finds where a flag or command description starts on a line like
-// "      --dev   use a ...": text, two or more spaces, then more text.
+// "      --listen   use a ...": text, two or more spaces, then more text.
 var descColumn = regexp.MustCompile(`^( *\S.*?\S {2,})\S`)
 
 // hangWrap wraps every line over 80 columns at spaces, except a command line
