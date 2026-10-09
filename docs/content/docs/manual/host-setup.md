@@ -1,7 +1,7 @@
 ---
 title: Prepare the Mac mini
 description: A minimal, hardened host for WorkHarbor on an Apple-silicon Mac mini.
-weight: 1
+weight: 2
 toc: true
 ---
 
