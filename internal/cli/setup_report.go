@@ -74,6 +74,11 @@ func (c repairContext) command(fix string) string {
 	if !strings.HasPrefix(fix, "whr setup") {
 		return fix
 	}
+	host := isHostFix(fix)
+	if c.RunAs != "" && fix == "whr setup --only config-base" {
+		// the administrator's run initializes the account's base configuration itself
+		fix, host = "whr setup --only config-first", true
+	}
 	if c.Prefix != "" {
 		fix += " --prefix " + shellArgument(c.Prefix)
 	}
@@ -81,9 +86,29 @@ func (c repairContext) command(fix string) string {
 		fix += " --user " + shellArgument(c.Account)
 	}
 	// a fix of the user phase runs as whr's account, whatever check names it; a
-	// `whr setup host` fix is the administrator's
-	if c.RunAs != "" && !strings.HasPrefix(fix, "whr setup host") {
+	// fix naming a host step (--only <host step>) is the administrator's
+	if c.RunAs != "" && !host {
 		fix += " (run as " + c.RunAs + ")"
 	}
 	return fix
+}
+
+// isHostFix reports whether the fix names a step of the administrator's part.
+func isHostFix(fix string) bool {
+	f := strings.Fields(fix)
+	for _, w := range f { // a doctor fix that already names the account (--user) is the administrator's
+		if w == "--user" {
+			return true
+		}
+	}
+	for i, w := range f {
+		if w == "--only" && i+1 < len(f) {
+			for _, s := range doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json"}), doctor.PhaseHost) {
+				if s.Name == f[i+1] {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

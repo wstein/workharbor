@@ -86,7 +86,7 @@ func TestGoldenSetupOutput(t *testing.T) {
 		"setup_nocolor": render.Detect(true, "1", false),
 	} {
 		var out, errb bytes.Buffer
-		o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Style: style, Resume: []string{"whr", "setup", "host"}}
+		o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Style: style, Resume: []string{"whr", "setup"}}
 		outs, err := Run(bg, goldenSteps(), &fakeHost{}, o)
 		if err != nil {
 			t.Fatal(err)
@@ -176,12 +176,12 @@ func TestQuitStopsCleanlyWithAResumeHintAndRunsNothing(t *testing.T) {
 		fixStep("power", doctor.Fail, "broken", &doctor.Fix{Cmds: []doctor.Cmd{{Sudo: true, Argv: []string{"pmset"}}}}),
 		fixStep("later", doctor.Fail, "broken", &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"x"}}}}),
 	}
-	outs, err := Run(bg, steps, h, Options{Phase: doctor.PhaseHost, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, Resume: []string{"whr", "setup", "host"}})
+	outs, err := Run(bg, steps, h, Options{Phase: doctor.PhaseHost, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, Resume: []string{"whr", "setup"}})
 	var q *QuitError
 	if !errors.As(err, &q) || !errors.Is(err, render.ErrQuit) {
 		t.Fatalf("err = %v", err)
 	}
-	if q.Resume != "whr setup host --from power" {
+	if q.Resume != "whr setup --from power" {
 		t.Errorf("resume hint %q", q.Resume)
 	}
 	if len(h.ran) != 0 || len(outs) != 1 {
@@ -195,9 +195,9 @@ func TestQuitWithOnlyResumesWithTheStepsLeft(t *testing.T) {
 		fixStep("a", doctor.Fail, "x", &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"x"}}}}),
 		fixStep("b", doctor.Fail, "x", &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"x"}}}}),
 	}
-	_, err := Run(bg, steps, h, Options{Phase: doctor.PhaseHost, Only: []string{"a", "b"}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, Resume: []string{"whr", "setup", "host"}})
+	_, err := Run(bg, steps, h, Options{Phase: doctor.PhaseHost, Only: []string{"a", "b"}, Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, Resume: []string{"whr", "setup"}})
 	var q *QuitError
-	if !errors.As(err, &q) || q.Resume != "whr setup host --only a --only b" {
+	if !errors.As(err, &q) || q.Resume != "whr setup --only a --only b" {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -245,7 +245,7 @@ func TestOutputLinesStayNarrowAndHoldNoRawToolText(t *testing.T) {
 	}
 	steps := append(goldenSteps(), fixStep("autologout2", doctor.NotVerified, raw, long))
 	var out, errb bytes.Buffer
-	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup", "host"}}
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup"}}
 	outs, err := Run(bg, steps, &fakeHost{}, o)
 	if err != nil {
 		t.Fatal(err)
@@ -389,7 +389,7 @@ func TestLastPageLengthWithManyFailingSteps(t *testing.T) {
 		steps = append(steps, fixStep("step-"+n, doctor.Fail, "broken "+n, guided))
 	}
 	var out, errb bytes.Buffer
-	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup", "host"}}
+	o := Options{Phase: doctor.PhaseHost, DryRun: true, Out: &out, Err: &errb, Resume: []string{"whr", "setup"}}
 	outs, err := Run(bg, steps, &fakeHost{}, o)
 	if err != nil {
 		t.Fatal(err)

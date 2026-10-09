@@ -102,7 +102,7 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 		want string
 	}{
 		{"user phase", false, []string{"setup", "--user", "werner"}, "next: whr setup --user werner --from "},
-		{"host phase", true, []string{"setup", "host", "--user", "werner"}, "next: whr setup --only config-base --user werner"}, // config-first is the admin's unreachable step: the remedy, not --from
+		{"host phase", true, []string{"setup", "host", "--user", "werner"}, "next: whr setup --user werner --from workharbor-user"}, // the administrator initializes the account's base configuration in the same run
 		{"prefix with a space", false, []string{"setup", "--user", "werner", "--prefix", "@HOME@/my prefix"}, "next: whr setup --user werner --prefix '@HOME@/my prefix' --from "},
 		{"only", false, []string{"setup", "--user", "werner", "--only", "api-token", "--only", "config-dir"}, "next: whr setup --user werner --only "},
 	} {
@@ -137,9 +137,6 @@ func TestSetupSummaryNextCommandWorksForThePhaseAndFlagsOfTheRun(t *testing.T) {
 				t.Fatalf("want %q, got %q in\n%s", c.want, next, errOut)
 			}
 			words := shellWords(strings.TrimPrefix(next, "next: whr "))
-			if c.host { // the remedy is for the whr account, not the administrator
-				r.env.User = "werner"
-			}
 			_, _, again := runWithHome(t, r, home, append(words, "--dry-run")...)
 			if strings.Contains(again, "no step") || strings.Contains(again, "this part runs as another user") {
 				t.Fatalf("the suggested command %q is refused:\n%s", next, again)

@@ -74,9 +74,38 @@ func (e SetupEnv) resolve(st *state, style render.Style) (SetupEnv, error) {
 	return e, nil
 }
 
-// newSetup is `whr setup` and `whr setup host` (provisional, design D46, issue
-// #104): the first-time setup wizard. `whr setup host` is the administrator's
-// part of the manual's host setup and `whr setup` the whr user's, in its desktop
+// autoPhase picks the part of `whr setup` that fits the account running it: a
+// step named by --only or --from decides when it belongs to the user part;
+// otherwise the whr account itself (when it is no administrator) runs the user
+// part, and every other account the administrator's part, which also writes
+// the whr account's base configuration.
+func autoPhase(ctx context.Context, env SetupEnv, whrUser string, only []string, from string) doctor.Phase {
+	names := append(append([]string{}, only...), from)
+	user := map[string]bool{}
+	for _, s := range doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json"}), doctor.PhaseUser) {
+		user[s.Name] = true
+	}
+	for _, n := range names {
+		if n == "whr-user" {
+			n = "workharbor-user"
+		}
+		if user[n] {
+			return doctor.PhaseUser
+		}
+	}
+	if env.User != whrUser {
+		return doctor.PhaseHost
+	}
+	if member, _, _ := doctor.Membership(ctx, env.Host, env.User); member {
+		return doctor.PhaseHost
+	}
+	return doctor.PhaseUser
+}
+
+// newSetup is `whr setup` (provisional, design D46, issue #104): the
+// first-time setup wizard. The administrator's run sets up the host and
+// initializes the whr account's base configuration; `whr setup host` is a
+// silently accepted alias of it. The whr user's part runs in its desktop
 // session. Each step is a check with an optional fix, shown before it runs.
 func newSetup(st *state) *cobra.Command {
 	var (
@@ -140,8 +169,11 @@ func newSetup(st *state) *cobra.Command {
 			return err
 		}
 		notWhr = env.User != whrUser
+		if phase == "" {
+			phase = autoPhase(cmd.Context(), env, whrUser, only, from)
+		}
 		if phase == doctor.PhaseHost && (answersPath != "" || savePath != "" || unattended) {
-			return usageError{"whr setup host is never answered from a file and never unattended: it changes the host with sudo, and you confirm each step yourself (--answers, --save-answers and --unattended are for `whr setup`)"}
+			return usageError{"the administrator's whr setup is never answered from a file and never unattended: it changes the host with sudo, and you confirm each step yourself (--answers, --save-answers and --unattended are for `whr setup`)"}
 		}
 		if unattended && answersPath == "" {
 			return usageError{"--unattended needs --answers FILE: it asks nothing, and only a file can answer"}
@@ -208,9 +240,6 @@ func newSetup(st *state) *cobra.Command {
 		steps := doctorOn(env, configPath())
 		reportSteps = steps
 		resume := []string{"whr", "setup"}
-		if phase == doctor.PhaseHost {
-			resume = append(resume, "host")
-		}
 		if cmd.Flags().Changed("user") {
 			resume = append(resume, "--user", whrUser)
 		}
@@ -367,14 +396,20 @@ func newSetup(st *state) *cobra.Command {
 		names := func(phase doctor.Phase) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 				var out []string
-				for _, s := range doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json"}), phase) {
-					out = append(out, s.Name+"\t"+s.Title)
+				phases := []doctor.Phase{phase}
+				if c.Name() == "setup" { // both parts: the run picks the one a named step belongs to
+					phases = []doctor.Phase{doctor.PhaseHost, doctor.PhaseUser}
+				}
+				for _, ph := range phases {
+					for _, s := range doctor.Steps(doctor.Checks(doctor.Deps{ConfigPath: "x/config.json"}), ph) {
+						out = append(out, s.Name+"\t"+s.Title)
+					}
 				}
 				return out, cobra.ShellCompDirectiveNoFileComp
 			}
 		}
 		phase := doctor.PhaseUser
-		if c.Name() == "host" {
+		if c.Name() == "setup" || c.Name() == "host" {
 			phase = doctor.PhaseHost
 		}
 		_ = c.RegisterFlagCompletionFunc("only", names(phase))
@@ -382,16 +417,17 @@ func newSetup(st *state) *cobra.Command {
 	}
 	root := &cobra.Command{
 		Use:   "setup",
-		Short: "first-time setup of the whr user's part, in its desktop session (provisional)",
+		Short: "first-time setup: as the administrator it sets up the host and the workharbor account; as a standard workharbor account, its desktop-session part (provisional)",
 		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return run(cmd, doctor.PhaseUser) },
+		RunE:  func(cmd *cobra.Command, _ []string) error { return run(cmd, "") },
 	}
 	flags(root)
 	hostCmd := &cobra.Command{
-		Use:   "host",
-		Short: "first-time setup of the host, as the administrator (provisional)",
-		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return run(cmd, doctor.PhaseHost) },
+		Use:    "host",
+		Hidden: true,
+		Short:  "alias of whr setup as the administrator (kept for the alpha.4 documentation)",
+		Args:   cobra.NoArgs,
+		RunE:   func(cmd *cobra.Command, _ []string) error { return run(cmd, doctor.PhaseHost) },
 	}
 	flags(hostCmd)
 	root.AddCommand(hostCmd)

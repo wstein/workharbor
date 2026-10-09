@@ -89,8 +89,20 @@ func (d Deps) systemConfigStep() Check {
 	}
 	return Check{
 		Name: "system-config", Phase: PhaseHost, Step: 13, Title: "the system config in /etc/whr (issue #431)", FixOnWarn: true,
-		Reach: d.needsConfigFile,
+		Reach: func(ctx context.Context) *Unreachable {
+			if d.adminWithoutConfig() {
+				return nil
+			}
+			return d.needsConfigFile(ctx)
+		},
 		Run: func(context.Context) (Status, string) {
+			if d.adminWithoutConfig() {
+				// config-first writes it from the account's file, which this account does not read
+				if _, st, _ := d.systemConfigRoots(errors.New("administrator run")); st != "" {
+					return NotVerified, file + " is not there yet: config-first writes it when it initializes " + d.account() + "'s base configuration; if " + d.account() + " is already configured, pass --config with a copy of its config.json that this account can read, and this step writes it"
+				}
+				return OK, file + " is there (written by config-first)"
+			}
 			want, err := d.wantSystemConfig()
 			if errors.Is(err, fs.ErrNotExist) {
 				return NotVerified, needsConfig + ": the system config is built from it, and it is not written yet"
@@ -109,19 +121,38 @@ func (d Deps) systemConfigStep() Check {
 			}
 			return OK, file + " is current"
 		},
-		Fix: &Fix{
-			Desc: desc,
-			Do: func(context.Context, Prompter) error {
-				want, err := d.wantSystemConfig()
-				if err != nil {
-					return err
-				}
-				return writeTemp(systemConfigTemp(), string(want))
-			},
-			Cmds: []Cmd{
-				{Sudo: true, Argv: []string{"install", "-d", "-m", "0755", "-o", "root", "-g", "wheel", filepath.Dir(file)}},
-				{Sudo: true, Argv: []string{"install", "-m", "0644", "-o", "root", "-g", "wheel", systemConfigTemp(), file}},
-			},
+		Fix: d.systemConfigFix(desc),
+	}
+}
+
+func (d Deps) systemConfigFix(desc string) *Fix {
+	file := d.systemConfigFile()
+	if d.adminWithoutConfig() {
+		return nil
+	}
+	return &Fix{
+		Desc: desc,
+		Do: func(context.Context, Prompter) error {
+			want, err := d.wantSystemConfig()
+			if err != nil {
+				return err
+			}
+			return writeTemp(systemConfigTemp(), string(want))
+		},
+		Cmds: []Cmd{
+			{Sudo: true, Argv: []string{"install", "-d", "-m", "0755", "-o", "root", "-g", "wheel", filepath.Dir(file)}},
+			{Sudo: true, Argv: []string{"install", "-m", "0644", "-o", "root", "-g", "wheel", systemConfigTemp(), file}},
 		},
 	}
+}
+
+// adminWithoutConfig is the administrator's run for a separate account whose
+// own home holds no whr configuration: the system config is then written by
+// config-first from the account's base configuration, not by this step.
+func (d Deps) adminWithoutConfig() bool {
+	if !d.adminRun() {
+		return false
+	}
+	_, err := os.Stat(d.ConfigPath)
+	return errors.Is(err, fs.ErrNotExist)
 }

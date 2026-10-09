@@ -113,8 +113,8 @@ func TestHomebrewIsNotDownloadedWhenTheAccountCannotSudo(t *testing.T) {
 		t.Error("the installer was downloaded")
 		return nil, errors.New("no")
 	})
-	outs, out, _ := runHomebrew(h, steps, Options{NoSudo: true, Resume: []string{"whr", "setup", "host"}})
-	if len(outs) != 1 || !outs[0].NeedsAdmin || len(h.ran) != 0 || !strings.Contains(out, "whr setup host --only homebrew") {
+	outs, out, _ := runHomebrew(h, steps, Options{NoSudo: true, Resume: []string{"whr", "setup"}})
+	if len(outs) != 1 || !outs[0].NeedsAdmin || len(h.ran) != 0 || !strings.Contains(out, "whr setup --only homebrew") {
 		t.Errorf("outs %+v ran %v out %q", outs, h.ran, out)
 	}
 }

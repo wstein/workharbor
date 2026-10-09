@@ -22,10 +22,10 @@ var commandInProse = regexp.MustCompile("`(?:whr|brew|tailscale|sudo|make|curl|g
 // proseAllowed are the prose lines that name a command on purpose. Each
 // entry is a substring of the line and says why it is not a command to run.
 var proseAllowed = []string{
-	"Host steps (whr setup host,", // a section title naming the phase, not a step to copy
-	"User steps (whr setup, as",   // the same, for the user phase
-	"next: whr setup host --from", // golden.go fixture value of the Outcome.Next field, shown as a one-line trail
-	"Next: ",                      // the preflight line of the dry-run fixture names the next step in prose
+	"Host steps (whr setup,",    // a section title naming the phase, not a step to copy
+	"User steps (whr setup, as", // the same, for the user phase
+	"next: whr setup --from",    // golden.go fixture value of the Outcome.Next field, shown as a one-line trail
+	"Next: ",                    // the preflight line of the dry-run fixture names the next step in prose
 }
 
 func proseProblems(where, text string, backtickOnly bool) []string {

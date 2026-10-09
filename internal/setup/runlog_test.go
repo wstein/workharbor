@@ -40,7 +40,7 @@ func TestRunLogHasStepLinesAndAFailureSummary(t *testing.T) {
 	unk := doctor.Check{Name: "later", Phase: doctor.PhaseHost, Run: func(context.Context) (doctor.Status, string) { return doctor.NotVerified, "cannot tell" }}
 	h := &failingHost{fakeHost: fakeHost{answers: []string{"y"}}, lg: lg}
 	var so, se strings.Builder
-	_, _ = Run(bg, []doctor.Check{good, bad, unk}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
+	_, _ = Run(bg, []doctor.Check{good, bad, unk}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup"}})
 	_ = lg.Close()
 	log := readFile(t, lp)
 	for _, want := range []string{"step power: ok fine", "step account: fail broken", "step account: fail mktool go failed", "step later: unknown cannot tell"} {
@@ -49,7 +49,7 @@ func TestRunLogHasStepLinesAndAFailureSummary(t *testing.T) {
 		}
 	}
 	e := se.String()
-	for _, want := range []string{"cause", "ACTION", "whr setup host --from account", "boom: denied", lp} {
+	for _, want := range []string{"cause", "ACTION", "whr setup --from account", "boom: denied", lp} {
 		if !strings.Contains(e, want) {
 			t.Errorf("failure summary lacks %q:\n%s", want, e)
 		}
@@ -76,7 +76,7 @@ func TestFailureTailIsNotTheOutputOfAnEarlierStep(t *testing.T) {
 	bad := step("account", doctor.PhaseHost, &fixed, &doctor.Fix{Cmds: []doctor.Cmd{{Argv: []string{"mktool", "go"}}}})
 	h := &silentFailHost{fakeHost{answers: []string{"y"}}}
 	var so, se strings.Builder
-	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
+	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup"}})
 	if strings.Contains(se.String(), stale) {
 		t.Errorf("the failure shows an earlier step's output:\n%s", se.String())
 	}
@@ -121,7 +121,7 @@ func TestCauseIsTheReasonWhenNoCommandFailed(t *testing.T) {
 	}})
 	h := &silentFailHost{fakeHost{answers: []string{"y"}}}
 	var so, se strings.Builder
-	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup", "host"}})
+	_, _ = Run(bg, []doctor.Check{bad}, h, Options{Phase: doctor.PhaseHost, Out: &so, Err: &se, RunLog: lg, Resume: []string{"whr", "setup"}})
 	got := se.String()
 	if !strings.Contains(got, "cause  could not write the file") || strings.Contains(got, "cause  EARLIER-OUTPUT") {
 		t.Errorf("cause:\n%s", got)

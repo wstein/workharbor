@@ -146,7 +146,7 @@ type Options struct {
 	Only   []string // run only these steps, optional ones too
 	From   string   // start at this step
 	// Resume is the command that started the run, up to its flags, as words
-	// ("whr", "setup", "host", "--user", "u"), without --dry-run,
+	// ("whr", "setup", "--user", "u"), without --dry-run,
 	// --only and --from. The summary's next command continues from it.
 	Resume []string
 	// Out gets the data (one line per step), Err the human text.
@@ -376,10 +376,7 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 				if len(u.Tools) > 0 {
 					bare, shown = u.Tools[0], u.Tools[0] // not whr commands: no run flags added
 				} else if u.Step != "" {
-					bare = "whr setup host --only " + u.Step
-					if o.Phase != doctor.PhaseHost {
-						bare = "whr setup --only " + u.Step
-					}
+					bare = "whr setup --only " + u.Step
 					shown = nextCommand(Options{Resume: o.Resume, Only: []string{u.Step}}, u.Step, []string{u.Step})
 				} else {
 					// the other phase's command keeps the run's --user
@@ -1300,7 +1297,7 @@ var (
 	ErrWrongUser = errors.New("this part runs as another user")
 )
 
-// GuardHost refuses `whr setup host` as root and as a standard whr user: the
+// GuardHost refuses `whr setup` as root and as a standard whr user: the
 // administrator's part is not for a standard account, which cannot sudo anyway.
 // An administrator account that is the whr account may run it (D49, D46);
 // admin says whether the account running this is one.

@@ -7,14 +7,16 @@ import (
 )
 
 // A fix of the user phase is for whr's account, even when a host check names
-// it; a `whr setup host` fix is the administrator's.
+// it; a `whr setup` fix is the administrator's.
 func TestRunAsIsForUserPhaseFixesOnly(t *testing.T) {
 	c := repairContext{RunAs: "workharbor"}
 	for fix, want := range map[string]string{
-		"whr setup --only config-base":   "whr setup --only config-base (run as workharbor)",
-		"whr setup":                      "whr setup (run as workharbor)",
-		"whr setup host --only firewall": "whr setup host --only firewall",
-		"sudo pmset -a sleep 0":          "sudo pmset -a sleep 0",
+		"whr setup --only config-base": "whr setup --only config-first",
+		"whr setup --only ssh-ca":      "whr setup --only ssh-ca (run as workharbor)",
+		"whr setup --user whr":         "whr setup --user whr",
+		"whr setup":                    "whr setup (run as workharbor)",
+		"whr setup --only firewall":    "whr setup --only firewall",
+		"sudo pmset -a sleep 0":        "sudo pmset -a sleep 0",
 	} {
 		if got := c.command(fix); got != want {
 			t.Errorf("%q: %q, want %q", fix, got, want)
@@ -22,7 +24,7 @@ func TestRunAsIsForUserPhaseFixesOnly(t *testing.T) {
 	}
 }
 
-// The report of `whr setup host` names whr's account for user-phase fixes only
+// The report of `whr setup` names whr's account for user-phase fixes only
 // when the administrator runs it: delete the assignment or negate notWhr and
 // this fails.
 func TestReportRunAsIsWhrsAccountForTheAdministratorsHostRun(t *testing.T) {
@@ -40,8 +42,8 @@ func TestReportRunAsIsWhrsAccountForTheAdministratorsHostRun(t *testing.T) {
 			t.Errorf("%v notWhr=%v: %q, want %q", tc.phase, tc.notWhr, got, tc.want)
 		}
 	}
-	got := repairContext{RunAs: reportRunAs(doctor.PhaseHost, true, "workharbor")}.command("whr setup --only config-base")
-	if got != "whr setup --only config-base (run as workharbor)" {
+	got := repairContext{RunAs: reportRunAs(doctor.PhaseHost, true, "workharbor")}.command("whr setup --only ssh-ca")
+	if got != "whr setup --only ssh-ca (run as workharbor)" {
 		t.Errorf("fix %q", got)
 	}
 }
