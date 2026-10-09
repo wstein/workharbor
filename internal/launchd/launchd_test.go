@@ -86,7 +86,7 @@ func TestASpecThatIsNotSafeIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheBinaryMustBeInstalledNotBuiltInAWorkingTree(t *testing.T) {
+func TestTheBinaryMayLieAnywhereButMustBeAnExecutableFile(t *testing.T) {
 	dir := t.TempDir()
 	tree := filepath.Join(dir, "tree")
 	if err := os.MkdirAll(filepath.Join(tree, ".git"), 0o750); err != nil {
@@ -102,19 +102,10 @@ func TestTheBinaryMustBeInstalledNotBuiltInAWorkingTree(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := CheckBinary(installed); err != nil {
-		t.Errorf("an installed binary was refused: %v", err)
-	}
-	if err := CheckBinary(built); err == nil || !strings.Contains(err.Error(), "git working tree") {
-		t.Errorf("a binary in a working tree = %v", err)
-	}
-	// a link from outside the tree into it is the tree's binary
-	link := filepath.Join(dir, "prefix", "bin", "linked")
-	if err := os.Symlink(built, link); err != nil {
-		t.Fatal(err)
-	}
-	if err := CheckBinary(link); err == nil {
-		t.Error("a symbolic link into a working tree was accepted")
+	for _, p := range []string{installed, built} {
+		if err := CheckBinary(p); err != nil {
+			t.Errorf("%s was refused: %v", p, err)
+		}
 	}
 	if err := CheckBinary(filepath.Join(dir, "missing")); err == nil {
 		t.Error("a missing binary was accepted")

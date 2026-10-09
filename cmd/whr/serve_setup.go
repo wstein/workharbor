@@ -46,15 +46,11 @@ func newServeSetup(cfg *config.Config, path, exe, home string) (web.Setup, error
 	if err != nil {
 		return nil, err
 	}
-	prefix := doctor.DefaultPrefix
-	if cfg.DevelopmentPrefix != "" {
-		prefix = cfg.DevelopmentPrefix
-	}
 	return &serveSetup{
 		deps: doctor.Deps{
 			ConfigPath: path, Home: home, FS: runtime.OSFS{}, LookPath: doctor.DefaultLookPath,
 			Runner: setup.Terminal{}, GOOS: goruntime.GOOS, User: account.Username, Account: doctor.WhrUser,
-			UID: os.Getuid(), Whr: exe, Prefix: prefix, Dev: cfg.DevelopmentPrefix != "",
+			UID: os.Getuid(), Whr: exe, Prefix: doctor.DefaultPrefix,
 		},
 		redactor: rd, hostname: hostname, now: time.Now, checks: doctor.Checks,
 	}, nil
@@ -78,7 +74,7 @@ func (s *serveSetup) Check(ctx context.Context) (doctor.Artifact, error) {
 	defer cancel()
 	results := doctor.Run(ctx, checks, nil)
 	p := doctor.PresentResults(results)
-	report := p.Artifact(s.now(), version.Get().Version, "web", "", s.deps.Account, s.deps.Dev, s.deps.Home, s.hostname)
+	report := p.Artifact(s.now(), version.Get().Version, "web", "", s.deps.Account, s.deps.Home, s.hostname)
 	clean := func(value string) string { return setupHomePath.ReplaceAllString(s.redactor.String(value), "~") }
 	for i := range report.Checks {
 		report.Checks[i].Check = clean(report.Checks[i].Check)

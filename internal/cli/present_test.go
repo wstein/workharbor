@@ -201,21 +201,6 @@ func TestRawToolTextOnlyWithVerbose(t *testing.T) {
 	}
 }
 
-func TestADevelopmentWarningIsSetApartByARule(t *testing.T) {
-	r := newSetupRig(t)
-	_, _, errOut := r.runUI(uiOpts{}, "doctor", "--dev")
-	lines := strings.Split(errOut, "\n")
-	for i, l := range lines {
-		if strings.HasPrefix(l, "warning: development installation") {
-			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+2], "-") != "" {
-				t.Errorf("the warning is not between rules:\n%s", errOut)
-			}
-			return
-		}
-	}
-	t.Errorf("no development warning:\n%s", errOut)
-}
-
 // askingHost is a setup host that also answers [Y/n/q].
 type askingHost struct {
 	setupHost
@@ -248,21 +233,6 @@ func TestQuitExitsWithItsOwnCodeAndAResumeHint(t *testing.T) {
 	if len(h.ran) != 0 {
 		t.Errorf("quitting ran %v", h.ran)
 	}
-}
-
-func TestSetupDevWarningIsSetApartByARule(t *testing.T) {
-	r := newSetupRig(t)
-	_, _, errOut := r.runUI(uiOpts{}, "setup", "--dev", "--dry-run")
-	lines := strings.Split(errOut, "\n")
-	for i, l := range lines {
-		if strings.HasPrefix(l, "warning: development installation") {
-			if i == 0 || strings.Trim(lines[i-1], "-") != "" || strings.Trim(lines[i+2], "-") != "" {
-				t.Errorf("the warning is not between rules:\n%s", errOut)
-			}
-			return
-		}
-	}
-	t.Errorf("no development warning:\n%s", errOut)
 }
 
 // runFailsHost fails every command the way os/exec does when it kills one:

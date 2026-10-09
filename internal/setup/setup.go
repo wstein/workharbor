@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -147,7 +146,7 @@ type Options struct {
 	Only   []string // run only these steps, optional ones too
 	From   string   // start at this step
 	// Resume is the command that started the run, up to its flags, as words
-	// ("whr", "setup", "host", "--dev", "--user", "u"), without --dry-run,
+	// ("whr", "setup", "host", "--user", "u"), without --dry-run,
 	// --only and --from. The summary's next command continues from it.
 	Resume []string
 	// Out gets the data (one line per step), Err the human text.
@@ -377,12 +376,10 @@ func Run(ctx context.Context, steps []doctor.Check, h Host, o Options) ([]Outcom
 					}
 					shown = nextCommand(Options{Resume: o.Resume, Only: []string{u.Step}}, u.Step, []string{u.Step})
 				} else {
-					// the other phase's command keeps the run's --dev and --user
+					// the other phase's command keeps the run's --user
 					argv := strings.Fields(u.Command)
 					for i, w := range o.Resume {
 						switch {
-						case w == "--dev":
-							argv = append(argv, w)
 						case w == "--user" && i+1 < len(o.Resume):
 							argv = append(argv, w, o.Resume[i+1])
 						}
@@ -907,7 +904,7 @@ func wrapList(list string, pad int) string {
 }
 
 // nextCommand is the command that goes on: the phase and the flags of this run
-// (so --dev, --user and --prefix survive), then --from the first step left, or,
+// (so --user and --prefix survive), then --from the first step left, or,
 // when the run was limited by --only, --only the steps left, because --from
 // would also run steps nobody selected.
 func nextCommand(o Options, first string, left []string) string {
@@ -1268,9 +1265,8 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // Errors of the guards.
 var (
-	ErrRoot         = errors.New("setup never runs as root: it runs each privileged command through sudo, one at a time, after showing it")
-	ErrWrongUser    = errors.New("this part runs as another user")
-	ErrNotInstalled = errors.New("whr is not an installed binary in an allowed prefix")
+	ErrRoot      = errors.New("setup never runs as root: it runs each privileged command through sudo, one at a time, after showing it")
+	ErrWrongUser = errors.New("this part runs as another user")
 )
 
 // GuardHost refuses `whr setup host` as root and as a standard whr user: the
@@ -1302,26 +1298,4 @@ func GuardUser(ctx context.Context, m launchd.Manager, user string, uid int, whr
 		return fmt.Errorf("%w: open Terminal in %s's desktop session (on the Mac itself, or over Screen Sharing) and run it there", err, whrUser)
 	}
 	return nil
-}
-
-// CheckInstalled refuses a whr that is not the installed one: it must lie in a
-// git working tree nowhere, and under one of the allowed prefixes. Ownership
-// is checked separately by doctor; development prefixes are explicitly selected.
-func CheckInstalled(path string, prefixes ...string) error {
-	if err := launchd.CheckBinary(path); err != nil {
-		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return err
-	}
-	for _, p := range prefixes {
-		if rp, err := filepath.EvalSymlinks(p); err == nil {
-			p = rp
-		}
-		if rel, err := filepath.Rel(p, resolved); err == nil && !strings.HasPrefix(rel, "..") {
-			return nil
-		}
-	}
-	return fmt.Errorf("%w: %s is not under %s", ErrNotInstalled, resolved, strings.Join(prefixes, " or "))
 }

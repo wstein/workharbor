@@ -168,23 +168,82 @@ func TestDropAdminRunsOneDseditgroupAndSudoK(t *testing.T) {
 	}
 }
 
-func TestPrefixIsNeverOwnedByTheConfiguredAccount(t *testing.T) {
+func TestPrefixOwnedByTheConfiguredAccountWarns(t *testing.T) {
 	me, err := user.Current()
 	if err != nil {
 		t.Skip(err)
 	}
-	// an administrator configured account owning the prefix fails
+	// an administrator configured account owning the prefix warns (alpha, #493)
 	d := hostDeps(scripted{adminKey: isAdmin})
 	d.Prefix = t.TempDir()
 	d.Account = me.Username
 	got, detail := status(steps(t, d)["prefix"])
-	if got != Fail || !strings.Contains(detail, "replace its own supervisor") {
+	if got != Warn || !strings.Contains(detail, "belongs to "+me.Username) || !strings.Contains(detail, "revisit at beta") {
 		t.Errorf("own prefix = %s %q", got, detail)
 	}
 	// another administrator owning it is fine
 	d.Account = "whr-no-such-account"
 	if got, detail := status(steps(t, d)["prefix"]); got != OK {
 		t.Errorf("other owner = %s %q", got, detail)
+	}
+}
+
+func TestBinaryOutsideThePrefixWarns(t *testing.T) {
+	d := hostDeps(scripted{adminKey: isAdmin})
+	d.Prefix = t.TempDir()
+	d.Account = "whr-no-such-account"
+	d.Whr = filepath.Join(t.TempDir(), "whr")
+	got, detail := status(steps(t, d)["prefix"])
+	if got != Warn || !strings.Contains(detail, "whr runs from "+d.Whr) || !strings.Contains(detail, "revisit at beta") {
+		t.Errorf("binary outside the prefix = %s %q", got, detail)
+	}
+	d.Whr = filepath.Join(d.Prefix, "bin", "whr")
+	if err := os.MkdirAll(filepath.Dir(d.Whr), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.Whr, []byte("x"), 0o700); err != nil { //nolint:gosec // an executable stand-in
+		t.Fatal(err)
+	}
+	if got, detail := status(steps(t, d)["prefix"]); got != OK {
+		t.Errorf("binary inside the prefix = %s %q", got, detail)
+	}
+}
+
+// The maintainer's flow: whr copied to /usr/local/bin, no /opt/whr at all. The
+// doctor warns once and does not fail (#493).
+func TestAMissingPrefixIsAWarnWhenWhrRunsFromElsewhere(t *testing.T) {
+	d := hostDeps(scripted{adminKey: isAdmin})
+	d.Prefix = filepath.Join(t.TempDir(), "opt", "whr")
+	d.Account = "whr-no-such-account"
+	d.Whr = filepath.Join(t.TempDir(), "whr")
+	if got, detail := status(steps(t, d)["prefix"]); got != Warn || !strings.Contains(detail, "revisit at beta") {
+		t.Errorf("missing prefix, whr elsewhere = %s %q", got, detail)
+	}
+	d.Whr = filepath.Join(d.Prefix, "bin", "whr")
+	if got, _ := status(steps(t, d)["prefix"]); got != Fail {
+		t.Errorf("missing prefix, whr in it = %s", got)
+	}
+}
+
+// serve finds the guest helpers next to the running binary, so the doctor looks
+// there, not under the prefix.
+func TestGuestHelpersAreLookedForNextToTheRunningBinary(t *testing.T) {
+	d := hostDeps(nil)
+	dir := t.TempDir()
+	d.Whr = filepath.Join(dir, "bin", "whr")
+	d.Prefix = "/opt/whr"
+	if err := os.MkdirAll(filepath.Dir(d.Whr), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.Whr, []byte("x"), 0o700); err != nil { //nolint:gosec // an executable stand-in
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "libexec", "whr")
+	if got := d.libexec(); got != want && !strings.HasSuffix(got, "/libexec/whr") {
+		t.Errorf("libexec = %s, want %s", got, want)
+	}
+	if strings.HasPrefix(d.libexec(), "/opt/whr") {
+		t.Errorf("libexec follows the prefix: %s", d.libexec())
 	}
 }
 

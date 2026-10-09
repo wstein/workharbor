@@ -165,13 +165,6 @@ run as operator
     [36mwhr setup --only config-base --user 'operator'[0m
 
 run as operator
- [35m? unverified[0m  development-key      this check describes the account operator
-               runs as: check it as operator
-[1;33m▌ ACTION[0m  to fix development-key, run
-
-    [36mwhr setup --only development-key --user 'operator'[0m
-
-run as operator
  [35m? unverified[0m  public-url           this check describes the account operator
                runs as: check it as operator
 [1;33m▌ ACTION[0m  to fix public-url, run
@@ -226,8 +219,6 @@ run as operator
  [35m? unverified[0m  account              dseditgroup did not say whether operator
                is an administrator (its output format is unverified on macOS
                26)
- [34m✓ ok[0m     development-mode     no development_prefix in
-          /Users/workharbor/.config/whr/config.json: a managed installation
  [1;31m✗ FAIL[0m   server               the supervisor did not accept the token:
           configuration: open /Users/workharbor/.config/whr/config.json: no
           such file or directory (is the supervisor running?)
@@ -315,7 +306,7 @@ run as operator
 
 run as operator
 ────────────────────────────────────────────────────────────
-Summary: 4 ok, 14 FAIL, 34 not verified (?), 0 WARN, 0 skipped
+Summary: 3 ok, 14 FAIL, 33 not verified (?), 0 WARN, 0 skipped
 
 [1mWhat you need to do now[0m
   1. workharbor-user: dscl did not say whether operator exists
@@ -432,93 +423,88 @@ Summary: 4 ok, 14 FAIL, 34 not verified (?), 0 WARN, 0 skipped
 
       [36mwhr setup --only config-base --user 'operator'[0m
 
-  26. development-key: this check describes the account operator runs as: check
-      it as operator (run as operator)
-
-      [36mwhr setup --only development-key --user 'operator'[0m
-
-  27. public-url: this check describes the account operator runs as: check it as
+  26. public-url: this check describes the account operator runs as: check it as
       operator (run as operator)
 
       [36mwhr setup --only public-url --user 'operator'[0m
 
-  28. github-app: this check describes the account operator runs as: check it as
+  27. github-app: this check describes the account operator runs as: check it as
       operator (run as operator)
 
       [36mwhr setup --only github-app --user 'operator'[0m
 
-  29. config-github: this check describes the account operator runs as: check it
+  28. config-github: this check describes the account operator runs as: check it
       as operator (run as operator)
 
       [36mwhr setup --only config-github --user 'operator'[0m
 
-  30. tool-store: this check describes the account operator runs as: check it as
+  29. tool-store: this check describes the account operator runs as: check it as
       operator (run as operator)
 
       [36mwhr setup --only tool-store --user 'operator'[0m
 
-  31. service-install: this check describes the account operator runs as: check
+  30. service-install: this check describes the account operator runs as: check
       it as operator (run as operator)
 
       [36mwhr setup --only service-install --user 'operator'[0m
 
-  32. drop-admin: this check describes the account operator runs as: check it as
+  31. drop-admin: this check describes the account operator runs as: check it as
       operator (run as operator)
 
       [36mwhr setup --only drop-admin --user 'operator'[0m
 
-  33. config: open /Users/workharbor/.config/whr/config.json: no such file or
+  32. config: open /Users/workharbor/.config/whr/config.json: no such file or
       directory (run as operator)
 
       [36mwhr setup --only config-base --user 'operator'[0m
 
-  34. server: the supervisor did not accept the token: configuration: open
+  33. server: the supervisor did not accept the token: configuration: open
       /Users/workharbor/.config/whr/config.json: no such file or directory (is
       the supervisor running?) (run as operator)
 
       [36mwhr setup --only service-install --user 'operator'[0m
 
-  35. forge-key: needs a valid configuration (see the config check) (run as
+  34. forge-key: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  36. bot-key: needs a valid configuration (see the config check) (run as
+  35. bot-key: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  37. api-clients: needs a valid configuration (see the config check) (run as
+  36. api-clients: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  38. forge-app: needs a valid configuration (see the config check) (run as
+  37. forge-app: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  39. forge-board: needs a valid configuration (see the config check) (run as
+  38. forge-board: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  40. forge-workflow: needs a valid configuration (see the config check) (run as
+  39. forge-workflow: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  41. agent-login: needs a valid configuration (see the config check) (run as
+  40. agent-login: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  42. lane-agents: needs a valid configuration (see the config check) (run as
+  41. lane-agents: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m
 
-  43. notifications: needs a valid configuration (see the config check) (run as
+  42. notifications: needs a valid configuration (see the config check) (run as
       operator)
 
       [36mwhr setup --user 'operator'[0m

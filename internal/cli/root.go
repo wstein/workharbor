@@ -58,7 +58,6 @@ type state struct {
 	env        *Env
 	configPath string
 	asJSON     bool
-	dev        bool
 	noColor    bool   // --no-color
 	color      string // --color: auto, always or never
 	client     *Client
@@ -140,8 +139,6 @@ func newRoot(env *Env) (*cobra.Command, *bool) {
 	root.PersistentFlags().BoolVar(&st.noColor, "no-color", false, "no colour (decoration only; the words are always printed)")
 	root.PersistentFlags().StringVar(&st.color, "color", "auto", "colour: auto, always or never")
 	root.PersistentFlags().BoolVar(&st.asJSON, "json", false, "print the API's envelope (or one JSON event per line for logs -f) instead of text")
-
-	root.PersistentFlags().BoolVar(&st.dev, "dev", false, "use a development installation (default prefix: $HOME/.local; --prefix, where a command has it, wins)")
 
 	// A command that ran owns its errors: only cobra's own refusal of the command
 	// line, which happens before any RunE, is a usage error. The mark goes on

@@ -88,21 +88,8 @@ func newService(st *state) *cobra.Command {
 			if err := launchd.CheckBinary(s.Whr); err != nil {
 				return usageError{err.Error()}
 			}
-			cfg, err := config.Load(s.Config) // a job that cannot start is worse than none
-			if err != nil {
+			if _, err := config.Load(s.Config); err != nil { // a job that cannot start is worse than none
 				return fmt.Errorf("the configuration %s is not valid: %w", s.Config, err)
-			}
-			// development_prefix reads as --dev --prefix (D24, #276): Load has checked its
-			// value and its file; the job's binary must be the one under that prefix, and
-			// a managed whr refuses the key
-			if cfg.DevelopmentPrefix != "" {
-				if underManagedPrefix(s.Whr) {
-					return usageError{fmt.Sprintf("%s holds %s, which a whr in a managed prefix refuses: run `whr setup --managed`, or delete the key", s.Config, config.DevelopmentPrefixKey)}
-				}
-				if !config.Within(s.Whr, cfg.DevelopmentPrefix) {
-					return usageError{fmt.Sprintf("%s is not under the %s %s: install it there, or run `whr setup --managed`", s.Whr, config.DevelopmentPrefixKey, cfg.DevelopmentPrefix)}
-				}
-				fmt.Fprintln(st.env.Stderr, rememberedWarning(s.Config))
 			}
 			if err := st.env.Host.manager().Install(cmd.Context(), s); err != nil {
 				return err
@@ -112,7 +99,7 @@ func newService(st *state) *cobra.Command {
 			return nil
 		},
 	}
-	install.Flags().StringVar(&whr, "whr", "", "the installed whr binary (default: this one; refused inside a git working tree)")
+	install.Flags().StringVar(&whr, "whr", "", "the installed whr binary (default: this one)")
 	install.Flags().StringVar(&container, "container", "", "the container CLI (default: from the PATH)")
 
 	uninstall := &cobra.Command{
@@ -162,7 +149,3 @@ func newService(st *state) *cobra.Command {
 	g.AddCommand(install, uninstall, status)
 	return g
 }
-
-// underManagedPrefix is config.UnderManagedPrefix; a test points it at a temporary
-// directory, because the managed prefixes are fixed paths outside the test's reach.
-var underManagedPrefix = config.UnderManagedPrefix

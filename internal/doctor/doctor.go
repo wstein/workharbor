@@ -137,8 +137,6 @@ type Deps struct {
 	Account string // the account workharbor runs as (--user); empty means WhrUser
 	UID     int
 	Whr     string // the running whr binary
-	Dev     bool   // allow a user-owned development installation: --dev, or the development_prefix key
-	Managed bool   // `whr setup --managed`: the development_prefix key is to be removed
 	Prefix  string // the selected installation prefix, "/opt/whr" by default
 	Brewing string // the Brewfile's text; empty means the one in this package
 	Yes     bool   // `whr setup --yes`: take the default of a choice, never a destructive option
@@ -183,7 +181,6 @@ func Checks(d Deps) []Check {
 			return OK, fmt.Sprintf("%s: %d repositories, listening on %s", d.ConfigPath, len(c.Repositories), c.Listen)
 		}},
 		{"account", 2, d.accountCheck()},
-		{"development-mode", 1, d.developmentModeCheck()},
 		{"server", 1, func(ctx context.Context) (Status, string) {
 			if d.Probe == nil {
 				return NotVerified, "no client"

@@ -39,7 +39,7 @@ func setupPresentation(steps []doctor.Check, outcomes []setup.Outcome, phase doc
 	return doctor.Present(checks)
 }
 
-func writeSetupReport(st *state, configPath string, p doctor.Presentation, source string, phase doctor.Phase, account string, dev bool) error {
+func writeSetupReport(st *state, configPath string, p doctor.Presentation, source string, phase doctor.Phase, account string) error {
 	// A missing config is normal during onboarding. Read only state_dir: report
 	// writing must also work when the rest of the configuration is not ready.
 	var cc struct {
@@ -54,7 +54,7 @@ func writeSetupReport(st *state, configPath string, p doctor.Presentation, sourc
 	}
 	home := st.env.Getenv("HOME")
 	hostname, _ := os.Hostname()
-	artifact := p.Artifact(time.Now(), version.Get().Version, source, phase, account, dev, home, hostname)
+	artifact := p.Artifact(time.Now(), version.Get().Version, source, phase, account, home, hostname)
 	_, err = doctor.WriteArtifact(config.StateDirOf(cc.StateDir, home), artifact)
 	if err != nil {
 		return fmt.Errorf("setup report: %w", err)
@@ -65,8 +65,6 @@ func writeSetupReport(st *state, configPath string, p doctor.Presentation, sourc
 // repairContext preserves invocation settings in diagnostic repair commands.
 // It decorates the existing command so doctor retains its JSON byte contract.
 type repairContext struct {
-	Dev     bool
-	Managed bool
 	Prefix  string
 	Account string
 	RunAs   string
@@ -75,22 +73,6 @@ type repairContext struct {
 func (c repairContext) command(fix string) string {
 	if !strings.HasPrefix(fix, "whr setup") {
 		return fix
-	}
-	for _, flag := range []struct {
-		enabled bool
-		name    string
-	}{{c.Dev, "--dev"}, {c.Managed, "--managed"}} {
-		if !flag.enabled {
-			continue
-		}
-		switch {
-		case fix == "whr setup":
-			fix += " " + flag.name
-		case strings.HasPrefix(fix, "whr setup host "):
-			fix = strings.Replace(fix, "whr setup host ", "whr setup host "+flag.name+" ", 1)
-		default:
-			fix = strings.Replace(fix, "whr setup ", "whr setup "+flag.name+" ", 1)
-		}
 	}
 	if c.Prefix != "" {
 		fix += " --prefix " + shellArgument(c.Prefix)

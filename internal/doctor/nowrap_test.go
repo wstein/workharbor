@@ -25,20 +25,18 @@ func noWrappedCommand(t *testing.T, step string, f *Fix) {
 }
 
 func TestNoStepTextEmbedsACommandThatWraps(t *testing.T) {
-	for _, dev := range []bool{false, true} {
-		for _, user := range []string{"workharbor", "werner"} {
-			d := hostDeps(scripted{})
-			d.Dev, d.User = dev, user
-			for _, c := range Checks(d) {
-				noWrappedCommand(t, c.Name, c.Fix)
-				if c.Reach == nil {
-					continue
-				}
-				if u := c.Reach(context.Background()); u != nil {
-					for field, text := range map[string]string{"Why": u.Why, "Where": u.Where} {
-						if m := embeddedCommand.FindString(text); m != "" {
-							t.Errorf("step %s: Unreachable.%s embeds the command %s in prose; use Command", c.Name, field, m)
-						}
+	for _, user := range []string{"workharbor", "werner"} {
+		d := hostDeps(scripted{})
+		d.User = user
+		for _, c := range Checks(d) {
+			noWrappedCommand(t, c.Name, c.Fix)
+			if c.Reach == nil {
+				continue
+			}
+			if u := c.Reach(context.Background()); u != nil {
+				for field, text := range map[string]string{"Why": u.Why, "Where": u.Where} {
+					if m := embeddedCommand.FindString(text); m != "" {
+						t.Errorf("step %s: Unreachable.%s embeds the command %s in prose; use Command", c.Name, field, m)
 					}
 				}
 			}

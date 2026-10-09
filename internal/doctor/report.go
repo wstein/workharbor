@@ -108,7 +108,6 @@ type Artifact struct {
 	Source        string        `json:"source"`
 	Phase         Phase         `json:"phase"`
 	Account       string        `json:"account"`
-	Dev           bool          `json:"dev"`
 	OK            bool          `json:"ok"`
 	Counts        Counts        `json:"counts"`
 	Checks        []ReportCheck `json:"checks"`
@@ -155,7 +154,7 @@ func replaceComponent(s, old, repl string, path bool) string {
 
 // Artifact returns an export-safe copy. Only existing diagnostic text is copied;
 // no environment, host metadata, credentials or additional paths are collected.
-func (p Presentation) Artifact(now time.Time, version, source string, phase Phase, account string, dev bool, home, hostname string) Artifact {
+func (p Presentation) Artifact(now time.Time, version, source string, phase Phase, account string, home, hostname string) Artifact {
 	redact := func(s string) string {
 		s = secrets.String(s)
 		if h := strings.TrimRight(home, "/"); h != "" {
@@ -177,7 +176,7 @@ func (p Presentation) Artifact(now time.Time, version, source string, phase Phas
 		checks[i].Detail = redact(checks[i].Detail)
 		checks[i].Fix = redact(checks[i].Fix)
 	}
-	return Artifact{1, "whr.setup-report", now.UTC(), redact(version), source, phase, redact(account), dev, p.OK, p.Counts, checks}
+	return Artifact{1, "whr.setup-report", now.UTC(), redact(version), source, phase, redact(account), p.OK, p.Counts, checks}
 }
 
 // WriteArtifact publishes a complete 0600 file atomically in private directories.

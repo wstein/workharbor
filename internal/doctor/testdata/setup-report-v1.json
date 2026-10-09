@@ -6,7 +6,6 @@
   "source": "setup",
   "phase": "user",
   "account": "operator",
-  "dev": true,
   "ok": true,
   "counts": {
     "ok": 1,

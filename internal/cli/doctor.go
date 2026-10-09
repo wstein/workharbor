@@ -23,7 +23,6 @@ import (
 // non-zero exit. It never fixes anything.
 func newDoctor(st *state) *cobra.Command {
 	var (
-		dev     bool
 		skip    []string
 		whrUser string
 		prefix  string
@@ -42,7 +41,6 @@ func newDoctor(st *state) *cobra.Command {
 			if err := plainFlag("--user", whrUser); err != nil {
 				return err
 			}
-			dev = st.dev
 			path := st.configPath
 			if path == "" {
 				path = DefaultConfigPath(st.env.Getenv)
@@ -59,28 +57,8 @@ func newDoctor(st *state) *cobra.Command {
 			}
 			defer st.finishRunLog(runLog, style)
 			exe, _ := env.Executable()
-			key, err := rememberedPrefix(cmd, dev, false, path, exe)
-			if err != nil {
+			if prefix, err = installationPrefix(cmd, prefix); err != nil {
 				return err
-			}
-			remembered := useRemembered(cmd, dev, key)
-			if remembered {
-				dev, prefix = true, key
-			} else if prefix, err = installationPrefix(cmd, prefix, dev, st.env.Getenv("HOME")); err != nil {
-				return err
-			}
-			switch {
-			case remembered:
-				ui.Rule()
-				fmt.Fprintln(st.env.Stderr, rememberedWarning(path))
-				ui.Rule()
-			case dev:
-				ui.Rule()
-				fmt.Fprintln(st.env.Stderr, developmentWarning)
-				ui.Rule()
-			}
-			if hint := env.developerHint(exe); env.User == whrUser && !dev && hint != "" {
-				ui.Note("note: " + hint)
 			}
 			repoDir, _ := os.Getwd()
 			checks := doctor.Checks(doctor.Deps{
@@ -90,7 +68,7 @@ func newDoctor(st *state) *cobra.Command {
 				FS:         runtime.OSFS{},
 				LookPath:   env.LookPath,
 				// Output only: the checks read the machine and nothing writes.
-				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix, Dev: dev,
+				Runner: env.Host, GOOS: env.GOOS, User: env.User, Account: whrUser, UID: env.UID, Whr: exe, Prefix: prefix,
 				Probe: func(ctx context.Context) error {
 					c, err := st.api()
 					if err != nil {
@@ -125,10 +103,7 @@ func newDoctor(st *state) *cobra.Command {
 				skipped[n] = true
 			}
 			rs := doctor.Run(cmd.Context(), checks, skipped)
-			repair := repairContext{Dev: dev && !remembered, Account: whrUser}
-			if repair.Dev && cmd.Flags().Changed("prefix") {
-				repair.Prefix = prefix
-			}
+			repair := repairContext{Account: whrUser}
 			for i, r := range rs {
 				context := repair
 				if other { // command adds it to the fixes that are for whr's account only
@@ -144,7 +119,7 @@ func newDoctor(st *state) *cobra.Command {
 			// after them, with exit status 1
 			var reportErr error
 			if report {
-				reportErr = writeSetupReport(st, path, presentation, "doctor", "", whrUser, dev)
+				reportErr = writeSetupReport(st, path, presentation, "doctor", "", whrUser)
 			}
 			if st.asJSON {
 				if err := encodeJSON(st.env.Stdout, map[string]any{"schema_version": 1, "ok": presentation.OK, "checks": presentation.Results()}); err != nil {
@@ -188,7 +163,7 @@ func newDoctor(st *state) *cobra.Command {
 	cmd.Flags().StringVar(&logFile, "log-file", "", "write the run log to this `path` (default: a new file under the state directory logs/); follow it with tail -f in a second terminal")
 	cmd.Flags().StringSliceVar(&skip, "skip", nil, "leave a check out (repeatable); run the doctor again to include it")
 	cmd.Flags().StringVar(&whrUser, "user", doctor.WhrUser, "the account workharbor runs as")
-	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr, or $HOME/.local with --dev)")
+	cmd.Flags().StringVar(&prefix, "prefix", doctor.DefaultPrefix, "the installation prefix (default: /opt/whr)")
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		var names []string
 		for _, c := range doctor.Checks(doctor.Deps{}) {

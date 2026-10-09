@@ -295,41 +295,6 @@ func (f *fakeLaunchctl) Run(_ context.Context, _ string, args ...string) ([]byte
 	return nil, errors.New("unexpected")
 }
 
-func TestOnlyAnInstalledBinaryUnderAnAdminPrefixIsAccepted(t *testing.T) {
-	dir := t.TempDir()
-	prefix := filepath.Join(dir, "opt", "whr")
-	bin := filepath.Join(prefix, "bin", "whr")
-	tree := filepath.Join(dir, "tree")
-	built := filepath.Join(tree, "bin", "whr")
-	for _, p := range []string{bin, built} {
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // an executable test file
-			t.Fatal(err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(tree, ".git"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := CheckInstalled(bin, prefix); err != nil {
-		t.Errorf("an installed binary = %v", err)
-	}
-	if err := CheckInstalled(built, prefix); !errors.Is(err, ErrNotInstalled) {
-		t.Errorf("a binary in a working tree = %v", err)
-	}
-	other := filepath.Join(dir, "elsewhere", "whr")
-	if err := os.MkdirAll(filepath.Dir(other), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(other, []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // an executable test file
-		t.Fatal(err)
-	}
-	if err := CheckInstalled(other, prefix); !errors.Is(err, ErrNotInstalled) {
-		t.Errorf("a binary outside the prefix = %v", err)
-	}
-}
-
 // A fix that needs a service runs only after a step brought it up, and the kernel
 // step then runs against the started system (#265).
 func TestAFixRunsOnlyAfterTheServiceItNeedsIsUp(t *testing.T) {
@@ -413,16 +378,16 @@ func TestSummaryNextCommandKeepsThePhaseAndFlags(t *testing.T) {
 		{"user phase", Options{}, "next: whr setup --from container-kernel\n"},
 		{"host phase", Options{Resume: []string{"whr", "setup", "host"}}, "next: whr setup host --from container-kernel\n"},
 		{
-			"dev user",
-			Options{Resume: []string{"whr", "setup", "--dev", "--user", "werner", "--prefix", "/Users/me/my prefix"}},
-			"next: whr setup --dev --user werner --prefix '/Users/me/my prefix' --from container-kernel\n",
+			"user flag",
+			Options{Resume: []string{"whr", "setup", "--user", "werner", "--prefix", "/Users/me/my prefix"}},
+			"next: whr setup --user werner --prefix '/Users/me/my prefix' --from container-kernel\n",
 		},
-		{"host dev", Options{Resume: []string{"whr", "setup", "host", "--dev", "--user", "werner"}}, "next: whr setup host --dev --user werner --from container-kernel\n"},
+		{"host", Options{Resume: []string{"whr", "setup", "host", "--user", "werner"}}, "next: whr setup host --user werner --from container-kernel\n"},
 		// --from would also run steps nobody selected: name the steps left instead
 		{
 			"only",
-			Options{Only: []string{"container-kernel", "api-token"}, Resume: []string{"whr", "setup", "--dev", "--user", "werner"}},
-			"next: whr setup --dev --user werner --only container-kernel --only api-token\n",
+			Options{Only: []string{"container-kernel", "api-token"}, Resume: []string{"whr", "setup", "--user", "werner"}},
+			"next: whr setup --user werner --only container-kernel --only api-token\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -613,14 +578,14 @@ func TestAnUnreachableStepIsNotAFailureAndAsksNoPassword(t *testing.T) {
 		return &doctor.Unreachable{Why: "the file is not written yet", Step: "first"}
 	}
 	h := &fakeHost{answers: []string{"y"}}
-	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--dev"}})
+	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--user", "u"}})
 	if len(h.ran) != 0 || len(h.asked) != 0 {
 		t.Errorf("something ran or was asked: %v %v", h.ran, h.asked)
 	}
 	if len(outs) != 1 || outs[0].Status != doctor.NotVerified || !outs[0].Asked {
 		t.Errorf("outcome %+v", outs)
 	}
-	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "    whr setup host --dev --only first") {
+	if !strings.Contains(errOut, "not reachable: the file is not written yet") || !strings.Contains(errOut, "first run:\n") || !strings.Contains(errOut, "    whr setup host --user u --only first") {
 		t.Errorf("output %q", errOut)
 	}
 	if strings.Contains(errOut, "fix the cause") {
@@ -683,7 +648,7 @@ type memLog struct{ entries []protocol.Entry }
 
 func (m *memLog) Append(e protocol.Entry) error { m.entries = append(m.entries, e); return nil }
 
-// The separate-account remedy keeps --dev, keeps prose out of the copyable
+// The separate-account remedy keeps --user, keeps prose out of the copyable
 // command, and is what the summary's next: names; the protocol says not_run.
 func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
 	var fixed bool
@@ -692,17 +657,17 @@ func TestAnUnreachableStepNamesTheRemedyInSummaryAndProtocol(t *testing.T) {
 		return &doctor.Unreachable{Why: "belongs to workharbor", Command: "whr setup --only config-base", Where: "as workharbor, in its desktop session"}
 	}
 	lg := &memLog{}
-	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--dev"}, Log: lg}
+	o := Options{Phase: doctor.PhaseHost, Resume: []string{"whr", "setup", "host", "--user", "u"}, Log: lg}
 	outs, _, errOut := run(t, &fakeHost{}, []doctor.Check{s}, o)
-	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "    whr setup --only config-base --dev\n") {
+	if !strings.Contains(errOut, "first run as workharbor, in its desktop session:") || !strings.Contains(errOut, "    whr setup --only config-base --user u\n") {
 		t.Errorf("output %q", errOut)
 	}
-	if outs[0].Remedy != "whr setup --only config-base" || outs[0].Next != "whr setup --only config-base --dev" {
+	if outs[0].Remedy != "whr setup --only config-base" || outs[0].Next != "whr setup --only config-base --user u" {
 		t.Errorf("outcome %+v", outs[0])
 	}
 	var sum bytes.Buffer
 	Summary(&sum, outs, o)
-	if !strings.Contains(sum.String(), "next: whr setup --only config-base --dev") || strings.Contains(sum.String(), "--from") {
+	if !strings.Contains(sum.String(), "next: whr setup --only config-base --user u") || strings.Contains(sum.String(), "--from") {
 		t.Errorf("summary %q", sum.String())
 	}
 	found := false
@@ -726,7 +691,7 @@ func TestAnUnreachableStepNamesToolsWithoutRunFlags(t *testing.T) {
 		return &doctor.Unreachable{Why: "only the whr binary is installed", Tools: []string{"make install PREFIX=" + prefix, "make install-release VERSION=<tag> PREFIX=" + prefix}}
 	}
 	h := &fakeHost{answers: []string{"y"}}
-	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser, Resume: []string{"whr", "setup", "--dev", "--user", "me"}})
+	outs, _, errOut := run(t, h, []doctor.Check{s}, Options{Phase: doctor.PhaseUser, Resume: []string{"whr", "setup"}})
 	if len(h.ran) != 0 || len(outs) != 1 || outs[0].Status != doctor.NotVerified || outs[0].Remedy != "make install PREFIX="+prefix {
 		t.Errorf("ran %v outcome %+v", h.ran, outs)
 	}
@@ -735,7 +700,7 @@ func TestAnUnreachableStepNamesToolsWithoutRunFlags(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, errOut)
 		}
 	}
-	if strings.Contains(errOut, "--dev --user") || strings.Contains(errOut, "fix the cause") {
+	if strings.Contains(errOut, "--user") || strings.Contains(errOut, "fix the cause") {
 		t.Errorf("flags added or reported as a failure:\n%s", errOut)
 	}
 }

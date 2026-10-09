@@ -93,7 +93,6 @@ func newOffboardRig(t *testing.T) *offboardRig {
 	r := &offboardRig{t: t, host: h, rig: s}
 	r.env = Env{Stdin: strings.NewReader(""), Getenv: func(string) string { return "" }, Setup: s.env}
 	r.env.Offboard = OffboardEnv{
-		Prefix: filepath.Dir(filepath.Dir(s.exe)),
 		Stat: func(string) (offboard.HomeInfo, error) {
 			if h.deleted {
 				return offboard.HomeInfo{}, fs.ErrNotExist

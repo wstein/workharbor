@@ -41,9 +41,8 @@ func (s Spec) PlistPath() string {
 }
 
 // Validate refuses a spec that cannot be rendered safely: every path must be
-// absolute and clean of control characters, and the binary must not live in a
-// git working tree (the supervisor runs an installed binary from an approved
-// commit, never a topic's build, D34).
+// absolute and clean of control characters. Where the binary lies does not
+// matter in the alpha (#493).
 func (s Spec) Validate() error {
 	for name, p := range map[string]string{"whr": s.Whr, "config": s.Config, "container": s.Container, "home": s.Home} {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
@@ -59,8 +58,9 @@ func (s Spec) Validate() error {
 	return nil
 }
 
-// CheckBinary refuses a whr that is not an installed binary: it must be a
-// regular, executable file outside any git working tree, after symbolic links.
+// CheckBinary refuses a whr that is not an executable regular file after
+// symbolic links. Where the file lies and who owns it do not matter in the
+// alpha (#493); the doctor warns about it.
 func CheckBinary(path string) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
@@ -70,14 +70,7 @@ func CheckBinary(path string) error {
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		return fmt.Errorf("%s is not an executable file", resolved)
 	}
-	for dir := filepath.Dir(resolved); ; dir = filepath.Dir(dir) {
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return fmt.Errorf("%s is inside the git working tree %s: install whr from an approved commit (make install) and use that binary (D34)", resolved, dir)
-		}
-		if dir == filepath.Dir(dir) {
-			return nil
-		}
-	}
+	return nil
 }
 
 // script is what the job runs: start the container system (idempotent; the
