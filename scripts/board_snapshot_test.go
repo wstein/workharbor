@@ -1420,7 +1420,7 @@ func syncFixture(t *testing.T) (board, []string) {
 	repo := t.TempDir()
 	git := func(dir string, args ...string) {
 		t.Helper()
-		if out, err := gittest.Git(t.Context(), "", dir, gittest.Identity, args...).CombinedOutput(); err != nil {
+		if out, err := gittest.Git(t.Context(), t.TempDir(), dir, gittest.Identity, args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
