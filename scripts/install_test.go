@@ -1,13 +1,16 @@
 package scripts
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor/internal/gittest"
 )
@@ -29,10 +32,28 @@ func (s sourceInstall) git(t *testing.T, args ...string) {
 
 func (s sourceInstall) install(t *testing.T) (string, error) {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "make", "install", "PREFIX="+s.prefix) //nolint:gosec // fixture-controlled arguments, no shell
+	return s.make(t, "install", "PREFIX="+s.prefix)
+}
+
+// make runs make in its own process group under a deadline and kills the whole
+// group on timeout or test end, so a looping stub cannot outlive the test (#399).
+func (s sourceInstall) make(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "make", args...) //nolint:gosec // fixture-controlled arguments, no shell
 	cmd.Dir, cmd.Env = s.repo, s.env
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 5 * time.Second
+	var buf bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &buf, &buf
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+	err := cmd.Wait()
+	return buf.String(), err
 }
 
 func newSourceInstall(t *testing.T) sourceInstall {
@@ -72,7 +93,7 @@ func newSourceInstall(t *testing.T) sourceInstall {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\ndest=$1\nif [ -d \"$dest\" ]; then dest=$dest/whr; fi\nprintf '#!/bin/sh\\necho fixture-version\\n' > \"$dest\"\nchmod 700 \"$dest\"\n"
+	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do [ $# -gt 0 ] || { echo fake go: no -o >&2; exit 2; }; shift; done\nshift\ndest=$1\nif [ -d \"$dest\" ]; then dest=$dest/whr; fi\nprintf '#!/bin/sh\\necho fixture-version\\n' > \"$dest\"\nchmod 700 \"$dest\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
 		t.Fatal(err)
 	}
@@ -173,7 +194,7 @@ func TestSourceInstallSmokeFailureNamesCodesign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do shift; done\nshift\nprintf '#!/bin/sh\\nexit 137\\n' > \"$1\"\nchmod 700 \"$1\"\n"
+	fake := "#!/bin/sh\nif [ \"$1\" = run ] || [ \"$1\" = env ]; then exec '" + realGo + "' \"$@\"; fi\nwhile [ \"$1\" != -o ]; do [ $# -gt 0 ] || { echo fake go: no -o >&2; exit 2; }; shift; done\nshift\nprintf '#!/bin/sh\\nexit 137\\n' > \"$1\"\nchmod 700 \"$1\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o700); err != nil { //nolint:gosec // executable fixture
 		t.Fatal(err)
 	}
@@ -189,9 +210,7 @@ func TestSourceInstallDetachedMainDefaultPrefix(t *testing.T) {
 	linked := t.TempDir()
 	s.git(t, "worktree", "add", "--detach", linked, "main")
 	s.repo = linked
-	cmd := exec.CommandContext(context.Background(), "make", "install")
-	cmd.Dir, cmd.Env = s.repo, s.env
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := s.make(t, "install"); err != nil {
 		t.Fatalf("detached current main with default existing HOME.local: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(s.prefix, "bin", "whr")); err != nil {
@@ -447,5 +466,24 @@ func TestSourceInstallWarnsAboutAPrefixInAnotherWorkingTree(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(other, "bin", "whr")); err != nil {
 		t.Errorf("not installed: %v", err)
+	}
+}
+
+// The fake go must reject a subcommand it does not model instead of looping
+// forever on an empty argument list (#399).
+func TestFakeGoStubTerminatesOnUnknownSubcommand(t *testing.T) {
+	s := newSourceInstall(t)
+	bin := strings.TrimSuffix(strings.SplitN(envValue(s.env, "PATH"), ":", 2)[0], "/")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(bin, "go"), "version") //nolint:gosec // fixture stub
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("fake go looped instead of exiting: %s", out)
+	}
+	if err == nil {
+		t.Fatalf("fake go accepted an unmodelled subcommand: %s", out)
 	}
 }
