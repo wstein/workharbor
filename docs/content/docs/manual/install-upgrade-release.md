@@ -40,14 +40,9 @@ curl -fsSLO "$base/$f" -O "$base/checksums.txt" &&
 grep " $f\$" checksums.txt | shasum -a 256 -c -
 ```
 
-If `gh` is installed and signed in (an upgrade: `whr setup` installs it), run the attestation check from the block further down on `"$f"` **before** `sudo ./install.sh`: the unpacked mode never checks the attestation, even when `gh` works, so without this an upgrade installs as root on the checksum and TLS alone. Then:
+The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on.
 
-```bash
-tar -xzf "$f" &&
-sudo ./install.sh "$tag"
-```
-
-The first block's last command prints the archive name and `OK`; any other output is a failure, do not go on. `install.sh` installs the files next to it and downloads nothing; the prefix is `/opt/whr` unless you add a path. It warns, and goes on, about an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or that the user running it does not own (alpha policy, issues #493 and #504): whoever can write the prefix can replace the binary that root runs, so keep it writable by the administrator only. Check who built the archive with `gh` (installed and signed in) before `sudo ./install.sh`; the first install, with no `gh` yet, trusts the checksums and TLS and can run this check afterwards:
+If `gh` is installed and signed in (an upgrade: `whr setup` installs it), check who built the archive **before** `sudo ./install.sh`: the unpacked mode never checks the attestation, even when `gh` works, so without this an upgrade installs as root on the checksum and TLS alone. A first install has no `gh` yet: skip this block, it trusts the checksums and TLS, and can run the check afterwards.
 
 ```bash
 commit=$(gh api repos/wstein/workharbor/commits/refs/tags/$tag --jq .sha) &&
@@ -57,7 +52,16 @@ gh attestation verify "$f" --repo wstein/workharbor \
   --deny-self-hosted-runners
 ```
 
-The tag of `install.sh <tag>` names the version written to `<prefix>/libexec/whr/VERSION`. When `checksums.txt` sits next to `install.sh` (the flow above), the archive of that tag must sit there too and match its checksum line, or the script stops before it installs anything or writes `VERSION`; without `checksums.txt` the tag cannot be checked, and the script says so. The unpacked mode checks no attestation: that is the `gh` check above. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, the tag matched against the archive next to the script, a piped script, checksum mismatch, downgrade, writable (warned) or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
+Then install:
+
+```bash
+tar -xzf "$f" &&
+sudo ./install.sh "$tag"
+```
+
+`install.sh` unpacks the archive next to it (the one for its tag) and installs those files, and downloads nothing; the prefix is `/opt/whr` unless you add a path. It warns, and goes on, about an existing prefix directory (a symlink is judged by its target) that is group- or world-writable or that the user running it does not own (alpha policy, issues #493 and #504): whoever can write the prefix can replace the binary that root runs, so keep it writable by the administrator only.
+
+The tag of `install.sh <tag>` names the version written to `<prefix>/libexec/whr/VERSION`. When `checksums.txt` sits next to `install.sh` (the flow above), the archive of that tag must sit there too and match its checksum line, or the script stops before it installs anything or writes `VERSION`, and it installs the files of that archive, not of a loose `bin/` beside it; without `checksums.txt` the tag cannot be checked, and the script says so. The unpacked mode checks no attestation: that is the `gh` check above. The script also runs piped as `cat install.sh | bash -s -- <tag>` from the unpacked directory (the tested form); `/bin/bash -s` piped is not tested and may fall into download mode. Measured: the script's tests (`go test ./scripts`: install from an unpacked archive without `gh`, the tag matched against the archive next to the script, `cat install.sh | bash -s` in an unpacked directory, checksum mismatch, downgrade, writable (warned) or symlinked prefix, a `gh` that cannot read the tag, the pasted blocks in stock zsh) and a GoReleaser snapshot (`make release-snapshot`) whose archive lists `bin/whr`, `guest/whr-*-linux-arm64` and `install.sh`. {{< status unverified >}} until a release carries it: the upload and the attestation of the single archive, the Homebrew formula built from it, and an install on a clean Apple-silicon Mac with no `gh`, Homebrew or Command Line Tools (#489).
 
 ### Verify a download yourself
 
