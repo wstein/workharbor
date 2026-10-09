@@ -272,7 +272,7 @@ Removing the binaries leaves all of this, because `whr` keeps it outside the pre
 Only a human tags, signs and publishes (D24, §6); an agent never does.
 
 0. Write the release summary `docs/releases/vX.Y.Z.md` from `docs/releases/TEMPLATE.md` (4-6 lines: highlights, what users can do now, what is known broken or unverified, how to verify provenance; then the `## Install` block) and commit it on `main`, reviewed like any file. The release workflow prepends it to the generated lists. If the file is missing or empty the release job fails before it builds anything; the tag cannot be moved, so fix `main` and create a new tag. The generated lists (features, bug fixes, ...) are folded in `<details>` with counts.
-1. `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release)`. It does not tag.
+1. `make release-prep VERSION=vX.Y.Z` regenerates `CHANGELOG.md` and commits it as `chore(release)`. It does not tag. It accepts any version tag, a prerelease such as `v0.1.0-alpha.5` included, and needs a clean tree. The release workflow does not read `CHANGELOG.md` (it runs git-cliff itself for the notes), so the step is not a gate for an alpha; no `chore(release)` commit exists in the history and the committed `CHANGELOG.md` still has only an `Unreleased` section, so none of `v0.1.0-alpha.1` to `.4` used it.
 2. After CI is green on that commit of `main`, push a **signed, annotated** tag `vX.Y.Z`. The release workflow checks the signature against `.github/release-signers`, that the commit is on `main` and that CI passed, then builds into a **draft**: one archive (`whr`, the guest binaries and `install.sh`), `checksums.txt`, an SBOM, a build-provenance attestation and its bundle (`whr_<tag>.intoto.jsonl`).
 
     Sign with the signing key, the one whose public half is in `.github/release-signers`, not with your login key, and check the tag locally before you push it:
@@ -287,6 +287,23 @@ Only a human tags, signs and publishes (D24, §6); an agent never does.
     The error `No principal matched` means a key outside `.github/release-signers` signed the tag. The workflow reads `.github/release-signers` from the **tagged** commit, so a tag that failed stays failed: fix the cause on `main`, wait for green CI, and create a **new** tag on the fixed commit. Only a human tags; an agent never does.
 3. Check the draft: install it on your own prefix with `make install-release VERSION=vX.Y.Z`, which verifies the checksums and the attestation, and read the notes.
 4. Publish it. For a release (not a prerelease) the `tap` workflow renders the formula and pushes it to `wstein/homebrew-tap`; a prerelease never updates the tap.
+
+### Release profile
+
+The values a release checklist (or the `crewbook-release` lane) needs, each read from the file named:
+
+| Item | Value |
+| --- | --- |
+| Previous tag | the highest `v0.1.0-alpha.N` below the new tag (a rule for the alphas; `v0.1.0` and later need their own, not decided here) |
+| Notes | `docs/releases/<tag>.md`, from `docs/releases/TEMPLATE.md`; the install block equals the template's apart from the tag |
+| Signer file | `.github/release-signers`, read from the tagged commit |
+| Workflow | `.github/workflows/release.yml` (draft release; the `tap` workflow runs only for a published non-prerelease) |
+| Archive | `whr_<version>_darwin_arm64.tar.gz` (`<version>` is the tag without `v`), with `bin/whr`, `guest/` and `install.sh`; next to `checksums.txt` and the SBOM `whr_<version>_sbom.cdx.json` |
+| Provenance | `whr_<tag>.intoto.jsonl`, attached to the draft |
+
+Rules: the job fails before building if `docs/releases/<tag>.md` is missing or empty; the tag is annotated, signed by a key in the tagged commit's signer file, on `main` with CI green on that commit; a prerelease never updates the tap; a failed tag stays failed and needs a new tag.
+
+The notes of `v0.1.0-alpha.5`, the first release built with the single archive, must say under **Known limits** that the upload and attestation of the single archive, the Homebrew formula built from it and the install on a clean Apple-silicon Mac are unverified; the markers on this page stay {{< status unverified >}} until a release has carried them.
 
 ### Set up the tap once (the maintainer)
 
