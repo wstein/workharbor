@@ -24,7 +24,7 @@ GOFLAGS += -trimpath
 endif
 export GOFLAGS
 
-.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range temp-ls temp-clean
+.PHONY: generate check-generated release-prep release-snapshot build install install-release check-clean check-main test test-short race vet fmt fmt-check lint editorconfig check check-local commitlint changelog docs docs-build docs-schema docs-serve hooks check-ci check-hooks secrets-staged fuzz secrets-range temp-ls temp-clean actionlint
 
 # The version comes from the tag (design §13): git describe, or v0.0.0-<commits>-g<sha>
 # when there is no tag, never empty. The tree is dirty if anything is uncommitted.
@@ -42,9 +42,9 @@ LDFLAGS = -X $(VERSION_PKG).Version=$(BUILD_VERSION) -X $(VERSION_PKG).Commit=$(
 # make install builds whr, the launcher whr-shim and the egress proxy whr-proxy
 # (both linux-arm64: the tool store and the sidecar) from the current commit,
 # with the version stamp, and installs them under PREFIX. It warns about a dirty
-# tree and HEAD differing from current local main (alpha policy, #504). The operator obtains
-# independent review of that exact commit (D24, D34); Git equality cannot prove
-# approval. Unpublished main is accepted only for a development installation.
+# tree and HEAD differing from current local main (alpha policy, #504; it refuses
+# neither). The operator obtains independent review of that exact commit (D24,
+# D34); Git equality cannot prove approval.
 # It builds with GOWORK=off and no GOFLAGS, so
 # a parent go.work or the environment cannot change what is built. The whr user
 # runs it with an existing user-owned PREFIX=$$HOME/.local, or an existing safe
