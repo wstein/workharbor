@@ -1,6 +1,7 @@
 package scripts_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,5 +76,50 @@ func TestReviewClass(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A base that looks like a git option must be a revision, never an option: with
+// --output it would write the diff to a file and read as an empty, ordinary change.
+func TestReviewClassTreatsAnOptionLikeBaseAsARevision(t *testing.T) {
+	t.Parallel()
+	script, err := filepath.Abs("review-class.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := reviewClassRepo(t, "scripts/x.sh")
+	cmd := exec.CommandContext(t.Context(), "sh", script, "topic", "--output=leak") //nolint:gosec // fixed script
+	cmd.Dir = dir
+	cmd.Env = []string{"PATH=/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME=" + t.TempDir()}
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("an option-like base was accepted: %s", out)
+	}
+	if strings.Contains("\n"+string(out), "\nclass: ") {
+		t.Errorf("a class was printed for a bad base: %s", out)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "leak")); statErr == nil {
+		t.Error("git treated the base as --output and wrote a file")
+	}
+}
+
+// The fail-closed paths: an unknown revision must exit 2 and print no class.
+func TestReviewClassFailsClosedOnAnUnknownRevision(t *testing.T) {
+	t.Parallel()
+	script, err := filepath.Abs("review-class.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := reviewClassRepo(t, "docs/guide.md")
+	cmd := exec.CommandContext(t.Context(), "sh", script, "no-such-branch", "main") //nolint:gosec // fixed script
+	cmd.Dir = dir
+	cmd.Env = []string{"PATH=/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME=" + t.TempDir()}
+	out, err := cmd.CombinedOutput()
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) || ee.ExitCode() != 2 {
+		t.Fatalf("want exit 2, got %v\n%s", err, out)
+	}
+	if strings.Contains("\n"+string(out), "\nclass: ") || !strings.Contains(string(out), "git diff failed") {
+		t.Errorf("want the refusal and no class, got: %s", out)
 	}
 }
