@@ -201,7 +201,8 @@ func (d Deps) workspaceFoldersStep() Check {
 			// No Sudo preview commands: the wizard asks for the password before
 			// Build when a fix has them, even if Build then refuses. Desc shows
 			// them, and sudo is asked only once Build has returned commands.
-			Desc: "for each workspace root, with sudo: mkdir -p <root>; chown -h " + d.account() + " <root>; chmod -h 0" + workspaceMode + " <root> (only what is missing)",
+			NeedsSudo: true,
+			Desc:      "for each workspace root, with sudo: mkdir -p <root>; chown -h " + d.account() + " <root>; chmod -h 0" + workspaceMode + " <root> (only what is missing)",
 			Build: func(ctx context.Context, p Prompter) ([]Cmd, error) {
 				roots, _, msg := d.workspaceRoots()
 				if msg != "" {

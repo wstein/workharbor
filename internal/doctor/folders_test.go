@@ -214,3 +214,32 @@ func TestAMountedExternalVolumeIsNotCalledUnmounted(t *testing.T) {
 		t.Errorf("%s", msg)
 	}
 }
+
+func TestARootWhoseOwnerChangedDuringTheConfirmRunsNothing(t *testing.T) {
+	d, r, root := folderDeps(t, "ws")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r["df -P "+root] = dfHeader + "/dev/disk3s1 100 1 99 1% /System/Volumes/Data"
+	r["stat -f %Su %Lp "+root] = "alice 700\n"
+	p := &hookPrompter{hook: func() { r["stat -f %Su %Lp "+root] = "bob 700\n" }}
+	cmds, err := folderStep(t, d).Fix.Build(context.Background(), p)
+	if err == nil || len(cmds) != 0 || !strings.Contains(err.Error(), "changed while you were asked") {
+		t.Errorf("owner: %v %v", cmds, err)
+	}
+	r["stat -f %Su %Lp "+root] = "alice 700\n"
+	p = &hookPrompter{hook: func() { r["stat -f %Su %Lp "+root] = "alice 777\n" }}
+	cmds, err = folderStep(t, d).Fix.Build(context.Background(), p)
+	if err == nil || len(cmds) != 0 || !strings.Contains(err.Error(), "changed while you were asked") {
+		t.Errorf("mode: %v %v", cmds, err)
+	}
+}
+
+// The fix uses sudo although its preview shows none: the wizard must know
+// before it asks "Ready to run this?" (#507).
+func TestTheWorkspaceFoldersFixSaysItNeedsSudo(t *testing.T) {
+	d, _, _ := folderDeps(t, "ws")
+	if !folderStep(t, d).Fix.NeedsSudo {
+		t.Error("the workspace-folders fix does not declare NeedsSudo")
+	}
+}
