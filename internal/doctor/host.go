@@ -739,11 +739,7 @@ func hostSteps(d Deps) []Check {
 				}
 				return OK, "Homebrew is installed"
 			},
-			Fix: &Fix{
-				Guide: "Install the Xcode Command Line Tools (the command below) and Homebrew from https://brew.sh as your administrator. Its installer is a script from the internet, so whr does not run it for you.",
-				Try:   []string{"xcode-select --install"},
-				Open:  "https://brew.sh",
-			},
+			Fix: d.homebrewFix(),
 		},
 
 		{

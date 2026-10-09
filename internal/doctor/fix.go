@@ -84,6 +84,9 @@ type Fix struct {
 	// reverting by hand (removing the account's administrator rights): the
 	// wizard then defaults to no, [y/N/q], where it defaults to yes otherwise.
 	Irreversible bool
+	// Cleanup, if set, runs after the fix ended, whether or not it worked, to
+	// remove what Do or Build left behind (a downloaded script).
+	Cleanup func()
 }
 
 // Runner is what the checks use to look at the machine: they only read. A test
