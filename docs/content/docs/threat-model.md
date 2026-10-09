@@ -5,7 +5,7 @@ weight: 2
 toc: true
 ---
 
-**Status:** updated 1 October 2026 for release 1 (issue #11): after the review of `main` at 26ce0d4 and its fixes (#78, #79), for the vendor terms of subscription logins (D40, T17), on 3 October for signed releases (D24, T19, #180), for the refused IPv6 prefixes (T5, #124, #194), and on 4 October for the trusted computing base (#248), and on 9 October for the alpha install policy (D58, #493). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
+**Status:** updated 1 October 2026 for release 1 (issue #11): after the review of `main` at 26ce0d4 and its fixes (#78, #79), for the vendor terms of subscription logins (D40, T17), on 3 October for signed releases (D24, T19, #180), for the refused IPv6 prefixes (T5, #124, #194), and on 4 October for the trusted computing base (#248), and on 9 October for the alpha install policy (D58, #493) and outside knowledge bundles (D60). It refines [design §7](design/security.md#7-security), which stays the list of security rules; this page says what those rules defend against, where each is enforced and tested, and which risks are accepted. A control is **measured** when a spike or test showed it working, **planned** when an issue implements it, and **open** when nothing covers it yet.
 
 ## Scope and assumptions
 
@@ -105,7 +105,7 @@ The console has no threat ID of its own: T16 covers access into it and the accep
 
 ## Threats and controls
 
-**External skill sets (D52, #283; to be built).** A compromised package source can inject instructions (T1) or attempt to substitute settings and resources at load time (T2/T3). The [loading contract](design/skill-sets.md) confines reviewed text to an inventoried, supervisor-controlled store mounted read-only, validates exact pins on start and resume, and preserves repository/home discovery suppression and platform policy. A pin identifies content; it does not make that content safe. Live loading and these additional supply-chain checks are {{< status unverified >}}; the implemented statuses below do not cover the new loader.
+**External skill sets (D52, #283; to be built).** A compromised package source can inject instructions (T1) or attempt to substitute settings and resources at load time (T2/T3). The [loading contract](design/skill-sets.md) confines reviewed text to an inventoried, supervisor-controlled store mounted read-only, validates exact pins on start and resume, and preserves repository/home discovery suppression and platform policy. A pin identifies content; it does not make that content safe. Outside knowledge, such as an OKF bundle (D60, proposed), is untrusted text (T1) that reaches an agent only through this path; its own `verified` or `generated` claims count for nothing, and WorkHarbor never runs its `executor` or `attester` resources or follows its path or `resource` fields. Live loading and these additional supply-chain checks are {{< status unverified >}}; the implemented statuses below do not cover the new loader.
 
 | # | Threat | Source | Controls | Enforced and tested in | Status |
 | --- | --- | --- | --- | --- | --- |
