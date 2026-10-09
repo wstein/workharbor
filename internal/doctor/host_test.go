@@ -1615,7 +1615,7 @@ func TestToolStoreIsNotReachableWithoutTheGuestHelpers(t *testing.T) {
 				t.Errorf("names a helper that is there: %q", u.Why)
 			}
 			// a managed prefix is never a make install target
-			if len(u.Tools) != 2 || u.Tools[0] != "make install-release VERSION=<tag> PREFIX="+d.Prefix || u.Tools[1] != "scripts/install-release.sh <tag> "+d.Prefix ||
+			if len(u.Tools) != 2 || u.Tools[0] != "sudo ./install.sh <tag> "+d.Prefix || u.Tools[1] != "make install-release VERSION=<tag> PREFIX="+d.Prefix ||
 				!strings.Contains(u.Note, "--allow-downgrade") || !strings.Contains(u.Note, "xattr -l") || strings.Contains(strings.Join(u.Tools, ";"), "make install PREFIX") {
 				t.Errorf("managed: %q %q", u.Tools, u.Note)
 			}
