@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+_build/
+deps/
+node_modules/
+.dist/
+.cache/
+__pycache__/
+*.pyc
+.symphony/
+.codex/auth.json
+.codex/sessions/
