@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -77,12 +78,46 @@ def begin(root, args):
 def scope(root, state):
     baseline = state['baseline']
     git(root, 'merge-base', '--is-ancestor', baseline, 'HEAD')
-    changed = set(filter(None, git(root, 'diff', '--name-only', '-z', baseline, '--').split('\0')))
+    changed = set(filter(None, git(root, 'diff', '--no-renames', '--name-only', '-z', baseline, '--').split('\0')))
+    staged = set(filter(None, git(root, 'diff', '--cached', '--no-renames', '--name-only', '-z', baseline, '--').split('\0')))
+    changed.update(staged)
+    commits = git(root, 'rev-list', f'{baseline}..HEAD').splitlines()
+    historical = {}
+    for commit in commits:
+        paths = set(filter(None, git(root, 'diff-tree', '--root', '-m', '-r',
+                                    '--no-commit-id', '--no-renames', '--name-only',
+                                    '-z', commit, '--').split('\0')))
+        historical[commit] = paths
+        changed.update(paths)
     changed.update(filter(None, git(root, 'ls-files', '--others', '--exclude-standard', '-z').split('\0')))
     allowed = set(state['allowed']) | {state['tasks_path']}
     extra = changed - allowed
     if extra:
         raise ValueError('Out-of-scope changes: ' + ', '.join(sorted(extra)))
+    # Inspect every recorded version too: neither a worktree restore nor a later
+    # revert may hide a staged or committed violation of the task contract.
+    versions = [('index', staged)] + list(historical.items())
+    for revision, paths in versions:
+        for value in paths:
+            path_in_repo(root, value)
+            if revision == 'index':
+                entries = git(root, 'ls-files', '--stage', '-z', '--', value).split('\0')
+                modes = [entry.split(' ', 1)[0] for entry in entries if entry]
+                source = f':{value}'
+            else:
+                entries = git(root, 'ls-tree', '-z', revision, '--', value).split('\0')
+                modes = [entry.split(' ', 1)[0] for entry in entries if entry]
+                source = f'{revision}:{value}'
+            if any(mode not in ('100644', '100755') for mode in modes):
+                raise ValueError(f'Unsafe file type in {revision}: {value}')
+            if value == state['tasks_path']:
+                if not modes:
+                    raise ValueError('Task file deleted in index/history')
+                version = git(root, 'show', source)
+                rows = task_lines(version)
+                row = rows.get(state['task'])
+                if row is None or version[:row.start(2)] + ' ' + version[row.end(2):] != state['tasks_before']:
+                    raise ValueError('Only the selected task checkbox may change in index/history')
     for value in changed:
         path_in_repo(root, value)
         if (root/value).is_symlink():
@@ -102,8 +137,16 @@ def scope(root, state):
     signature = {}
     for value in sorted(allowed):
         path = root/value
-        data = normalized.encode() if value == state['tasks_path'] else (path.read_bytes() if path.is_file() else b'<absent>')
-        signature[value] = hashlib.sha256(data).hexdigest()
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            signature[value] = dict(type='absent', mode=None, sha256=None)
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError(f'Expected regular file: {value}')
+        data = normalized.encode() if value == state['tasks_path'] else path.read_bytes()
+        signature[value] = dict(type='regular', mode='100755' if metadata.st_mode & stat.S_IXUSR else '100644',
+                                sha256=hashlib.sha256(data).hexdigest())
     if (row[2] != ' ' or state['phase'] == 'handoff-only') and signature != state.get('verified_files'):
         raise ValueError('Completed task content changed; owner-authorized rework required')
     return current, row, signature

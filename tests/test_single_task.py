@@ -82,6 +82,73 @@ class SingleTaskTests(unittest.TestCase):
             path.write_text(content)
             self.assertIn('checkbox', self.cli('verify', ok=False).stderr)
 
+    def test_staged_violation_hidden_by_worktree_restore(self):
+        self.begin()
+        path = self.feature/'spec.md'
+        original = path.read_bytes()
+        path.write_text('Unauthorized staged change\n')
+        self.git('add', 'specs/demo/spec.md')
+        path.write_bytes(original)
+        self.assertIn('Out-of-scope', self.cli('complete', ok=False).stderr)
+        self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
+
+    def test_committed_violation_hidden_by_revert(self):
+        self.begin()
+        path = self.feature/'spec.md'
+        original = path.read_bytes()
+        for content in (b'Unauthorized committed change\n', original):
+            path.write_bytes(content)
+            self.git('add', '.')
+            self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                     'commit', '-m', 'test: change then revert')
+        self.assertIn('Out-of-scope', self.cli('complete', ok=False).stderr)
+        self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
+
+    def test_staged_other_task_hidden_by_worktree_restore(self):
+        self.begin()
+        path = self.feature/'tasks.md'
+        path.write_text(self.tasks.replace('[ ] T002', '[x] T002'))
+        self.git('add', 'specs/demo/tasks.md')
+        path.write_text(self.tasks)
+        self.assertIn('checkbox', self.cli('complete', ok=False).stderr)
+        self.assertEqual(self.tasks, path.read_text())
+
+    def test_historical_other_task_hidden_by_revert(self):
+        self.begin()
+        path = self.feature/'tasks.md'
+        for content in (self.tasks.replace('Other task', 'Unauthorized scope'), self.tasks):
+            path.write_text(content)
+            self.git('add', '.')
+            self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                     'commit', '-m', 'test: task change then revert')
+        self.assertIn('checkbox', self.cli('complete', ok=False).stderr)
+        self.assertEqual(self.tasks, path.read_text())
+
+    def test_mode_change_requires_rework_even_without_git_filemode(self):
+        self.begin()
+        self.cli('complete')
+        self.git('config', 'core.filemode', 'false')
+        (self.root/'guide.md').chmod(0o755)
+        self.assertIn('rework', self.cli('verify', ok=False).stderr)
+
+    def test_absent_file_differs_from_sentinel_contents(self):
+        self.begin()
+        (self.root/'guide.md').unlink()
+        self.cli('complete')
+        (self.root/'guide.md').write_bytes(b'<absent>')
+        self.assertIn('rework', self.cli('verify', ok=False).stderr)
+
+    def test_staged_symlink_hidden_by_worktree_restore(self):
+        self.begin()
+        path = self.root/'guide.md'
+        path.unlink()
+        path.symlink_to('specs/demo/spec.md')
+        self.git('add', 'guide.md')
+        path.unlink()
+        path.write_text('Before\n')
+        self.assertIn('Unsafe file type', self.cli('complete', ok=False).stderr)
+        self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
+
     def test_failed_acceptance_does_not_complete(self):
         self.begin([sys.executable, '-c', 'raise SystemExit(2)'])
         self.cli('complete', ok=False)
