@@ -11,3 +11,4 @@ __pycache__/
 .symphony/
 .codex/auth.json
 .codex/sessions/
+WORKFLOW.local.md
