@@ -53,7 +53,8 @@ Features 001/002 as mutation targets. Exercise this matrix on both target platfo
 | Allowed content with passing checks | Only selected marker checked; sealed evidence retained | US2 |
 | Untracked, staged-only, mode/type change, commit then revert | Reject unauthorized scope across all inventories | FR-005 |
 | Missing tool, nonzero exit, timeout, mutating acceptance command | Failed evidence; no new completion claim | FR-006 |
-| Interrupt before/after acceptance, prepared intent, marker write and final journal event | Resume exact transition without duplicate work or lost history | US3; FR-009 |
+| Interrupt before acceptance or after acceptance-recorded but before intent | Same attempt/history; exact entry task bytes; fresh review/check validation before durable intent and marker publication; stale review, changed sealed content, failed rerun or later-state missing intent blocks; include checked rework | US3; FR-009 |
+| Interrupt after prepared intent, marker write and final journal event | Resume exact transition without duplicate work or lost history | US3; FR-009 |
 | Commit binding, repeated verification, changed completed content | Original implementation identity retained; handoff-only never reimplements | FR-008 |
 | Two begin/complete/rework processes and process termination | One lock owner; competitor conflicts; crash releases lock safely | FR-009 |
 | Explicit authorized rework vs missing authorization | New linked attempt only for approved correction; checked marker preserved | FR-007 |

@@ -111,8 +111,12 @@ mode versus progress, evidence identities, crash boundaries and error outcomes.
    submodule/gitlink changes, nonregular allowed outputs and repository escapes.
 5. Lock one worktree while a command validates/writes state and completes checks.
    Journal acceptance identity and completion intent before atomic checkbox update.
-   On recovery compare exact pre/post task bytes and content identities, then finish
-   only the interrupted transition. Corrupt or unexpected state blocks, never resets.
+   Before an intent exists, resume a valid active/acceptance-recorded attempt only
+   with unchanged entry task bytes, matching sealed content when recorded, current
+   review and freshly rerun checks; persist intent before any marker write. With
+   intent, compare exact pre/post bytes and finish only that prepared transition.
+   Keep the same attempt/history. A later state missing required intent is corrupt;
+   unexpected content blocks, never resets. See the data model for both branches.
 6. Separate acceptance, checkbox completion and commit binding. After completion,
    only `record-commit` binds an existing matching local implementation commit;
    handoff readiness requires it. No self-referential commit hash is put in the

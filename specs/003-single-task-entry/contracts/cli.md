@@ -15,7 +15,7 @@ issue prose. Context/review records follow [data-model.md](../data-model.md).
 | `python3 scripts/single_task.py verify --attempt ID --review PATH` | Current semantic review and existing attempt | Scope and acceptance checks; no task-marker mutation |
 | `python3 scripts/single_task.py complete --attempt ID --review PATH` | Same as verify | Rerun checks; journal and apply only selected marker; enter handoff-only, awaiting commit |
 | `python3 scripts/single_task.py record-commit --attempt ID --commit SHA` | Existing matching local commit | Bind immutable implementation identity; no commit creation or file modification |
-| `python3 scripts/single_task.py resume --attempt ID --review PATH` | Saved state and current content-bound review | Recover prepared completion if needed, rerun acceptance; handoff readiness requires bound commit |
+| `python3 scripts/single_task.py resume --attempt ID --review PATH` | Saved state and current content-bound review | Resume the same valid pre-intent attempt with fresh validation/checks, or recover its prepared transition per data-model.md; handoff readiness requires bound commit |
 | `python3 scripts/single_task.py status --attempt ID` | Existing journal | Read-only mode/progress/evidence/blocker summary |
 
 No command executes task implementation automatically. Begin returns a bounded

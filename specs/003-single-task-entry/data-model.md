@@ -146,9 +146,27 @@ allowed evidence document. Approval normalization never grants execution permiss
 Under the lock, validate context/scope and semantic review, execute checks, then
 revalidate content. Persist acceptance and exact pre/post marker intent durably
 before atomic tasks.md replacement. Persist replacement directory durability before
-finalizing journal progress. A restart at any boundary compares the actual tasks
-file to exact intent pre/post bytes, reruns checks against the sealed content and
-finishes only that same transition. Anything else blocks without rollback.
+finalizing journal progress. Recovery under the same exclusive lock distinguishes:
+
+- Before an intent exists, a valid `active` or `acceptance-recorded` attempt may
+  resume only with tasks.md byte-identical to its immutable entry snapshot. For
+  `acceptance-recorded`, current content must also match the recorded acceptance
+  manifest; changed content blocks without adopting a new baseline. Validate the
+  saved context, scope and current content-bound semantic review, rerun every
+  approved check and revalidate content. Old successful results never authorize a
+  marker write. Only fresh success permits appending new acceptance evidence,
+  persisting the exact pre/post intent and continuing the same attempt through the
+  normal completion transition. Retain earlier events and attempt ID; do not
+  reimplement, create another attempt or change the marker before durable intent.
+- Once an intent exists, compare actual tasks bytes to its exact pre/post bytes,
+  rerun checks against sealed content and finish only that prepared transition.
+  A `completion-prepared` or later state missing its required intent is corrupt
+  evidence, not the valid pre-intent case; block without reconstructing it.
+
+Missing/stale review, failed checks, mismatched tasks/content or invalid journal
+state block without changing task bytes, resetting state or deleting prior events.
+The same pre-intent rule applies to rework: the entry snapshot is already checked,
+and its eventual pre/post marker bytes remain identical.
 After successful checkbox completion mode is handoff-only; commit binding may still
 be pending. `record-commit` is permitted, implementation changes are not. Full handoff
 verification requires a bound commit. Repeated complete is idempotent and never
