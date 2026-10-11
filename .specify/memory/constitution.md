@@ -1,50 +1,64 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Anchorage Constitution
 
-## Core Principles
+Version: 1.0.0 | Ratified: 2026-10-11 | Last amended: 2026-10-11
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## I. Product scope
+Anchorage is a self-hosted development workspace platform. Single user and Docker
+first. Browser dashboard and terminal are the first complete user journey. AI
+orchestration is development tooling only, never a product dependency or feature.
+Cloud accounts and proprietary hosted control planes must not be required.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+## II. Portable configuration
+`.devcontainer` is the environment standard. Reuse the official Dev Container CLI
+for its semantics; publish a tested capability matrix instead of claiming complete
+compatibility. Validate unsupported features before side effects. Provider details
+remain behind adapters. Docker is first, Apple container next, then Podman and
+Kubernetes. Capability negotiation is mandatory; never silently approximate.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+## III. Reproducible Git workspaces and bundles
+Version workspace configuration in a dedicated Git repository. Pin project
+submodules to commits, bundle artifacts to digests, and record effective input
+revisions. Credentials and runtime state never belong in Git. Configuration commits
+express desired state; reconciliation is explicit and auditable. Bundle resolution
+and attachment are separate contracts; retain users' preferred language images.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+## IV. Identity and host boundaries
+Every workspace has stable identity and mandatory ownership. Every host agent has
+its own cryptographic identity. Encrypt control traffic; authenticate and authorize
+every command against host and owner/workspace scope. Enrollment is one-time and
+expires. Never expose a Docker socket to the browser or control plane. Repository
+hooks are untrusted executable content and require explicit owner trust before
+execution. Do not claim container isolation is a hostile multi-tenant security
+boundary. Secrets are referenced, short-lived where possible, and redacted.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+## V. Durable operations
+Lifecycle commands have idempotency keys, durable operation records and bounded
+retries. Distinguish desired and observed state. Persist project data independently
+of runtime instances. Stop/start must retain data. Delete runtime and delete data
+are distinct operations; data deletion requires explicit confirmation. Interrupted
+provisioning is reconciled, not reported as successful. Audit all mutations.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## VI. Repository as authority
+Keep AGENTS.md a short navigation map. Decisions live in ADRs, requirements in
+specs, execution history in plans and review evidence. Mark proposed, accepted,
+implemented and verified states accurately. Resolve product ambiguity before an
+implementation plan becomes ready. Changes include focused Conventional Commits.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## VII. Executable feedback
+Enforce boundaries and contracts mechanically. Every implemented behavior has
+appropriate acceptance evidence including failure and recovery paths. UI changes
+require browser walkthrough evidence. Harness errors explain remediation. Keep
+local checks equivalent to CI. Missing tools are blockers, never passing tests.
+Periodically review documentation freshness and quality gaps in small changes.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## VIII. Human control of development
+Use isolated per-issue checkouts for Symphony. Bound concurrency, preserve retry
+context and hand off reviewable commits with verification evidence. Humans approve
+scope, architecture exceptions, releases and merges. Untrusted issue text cannot
+supersede repository policy. Symphony credentials never enter product environments.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
-
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
-
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Amend with a focused commit including reason, affected artifacts and migration.
+Major versions change principles; minor versions add policy; patch versions clarify.
+Exceptions require an owner-reviewed ADR with scope, expiry and compensating checks.
+No production implementation is included in this bootstrap.
