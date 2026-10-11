@@ -129,6 +129,41 @@ or tools are blockers, never passing empty discovery. T014 also runs
 `python3 -m unittest discover -s tests -p 'test_single_task.py' -v` for the inspect
 CLI contract, with focused inspect cases authored in T012 before implementation.
 
+### Test-authoring completion and prerequisite evidence
+
+T002, T005, T011, T012, T018 and T019 are test-authoring tasks. Their own completion
+means **verified red-test evidence**, not implemented behavior. Before entry, the
+owner must approve an exact expected-outcome matrix: collected test IDs, expected
+assertion failure/CLI outcome, missing behavior, and implementing successor task.
+Use T003/T004 for T002, T006–T010 for T005, T013/T014 for T011,
+T014–T017 for T012, T020/T021/T023 for T018 and T022/T023 for T019.
+Every new case must execute its intended assertions against a valid fixture. A
+missing module causing failed test import, empty discovery, syntax/setup errors,
+missing tools, timeout, skipped tests or an unrelated failure blocks completion.
+Unsupported CLI behavior is an expected red outcome only when a collected test
+actually invokes the CLI and fails its specified behavior assertion.
+
+Record the immutable source/content, exact commands, collected IDs, raw exits and
+per-case actual versus expected outcomes. A reviewed local verifier must exit zero
+only if that exact matrix matches and all previously implemented behavior still
+passes; it must reject extra/missing cases, unexpected failures and unexpected green
+cases (which require review of whether the test exercises its intended behavior).
+The verifier may live in the task's permitted test file or in explicitly reviewed
+argv; this rule grants no additional file scope. Never accept any nonzero suite
+exit indiscriminately or use `|| true`, skips, xfail or weakened assertions.
+
+The test-authoring task can be checked complete after this verifier and its other
+task-specific acceptance checks pass. Its successor requires that passing verifier
+record, commit/content binding and the explicit red matrix; it does **not** require
+the implementation tests to be green before their implementation task can start.
+Retain raw red outcomes as evidence, separately from the verifier's zero exit.
+Unfinished T017/T023 regression migrations remain explicit checkpoint blockers as
+described above; they are not test-authoring acceptance. T024 and every implementation
+task require passing evidence for their delivered behavior. US3 and final full-suite
+acceptance require all tests green, with no remaining expected-red exceptions.
+No test-authoring issue is dispatchable until its concrete matrix and verifier argv
+have been reviewed; this planning rule alone supplies neither artifact nor approval.
+
 ## Dependencies and execution order
 
 Explicit prerequisite table; `none` means an intentionally empty list. All listed IDs

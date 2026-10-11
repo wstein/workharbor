@@ -135,6 +135,14 @@ Check their tree identities before and after against the recorded implementation
 baseline. `make check`, `git diff --check` and the targeted unittest suites must pass.
 Documentation must label future commands/scenarios as planned until implemented.
 No existing passing suite is represented as evidence for new behavior.
+Test-authoring completion uses the explicit expected-outcome matrix and zero-exit
+red-evidence verifier defined in tasks.md. A successor consumes the verifier's
+passing, content-bound acceptance record together with the raw expected failures;
+it never treats those failures as implemented behavior or demands their green
+implementation result before starting the implementing task. Uncollected tests,
+import/setup failures and unrelated regressions block test-authoring acceptance.
+The exact matrix and verifier argv require review before that issue's dispatch;
+all tests must be green at US3 and final acceptance.
 Migrate existing CLI regression callers with entry (T010), completion (T017) and
 retry (T023), retaining every original invariant. Intermediate US1/US2 full-suite
 failures for unfinished commands are explicit blockers, not skipped tests or green

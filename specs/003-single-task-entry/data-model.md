@@ -23,7 +23,11 @@ Persist only safe references and identifiers; no authentication tokens or raw ou
   inference or standalone assertion may replace the authoritative table.
 - `prerequisite_evidence`: exactly one local record per dependency; task/feature,
   completed status, content manifest, implementation commit, passing check results
-  and evidence_ref. Require a checked prerequisite in current tasks and locally
+  and evidence_ref. For a test-authoring prerequisite, passing results mean the
+  reviewed expected-outcome verifier passed; its evidence_ref also retains the
+  exact collected-case matrix and raw expected-red outcomes required by tasks.md.
+  This does not waive check exit-zero validation or assert implementation success.
+  Require a checked prerequisite in current tasks and locally
   resolvable implementation commits whose recorded tree paths match the manifest;
   all check records bind to that manifest. Reject extra, missing or stale records.
 - `allowed_paths`: nonempty unique exact paths; no globs/directories, .git or local
