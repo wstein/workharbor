@@ -4,7 +4,7 @@ The feature is not runnable yet. Start with T001; then follow tasks in dependenc
 order. For existing baseline prerequisite inspection:
 
 ```sh
-SPECIFY_FEATURE=001-workspace-lifecycle .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
+SPECIFY_FEATURE_DIRECTORY=specs/001-workspace-lifecycle SPECIFY_FEATURE_NO_PERSIST=1 .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
 make check
 ```
 
