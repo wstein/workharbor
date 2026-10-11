@@ -1,6 +1,6 @@
 # Feature 001 implementation plan
 
-Status: proposed implementation plan; product work not started.
+Status: revised proposed implementation plan awaiting human review; product work not started.
 Branch for implementation: `001-workspace-lifecycle`.
 
 ## Technical context
@@ -40,3 +40,46 @@ excluded. Capture actual idle/load resource measurements rather than stack estim
 Pin versions and publish the supported config matrix; all FR requirements need
 evidence; backup/restore and certificate rotation runbooks must be tested. Do not
 label a scaffold or mocked provider as a shipped feature.
+
+## Components and validation commands
+Control-plane modules live in `apps/control_plane/lib/workharbor/`; LiveViews in
+`apps/control_plane/lib/workharbor_web/live/`. Domain migrations live in
+`apps/control_plane/priv/repo/migrations/`, tests in `apps/control_plane/test/`.
+Agent ports, services and Docker adapter live respectively in
+`apps/host_agent/internal/ports/`, `apps/host_agent/internal/service/` and
+`apps/host_agent/internal/providers/docker/`; Go tests sit beside their packages.
+Protocol schemas and negative fixtures live in `contracts/host-protocol/`.
+T001 and T011 establish the actual project commands: `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix test`, `gofmt -l .`, `go build ./...` and
+`go test ./...`, each run from its application directory. `make check` remains the
+repository gate. Real-host/browser commands and results are added to quickstart
+and evidence by T010; absent application tools or hosts never count as passing.
+
+## Security and recovery design
+Persist revision-scoped trust approvals in the control plane and include the
+approved revision set in authorized provisioning commands. Resolve and validate
+before executing hooks. Enrollment and session consumption use transactional
+compare-and-set semantics. Implement the spec's exact TTLs, session quotas,
+dimensions, buffer limits and cleanup deadlines; test boundary and concurrent use.
+Use monotonic timers for heartbeat expiry, operation deadlines and relay cleanup.
+Each provider mutation has a 120-second deadline, except provisioning (20 minutes).
+A timeout triggers inspection before any retry; retries never run overlapping
+mutations. After the spec's three retries, require explicit operator retry.
+Use generation-checked reports and reconcile after authenticated reconnect.
+
+## Backup and restore gate
+T019 supplies `scripts/backup-workharbor.sh`, `scripts/restore-workharbor.sh` and
+`docs/development/backup-restore.md`. Quiesce operations and stop workspaces before
+copying metadata and project storage; abort if quiescence cannot be confirmed.
+Back up identity/revocation state securely outside Git, with restricted access.
+Restore into an empty installation, retain ownership and operation outcomes,
+mark observations unknown, and reconcile only after authenticated reconnect.
+T019 proves this with uncommitted files and a revoked identity on a clean host.
+
+## Review and execution gates
+The revised spec and plan require separate human review before implementation
+issues receive `workharbor-ready`. An issue names the feature, one task, its
+prerequisites, authoritative documents and acceptance commands. Agents select that
+feature, read those documents and implement only the approved task. Missing gates,
+unclear scope or unmet dependencies block execution. Analyze before implementation;
+converge after an implementation pass, never as an automatic planning substitute.
