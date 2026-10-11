@@ -19,11 +19,21 @@ implementation remains pending. AI tooling is for development only.
 ## Start
 
 ```sh
-git clone workharbor.bundle workharbor
+git clone https://github.com/wstein/workharbor-nxt.git workharbor
 cd workharbor
 make check
 python3 scripts/select_feature.py 001-workspace-lifecycle
 ```
+
+For an offline restore from an existing bundle:
+
+```sh
+git clone /absolute/path/to/workharbor.bundle workharbor
+cd workharbor
+make check
+```
+
+The bundle must be supplied separately; it is not required for the GitHub clone.
 
 Requires Git, Make, Python 3.11+ and Bash. On macOS the built-in Python may need a
 newer installation. Open Codex in this repository; generated `$speckit-*` skills
