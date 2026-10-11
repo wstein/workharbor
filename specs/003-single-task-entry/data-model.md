@@ -15,12 +15,12 @@ Persist only safe references and identifiers; no authentication tokens or raw ou
 - `approval`: nonempty owner_ref/evidence_ref and context_digest binding feature,
   task, reviewed artifacts, dependency assertion, allowed paths, semantic constraints,
   checks and requested mode. This is an operator assertion, not authenticated identity.
-- `dependencies`: explicit unique task IDs including `[]`, plus `source_assertion`
-  naming artifact path, reviewed digest, exact dependency excerpt (or explicit
-  declaration of no dependencies), and owner review reference. Validate against
-  corresponding source bytes and prerequisite records; no prose inference.
-  If the excerpt cannot unambiguously enumerate those IDs, block and request a
-  reviewed structured declaration rather than treating it as complete.
+- `dependencies`: explicit unique task IDs including `[]`, sorted by task ID.
+  `source_assertion` has exactly `path` (selected feature's tasks.md), `sha256`
+  (its reviewed raw-byte digest), `excerpt` (the full dependency table below) and
+  nonempty `owner_ref`. Bind these fields in the context approval. Validate the
+  reviewed table and compare the selected row exactly with dependencies; no prose
+  inference or standalone assertion may replace the authoritative table.
 - `prerequisite_evidence`: exactly one local record per dependency; task/feature,
   completed status, content manifest, implementation commit, passing check results
   and evidence_ref. Require a checked prerequisite in current tasks and locally
@@ -39,6 +39,34 @@ Persist only safe references and identifiers; no authentication tokens or raw ou
 Contexts use canonical JSON (UTF-8, sorted keys, compact separators) for digesting;
 exclude the approval.context_digest field itself from the digest. Evidence references
 are inert local references: never fetched, evaluated or assumed authentic.
+
+## Dependency table grammar v1
+The reviewed tasks.md must contain exactly one dependency table outside fenced code.
+Its header and separator are exactly `| Task | Prerequisites |` and
+`| --- | --- |`. Each following contiguous row has exactly one of these forms:
+
+```text
+| T001 | none |
+| T002 | T001 |
+| T003 | T001, T002 |
+```
+
+IDs match `T[0-9]{3}`. Rows are sorted by task ID and enumerate every real task
+exactly once; prerequisite lists are sorted, comma-space separated, unique and
+refer only to other tasks in the same feature. `none` is the sole empty-list
+spelling. Reject omitted/extra/duplicate rows, duplicate headers/tables, unknown
+IDs, self-dependencies, cycles, malformed separators and contradictory duplicate
+rows. The excerpt contains the header, separator and all rows, with LF separators
+and no trailing LF; locate it by exact lines in the reviewed artifact (CRLF line
+terminators may be removed for this comparison only; its artifact digest still
+hashes raw bytes). Context IDs must equal the selected row, including an explicit
+`[]` for `none`; prerequisite evidence must cover exactly that set.
+Other prose is not parsed for dependencies. The owner review must attest that this
+table is the complete dependency declaration and that surrounding prose does not
+contradict it. An artifact without this table blocks until the owner supplies and
+reviews a corrected artifact revision; an operator cannot override it with an
+unanchored context list. This feature changes no real Feature 001/002 artifacts.
+Tests cover valid empty/nonempty rows and every rejection rule above.
 
 ## Review preparation and canonical content manifest
 `inspect --attempt ID` acquires the same worktree lock, validates saved context and

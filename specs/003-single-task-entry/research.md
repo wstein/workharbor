@@ -19,7 +19,9 @@ bound one task); new service/framework (unnecessary dependencies and remote coup
 resolved local artifact commits and exact prerequisite evidence.
 **Rationale:** Arbitrary Markdown prose is not a reliable dependency grammar; do not
 infer dependencies or execute its text. Require a reviewed explicit list anchored to
-source artifact identity and reject ambiguity. Local records establish consistency,
+source artifact identity and reject ambiguity. The authoritative declaration is the
+complete tasks.md table defined by dependency-table grammar v1 in the data model;
+owner review attests its completeness, while validation checks syntax and consistency. Local records establish consistency,
 not owner authenticity. These trust limits are explicit in FR-002/003 assumptions.
 **Alternatives considered:** Live GitHub review lookup (violates offline requirement);
 checkboxes alone (not implementation/test evidence); natural-language auto-inference

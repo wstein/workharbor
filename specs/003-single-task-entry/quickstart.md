@@ -45,7 +45,7 @@ Features 001/002 as mutation targets. Exercise this matrix on both target platfo
 | --- | --- | --- |
 | Begin one task with explicit empty or satisfied dependencies | One implement attempt, no other task starts | US1; FR-001–004 |
 | Unknown/duplicate/multiple task, unsafe feature, dirty worktree | Block before checks/implementation; preserve existing work | US1; edge cases |
-| Omitted dependency list, wrong IDs, missing/failed/stale evidence | Precise prerequisite blocker; never auto-run dependencies | FR-002 |
+| Missing/malformed/duplicate/incomplete dependency table, unknown/self IDs, cycles, wrong context IDs, missing/failed/stale evidence | Precise prerequisite blocker; never auto-run dependencies | FR-002 |
 | Missing approval, changed requirements/scope/checks/dependencies | Block; no remote owner-authentication claim | FR-003/004 |
 | Checkbox-only or valid appended evidence-footer progress | Approval retained; unrelated execution-task markers still protected | FR-003/005 |
 | Inspect current content, then review its returned manifest/digests | No acceptance execution or task mutation; canonical vectors agree on both platforms; subsequent content mutation makes review stale | FR-006 |

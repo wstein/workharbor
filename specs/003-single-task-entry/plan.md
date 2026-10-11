@@ -93,7 +93,9 @@ mode versus progress, evidence identities, crash boundaries and error outcomes.
 1. Entry requires a local reviewed context: exact feature/task, artifact revisions,
    dependency IDs/source references, completion evidence, permitted paths/checks and
    approval records. Validate fields strictly; compare dependencies with approved
-   source assertions. Ambiguous prose cannot be inferred as an empty dependency set.
+   tasks.md table/source assertions using dependency-table grammar v1 in the data
+   model. Reject malformed, incomplete, duplicate, cyclic or mismatching declarations;
+   ambiguous prose cannot be inferred as an empty dependency set.
 2. Treat local approval and semantic review as trusted operator attestations bound
    to content/revisions; validate completeness and consistency without claiming to
    authenticate the owner. No prose-to-command evaluation or remote API calls.
