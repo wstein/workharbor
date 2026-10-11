@@ -4,6 +4,9 @@
 [data-model.md](data-model.md), [CLI contract](contracts/cli.md), [quickstart.md](quickstart.md).
 **Status**: Generated proposal; all tasks pending. No owner approval or implementation
 is inferred from generation. Obtain required human reviews and run analyze before work.
+**Regeneration basis**: Current design includes canonical inspection/review identities,
+dependency-table grammar v1, phased regression migration and pre-intent recovery.
+Existing T001–T028 IDs and all pending markers are retained.
 **Tests**: Explicitly required by FR-010 and SC-001–SC-006; write the specified failing
 cases before the corresponding implementation, then verify each story checkpoint.
 **Constraints**: Python 3.11+ standard library and Git only. Features 001/002,
@@ -40,10 +43,10 @@ approval and unmet prerequisites fail before acceptance commands or implementati
 
 ### Implementation
 
-- [ ] T006 [US1] Implement strict TaskContext validation/canonical digesting in `scripts/single_task_context.py`: "schema_version: 1", "reject unknown/missing fields", one task_id/feature, "nonempty owner_ref/evidence_ref", context_digest excluding itself, "nonempty unique exact paths", "nonempty reviewed descriptions", and checks with "ID, argv array of nonempty strings", "repository-relative cwd (or `.`), positive timeout_seconds, and expected exit 0"; require rework-only fields only in rework contexts and forbid globs/directories/.git/state/protected artifacts in allowed paths (FR-001, FR-003, FR-004).
+- [ ] T006 [US1] Implement strict TaskContext validation/canonical digesting in `scripts/single_task_context.py`: "schema_version: 1", "reject unknown/missing fields", one task_id/feature, "nonempty owner_ref/evidence_ref", context_digest excluding itself, "nonempty unique exact paths", "nonempty reviewed descriptions", and checks with "ID, argv array of nonempty strings", "repository-relative cwd (or `.`), positive timeout_seconds, and expected exit 0"; enforce entry mode exactly `implement` or `owner-authorized rework`, artifact paths/commit/SHA-256 identities and source_assertion fields path/sha256/excerpt/owner_ref; canonical context JSON uses "UTF-8, sorted keys, compact separators", "ensure_ascii=False", "no NaN/Infinity and no trailing newline", excluding only approval.context_digest; require rework-only fields only in rework contexts and forbid globs/directories/.git/state/protected artifacts in allowed paths (FR-001, FR-003, FR-004).
 - [ ] T007 [US1] Implement feature/task/baseline/path validation in `scripts/single_task_scope.py`: existing direct specs child, regular unsymlinked spec/plan/tasks, unique `TNNN` outside fences, pending selected task for implement, clean Git worktree including nonignored untracked files, canonical contained paths with no symlink components; never reset or adopt existing changes (FR-001, FR-004; US1/AC2).
 - [ ] T008 [US1] Implement reviewed-artifact/approval comparison in `scripts/single_task_context.py`: locally resolvable ancestor commits and matching SHA-256 bytes; bind exact feature/task/scope/checks/dependencies/mode to approval; preserve approval only for unchanged task lines with normalized checkbox markers and strictly appended EOF `## Execution evidence` records `- Evidence: TNNN PATH SHA256`, requiring "64 lowercase hex digest", valid existing task and matching local content; existing footer records cannot change/disappear and all other prose remains byte-exact (FR-003; SC-005).
-- [ ] T009 [US1] Implement prerequisite/source validation in `scripts/single_task_context.py`: "explicit unique task IDs including `[]`", source_assertion path/sha256/excerpt/owner_ref and the exact dependency-table grammar v1 from data-model.md (all tasks exactly once, sorted rows/lists, `none` for empty, no unknown/self/duplicate/cyclic dependencies), and "exactly one local record per dependency" containing task/feature/completed status/content manifest/implementation commit/passing check results/evidence_ref; verify current checked prerequisites, local commit-tree manifest identity and check binding; reject extra/missing/stale evidence or ambiguous source rather than guessing (FR-002; US1/AC2).
+- [ ] T009 [US1] Implement prerequisite/source validation in `scripts/single_task_context.py`: "explicit unique task IDs including `[]`", source_assertion path/sha256/excerpt/owner_ref and the exact dependency-table grammar v1 from data-model.md ("exactly one dependency table outside fenced code", exact headers `| Task | Prerequisites |` / `| --- | --- |`, "Rows are sorted by task ID", all tasks exactly once, sorted unique local dependency IDs, "`none` is the sole empty-list" spelling, LF excerpt with no trailing LF and only the documented CRLF comparison exception; no unknown/self/duplicate/cyclic dependencies), and "exactly one local record per dependency" containing task/feature/completed status/content manifest/implementation commit/passing check results/evidence_ref; verify current checked prerequisites, local commit-tree manifest identity and check binding; reject extra/missing/stale evidence or ambiguous source rather than guessing (FR-002; US1/AC2).
 - [ ] T010 [US1] Wire `begin --context PATH` and `status --attempt ID` in `scripts/single_task.py` to validated context, scope and journal; create one immutable implement attempt only after all gates pass, retain context/checks/baseline, and reject legacy ad hoc arguments or legacy state with recovery instructions; migrate existing begin/entry regression callers and shared context/attempt helpers in `tests/test_single_task.py` in this same task, with explicit legacy-argument rejection cases; enumerate retained completion/retry scenarios as pending until T017/T023, without deleting, skipping or weakening them to force green; never execute implementation or acceptance at entry (FR-001–FR-004, FR-007, FR-009, FR-012).
 
 Checkpoint: entry/context tests pass for the validated-entry MVP. Existing end-to-end
@@ -59,13 +62,13 @@ staged-only changes, committed violations and failed/mutating checks reject comp
 
 ### Tests
 
-- [ ] T011 [P] [US2] Add failing scope/semantic-review tests in `tests/test_single_task_scope.py` covering current/staged/untracked changes, commit-then-revert history, executable mode/file type/symlink/gitlink changes, other task marker/text/order mutation, typed absent manifest values, canonical manifest/digest vectors (including non-ASCII paths, modes, absence and checkbox normalization), inspect without checks/task mutation, and missing/stale/negative semantic review (US2/AC1–AC2; FR-005, FR-006; SC-003).
-- [ ] T012 [P] [US2] Add failing acceptance/completion CLI tests in `tests/test_single_task.py` for local argv/cwd/timeout execution, missing executable, nonzero exit, missing check, pre/post-check content mutation, safe failure evidence and selected-checkbox-only completion; keep existing guard regressions as explicit scope cases (US2/AC1–AC4; FR-006, FR-012).
+- [ ] T011 [P] [US2] Add failing scope/semantic-review tests in `tests/test_single_task_scope.py` covering current/staged/untracked changes, commit-then-revert history, executable mode/file type/symlink/gitlink changes, other task marker/text/order mutation, typed absent manifest values, canonical manifest/digest vectors with fixed expected bytes and SHA-256 values (including non-ASCII paths, modes, absence and checkbox normalization), strict rejection of unknown/missing manifest/review fields, inspect without checks/task mutation, and missing/stale/negative semantic review (US2/AC1–AC2; FR-005, FR-006; SC-003).
+- [ ] T012 [P] [US2] Add failing acceptance/completion CLI tests in `tests/test_single_task.py` for inspect output identities/no-check/no-mutation behavior and local argv/cwd/timeout execution, missing executable, nonzero exit, missing check, pre/post-check content mutation, safe failure evidence and selected-checkbox-only completion; keep existing guard regressions as explicit scope cases (US2/AC1–AC4; FR-006, FR-012).
 
 ### Implementation
 
-- [ ] T013 [US2] Implement separate worktree/index/HEAD/intervening-commit inventories in `scripts/single_task_scope.py`, including nonignored untracked paths and path/type/mode/bytes manifests with "distinct typed absent values, not a sentinel string"; reject unauthorized changes even when later reverted, all unsafe symlink/gitlink outputs, and every tasks.md byte except the selected checkbox (FR-005; SC-003).
-- [ ] T014 [US2] Implement content-bound SemanticReview validation in `scripts/single_task_scope.py` for required "attempt_id", "task_id", "context_digest", "content_manifest_digest", "reviewer_ref", "evidence_ref", "approved: true"; invalidate review when approved content changes, preserve exact before/after tasks bytes/digests and normalize only the selected checkbox across completion; implement canonical manifest serialization/digesting and `inspect --attempt ID` output in `scripts/single_task.py` per data-model.md, with no review requirement, acceptance execution or completion events; independently recompute identity before/after acceptance and reject reviews made stale since inspection (FR-006; US2/AC1–AC2).
+- [ ] T013 [US2] Implement separate worktree/index/HEAD/intervening-commit inventories in `scripts/single_task_scope.py`, including nonignored untracked paths and path/type/mode/bytes manifests with "distinct typed absent values, not a sentinel string"; reject unauthorized changes even when later reverted, all unsafe symlink/gitlink outputs, and every tasks.md byte except the selected checkbox; emit exactly schema_version=1 and entries sorted "in Unicode code-point order", one entry per allowed path plus selected tasks path, regular entries path/type/mode/sha256 with type="regular", mode="100644" or "100755" and 64 lowercase hex digest, absent entries path/type="absent"/mode=null/sha256=null (FR-005; SC-003).
+- [ ] T014 [US2] Implement content-bound SemanticReview validation in `scripts/single_task_scope.py` for required "attempt_id", "task_id", "context_digest", "content_manifest_digest", "reviewer_ref", "evidence_ref", "approved: true"; invalidate review when approved content changes, preserve exact before/after tasks bytes/digests and normalize only the selected checkbox across completion; implement canonical manifest serialization/digesting ("UTF-8 JSON with sorted object keys, compact separators", "ensure_ascii=False", "no NaN/Infinity and no trailing newline", no Unicode normalization; hash raw bytes and normalize only the selected checkbox to ASCII space) and `inspect --attempt ID` output in `scripts/single_task.py` per data-model.md, return attempt_id/task_id/context_digest/content_manifest/content_manifest_digest with no review requirement, acceptance execution, task mutation or acceptance/completion events; independently recompute identity before/after acceptance and reject reviews made stale since inspection (FR-006; US2/AC1–AC2).
 - [ ] T015 [US2] Implement acceptance execution in `scripts/single_task_acceptance.py`: use only reviewed ordered argv/cwd/finite timeout with no shell evaluation, validate scope/content before and after, bind check identity/exit/timeout/error category and semantic review to the current manifest, reject missing tools/mutations, and journal safe results without persisting raw subprocess output (FR-006, FR-010, FR-012; US2/AC3–AC4).
 - [ ] T016 [US2] Implement completion intent and marker publication in `scripts/single_task_state.py`: under exclusive lock persist acceptance and exact pre/post intent durably before atomic tasks.md replace and directory fsync; advance active → acceptance-recorded → completion-prepared → checkbox-applied → completed-awaiting-commit without overwriting immutable entry_mode or old events; do not mark any task on failed validation/acceptance (FR-004, FR-005, FR-009).
 - [ ] T017 [US2] Wire `verify --attempt ID --review PATH` and `complete --attempt ID --review PATH` in `scripts/single_task.py`; rerun current acceptance at completion, derive handoff-only after valid marker completion, report awaiting-commit separately from handoff-ready, and make repeated complete idempotent with no new attempt or implicit next-task selection; migrate completion/verification regression callers and review preparation in `tests/test_single_task.py` in this same task, preserving all earlier path/checkbox/failure assertions; retry/commit-binding expectations remain explicit blockers until T023 (FR-005–FR-008, FR-012).
@@ -122,7 +125,9 @@ against missing behavior; do not report those tests as passing implementation ev
 T026 checks documentation links via `make check`; T027/T028 require the full quickstart
 matrix and platform evidence, not just one filtered suite. If a shared module changes,
 include all affected existing suites. All commands must actually run; missing files
-or tools are blockers, never passing empty discovery.
+or tools are blockers, never passing empty discovery. T014 also runs
+`python3 -m unittest discover -s tests -p 'test_single_task.py' -v` for the inspect
+CLI contract, with focused inspect cases authored in T012 before implementation.
 
 ## Dependencies and execution order
 
@@ -211,3 +216,22 @@ story because a preceding/following phase is still pending.
 | SC-004 | T018, T021, T024 |
 | SC-005 | T005, T008, T019, T022 |
 | SC-006 | T026–T028 |
+
+## Contract and entity coverage
+
+| Contract command | Tests | Implementation / wiring |
+| --- | --- | --- |
+| begin, status | T002, T005, T010 | T003–T010 |
+| inspect | T011, T012 | T013, T014 |
+| verify, complete | T011, T012 | T013–T017 |
+| record-commit | T018 | T020, T023 |
+| resume | T018, T024 | T021, T023 |
+| rework | T019, T024 | T022, T023 |
+
+TaskContext and approval/source/prerequisite records belong to US1 (T006–T010).
+Shared immutable Attempt/Event state belongs to Foundation (T002–T004).
+ContentManifest, SemanticReview and acceptance evidence belong to US2 (T011–T017).
+Implementation identity, recovery and linked rework belong to US3 (T018–T024).
+T025 audits regressions across these contracts; T027/T028 establish final local and
+platform evidence. No task generation result substitutes for human approval or
+implementation verification.
