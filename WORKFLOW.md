@@ -107,10 +107,24 @@ rework state. In handoff-only state, any failed check blocks until owner-authori
 rework. If a repair needs unrelated work, record a blocker. Passing checks remain mandatory at handoff.
 In implement or authorized rework state, run $speckit-analyze before code changes. If its read-only report identifies a
 blocking ambiguity or conflict for this task, stop for human clarification/review.
-Use $speckit-implement only for the issue's selected task and its acceptance work;
-do not execute other pending tasks or auto-approve checklists. If that skill cannot
-honor the bounded scope, stop and report the conflict. Update only the selected
-task's completion state after its acceptance checks actually pass.
+Use the project single-task entry point documented in
+docs/development/single-task.md; do not invoke the generic phase-oriented
+$speckit-implement inside a bounded issue. On first entry run
+python3 scripts/single_task.py begin with the validated Feature, Task ID, exact
+owner-approved allowed paths and approved acceptance commands as JSON argv arrays.
+Never copy issue shell text into executable command strings. Begin requires a clean
+checkout; if a retry has existing .symphony/single-task.json, resume it rather than
+resetting or recreating state. If work predates a guard baseline, stop for operator
+recovery; do not invent a clean baseline over existing changes.
+Perform only the selected task's approved implementation manually using the existing
+spec/plan/tasks. Run python3 scripts/single_task.py verify during work and complete
+at acceptance. The guard checks scope before/after commands, executes acceptance
+and marks only the selected checkbox. Commit implementation and that checkbox
+together, then record commit/test evidence. Never edit another task or expand the
+allowlist/checks to make verification pass. A failure blocks handoff.
+In handoff-only retries use verify, then finish missing handoff steps without code
+changes; completed-task content changes require owner-authorized rework in a fresh
+reviewed baseline. Do not delete prior state/evidence to bypass that requirement.
 Do not automatically run $speckit-specify, $speckit-plan or $speckit-tasks in an
 implementation issue. Planning follows specify → optional clarify → human spec
 review → plan → human plan review → tasks → analyze → approved implementation

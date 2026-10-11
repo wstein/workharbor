@@ -81,7 +81,8 @@ after review and prerequisite completion. The template does not apply it automat
 
 At each attempt the agent validates the issue fields, selects the existing feature
 with `scripts/select_feature.py`, reads its artifacts, runs initial checks and
-`$speckit-analyze`, then uses `$speckit-implement` within the selected task's scope.
+`$speckit-analyze`, then uses the [single-task entry point](single-task.md)
+for the selected task. The generic `$speckit-implement` remains feature-wide.
 Missing approval, invalid context, unmet dependencies or a skill that cannot honor
 that scope result in a blocked handoff. Initial failures outside the task's repair
 scope are blockers. Planning artifacts are not regenerated during implementation.
@@ -110,4 +111,5 @@ task checkbox/commit but before PR/workpad/labels. Resume with matching evidence
 verify no task is reimplemented and no duplicate PR is created. Also test missing
 completion evidence and a semantic artifact change: both must block; a checkbox-only
 progress change must retain approval. These are required scenarios, not recorded
-live results. A verified single-task Spec Kit entry point remains future work.
+live results. The single-task guard has local integration tests; live orchestration remains
+unverified until these scenarios run against Symphony.
