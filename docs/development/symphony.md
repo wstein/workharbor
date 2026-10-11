@@ -45,8 +45,9 @@ runtime. No daemon has been started and no external messages have been sent.
 ## Trust and recovery
 Hooks clone only the operator-controlled repo into a fresh per-issue directory.
 Every attempt retains its branch and changes on retry. Pre-run bootstrap checks
-provide diagnostics without blocking repairs; passing checks remain mandatory at
-handoff. Invalid checkout/branch prerequisites still stop the hook.
+run without blocking repairs. Symphony may discard successful hook output, so
+the agent runs `make check` itself at the beginning of each attempt and records the
+results in its workpad. Passing checks remain mandatory at handoff. Invalid checkout/branch prerequisites still stop the hook.
 Concurrency is capped at two. Workspace-write policies are not a complete hostile
 code security boundary; run Symphony under a dedicated development account/host,
 without production host-agent credentials. Before handoff, agents finish checks, commits, any authorized PR and tracker
@@ -60,3 +61,28 @@ and an operator performs the final switch. An owner explicitly restores the read
 label to resume work. Merges and
 releases are owner actions. Stop the service to pause dispatch; preserve failed
 checkouts for diagnosis. Do not automatically delete evidence or data.
+
+## Spec Kit and bounded implementation issues
+Symphony dispatches issues; it does not automatically execute the Spec Kit workflow.
+For a new feature, run `$speckit-specify`, optionally `$speckit-clarify`, then obtain
+human spec review. Run `$speckit-plan` and obtain separate human plan review before
+`$speckit-tasks` and `$speckit-analyze`. The repository's Spec Kit workflow contains
+these human gates; a ready label does not replace them.
+
+Feature 001 already has spec, plan and tasks. Reuse and review their current
+revisions. Use the [implementation issue template](../../.github/ISSUE_TEMPLATE/implementation.md)
+to name one task, prerequisites, document paths, approved scope, acceptance results
+and commands. Approval evidence must identify the owner review and reviewed commit;
+changed artifacts require renewed approval. Add `workharbor-ready` manually only
+after review and prerequisite completion. The template does not apply it automatically.
+
+At each attempt the agent validates the issue fields, selects the existing feature
+with `scripts/select_feature.py`, reads its artifacts, runs initial checks and
+`$speckit-analyze`, then uses `$speckit-implement` within the selected task's scope.
+Missing approval, invalid context, unmet dependencies or a skill that cannot honor
+that scope result in a blocked handoff. Initial failures outside the task's repair
+scope are blockers. Planning artifacts are not regenerated during implementation.
+Run `$speckit-converge` for the whole feature only in an explicitly authorized
+closure pass after implementation; review its remaining work before dispatch.
+This is a prompt/issue contract, not a mechanical tracker gate. Live dispatch and
+skill-scope behavior require the documented smoke test before unattended operation.
