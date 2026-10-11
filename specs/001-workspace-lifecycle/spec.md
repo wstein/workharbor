@@ -1,6 +1,6 @@
 # Feature 001: Create and access a Docker workspace
 
-Status: specified; not implemented. Created: 2026-10-11.
+Status: revised proposal awaiting human spec/plan review; not implemented. Created: 2026-10-11.
 Feature identifier: 001-workspace-lifecycle.
 
 ## User scenarios and acceptance
@@ -42,6 +42,40 @@ host: UI displays unknown/stale state, then converges after authenticated reconn
 - FR-011: Keep secrets out of Git, logs and workspace environment unless explicitly granted.
 - FR-012: Deliver browser walkthrough evidence and automated failure-path tests.
 
+## Security and operational acceptance
+- Enrollment codes expire five minutes after creation. Expired, consumed and
+  revoked codes fail without issuing an identity; consumption is atomic.
+- Terminal grants expire 60 seconds after issuance and are consumed atomically on
+  connection. An established session lasts at most eight hours and expires after
+  15 minutes without owner input. Reconnect requires a new grant. At most two
+  sessions per workspace and eight per owner may be active; excess requests fail
+  with an explicit limit error. Each relay direction buffers at most 1 MiB per
+  session; overflow terminates that session with a diagnostic. Dimensions must be
+  within 1–500 columns and 1–200 rows. Disconnect releases the PTY within five
+  seconds, including when the transport disappears without a close frame.
+- Before any config-provided executable hook, the owner explicitly approves a
+  resolved config commit and the complete set of resolved submodule commits.
+  Store this approval with owner, repository identity, revisions and timestamp.
+  New config/submodule commits require new approval; branch names or repository
+  URLs alone never carry trust. Reject unsupported capabilities before hooks or
+  provider mutations. Refusal leaves the workspace unprovisioned.
+- Agents heartbeat every ten seconds. After 30 seconds without an authenticated
+  heartbeat, mark the host and its workspace observations unknown; show this in
+  the browser within five additional seconds. Under the supported test load,
+  authenticated reconnect reconciles observed state within 30 seconds when the
+  provider responds. Retry interrupted operations at most three times with delays
+  of 1, 2 and 4 seconds; exhausted or timed-out work remains visibly failed or
+  unknown, retains storage, and requires an explicit retry operation.
+- Acceptance environment: one Linux Docker host, one control plane and one owner,
+  with up to five workspaces and eight terminal sessions. Record exact machine,
+  OS and tool versions. Measure time from the triggering event; timing tests use
+  a responsive provider and report unavailable-host/provider cases separately.
+- Backup/restore must recover control-plane metadata and persistent project files
+  to a clean installation from a quiesced backup, retaining workspace/owner/host
+  associations and idempotency outcomes. Restore without starting runtimes, mark
+  observations unknown, require authenticated host reconnect, and reject revoked
+  credentials. Backup secrets remain outside Git and workspace environments.
+
 ## Boundaries
 Image and Dockerfile devcontainers are the initial tested matrix. Compose,
 Features, nested containers, privileged configs and extra mounts must be explicitly
@@ -50,8 +84,15 @@ Bundle attachments remain a contract only here. Browser editor and external IDEs
 follow later. No Git server, multi-user UI or AI orchestration product endpoint.
 
 ## Success criteria
-All US1–US4 scenarios pass on a clean Docker test host with no AI/tracker services.
-Two requests with one idempotency key produce one runtime. Reconnect converges to
-actual provider state. A cross-owner command/session and revoked agent are rejected.
-Uncommitted files survive stop/start. Reports include host/OS/tool versions and
-commands; mocked tests alone do not demonstrate the complete user journey.
+- SC-001: All US1–US4 scenarios pass on the acceptance host without AI/tracker services.
+- SC-002: Two requests with one idempotency key produce one runtime; changed payload
+  returns conflict. Interrupted provisioning retains files and creates no duplicate.
+- SC-003: Stale detection, browser updates and reconnect meet the time limits above;
+  an unavailable provider never produces a false successful or running observation.
+- SC-004: Cross-owner/host commands, revoked identities, expired/reused grants,
+  unapproved revisions and terminal limit violations are rejected in automated tests.
+- SC-005: Uncommitted files survive stop/start and a clean-install backup/restore;
+  restored file contents and idempotency outcomes match their pre-backup values.
+- SC-006: Evidence includes browser walkthrough, failure-path results, host/OS/tool
+  versions, exact commands and idle/load resource measurements. Mocked tests alone
+  do not demonstrate the complete user journey.
