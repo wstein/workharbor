@@ -8,7 +8,7 @@ The workflow targets OpenAI Symphony's Elixir reference implementation at
 older examples with flat settings may differ. JSON front matter is valid YAML and
 lets bootstrap validation use Python's standard library. The reference runtime at
 this commit declares Erlang 28 and Elixir 1.19.5-otp-28. Consult upstream's README
-for installation; these versions are Symphony tooling, not Anchorage product pins.
+for installation; these versions are Symphony tooling, not WorkHarbor product pins.
 Linear is an initial development adapter, not a product or permanent forge choice.
 GitHub/Forgejo/Gitea/Codeberg tracking needs a compatible upstream/custom adapter.
 
@@ -16,12 +16,12 @@ GitHub/Forgejo/Gitea/Codeberg tracking needs a compatible upstream/custom adapte
 Install the pinned Symphony separately, install/authenticate Codex CLI, and inspect
 its app-server JSON schema for the workflow approval and sandbox policy. Create a
 Linear project with Todo, In Progress, Rework, Human Review, Blocked and terminal
-states. Only issues with `anchorage-ready` are eligible. Review and label issues
+states. Only issues with `workharbor-ready` are eligible. Review and label issues
 explicitly. Configure environment variables in your private service environment:
 
-- ANCHORAGE_REPO_URL: trusted remote URL or absolute local source checkout path.
-- ANCHORAGE_WORKSPACE_ROOT: absolute dedicated directory outside the source checkout.
-- ANCHORAGE_LINEAR_PROJECT: actual Linear project slug.
+- WORKHARBOR_REPO_URL: trusted remote URL or absolute local source checkout path.
+- WORKHARBOR_WORKSPACE_ROOT: absolute dedicated directory outside the source checkout.
+- WORKHARBOR_LINEAR_PROJECT: actual Linear project slug.
 - LINEAR_API_KEY: host-side secret; never commit or place in issue workspaces.
 
 Run `python3 scripts/prepare_symphony.py` to render `WORKFLOW.local.md`. The script
@@ -30,7 +30,7 @@ the secret reference `$LINEAR_API_KEY`, not its value. Keep repository URLs free
 embedded credentials. Run from the separately installed Symphony `elixir/` directory:
 
 ```sh
-mise exec -- ./bin/symphony /absolute/path/to/anchorage/WORKFLOW.local.md
+mise exec -- ./bin/symphony /absolute/path/to/workharbor/WORKFLOW.local.md
 ```
 
 Follow the pinned upstream build procedure before that command. Confirm the host

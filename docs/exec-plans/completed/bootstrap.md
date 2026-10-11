@@ -1,4 +1,4 @@
-# Anchorage bootstrap completion
+# WorkHarbor bootstrap completion
 
 Date: 2026-10-11. Scope: Git project bootstrap and portable full-history bundle.
 
@@ -32,9 +32,9 @@ be verified before feature 002. These limits are intentional bootstrap scope.
 From a clean checkout:
 
 ```sh
-git bundle create /absolute/output/anchorage.bundle --all
-git bundle verify /absolute/output/anchorage.bundle
-git clone /absolute/output/anchorage.bundle /absolute/fresh-checkout
+git bundle create /absolute/output/workharbor.bundle --all
+git bundle verify /absolute/output/workharbor.bundle
+git clone /absolute/output/workharbor.bundle /absolute/fresh-checkout
 ```
 
 Run `make check` there. A bundle contains committed Git objects, not ignored local

@@ -1,9 +1,9 @@
-# Anchorage Constitution
+# WorkHarbor Constitution
 
 Version: 1.0.0 | Ratified: 2026-10-11 | Last amended: 2026-10-11
 
 ## I. Product scope
-Anchorage is a self-hosted development workspace platform. Single user and Docker
+WorkHarbor is a self-hosted development workspace platform. Single user and Docker
 first. Browser dashboard and terminal are the first complete user journey. AI
 orchestration is development tooling only, never a product dependency or feature.
 Cloud accounts and proprietary hosted control planes must not be required.

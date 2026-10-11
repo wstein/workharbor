@@ -2,7 +2,7 @@
 
 Status: accepted baseline, implementation pending.
 
-Anchorage combines a Portainer-inspired host overview, DevPod-inspired portable
+WorkHarbor combines a Portainer-inspired host overview, DevPod-inspired portable
 workspaces and Okteto-inspired remote development access. These are inspiration,
 not code dependencies or a parity promise. Primary operator: one owner on a
 homeserver, approximately 4–8 active workspaces; actual limits depend on workloads.
