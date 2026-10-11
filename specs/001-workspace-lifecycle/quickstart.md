@@ -6,6 +6,7 @@ order. For existing baseline prerequisite inspection:
 ```sh
 SPECIFY_FEATURE_DIRECTORY=specs/001-workspace-lifecycle SPECIFY_FEATURE_NO_PERSIST=1 .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
 make check
+python3 scripts/select_feature.py 001-workspace-lifecycle
 ```
 
 On a separate implementation branch use `git switch -c 001-workspace-lifecycle`.

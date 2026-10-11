@@ -12,6 +12,7 @@ implementation remains pending. AI tooling is for development only.
 git clone anchorage.bundle anchorage
 cd anchorage
 make check
+python3 scripts/select_feature.py 001-workspace-lifecycle
 ```
 
 Requires Git, Make, Python 3.11+ and Bash. On macOS the built-in Python may need a

@@ -12,6 +12,7 @@ replace compilation, runtime authorization tests or a security audit.
 Read constitution → specify/clarify → plan → tasks → analyze → implement → converge.
 Use generated Codex skills (`$speckit-*`) from `.agents/skills/`. Bootstrap 001 already
 has a spec/plan/tasks; do not regenerate them without reviewing intended changes.
+Select local skill context with `python3 scripts/select_feature.py 001-workspace-lifecycle`.
 Use `SPECIFY_FEATURE_DIRECTORY=specs/001-workspace-lifecycle SPECIFY_FEATURE_NO_PERSIST=1` on main for upstream prerequisite
 scripts; create `001-workspace-lifecycle` for implementation.
 
