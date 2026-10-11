@@ -46,3 +46,18 @@ class SymphonyTests(unittest.TestCase):
             env['WORKHARBOR_WORKSPACE_ROOT'] = str(project/'nested')
             run = subprocess.run(['python3', str(script)], env=env, capture_output=True)
             self.assertNotEqual(0, run.returncode)
+
+    def test_retry_can_repair_failed_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(['git', 'init', '-b', 'main', str(root)], check=True, capture_output=True)
+            (root/'Makefile').write_text('check:\n\t@echo "broken link absent.md" >&2\n\t@exit 2\n')
+            run = subprocess.run(['bash', str(ROOT/'scripts/symphony-before-run.sh')], cwd=root, capture_output=True, text=True)
+            self.assertEqual(0, run.returncode, run.stderr)
+            self.assertIn('broken link absent.md', run.stderr)
+            self.assertIn('before handoff', run.stderr)
+            branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=root, text=True).strip()
+            self.assertTrue(branch.startswith('work/'))
+            retry = subprocess.run(['bash', str(ROOT/'scripts/symphony-before-run.sh')], cwd=root, capture_output=True)
+            self.assertEqual(0, retry.returncode)
+            self.assertEqual(branch, subprocess.check_output(['git', 'branch', '--show-current'], cwd=root, text=True).strip())

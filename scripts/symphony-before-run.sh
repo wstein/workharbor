@@ -12,4 +12,11 @@ if [ "$branch" = main ]; then
   esac
   git switch -c "work/$key"
 fi
-make check
+# Quality failures are repair input, not a dispatch prerequisite.
+# Hook output supplies the diagnosis; handoff still requires passing checks.
+if make check; then
+  echo 'Pre-run quality checks passed.'
+else
+  status=$?
+  echo "Pre-run quality checks failed (exit $status); repair these failures and rerun make check before handoff." >&2
+fi
