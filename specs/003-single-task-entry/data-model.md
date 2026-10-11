@@ -40,6 +40,33 @@ Contexts use canonical JSON (UTF-8, sorted keys, compact separators) for digesti
 exclude the approval.context_digest field itself from the digest. Evidence references
 are inert local references: never fetched, evaluated or assumed authentic.
 
+## Review preparation and canonical content manifest
+`inspect --attempt ID` acquires the same worktree lock, validates saved context and
+scope, and returns the current manifest without executing acceptance commands,
+changing task bytes or appending acceptance/completion events. It returns
+`attempt_id`, `task_id`, `context_digest`, `content_manifest` and
+`content_manifest_digest`; it does not approve the content or claim verification.
+The reviewer examines actual content and semantic constraints before creating a
+SemanticReview with these identities. Inspection is a snapshot, not a reservation:
+verify/complete/resume independently recompute the manifest under lock and reject a
+stale review before checks, and reject content changes during checks.
+
+The manifest has exactly `schema_version: 1` and `entries`, an array sorted by
+repository-relative path in Unicode code-point order. Include every allowed path
+and the selected tasks.md path exactly once, including absent allowed files.
+A regular-file entry has exactly `path`, `type: "regular"`, `mode` (Git mode string
+`"100644"` or `"100755"`) and `sha256` (64 lowercase hex characters).
+An absent entry has exactly `path`, `type: "absent"`, `mode: null`, `sha256: null`.
+Reject directories, symlinks and gitlinks. Hash raw bytes; for tasks.md replace only
+the selected checkbox byte with ASCII space before hashing, preserving all other
+bytes and line endings. Exact unnormalized pre/post bytes remain recovery evidence.
+Use SHA-256 over UTF-8 JSON with sorted object keys, compact separators,
+`ensure_ascii=False`, no NaN/Infinity and no trailing newline. Do not normalize
+Unicode or paths beyond the required canonical-path validation. This serialization
+also applies to the context digest, with its documented excluded field.
+Fixtures must assert identical canonical bytes/digests on Linux and macOS, including
+non-ASCII paths, executable files, absence and the selected checkbox transition.
+
 ## SemanticReview (immutable per acceptance identity)
 `attempt_id`, `task_id`, `context_digest`, `content_manifest_digest`, `reviewer_ref`,
 `evidence_ref`, `approved: true`. All required; a changed content manifest invalidates

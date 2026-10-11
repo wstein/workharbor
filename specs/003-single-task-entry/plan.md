@@ -97,7 +97,10 @@ mode versus progress, evidence identities, crash boundaries and error outcomes.
 2. Treat local approval and semantic review as trusted operator attestations bound
    to content/revisions; validate completeness and consistency without claiming to
    authenticate the owner. No prose-to-command evaluation or remote API calls.
-3. Allow progress-only differences through a deliberately narrow comparison:
+3. Prepare semantic review with `inspect --attempt ID`, returning the canonical
+   manifest and digests defined in the data model without acceptance execution or
+   task mutation. Recompute identity before/after checks; inspection grants no approval.
+   Allow progress-only differences through a deliberately narrow comparison:
    checkbox markers on otherwise identical task lines, plus strictly structured
    evidence-reference footers. Anything else blocks until renewed approval.
 4. Inventory baseline-to-current, baseline-to-index, baseline-to-HEAD and each

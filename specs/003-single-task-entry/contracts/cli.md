@@ -11,6 +11,7 @@ issue prose. Context/review records follow [data-model.md](../data-model.md).
 | --- | --- | --- |
 | `python3 scripts/single_task.py begin --context PATH` | Reviewed local context with mode implement, pending task and clean baseline | Validate artifacts/approvals/dependencies; create immutable attempt; return attempt ID |
 | `python3 scripts/single_task.py rework --context PATH` | Rework context, checked task, complete prior evidence, new owner authorization, clean baseline | Create linked attempt in owner-authorized rework; preserve old state/marker |
+| `python3 scripts/single_task.py inspect --attempt ID` | Existing attempt and current scope-valid content; no review needed | Return canonical content manifest, its digest, context digest and task/attempt IDs; no checks or acceptance mutation |
 | `python3 scripts/single_task.py verify --attempt ID --review PATH` | Current semantic review and existing attempt | Scope and acceptance checks; no task-marker mutation |
 | `python3 scripts/single_task.py complete --attempt ID --review PATH` | Same as verify | Rerun checks; journal and apply only selected marker; enter handoff-only, awaiting commit |
 | `python3 scripts/single_task.py record-commit --attempt ID --commit SHA` | Existing matching local commit | Bind immutable implementation identity; no commit creation or file modification |
@@ -19,7 +20,10 @@ issue prose. Context/review records follow [data-model.md](../data-model.md).
 
 No command executes task implementation automatically. Begin returns a bounded
 context; the operator/agent implements that selected task only, then uses verify and
-complete. Commands execute only explicitly reviewed acceptance argv without a shell,
+complete. After implementation, use inspect to obtain the content identity, review
+the actual changes against semantic constraints, then supply the review to verify
+and complete. Inspection never constitutes approval; stale reviews fail before
+checks and content changes during checks fail acceptance. Commands execute only explicitly reviewed acceptance argv without a shell,
 from validated cwd with finite timeout. They never run prerequisite tasks or select
 a next task. Legacy ad hoc begin arguments cannot bypass context/evidence validation;
 reject legacy state with migration instructions rather than overwriting it.
