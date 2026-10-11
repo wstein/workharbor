@@ -44,9 +44,12 @@ approval and unmet prerequisites fail before acceptance commands or implementati
 - [ ] T007 [US1] Implement feature/task/baseline/path validation in `scripts/single_task_scope.py`: existing direct specs child, regular unsymlinked spec/plan/tasks, unique `TNNN` outside fences, pending selected task for implement, clean Git worktree including nonignored untracked files, canonical contained paths with no symlink components; never reset or adopt existing changes (FR-001, FR-004; US1/AC2).
 - [ ] T008 [US1] Implement reviewed-artifact/approval comparison in `scripts/single_task_context.py`: locally resolvable ancestor commits and matching SHA-256 bytes; bind exact feature/task/scope/checks/dependencies/mode to approval; preserve approval only for unchanged task lines with normalized checkbox markers and strictly appended EOF `## Execution evidence` records `- Evidence: TNNN PATH SHA256`, requiring "64 lowercase hex digest", valid existing task and matching local content; existing footer records cannot change/disappear and all other prose remains byte-exact (FR-003; SC-005).
 - [ ] T009 [US1] Implement prerequisite/source validation in `scripts/single_task_context.py`: "explicit unique task IDs including `[]`", source_assertion path/sha256/excerpt/owner_ref and the exact dependency-table grammar v1 from data-model.md (all tasks exactly once, sorted rows/lists, `none` for empty, no unknown/self/duplicate/cyclic dependencies), and "exactly one local record per dependency" containing task/feature/completed status/content manifest/implementation commit/passing check results/evidence_ref; verify current checked prerequisites, local commit-tree manifest identity and check binding; reject extra/missing/stale evidence or ambiguous source rather than guessing (FR-002; US1/AC2).
-- [ ] T010 [US1] Wire `begin --context PATH` and `status --attempt ID` in `scripts/single_task.py` to validated context, scope and journal; create one immutable implement attempt only after all gates pass, retain context/checks/baseline, and reject legacy ad hoc arguments or legacy state with recovery instructions; never execute implementation or acceptance at entry (FR-001–FR-004, FR-007, FR-009, FR-012).
+- [ ] T010 [US1] Wire `begin --context PATH` and `status --attempt ID` in `scripts/single_task.py` to validated context, scope and journal; create one immutable implement attempt only after all gates pass, retain context/checks/baseline, and reject legacy ad hoc arguments or legacy state with recovery instructions; migrate existing begin/entry regression callers and shared context/attempt helpers in `tests/test_single_task.py` in this same task, with explicit legacy-argument rejection cases; enumerate retained completion/retry scenarios as pending until T017/T023, without deleting, skipping or weakening them to force green; never execute implementation or acceptance at entry (FR-001–FR-004, FR-007, FR-009, FR-012).
 
-Checkpoint: US1 tests pass. MVP is a validated entry, not a fully usable completion/retry tool.
+Checkpoint: entry/context tests pass for the validated-entry MVP. Existing end-to-end
+completion/retry regressions remain required and may still fail while their commands
+are unimplemented. Report each such failure as a blocker, never as a green full-suite
+checkpoint. US1 alone is not a completion/retry tool or a passing repository handoff.
 
 ## Phase 4: US2 — Verify scope and complete exactly one task (P1)
 
@@ -65,9 +68,11 @@ staged-only changes, committed violations and failed/mutating checks reject comp
 - [ ] T014 [US2] Implement content-bound SemanticReview validation in `scripts/single_task_scope.py` for required "attempt_id", "task_id", "context_digest", "content_manifest_digest", "reviewer_ref", "evidence_ref", "approved: true"; invalidate review when approved content changes, preserve exact before/after tasks bytes/digests and normalize only the selected checkbox across completion; implement canonical manifest serialization/digesting and `inspect --attempt ID` output in `scripts/single_task.py` per data-model.md, with no review requirement, acceptance execution or completion events; independently recompute identity before/after acceptance and reject reviews made stale since inspection (FR-006; US2/AC1–AC2).
 - [ ] T015 [US2] Implement acceptance execution in `scripts/single_task_acceptance.py`: use only reviewed ordered argv/cwd/finite timeout with no shell evaluation, validate scope/content before and after, bind check identity/exit/timeout/error category and semantic review to the current manifest, reject missing tools/mutations, and journal safe results without persisting raw subprocess output (FR-006, FR-010, FR-012; US2/AC3–AC4).
 - [ ] T016 [US2] Implement completion intent and marker publication in `scripts/single_task_state.py`: under exclusive lock persist acceptance and exact pre/post intent durably before atomic tasks.md replace and directory fsync; advance active → acceptance-recorded → completion-prepared → checkbox-applied → completed-awaiting-commit without overwriting immutable entry_mode or old events; do not mark any task on failed validation/acceptance (FR-004, FR-005, FR-009).
-- [ ] T017 [US2] Wire `verify --attempt ID --review PATH` and `complete --attempt ID --review PATH` in `scripts/single_task.py`; rerun current acceptance at completion, derive handoff-only after valid marker completion, report awaiting-commit separately from handoff-ready, and make repeated complete idempotent with no new attempt or implicit next-task selection (FR-005–FR-008, FR-012).
+- [ ] T017 [US2] Wire `verify --attempt ID --review PATH` and `complete --attempt ID --review PATH` in `scripts/single_task.py`; rerun current acceptance at completion, derive handoff-only after valid marker completion, report awaiting-commit separately from handoff-ready, and make repeated complete idempotent with no new attempt or implicit next-task selection; migrate completion/verification regression callers and review preparation in `tests/test_single_task.py` in this same task, preserving all earlier path/checkbox/failure assertions; retry/commit-binding expectations remain explicit blockers until T023 (FR-005–FR-008, FR-012).
 
-Checkpoint: US1/US2 tests pass; one selected task can complete locally. No live handoff is claimed.
+Checkpoint: entry and scope/acceptance/completion tests pass; one selected task can
+complete locally. Retry/commit-binding regressions not yet supported by US3 remain
+reported blockers; do not claim a passing full-suite checkpoint or live handoff.
 
 ## Phase 5: US3 — Resume handoff or explicitly authorized rework (P1)
 
@@ -86,14 +91,14 @@ explicit approved correction keeps the checkbox checked and preserves old eviden
 - [ ] T020 [US3] Implement immutable implementation binding in `scripts/single_task_state.py`: locally reachable commit, selected completed marker, exact sealed allowed-path bytes/types/modes and valid baseline/index/worktree/history scope; retain original implementation identity separately from latest verification HEAD, refuse conflicting rebinding and append verification events instead of overwriting evidence (FR-008, FR-009).
 - [ ] T021 [US3] Implement crash recovery in `scripts/single_task_state.py`: read durable prepared intent, compare exact task pre/post bytes and sealed manifests, rerun acceptance with matching review and finish only that transition; block corrupt/missing/unsupported/legacy state or unexpected content without resetting, reconstructing approval or deleting evidence (FR-008, FR-009; US3/AC2, AC4).
 - [ ] T022 [US3] Implement owner-authorized rework entry in `scripts/single_task_context.py` and `scripts/single_task_state.py`: require "prior_attempt_id", "prior_implementation_commit", "rework_approval" binding previous evidence and exact corrective scope/checks; create a new linked immutable attempt from a clean reviewed baseline for an already checked task, keep pre/post marker bytes identical, and seal new acceptance without reopening tasks (FR-004, FR-007, FR-009; US3/AC3).
-- [ ] T023 [US3] Wire `rework --context PATH`, `record-commit --attempt ID --commit SHA` and `resume --attempt ID --review PATH` in `scripts/single_task.py`; enforce three effective modes and contract exits, require bound commit plus fresh passing acceptance for handoff-ready, allow commit binding during awaiting-commit recovery and never implement in handoff-only mode (FR-007–FR-009, FR-012).
+- [ ] T023 [US3] Wire `rework --context PATH`, `record-commit --attempt ID --commit SHA` and `resume --attempt ID --review PATH` in `scripts/single_task.py`; enforce three effective modes and contract exits, require bound commit plus fresh passing acceptance for handoff-ready, allow commit binding during awaiting-commit recovery and never implement in handoff-only mode; migrate the remaining retry/interruption/commit-binding regression callers in `tests/test_single_task.py` now, preserving their original invariants under the new interface; all retained regression scenarios must pass before the US3 checkpoint (FR-007–FR-009, FR-012).
 - [ ] T024 [US3] Add synchronized competing-process tests in `tests/test_single_task_state.py` for begin/complete/rework/status conflicts, one completion owner, kill-and-resume lock release, SQLite/flush failures and immutable attempt history; use barriers/pipes and injected durable boundaries, not timing-only sleeps; verify blockers retain recoverable evidence (FR-009; SC-004).
 
 Checkpoint: all three modes work offline; interruption/concurrency/rework tests pass and history is preserved.
 
 ## Phase 6: Polish and cross-cutting verification
 
-- [ ] T025 Update `tests/test_single_task.py` regression callers to the reviewed context/attempt/review interface, preserving earlier path/checkbox/failure cases and asserting rejected legacy entry cannot bypass validation; confirm all contract commands return safe versioned outcomes and missing commands/tools cannot pass discovery (FR-001–FR-012).
+- [ ] T025 Audit `tests/test_single_task.py` regression migration already delivered in T010/T017/T023: map every original case to its new context/attempt/review equivalent, require all preserved path/checkbox/failure/retry invariants to pass with no missing/skipped cases, and assert rejected legacy entry cannot bypass validation; confirm all contract commands return safe versioned outcomes and missing commands/tools cannot pass discovery. This task audits coverage; it must not defer interface migration or repair an earlier falsely green checkpoint (FR-001–FR-012).
 - [ ] T026 Update `docs/development/single-task.md` for context preparation, semantic review, prerequisites, approvals, begin/inspect/verify/complete/record-commit/resume/rework, explicit legacy recovery and lock/platform limits; use synthetic examples and distinguish local evidence from owner authentication and untested live Symphony; document completion/commit/evidence order without changing WORKFLOW.md or Features 001/002 (FR-010–FR-012).
 - [ ] T027 Run the matrix in `specs/003-single-task-entry/quickstart.md` with required-file preflight and all three modes; add offline/network-attempt and protected-tree checks in `tests/test_single_task_context.py` and `tests/test_single_task_scope.py`, assert zero credential/service dependencies and unchanged Feature 001/002 tree identities against the recorded baseline, then run `make check` and `git diff --check` (FR-010, FR-011; SC-001–SC-006).
 - [ ] T028 Record actual Linux/macOS commands, exits, scenario/requirement coverage, immutable baseline and implementation commit references in `docs/exec-plans/completed/003-single-task-entry.md`; record missing-platform evidence as a blocker, not a pass, and retain local-only/live-unverified limitations; capture commit hashes after their referenced commits, without self-referential evidence or automatic publication (FR-012; SC-001–SC-006).
@@ -107,7 +112,12 @@ T007/T011/T013/T014 use `python3 -m unittest discover -s tests -p 'test_single_t
 T001/T010/T012/T015/T017/T023/T025 use `python3 -m unittest discover -s tests -p 'test_single_task.py' -v`.
 At every story checkpoint run `python3 -m unittest discover -s tests -p 'test_single_task*.py' -v`
 with required-file preflight for that story's suites, then `make check` and
-`git diff --check`. Test-authoring tasks initially demonstrate meaningful failure
+`git diff --check`. T010/T017 migrate callers with their commands; they must list
+remaining completion/retry failures against T017/T023. Those intermediate runs can
+be red and are not repository acceptance or implementation handoff. Do not skip,
+delete, weaken assertions or report pending regressions as passing. The first
+required green full-suite checkpoint is US3 after T024, and final acceptance remains
+T027/T028. Test-authoring tasks initially demonstrate meaningful failure
 against missing behavior; do not report those tests as passing implementation evidence.
 T026 checks documentation links via `make check`; T027/T028 require the full quickstart
 matrix and platform evidence, not just one filtered suite. If a shared module changes,
@@ -171,8 +181,8 @@ story because a preceding/following phase is still pending.
 
 ## Implementation strategy
 
-1. Deliver Setup/Foundation and US1 as the entry MVP; stop for review after T010.
-2. Add US2 and review real local scope/acceptance/checkbox behavior after T017.
+1. Deliver Setup/Foundation and US1 as the entry MVP; stop for review after T010 with exact targeted results and outstanding full-suite blockers, not a green repository handoff.
+2. Add US2 and review real local scope/acceptance/checkbox behavior after T017; explicitly retain US3 retry blockers until T023 migrates them.
 3. Add US3 and validate interruptions, commit identity and authorized rework after T024.
 4. Complete cross-platform/offline/protected-feature evidence before declaring the
    feature implemented. Initial 17 repository tests are baseline evidence only.

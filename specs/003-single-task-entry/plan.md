@@ -131,6 +131,11 @@ Check their tree identities before and after against the recorded implementation
 baseline. `make check`, `git diff --check` and the targeted unittest suites must pass.
 Documentation must label future commands/scenarios as planned until implemented.
 No existing passing suite is represented as evidence for new behavior.
+Migrate existing CLI regression callers with entry (T010), completion (T017) and
+retry (T023), retaining every original invariant. Intermediate US1/US2 full-suite
+failures for unfinished commands are explicit blockers, not skipped tests or green
+repository handoffs; require the complete suite green at US3 and final acceptance.
+T025 audits that migration rather than postponing it.
 
 ## Review handoff
 Stop after design. Obtain owner plan review before generating executable tasks.
