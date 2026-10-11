@@ -44,13 +44,19 @@ runtime. No daemon has been started and no external messages have been sent.
 
 ## Trust and recovery
 Hooks clone only the operator-controlled repo into a fresh per-issue directory.
-Every attempt runs bootstrap checks and retains its branch and changes on retry.
+Every attempt retains its branch and changes on retry. Pre-run bootstrap checks
+provide diagnostics without blocking repairs; passing checks remain mandatory at
+handoff. Invalid checkout/branch prerequisites still stop the hook.
 Concurrency is capped at two. Workspace-write policies are not a complete hostile
 code security boundary; run Symphony under a dedicated development account/host,
-without production host-agent credentials. At handoff agents remove
-`workharbor-ready`, add `human-review`, and leave the
-issue open. For blockers they remove `workharbor-ready` and add `blocked`. Failed
-tracker writes require operator intervention; do not claim a completed handoff.
-An owner restores the ready label explicitly to resume work. Merges and
+without production host-agent credentials. Before handoff, agents finish checks, commits, any authorized PR and tracker
+evidence. The final tracker action replaces the issue's label set in one GitHub API
+operation: preserve unrelated labels, remove `workharbor-ready`, and add
+`human-review` (or `blocked` with a recorded explanation). The issue stays open.
+Reconciliation can stop the agent immediately after the ready label disappears;
+no remaining work may depend on that agent continuing. If the available tracker
+tool cannot perform this replacement or the write fails, the handoff is incomplete
+and an operator performs the final switch. An owner explicitly restores the ready
+label to resume work. Merges and
 releases are owner actions. Stop the service to pause dispatch; preserve failed
 checkouts for diagnosis. Do not automatically delete evidence or data.
