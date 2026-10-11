@@ -28,7 +28,7 @@
     "root": "$ANCHORAGE_WORKSPACE_ROOT"
   },
   "hooks": {
-    "after_create": "set -eu\n: \"${ANCHORAGE_REPO_URL:?Set a trusted Anchorage repository URL or absolute local path}\"\ngit clone --no-local -- \"$ANCHORAGE_REPO_URL\" .\n",
+    "after_create": "set -eu\n: \"${ANCHORAGE_REPO_URL:?Set a trusted Anchorage repository URL or absolute local path}\"\ngit clone --no-local -- \"$ANCHORAGE_REPO_URL\" .\npython3 scripts/select_feature.py 001-workspace-lifecycle\n",
     "before_run": "bash scripts/symphony-before-run.sh",
     "timeout_ms": 60000
   },

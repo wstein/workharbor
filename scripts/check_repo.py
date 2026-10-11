@@ -73,6 +73,20 @@ def check(root):
             errors.extend(boundary_errors(Path(name), path.read_text()))
         if re.search(r'(^|/)(\.env|auth\.json)$', name):
             errors.append(f'{name}: credential file tracked; remove it and rotate exposed credentials')
+    if (root/'WORKFLOW.md').exists():
+        try:
+            _, front, body = (root/'WORKFLOW.md').read_text().split('---', 2)
+            workflow = json.loads(front)
+            if workflow['tracker']['provider']['api_key'] != '$LINEAR_API_KEY':
+                errors.append('WORKFLOW.md: use a secret reference, never an inline credential')
+            if set(workflow['tracker']['active_states']) & {'Human Review', 'Done', 'Blocked', 'Backlog'}:
+                errors.append('WORKFLOW.md: review/terminal/blocked states must not dispatch')
+            if workflow['agent']['max_concurrent_agents'] > 2:
+                errors.append('WORKFLOW.md: baseline concurrency exceeds two; review capacity first')
+            if not body.strip():
+                errors.append('WORKFLOW.md: missing agent policy')
+        except (ValueError, KeyError, TypeError) as exc:
+            errors.append(f'WORKFLOW.md: malformed baseline contract; restore JSON YAML front matter ({exc})')
     if (root/'AGENTS.md').exists() and len((root/'AGENTS.md').read_text().splitlines()) > 100:
         errors.append('AGENTS.md: exceeds 100 lines; move detail into linked documents')
     return errors
