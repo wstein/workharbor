@@ -44,6 +44,16 @@ T001 implementation or fixture acceptance is claimed. The parent environment is 
 modified, test Git config/hooks/signing are isolated, and credential values are
 neither copied into test environments nor printed.
 
+The exact documented entry snippet was also run from a fresh offline local clone
+of preparation commit `80136a71e9ce1d257b6b99c75894e78c27c718ab`, on branch
+`issue-2-t001-fixtures`, after feature selection. The baseline/guard/branch/clean
+preflight passed, begin exited 0 and saved exactly seven allowed paths and three
+checks. No checks ran at entry, no task bytes changed and Git status remained clean.
+A subsequent complete exited 1 with the expected missing-fixture blocker, leaving
+tasks unchanged. The clone and state were temporary and removed afterwards.
+This verifies the actual invocation at a committed revision, beyond the five
+isolated entry tests; no successful T001 acceptance or live execution is claimed.
+
 Repository checks: `PYTHONDONTWRITEBYTECODE=1 make check` passed with 24 tests;
 `git diff --cached --check` passed. Initial make run during preparation exposed that the
 harness test copies tracked files only: the newly linked untracked document was
