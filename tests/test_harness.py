@@ -1,5 +1,8 @@
 import importlib.util
 import tempfile
+import json
+import subprocess
+import shutil
 import unittest
 from pathlib import Path
 
@@ -23,6 +26,26 @@ class HarnessTests(unittest.TestCase):
         for unsafe in ('../other', '/etc', 'projects/../../other', 'projects\\other'):
             with self.subTest(path=unsafe):
                 self.assertTrue(checks.workspace_errors(dict(base, projects_path=unsafe)))
+
+    def test_repository_checker_validates_required_manifest(self):
+        source = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+            names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=source, text=True).split('\0')
+            for name in filter(None, names):
+                target = root/name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source/name, target)
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True, capture_output=True)
+            self.assertEqual([], checks.check(root))
+            manifest = root/checks.WORKSPACE_MANIFEST
+            data = json.loads(manifest.read_text())
+            data['projects_path'] = '../../outside'
+            manifest.write_text(json.dumps(data))
+            self.assertTrue(any('unsafe projects_path' in error for error in checks.check(root)))
+            manifest.unlink()
+            self.assertTrue(any('required artifact missing' in error and checks.WORKSPACE_MANIFEST in error for error in checks.check(root)))
 
     def test_provider_dependency_rejected_outside_adapter(self):
         text = 'import "github.com/docker/docker/client"'

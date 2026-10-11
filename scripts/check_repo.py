@@ -6,7 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REQUIRED = ['README.md', 'AGENTS.md', '.specify/memory/constitution.md',
+WORKSPACE_MANIFEST = 'examples/workspace/workharbor.json'
+
+REQUIRED = [WORKSPACE_MANIFEST, 'README.md', 'AGENTS.md', '.specify/memory/constitution.md',
             'WORKFLOW.md', 'docs/index.md', 'contracts/README.md',
             'specs/001-workspace-lifecycle/spec.md',
             'specs/001-workspace-lifecycle/plan.md',
@@ -54,6 +56,12 @@ def boundary_errors(relative, text):
 
 def check(root):
     errors = [f'{name}: required artifact missing; restore it' for name in REQUIRED if not (root/name).is_file()]
+    manifest = root/WORKSPACE_MANIFEST
+    if manifest.is_file():
+        try:
+            errors.extend(workspace_errors(json.loads(manifest.read_text())))
+        except (ValueError, UnicodeError) as exc:
+            errors.append(f'{WORKSPACE_MANIFEST}: invalid JSON; repair syntax ({exc})')
     tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
     for name in filter(None, tracked):
         path = root/name
@@ -63,8 +71,6 @@ def check(root):
         if name.endswith('.json'):
             try:
                 data = json.loads(path.read_text())
-                if name == 'examples/workspace/workharbor.json':
-                    errors.extend(workspace_errors(data))
             except (ValueError, UnicodeError) as exc:
                 errors.append(f'{name}: invalid JSON; repair syntax ({exc})')
         if name.endswith('.md') and (name.startswith(('docs/', 'specs/', 'contracts/', 'examples/')) or name in ('README.md','AGENTS.md')):
