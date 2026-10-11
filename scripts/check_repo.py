@@ -77,10 +77,13 @@ def check(root):
         try:
             _, front, body = (root/'WORKFLOW.md').read_text().split('---', 2)
             workflow = json.loads(front)
-            if workflow['tracker']['provider']['api_key'] != '$LINEAR_API_KEY':
+            if workflow['tracker']['provider']['token'] != '$GITHUB_TOKEN':
                 errors.append('WORKFLOW.md: use a secret reference, never an inline credential')
-            if set(workflow['tracker']['active_states']) & {'Human Review', 'Done', 'Blocked', 'Backlog'}:
-                errors.append('WORKFLOW.md: review/terminal/blocked states must not dispatch')
+            tracker = workflow['tracker']
+            if (tracker['kind'] != 'github' or tracker['active_states'] != ['open']
+                    or tracker['terminal_states'] != ['closed']
+                    or tracker['required_labels'] != ['workharbor-ready']):
+                errors.append('WORKFLOW.md: dispatch only open GitHub issues labeled workharbor-ready')
             if workflow['agent']['max_concurrent_agents'] > 2:
                 errors.append('WORKFLOW.md: baseline concurrency exceeds two; review capacity first')
             if not body.strip():

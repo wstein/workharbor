@@ -1,24 +1,19 @@
 ---
 {
   "tracker": {
-    "kind": "linear",
+    "kind": "github",
     "provider": {
-      "project_slug": "SET_LINEAR_PROJECT_SLUG",
-      "api_key": "$LINEAR_API_KEY"
+      "repo": "SET_GITHUB_REPO",
+      "token": "$GITHUB_TOKEN"
     },
     "required_labels": [
       "workharbor-ready"
     ],
     "active_states": [
-      "Todo",
-      "In Progress",
-      "Rework"
+      "open"
     ],
     "terminal_states": [
-      "Done",
-      "Canceled",
-      "Cancelled",
-      "Duplicate"
+      "closed"
     ]
   },
   "polling": {
@@ -81,8 +76,12 @@ Update specs, ADRs and quality register when required. Preserve existing work on
 retry. Open a PR only when the configured forge and authorization allow it; otherwise
 hand off commits and local evidence. Review feedback before final handoff.
 
-When required checks pass, request Human Review and attach the actual PR/evidence
-link if available. Blocked issues go to Blocked with a precise explanation when that
-state/tool exists. Human Review, Blocked, Backlog and Done are not dispatch states.
+When required checks pass, remove workharbor-ready and add human-review using
+the configured tracker tools. Keep the issue open and attach the actual PR/evidence
+link if available. For blockers, remove workharbor-ready and add blocked with a
+precise explanation. If tracker writes fail or are unavailable, report the handoff
+as incomplete and ask the operator to remove workharbor-ready before redispatch.
+Only open issues labeled workharbor-ready are eligible; review and blocked issues
+must not retain that label. An owner explicitly restores it when work may resume.
 Never merge, release or deploy; an owner makes those decisions. Report completed
 scope, evidence and outstanding blockers. Do not add product AI functionality.
