@@ -1,0 +1,5 @@
+{
+  "name": "anchorage-workspace-example",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "remoteUser": "vscode"
+}
