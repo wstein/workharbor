@@ -1,5 +1,15 @@
 # WorkHarbor
 
+[![Repository checks](https://github.com/wstein/workharbor-nxt/actions/workflows/check.yml/badge.svg)](https://github.com/wstein/workharbor-nxt/actions/workflows/check.yml)
+[![Status: bootstrap](https://img.shields.io/badge/status-bootstrap-orange)](#first-implementation)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](#start)
+[![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)](#baseline)
+[![Elixir](https://img.shields.io/badge/Elixir-4B275F?logo=elixir&logoColor=white)](#baseline)
+[![Phoenix](https://img.shields.io/badge/Phoenix-FD4F00?logo=phoenixframework&logoColor=white)](#baseline)
+[![Symphony](https://img.shields.io/badge/Symphony-412991)](https://openai.com/index/open-source-codex-orchestration-symphony/)
+[![Harness Engineering](https://img.shields.io/badge/Harness_Engineering-412991)](https://openai.com/index/harness-engineering/)
+[![Spec Kit](https://img.shields.io/badge/Spec_Kit-181717?logo=github&logoColor=white)](https://github.com/github/spec-kit)
+
 Self-hosted development workspaces: Docker first, `.devcontainer` native, browser
 access, provider-neutral host agents, reproducible Git configuration and tool bundles.
 
