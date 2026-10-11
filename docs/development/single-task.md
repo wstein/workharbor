@@ -1,6 +1,8 @@
 # Bounded Spec Kit task entry point
 
 Status: local CLI and integration tests implemented; live Symphony unverified.
+For the explicitly bounded Feature 003 T001 preparation, see the
+[verified bootstrap contract](bootstrap-t001.md); it does not imply Feature 003 is implemented.
 The generic `speckit-implement` runs a feature by phases. For an approved single-task
 issue use `scripts/single_task.py` instead, while retaining the existing Spec Kit
 spec, plan, tasks and read-only analysis as authority.

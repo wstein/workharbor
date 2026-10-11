@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue": "https://github.com/wstein/workharbor-nxt/issues/2",
+  "feature": "003-single-task-entry",
+  "task": "T001",
+  "minimum_baseline": "d04f711e7b43f67bd6495cc4fae5ad40e73bab4c",
+  "guard_sha256": "7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4",
+  "dependencies": [],
+  "allowed_paths": [
+    "tests/fixtures/single-task/spec.md",
+    "tests/fixtures/single-task/plan.md",
+    "tests/fixtures/single-task/tasks.md",
+    "tests/fixtures/single-task/context.json",
+    "tests/fixtures/single-task/prerequisite.json",
+    "tests/fixtures/single-task/review.json",
+    "tests/test_single_task.py"
+  ],
+  "checks": [
+    [
+      "python3",
+      "-c",
+      "from pathlib import Path\nimport sys\nimport unittest\npaths = [\"tests/fixtures/single-task/spec.md\",\"tests/fixtures/single-task/plan.md\",\"tests/fixtures/single-task/tasks.md\",\"tests/fixtures/single-task/context.json\",\"tests/fixtures/single-task/prerequisite.json\",\"tests/fixtures/single-task/review.json\"]\nfor value in paths:\n    path = Path(value)\n    if not path.is_file() or path.is_symlink():\n        raise SystemExit('Missing regular fixture: ' + value)\nsys.path.insert(0, 'tests')\nfrom test_single_task import SingleTaskFixtureTests\nnames = [\"test_two_task_feature\",\"test_runtime_context_prerequisite_review\",\"test_git_configuration_hooks_and_signing_are_isolated\",\"test_tracker_credentials_are_removed_without_logging\",\"test_fixture_creation_rejects_network\",\"test_protected_features_remain_unchanged\"]\nsuite = unittest.TestSuite(SingleTaskFixtureTests(name) for name in names)\nresult = unittest.TextTestRunner(verbosity=2).run(suite)\nraise SystemExit(0 if result.wasSuccessful() and result.testsRun == len(names) and not result.skipped and not result.expectedFailures else 1)\n"
+    ],
+    [
+      "make",
+      "check"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "cwd": ".",
+  "expected_exit": 0
+}
