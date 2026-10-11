@@ -13,4 +13,4 @@ git commit -m 'chore: define development workspace'
 Git records the project commit. Authenticate through credential helpers, not URLs.
 The devcontainer example selects a language image; before real use replace its tag
 with a verified digest. No fake digest is supplied. Bundles are optional and empty.
-The platform manifest is Anchorage's proposed schema, not a Dev Container field.
+The platform manifest is WorkHarbor's proposed schema, not a Dev Container field.

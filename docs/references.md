@@ -14,5 +14,5 @@ Checked: 2026-10-11. These are design sources, not a parity or compliance certif
 - https://github.com/apple/container — planned provider; not implemented.
 - https://github.com/wstein/bundledock — owner-provided bundle concept; upstream format not verified in this bootstrap.
 
-Product documents express Anchorage decisions independently; they do not reproduce
+Product documents express WorkHarbor decisions independently; they do not reproduce
 upstream articles or claim those sources require a particular backend or provider.

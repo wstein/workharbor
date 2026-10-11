@@ -1,4 +1,4 @@
-# Anchorage
+# WorkHarbor
 
 Self-hosted development workspaces: Docker first, `.devcontainer` native, browser
 access, provider-neutral host agents, reproducible Git configuration and tool bundles.
@@ -9,8 +9,8 @@ implementation remains pending. AI tooling is for development only.
 ## Start
 
 ```sh
-git clone anchorage.bundle anchorage
-cd anchorage
+git clone workharbor.bundle workharbor
+cd workharbor
 make check
 python3 scripts/select_feature.py 001-workspace-lifecycle
 ```
@@ -44,5 +44,5 @@ has been installed on your host or activated. No product dependency on Symphony.
 
 ## Provenance and license
 [Third-party provenance](third_party/README.md) records the exact Spec Kit snapshot
-and its MIT notice. Anchorage's own project license awaits an owner decision.
+and its MIT notice. WorkHarbor's own project license awaits an owner decision.
 [References](docs/references.md) distinguish inspiration from implementation.

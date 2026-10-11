@@ -63,7 +63,7 @@ def check(root):
         if name.endswith('.json'):
             try:
                 data = json.loads(path.read_text())
-                if name == 'examples/workspace/anchorage.json':
+                if name == 'examples/workspace/workharbor.json':
                     errors.extend(workspace_errors(data))
             except (ValueError, UnicodeError) as exc:
                 errors.append(f'{name}: invalid JSON; repair syntax ({exc})')
