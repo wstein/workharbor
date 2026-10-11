@@ -73,7 +73,10 @@ Feature 001 already has spec, plan and tasks. Reuse and review their current
 revisions. Use the [implementation issue template](../../.github/ISSUE_TEMPLATE/implementation.md)
 to name one task, prerequisites, document paths, approved scope, acceptance results
 and commands. Approval evidence must identify the owner review and reviewed commit;
-changed artifacts require renewed approval. Add `workharbor-ready` manually only
+requirements, task descriptions, acceptance, dependencies or ordering changes require
+renewed approval. Pure checkbox updates and appended evidence references retain
+approval if their diff changes none of those semantics; record this comparison
+against the approved commit. Ambiguous changes block execution. Add `workharbor-ready` manually only
 after review and prerequisite completion. The template does not apply it automatically.
 
 At each attempt the agent validates the issue fields, selects the existing feature
@@ -86,3 +89,25 @@ Run `$speckit-converge` for the whole feature only in an explicitly authorized
 closure pass after implementation; review its remaining work before dispatch.
 This is a prompt/issue contract, not a mechanical tracker gate. Live dispatch and
 skill-scope behavior require the documented smoke test before unattended operation.
+
+## Retry and rework states
+A pending approved task uses `implement`. After acceptance passes and its checkbox
+is checked, a retry uses `handoff-only` if matching implementation commits and test
+evidence exist for that issue/task/revision. Verify the commits and rerun acceptance
+against the current tree, then finish only missing PR/workpad/evidence/label steps.
+Reuse existing handoff artifacts. Do not uncheck or reimplement the task, execute
+other tasks, or run planning/convergence skills during a handoff-only retry.
+
+Missing evidence or failing revalidation blocks handoff and requires explicit owner
+rework authorization. `rework` must identify the previous implementation, corrective
+scope and acceptance. It permits only those corrections; preserve previous evidence
+and completion history. Changed requirements/design/dependencies need renewed
+spec/plan approval. Neither an attempt number nor restoring the ready label alone
+is evidence of rework approval.
+
+Before unattended operation, smoke-test a normal handoff and interruption after the
+task checkbox/commit but before PR/workpad/labels. Resume with matching evidence and
+verify no task is reimplemented and no duplicate PR is created. Also test missing
+completion evidence and a semantic artifact change: both must block; a checkbox-only
+progress change must retain approval. These are required scenarios, not recorded
+live results. A verified single-task Spec Kit entry point remains future work.

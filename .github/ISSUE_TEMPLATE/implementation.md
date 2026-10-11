@@ -20,6 +20,14 @@ Artifact revision: <!-- Commit containing the reviewed spec/plan/tasks -->
 ## Scope
 Exclusively the named task. <!-- State concrete deliverables and exclusions. -->
 
+## Retry or rework
+Execution mode: implement
+<!-- Completed task retries use handoff-only with implementation commit and test
+ evidence links. For rework, link explicit owner authorization, previous commit,
+ corrective scope and acceptance. Restoring a ready label is not rework approval.
+ Pure checkbox/evidence updates preserve artifact approval; semantic changes need
+ renewed review. -->
+
 ## Prerequisites
 <!-- List prerequisite task IDs with completion/test evidence, or explicitly none. -->
 
