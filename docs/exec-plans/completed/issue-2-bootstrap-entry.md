@@ -69,3 +69,37 @@ bind its actual clean HEAD. No push, ready label, PR, live tracker dispatch, Sym
 startup, merge or deployment is part of this verification. Preserve the existing
 guard limits: no authenticated approval validation, concurrent lock/journal or
 complete Feature 003 contract. Use one operator/agent per isolated checkout.
+
+## Follow-up: published preparation and pinned workspace creation
+
+The original publication/approval gates above were subsequently satisfied:
+the preparation branch is published at `ac7aa0c4b50b533686c025d7231703bb5a35fd7a`,
+and the repository owner approved spec/plan revision `d04f711` and the exact T001
+contract in [Issue 2's owner comment](https://github.com/wstein/workharbor-nxt/issues/2#issuecomment-6115295473).
+T001 is still pending. GitHub main remains at `d04f711`; cloning its default HEAD
+would omit the approved preparation.
+
+The renderer now requires `WORKHARBOR_REPO_REVISION` as a full commit SHA and emits
+clone-without-checkout, branch creation at that SHA and an exact HEAD assertion.
+Optional operator feature/branch settings select the bounded T001 entry. A real
+temporary-Git regression test checks a pinned commit different from default HEAD;
+invalid revisions fail rendering. No existing checkout is reset or silently updated.
+Local `make check` passes all 25 tests; `git diff --check` passes.
+
+`WORKFLOW.local.md` was regenerated from the current template with revision
+`ac7aa0c4b50b533686c025d7231703bb5a35fd7a`, feature `003-single-task-entry` and
+branch `issue-2-t001-fixtures`. This replaced the stale prompt and Feature 001
+selection hook. The token remains an environment reference, not a stored value.
+
+The configured workspace root `/Users/werner/workharbor-issue-workspaces` was
+created. The actual newly rendered after_create hook was executed in a temporary
+child of that root against GitHub. It exited zero and produced the exact pin,
+branch and selected feature, with clean Git status. Five bootstrap tests and all
+24 repository tests at the pinned revision passed, as did `git diff --check`.
+No real task state or checkbox was created/modified. The temporary child was removed
+after verification; the configured root remains. This is workspace-hook verification,
+not a Symphony dispatch or completed T001 acceptance.
+
+No ready label, agent startup, merge, push or deployment was performed. The renderer
+fix and this record require separate publication if they must be recreated on another
+host; the approved T001 checkout continues to use its published preparation pin.

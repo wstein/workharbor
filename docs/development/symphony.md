@@ -21,6 +21,13 @@ Issues in the operator-selected repository. Only open issues with
 explicitly. Configure environment variables in your private service environment:
 
 - WORKHARBOR_REPO_URL: trusted remote URL or absolute local source checkout path.
+- WORKHARBOR_REPO_REVISION: required full lowercase commit SHA approved for execution;
+  workspace creation checks out this exact commit instead of the remote default branch.
+- WORKHARBOR_FEATURE: optional existing feature directory selected after checkout;
+  otherwise the agent selects the issue's validated feature before implementation.
+- WORKHARBOR_ISSUE_BRANCH: optional fixed branch for a single-issue bootstrap;
+  otherwise creation uses `work/<workspace-key>`. Do not use a single-issue setting
+  for unrelated dispatches.
 - WORKHARBOR_WORKSPACE_ROOT: absolute dedicated directory outside the source checkout.
 - WORKHARBOR_GITHUB_REPO: `owner/repository`, for example `wstein/workharbor-nxt`.
 - GITHUB_TOKEN: host-side token with issue read/write access to that repository;
@@ -29,7 +36,25 @@ explicitly. Configure environment variables in your private service environment:
 Run `python3 scripts/prepare_symphony.py` to render `WORKFLOW.local.md`. The script
 fails on missing settings or Codex and does not start anything. It preserves only
 the secret reference `$GITHUB_TOKEN`, not its value. Keep repository URLs free of
-embedded credentials. Run from the separately installed Symphony `elixir/` directory:
+embedded credentials.
+
+For the approved Issue #2 bootstrap, render with these operator-controlled settings:
+
+```sh
+export WORKHARBOR_REPO_REVISION=ac7aa0c4b50b533686c025d7231703bb5a35fd7a
+export WORKHARBOR_FEATURE=003-single-task-entry
+export WORKHARBOR_ISSUE_BRANCH=issue-2-t001-fixtures
+python3 scripts/prepare_symphony.py
+```
+
+This pin contains the approved preparation commit `80136a7`. The generated hook
+creates a branch at the exact pin, asserts HEAD and selects Feature 003; render
+again when the approved execution revision changes. Re-rendering also replaces
+stale local prompt/hook text from the current repository template. It does not
+update an existing issue checkout: inspect its revision/state separately, retain
+retry evidence and stop for operator recovery if it does not match. Never reset
+existing work to retrofit a new pin. Verifying this hook locally does not prove
+live Symphony dispatch. After preparation, start from the Symphony directory:
 
 ```sh
 mise exec -- ./bin/symphony /absolute/path/to/workharbor/WORKFLOW.local.md
