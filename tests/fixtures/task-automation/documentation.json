@@ -1,0 +1,40 @@
+{
+  "fixture_schema": 1,
+  "kind": "documentation",
+  "task_id": "fixture:documentation",
+  "issue": null,
+  "execution_eligible": false,
+  "scope": [
+    "synthetic/documentation/artifact.txt"
+  ],
+  "prerequisites": [
+    {
+      "id": "fixture:reviewed-input",
+      "status": "unmet",
+      "evidence": null
+    },
+    {
+      "id": "fixture:guard-context",
+      "status": "unavailable",
+      "evidence": null
+    }
+  ],
+  "case_manifest": {
+    "expected_raw_exit": 0,
+    "cases": [
+      {
+        "id": "fixture.documentation.guide",
+        "expected": "pass",
+        "assertion": null
+      }
+    ]
+  },
+  "evidence": {
+    "authenticated_approval": null,
+    "independent_review": null,
+    "live_observation": null,
+    "observed_raw_exit": null,
+    "guard_capabilities": []
+  },
+  "predecessor": null
+}

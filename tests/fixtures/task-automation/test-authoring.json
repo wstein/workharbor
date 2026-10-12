@@ -1,0 +1,48 @@
+{
+  "fixture_schema": 1,
+  "kind": "test-authoring",
+  "task_id": "fixture:test-authoring",
+  "issue": null,
+  "execution_eligible": false,
+  "scope": [
+    "synthetic/test-authoring/artifact.txt"
+  ],
+  "prerequisites": [
+    {
+      "id": "fixture:reviewed-input",
+      "status": "unmet",
+      "evidence": null
+    },
+    {
+      "id": "fixture:guard-context",
+      "status": "unavailable",
+      "evidence": null
+    }
+  ],
+  "case_manifest": {
+    "expected_raw_exit": 1,
+    "cases": [
+      {
+        "id": "fixture.behavior.input",
+        "expected": "pass",
+        "assertion": null
+      },
+      {
+        "id": "fixture.behavior.pending",
+        "expected": "assertion",
+        "assertion": {
+          "type": "AssertionError",
+          "message": "synthetic pending behavior"
+        }
+      }
+    ]
+  },
+  "evidence": {
+    "authenticated_approval": null,
+    "independent_review": null,
+    "live_observation": null,
+    "observed_raw_exit": null,
+    "guard_capabilities": []
+  },
+  "predecessor": null
+}
