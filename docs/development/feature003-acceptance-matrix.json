@@ -630,5 +630,61 @@
     "behavior_implementation_claim": false,
     "raw_full_repository_suite_run": false,
     "canonical_repository_acceptance_run": false
-  }
+  },
+  "implementation_checkpoints": [
+    {
+      "task": "T015",
+      "source_commit": "dc30f3df1617ca2c74230f9c17eba3c6c58a5eb1",
+      "status": "locally implemented; production source reviewed clear at3d076bb; strengthened binding control passed; final marker identity audit pending",
+      "initial_red_cases": 9,
+      "initial_red_assertions": 9,
+      "initial_red_errors": 0,
+      "direct_cases": 10,
+      "direct_passes": 10,
+      "direct_raw_exit": 0,
+      "direct_execution_source_commit": "3d076bb485f648831e7822cd76dc62798c4965b7",
+      "input_revision": "sha256:8f0b00cd02b9fe85014c203e545c78429df33243aab28b2b7dc2d81f5bb42571",
+      "source_snapshot_stable": true,
+      "later_binding_control_cases": 1,
+      "later_binding_control_raw_exit": 0,
+      "later_binding_qualification": "After the frozen10-case run, only the existing success test was strengthened to assert independent full manifest/review/context/head/ordered-check identities with a distinct allowed implementation HEAD. The affected control passed; production code unchanged.",
+      "state_primitive_passes": 12,
+      "state_retained_passes": 10,
+      "state_primitive_raw_exit": 0,
+      "state_retained_raw_exit": 0,
+      "evidence": [
+        {
+          "path": "/private/tmp/workharbor-003-t015-raw.json",
+          "sha256": "869e5de685097faacee412d55729510d56d94de86f4b40ed3455beee97640114"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t015-binding-control.log",
+          "sha256": "4ec533e063d0ea7fd9c33c9a3fb72426100a26cbb0d87f0b912d37834c300618"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t015-state-direct.log",
+          "sha256": "50d7fa749e8ef0f268f406ef09579faeed8f8e8a8859a2b770d72b3e8c16e7ef"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t015-state-retained.log",
+          "sha256": "17986381b38ddab6e9f082de3857b3201a000bfd8b60057bd2243530cbf93706"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t015-first-red.log",
+          "sha256": "047deeb778a47091290263841314ca0b374b41141704f517523d415b4e6e03af"
+        }
+      ],
+      "files": {
+        "scripts/single_task_acceptance.py": "8d60db0ddb450a9901e1fdaf7f3b39fe1b354472163c5686bbbcadbc47ee1ce9",
+        "scripts/single_task_state.py": "10a919794d7251adeb43443e5422510302c6fa399685691d1199a6c033f55bfa",
+        "tests/test_single_task_acceptance.py": "a32533736f0535974a696eb25ef1df2c96bbbbe95c1d278c8254a8e7eb00e6eb"
+      },
+      "old_schema_policy": "Exact old journal schemas fail closed without migration; original event identity/digest/immutability retained with new canonical safe payload.",
+      "remaining_CLI_boundary": "T015 provides owning module only; T012 public verify/complete cases remain pending until T017. No future CLI case is declared green from direct-module evidence.",
+      "approved_red_wrapper_executed": false,
+      "full_suite_green": false,
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false
+    }
+  ]
 }
