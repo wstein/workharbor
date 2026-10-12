@@ -4,7 +4,7 @@ import subprocess
 import unittest
 
 import test_single_task_completion as completion_fixture
-from test_single_task import GIT, context_digest, digest
+from test_single_task import GIT, canonical_bytes, context_digest, digest
 import single_task_state as state
 import single_task_scope as scope
 
@@ -90,6 +90,10 @@ class ImplementationBindingTests(unittest.TestCase):
                                  approval_context_digest=context['approval']['context_digest'])
             attempt = store.read_attempt('checked-rework')
             review = self.fixture.review(context)
+            manifest = self.fixture.manifest(context['allowed_paths'] + ['specs/synthetic/tasks.md'], 'T001')
+            task_entry = next(item for item in manifest['entries'] if item['path'] == 'specs/synthetic/tasks.md')
+            task_entry['sha256'] = digest(checked.replace(b'[X] T001', b'[ ] T001'))
+            review['content_manifest_digest'] = digest(canonical_bytes(manifest))
             review['attempt_id'] = 'checked-rework'
             acceptance.execute_acceptance(self.root, attempt, review, store)
             state.publish_completion(self.root, store, 'checked-rework')
