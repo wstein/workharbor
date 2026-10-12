@@ -559,6 +559,32 @@ class ReadinessTests(unittest.TestCase):
                     self.assertIn(result['blockers'][-1]['code'],
                                   ('package-digest-missing', 'package-digest-mismatch'))
 
+    def test_extra_approved_capability_drop_or_change_blocks_at_final_proof(self):
+        name = 'runtime.additional-observation'
+        self.approved.pop('package_digest')
+        self.approved['execution']['capabilities']['ready'] = [name]
+        self.approved = package.build_package(self.approved)
+        self.current = copy.deepcopy(self.approved)
+        extra = package.CapabilityEvidence(True, self.commit, True, REFERENCE)
+        original = self.runtime.observe_effective
+        for change in ('drop', 'revision'):
+            self.calls.clear()
+            self.runtime.capabilities[name] = extra
+            observations = 0
+            def changed(*args, **kwargs):
+                nonlocal observations
+                observations += 1
+                observed = original(*args, **kwargs)
+                if observations == 3:
+                    if change == 'drop':
+                        self.runtime.capabilities.pop(name)
+                    else:
+                        self.runtime.capabilities[name] = package.CapabilityEvidence(
+                            True, 'f' * 40, True, REFERENCE)
+                return observed
+            with self.subTest(change=change), patch.object(self.runtime, 'observe_effective', side_effect=changed):
+                self.assert_blocked(self.ready())
+
     def test_entry_runtime_binding_drift_blocks_without_adoption(self):
         prior = self.assess()
         original = self.runtime.observe_effective
@@ -588,6 +614,28 @@ class ReadinessTests(unittest.TestCase):
         self.assertFalse(response['execution_eligible'])
         self.assertEqual([{'code': 'readiness-host-unavailable'}], response['blockers'])
         self.assertFalse(any(call[0] == 'write' for call in self.calls))
+
+    def test_readiness_git_children_never_inherit_host_credentials(self):
+        import subprocess
+        original = subprocess.run
+        children = []
+        def observe(argv, **kwargs):
+            if argv[0] == 'git':
+                children.append((argv, kwargs.get('env', {})))
+            return original(argv, **kwargs)
+        with patch.dict(os.environ, {'GITHUB_TOKEN': 'secret-canary',
+                                     'UNRELATED_HOST_SECRET': 'secret-canary',
+                                     'PYTHONPATH': '/secret-canary'}), \
+                patch.object(subprocess, 'run', side_effect=observe):
+            result = self.assess()
+        self.assertTrue(result['readiness_valid'], result)
+        self.assertTrue(children)
+        for argv, environment in children:
+            self.assertFalse('secret-canary' in environment.values(), 'host credential inherited')
+            self.assertNotIn('PYTHONPATH', environment)
+            self.assertIn('--no-lazy-fetch', argv)
+            self.assertEqual('1', environment.get('GIT_NO_LAZY_FETCH'))
+            self.assertEqual('', environment.get('GIT_ALLOW_PROTOCOL'))
 
 
 if __name__ == '__main__':
