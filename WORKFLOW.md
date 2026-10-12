@@ -151,8 +151,18 @@ Feature-wide $speckit-converge belongs to an explicitly authorized feature closu
 pass after implementation; never append unrelated convergence work in this issue.
 
 Confirm issue readiness and blockers. Maintain one workpad for plan, progress,
-validation and blockers using the configured tracker tool if available. If tracker
-writes are unavailable, record local evidence and report the missing access; do not
+validation and blockers using the configured tracker tool if available. Keep its
+updates short and link durable evidence rather than duplicating it across comments.
+GitHub comments should lead with the result or requested action. Routine comments
+normally stay within 150 words; use 3–5 short bullets when a list helps. Include only
+material findings, actual check outcomes, blockers and the next action. Link committed
+contracts and evidence instead of pasting argv, matrices, hash inventories or history.
+Approval comments must still identify the feature/task and exact reviewed revision,
+with the contract link and identity. Preserve scope, prerequisites, approval authority
+and exceptions through authoritative artifacts accessible to the reader. Add detail
+when essential material facts are unavailable elsewhere; never omit relevant blockers
+for brevity. Preserve existing approval, review and evidence history.
+If tracker writes are unavailable, record local evidence and report the missing access; do not
 claim tracker updates. Use docs/exec-plans/active/ for a repo execution plan and move
 the completed record to completed/ at handoff.
 
