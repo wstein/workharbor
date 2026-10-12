@@ -27,6 +27,13 @@ to required inventory or retained outcomes require owner PR review and merge;
 a manifest edit or passing check cannot approve itself. Remove retained outcomes
 with reviewed implementation and regression migration when their conditions hold.
 
+PR #49 proposes extending that same manifest to the 58 preserved T005 assertions
+for pending T007–T010 behavior at the T006 checkpoint, while requiring all 74
+context tests, including the 16 implemented green controls. The five historical
+records remain unchanged. [The proposal](../development/pr49-acceptance-proposal.md)
+records exact scope and provenance; owner PR review and merge must adopt this
+extension. It does not approve task execution or describe the raw suite as green.
+
 `make check` and CI run the same qualified acceptance policy and repository/static
 checks. `make check-raw` retains the honest baseline unittest result: currently 41
 cases, 36 passes, five assertion failures, exit 2. Qualified green never describes
