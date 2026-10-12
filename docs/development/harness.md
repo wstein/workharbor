@@ -43,9 +43,14 @@ pass. Raw `make check` still runs and must report exit 2; its full suite remains
 and CI acceptance does not claim CLI implementation or full-suite acceptance.
 
 The helper pins both approved contracts, both verifiers, the legacy guard and exact
-T003 task bytes. It verifies sealed T003 ancestry plus original/accepted T002 blob
-identities. Its tree may differ from sealed T003 only in this harness document,
-the CI helper and the workflow. Any other changed or untracked file, missing history,
+T003 task bytes. It requires either sealed T003 ancestry or the exact owner-merged
+PR #32 commit (`a36bf7e1fc9b09bd07226078b7d70c5d299d9324`), comparing against that
+anchor without requiring orphaned pre-rebase commits. Accepted T002 blobs must
+match the common pre-T003 baseline. Its tree may differ from the anchor only in
+this harness document, the CI helper and the workflow. The exact reviewed
+AGENTS.md and WORKFLOW.md pair from `c329e4c71e246eb286bcd49c6b3689c93317f313` is
+also permitted only when both byte hashes, regular non-executable file modes and
+index contents match. Any other changed or untracked file, missing history,
 changed pin or successor task expires the phase and requires strict full-green
 `make check`, plus the direct state suite when that module exists. T004 cannot
 inherit the exception. Full-suite green is required at US3 and final acceptance.
