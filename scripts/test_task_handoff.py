@@ -638,6 +638,340 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(2, len(self.writes))
 
 
+class FinalLabelTests(unittest.TestCase):
+    git = RecoveryTests.git
+    open = RecoveryTests.open
+    recovery = RecoveryTests.recovery
+    resume = RecoveryTests.resume
+    readiness = RecoveryTests.readiness
+    publish = PublicationTests.publish
+    prepared_port = PublicationTests.prepared_port
+
+    def setUp(self):
+        PublicationTests.setUp(self)
+        self.value['execution']['external_actions'].append('replace-labels')
+        self.value.pop('package_digest')
+        self.value = package.build_package(self.value)
+        self.key = handoff.HandoffKey(self.value['repository'], '17',
+                                     self.value['package_digest'], 'guard-attempt')
+        tracker = self.tracker_module
+        test = self
+        class Labels:
+            labels = ['unrelated', 'workharbor-ready']
+            version = 0
+            writes = 0
+            conflicts = 0
+            unknown = False
+            prohibit_later_read = False
+
+            def payload(self):
+                return dict(object_id='issue-17', repository=test.value['repository'], number=17,
+                    state='open', labels=self.labels, updated_at=900 + self.version)
+
+            def receipt(self):
+                return tracker.AuthenticatedRead('github', 'repo-1', 'host-verifier', 'e' * 40,
+                    1000, package.canonical_json(self.payload()))
+
+            def read(self, kind, identity):
+                test.assertFalse(self.prohibit_later_read, 'provider read after final response')
+                return self.receipt()
+
+            def replace_labels(self, identity, expected, desired, *, operation_key):
+                test.assertTrue(operation_key.startswith('final-labels:'))
+                if self.conflicts:
+                    self.labels = sorted(set(self.labels) | {'concurrent-' + str(self.version)})
+                    self.version += 1
+                    self.conflicts -= 1
+                    raise tracker.LabelConflict()
+                test.assertEqual(handoff._digest(package.canonical_json(self.payload())), expected['object_digest'])
+                test.assertEqual(set(self.labels), set(expected['labels']))
+                self.labels = list(desired)
+                self.version += 1
+                self.writes += 1
+                if self.unknown:
+                    raise RuntimeError('sensitive-provider-output')
+                self.prohibit_later_read = True
+                return self.receipt()
+        self.labels = Labels()
+        config = tracker.TrackerConfig('github', self.value['repository'], 'repo-1',
+                                       'owner-1', 'host-verifier', 'e' * 40)
+        self.label_port = tracker.ConditionalLabels(tracker.AuthenticatedTracker(config,
+            self.labels, clock=lambda: 1000), self.labels)
+        self.label_port.capabilities = {'tracker.safe-labels': package.CapabilityEvidence(
+            True, self.commit, True, None)}
+
+    def completed(self, journal):
+        recovery = self.recovery(journal)
+        with self.prepared_port():
+            self.assertTrue(self.publish(recovery)['publication_valid'])
+        return recovery
+
+    def finish(self, recovery, **ports):
+        return handoff.final_labels(recovery, self.value,
+            tracker=ports.pop('tracker', self.label_port), readiness=self.readiness,
+            authorized_actions=ports.pop('authorized_actions', ('replace-labels',)), **ports)
+
+    def test_final_transition_preserves_labels_and_requires_no_later_provider_request(self):
+        with self.open() as journal:
+            result = self.finish(self.completed(journal))
+            self.assertTrue(result['handoff_complete'], result)
+            self.assertEqual('handed-off', result['progress'])
+            self.assertEqual(['human-review', 'unrelated'], self.labels.labels)
+            self.assertEqual(1, self.labels.writes)
+            intents = [event for event in journal.events(self.key) if event['kind'] == 'intent'
+                       and event['payload']['operation_key'].startswith('final-labels:')]
+            intent = intents[0]['payload']['content']
+            self.assertEqual(['unrelated', 'workharbor-ready'], intent['expected']['labels'])
+            self.assertEqual(['human-review', 'unrelated'], intent['desired'])
+            self.assertIn('evidence_digest', intent)
+            self.assertIn('recovery', intent)
+            self.assertTrue(self.finish(self.recovery(journal, initialize=False))['handoff_complete'])
+            self.assertEqual(1, self.labels.writes)
+
+    def test_concurrent_unrelated_labels_recompute_conditional_intent(self):
+        self.labels.conflicts = 1
+        with self.open() as journal:
+            result = self.finish(self.completed(journal))
+            self.assertTrue(result['handoff_complete'], result)
+            self.assertEqual(['concurrent-0', 'human-review', 'unrelated'], self.labels.labels)
+            self.assertEqual(1, self.labels.writes)
+            self.assertEqual(2, len([event for event in journal.events(self.key)
+                if event['kind'] == 'intent' and event['payload']['operation_key'].startswith('final-labels:')]))
+
+    def test_unknown_final_write_stays_incomplete_until_later_exact_reconciliation(self):
+        self.labels.unknown = True
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            result = self.finish(recovery)
+            self.assertFalse(result['handoff_complete'])
+            self.assertEqual('final-label-intent', result['progress'])
+            self.assertEqual(1, self.labels.writes)
+        with self.open() as journal:
+            recovery = self.recovery(journal, initialize=False)
+            result = self.finish(recovery)
+            self.assertTrue(result['handoff_complete'], result)
+            self.assertEqual(1, self.labels.writes)
+
+    def test_unknown_then_changed_remote_state_is_terminal_and_never_retried(self):
+        self.labels.unknown = True
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.labels.labels.append('new-unrelated')
+            self.labels.version += 1
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(1, self.labels.writes)
+            self.labels.labels.remove('new-unrelated')
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(1, self.labels.writes)
+
+    def test_unattempted_intent_cannot_confirm_externally_matching_labels(self):
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            with patch.object(self, 'readiness', return_value=dict(readiness_valid=False)):
+                self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertFalse(any(event['kind'] == 'final-label-attempt'
+                                 for event in journal.events(self.key)))
+            self.labels.labels = ['human-review', 'unrelated']
+            self.labels.version += 1
+            result = handoff.handoff(recovery, self.value, {}, {}, publication_ports={},
+                label_ports=dict(tracker=self.label_port, authorized_actions=('replace-labels',)))
+            self.assertFalse(result['handoff_complete'], result)
+            self.assertEqual('final-label-intent', result['progress'])
+            self.assertEqual(0, self.labels.writes)
+
+    def test_conflicts_are_bounded_and_readiness_drift_or_lost_ownership_never_writes(self):
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            with patch.object(self, 'readiness', return_value=dict(readiness_valid=False)):
+                self.assertFalse(self.finish(recovery)['handoff_complete'])
+            original = self.label_port.read_issue
+            def lost(identity):
+                observation = original(identity)
+                recovery.ownership = ExclusiveOwnership('unknown')
+                return observation
+            with patch.object(self.label_port, 'read_issue', side_effect=lost):
+                self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(0, self.labels.writes)
+            recovery.ownership = ExclusiveOwnership()
+            self.labels.conflicts = 20
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(4, len([event for event in journal.events(self.key)
+                                    if event['kind'] == 'final-label-attempt']))
+
+    def test_handoff_cli_default_unavailable_and_fixture_complete_flow(self):
+        import task_automation as automation
+        import contextlib
+        import io
+        import json
+        (self.root / 'package.json').write_bytes(package.package_bytes(self.value))
+        def invoke(**ports):
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                code = automation.main(['handoff', '--package', 'package.json', '--attempt',
+                    self.key.guard_attempt_id, '--offline'], root=self.root,
+                    repository=self.value['repository'], **ports)
+            return code, json.loads(stream.getvalue())
+        self.assertEqual(3, invoke()[0])
+        self.assertFalse((self.root / '.symphony').exists())
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            publication_ports = dict(guard=self.guard, readiness=self.readiness, tracker=self.publisher,
+                authority=self.authority, reviewer=self.reviewer, implementer_id='author-1',
+                review_ref='sha256:' + 'a' * 64, publication_ref='sha256:' + 'b' * 64,
+                validated_source=self.source, preparation=self.request, reviewed_checker=self.commit,
+                observe_refs=lambda: {'base': 'b' * 40, 'head': self.commit},
+                pr_content={'title': 'fixture', 'body': 'scope/check evidence'},
+                evidence_content={'checks': 'sha256:' + 'b' * 64})
+            code, result = invoke(recovery=recovery, handoff_ports=dict(snapshot={
+                'root': self.root, 'head': self.commit}, evidence={}, publication_ports=publication_ports,
+                label_ports=dict(tracker=self.label_port, readiness=self.readiness,
+                                 authorized_actions=('replace-labels',))))
+            self.assertEqual(0, code, result)
+            self.assertTrue(result['handoff_complete'])
+            self.assertFalse(result['execution_eligible'])
+            self.assertEqual(2, len(self.writes))
+            self.assertEqual(1, self.labels.writes)
+
+    def test_unsupported_capability_incomplete_publication_and_lost_ownership_do_not_write(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            with self.prepared_port():
+                self.assertTrue(self.publish(recovery)['publication_valid'])
+            self.label_port.capabilities = {}
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.label_port.capabilities = {'tracker.safe-labels': package.CapabilityEvidence(
+                True, self.commit, True, None)}
+            recovery.ownership = ExclusiveOwnership('unknown')
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(0, self.labels.writes)
+
+    def test_cli_reconciles_unknown_or_crashed_final_write_without_publication_ports(self):
+        import task_automation as automation
+        import contextlib
+        import io
+        import json
+        for interruption in ('unknown', 'crash'):
+            with self.subTest(interruption=interruption):
+                self.setUp()
+                (self.root / 'package.json').write_bytes(package.package_bytes(self.value))
+                with self.open() as journal:
+                    recovery = self.completed(journal)
+                    if interruption == 'unknown':
+                        self.labels.unknown = True
+                        self.assertFalse(self.finish(recovery)['handoff_complete'])
+                    else:
+                        original = journal.result
+                        def interrupted(key, operation_key, *args):
+                            if operation_key.startswith('final-labels:'):
+                                raise KeyboardInterrupt()
+                            return original(key, operation_key, *args)
+                        with patch.object(journal, 'result', side_effect=interrupted):
+                            with self.assertRaises(KeyboardInterrupt):
+                                self.finish(recovery)
+                    calls = list(self.calls)
+                self.labels.prohibit_later_read = False
+                with self.open() as journal:
+                    recovery = self.recovery(journal, initialize=False)
+                    ports = dict(snapshot={}, evidence={}, publication_ports={}, label_ports=dict(
+                        tracker=self.label_port, authorized_actions=('replace-labels',)))
+                    def invoke():
+                        stream = io.StringIO()
+                        with contextlib.redirect_stdout(stream):
+                            code = automation.main(['handoff', '--package', 'package.json', '--attempt',
+                                self.key.guard_attempt_id, '--offline'], root=self.root,
+                                repository=self.value['repository'], recovery=recovery, handoff_ports=ports)
+                        return code, json.loads(stream.getvalue())
+                    recovery.ownership = ExclusiveOwnership('unknown')
+                    self.assertNotEqual(0, invoke()[0])
+                    recovery.ownership = ExclusiveOwnership()
+                    ports['label_ports']['authorized_actions'] = ()
+                    self.assertNotEqual(0, invoke()[0])
+                    ports['label_ports']['authorized_actions'] = ('replace-labels',)
+                    capability = self.label_port.capabilities
+                    self.label_port.capabilities = {}
+                    self.assertNotEqual(0, invoke()[0])
+                    self.label_port.capabilities = capability
+                    code, result = invoke()
+                    self.assertEqual(0, code, result)
+                    self.assertTrue(result['handoff_complete'])
+                    self.assertTrue(result['verification_valid'])
+                    self.assertEqual(calls, self.calls)
+                    self.assertEqual(2, len(self.writes))
+                    self.assertEqual(1, self.labels.writes)
+
+    def test_missing_host_or_package_label_authorization_performs_no_write(self):
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            self.assertFalse(self.finish(recovery, authorized_actions=())['handoff_complete'])
+            self.assertEqual(0, self.labels.writes)
+        self.setUp()
+        self.value['execution']['external_actions'].remove('replace-labels')
+        self.value.pop('package_digest')
+        self.value = package.build_package(self.value)
+        self.key = handoff.HandoffKey(self.value['repository'], '17',
+                                     self.value['package_digest'], 'guard-attempt')
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            self.assertFalse(self.finish(recovery)['handoff_complete'])
+            self.assertEqual(0, self.labels.writes)
+
+    def test_blocked_labels_follow_durable_blocker_and_recovery(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            result = self.finish(recovery, target='blocked', blocker='fixture-revalidation-failed')
+            self.assertFalse(result['handoff_complete'])
+            self.assertTrue(result['label_transition_confirmed'])
+            self.assertEqual(['blocked', 'unrelated'], self.labels.labels)
+            events = journal.events(self.key)
+            blockers = [event['sequence'] for event in events if event['kind'] == 'lifecycle-blocker']
+            intent = next(event['sequence'] for event in events if event['kind'] == 'intent')
+            self.assertLess(blockers[0], intent)
+
+    def test_crash_after_final_provider_write_reconciles_without_duplicate_publication_or_labels(self):
+        with self.open() as journal:
+            recovery = self.completed(journal)
+            original = journal.result
+            def interrupted(key, operation_key, *args):
+                if operation_key.startswith('final-labels:'):
+                    raise KeyboardInterrupt()
+                return original(key, operation_key, *args)
+            with patch.object(journal, 'result', side_effect=interrupted):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.finish(recovery)
+            self.assertEqual(1, self.labels.writes)
+        self.labels.prohibit_later_read = False
+        with self.open() as journal:
+            result = self.finish(self.recovery(journal, initialize=False))
+            self.assertTrue(result['handoff_complete'], result)
+            self.assertEqual(1, self.labels.writes)
+            self.assertEqual(2, len(self.writes))
+
+    def test_every_progress_boundary_resumes_without_duplicate_pr_evidence_or_labels(self):
+        for boundary in handoff.PROGRESS:
+            with self.subTest(boundary=boundary):
+                self.setUp()
+                with self.open() as journal, self.prepared_port():
+                    original = journal.append
+                    def interrupted(key, kind, payload):
+                        if kind == 'lifecycle-progress' and payload['progress'] == boundary:
+                            raise KeyboardInterrupt()
+                        return original(key, kind, payload)
+                    with patch.object(journal, 'append', side_effect=interrupted):
+                        with self.assertRaises(KeyboardInterrupt):
+                            self.finish(self.completed(journal))
+                self.labels.prohibit_later_read = False
+                with self.open() as journal, self.prepared_port():
+                    recovery = self.recovery(journal)
+                    self.assertTrue(self.publish(recovery)['publication_valid'])
+                    result = self.finish(recovery)
+                    self.assertTrue(result['handoff_complete'], result)
+                    self.assertEqual(self.commit, result['implementation_commit'])
+                    self.assertEqual(2, len(self.writes))
+                    self.assertEqual(1, self.labels.writes)
+
+
 class JournalTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

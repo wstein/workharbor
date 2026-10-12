@@ -82,8 +82,8 @@ results in its workpad. Passing checks remain mandatory at handoff. Invalid chec
 Concurrency is capped at two. Workspace-write policies are not a complete hostile
 code security boundary; run Symphony under a dedicated development account/host,
 without production host-agent credentials. Before handoff, agents finish checks, commits, any authorized PR and tracker
-evidence. The final tracker action replaces the issue's label set in one GitHub API
-operation: preserve unrelated labels, remove `workharbor-ready`, and add
+evidence. The final tracker action requires demonstrated conditional full-set
+replacement or proven serialization covering all label writers: preserve unrelated labels, remove `workharbor-ready`, and add
 `human-review` (or `blocked` with a recorded explanation). The issue stays open.
 Reconciliation can stop the agent immediately after the ready label disappears;
 no remaining work may depend on that agent continuing. If the available tracker
@@ -164,6 +164,21 @@ scope and acceptance. It permits only those corrections; preserve previous evide
 and completion history. Changed requirements/design/dependencies need renewed
 spec/plan approval. Neither an attempt number nor restoring the ready label alone
 is evidence of rework approval.
+
+Feature 004 `resume`/`handoff` require trusted host-injected ports; standalone
+commands block without creating a journal. GitHub safe-label capability remains
+unavailable. Keep the checkout, journal, exact package revision and original guard
+implementation; verification HEAD and linked corrective attempts stay separate.
+Before final labels, durable evidence records checks, commit binding, exact review
+and authorized publication, then the observed labels/version, desired set and
+recovery instructions. The final authenticated write receipt needs no later
+provider request. Unknown responses remain incomplete. Retry `handoff` with the
+retained journal: it reconciles an attempted final intent before rerunning guard
+or publication work, retaining ownership/capability/action gates. Exact desired
+labels confirm only a durably attempted operation. Conflicts recompute to preserve
+unrelated labels; uncertain drift or exhausted retries require owner recovery.
+Never reset, delete evidence or invent a baseline. Disposable all-boundary crash
+and CLI retry tests demonstrate local behavior only; live operation is unverified.
 
 Before unattended operation, smoke-test a normal handoff and interruption after the
 task checkbox/commit but before PR/workpad/labels. Resume with matching evidence and

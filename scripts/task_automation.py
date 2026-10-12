@@ -122,7 +122,7 @@ def ready(approved, current, snapshot, evidence, **ports):
 
 
 def main(argv=None, *, root=None, repository=None, readiness_host=None,
-         recovery=None, recovery_ports=None):
+         recovery=None, recovery_ports=None, handoff_ports=None):
     """Host may inject repository identity; CLI uses local Git origin metadata."""
     result = envelope()
     try:
@@ -135,12 +135,13 @@ def main(argv=None, *, root=None, repository=None, readiness_host=None,
             child = commands.add_parser(name)
             child.add_argument('--package', required=True)
             child.add_argument('--offline', action='store_true', required=True)
-        resume = commands.add_parser('resume')
-        resume.add_argument('--package', required=True)
-        resume.add_argument('--attempt', required=True)
-        mode = resume.add_mutually_exclusive_group(required=True)
-        mode.add_argument('--offline', action='store_true')
-        mode.add_argument('--live-config')
+        for name in ('resume', 'handoff'):
+            child = commands.add_parser(name)
+            child.add_argument('--package', required=True)
+            child.add_argument('--attempt', required=True)
+            mode = child.add_mutually_exclusive_group(required=True)
+            mode.add_argument('--offline', action='store_true')
+            mode.add_argument('--live-config')
         child = commands.add_parser('ready')
         child.add_argument('--package', required=True)
         child.add_argument('--live-config', required=True)
@@ -152,11 +153,11 @@ def main(argv=None, *, root=None, repository=None, readiness_host=None,
         if args.command != 'prepare' and 'package_digest' not in package.parse_json(data):
             raise package.PackageError('package-digest-missing')
         repository = repository if repository is not None else repository_identity(root)
-        if args.command == 'resume':
+        if args.command in ('resume', 'handoff'):
             result.update(package_digest=value['package_digest'],
                           revision_digest=package.package_revision_digest(value),
                           requested_mode=value['mode'], effective_mode=value['mode'],
-                          resume_valid=False)
+                          resume_valid=False, handoff_complete=False)
             if recovery is None:
                 result['blockers'] = [dict(code='recovery-host-unavailable')]
                 code = 3
@@ -166,13 +167,18 @@ def main(argv=None, *, root=None, repository=None, readiness_host=None,
                 result['blockers'] = [dict(code='recovery-ownership-conflict')]
                 code = 5
             else:
-                ports = dict(recovery_ports or {})
+                ports = dict((recovery_ports if args.command == 'resume' else handoff_ports) or {})
                 ports['live'] = bool(args.live_config)
-                observed = recovery.resume(value, ports.pop('snapshot', None),
-                                           ports.pop('evidence', None), **ports)
+                execute = recovery.resume if args.command == 'resume' else (
+                    lambda value, snapshot, evidence, **ports: handoff.handoff(
+                        recovery, value, snapshot, evidence, **ports))
+                observed = execute(value, ports.pop('snapshot', None), ports.pop('evidence', None), **ports)
                 result.update(observed)
                 codes = {item['code'] for item in result['blockers']}
-                code = 0 if result['resume_valid'] else 5 if 'recovery-ownership-conflict' in codes else 3
+                successful = result['resume_valid'] if args.command == 'resume' else result['handoff_complete']
+                code = (0 if successful else 5 if 'recovery-ownership-conflict' in codes else
+                        6 if codes & {'final-label-reconciliation-incomplete',
+                                      'publication-remote-reconciliation-blocked'} else 3)
             print(package.canonical_json(result).decode('utf-8'))
             return code
         if args.command == 'ready':
