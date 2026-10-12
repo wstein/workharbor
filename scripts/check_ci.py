@@ -230,8 +230,14 @@ def approved_operator_tooling(root, context, policy_source):
         git(root, 'merge-base', '--is-ancestor', policy_source, context.head)
         base = context.base if context.event == 'pull_request' else DOCUMENTATION_POLICY_SOURCE
         allowed = lambda name: name in OPERATOR_PATHS or documentation_path(name)
+        try:
+            git(root, 'merge-base', '--is-ancestor', policy_source, base)
+            adopted_base = True
+        except subprocess.CalledProcessError:
+            adopted_base = False
+        base_anchor = policy_source if adopted_base else DOCUMENTATION_POLICY_SOURCE
         if (not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
-                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, documentation_path)
+                or not history_scope(root, base_anchor, base, documentation_path)
                 or not history_scope(root, policy_source, context.head, documentation_path)
                 or not protected_baseline(root, (policy_source, base, context.head, context.checkout))):
             return False
@@ -239,7 +245,8 @@ def approved_operator_tooling(root, context, policy_source):
         # Independent base docs are allowed; changed operator code needs a new pin.
         for name in sorted(OPERATOR_PATHS):
             expected = git(root, 'ls-tree', policy_source, '--', name)
-            for revision in (context.head, context.checkout):
+            revisions = (base, context.head, context.checkout) if adopted_base else (context.head, context.checkout)
+            for revision in revisions:
                 if git(root, 'ls-tree', revision, '--', name) != expected:
                     return False
         tests = {path.relative_to(root).as_posix() for path in root.glob('scripts/test_*.py')}
