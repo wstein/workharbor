@@ -1,8 +1,10 @@
 # Feature 003 local validation guide
 
-Status: planned acceptance procedure. The enhanced context/rework/journal interface
-is not implemented yet. Existing guard tests are baseline evidence only. No live
-tracker, Symphony service, credentials or product host is required.
+Status: the context/attempt/review/journal CLI is implemented locally; final feature
+acceptance still requires the matrix and platform evidence below. See the
+[operator guide](../../docs/development/single-task.md) for the current commands.
+No live tracker, Symphony service, credentials or product host is required; live
+dispatch remains unverified.
 
 ## Prerequisites
 Use Python 3.11+, Git, Make and Bash on Linux or macOS with a local filesystem.
@@ -11,7 +13,7 @@ Remove tracker credentials from the test environment; never print them. Approval
 and semantic review records in tests are explicit synthetic owner attestations,
 not claims of authenticated real-owner approval.
 
-## Inspect current baseline (runnable now)
+## Inspect local regression coverage
 From the repository root:
 
 ```sh
@@ -19,13 +21,14 @@ python3 -m unittest discover -s tests -p 'test_single_task.py' -v
 make check
 git diff --check
 ```
-Passing current tests does not demonstrate the additional Feature 003 requirements.
+Passing this regression file alone does not establish the full Feature 003 matrix
+or evidence on both supported platforms.
 Select Feature 003 before Spec Kit planning/tasks commands; the repository Makefile
 still explicitly checks Feature 001 bootstrap prerequisites and does not change the
 selected local feature.
 
-## Acceptance after implementation
-The following commands are intended for the completed implementation. Required-file
+## Full local acceptance
+Run these commands against the implementation under review. Required-file
 preflight prevents an empty unittest discovery from being mistaken for success:
 
 ```sh
@@ -74,6 +77,6 @@ Record actual command/exit/platform results, scenario coverage and implementatio
 commit in the review evidence. Do not put a commit's own hash in a file included in
 that commit: complete/commit first, then record the hash in local journal/review.
 
-No tasks are marked complete by this planning guide. Local acceptance does not
+No tasks are marked complete by this guide. Local acceptance does not
 create an issue/PR, change labels, authenticate a real owner or demonstrate live
 Symphony. Those remain separately authorized and evidenced operations.
