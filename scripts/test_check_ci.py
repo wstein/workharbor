@@ -1,5 +1,6 @@
 """Acceptance outcomes and source identity; historical policy is superseded by ADR 0007."""
 import importlib.util
+import copy
 import io
 import json
 import os
@@ -11,6 +12,10 @@ import types
 import unittest
 from pathlib import Path
 from unittest import mock
+
+import task_package as package
+import task_outcomes as outcomes
+import test_task_package as package_tests
 
 SPEC = importlib.util.spec_from_file_location('ci_source', Path(__file__).with_name('check_ci.py'))
 ci = importlib.util.module_from_spec(SPEC)
@@ -144,7 +149,9 @@ class AcceptanceTests(unittest.TestCase):
         result = subprocess.run(ci.python_argv('-c', code), cwd=ci.ROOT, capture_output=True, text=True, check=True)
         ids = json.loads(result.stdout)
         for module in ('test_harness.', 'test_single_task.', 'test_single_task_state.', 'test_symphony.',
-                       'test_check_ci.', 'test_prepare_publication.', 'test_approval_binding.'):
+                       'test_check_ci.', 'test_prepare_publication.', 'test_approval_binding.',
+                       'test_task_fixtures.', 'test_task_package.', 'test_task_handoff.',
+                       'test_task_outcomes.', 'test_task_automation.'):
             self.assertTrue(any(name.startswith(module) for name in ids), module)
         for prefix in ('verify_t004_cli.CliBoundaryTests.', 'verify_t003_state.StatePrimitiveTests.'):
             self.assertEqual(12, sum(name.startswith(prefix) for name in ids))
@@ -172,6 +179,184 @@ class AcceptanceTests(unittest.TestCase):
             ci.main(['--source', 'a' * 40, '--policy-source', 'b' * 40])
 
 
+class PackageAcceptanceTests(unittest.TestCase):
+    """Disposable local ports prove CI integration, never authenticated approval."""
+    git = package_tests.RepositoryPrimitiveTests.git
+
+    def setUp(self):
+        package_tests.PackageContractTests.setUp(self)
+        (self.root/'tests').mkdir()
+        self.probe('pass')
+        self.input['execution']['build_provenance'] = 'f' * 64
+        for name in ('spec', 'plan', 'execution'):
+            self.input['approval_refs'][name] = 'sha256:' + 'a' * 64
+        self.input['outcomes'][0]['cases'] = [dict(id='test_probe.Probe.test_case', expected='pass', fingerprint=None)]
+        self.input['outcomes'][0]['tool_revision'] = outcomes.tool_revision()
+        self.input['outcomes'][0]['input_revision'] = outcomes.snapshot(self.root)
+        self.bind()
+        self.guard = self.fake_guard()
+
+    def probe(self, body):
+        (self.root/'tests/test_probe.py').write_text(
+            'import unittest\nclass Probe(unittest.TestCase):\n    def test_case(self): ' + body + '\n')
+
+    def bind(self):
+        self.value = package.build_package(self.input)
+        self.approved_revision = package.package_revision_digest(self.value)
+        self.approved_checks = copy.deepcopy(self.value['outcomes'])
+
+    def fake_guard(self):
+        class Guard:
+            capabilities = {name: package.CapabilityEvidence(True, 'a' * 40, True, None)
+                            for name in package.required_capabilities('validate', 'implement')}
+            def validate_context(self, context, evidence):
+                return package.GuardValidation(True)
+            def compare_artifacts(self, approved, current, evidence):
+                return 'identical'
+            def validate_scope(self, snapshot, context, evidence):
+                return package.GuardValidation(True)
+            def validate_acceptance(self, context, evidence):
+                return package.GuardValidation(True)
+        return Guard()
+
+    def invoke(self, **changes):
+        arguments = dict(approved_revision=self.approved_revision, approved_checks=self.approved_checks,
+                         guard=self.guard)
+        arguments.update(changes)
+        return ci.package_acceptance(self.value, self.snapshot, None, {}, **arguments)
+
+    def test_approved_green_package_uses_shared_validator_and_runner(self):
+        result = self.invoke()
+        self.assertTrue(result['accepted'])
+        self.assertTrue(result['validation']['structural_valid'])
+        self.assertEqual([0], result['validation']['raw_exits'])
+        self.assertTrue(result['outcomes']['accepted'])
+        self.assertFalse(result['execution_eligible'])
+        self.assertIsNone(result['authenticated_approval'])
+        self.assertIsNone(result['independent_review'])
+        self.assertIsNone(result['live_execution'])
+
+    def test_missing_guard_blocks_before_matrix_execution(self):
+        with mock.patch.dict(ci._outcomes, run_checks=mock.Mock()) as _:
+            runner = ci._outcomes['run_checks']
+            result = self.invoke(guard=None)
+            self.assertFalse(result['accepted'])
+            self.assertIn('guard-unavailable', {item['code'] for item in result['validation']['blockers']})
+            self.assertFalse(result['execution_eligible'])
+            runner.assert_not_called()
+
+    def test_missing_changed_and_content_only_revision_pins_block(self):
+        for revision in (None, '', 'f' * 64, self.value['package_digest']):
+            with self.subTest(revision=revision), mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+                result = self.invoke(approved_revision=revision)
+                self.assertFalse(result['accepted'])
+                ci._outcomes['run_checks'].assert_not_called()
+
+    def test_approval_reference_change_requires_new_raw_revision(self):
+        before = self.value['package_digest']
+        self.input['approval_refs']['spec'] = 'sha256:' + 'b' * 64
+        self.value = package.build_package(self.input)
+        self.assertEqual(before, self.value['package_digest'])
+        with mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+            self.assertFalse(self.invoke()['accepted'])
+            ci._outcomes['run_checks'].assert_not_called()
+
+    def test_changed_approved_argv_deadline_cases_and_revisions_block(self):
+        for field, replacement in (('argv', [sys.executable, '-I', '-B', '-c', 'raise RuntimeError()']),
+                                   ('deadline_seconds', 11), ('tool_revision', 'sha256:' + 'a' * 64),
+                                   ('input_revision', 'sha256:' + 'b' * 64), ('cases', [])):
+            changed = copy.deepcopy(self.approved_checks)
+            changed[0][field] = replacement
+            with self.subTest(field=field), mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+                self.assertFalse(self.invoke(approved_checks=changed)['accepted'])
+                ci._outcomes['run_checks'].assert_not_called()
+
+    def test_package_self_assertions_and_missing_host_checks_do_not_authorize(self):
+        for checks in (None, [], [dict(self.approved_checks[0], id='different-check')]):
+            with self.subTest(checks=checks), mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+                self.assertFalse(self.invoke(approved_checks=checks)['accepted'])
+                ci._outcomes['run_checks'].assert_not_called()
+
+    def test_source_repository_and_shape_fail_before_execution(self):
+        original = copy.deepcopy(self.input)
+        for section, field, replacement, blocker in (
+                ('source', 'accepted_commit', 'f' * 40, 'git-object-unavailable'),
+                ('execution', 'build_provenance', None, 'execution-identity-unavailable'),
+                ('approval_refs', 'execution', None, 'execution-approval-reference-missing')):
+            self.input = copy.deepcopy(original)
+            self.input[section][field] = replacement
+            self.bind()
+            with self.subTest(field=field), mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+                result = self.invoke()
+                self.assertFalse(result['accepted'])
+                self.assertIn(blocker, {item['code'] for item in result['validation']['blockers']})
+                ci._outcomes['run_checks'].assert_not_called()
+        self.value = dict(package.build_package(original), repository='other/repository')
+        self.value.pop('package_digest')
+        self.value = package.build_package(self.value)
+        with mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+            result = self.invoke(approved_revision=package.package_revision_digest(self.value))
+            self.assertFalse(result['accepted'])
+            self.assertEqual([{'code': 'repository-mismatch'}], result['validation']['blockers'])
+            ci._outcomes['run_checks'].assert_not_called()
+
+    def test_guard_scope_rejection_and_capability_loss_block(self):
+        for change in ('scope', 'capability'):
+            guard = self.fake_guard()
+            if change == 'scope':
+                guard.validate_scope = lambda *args: package.GuardValidation(False)
+            else:
+                guard.capabilities = {}
+            with self.subTest(change=change), mock.patch.dict(ci._outcomes, run_checks=mock.Mock()):
+                self.assertFalse(self.invoke(guard=guard)['accepted'])
+                ci._outcomes['run_checks'].assert_not_called()
+
+    def test_changed_input_and_tool_bytes_fail_shared_execution(self):
+        for change in ('input', 'tool'):
+            self.input['outcomes'][0]['input_revision'] = outcomes.snapshot(self.root)
+            self.input['outcomes'][0]['tool_revision'] = outcomes.tool_revision()
+            if change == 'input':
+                self.bind()
+                (self.root/'changed.txt').write_text('changed')
+            else:
+                self.input['outcomes'][0]['tool_revision'] = 'sha256:' + 'f' * 64
+                self.bind()
+            with self.subTest(change=change):
+                result = self.invoke()
+                self.assertFalse(result['accepted'])
+                self.assertEqual('revision_mismatch', result['outcomes']['checks'][0]['blocker'])
+
+    def test_new_failure_skip_and_extra_case_remain_strict(self):
+        for body in ('self.fail("new")', 'self.skipTest("skip")', 'pass\n    def test_extra(self): pass'):
+            self.probe(body)
+            self.input['outcomes'][0]['input_revision'] = outcomes.snapshot(self.root)
+            self.bind()
+            with self.subTest(body=body):
+                self.assertFalse(self.invoke()['accepted'])
+
+    def test_retained_package_assertion_requires_separate_matrix_approval(self):
+        self.probe('self.fail("fixture-red")')
+        check = self.input['outcomes'][0]
+        check['input_revision'] = outcomes.snapshot(self.root)
+        check['cases'][0].update(expected='assertion', fingerprint=outcomes.assertion_fingerprint(
+            check['cases'][0]['id'], 'fixture-red'))
+        check['raw_exit'] = 1
+        self.input['approval_refs']['matrix'] = 'sha256:' + 'c' * 64
+        self.bind()
+        self.assertFalse(self.invoke()['accepted'])
+        result = self.invoke(matrix_approved=True)
+        self.assertTrue(result['accepted'])
+        self.assertEqual([1], result['validation']['raw_exits'])
+        self.assertFalse(result['execution_eligible'])
+
+    def test_errors_are_sanitized_without_raw_argv_or_adapter_diagnostics(self):
+        self.guard.validate_context = mock.Mock(side_effect=RuntimeError('secret-canary'))
+        result = self.invoke()
+        self.assertFalse(result['accepted'])
+        self.assertNotIn('secret-canary', json.dumps(result))
+        self.assertNotIn('argv', json.dumps(result))
+
+
 class SourceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -186,6 +371,8 @@ class SourceTests(unittest.TestCase):
         (self.root/'scripts/check_ci.py').write_bytes(Path(ci.__file__).read_bytes())
         (self.root/'scripts/check_ci.py').chmod(Path(ci.__file__).stat().st_mode & 0o777)
         (self.root/'scripts/task_outcomes.py').write_bytes(Path(ci.__file__).with_name('task_outcomes.py').read_bytes())
+        for name in ('task_package.py', 'single_task_state.py'):
+            (self.root/'scripts'/name).write_bytes(Path(ci.__file__).with_name(name).read_bytes())
         self.git('add', '.')
         self.git('commit', '--quiet', '-m', 'test: baseline')
         self.base = self.git('rev-parse', 'HEAD')
@@ -307,6 +494,14 @@ class SourceTests(unittest.TestCase):
         ci.source_identity(self.root, self.base)
         self.commit('scripts/task_outcomes.py', 'pass\n')
         with self.assertRaises(ValueError): ci.source_identity(self.root, self.base)
+
+    def test_source_pin_binds_package_and_traversal_dependencies(self):
+        for name in ('task_package.py', 'single_task_state.py'):
+            with self.subTest(name=name):
+                ci.source_identity(self.root, self.base)
+                self.commit('scripts/' + name, 'pass\n')
+                with self.assertRaises(ValueError): ci.source_identity(self.root, self.base)
+                self.git('checkout', '--quiet', '--detach', self.base)
 
     def test_python_cache_is_external_for_current_and_child_imports_and_restored(self):
         before = (sys.pycache_prefix, sys.dont_write_bytecode)
