@@ -34,6 +34,10 @@ class WriteUnknown(Exception):
     """A publication may have happened; exact remote reconciliation is required."""
 
 
+class LabelConflict(Exception):
+    """Conditional replacement did not apply; reread/recompute without lost labels."""
+
+
 @dataclass(frozen=True)
 class PublicationObject:
     object_id: str
@@ -317,6 +321,10 @@ class AuthenticatedTracker:
                 break
             if not transient or attempt == 3:
                 raise TrackerBlocked('tracker-read-unavailable')
+        return self._response(response)
+
+    def _response(self, response):
+        """Validate one authenticated response, including a final write receipt."""
         valid_clock = False
         try:
             now = self._clock()
@@ -375,7 +383,12 @@ class AuthenticatedTracker:
         if (type(identity) is not IssueIdentity or identity.repository != self.config.repository
                 or type(identity.number) is not int or not 1 <= identity.number <= 2147483647):
             raise TrackerBlocked('invalid-issue-identity')
-        value, response, now = self._read('issue', str(identity.number))
+        return self._issue(identity, *self._read('issue', str(identity.number)))
+
+    def _issue(self, identity, value, response, now):
+        if (type(identity) is not IssueIdentity or identity.repository != self.config.repository
+                or type(identity.number) is not int or not 1 <= identity.number <= 2147483647):
+            raise TrackerBlocked('invalid-issue-identity')
         if (not _keys(value, ('object_id', 'repository', 'number', 'state', 'labels', 'updated_at'))
                 or not _id(value['object_id']) or value['repository'] != identity.repository
                 or type(value['number']) is not int or value['number'] != identity.number
@@ -390,6 +403,52 @@ class AuthenticatedTracker:
                                 value['state'], tuple(value['labels']), value['updated_at'],
                                 hashlib.sha256(response.payload).hexdigest(), response.observed_at,
                                 response.verifier_id, response.verifier_revision)
+
+
+class ConditionalLabels:
+    """Host-injected conditional replacement; ordinary GitHub capability is empty.
+
+    Availability must demonstrate conditional full-set replacement or serialization
+    of every writer. The host atomically deduplicates operation_key and rejects a
+    changed expected/desired request for that key. Its returned authenticated issue
+    observation confirms this final operation without a later provider request.
+    Unknown receipts remain incomplete; read/PUT/read is not a safe implementation.
+    """
+    capabilities = MappingProxyType({})
+
+    def __init__(self, reader, writer=None):
+        if type(reader) is not AuthenticatedTracker:
+            raise TrackerBlocked('authenticated-label-reader-required')
+        self.reader, self.writer = reader, writer
+
+    def read_issue(self, identity):
+        return self.reader.read_issue(identity)
+
+    def replace_labels(self, identity, expected, desired, *, operation_key):
+        if self.writer is None or not callable(getattr(self.writer, 'replace_labels', None)):
+            raise TrackerBlocked('conditional-label-writer-unavailable')
+        if (type(identity) is not IssueIdentity or identity.repository != self.reader.config.repository
+                or not _keys(expected, ('object_digest', 'labels'))
+                or not _match(expected['object_digest'], r'[0-9a-f]{64}')
+                or type(expected['labels']) is not tuple or type(desired) is not tuple
+                or any(len(labels) > 100 or len(labels) != len(set(labels)) or any(
+                    not _match(label, r'[A-Za-z0-9][A-Za-z0-9 ._/-]{0,49}') for label in labels)
+                    for labels in (expected['labels'], desired))
+                or not _match(operation_key, r'final-labels:[0-9a-f]{64}')):
+            raise TrackerBlocked('invalid-conditional-label-request')
+        try:
+            response = self.writer.replace_labels(identity, expected, desired, operation_key=operation_key)
+        except LabelConflict:
+            raise
+        except Exception:
+            raise WriteUnknown('final-label-write-unknown') from None
+        try:
+            observation = self.reader._issue(identity, *self.reader._response(response))
+            if observation.state != 'open' or set(observation.labels) != set(desired):
+                raise TrackerBlocked('final-label-receipt-mismatch')
+        except Exception:
+            raise WriteUnknown('final-label-write-unknown') from None
+        return observation
 
 
 class ApprovalAuthority:
