@@ -600,7 +600,8 @@ def bind_implementation(worktree_root, store, attempt_id, commit):
         selected = scope.task_lines(expected).get(context['task_id'])
         if selected is None:
             raise InvalidState('Selected completion marker is missing')
-        expected[selected['marker_offset']] = ord('x')
+        if not selected['checked']:
+            expected[selected['marker_offset']] = ord('x')
         if (intent['attempt_id'] != attempt_id or intent['tasks_path'] != task_path or
                 pre != attempt['tasks_bytes'] or post != bytes(expected) or
                 hashlib.sha256(pre).hexdigest() != intent['tasks_before_sha256'] or

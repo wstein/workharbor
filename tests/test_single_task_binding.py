@@ -1,9 +1,10 @@
 """Direct T020 owning controls; no unavailable CLI can satisfy binding."""
+import copy
 import subprocess
 import unittest
 
 import test_single_task_completion as completion_fixture
-from test_single_task import GIT
+from test_single_task import GIT, context_digest, digest
 import single_task_state as state
 import single_task_scope as scope
 
@@ -60,6 +61,46 @@ class ImplementationBindingTests(unittest.TestCase):
             self.assertEqual(later, events[-1]['payload']['verification_head'])
             self.assertEqual(self.commit, events[-1]['payload']['implementation_commit'])
         self.rejected(later)
+
+    def test_checked_rework_binding_preserves_uppercase_marker(self):
+        # Primitive-owned state fixture isolates T020. This does not claim T022
+        # entry authorization or T023 handoff wiring is implemented.
+        import single_task_acceptance as acceptance
+        self.bind()
+        predecessor = self.attempt_id
+        with state.open_store(self.root, require_existing=True, writable_existing=True) as store:
+            old = store.read_attempt(predecessor)
+            acceptance.execute_acceptance(self.root, old, self.review, store)
+            store.append_event(predecessor, 'fixture-verified-handoff', {}, progress='handoff-ready')
+        checked = self.after.replace(b'[x] T001', b'[X] T001')
+        self.tasks.write_bytes(checked)
+        baseline = self.commit_current()
+        context = copy.deepcopy(self.context)
+        context.update(mode='owner-authorized rework', prior_attempt_id=predecessor,
+                       prior_implementation_commit=self.commit,
+                       rework_approval={'owner_ref': 'synthetic:owner', 'evidence_ref': 'synthetic:rework'})
+        for name, record in context['reviewed_artifacts'].items():
+            record.update(commit=baseline, sha256=digest((self.fixture.feature/name).read_bytes()))
+        context['source_assertion']['sha256'] = digest(checked)
+        context['approval']['context_digest'] = context_digest(context)
+        with state.open_store(self.root, require_existing=True, writable_existing=True) as store:
+            prefix = store.read_events(predecessor)
+            store.create_attempt(attempt_id='checked-rework', context=context, baseline=baseline,
+                                 tasks_bytes=checked, entry_mode=context['mode'], predecessor=predecessor,
+                                 approval_context_digest=context['approval']['context_digest'])
+            attempt = store.read_attempt('checked-rework')
+            review = self.fixture.review(context)
+            review['attempt_id'] = 'checked-rework'
+            acceptance.execute_acceptance(self.root, attempt, review, store)
+            state.publish_completion(self.root, store, 'checked-rework')
+            value = self.owner()(self.root, store, 'checked-rework', baseline)
+            self.assertEqual(baseline, value['implementation_commit'])
+            self.assertEqual(prefix, store.read_events(predecessor))
+            intent = next(row['payload'] for row in store.read_events('checked-rework')
+                          if row['kind'] == 'completion-intent')
+            self.assertEqual(checked, bytes.fromhex(intent['tasks_before_hex']))
+            self.assertEqual(checked, bytes.fromhex(intent['tasks_after_hex']))
+        self.assertEqual(checked, self.tasks.read_bytes())
 
     def test_unavailable_commit_rejected(self):
         self.rejected('f' * 40)
