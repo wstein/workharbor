@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Temporary, content-bound T003 CI acceptance; all other trees require green."""
+"""Sealed T003 acceptance and T004 preparation; other trees require green."""
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -29,6 +30,84 @@ PINS = {
     'scripts/single_task.py': '7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4',
     'specs/003-single-task-entry/tasks.md': 'c180e72fbb9e0fba51579629657cd24aa41808ddec79d8a58c191dd6d451c6ab',
 }
+T004_SOURCE = '5d1dc6563c7ae1f8479f01af0901c39792b3f8b8'
+T004_PREPARATION = 'f6a69470f8a3e5c396e134326c033a3b1195de7b'
+T004_CI_PATHS = ('scripts/check_ci.py', 'docs/development/harness.md')
+T004_PREP_PINS = {
+    'docs/development/bootstrap-t004.json': ('3c655a98d91a9ddf160be9795c6843843a04269e1d09ff19103e2b3478dc712c', False),
+    'docs/development/bootstrap-t004.md': ('f8404622ae94fcce8c18b5a2d9023e35c4241b313f4f938dd873b5538e8f1ded', False),
+    'scripts/verify_t004_cli.py': ('39aaa54427eb12085b65513bcb64e8d1cc56f50e7dfb3e396c8bf8be9752b074', True),
+}
+T004_REJECTION_SHA256 = '60f9589d0fabb34d3b95847ea2521d6458a2a3d0a10ce8a091ffa30f8321d0e0'
+
+
+def approved_t004_preparation(root):
+    """Recognize only one CI commit above the immutable three-artifact seal.
+
+    This is a content boundary, never self-authentication of this checker. The
+    final CI commit still needs independent review. Any later commit expires it.
+    """
+    try:
+        git(root, 'merge-base', '--is-ancestor', T004_SOURCE, T004_PREPARATION)
+        git(root, 'merge-base', '--is-ancestor', T004_PREPARATION, 'HEAD')
+        if len(git(root, 'rev-list', T004_PREPARATION + '..HEAD').splitlines()) != 1:
+            return False
+        for name, (digest, executable) in T004_PREP_PINS.items():
+            path = root/name
+            if (path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
+                    or bool(path.stat().st_mode & 0o111) != executable
+                    or hashlib.sha256(path.read_bytes()).hexdigest() != digest):
+                return False
+        exclusions = tuple(':(exclude)' + name for name in T004_CI_PATHS)
+        for revision in (('HEAD',), (), ('--cached',)):
+            git(root, 'diff', '--quiet', T004_PREPARATION, *revision, '--', '.', *exclusions)
+        # The two reviewed CI edits must themselves be clean at this exact HEAD;
+        # neither staged nor working-tree overrides are part of the seal.
+        for options in ((), ('--cached',)):
+            git(root, 'diff', *options, '--quiet', 'HEAD', '--', *T004_CI_PATHS)
+        return not git(root, 'ls-files', '--others', '--exclude-standard', '-z')
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+def expected_t004_rejection(result):
+    """Exact safe preimplementation report, not an arbitrary nonzero exit."""
+    try:
+        value = json.loads(result.stdout)
+        encoded = json.dumps(value, sort_keys=True, separators=(',', ':'),
+                             ensure_ascii=False, allow_nan=False).encode('utf-8')
+        return (result.returncode == 1 and not result.stderr
+                and hashlib.sha256(encoded).hexdigest() == T004_REJECTION_SHA256)
+    except (ValueError, TypeError, UnicodeError):
+        return False
+
+
+def check_t004_preparation(root):
+    print('CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
+    for argv in ([sys.executable, 'scripts/verify_t004_cli.py', '--self-test'],
+                 [sys.executable, '-m', 'py_compile', 'scripts/verify_t004_cli.py'],
+                 [sys.executable, 'scripts/verify_t003_state.py'],
+                 [sys.executable, 'scripts/verify_t002_red.py'],
+                 [sys.executable, 'scripts/check_repo.py'], ['git', 'diff', '--check']):
+        if run(argv, root):
+            return 1
+    rejection = subprocess.run([sys.executable, 'scripts/verify_t004_cli.py'], cwd=root,
+                               capture_output=True, text=True, timeout=120)
+    if not expected_t004_rejection(rejection):
+        print('Preparation blocked: T004 preimplementation rejection changed.', flush=True)
+        return 1
+    print('Exact T004 rejection verified: 53 tests; implementation acceptance is FALSE.', flush=True)
+    for script in sorted((root/'.specify/scripts/bash').glob('*.sh')) + sorted((root/'scripts').glob('*.sh')):
+        if run(['bash', '-n', str(script.relative_to(root))], root):
+            return 1
+    env = os.environ.copy()
+    env.update(SPECIFY_FEATURE_DIRECTORY='specs/001-workspace-lifecycle', SPECIFY_FEATURE_NO_PERSIST='1')
+    if subprocess.run(['bash', '.specify/scripts/bash/check-prerequisites.sh', '--json',
+                       '--require-tasks', '--include-tasks'], cwd=root, env=env).returncode:
+        return 1
+    raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
+    print(f'Raw make check exit: {raw}; full suite remains RED; preparation only.', flush=True)
+    return 0 if raw == 2 and approved_t004_preparation(root) else 1
 
 
 def git(root, *args):
@@ -96,6 +175,8 @@ def strict_suite(root):
 
 
 def check(root):
+    if approved_t004_preparation(root):
+        return check_t004_preparation(root)
     scoped = approved_t003(root)
     print('CI mode: approved T003 phase' if scoped else 'CI mode: strict full green', flush=True)
     if scoped:
@@ -125,7 +206,7 @@ def check(root):
 def self_test():
     class GateTests(unittest.TestCase):
         def test_approved_content_and_prerequisites(self):
-            self.assertTrue(approved_t003(ROOT))
+            self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT))
 
         def test_rebased_anchor_without_original_commit(self):
             original_git = git
@@ -134,12 +215,13 @@ def self_test():
                     raise subprocess.CalledProcessError(128, args)
                 return original_git(root, *args)
             with mock.patch(__name__ + '.git', side_effect=without_original):
-                self.assertTrue(approved_t003(ROOT))
+                self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT))
 
         def test_reviewed_docs_and_successor_mutations(self):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)/'checkout'
                 subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
+                subprocess.run(['git', '-C', str(root), 'checkout', '--quiet', T004_SOURCE], check=True)
                 self.assertTrue(reviewed_docs(root))
                 self.assertTrue(approved_t003(root))
                 for name in (*DOC_PINS, 'scripts/single_task_state.py',
@@ -208,12 +290,14 @@ def self_test():
                 self.assertFalse(approved_t003(ROOT))
 
         def test_strict_fallback_requires_green(self):
-            with mock.patch(__name__ + '.approved_t003', return_value=False), \
+            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.strict_suite', return_value=True):
                 for raw in (0, 1, 2):
                     with self.subTest(raw=raw), mock.patch(__name__ + '.run', side_effect=[0, raw]):
                         self.assertEqual(0 if raw == 0 else 1, check(ROOT))
-            with mock.patch(__name__ + '.approved_t003', return_value=False), \
+            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.run', return_value=0), \
                     mock.patch(__name__ + '.strict_suite', return_value=False):
                 self.assertEqual(1, check(ROOT))
@@ -236,7 +320,8 @@ def self_test():
                     self.assertEqual(expected, strict_suite(ROOT))
 
         def test_scoped_checks_and_raw_red_required(self):
-            with mock.patch(__name__ + '.approved_t003', return_value=True), \
+            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_t003', return_value=True), \
                     mock.patch('subprocess.run', return_value=mock.Mock(returncode=0)):
                 for raw in (0, 1, 2):
                     with self.subTest(raw=raw), mock.patch(__name__ + '.run', side_effect=lambda argv, root: raw if argv[0] == 'make' else 0):
@@ -247,8 +332,70 @@ def self_test():
                 with mock.patch(__name__ + '.run', return_value=0), \
                         mock.patch('subprocess.run', return_value=mock.Mock(returncode=1)):
                     self.assertEqual(1, check(ROOT))
+        def test_preparation_mutations_expire_gate(self):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)/'checkout'
+                subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
+                self.assertTrue(approved_t004_preparation(root))
+                names = (*T004_PREP_PINS, *T004_CI_PATHS, 'scripts/single_task.py',
+                         'scripts/single_task_state.py', 'tests/test_single_task_state.py',
+                         'specs/003-single-task-entry/tasks.md', '.github/workflows/check.yml')
+                for name in names:
+                    path = root/name
+                    content, mode = path.read_bytes(), path.stat().st_mode
+                    for mutation in ('changed', 'missing', 'symlink', 'mode'):
+                        with self.subTest(path=name, mutation=mutation):
+                            path.unlink()
+                            if mutation == 'symlink':
+                                path.symlink_to(ROOT/name)
+                            elif mutation != 'missing':
+                                path.write_bytes(content + (b'\n' if mutation == 'changed' else b''))
+                                path.chmod(mode ^ 0o111 if mutation == 'mode' else mode)
+                            self.assertFalse(approved_t004_preparation(root))
+                            subprocess.run(['git', '-C', str(root), 'add', '--', name], check=True)
+                            self.assertFalse(approved_t004_preparation(root))
+                            subprocess.run(['git', '-C', str(root), 'restore', '--staged', '--worktree', '--', name], check=True)
+                extra = root/'scripts/unapproved.py'
+                extra.write_text('pass\n')
+                self.assertFalse(approved_t004_preparation(root))
+                extra.unlink()
+                subprocess.run(['git', '-C', str(root), '-c', 'user.name=Synthetic',
+                                '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                                '--allow-empty', '-m', 'test: later CI commit expires seal'], check=True)
+                self.assertFalse(approved_t004_preparation(root))
+
+        def test_preparation_unknown_history_refused(self):
+            with mock.patch(__name__ + '.git', side_effect=subprocess.CalledProcessError(1, ['git'])):
+                self.assertFalse(approved_t004_preparation(ROOT))
+
+        def test_preparation_rejection_is_exact(self):
+            observed = subprocess.run([sys.executable, 'scripts/verify_t004_cli.py'], cwd=ROOT,
+                                      capture_output=True, text=True, timeout=120)
+            self.assertTrue(expected_t004_rejection(observed))
+            value = json.loads(observed.stdout)
+            for code, output, stderr in ((0, observed.stdout, ''), (2, observed.stdout, ''),
+                                        (1, '', ''), (1, observed.stdout, 'unexpected error'),
+                                        (1, '{}', ''), (1, 'not JSON', '')):
+                self.assertFalse(expected_t004_rejection(subprocess.CompletedProcess([], code, output, stderr)))
+            for key, changed in (('tests_run', 0), ('proposal_matrix_verified', True),
+                                 ('validated_entry_implemented', True), ('full_suite_green', True)):
+                modified = dict(value, **{key: changed})
+                self.assertFalse(expected_t004_rejection(subprocess.CompletedProcess([], 1, json.dumps(modified), '')))
+            for kind in ('skip', 'xfail', 'unexpected-success', 'error', 'pass'):
+                modified = json.loads(observed.stdout)
+                modified['outcomes'][0]['outcome'] = kind
+                if modified != value:
+                    self.assertFalse(expected_t004_rejection(subprocess.CompletedProcess([], 1, json.dumps(modified), '')))
+
+        def test_preparation_failure_does_not_fall_through(self):
+            with mock.patch(__name__ + '.approved_t004_preparation', return_value=True), \
+                    mock.patch(__name__ + '.check_t004_preparation', return_value=1), \
+                    mock.patch(__name__ + '.approved_t003') as older:
+                self.assertEqual(1, check(ROOT))
+                older.assert_not_called()
+
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(GateTests))
-    return 0 if result.wasSuccessful() and result.testsRun == 9 else 1
+    return 0 if result.wasSuccessful() and result.testsRun == 13 else 1
 
 
 if __name__ == '__main__':
