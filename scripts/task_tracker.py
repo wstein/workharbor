@@ -56,6 +56,7 @@ class TrackerConfig:
     repository_id: str
     owner_id: str
     verifier_id: str
+    verifier_revision: str
     max_observation_age: int = 300
     max_decision_age: int = 2592000
 
@@ -84,6 +85,7 @@ class AuthenticatedRead:
     provider_id: str
     repository_id: str
     verifier_id: str
+    verifier_revision: str
     observed_at: int
     payload: bytes
 
@@ -110,6 +112,7 @@ class ApprovalDecision:
     observed_at: int | None
     assurance: str
     verifier_id: str | None
+    verifier_revision: str | None
 
 
 @dataclass(frozen=True)
@@ -131,6 +134,7 @@ class IssueObservation:
     object_digest: str
     observed_at: int
     verifier_id: str
+    verifier_revision: str
 
 
 def _target_valid(target):
@@ -159,7 +163,7 @@ def supplied_local(reference):
         raise TrackerBlocked('invalid-approval-reference')
     return ApprovalDecision(None, None, reference.object_id, reference.url, None, None,
                             reference.target, reference.content_digest, None, None, None,
-                            None, None, None, 'supplied-local', None)
+                            None, None, None, 'supplied-local', None, None)
 
 
 class AuthenticatedTracker:
@@ -174,6 +178,7 @@ class AuthenticatedTracker:
 
     def __init__(self, config, transport, *, clock=time.time):
         if (type(config) is not TrackerConfig or config.provider_id != 'github'
+                or not _match(config.verifier_revision, r'[0-9a-f]{40}|[0-9a-f]{64}')
                 or not _repository(config.repository)
                 or not all(_id(value) for value in
                            (config.repository_id, config.owner_id, config.verifier_id))
@@ -210,8 +215,8 @@ class AuthenticatedTracker:
             raise TrackerBlocked('tracker-clock-unavailable')
         config = self.config
         if (type(response) is not AuthenticatedRead
-                or (response.provider_id, response.repository_id, response.verifier_id)
-                != (config.provider_id, config.repository_id, config.verifier_id)
+                or (response.provider_id, response.repository_id, response.verifier_id, response.verifier_revision)
+                != (config.provider_id, config.repository_id, config.verifier_id, config.verifier_revision)
                 or not _epoch(response.observed_at)
                 or not 0 <= now - response.observed_at <= config.max_observation_age
                 or type(response.payload) is not bytes or len(response.payload) > MAX_BYTES):
@@ -252,7 +257,7 @@ class AuthenticatedTracker:
                                 self.config.owner_id, target, reference.content_digest,
                                 value['state'], value['created_at'], value['decided_at'],
                                 value['updated_at'], value['expires_at'], response.observed_at,
-                                'authenticated-provider', response.verifier_id)
+                                'authenticated-provider', response.verifier_id, response.verifier_revision)
 
     def read_issue(self, identity):
         if (type(identity) is not IssueIdentity or identity.repository != self.config.repository
@@ -272,7 +277,7 @@ class AuthenticatedTracker:
                                 value['object_id'], identity.repository, identity.number,
                                 value['state'], tuple(value['labels']), value['updated_at'],
                                 hashlib.sha256(response.payload).hexdigest(), response.observed_at,
-                                response.verifier_id)
+                                response.verifier_id, response.verifier_revision)
 
 
 class ApprovalAuthority:
