@@ -1,11 +1,11 @@
 # T019 rework test proposal
 
-Status: **preparation only; exact owner matrix approval remains pending**.
+Status: **T019 test-authoring accepted under the exact owner-approved matrix**.
 [Feature 003 T019](../../specs/003-single-task-entry/tasks.md) adds tests only in
 `tests/test_single_task_context.py`. Its implementing successors are T022/T023.
 The original 99 context cases and every existing CLI regression remain unchanged.
-No implementation, completion checkbox, dispatch or expected-red acceptance is
-authorized by this proposal.
+This completion records verified red-test evidence. Actual rework behavior remains
+pending T022/T023; live dispatch remains unverified.
 
 The preparation base is the independently reviewed T017 publication candidate
 `767eb60fa6b69240e98b69ff379081469ea55484`. Its context/CLI tests, owning modules
@@ -81,10 +81,27 @@ or extra cases, skipped tests and unclassified failures. Source snapshots must
 remain unchanged during each capture. Raw suite exits and expected-outcome verifier
 acceptance are separate results.
 
-The executable matrix is generated outside the checkout after the final proposal
-commit, binding its new input snapshot while retaining the actual capture identities.
-The exact wrapper argv and checks digest accompany that final binding. They require
-independent review and a distinct
-owner approval before any `--matrix-approved` invocation or T019 completion.
-Canonical repository acceptance remains a separate required handoff gate. No full
-suite, authentication, platform coverage or live runtime result is claimed here.
+The owner explicitly approved frozen proposal
+`cc698174efcbc3a08ba79814f8e0dfd54ec6e628`, its exact argv/Python/PATH and native
+checks digest `sha256:54eb8d1785eeb8d8d66bc04f8398b852b606386a82f39c5055314b2e2f6869c2`,
+following the combined T018/T019 package and independent review recommendation.
+That current-session authorization was relayed by CrewBook dispatch; it is supplied
+local authority, not independent owner identity authentication.
+
+The approved wrapper ran **before source or checkbox edits** and returned **exit 0,
+accepted=true**. Both exact inventories, fingerprints and raw child exits matched:
+181 cases, 162 passes and 19 expected assertions, raw exits 1, 1. The approved input
+and post-verifier snapshots were both
+`sha256:7c0cf99a7594838f42ee08a35819a4c1ef1706ae4aa3bd38ead841047303d0b0`.
+The full native result has SHA-256
+`fef21058eff846b58ce2cba7432c8679b4cc2a3dd8282b7eb54ce70c195e3db8`.
+Only after preserving that result and unchanged snapshot did bookkeeping mark T019
+complete and append this evidence. The JSON keeps actual measurement source
+`762e7614` distinct from approved execution source `cc698174`; later evidence edits
+do not claim another execution. Its accepted record reproduces the approved matrix
+by replacing only observed-check input revisions with the approved input snapshot.
+
+The 17 new assertions still observe missing command capabilities; deeper rework
+semantics remain unexecuted. Canonical repository acceptance remains a separate
+required handoff gate. No full suite, authentication, platform coverage or live
+runtime result is claimed here.
