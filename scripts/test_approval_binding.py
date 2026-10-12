@@ -2,10 +2,12 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tests'))
 from approval_binding import (
@@ -196,6 +198,22 @@ class ApprovalBindingTests(unittest.TestCase):
         self.fixture.git('config', 'core.filemode', 'false')
         (self.fixture.feature / 'spec.md').chmod(0o755)
         self.rejected(self.assess(), 'worktree-artifact-drift')
+
+    def test_symlink_swap_cannot_follow_external_file(self):
+        target = self.fixture.feature / 'plan.md'
+        outside = self.fixture.private / 'external'
+        outside.write_bytes(target.read_bytes())
+        real_open = os.open
+        swapped = []
+        def swap(path, flags, *args, **kwargs):
+            if path == 'plan.md' and not swapped:
+                swapped.append(True)
+                target.unlink()
+                target.symlink_to(outside)
+            return real_open(path, flags, *args, **kwargs)
+        with patch('approval_binding.os.open', side_effect=swap):
+            self.rejected(self.assess(), 'validation-unavailable')
+        self.assertEqual([True], swapped)
 
     def test_staged_hidden_change_dirty_worktree_and_untracked_block(self):
         path = self.root / 'guide.md'

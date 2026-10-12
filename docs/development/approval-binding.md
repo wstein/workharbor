@@ -50,6 +50,10 @@ HEAD must equal its full requested revision; its index/worktree must be clean,
 including nonignored untracked files. Protected entries must be regular Git files,
 with no symlink/gitlink ancestors; physical modes are checked even if core.filemode
 is false. Recheck the snapshot after external verification to reject concurrent drift.
+Physical reads reuse Feature 003's descriptor-relative directory traversal, open
+files without following links, reject hardlinked/nonregular files and bound reads
+to the expected Git blob size. Limit protected paths to 1,000, blobs to 1 MiB each,
+and each local Git call to ten seconds; exceeding limits blocks.
 
 The result is sanitized comparison evidence: result, retained flag, approval
 assurance, original/current raw binding digests, approved/current snapshots,
