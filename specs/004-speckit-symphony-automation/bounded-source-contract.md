@@ -16,9 +16,10 @@ or silently refresh an accepted pin to proposal code.
 
 Proposal scope and approval checks inspect the exact head, its index/worktree and
 each proposal commit from `merge-base(base, head)` through head. Validate the
-accepted-policy ancestry and task's approved scope, including commit/revert, modes,
-symlinks and gitlinks. A synthetic merge commit is never a task-authored commit and
-never changes the approved scope. A head failure cannot be cleared by merge checks.
+trusted accepted-base history and task's approved scope, including commit/revert,
+modes, symlinks and gitlinks; policy equivalence follows the contract below. A
+synthetic merge commit is never a task-authored commit and never changes the
+approved scope. A head failure cannot be cleared by merge checks.
 
 Integration separately authenticates the PR repository/event/base/head, exactly two
 ordered merge parents `(base, head)`, and the actual Git merge result. Recompute the
@@ -43,6 +44,62 @@ unavailable, changed or ambiguous, block the affected action. The existing seale
 bootstrap gate may conservatively block changed executable/test/configuration inputs
 until such evidence exists; it must not pretend that a blocked prerequisite passed.
 Proposal edits to protected inputs still need their own explicit authorization.
+
+## Immutable policy authority, content-equivalent history
+
+Status: proposed bounded plan revision for the owner's requested reduction in
+repeated approval administration; no claim of plan approval or implementation.
+The owner independently adopts one reviewed immutable policy commit. Keep that
+commit as authority and keep historical acceptance pins unchanged. New policy
+content requires one explicit owner adoption after independent review; a proposal,
+manifest or passing check cannot adopt itself. This changes no host permissions.
+
+The accepted checker derives a deterministic content manifest from that trusted
+Git object, never from candidate declarations. Record exact path inventory, Git
+type/mode and raw-blob digest for checker, workflow, operator tools and paired tests;
+bind the tool/test mapping, schema/contracts and authority inputs that define their
+scope, dependencies and ordered checks. The bounded inventory is `OPERATOR_PATHS`,
+`.specify/memory/constitution.md`, `docs/development/{harness,prepublication,approval-binding}.md`
+and Feature 004's `bounded-source-contract.md`, `contracts/cli.md`, `data-model.md`.
+Keep imported guard, build/check scripts,
+tests, dependency/configuration inputs and frozen Feature 001–003 artifacts under
+their existing immutable accepted baseline. Enumerate the dependency closure in
+trusted policy; added, removed or renamed inputs cannot escape by falling outside
+a candidate-supplied inventory. Ordinary documentation outside these protected
+inputs remains eligible for the existing documentation rule. Task-content approval
+still uses GuardPort's protected contract and comparison rules below.
+
+Head and actual integration must match the adopted manifest exactly. Validate the
+current accepted base separately, including its protected prerequisites. A real
+rebase or squash with identical protected content need not contain the policy
+commit as an ancestor and needs neither a new policy pin nor another policy-content
+approval. Record the new commit/tree identities and comparison evidence; retain
+fresh exact-candidate review and integration checks. Unrelated accepted-base
+updates need no policy renewal. Changed policy, scope, checks or dependencies
+invalidate affected approval; unavailable or ambiguous evidence blocks.
+
+Content equality does not replace history validation. From the existing trusted
+accepted-base anchor, validate the trusted policy history and current base history;
+then validate every proposal commit from the unique PR merge base to head. The
+base may end at a reviewed intermediate state before policy adoption; head and
+integration must reach the final adopted state. Keep
+protected-path commit/revert rejection. Permit policy transitions only by matching
+the complete protected-policy manifest states in the reviewed source history, in
+order. Consecutive duplicate states may collapse; a squash may skip contiguous
+reviewed transitions to their exact resulting state. Other changes must satisfy
+existing documentation/task scope and type rules. This permits reviewed policy
+replay, not arbitrary code changes on operator paths. Reject invented, reversed or
+mixed policy states, protected changes followed by reverts, missing objects and
+ambiguous/nonlinear transition evidence; do not delete ancestry guards wholesale.
+Synthetic integration parents remain a separate authenticated `(base, head)` gate.
+
+Required disposable-Git evidence includes actual rebase and squash candidates with
+identical manifests but no policy-commit ancestry, plus unrelated accepted-base
+updates. Negative cases change checker/workflow/tool/test bytes, inventory, modes,
+manifest/schema/contract inputs, scope or dependencies; include protected
+commit/revert, dirty/untracked/index content and symlinked paths/parents. Retain
+Git metadata/configuration, event/repository identity, frozen artifacts and all
+existing check/outcome gates. These are required cases, not passing-test claims.
 
 ## Reusable prepublication preparation
 
