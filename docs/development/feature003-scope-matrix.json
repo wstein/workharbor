@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "proposed-observed-executable-preparation-not-approved",
+  "status": "owner-approved-test-authoring-matrix-matched",
   "feature": "003-single-task-entry",
   "task_id": "T011",
   "base_commit": "e3e80a2e5b1cf0726e82c110793327a86eb35a72",
@@ -11,7 +11,7 @@
     "T013",
     "T014"
   ],
-  "gate": "Executable preparation was authorized separately. No T011 task entry, completion checkbox, --matrix-approved invocation, or test-authoring acceptance until the owner approves this exact reviewed source-bound matrix and argv.",
+  "gate": "The owner session authorized the exact reviewed source0873c55353b778de5f270b7c5d7890b5de05d2eb and checks077633535b54b442afc3278208ac4747ebdcfe139d67c1d52087bfba9e4873ed. The unchanged approved verifier ran before any source/task-marker edit and returned exit0 with accepted=true. Only T011 test-authoring completion is recorded; no successor behavior is implemented.",
   "authoring_scope": [
     "tests/test_single_task_scope.py",
     "docs/development/feature003-scope-matrix.json",
@@ -167,14 +167,14 @@
   ],
   "case_expansion": "The original 29 design categories below are retained; the current executable draft expands them into 76 distinct collected methods without failed subtests or skipped boundaries. Two literal normalization vectors cover pending/checked selected markers and preservation of another already-checked marker.",
   "expected_outcomes": {
-    "status": "proposed-observed-not-approved",
+    "status": "owner-approved-matrix-matched",
     "tests_run": 76,
     "raw_exit": 1,
     "errors": 0,
     "skips": 0,
     "failed_subtests": 0,
     "observed": true,
-    "approved": false,
+    "approved": true,
     "qualified_body_assertions": 76,
     "successful_begin_status_fixtures": 76,
     "observation_scope": "All 76 observed reds are callable-capability assertions in test bodies after valid real T010 begin/status. No scope rejection, schema rejection, semantic-review rejection, canonical serialization, normalization, or direct inspection behavior has yet executed. Deeper assertions are executable future contracts, not reproduced implementation failures."
@@ -282,11 +282,10 @@
   "ci_policy": "No changes to docs/development/ci-acceptance.json, scripts/check_ci.py or scripts/task_outcomes.py. The final reviewed T010 source supersedes original main’s five helper reds with 19 explicit remaining completion/retry/legacy-CLI assertions. Preserve that exact accepted source and policy; do not relabel pending migrations as implemented.",
   "ownership": "T011 owns direct inventory/manifest/schema/review and read-only preparation behavior. T012 owns public inspect identities/envelope and verify/complete acceptance execution, failures, mutations and selected-marker completion. No T015/T017 success implementation is required for T011 direct semantic validation.",
   "pending": [
-    "Final independent review of the doc-only clarification and exact source/input rebinding",
-    "Owner decision on the explicit versioned SemanticReview shape clarification and exact T011/T012 source-bound matrices/argv",
-    "Coordinator rebinding after any combined publication/integration changes; no inherited approval across changed source"
+    "Independent review of the final T011-only checkbox/evidence bookkeeping revision",
+    "Coordinator-owned repository acceptance and authorized publication/handoff; this leaf performs no push or PR work"
   ],
-  "limitations": "Preparation only. The observed reds establish absent owning capabilities after valid entry/status; deeper assertions remain unexecuted. No implementation evidence, accepted test-authoring outcome, T011 checkbox, provider/runtime activation, authenticated owner verification, publication, or live test claim. Canonical make check is coordinator-owned and was not run by this bounded leaf.",
+  "limitations": "T011 completion means the owner-approved exact test-authoring matrix matched. All76 reds establish absent owning capabilities after valid real entry/status; deeper assertions remain unexecuted. Raw child exit1 is retained honestly. No successor implementation, provider/runtime activation, authenticated owner verification, publication, or live test claim. Canonical make check is coordinator-owned and was not run by this bounded leaf.",
   "original_preparation_commit": "cebcd6c868a07b649ec8c95d6ef7c94ae234b2a6",
   "proposed_owning_apis": [
     {
@@ -934,7 +933,7 @@
     "reviewed_t010_commit": "4683665f07c641c5dbfebca8e5a4f1c5619fadab",
     "tests_sha256": "sha256:340d3a87e7675dfcbf567aa1abfaef78b6eff5b602e0616d1787df2274eb557a",
     "task_outcomes_tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
-    "candidate_commit_and_input_snapshot": "Sealed outside this checked root after committing the proposal, to avoid self-referential snapshot fields. The owner decision must name that exact candidate, external matrix digest, input revision and executable argv; any later integration or source change requires rebinding.",
+    "candidate_commit_and_input_snapshot": "Historical proposal0873 source and external seal were presented before owner approval. approved_execution now records the exact executed source/snapshot/argv/checks digest and actual result. Later bookkeeping does not reuse that old snapshot as the identity of changed source.",
     "accepted_main_commit": "e3e80a2e5b1cf0726e82c110793327a86eb35a72",
     "retained_observation_source": "The 76-case capture used reviewed T0104683665 plus draft tests SHA256 340d3a87e7675dfcbf567aa1abfaef78b6eff5b602e0616d1787df2274eb557a, frozen in proposal46aeb517. Accepted main e3e80a2 has the same full prerequisite tree. This revision changes proposal/model prose only; test, runner and execution blobs remain byte-identical. No new raw test run is claimed.",
     "interpreter": "/opt/homebrew/opt/python@3.14/bin/python3.14",
@@ -942,7 +941,7 @@
     "prior_executable_proposal_commit": "46aeb51797d54747dc6fd24cd5e253093a7cfe0e"
   },
   "schema_version_compatibility_proposal": {
-    "status": "explicit clarification proposed for owner review; no new evidence format",
+    "status": "Routine subsection alignment with the existing global versioned-evidence rule; included in reviewed source0873. No separate new-format approval required.",
     "existing_authority": "data-model.md introductory rule requires schema_version: 1 for all context/evidence formats and rejects unknown/missing fields; SemanticReview lists seven semantic fields.",
     "approved_fixture_provenance": "T001 tests/fixtures/single-task/review.json at accepted main e3e80a2e5b1cf0726e82c110793327a86eb35a72 already contains schema_version: 1 plus those seven semantic fields.",
     "proposed_artifact": "specs/003-single-task-entry/data-model.md#semanticreview-immutable-per-acceptance-identity",
@@ -957,7 +956,7 @@
       "approved"
     ],
     "version_rule": "schema_version must be integer 1; reject missing/unknown keys. Existing semantic rules and approved=true requirement are unchanged.",
-    "owner_decision": "Approve this explicit shape clarification together with the exact T011/T012 matrices and source-bound argv; no approval is inferred."
+    "owner_decision": "Historical proposal requested an explicit shape decision. Coordinator clarified that the existing global schema_version1 rule already governs this approved T001 fixture; the subsection alignment introduces no new format."
   },
   "baseline_policy": {
     "reviewed_commit": "4683665f07c641c5dbfebca8e5a4f1c5619fadab",
@@ -985,5 +984,37 @@
       "verify_t004_cli.CliBoundaryTests.test_scope_blocker_exit_three"
     ],
     "verification_status": "Retained from independently reviewed T010 final checkpoint; not rerun as a full canonical suite by this bounded leaf. Every new fixture freshly checks real implemented begin/status behavior."
+  },
+  "approved_execution": {
+    "source_commit": "0873c55353b778de5f270b7c5d7890b5de05d2eb",
+    "checks_digest": "sha256:077633535b54b442afc3278208ac4747ebdcfe139d67c1d52087bfba9e4873ed",
+    "verifier_argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-I",
+      "-B",
+      "/private/tmp/workharbor-003-t011/scripts/task_outcomes.py",
+      "--matrix",
+      "/private/tmp/workharbor-003-t011-runtime-matrix.json",
+      "--root",
+      "/private/tmp/workharbor-003-t011",
+      "--approved-digest",
+      "sha256:077633535b54b442afc3278208ac4747ebdcfe139d67c1d52087bfba9e4873ed",
+      "--matrix-approved"
+    ],
+    "verifier_exit": 0,
+    "accepted": true,
+    "blocker": null,
+    "verifier_pre_snapshot_validated_against": "sha256:b7eb25ac5be79b47ab2634c98d15dc2186652906df8a1ba26ed52fc6f50b97e8",
+    "post_run_snapshot_independently_recomputed": "sha256:b7eb25ac5be79b47ab2634c98d15dc2186652906df8a1ba26ed52fc6f50b97e8",
+    "tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
+    "result_bytes_sha256": "sha256:512873f27f2d6c2711514c146bae504599696567aa4c9122bc4c48acedd1ae2b",
+    "raw_child_exit": 1,
+    "runner_exit": 1,
+    "observed_case_count": 76,
+    "ordered_outcomes_match_approved_cases": true,
+    "local_owner_decision": "Owner session instruction \"go on all merged from my side\", explicitly bound by the coordinator to both presented frozen T011/T012 matrices before execution.",
+    "matrix_approval_supplied": true,
+    "owner_identity_authenticated": false,
+    "evidence_boundary": "The verifier accepted the exact expected-red matrix, not implemented scope behavior. All76 observations remain missing-callable body assertions after valid real begin/status; deeper invariants remain unexecuted. This approved source/result capture precedes the later T011 checkbox/evidence commit."
   }
 }
