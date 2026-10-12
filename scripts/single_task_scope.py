@@ -242,6 +242,10 @@ def validate_manifest(value):
         if type(entry) is not dict or set(entry) != {'path', 'type', 'mode', 'sha256'}:
             reject()
         canonical_path(entry['path'])
+        try:
+            entry['path'].encode('utf-8')
+        except UnicodeError:
+            reject()
         paths.append(entry['path'])
         if entry['type'] == 'absent':
             if entry['mode'] is not None or entry['sha256'] is not None:
@@ -318,7 +322,10 @@ def _physical(root, relative, algorithm):
         elif stat.S_ISREG(info.st_mode):
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
             with os.fdopen(fd, 'rb') as stream:
-                mode = '100755' if os.fstat(stream.fileno()).st_mode & 0o111 else '100644'
+                opened = os.fstat(stream.fileno())
+                if not stat.S_ISREG(opened.st_mode):
+                    reject()
+                mode = '100755' if opened.st_mode & 0o111 else '100644'
                 content = stream.read()
         else:
             reject()

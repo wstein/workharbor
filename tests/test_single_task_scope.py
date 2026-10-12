@@ -7,12 +7,15 @@ The exact observed matrix and the proposed API signatures require owner review.
 import copy
 import importlib.util
 import json
+import os
+import stat
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from test_single_task import SingleTaskFixture, canonical_bytes, context_digest, digest
 
@@ -328,6 +331,33 @@ class SingleTaskScopeTests(unittest.TestCase):
         path.write_bytes(original)
         path.chmod(0o755)
         self.rejected_inventory()
+
+    def test_reject_file_swapped_to_fifo_at_open(self):
+        self.begin()
+        opened = self.scope.os.open
+        swapped = False
+
+        def swap(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if path == 'guide.md' and kwargs.get('dir_fd') is not None and not swapped:
+                swapped = True
+                (self.root/'guide.md').unlink()
+                os.mkfifo(self.root/'guide.md')
+            return opened(path, flags, *args, **kwargs)
+
+        with mock.patch.object(self.scope.os, 'open', side_effect=swap):
+            self.rejected_inventory()
+        self.assertTrue(swapped)
+        self.assertTrue(stat.S_ISFIFO((self.root/'guide.md').lstat().st_mode))
+
+    def test_manifest_reject_unpaired_surrogate_path(self):
+        self.begin()
+        value = self.manifest()
+        value['entries'][0]['path'] = 'bad' + chr(0xd800) + '.txt'
+        value['entries'].sort(key=lambda entry: entry['path'])
+        function = self.owning('validate_manifest', 'T013')
+        with self.assertRaises(ValueError):
+            function(value)
 
     def test_canonical_unicode_binary_mode_and_absence_vector(self):
         self.begin()
