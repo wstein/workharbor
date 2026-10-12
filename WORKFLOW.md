@@ -170,8 +170,14 @@ Implement a focused slice with Conventional Commits. Run make check and all test
 required by the changed product behavior. Never substitute scaffold checks for real
 Docker/browser acceptance. Missing tools or credentials are blockers, not passes.
 Update specs, ADRs and quality register when required. Preserve existing work on
-retry. Open a PR only when the configured forge and authorization allow it; otherwise
-hand off commits and local evidence. Review feedback before final handoff.
+retry. After independent review, always create a PR, reusing the existing task PR
+on retries. The owner gives standing authorization for PR publication; do not ask
+again for unchanged scope. Create it as draft while actionable findings remain or
+required checks are missing, pending or failing. If forge access or native/automatic
+approval review blocks publication, preserve commits/evidence and report the exact
+blocked action and reason. This authorization does not grant merge, other
+publication, runtime/dispatch activation or deployment permission. Review feedback
+before final handoff.
 
 <a id="pr-target"></a>
 Use `main` as the pull-request base, including when a task's approved execution
@@ -188,7 +194,9 @@ Mark an authorized PR ready for review only when independent review of its exact
 current head has no material findings, every actionable finding is resolved, and
 all required checks on that head have completed successfully. Keep it draft while
 any actionable finding remains unresolved or any required check is missing,
-pending or failing, including known reds accepted for a scoped task handoff.
+pending or failing. Required-check success follows the reviewed repository
+acceptance policy; record retained raw reds separately without calling them passing
+raw checks or waiving a failing required check.
 Distinguish optional, nonblocking suggestions from actionable findings. If the
 head changes, keep or return the PR to draft and refresh independent review and
 check evidence before marking ready again. Ready for review does not grant owner
