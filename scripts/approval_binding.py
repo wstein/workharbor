@@ -174,8 +174,9 @@ def _snapshot(root, revision, paths):
 def _current(root, revision, paths):
     if _git(root, 'rev-parse', 'HEAD').decode().strip() != revision:
         raise BindingBlocked('current-head-mismatch')
+    _inert_status_inputs(root, revision)
     if _git(root, 'status', '--porcelain=v1', '-z', '--untracked-files=all',
-            '--ignore-submodules=none'):
+            '--ignore-submodules=all'):
         raise BindingBlocked('dirty-current-source')
     snapshot = _snapshot(root, revision, paths)
     for item in snapshot.artifacts:
@@ -184,6 +185,25 @@ def _current(root, revision, paths):
         if mode != item.mode or data != item.data:
             raise BindingBlocked('worktree-artifact-drift')
     return snapshot
+
+
+def _inert_status_inputs(root, revision):
+    """Refuse executable conversions and submodules before inspecting status.
+
+    Config/object/index reads do not convert worktree content. Includes and
+    worktree config participate in this effective-config query. Global/system
+    settings and inherited Git overrides are already excluded by _git.
+    """
+    configuration = _git(root, 'config', '--null', '--list', '--includes')
+    for record in configuration.split(b'\0'):
+        key = record.split(b'\n', 1)[0].lower()
+        if key.startswith(b'filter.') and key.endswith((b'.clean', b'.smudge', b'.process')):
+            raise BindingBlocked('executable-git-filter-unsupported')
+    tree = _git(root, 'ls-tree', '-r', '-z', revision)
+    index = _git(root, 'ls-files', '--stage', '-z')
+    if any(record.startswith(b'160000 ') for source in (tree, index)
+           for record in source.split(b'\0')):
+        raise BindingBlocked('submodule-source-unsupported')
 
 
 def _read_regular(root, path, expected_size):
@@ -299,6 +319,7 @@ def assess_retention(root, request, *, guard=None, authority=None):
                  'task-contract-changed', 'protected-artifact-mode-changed',
                  'invalid-artifact-comparison', 'artifact-approval-renewal-required',
                  'approval-not-verified', 'current-source-changed-during-verification'}
+        known.update(('executable-git-filter-unsupported', 'submodule-source-unsupported'))
         result['blocker'] = str(exc) if str(exc) in known else 'adapter-rejected'
     except Exception:
         result['blocker'] = 'validation-unavailable'
