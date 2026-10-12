@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 """Check pinned remote revisions in disposable storage; never publish."""
+import sys
+
+if __name__ == '__main__' and not sys.flags.isolated:
+    print('Prepublication blocked: launch the trusted tool with python -I -B.', file=sys.stderr)
+    raise SystemExit(3)
+
 import argparse
 import json
 import math
@@ -7,7 +13,6 @@ import os
 import re
 import signal
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -147,7 +152,7 @@ def prepare(repository, source, base_ref, base, head_ref, head, timeout=300):
             if checker.is_symlink() or not checker.is_file():
                 raise Blocked('checker_unavailable')
             result.update(checkout=checkout, tree=tree)
-            code, _ = commands.run([sys.executable, str(checker), '--root', str(integration),
+            code, _ = commands.run([sys.executable, '-I', '-B', str(checker), '--root', str(integration),
                                     '--event', 'pull_request', '--base', base,
                                     '--head', head, '--checkout', checkout,
                                     '--policy-source', source],
