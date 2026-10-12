@@ -58,3 +58,26 @@ No verifier matrix, runtime pin, task marker or state implementation changes her
 Run `python3 scripts/check_ci.py --self-test` for phase/pin/fallback regression checks.
 The committed prerequisite record reference/digest stays pinned; CI verifies local
 Git content and does not refresh external owner authorization.
+
+### Sealed T004 preparation validation
+
+PR34's preparation is a separate CI mode, with no T004 implementation acceptance
+or entry authorization. It recognizes immutable preparation commit
+`f6a69470f8a3e5c396e134326c033a3b1195de7b` above accepted source `5d1dc656…`,
+pins all three preparation artifact hashes/modes, and permits exactly one CI
+commit changing only this document and `scripts/check_ci.py`. HEAD, index and
+worktree must otherwise match that preparation seal; untracked files and dirty
+CI edits block. Any later commit, implementation, marker, test, workflow or
+preparation change expires the mode and returns to the existing strict path.
+The checker does not hash itself or authenticate its own approval: independent
+review of the exact final CI commit remains required.
+
+This mode runs the preparation verifier self-test/syntax, the twelve T003 green
+cases, T002's exact 31-green/ten-red verifier, repository/diff/shell/prerequisite
+checks, and raw `make check` (required exit 2, explicitly red). It also requires
+exit 1 and the exact canonical SHA-256 of the known 53-case T004 rejection
+report. Missing/extra cases, changed outcomes, generic nonzero errors or an
+unexpected T004 pass block. Known unimplemented errors are accepted only as
+preparation evidence; they can never pass T004's delivered-behavior verifier.
+Successful CI labels itself **PREPARATION ONLY**. The runtime task's four ordered
+acceptance argv, immutable external guard and pending owner gates are unchanged.
