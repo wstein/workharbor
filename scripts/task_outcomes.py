@@ -2,7 +2,10 @@
 """Shared unittest classification and explicitly approved exact-package matrices.
 
 Package data never authorizes execution. Callers supply the separately reviewed
-checks, and (for test authoring only) a distinct matrix decision. Local decisions
+checks, and (for test authoring only) a distinct matrix decision. Check argv is
+a discovery descriptor: the exact current interpreter, mandatory -I -B, and
+unittest discovery. matrix_argv exposes the executable wrapper to approve for
+Feature 003. Local decisions
 are reported as supplied assertions, never authenticated owner evidence.
 """
 import sys
@@ -191,13 +194,11 @@ def _identifier(value):
 def _discovery(argv):
     if not isinstance(argv, list) or any(not isinstance(item, str) or len(item) > 512 for item in argv):
         raise ValueError('invalid_argv')
-    if not argv or argv[0] not in ('python3', sys.executable):
+    if not argv or argv[0] != sys.executable:
         raise ValueError('unsupported_interpreter')
-    args = argv[1:]
-    if args[:2] == ['-I', '-B']:
-        args = args[2:]
-    elif args[:1] in (['-I'], ['-B']):
-        args = args[1:]
+    if argv[1:3] != ['-I', '-B']:
+        raise ValueError('isolated_interpreter_required')
+    args = argv[3:]
     if (len(args) != 8 or args[:4] != ['-m', 'unittest', 'discover', '-s']
             or args[5] != '-p' or args[7] not in ('-v', '-q')):
         raise ValueError('unsupported_check_argv')
@@ -257,6 +258,9 @@ def _child(check, root, report):
     if check['tool_revision'] != tool_revision():
         raise ValueError('tool_revision_mismatch')
     directory, pattern = _discovery(check['argv'])
+    # Match unittest's public argv view while the reviewed matrix wrapper owns
+    # collection/result recording. This descriptor is not a shell launcher.
+    sys.argv = [Path(sys.executable).name + ' -m unittest', *check['argv'][5:]]
     suite = unittest.TestLoader().discover(str(root/directory), pattern=pattern, top_level_dir=str(root/directory))
     ids = [case.id() for case in flatten(suite)]
     try:
@@ -319,6 +323,16 @@ def _execute(root, check):
             process.wait()
             evidence.update(raw_exit=process.returncode, runner_exit=process.returncode, blocker='timeout')
         else:
+            # A successful parent does not prove its subprocess work ended.
+            # Ordinary inherited-group descendants must stop before the final
+            # snapshot; unfinished children invalidate the evidence. This is
+            # process-group containment, not a hostile-code sandbox.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                unfinished = False
+            else:
+                unfinished = True
             evidence['raw_exit'] = evidence['runner_exit'] = process.returncode
             if report.exists():
                 observed = _load(report)
@@ -329,6 +343,8 @@ def _execute(root, check):
                     evidence.update(raw_exit=None, blocker='invalid_collection')
             if not evidence['accepted'] and evidence['blocker'] is None:
                 evidence['blocker'] = 'outcome_mismatch'
+            if unfinished:
+                evidence.update(accepted=False, blocker='unfinished_children')
     if (snapshot(root) != check['input_revision'] or digest(Path(__file__).read_bytes()) != tool_revision()):
         evidence.update(accepted=False, blocker='mutating_check')
     return evidence
