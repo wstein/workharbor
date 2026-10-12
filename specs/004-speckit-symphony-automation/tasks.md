@@ -61,7 +61,7 @@ block their actions without preventing disposable fixture development.
 
 **Purpose**: Establish reusable offline inputs and record actual external prerequisites.
 
-- [ ] T001 Create the three synthetic package inputs and safe case/evidence manifests in `tests/fixtures/task-automation/documentation.json`, `tests/fixtures/task-automation/test-authoring.json`, `tests/fixtures/task-automation/implementation.json` and `tests/fixtures/task-automation/README.md`, with fixture/network-denial tests in `scripts/test_task_fixtures.py`; record actual plan/spec/A-tools/guard identities and required baseline inventory in the fixture README without running prerequisites or changing real task artifacts.
+- [x] T001 Create the three synthetic package inputs and safe case/evidence manifests in `tests/fixtures/task-automation/documentation.json`, `tests/fixtures/task-automation/test-authoring.json`, `tests/fixtures/task-automation/implementation.json` and `tests/fixtures/task-automation/README.md`, with fixture/network-denial tests in `scripts/test_task_fixtures.py`; record actual plan/spec/A-tools/guard identities and required baseline inventory in the fixture README without running prerequisites or changing real task artifacts.
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
