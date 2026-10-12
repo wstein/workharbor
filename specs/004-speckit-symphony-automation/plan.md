@@ -24,6 +24,9 @@ Keep head scope/content approval separate from synthetic integration; permit unr
 trusted-base updates, revalidate affected protected prerequisites, prepare/check an
 actual pinned merge before publication, and retain approval by guarded content contract.
 The contract is a design requirement until exact-revision implementation evidence exists.
+Its proposed policy-equivalence revision retains the owner-adopted immutable policy
+anchor while permitting evidenced content-identical rebase/squash history without
+renewing that pin; it does not approve the remaining plan.
 
 ## Technical Context
 
