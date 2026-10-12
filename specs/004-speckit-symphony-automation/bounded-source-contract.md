@@ -187,3 +187,12 @@ Use disposable repositories and injected ports; include commit/revert and dirty
 index/mode cases. Keep all existing Features 001–003 artifacts and frozen acceptance
 contracts byte-identical. Report raw test exits, narrowed gate outcomes and live
 observations separately. These are required tests, not claimed passing results.
+
+## Promotion of the complete approved snapshot to main
+
+A pre-baseline main base may be promoted only when it is an ancestor of the fixed
+accepted policy anchor, source and head retain that exact anchor and validated
+ordered history, and the complete source, head and actual integration trees match.
+GitHub metadata must name main; local preparation uses the trusted canonical-main
+guard. This narrow path does not claim the old base has current prerequisites;
+all protected source/head/integration content and execution checks still apply.

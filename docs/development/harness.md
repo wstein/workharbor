@@ -144,3 +144,9 @@ explicit adoption input for operator validation; it never selects a task excepti
 Run `python3 -I -B scripts/check_ci.py --self-test` and
 `python3 -I -B scripts/test_check_ci.py` for legacy baseline and new source regressions.
 Frozen verifier inputs remain unchanged; no external approval is refreshed by CI.
+
+For a pre-baseline main promotion, the old base must be an ancestor of the fixed
+accepted anchor and the complete approved source, head and actual merge trees
+must match. The validated source/head history and canonical-main metadata remain
+mandatory. The gate does not claim current prerequisites on that old base; it runs
+all protected snapshot and execution checks on the promoted head and integration.
