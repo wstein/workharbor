@@ -79,6 +79,15 @@ class SourceTests(unittest.TestCase):
         args.update(changes)
         return source.validate_source(**args)
 
+    def rebase(self):
+        self.git('checkout', '--quiet', '--detach', self.base)
+        new_head = self.change('proposal.txt', 'task change\n')
+        pairs = [dict(old=self.head, old_parent=self.accepted,
+                      new=new_head, new_parent=self.base)]
+        return dict(root=self.root, old_base=self.accepted, new_base=self.base,
+                    old_head=self.head, new_head=new_head, correspondence=pairs,
+                    protected_paths=['contract.txt'], guard=self.guard,
+                    context={'opaque': 'guard-owned'}, evidence={})
 
     def test_distinct_accepted_base_head_wrapper_and_trees_are_retained(self):
         result = self.validate()
@@ -168,9 +177,60 @@ class SourceTests(unittest.TestCase):
         self.assertFalse(result['source_valid'])
         self.assertEqual(self.wrapper, result['snapshot']['checkout'])
 
+    def test_equivalent_rebase_uses_exact_pairs_patches_protected_content_and_tree(self):
+        args = self.rebase()
+        before = copy.deepcopy({key: value for key, value in args.items() if key != 'guard'})
+        result = source.verify_rebase(**args)
+        self.assertEqual('VERIFIED', result['status'])
+        self.assertEqual(args['new_head'], result['fresh_review_required'])
+        self.assertFalse(result['renewed_approval_required'])
+        self.assertEqual(args['correspondence'], result['correspondence'])
+        self.assertEqual(self.git('rev-parse', args['new_head']+'^{tree}'), result['result_tree'])
+        self.assertEqual(before, {key: value for key, value in args.items() if key != 'guard'})
+        self.assertFalse(result['execution_eligible'])
 
+    def test_missing_duplicate_reordered_pairs_or_false_parents_block(self):
+        args = self.rebase()
+        pair = args['correspondence'][0]
+        for pairs in ([], [pair, pair], [dict(pair, old_parent=self.base)],
+                      [dict(pair, new_parent=self.accepted)], [dict(pair, old='f'*40)]):
+            with self.subTest(pairs=pairs):
+                self.assertEqual('BLOCKED', source.verify_rebase(**dict(args, correspondence=pairs))['status'])
 
+    def test_changed_patch_protected_content_and_result_tree_require_renewal(self):
+        args = self.rebase()
+        for kind in ('patch', 'protected', 'tree'):
+            self.git('checkout', '--quiet', '--detach', args['new_head'])
+            if kind == 'patch': (self.root/'proposal.txt').write_text('different task\n')
+            elif kind == 'protected': (self.root/'contract.txt').write_text('new approval required\n')
+            else: (self.root/'extra.txt').write_text('hidden result change\n')
+            new = self.commit('changed candidate')
+            # A single rewritten commit names the new base as parent explicitly.
+            tree = self.git('rev-parse', new+'^{tree}')
+            new = self.git('commit-tree', tree, '-p', self.base, input='rewrite\n')
+            pairs = [dict(args['correspondence'][0], new=new)]
+            with self.subTest(kind=kind):
+                result = source.verify_rebase(**dict(args, new_head=new, correspondence=pairs))
+                self.assertEqual('BLOCKED', result['status'])
+                self.assertTrue(result['renewed_approval_required'])
+                self.assertEqual(new, result['fresh_review_required'])
 
+    def test_overlap_even_matching_patch_requires_new_review_and_approval(self):
+        args = self.rebase()
+        self.git('checkout', '--quiet', '--detach', self.accepted)
+        # Matching bytes after a base commit/revert still need the guard's history verdict.
+        self.change('proposal.txt', 'temporary base overlap\n')
+        self.git('rm', 'proposal.txt')
+        overlap_base = self.commit('revert base overlap')
+        new = self.change('proposal.txt', 'task change\n')
+        pairs = [dict(args['correspondence'][0], new=new, new_parent=overlap_base)]
+        self.guard.validate_scope.return_value = package.GuardValidation(False)
+        result = source.verify_rebase(**dict(args, new_base=overlap_base, new_head=new, correspondence=pairs))
+        # A matching final patch cannot clear the guard's intervening-history refusal.
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertTrue(result['renewed_approval_required'])
+        self.assertTrue(result['guard_history_required'])
+        self.assertFalse(result['execution_eligible'])
 
     def test_partial_promisor_repository_blocks_before_any_source_lookup(self):
         for key, value in (('extensions.partialclone', 'origin'),
@@ -187,7 +247,24 @@ class SourceTests(unittest.TestCase):
             self.assertFalse(self.validate()['source_valid'])
             lookup.assert_not_called()
 
+    def test_rebase_cannot_select_subset_of_guard_protected_inventory(self):
+        args = self.rebase()
+        self.git('checkout', '--quiet', '--detach', self.accepted)
+        base = self.change('policy.txt', 'changed protected prerequisite\n')
+        new = self.change('proposal.txt', 'task change\n')
+        pairs = [dict(args['correspondence'][0], new=new, new_parent=base)]
+        self.guard.validate_context.return_value = binding.ValidatedContract(
+            'b'*64, ('contract.txt', 'policy.txt'))
+        result = source.verify_rebase(**dict(args, new_base=base, new_head=new, correspondence=pairs))
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertTrue(result['renewed_approval_required'])
+        self.guard.validate_scope.assert_not_called()
 
+    def test_unavailable_rebase_guard_blocks_even_with_exact_local_equivalence(self):
+        result = source.verify_rebase(**dict(self.rebase(), guard=None))
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertEqual('rebase-guard-or-source-blocked', result['blocker'])
+        self.assertFalse(result['execution_eligible'])
 
     def test_guard_revision_drift_blocks_before_context_or_scope(self):
         self.guard.revision = 'c'*40
@@ -197,7 +274,22 @@ class SourceTests(unittest.TestCase):
         self.guard.validate_context.assert_not_called()
         self.guard.validate_scope.assert_not_called()
 
+    def test_conflicting_rebase_needs_renewed_approval_and_exact_review(self):
+        args = self.rebase()
+        self.git('checkout', '--quiet', '--detach', self.accepted)
+        base = self.change('proposal.txt', 'conflicting accepted update\n')
+        new = self.change('proposal.txt', 'task change\n')
+        pairs = [dict(args['correspondence'][0], new=new, new_parent=base)]
+        result = source.verify_rebase(**dict(args, new_base=base, new_head=new, correspondence=pairs))
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertTrue(result['renewed_approval_required'])
+        self.assertEqual(new, result['fresh_review_required'])
 
+    def test_invalid_rebase_identifiers_are_sanitized(self):
+        result = source.verify_rebase(**dict(self.rebase(), new_head='credential-canary'))
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertNotIn('credential-canary', json.dumps(result))
+        self.assertIsNone(result['new_head'])
 
     def test_source_validation_is_inert_for_network_and_prepublication(self):
         with mock.patch('socket.create_connection', side_effect=AssertionError('network')), \
