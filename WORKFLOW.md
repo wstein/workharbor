@@ -173,6 +173,16 @@ Update specs, ADRs and quality register when required. Preserve existing work on
 retry. Open a PR only when the configured forge and authorization allow it; otherwise
 hand off commits and local evidence. Review feedback before final handoff.
 
+<a id="pr-target"></a>
+Use `main` as the pull-request base, including when a task's approved execution
+baseline is on another branch. Set `gh pr create --base main` explicitly and verify
+the created PR's `baseRefName` is `main`; an execution pin does not select the PR
+target. If accepted prerequisites have not reached `main`, prepare their separate
+promotion for owner review and keep dependent work draft or blocked. Preserve
+historical task pins and evidence. Maintain linear history: the owner merges by
+rebase only; agents never merge, push `main`, or rewrite accepted history. Changed
+candidate SHAs require fresh check and independent review evidence.
+
 <a id="pr-readiness"></a>
 Mark an authorized PR ready for review only when independent review of its exact
 current head has no material findings, every actionable finding is resolved, and
