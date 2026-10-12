@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -623,6 +624,36 @@ class SingleTaskTests(unittest.TestCase):
         self.cli('verify', ok=False)
 
 
+    def test_valid_context_cannot_replace_attempt_awaiting_handoff(self):
+        self.begin()
+        (self.root/'guide.md').write_text('After\n')
+        self.cli('complete')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'test: selected output')
+        commit = self.git('rev-parse', 'HEAD').stdout.decode().strip()
+        self.cli('record-commit', '--attempt', self.attempt, '--commit', commit)
+        manifest = self.fixture.manifest(['guide.md', 'specs/demo/tasks.md'], 'T001')
+        check = self.git('diff', '--check')
+        prerequisite = dict(schema_version=1, feature='demo', task_id='T001', completed=True,
+                            implementation_commit=commit, content_manifest=manifest,
+                            check_results=[dict(id='local-diff', argv=['git', 'diff', '--check'],
+                                                cwd='.', exit=check.returncode,
+                                                content_manifest_digest=digest(canonical_bytes(manifest)))],
+                            evidence_ref='synthetic:completed-selected-task')
+        context = self.entry(task_id='T002', dependencies=['T001'],
+                             prerequisite_evidence=[prerequisite], allowed_paths=['other.md'],
+                             semantic_constraints=['Only implement the selected synthetic T002.'])
+        tasks = (self.feature/'tasks.md').read_bytes()
+        result = self.cli('begin', '--context', str(context), ok=False)
+        self.assertEqual(3, result.returncode)
+        self.assertEqual('state_blocker', json.loads(result.stdout)['errors'][0]['code'])
+        status = json.loads(self.cli('status', '--attempt', self.attempt).stdout)
+        self.assertEqual('handoff-only', status['mode'])
+        self.assertEqual('completed-awaiting-commit', status['progress'])
+        self.assertEqual(tasks, (self.feature/'tasks.md').read_bytes())
+        self.assertIn(b'[ ] T002', tasks)
+
+
 class SingleTaskAcceptanceTests(unittest.TestCase):
     """Proposed T012 public CLI contracts; no task entry/completion authority."""
 
@@ -1105,3 +1136,149 @@ class SingleTaskAcceptanceTests(unittest.TestCase):
         self.tasks.write_bytes(self.before_tasks.replace(b'[ ] T001', b'[x] T001', 1))
         self.review()
         self.blocked(3, 'complete')
+
+# Original guard inventory at 95b5bed59c918bc100880771ac6be4d127b8edb7.
+# The semantic mapping is retained with the final execution evidence; names alone
+# are not proof that the original mutation/assertion subscenarios still run.
+RETAINED_GUARD_CASES = (
+    'test_complete_and_retry_preserve_other_task',
+    'test_interruption_after_checkbox_before_phase_update',
+    'test_reject_outside_scope_committed_and_untracked',
+    'test_reject_other_checkbox_and_selected_description',
+    'test_staged_violation_hidden_by_worktree_restore',
+    'test_committed_violation_hidden_by_revert',
+    'test_staged_other_task_hidden_by_worktree_restore',
+    'test_historical_other_task_hidden_by_revert',
+    'test_mode_change_requires_rework_even_without_git_filemode',
+    'test_absent_file_differs_from_sentinel_contents',
+    'test_staged_symlink_hidden_by_worktree_restore',
+    'test_failed_acceptance_does_not_complete',
+    'test_early_completion_without_evidence_rejected',
+    'test_acceptance_cannot_mutate_scope_or_complete',
+    'test_dirty_checkout_and_unknown_task_rejected',
+    'test_traversal_and_symlink_rejected',
+)
+
+
+class SingleTaskMigrationAuditTests(unittest.TestCase):
+    """T025: retained regressions and actual versioned command lifecycle."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture = SingleTaskFixture(temporary.name)
+        self.root = self.fixture.root
+        (self.root/'.gitignore').write_text('.symphony/\n')
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: contract audit baseline')
+        self.context = self.fixture.context()
+        self.context_path = self.fixture.private/'context.json'
+        self.review_path = self.fixture.private/'review.json'
+        self.commands = []
+
+    def invoke(self, *args, expected=0):
+        argv = [sys.executable, '-B', str(SCRIPT), *args]
+        injection = getattr(self, 'child_injection', None)
+        if injection is not None:
+            argv = [sys.executable, '-B', '-c', injection, str(SCRIPT), *args]
+        result = subprocess.run(argv, cwd=self.root, env=self.fixture.env,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(expected, result.returncode, result.stderr)
+        self.assertEqual('', result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(1, value['schema_version'])
+        self.assertIs(False, value['owner_identity_authenticated'])
+        self.assertIs(False, value['live_dispatch_verified'])
+        for field in ('attempt_id', 'mode', 'progress', 'local_verification', 'errors'):
+            self.assertIn(field, value)
+        if expected == 0:
+            self.assertEqual([], value['errors'])
+        else:
+            self.assertTrue(value['errors'])
+        self.commands.append(args[0])
+        return value
+
+    def exercise_contract(self):
+        self.context_path.write_bytes(canonical_bytes(self.context))
+        entry = self.invoke('begin', '--context', str(self.context_path))
+        self.assertEqual('implement', entry['mode'])
+        self.assertEqual('active', entry['progress'])
+        tasks = self.fixture.feature/'tasks.md'
+        before = tasks.read_bytes()
+        predecessor = None
+        prior_events = None
+        for correction in (False, True):
+            attempt = entry['attempt_id']
+            (self.root/'guide.md').write_text('Correction\n' if correction else 'Implementation\n')
+            inspected = self.invoke('inspect', '--attempt', attempt)
+            review = {key: inspected[key] for key in
+                      ('attempt_id', 'task_id', 'context_digest', 'content_manifest_digest')}
+            review.update(schema_version=1, approved=True,
+                          reviewer_ref='synthetic:semantic-reviewer', evidence_ref='synthetic:review')
+            self.review_path.write_bytes(canonical_bytes(review))
+            verified = self.invoke('verify', '--attempt', attempt, '--review', str(self.review_path))
+            self.assertEqual('passed', verified['local_verification'])
+            completed = self.invoke('complete', '--attempt', attempt, '--review', str(self.review_path))
+            self.assertEqual('handoff-only', completed['mode'])
+            self.assertEqual('completed-awaiting-commit', completed['progress'])
+            self.assertEqual(before.replace(b'[ ] T001', b'[x] T001'), tasks.read_bytes())
+            self.assertIn(b'[ ] T002', tasks.read_bytes())
+            self.fixture.git('add', '.')
+            self.fixture.git('commit', '-m', 'test: corrective output' if correction else 'test: selected output')
+            commit = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+            self.invoke('record-commit', '--attempt', attempt, '--commit', commit)
+            resumed = self.invoke('resume', '--attempt', attempt, '--review', str(self.review_path))
+            self.assertEqual('handoff-ready', resumed['progress'])
+            self.assertEqual('handoff-only', resumed['mode'])
+            self.assertEqual('passed', resumed['local_verification'])
+            status = self.invoke('status', '--attempt', attempt)
+            self.assertEqual('not-run', status['local_verification'])
+            self.assertEqual('handoff-ready', status['progress'])
+            with closing(sqlite3.connect(self.root/'.symphony/single-task/journal.sqlite3')) as db:
+                events = db.execute('SELECT * FROM events WHERE attempt_id=? ORDER BY sequence',
+                                    (predecessor or attempt,)).fetchall()
+            if correction:
+                self.assertEqual(prior_events, events, 'Rework must preserve every predecessor event')
+                self.assertNotEqual(predecessor, attempt)
+            else:
+                predecessor, prior_events = attempt, events
+                self.context.update(mode='owner-authorized rework', prior_attempt_id=attempt,
+                                    prior_implementation_commit=commit,
+                                    rework_approval={'owner_ref': self.fixture.identities['owner'],
+                                                    'evidence_ref': 'synthetic:explicit-corrective-approval'})
+                self.context['approval']['context_digest'] = context_digest(self.context)
+                self.context_path.write_bytes(canonical_bytes(self.context))
+                entry = self.invoke('rework', '--context', str(self.context_path))
+                self.assertEqual('owner-authorized rework', entry['mode'])
+                self.assertEqual('active', entry['progress'])
+                self.assertEqual(before.replace(b'[ ] T001', b'[x] T001'), tasks.read_bytes())
+        self.assertEqual({'begin', 'inspect', 'verify', 'complete', 'record-commit',
+                          'resume', 'status', 'rework'}, set(self.commands))
+
+    def test_original_cases_remain_required_and_discoverable(self):
+        required = {'test_single_task.SingleTaskTests.'+name for name in RETAINED_GUARD_CASES}
+        suite = unittest.TestLoader().loadTestsFromTestCase(SingleTaskTests)
+        self.assertTrue(required <= {case.id() for case in suite})
+        for name in RETAINED_GUARD_CASES:
+            self.assertFalse(getattr(getattr(SingleTaskTests, name), '__unittest_skip__', False))
+        self.assertFalse(getattr(SingleTaskTests, '__unittest_skip__', False))
+        manifest = json.loads((SCRIPT.parent.parent/'docs/development/ci-acceptance.json').read_text())
+        self.assertTrue(required <= set(manifest['required_test_ids']))
+        self.assertEqual([], manifest['retained_assertion_failures'])
+
+    def test_all_contract_commands_have_local_versioned_outcomes(self):
+        self.exercise_contract()
+
+    def test_legacy_and_missing_commands_cannot_bypass_context(self):
+        before = (self.fixture.feature/'tasks.md').read_bytes()
+        for args in (('begin', '--feature', 'synthetic', '--task', 'T001'),
+                     ('missing-contract-command', 'synthetic-sensitive-input'),
+                     ('verify',), ('rework',)):
+            with self.subTest(command=args[0]):
+                value = self.invoke(*args, expected=2)
+                self.assertEqual('invalid_arguments', value['errors'][0]['code'])
+                self.assertEqual('not-run', value['local_verification'])
+                self.assertNotIn('synthetic-sensitive-input', json.dumps(value))
+                self.assertIsNone(value['attempt_id'])
+                self.assertEqual(before, (self.fixture.feature/'tasks.md').read_bytes())
+        self.assertFalse((self.root/'.symphony/single-task/journal.sqlite3').exists())
