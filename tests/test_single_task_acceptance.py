@@ -89,7 +89,7 @@ class AcceptanceExecutionTests(unittest.TestCase):
         evidence = self.execute()
         lines = self.trace.read_text().splitlines()
         self.assertEqual('first', lines[0])
-        self.assertEqual([str(self.root/'checks'), literal], json.loads(lines[1]))
+        self.assertEqual([str((self.root/'checks').resolve()), literal], json.loads(lines[1]))
         self.assertFalse((self.root/'sentinel').exists())
         with state.open_store(self.root, require_existing=True) as store:
             self.assertEqual('acceptance-recorded', store.read_attempt(self.attempt_id)['progress'])
@@ -131,6 +131,19 @@ class AcceptanceExecutionTests(unittest.TestCase):
         self.assertTrue(ready.exists(), 'Actual descendant must reach its barrier')
         time.sleep(1.6)
         self.assertFalse(late.exists(), 'Timed-out descendants must stop executing')
+
+    def test_successful_parent_cannot_leave_background_descendant(self):
+        ready, late = self.fixture.private/'ready', self.fixture.private/'late'
+        child = ('from pathlib import Path; import time; '
+                 f'Path({str(ready)!r}).touch(); time.sleep(1.5); Path({str(late)!r}).touch()')
+        parent = ('import subprocess,sys,time; from pathlib import Path; '
+                  f'subprocess.Popen([sys.executable,"-B","-c",{child!r}]); '
+                  f'\nwhile not Path({str(ready)!r}).exists(): time.sleep(.01)\n')
+        self.begin([self.check(parent)])
+        self.blocked('background_process')
+        self.assertTrue(ready.exists(), 'Actual descendant must reach its barrier')
+        time.sleep(1.6)
+        self.assertFalse(late.exists(), 'Successful parent cannot leave mutation behind')
 
     def test_mutation_of_allowed_content(self):
         self.begin([self.check('from pathlib import Path; Path("guide.md").write_text("changed")')])
