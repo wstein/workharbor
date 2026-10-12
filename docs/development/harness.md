@@ -74,3 +74,40 @@ external approval and ownership contracts remain unchanged.
 without publishing. Its `--source` pin binds exact checker code, not owner adoption.
 Operator tests are collected automatically by `make check`; focused runs remain
 available for development. Missing tools/checks remain blockers.
+
+## Optional package CI checks
+
+`check_ci.package_acceptance(value, repository_snapshot, evidence, capabilities,
+approved_revision=..., approved_checks=..., guard=..., matrix_approved=False)` is
+the host-callable package entry. Ordinary `make check` needs no package or guard
+and does not implicitly execute a package. Its collector includes all new operator
+tests as strict green cases under the unchanged minimum-ID manifest.
+
+The host supplies a sealed package and trusted repository/root/opaque comparison
+snapshots. Separately reviewed inputs must include the exact serialization revision
+from `task_package.package_revision_digest` (including approval references) and the
+complete ordered checks. Those checks bind argv, deadlines, case fingerprints and
+tool/input revisions; package references alone grant no permission. A test-authoring
+assertion matrix also needs the host's distinct `matrix_approved=True` decision.
+These local inputs are not authenticated owner approval.
+
+The entry calls the same `task_package.validate` used by the offline CLI, with
+`task_outcomes.validate_checks`. Any validation blocker, including the unavailable
+default guard, prevents check execution. Only cleared inputs reach the existing
+`task_outcomes.run_checks`; there is no second classifier, task exception, adapter
+loader or legacy guard fallback. It retains raw exits even when an exact reviewed
+assertion matrix matches. Success proves only that local package checks matched:
+`execution_eligible` stays false and authenticated approval/review/live fields stay
+null. Real entry, runtime, tracker and publication gates remain separate.
+
+Focused offline regression command (Python 3.11+):
+
+```sh
+python3 -I -B -c 'import sys,unittest;sys.path.insert(0,"scripts");raise SystemExit(not unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromName("test_check_ci")).wasSuccessful())'
+```
+
+Disposable Git fixtures exercise package provenance, host approval/argv drift,
+missing guard/capabilities, strict new outcomes and exact assertion/raw-exit handling.
+The prepublication source pin also covers the package and state traversal dependencies;
+it continues to identify code rather than establish owner approval. No prerequisites,
+network services or real feature execution are used by these fixtures.
