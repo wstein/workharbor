@@ -37,6 +37,7 @@ CREATE TABLE attempts (
     attempt_id TEXT PRIMARY KEY,
     context BLOB NOT NULL,
     context_copy_sha256 TEXT NOT NULL,
+    approval_context_digest TEXT,
     baseline TEXT NOT NULL,
     tasks_bytes BLOB NOT NULL,
     entry_mode TEXT NOT NULL CHECK(entry_mode IN ('implement','owner-authorized rework')),
@@ -75,6 +76,17 @@ def _canonical(value):
                           ensure_ascii=False, allow_nan=False).encode('utf-8')
     except (ValueError, TypeError, UnicodeError) as error:
         raise InvalidState('Evidence must be canonical UTF-8 JSON') from error
+
+
+def _approval_identity(context):
+    try:
+        value = json.loads(_canonical(context))
+        claimed = value['approval'].pop('context_digest')
+        if claimed != hashlib.sha256(_canonical(value)).hexdigest():
+            raise InvalidState('Approval context identity does not match retained context')
+        return claimed
+    except (KeyError, TypeError, ValueError):
+        raise InvalidState('Invalid retained approval context identity') from None
 
 
 def _time():
@@ -177,7 +189,7 @@ class _Store:
             raise InvalidState('Attempt ID must be UTF-8') from error
 
     def create_attempt(self, *, attempt_id, context, baseline, tasks_bytes,
-                       entry_mode, predecessor=None):
+                       entry_mode, predecessor=None, approval_context_digest=None):
         name = self._copy_name(attempt_id)
         if (not isinstance(context, dict) or not isinstance(baseline, str) or not baseline
                 or not isinstance(tasks_bytes, bytes)
@@ -185,6 +197,8 @@ class _Store:
             raise InvalidState('Invalid immutable attempt input')
         encoded = _canonical(context)
         digest = hashlib.sha256(encoded).hexdigest()
+        if approval_context_digest is not None and _approval_identity(context) != approval_context_digest:
+            raise InvalidState('Approval context identity does not match retained context')
         with self.transaction():
             if self._db.execute('SELECT 1 FROM attempts WHERE attempt_id=?', (attempt_id,)).fetchone():
                 raise StateConflict('Attempt ID already exists; retain the original attempt')
@@ -205,8 +219,8 @@ class _Store:
             finally:
                 os.close(fd)
             os.fsync(self._contexts)
-            self._db.execute('INSERT INTO attempts VALUES (?,?,?,?,?,?,?,?)',
-                             (attempt_id, encoded, digest, baseline, tasks_bytes,
+            self._db.execute('INSERT INTO attempts VALUES (?,?,?,?,?,?,?,?,?)',
+                             (attempt_id, encoded, digest, approval_context_digest, baseline, tasks_bytes,
                               entry_mode, predecessor, _time()))
             self._db.execute('INSERT INTO progress VALUES (?,?)', (attempt_id, 'active'))
 
@@ -230,11 +244,18 @@ class _Store:
             value['context'] = json.loads(copied)
             if _canonical(value['context']) != copied:
                 raise InvalidState('Context evidence is not canonical')
+            if (value['approval_context_digest'] is not None and
+                    _approval_identity(value['context']) != value['approval_context_digest']):
+                raise InvalidState('Approval context identity does not match retained context')
             return value
         except (sqlite3.Error, ValueError, UnicodeError) as error:
             raise InvalidState('Unreadable attempt evidence; operator recovery required') from error
         except OSError as error:
             raise PersistenceFailure('Cannot read immutable context evidence') from error
+
+    def active_attempt(self):
+        row = self._db.execute("SELECT attempt_id FROM progress WHERE value <> 'handoff-ready'").fetchone()
+        return None if row is None else self.read_attempt(row[0])
 
     def read_events(self, attempt_id):
         self.read_attempt(attempt_id)
@@ -289,8 +310,12 @@ class _Store:
 
 
 @contextmanager
-def open_store(worktree_root):
-    """Own a nonblocking exclusive lock until all caller command work has finished."""
+def open_store(worktree_root, *, preflight=None, require_existing=False):
+    """Own the command lock; preflight precedes creation, existing-only reads are RO.
+
+    The callback is trusted caller code, never a context-supplied executable.
+    Existing-only callers cannot create a journal or write through this store.
+    """
     descriptors = []
     connection = None
     try:
@@ -332,8 +357,12 @@ def open_store(worktree_root):
         os.fsync(lock)
         os.fsync(directory)
         existing = _regular(directory, 'journal.sqlite3')
+        if require_existing and not existing:
+            raise InvalidState('Attempt journal missing; operator recovery required')
         if not existing and os.path.lexists(root/'.symphony/single-task/contexts'):
             raise InvalidState('Journal missing from existing state; operator recovery required')
+        if preflight is not None:
+            preflight()
         contexts = _directory(directory, 'contexts', create=not existing)
         descriptors.append(contexts)
         for name in os.listdir(contexts):
@@ -349,6 +378,9 @@ def open_store(worktree_root):
                     _Store(probe, directory, contexts)._validate()
                 except sqlite3.Error as error:
                     raise InvalidState('Invalid journal schema; operator recovery required') from error
+                if require_existing:
+                    yield _Store(probe, directory, contexts)
+                    return
         connection = sqlite3.connect(journal, isolation_level=None, timeout=0)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA foreign_keys = ON')
