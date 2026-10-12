@@ -44,6 +44,8 @@ T004_PREP_PINS = {
 }
 T004_REJECTION_SHA256 = '60f9589d0fabb34d3b95847ea2521d6458a2a3d0a10ce8a091ffa30f8321d0e0'
 DOCUMENTATION_BASE = '8f8211afdda9e46984ccfb95505f83434da06db7'
+# Accepted CI authority, distinct from the unchanged behavioral baseline pins.
+DOCUMENTATION_POLICY_SOURCE = '2d965c15587cdc4d9fc9a00083bd00d7788b8306'
 
 
 class SourceContext(NamedTuple):
@@ -137,32 +139,63 @@ def source_context(root, event=None, base=None, head=None, checkout=None):
         raise ValueError('Unavailable or invalid source evidence') from error
 
 
+def documentation_path(name):
+    path = Path(name)
+    protected = set(PINS) | set(T004_PREP_PINS) | set(DOC_PINS) | {
+        'docs/development/bootstrap-t002.md', 'docs/development/bootstrap-t003.md'}
+    return (name not in protected and not name.startswith((
+        'specs/001-workspace-lifecycle/', 'specs/002-symphony-doc-smoke/',
+        'specs/003-single-task-entry/')) and (name == 'README.md' or (
+        path.parts[0] in ('docs', 'specs', 'contracts') and path.suffix in ('.md', '.json'))))
+
+
+def history_scope(root, baseline, revision, allowed):
+    """Inspect every changed version, so a revert cannot erase scope/type drift."""
+    git(root, 'merge-base', '--is-ancestor', baseline, revision)
+    commits = git(root, 'rev-list', baseline + '..' + revision).decode().splitlines()
+    for commit in commits:
+        changed = git(root, 'diff-tree', '--root', '-m', '-r', '--no-commit-id',
+                      '--no-renames', '--name-only', '-z', commit, '--')
+        for raw in filter(None, changed.split(b'\0')):
+            name = os.fsdecode(raw)
+            if not allowed(name):
+                return False
+            entry = git(root, 'ls-tree', commit, '--', name)
+            if entry and not entry.startswith(b'100644 blob '):
+                return False
+    return True
+
+
+def protected_baseline(root, revisions):
+    # Content, Git type and mode are immutable at head, updated base and integration.
+    pins = dict(PINS, **{name: value[0] for name, value in T004_PREP_PINS.items()})
+    for name, digest in pins.items():
+        baseline = git(root, 'ls-tree', DOCUMENTATION_BASE, '--', name)
+        if not baseline:
+            return False
+        for revision in revisions:
+            if git(root, 'ls-tree', revision, '--', name) != baseline:
+                return False
+        if hashlib.sha256((root/name).read_bytes()).hexdigest() != digest:
+            return False
+    return True
+
+
 def approved_documentation(root, context=None):
-    """Scope/approval inputs come from proposal head; tests use the actual merge."""
+    """Validate PR delta and independently revalidate changed-base prerequisites."""
     try:
         context = source_context(root, *context) if context else source_context(root)
-        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, context.head)
-        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, context.base)
-        pins = dict(PINS, **{name: value[0] for name, value in T004_PREP_PINS.items()})
-        for name, digest in pins.items():
-            if hashlib.sha256((root/name).read_bytes()).hexdigest() != digest:
-                return False
-        changed = git(root, 'diff', '--name-only', '--no-renames', '-z', DOCUMENTATION_BASE, context.head)
-        for raw in changed.split(b'\0'):
-            if not raw:
-                continue
-            name = os.fsdecode(raw)
-            path = Path(name)
-            if name == 'scripts/check_ci.py':
-                continue  # Removed by the separate accepted-source scope change.
-            if not (name == 'README.md' or (path.parts[0] in ('docs', 'specs', 'contracts')
-                    and path.suffix in ('.md', '.json'))):
-                return False
-            for revision in (DOCUMENTATION_BASE, context.head):
-                entry = git(root, 'ls-tree', revision, '--', name)
-                if entry and not entry.startswith(b'100644 blob '):
-                    return False
-        return True
+        base = context.base if context.event == 'pull_request' else DOCUMENTATION_POLICY_SOURCE
+        fork = git(root, 'merge-base', '--all', base, context.head).decode().splitlines()
+        if len(fork) != 1:
+            return False
+        for revision in (base, fork[0], context.head):
+            git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_POLICY_SOURCE, revision)
+        # Trust only accepted policy ancestry; head scope excludes independent base changes.
+        return (history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, documentation_path)
+                and history_scope(root, DOCUMENTATION_POLICY_SOURCE, fork[0], documentation_path)
+                and history_scope(root, fork[0], context.head, documentation_path)
+                and protected_baseline(root, (base, context.head, context.checkout)))
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
         return False
 
@@ -554,13 +587,18 @@ def self_test():
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)/'checkout'
                 subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
+                (root/'docs/synthetic-proposal.md').write_text('# Synthetic proposal\n')
+                subprocess.run(['git', '-C', str(root), 'add', 'docs/synthetic-proposal.md'], check=True)
+                subprocess.run(['git', '-C', str(root), '-c', 'user.name=Synthetic',
+                                '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                                '-m', 'docs: synthetic proposal'], check=True)
                 candidate = git(root, 'rev-parse', 'HEAD').decode().strip()
                 tree = git(root, 'rev-parse', 'HEAD^{tree}').decode().strip()
                 env = dict(os.environ, GIT_AUTHOR_NAME='Synthetic', GIT_COMMITTER_NAME='Synthetic',
                            GIT_AUTHOR_EMAIL='fixture@example.invalid', GIT_COMMITTER_EMAIL='fixture@example.invalid')
                 event_path = Path(directory)/'event.json'
                 event = {'pull_request': {
-                    'base': {'sha': DOCUMENTATION_BASE, 'ref': 'chore/issue-2-bootstrap-entry',
+                    'base': {'sha': DOCUMENTATION_POLICY_SOURCE, 'ref': 'chore/issue-2-bootstrap-entry',
                              'repo': {'full_name': 'wstein/workharbor-nxt'}},
                     'head': {'sha': candidate, 'ref': 'chore/5-t004-preparation',
                              'repo': {'full_name': 'wstein/workharbor-nxt'}}}}
@@ -573,7 +611,7 @@ def self_test():
                                               text=True, capture_output=True, check=True).stdout.strip()
                     subprocess.run(['git', '-C', str(root), 'switch', '--quiet', '--detach', revision], check=True)
                     return revision
-                revision = merge([DOCUMENTATION_BASE, candidate])
+                revision = merge([DOCUMENTATION_POLICY_SOURCE, candidate])
                 with mock.patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request',
                         'GITHUB_SHA': revision, 'GITHUB_EVENT_PATH': str(event_path)}):
                     self.assertTrue(approved_documentation(root))
@@ -581,16 +619,16 @@ def self_test():
                         with mock.patch.dict(os.environ, {key: wrong}):
                             self.assertFalse(approved_documentation(root))
                     changed = json.loads(json.dumps(event))
-                    changed['pull_request']['head']['sha'] = DOCUMENTATION_BASE
+                    changed['pull_request']['head']['sha'] = DOCUMENTATION_POLICY_SOURCE
                     event_path.write_text(json.dumps(changed))
                     self.assertFalse(approved_documentation(root))
                     event_path.write_text(json.dumps(event))
                     (root/'scripts/check_ci.py').write_text('dirty wrapper checker\n')
                     self.assertFalse(approved_documentation(root))
                     subprocess.run(['git', '-C', str(root), 'restore', '--', 'scripts/check_ci.py'], check=True)
-                    for parents, selected_tree in (([candidate, DOCUMENTATION_BASE], tree),
-                            ([DOCUMENTATION_BASE, candidate, ACCEPTED_T003], tree),
-                            ([DOCUMENTATION_BASE, candidate], git(root, 'rev-parse', DOCUMENTATION_BASE + '^{tree}').decode().strip())):
+                    for parents, selected_tree in (([candidate, DOCUMENTATION_POLICY_SOURCE], tree),
+                            ([DOCUMENTATION_POLICY_SOURCE, candidate, ACCEPTED_T003], tree),
+                            ([DOCUMENTATION_POLICY_SOURCE, candidate], git(root, 'rev-parse', DOCUMENTATION_POLICY_SOURCE + '^{tree}').decode().strip())):
                         wrong = merge(parents, selected_tree)
                         with mock.patch.dict(os.environ, {'GITHUB_SHA': wrong}):
                             self.assertFalse(approved_documentation(root))
@@ -621,7 +659,12 @@ def self_test():
                 self.assertEqual(1, check(ROOT))
                 older.assert_not_called()
 
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(GateTests))
+    with tempfile.TemporaryDirectory() as directory:
+        fixture = Path(directory)/'accepted'
+        subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(fixture)], check=True)
+        subprocess.run(['git', '-C', str(fixture), 'checkout', '--quiet', DOCUMENTATION_POLICY_SOURCE], check=True)
+        with mock.patch(__name__ + '.ROOT', fixture):
+            result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(GateTests))
     return 0 if result.wasSuccessful() and result.testsRun == 14 else 1
 
 
