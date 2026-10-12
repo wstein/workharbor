@@ -122,3 +122,10 @@ protocol acceptance, not successful T001 execution. The renderer regression chec
 the exact five false categories; `make check` passes 25 tests and diff check passes.
 Existing GH-2 checkout/state was not reset or modified by the repair. Live retry
 and task handoff still require runtime evidence.
+
+At `2026-10-12T02:13:16+02:00`, the existing Symphony process picked up the rendered
+fix on GH-2 attempt 4 without restart. Its log recorded `thread/settings/updated`
+with all five granular categories false and then `Codex session started` for GH-2,
+thread `01a12d74-df99-77b0-8140-891a4455217d`. The previous protocol startup failure
+is resolved in the live process. This establishes session startup only; T001
+acceptance, normal handoff and interrupted-handoff recovery are not yet verified.
