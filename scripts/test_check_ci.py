@@ -105,6 +105,66 @@ class SourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ci.source_context(self.root, *context._replace(head='HEAD'))
 
+    def adopt_fixture_policy(self, test_content=None):
+        # Explicit local synthetic trust input, never authenticated adoption evidence.
+        checker = self.root/'scripts/check_ci.py'
+        checker.write_bytes(Path(ci.__file__).read_bytes())
+        test = self.root/'scripts/test_check_ci.py'
+        test.write_text(test_content or (
+            'import unittest\nclass Probe(unittest.TestCase):\n'
+            '    def test_probe(self): self.assertEqual(2, 1 + 1)\n'))
+        self.git('add', '--', 'scripts/check_ci.py', 'scripts/test_check_ci.py')
+        self.git('commit', '--quiet', '-m', 'test: synthetic reviewed operator policy')
+        return self.git('rev-parse', 'HEAD')
+
+    def test_operator_policy_requires_exact_trusted_source_and_frozen_baseline(self):
+        policy = self.adopt_fixture_policy()
+        self.assertTrue(ci.approved_operator_tooling(self.root, None, policy))
+        self.assertFalse(ci.approved_documentation(self.root))
+        for missing in (None, SOURCE, '0'*40):
+            with self.subTest(policy=missing):
+                self.assertFalse(ci.approved_operator_tooling(self.root, None, missing))
+        self.commit('scripts/unknown_tool.py', 'pass\n')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.git('checkout', '--quiet', '--detach', policy)
+        self.commit('scripts/single_task.py', 'pass\n')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.git('checkout', '--quiet', '--detach', policy)
+        self.commit('scripts/test_check_ci.py', 'pass\n')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
+    def test_operator_suite_requires_nonempty_strict_green_for_every_tool(self):
+        for body, expected in ((
+                'import unittest\nclass Probe(unittest.TestCase):\n'
+                '    def test_probe(self): self.assertTrue(True)\n', True),
+                ('import unittest\nclass Probe(unittest.TestCase):\n'
+                 '    @unittest.skip("synthetic")\n    def test_probe(self): pass\n', False),
+                ('import unittest\nclass Probe(unittest.TestCase):\n'
+                 '    @unittest.expectedFailure\n    def test_probe(self): self.fail("synthetic")\n', False),
+                ('# empty discovery\n', False),
+                ('raise RuntimeError("synthetic import error")\n', False)):
+            with self.subTest(expected=expected, body=body):
+                self.git('checkout', '--quiet', '--detach', SOURCE)
+                policy = self.adopt_fixture_policy(body)
+                self.assertTrue(ci.approved_operator_tooling(self.root, None, policy))
+                self.assertEqual(expected, ci.operator_suite(self.root))
+
+    def test_checks_cannot_mutate_operator_content_or_change_pinned_head(self):
+        policy = self.adopt_fixture_policy()
+        def mutate(root):
+            (root/'scripts/test_check_ci.py').write_text('pass\n')
+            return True
+        with mock.patch.object(ci, 'operator_suite', side_effect=mutate), \
+                mock.patch.object(ci, 'run', side_effect=lambda argv, root: 2 if argv[0] == 'make' else 0), \
+                mock.patch.object(ci, 'expected_t004_rejection', return_value=True):
+            original_run = subprocess.run
+            def commands(argv, *args, **kwargs):
+                if argv[0] == 'git':
+                    return original_run(argv, *args, **kwargs)
+                return subprocess.CompletedProcess(argv, 0, '{}', '')
+            with mock.patch.object(ci.subprocess, 'run', side_effect=commands):
+                self.assertEqual(1, ci.check(self.root, policy_source=policy))
+
     def test_forged_merge_tree_and_wrong_parent_order_block(self):
         context = self.proposal()
         for parents, tree in (((context.head, context.base), None),
@@ -167,6 +227,27 @@ class SourceTests(unittest.TestCase):
                 extra = self.root/'docs/untracked.md'
                 if extra.exists():
                     extra.unlink()
+
+    def test_git_executable_config_and_environment_do_not_run_sentinels(self):
+        context = self.proposal()
+        sentinel = Path(self.temporary.name)/'executed'
+        command = 'touch ' + str(sentinel)
+        for key in ('filter.probe.clean', 'filter.probe.process', 'merge.probe.driver',
+                    'diff.probe.textconv', 'diff.external', 'include.path'):
+            with self.subTest(key=key):
+                self.git('config', key, command)
+                with self.assertRaises(ValueError):
+                    ci.source_context(self.root, *context)
+                self.assertFalse(sentinel.exists())
+                self.git('config', '--unset', key)
+        # fsmonitor is forcibly disabled before any config/index command; global
+        # and environment-injected commands are ignored rather than inherited.
+        self.git('config', 'core.fsmonitor', command)
+        with mock.patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1',
+                'GIT_CONFIG_KEY_0': 'core.fsmonitor', 'GIT_CONFIG_VALUE_0': command,
+                'GIT_DIR': str(Path(self.temporary.name)/'foreign-git')}):
+            self.assertEqual(context, ci.source_context(self.root, *context))
+        self.assertFalse(sentinel.exists())
 
     def test_integration_checks_execute_in_merge_worktree(self):
         context = self.proposal()
