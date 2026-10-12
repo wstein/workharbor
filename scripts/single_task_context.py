@@ -430,3 +430,113 @@ def validate_prerequisites(root, value):
     except (ContextError, OSError, ValueError, UnicodeError):
         raise ContextError('prerequisite_evidence') from None
     return {record['task_id']: record for record in records}
+
+
+def validate_rework_context(root, value, store):
+    """Validate supplied corrective authorization against retained local predecessor."""
+    import single_task_scope as scope
+    import single_task_state as state
+    context = validate_context(value)
+    if context['mode'] != 'owner-authorized rework':
+        raise ContextError('context_schema')
+    entry = scope.validate_entry_scope(root, context)
+    validate_reviewed_artifacts(root, context)
+    validate_prerequisites(root, context)
+    try:
+        prior = store.read_attempt(context['prior_attempt_id'])
+        binding = state.implementation_binding(store, prior['attempt_id'])
+        if (prior['progress'] != 'handoff-ready' or prior['context']['feature'] != context['feature'] or
+                prior['context']['task_id'] != context['task_id'] or binding is None):
+            raise state.InvalidState('Rework requires the same completed bound predecessor')
+        events = store.read_events(prior['attempt_id'])
+        intents = [row for row in events if row['kind'] == 'completion-intent']
+        if len(intents) != 1:
+            raise state.InvalidState('Predecessor completion intent is missing or contradictory')
+        event = intents[0]
+        intent = event['payload']
+        state.validate_completion_intent_schema(intent)
+        manifest = scope.validate_manifest(intent['content_manifest'])
+        manifest_digest = hashlib.sha256(scope.canonical_manifest_bytes(manifest)).hexdigest()
+        expected_binding = {'schema_version': 1, 'implementation_commit': context['prior_implementation_commit'],
+                            'context_digest': prior['approval_context_digest'],
+                            'content_manifest_digest': manifest_digest,
+                            'completion_intent_digest': event['payload_digest']}
+        if canonical_bytes(binding) != canonical_bytes(expected_binding):
+            raise state.InvalidState('Corrective authorization does not name the retained implementation')
+        before = bytes.fromhex(intent['tasks_before_hex'])
+        after = bytes.fromhex(intent['tasks_after_hex'])
+        task_path = f"specs/{context['feature']}/tasks.md"
+        selected = scope.task_lines(before).get(context['task_id'])
+        if selected is None or selected['checked'] != (prior['entry_mode'] == 'owner-authorized rework'):
+            raise state.InvalidState('Predecessor marker mode is invalid')
+        offset = selected['marker_offset']
+        expected_post = before if selected['checked'] else before[:offset] + b'x' + before[offset+1:]
+        if (intent['attempt_id'] != prior['attempt_id'] or intent['tasks_path'] != task_path or
+                before != prior['tasks_bytes'] or after != expected_post or
+                hashlib.sha256(before).hexdigest() != intent['tasks_before_sha256'] or
+                hashlib.sha256(after).hexdigest() != intent['tasks_after_sha256'] or
+                manifest_digest != intent['content_manifest_digest'] or
+                intent['context_digest'] != prior['approval_context_digest']):
+            raise state.InvalidState('Predecessor completion seal is invalid')
+        state.validate_retained_completion_phase(prior, events, event, after, after)
+        acceptance = next((row for row in events if row['sequence'] == intent['acceptance_sequence']), None)
+        if (acceptance is None or acceptance['kind'] != 'acceptance' or
+                acceptance['sequence'] >= event['sequence'] or
+                acceptance['payload_digest'] != intent['acceptance_digest'] or
+                acceptance['payload']['content_manifest'] != manifest or
+                acceptance['payload']['context_digest'] != prior['approval_context_digest']):
+            raise state.InvalidState('Predecessor acceptance seal is invalid')
+        state.validate_acceptance_schema(acceptance['payload'])
+        if (acceptance['payload']['attempt_id'] != prior['attempt_id'] or
+                acceptance['payload']['task_id'] != context['task_id']):
+            raise state.InvalidState('Predecessor acceptance task identity disagrees')
+        review = scope.validate_semantic_review(acceptance['payload']['semantic_review'], prior, manifest)
+        review_digest = hashlib.sha256(canonical_bytes(review)).hexdigest()
+        expected_checks = [{'schema_version': 1, 'id': check['id'], 'argv': check['argv'],
+                            'cwd': check['cwd'], 'expected_exit': 0, 'exit': 0, 'category': 'passed',
+                            'timed_out': False, 'context_digest': prior['approval_context_digest'],
+                            'content_manifest_digest': manifest_digest,
+                            'semantic_review_digest': review_digest} for check in prior['context']['checks']]
+        if (review_digest != intent['semantic_review_digest'] or
+                review_digest != acceptance['payload']['semantic_review_digest'] or
+                manifest_digest != acceptance['payload']['content_manifest_digest'] or
+                canonical_bytes(expected_checks) != canonical_bytes(acceptance['payload']['checks'])):
+            raise state.InvalidState('Predecessor acceptance identities disagree')
+        commit = context['prior_implementation_commit']
+        if scope.git(root, 'rev-parse', '--verify', '--end-of-options', commit + '^{commit}').stdout.strip().decode('ascii') != commit:
+            raise state.InvalidState('Prior implementation commit unavailable')
+        scope.git(root, 'merge-base', '--is-ancestor', prior['baseline'], commit)
+        scope.git(root, 'merge-base', '--is-ancestor', commit, entry['baseline_commit'])
+        original = scope._git_inventory(root, prior['baseline'])
+        for revision in [commit] + scope.git(root, 'rev-list', commit, '^' + prior['baseline']).stdout.decode('ascii').splitlines():
+            inventory = scope._git_inventory(root, revision)
+            for path in original.keys() | inventory.keys():
+                current = inventory.get(path)
+                if path in prior['context']['allowed_paths']:
+                    if current is not None and current[0] not in ('100644', '100755'):
+                        raise state.InvalidState('Unsafe predecessor implementation output')
+                elif path == task_path:
+                    if (current is None or current[0] != original[path][0] or
+                            scope.normalize_tasks_bytes(scope._blob(root, current[1]), context['task_id']) !=
+                            scope.normalize_tasks_bytes(before, context['task_id'])):
+                        raise state.InvalidState('Predecessor implementation changed protected tasks')
+                elif current != original.get(path):
+                    raise state.InvalidState('Predecessor implementation changed protected content')
+        for item in manifest['entries']:
+            actual = _tree_entry(root, commit, item['path'])
+            if item['type'] == 'absent':
+                if actual is not None:
+                    raise state.InvalidState('Predecessor sealed absence does not match')
+            else:
+                if actual is None or actual[:2] != (item['mode'], b'blob'):
+                    raise state.InvalidState('Predecessor sealed type or mode does not match')
+                content = scope._blob(root, actual[2])
+                if item['path'] == task_path:
+                    if content != after:
+                        raise state.InvalidState('Predecessor completed task bytes do not match')
+                    content = scope.normalize_tasks_bytes(content, context['task_id'])
+                if hashlib.sha256(content).hexdigest() != item['sha256']:
+                    raise state.InvalidState('Predecessor sealed bytes do not match')
+        return entry
+    except (ContextError, KeyError, TypeError, ValueError, UnicodeError):
+        raise state.InvalidState('Retained rework predecessor evidence is invalid') from None
