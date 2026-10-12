@@ -12,10 +12,10 @@ Priority: first. Completion scope: all of [Feature 003](../specs/003-single-task
 Local verification requires neither a tracker nor a running Symphony service.
 
 - [x] T001–T010: fixtures, durable state and validated entry accepted in merged PRs [#49](https://github.com/wstein/workharbor-nxt/pull/49) and [#50](https://github.com/wstein/workharbor-nxt/pull/50), with earlier prerequisite work.
-- [ ] T011–T012: approve exact test-authoring matrices and verify their expected outcomes; distinguish expected-red evidence from implemented behavior.
-- [ ] T013–T017: implement and review scope inventories, content-bound review, acceptance execution and durable completion.
-- [ ] T018–T019: approve and verify recovery/rework test-authoring matrices.
-- [ ] T020–T023: implement and review commit binding, crash recovery, authorized rework and resume commands.
+- [x] T011–T012: exact test-authoring matrices and their expected outcomes accepted in merged PR [#53](https://github.com/wstein/workharbor-nxt/pull/53); expected-red evidence remains distinct from implemented behavior.
+- [x] T013–T017: scope inventories, content-bound review, acceptance execution and durable completion accepted in merged PR [#53](https://github.com/wstein/workharbor-nxt/pull/53).
+- [x] T018–T019: recovery/rework test-authoring matrices approved and verified locally at `12be360` / `26607a3`; publication remains pending.
+- [x] T020–T023: commit binding, crash recovery, authorized rework and resume commands implemented and independently reviewed locally; unmerged. The local full check timed out; final required Linux acceptance and T023's task completion marker remain pending.
 - [ ] Future remainder, T024: verify competing processes, interrupted lock ownership and persistence failures.
 - [ ] Future remainder, T025–T026: audit preserved regression coverage and document the complete local interface.
 - [ ] Future remainder, T027–T028: run final acceptance and record actual Linux/macOS evidence, including any missing-platform blockers.
