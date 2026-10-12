@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "status": "proposed-unobserved-preparation-only",
+  "feature": "003-single-task-entry",
+  "task_id": "T011",
+  "base_commit": "3cc1350a952b7dfed633d3ff03c4082ee54e7be8",
+  "prerequisites": [
+    "T010"
+  ],
+  "successors": [
+    "T013",
+    "T014"
+  ],
+  "gate": "No task entry, test implementation, completion, or expected-red acceptance until reviewed T010 integration and separate owner approval of the exact source-bound matrix and argv.",
+  "authoring_scope": [
+    "tests/test_single_task_scope.py",
+    "docs/development/feature003-scope-matrix.json"
+  ],
+  "fixture": "Reuse accepted SingleTaskFixture in isolated disposable Git repositories; begin/status must first succeed through accepted T010. Resolve direct T013/T014 scope APIs with their owner before implementing tests; absent modules or APIs are not assertion-red evidence.",
+  "proposal_categories": [
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_allowed_worktree_index_and_committed_edits",
+      "successor": "T013",
+      "intent": "Permitted output bytes are represented correctly in each repository plane."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_unauthorized_worktree_change",
+      "successor": "T013",
+      "intent": "Reject an unrelated tracked file changed only in the worktree."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_change_hidden_by_worktree_restore",
+      "successor": "T013",
+      "intent": "Reject an unrelated index change after current bytes are restored."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_nonignored_untracked_change",
+      "successor": "T013",
+      "intent": "Reject an unrelated nonignored untracked path; an allowed absent path remains permissible."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_committed_change_hidden_by_revert",
+      "successor": "T013",
+      "intent": "Reject an unauthorized intervening commit even when HEAD and worktree match the baseline."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_physical_executable_mode_in_manifest",
+      "successor": "T013",
+      "intent": "Manifest records 100755 versus 100644 from physical output mode even with core.filemode=false."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_directory_output",
+      "successor": "T013",
+      "intent": "An allowed path becoming a directory is not an absent regular output."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_symlink_worktree",
+      "successor": "T013",
+      "intent": "Reject a current symlink without reading or modifying its target."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_symlink_hidden_by_worktree_restore",
+      "successor": "T013",
+      "intent": "Reject index symlink type after safe current regular bytes are restored."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_symlink_hidden_by_revert",
+      "successor": "T013",
+      "intent": "Reject an unsafe symlink present only in intervening history."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_index_gitlink",
+      "successor": "T013",
+      "intent": "Reject a mode-160000 index entry using local update-index plumbing, without submodule/network setup."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_gitlink_hidden_by_revert",
+      "successor": "T013",
+      "intent": "Reject a mode-160000 committed entry after a restoring commit; no recursive submodule commands."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_other_task_marker",
+      "successor": "T013",
+      "intent": "Changing another task marker remains unauthorized although approval comparison can normalize progress."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_selected_task_text",
+      "successor": "T013",
+      "intent": "Changing selected task description is unauthorized."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_task_order",
+      "successor": "T013",
+      "intent": "Reordering task lines is unauthorized."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_task_mutation_hidden_by_worktree_restore",
+      "successor": "T013",
+      "intent": "An unrelated task marker in the index cannot be hidden by restoring worktree task bytes."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_task_mutation_hidden_by_revert",
+      "successor": "T013",
+      "intent": "An unrelated task mutation in history cannot be hidden by a later restoring commit."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_absent_is_distinct_from_sentinel_file",
+      "successor": "T013",
+      "intent": "Absent allowed output has null mode/hash and differs from a regular file containing a sentinel-like string."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_canonical_unicode_binary_mode_and_absence_vector",
+      "successor": "T014",
+      "intent": "Compare literal canonical UTF-8 bytes and fixed SHA-256 for the vector below, with code-point ordering and no Unicode normalization."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_normalize_only_selected_checkbox_with_crlf",
+      "successor": "T014",
+      "intent": "Selected space/x markers yield the fixed normalized manifest identity; preserve CRLF, all other task bytes, and exact pre/post snapshots."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_strict_manifest_schema",
+      "successor": "T013",
+      "intent": "Expand unknown/missing top-level and entry fields, malformed type/mode/hash, duplicates and entry-order violations into distinct collected methods before approval."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_strict_review_schema",
+      "successor": "T014",
+      "intent": "Expand unknown/missing fields and incorrect types for all seven required review fields into distinct collected methods before approval."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_missing_semantic_review",
+      "successor": "T014",
+      "intent": "Absent semantic attestation blocks before checks and preserves task bytes."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_negative_semantic_review",
+      "successor": "T014",
+      "intent": "approved=false cannot attest semantic scope."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_identity_mismatch",
+      "successor": "T014",
+      "intent": "Expand attempt/task/context/content identity mismatches into distinct collected methods before approval."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_output_bytes_change",
+      "successor": "T014",
+      "intent": "A content review from inspection becomes stale when approved output bytes change."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_output_mode_change",
+      "successor": "T014",
+      "intent": "A content review becomes stale after a physical executable mode change."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_absent_output_creation",
+      "successor": "T014",
+      "intent": "A review of absent output becomes stale when that output is created."
+    },
+    {
+      "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_inspection_without_checks_task_or_acceptance_mutation",
+      "successor": "T014",
+      "intent": "At the scope/preparation boundary inspect obtains identity without a review, checks, task mutation or acceptance/completion events; T012 covers public CLI envelope."
+    }
+  ],
+  "case_expansion": "Categories are design inventory, not a collected test count. Each required boundary/vector must reach its own test-body behavior assertion as a distinct collected method; no skipped, failed-subtest, import/setup, or missing-API qualification. Schema expansion and actual IDs must be reviewed before entry.",
+  "expected_outcomes": {
+    "observed": false,
+    "collected_ids": null,
+    "assertion_fingerprints": null,
+    "raw_exit": null,
+    "tool_revision": null,
+    "input_revision": null,
+    "reason": "No tests authored or executed. Expected outcomes and fingerprints require valid T010-based fixtures and observed body assertions; no synthetic failure is accepted."
+  },
+  "canonical_vector": {
+    "status": "fixed proposed oracle; implementation untested",
+    "file_inputs": [
+      {
+        "path": "á.txt",
+        "mode": "100644",
+        "bytes_hex": "6465636f6d706f7365640a",
+        "sha256": "a95c16aa568fee306afb42ea729e98485a3eac4d970e755f829ba7140f17d024"
+      },
+      {
+        "path": "é.txt",
+        "mode": "100644",
+        "bytes_hex": "ff0d0a",
+        "sha256": "1320b5dc13aa91dbac6eabc346cb655592aef8244a8ed04b8c4b3bdd59b8af4c"
+      },
+      {
+        "path": "脚本.sh",
+        "mode": "100755",
+        "bytes_hex": "23212f62696e2f73680a6578697420300a",
+        "sha256": "306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb"
+      },
+      {
+        "path": "specs/synthetic/tasks.md",
+        "mode": "100644",
+        "bytes_hex": "2d205b205d20543030312053636f70650d0a2d205b205d2054303032204c617465720d0a",
+        "sha256": "fdc2587b398411f49f470266e66d59235464a2fbfa6ab66860b6545e5b4f2d5b"
+      }
+    ],
+    "absent_paths": [
+      "missing.txt"
+    ],
+    "tasks_before_hex": "2d205b205d20543030312053636f70650d0a2d205b205d2054303032204c617465720d0a",
+    "tasks_after_hex": "2d205b785d20543030312053636f70650d0a2d205b205d2054303032204c617465720d0a",
+    "normalized_tasks_sha256": "fdc2587b398411f49f470266e66d59235464a2fbfa6ab66860b6545e5b4f2d5b",
+    "content_manifest": {
+      "schema_version": 1,
+      "entries": [
+        {
+          "path": "á.txt",
+          "type": "regular",
+          "mode": "100644",
+          "sha256": "a95c16aa568fee306afb42ea729e98485a3eac4d970e755f829ba7140f17d024"
+        },
+        {
+          "path": "missing.txt",
+          "type": "absent",
+          "mode": null,
+          "sha256": null
+        },
+        {
+          "path": "specs/synthetic/tasks.md",
+          "type": "regular",
+          "mode": "100644",
+          "sha256": "fdc2587b398411f49f470266e66d59235464a2fbfa6ab66860b6545e5b4f2d5b"
+        },
+        {
+          "path": "é.txt",
+          "type": "regular",
+          "mode": "100644",
+          "sha256": "1320b5dc13aa91dbac6eabc346cb655592aef8244a8ed04b8c4b3bdd59b8af4c"
+        },
+        {
+          "path": "脚本.sh",
+          "type": "regular",
+          "mode": "100755",
+          "sha256": "306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb"
+        }
+      ]
+    },
+    "canonical_json": "{\"entries\":[{\"mode\":\"100644\",\"path\":\"á.txt\",\"sha256\":\"a95c16aa568fee306afb42ea729e98485a3eac4d970e755f829ba7140f17d024\",\"type\":\"regular\"},{\"mode\":null,\"path\":\"missing.txt\",\"sha256\":null,\"type\":\"absent\"},{\"mode\":\"100644\",\"path\":\"specs/synthetic/tasks.md\",\"sha256\":\"fdc2587b398411f49f470266e66d59235464a2fbfa6ab66860b6545e5b4f2d5b\",\"type\":\"regular\"},{\"mode\":\"100644\",\"path\":\"é.txt\",\"sha256\":\"1320b5dc13aa91dbac6eabc346cb655592aef8244a8ed04b8c4b3bdd59b8af4c\",\"type\":\"regular\"},{\"mode\":\"100755\",\"path\":\"脚本.sh\",\"sha256\":\"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\"type\":\"regular\"}],\"schema_version\":1}",
+    "canonical_utf8_sha256": "80a31269779dfebdcd6c7c837b00f973b9bcb099257defc007ccfb752cfc3068",
+    "serialization": "UTF-8; sorted object keys; compact separators; ensure_ascii=false; finite values only; no trailing LF; Unicode code-point path order; no Unicode normalization."
+  },
+  "proposed_check_argv": [
+    [
+      "/opt/homebrew/bin/python3.14",
+      "-I",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_single_task_scope.py",
+      "-v"
+    ],
+    [
+      "/opt/homebrew/bin/python3.14",
+      "-I",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_single_task*.py",
+      "-v"
+    ],
+    [
+      "/opt/homebrew/bin/python3.14",
+      "-I",
+      "-B",
+      "scripts/check_repo.py"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "exact_verifier": "Use existing scripts/task_outcomes.py with ordered exact case IDs, pass/assertion outcomes and assertion fingerprints, approved discovery argv, deadlines and exact tool/input revisions. Freeze the executable matrix outside the checked root after accepted source is sealed, avoiding a self-referential snapshot. Approve matrix_argv output and its checks digest separately; --matrix-approved is supplied approval evidence, never authenticated identity. Require all implemented cases and the five pre-existing CI retained reds to match their exact baseline policy. Any new extra/missing case, unexpected green, unrelated failure, skip, import/setup error, timeout or check mutation blocks.",
+  "ci_policy": "Do not edit docs/development/ci-acceptance.json, scripts/check_ci.py or scripts/task_outcomes.py. Preserve the existing five retained assertion cases without reclassifying T010/T017/T023 migrations as completed. No broad raw-suite waiver.",
+  "ownership": "T011 owns direct inventory/manifest/schema/review and read-only preparation behavior. T012 owns public inspect identities/envelope and verify/complete acceptance execution, failures, mutations and selected-marker completion. No T015/T017 success implementation is required for T011 direct semantic validation.",
+  "pending": [
+    "Accepted T010 source and fixture/API migration",
+    "Agreed direct scope API for strict manifest/review validation and side-effect-free preparation",
+    "Distinct collected IDs after schema/identity boundary expansion",
+    "Meaningful body-assertion observations and exact fingerprints on the source-bound candidate",
+    "Independent review and exact owner matrix/argv decision"
+  ],
+  "limitations": "Preparation only. No implementation evidence, observed red count, acceptance, task completion, publication, provider/runtime activation, or live authentication claim."
+}
