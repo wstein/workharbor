@@ -1,6 +1,7 @@
 # Validation guide: Task automation
 
-Status: local package preparation, source/approval/runtime ports and readiness
+Status: local package preparation, source/approval/runtime ports, readiness,
+durable recovery, publication and final handoff
 composition are implemented with disposable fixture evidence. Actual guard-backed
 execution and live readiness/handoff remain blocked on demonstrated host adapters.
 No live runtime is activated; offline results prove no owner authentication or
@@ -113,9 +114,37 @@ were red and are not acceptance evidence. Canonical `make check` and raw baselin
 reporting belong to the coordinator's final combined T017 run, not these focused
 results. No actual provider/runtime/guard capability or live dispatch was verified.
 
+## Durable recovery and final handoff
+
+Run the `test_task_handoff.py`, `test_task_tracker.py` and `test_task_automation.py`
+discovery suites with the supported interpreter. `task_automation.py resume` and
+`handoff` accept `--package PACKAGE.json --attempt ATTEMPT --offline`; standalone
+commands return blocked exit 3 without creating a missing journal. Actual guard
+completion/resume and GitHub conditional labels remain unavailable by default.
+
+Preserve the checkout, journal, immutable package and original guard implementation.
+Failed revalidation/changed inputs block; only explicit owner corrective scope/checks
+permit a linked guard-owned attempt. Publication reuses the accepted local
+preparation helper and exact reviewed repository/base/head refs and commits;
+durable stable keys and exact authenticated queries prevent blind duplicate writes.
+Checks → commit binding → exact review → authorized publication → durable evidence
+precede final labels. The conditional intent retains observed labels/version,
+desired labels, evidence digest and recovery before writing; unrelated labels stay,
+ready is removed, human-review or durably explained blocked is added, issue stays open.
+
+The final authenticated receipt requires no later provider action. Unknown writes
+remain incomplete (exit 6). Retry reconciles a durably attempted final intent before
+new guard/publication work, even with those ports absent; ownership, label capability
+and action permission still apply. Mere intent without an attempt cannot confirm
+externally matching labels. Conflicts recompute with at most four attempts;
+uncertain drift/ambiguity/exhaustion require owner recovery. No reset, journal deletion
+or baseline invention. Fixture tests interrupt every progress boundary and final
+response/local persistence, including actual CLI unknown/crash retry; these prove
+no real provider/runtime operation. Combined canonical/raw evidence belongs to T017.
+
 ## Remaining acceptance scenarios
 
-The scenarios below belong to later tasks and are not claimed by this offline MVP.
+The scenarios below require live evidence beyond disposable fixture coverage.
 Use disposable repositories, disabled network and fake runtime/tracker ports before
 separately authorized live work. Use [contract](contracts/cli.md) and
 [model](data-model.md); do not infer execution authority from these examples.

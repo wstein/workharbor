@@ -679,6 +679,191 @@ def publish(recovery, value, snapshot, evidence, *, guard=None, readiness=None, 
     return result
 
 
+def final_labels(recovery, value, *, tracker=None, readiness=None, authorized_actions=(),
+                 target='human-review', blocker=None, live=False):
+    """Persist recovery, then make one final conditional label operation.
+
+    A returned authenticated receipt is the confirmation; no later provider read,
+    publication, check or ownership request is required. Lost responses stop this
+    call as incomplete. A later operator/resume call may reconcile the exact set
+    before any bounded retry. The journal/checkout are never reset or recreated.
+    """
+    state = recovery.status()
+    result = dict(state, handoff_complete=False, label_transition_confirmed=False,
+                  execution_eligible=False, live_execution=None, blockers=[])
+    code = 'final-label-prerequisite-blocked'
+    try:
+        if recovery._inputs(value) != recovery.journal.events(recovery.key)[0]['payload']:
+            raise StateConflict('Final handoff inputs changed')
+        if state['progress'] == 'handed-off' and target == 'human-review':
+            result.update(handoff_complete=True, label_transition_confirmed=True)
+            return result
+        recovery._ownership()
+        if target not in ('human-review', 'blocked'):
+            raise StateConflict('Invalid final label target')
+        if target == 'blocked':
+            if not _matches(blocker, r'[a-z][a-z0-9-]{0,80}'):
+                raise StateConflict('Durable safe blocker required')
+            recovery.journal.append(recovery.key, 'lifecycle-blocker', {'code': blocker})
+            evidence_digest = _digest(_encode(dict(inputs=recovery._inputs(value), blocker=blocker)))
+        else:
+            if (state['progress'] not in ('evidence-durable', 'final-label-intent', 'handed-off')
+                    or not state['verification_valid']
+                    or state['review_candidate'] != state['verification_head']):
+                raise StateConflict('Durable verified reviewed publication/evidence required')
+            event = next(event for event in recovery.journal.events(recovery.key)
+                         if event['kind'] == 'lifecycle-progress'
+                         and event['payload']['progress'] == 'evidence-durable')
+            durable_evidence = recovery.journal.operation(recovery.key,
+                event['payload']['evidence']['operation_key'])
+            if durable_evidence['status'] != 'succeeded':
+                raise StateConflict('Durable evidence confirmation required')
+            evidence_digest = _digest(_encode(dict(evidence=durable_evidence['result'],
+                implementation=state['rework_implementation_commit'] or state['implementation_commit'],
+                verification_head=state['verification_head'], checks_ref=state['checks_ref'],
+                review_candidate=state['review_candidate'])))
+        code = 'final-label-capability-unavailable'
+        _, missing = package._capability_evidence('tracker.safe-labels',
+            getattr(tracker, 'capabilities', {}).get('tracker.safe-labels'), live)
+        if missing:
+            raise StateConflict('Demonstrated conditional label capability required')
+        if ('replace-labels' not in authorized_actions
+                or 'replace-labels' not in value['execution']['external_actions']):
+            raise StateConflict('Final label action not authorized')
+        identity = tracker_ports.IssueIdentity(recovery.key.repository, int(recovery.key.issue))
+        journal, key = recovery.journal, recovery.key
+        code = 'final-label-reconciliation-incomplete'
+
+        def confirmed(operation_key, observation):
+            journal.result(key, operation_key, 'succeeded', dict(
+                object_digest=observation.object_digest, labels=list(observation.labels), state='open'))
+            if target == 'human-review' and recovery.status()['progress'] == 'final-label-intent':
+                evidence = {'operation_key': operation_key}
+                recovery._stage('handed-off', evidence, recovery.status())
+                journal.append(key, 'lifecycle-progress', dict(progress='handed-off', evidence=evidence))
+            result.update(recovery.status(), label_transition_confirmed=True,
+                          handoff_complete=target == 'human-review', blockers=[])
+            return result
+
+        for _ in range(4):
+            recovery._ownership()
+            observation = _guard_call(tracker.read_issue, identity)
+            if (type(observation) is not tracker_ports.IssueObservation
+                    or observation.repository != identity.repository or observation.number != identity.number
+                    or observation.state != 'open'):
+                raise StateConflict('Exact open issue observation required')
+            pending = [event['payload'] for event in journal.events(key) if event['kind'] == 'intent'
+                       and event['payload']['operation_key'].startswith('final-labels:')
+                       and event['payload']['content'].get('evidence_digest') == evidence_digest
+                       and event['payload']['content'].get('target') == target]
+            for intent in pending:
+                operation = journal.operation(key, intent['operation_key'])
+                if operation['status'] == 'ambiguous':
+                    raise StateConflict('Ambiguous final labels retained')
+                if (operation['status'] == 'write-unknown'
+                        and set(observation.labels) != set(intent['content']['desired'])
+                        and observation.object_digest != intent['content']['expected']['object_digest']):
+                    journal.result(key, intent['operation_key'], 'ambiguous', {'recovery': 'operator-required'})
+                    raise StateConflict('Uncertain final label state changed; operator reconciliation required')
+            if 'workharbor-ready' not in observation.labels:
+                for intent in reversed(pending):
+                    operation_key = intent['operation_key']
+                    operation = journal.operation(key, operation_key)
+                    if operation['status'] == 'ambiguous':
+                        raise StateConflict('Ambiguous final labels retained')
+                    attempted = any(event['kind'] == 'final-label-attempt'
+                                    and event['payload']['operation_key'] == operation_key
+                                    for event in journal.events(key))
+                    if attempted and set(observation.labels) == set(intent['content']['desired']):
+                        return confirmed(operation_key, observation)
+                raise StateConflict('Final label state unknown; operator reconciliation required')
+            desired = tuple(sorted((set(observation.labels) - {'workharbor-ready'}) | {target}))
+            expected = dict(object_digest=observation.object_digest, labels=list(observation.labels))
+            content = dict(identity=asdict(identity), expected=expected, desired=list(desired),
+                evidence_digest=evidence_digest, target=target,
+                recovery='retain-checkout-journal; query-exact-label-set-before-retry; owner-reconciles-ambiguity')
+            if target == 'blocked':
+                content['blocker'] = blocker
+            operation_key = 'final-labels:' + _digest(_encode(content))
+            journal.intent(key, operation_key, content)
+            previous = journal.operation(key, operation_key)
+            if previous['status'] in ('succeeded', 'ambiguous'):
+                raise StateConflict('Terminal final label result changed remotely')
+            attempts = sum(event['kind'] == 'final-label-attempt'
+                           and event['payload']['evidence_digest'] == evidence_digest
+                           and event['payload']['target'] == target for event in journal.events(key))
+            if attempts >= 4:
+                raise StateConflict('Final label retry limit retained')
+            if previous['status'] == 'write-unknown':
+                if observation.object_digest != expected['object_digest']:
+                    raise StateConflict('Uncertain label state changed')
+                journal.result(key, operation_key, 'safe-retry', {'exact-original-state': True})
+            if target == 'human-review' and recovery.status()['progress'] == 'evidence-durable':
+                recovery.advance('final-label-intent', {'operation_key': operation_key})
+            if target == 'human-review':
+                recovery._ready(readiness, 'post-check', recovery.status())
+            recovery._ownership()
+            journal.append(key, 'final-label-attempt', dict(operation_key=operation_key,
+                evidence_digest=evidence_digest, target=target, attempt=attempts + 1))
+            try:
+                receipt = tracker.replace_labels(identity, dict(
+                    object_digest=expected['object_digest'], labels=tuple(expected['labels'])), desired,
+                    operation_key=operation_key)
+            except tracker_ports.LabelConflict:
+                journal.result(key, operation_key, 'safe-retry', {'conditional-conflict': True})
+                continue
+            except Exception:
+                journal.result(key, operation_key, 'write-unknown', {'recovery': content['recovery']})
+                break  # No required subsequent provider/agent action after removal.
+            if (type(receipt) is not tracker_ports.IssueObservation or receipt.state != 'open'
+                    or receipt.repository != identity.repository or receipt.number != identity.number
+                    or set(receipt.labels) != set(desired)):
+                journal.result(key, operation_key, 'write-unknown', {'recovery': content['recovery']})
+                break
+            return confirmed(operation_key, receipt)
+        raise StateConflict('Final label write incomplete; operator recovery retained')
+    except (PersistenceFailure, InvalidState):
+        raise
+    except Exception:
+        recovery.journal.append(recovery.key, 'label-blocker', {'code': code,
+            'recovery': 'retain-evidence-and-reconcile-exact-state-before-any-retry'})
+        result.update(recovery.status(), blockers=[{'code': code}])
+    return result
+
+
+def handoff(recovery, value, snapshot, evidence, *, publication_ports=None, label_ports=None, live=False):
+    """Complete publication/evidence, or reconcile the retained final operation first."""
+    state = recovery.status()
+    if state['progress'] == 'handed-off':
+        if recovery._inputs(value) != recovery.journal.events(recovery.key)[0]['payload']:
+            raise StateConflict('Completed handoff inputs changed')
+        return dict(state, handoff_complete=True, label_transition_confirmed=True,
+                    execution_eligible=False, live_execution=None, blockers=[])
+    ports = dict(label_ports or {})
+    final_intents = [event['payload']['content'] for event in recovery.journal.events(recovery.key)
+                     if event['kind'] == 'intent'
+                     and event['payload']['operation_key'].startswith('final-labels:')]
+    if final_intents:
+        # A final write may already have removed eligibility. Reconcile its durable
+        # identity before any new guard/check/publication work can change that proof.
+        intent = final_intents[-1]
+        return final_labels(recovery, value, target=intent['target'],
+                            blocker=intent.get('blocker'), live=live, **ports)
+    published = publish(recovery, value, snapshot, evidence, live=live, **dict(publication_ports or {}))
+    if not published['publication_valid']:
+        blocker = published['blockers'][0]['code'] if published['blockers'] else 'publication-incomplete'
+        labels = final_labels(recovery, value, target='blocked', blocker=blocker, live=live, **ports)
+        published.update(handoff_complete=False,
+                         label_transition_confirmed=labels['label_transition_confirmed'])
+        published['blockers'] += labels['blockers']
+        return published
+    labels = final_labels(recovery, value, live=live, **ports)
+    labels.update(pr=published['pr'], published_evidence=published['published_evidence'],
+                  independent_review=published['independent_review'],
+                  authenticated_approval=published['authenticated_approval'])
+    return labels
+
+
 def _schema(connection):
     return [tuple(row) for row in connection.execute(
         "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' "
