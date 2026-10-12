@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from typing import NamedTuple
 from unittest import mock
@@ -78,8 +79,8 @@ def clean_checkout(root, revision):
     """Compare bytes and modes explicitly, including assume-unchanged files."""
     for options in ((), ('--cached',)):
         git(root, 'diff', *options, '--quiet', revision, '--')
-    if git(root, 'ls-files', '--others', '--exclude-standard', '-z'):
-        raise ValueError('Untracked checkout content')
+    if git(root, 'ls-files', '--others', '-z'):
+        raise ValueError('CI execution requires a pristine isolated checkout, including ignored files; use prepublication scratch')
     algorithm = git(root, 'rev-parse', '--show-object-format').decode().strip()
     for entry in git(root, 'ls-files', '--stage', '-z').split(b'\0'):
         if not entry:
@@ -293,6 +294,26 @@ def approved_operator_tooling(root, context, policy_source):
         return False
 
 
+@contextmanager
+def isolated_python_cache():
+    """Keep cache reads and generated files outside the candidate checkout."""
+    with tempfile.TemporaryDirectory(prefix='workharbor-ci-cache-') as cache:
+        names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1'}
+        previous = {name: os.environ.get(name) for name in names}
+        prefix, no_write = sys.pycache_prefix, sys.dont_write_bytecode
+        os.environ.update(names)
+        sys.pycache_prefix, sys.dont_write_bytecode = cache, True
+        try:
+            yield
+        finally:
+            sys.pycache_prefix, sys.dont_write_bytecode = prefix, no_write
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+
 def operator_suite(root):
     # Run all bounded new tests in a fresh interpreter, with a deadline and strict
     # unittest outcomes. The parent has already checked the complete inventory.
@@ -301,10 +322,12 @@ def operator_suite(root):
             "raise SystemExit(0 if m['strict_suite'](m['Path'](sys.argv[2]), "
             "'scripts', 'test_*.py', sys.argv[3:]) else 1)")
     try:
-        result = subprocess.run([sys.executable, '-B', '-c', code, str(Path(__file__).resolve()),
-                                 str(root.resolve()), *modules], cwd=root, timeout=300)
+        clean_checkout(root, git(root, 'rev-parse', 'HEAD').decode().strip())
+        with isolated_python_cache():
+            result = subprocess.run([sys.executable, '-B', '-c', code, str(Path(__file__).resolve()),
+                                     str(root.resolve()), *modules], cwd=root, timeout=300)
         return result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
 
 
@@ -498,6 +521,16 @@ def strict_suite(root, directory='tests', pattern='test*.py', required_modules=(
 
 
 def check(root, context=None, policy_source=None):
+    try:
+        clean_checkout(root, git(root, 'rev-parse', 'HEAD').decode().strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print('CI blocked: use a pristine isolated checkout, including ignored files (prepublication scratch).', flush=True)
+        return 1
+    with isolated_python_cache():
+        return _check(root, context, policy_source)
+
+
+def _check(root, context=None, policy_source=None):
     if context is not None or policy_source is not None or 'GITHUB_EVENT_NAME' in os.environ:
         try:
             context = source_context(root, *context) if context else source_context(root)
@@ -632,14 +665,16 @@ def self_test():
                 self.assertFalse(approved_t003(ROOT))
 
         def test_strict_fallback_requires_green(self):
-            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+            with mock.patch(__name__ + '.clean_checkout'), \
+                    mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
                     mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.strict_suite', return_value=True):
                 for raw in (0, 1, 2):
                     with self.subTest(raw=raw), mock.patch(__name__ + '.run', side_effect=[0, raw]):
                         self.assertEqual(0 if raw == 0 else 1, check(ROOT))
-            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+            with mock.patch(__name__ + '.clean_checkout'), \
+                    mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
                     mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.run', return_value=0), \
@@ -664,7 +699,8 @@ def self_test():
                     self.assertEqual(expected, strict_suite(ROOT))
 
         def test_scoped_checks_and_raw_red_required(self):
-            with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+            with mock.patch(__name__ + '.clean_checkout'), \
+                    mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
                     mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=True), \
                     mock.patch('subprocess.run', return_value=mock.Mock(returncode=0)):

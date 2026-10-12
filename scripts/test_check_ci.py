@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import py_compile
 import subprocess
 import sys
 import tempfile
@@ -235,6 +236,49 @@ class SourceTests(unittest.TestCase):
         self.squash_policy(policy)
         (self.root/'scripts/test_untracked.py').write_text('pass\n')
         self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
+    def test_ignored_bytecode_and_source_cannot_execute_or_pass_the_boundary(self):
+        policy = self.adopt_fixture_policy()
+        sentinel = Path(self.temporary.name)/'executed'
+        payload = Path(self.temporary.name)/'payload.py'
+        payload.write_text('from pathlib import Path\nPath(' + repr(str(sentinel)) + ').write_text("executed")\n'
+                           'import unittest\nclass Probe(unittest.TestCase):\n'
+                           '    def test_probe(self): self.assertTrue(True)\n')
+        cache = self.root/f'scripts/__pycache__/test_check_ci.{sys.implementation.cache_tag}.pyc'
+        for name in (cache.relative_to(self.root).as_posix(), 'scripts/json.py', 'json.py', '.specify/feature.json'):
+            with self.subTest(ignored=name):
+                path = self.root/name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                exclude = self.root/'.git/info/exclude'
+                exclude.write_text(exclude.read_text() + '\n/' + name + '\n')
+                if name.endswith('.pyc'):
+                    py_compile.compile(str(payload), cfile=str(path), doraise=True,
+                                       invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
+                else:
+                    path.write_bytes(payload.read_bytes())
+                self.assertEqual('', self.git('ls-files', '--others', '--exclude-standard'))
+                self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+                self.assertFalse(ci.operator_suite(self.root))
+                with mock.patch.object(ci, 'run', return_value=0) as run:
+                    self.assertEqual(1, ci.check(self.root, policy_source=policy))
+                    run.assert_not_called()
+                self.assertFalse(sentinel.exists())
+                path.unlink()
+
+    def test_python_cache_is_external_for_current_and_child_imports_and_restored(self):
+        before = (sys.pycache_prefix, sys.dont_write_bytecode,
+                  os.environ.get('PYTHONPYCACHEPREFIX'), os.environ.get('PYTHONDONTWRITEBYTECODE'))
+        with ci.isolated_python_cache():
+            prefix = Path(sys.pycache_prefix)
+            self.assertTrue(prefix.is_dir())
+            self.assertFalse(prefix.is_relative_to(self.root))
+            child = subprocess.run([sys.executable, '-c',
+                                    'import json,sys;print(json.dumps([sys.pycache_prefix,sys.dont_write_bytecode]))'],
+                                   check=True, text=True, capture_output=True)
+            self.assertEqual([str(prefix), True], json.loads(child.stdout))
+        self.assertFalse(prefix.exists())
+        self.assertEqual(before, (sys.pycache_prefix, sys.dont_write_bytecode,
+                                 os.environ.get('PYTHONPYCACHEPREFIX'), os.environ.get('PYTHONDONTWRITEBYTECODE')))
 
     def test_operator_suite_requires_nonempty_strict_green_for_every_tool(self):
         for body, expected in ((
