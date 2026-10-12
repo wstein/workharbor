@@ -16,7 +16,9 @@ Independent review still binds the exact candidate commit; publication is separa
 `scripts/approval_binding.py` exposes `assess_retention(root, request, guard=...,
 authority=...)`. The request has exactly `schema_version: 1`, full locally resolvable
 `approved_revision` and `current_revision`, opaque `approved_context` and
-`current_context`, opaque `evidence`, and an inert `approval_ref`. No input is fetched,
+`current_context`, opaque `evidence`, inert `approval_ref`, `approval_action` and
+`approved_package_digest`. The latter remains the original reviewed package digest,
+even when a new base produces a different current package. No input is fetched,
 evaluated as shell, executed as a check, or used to select Python adapter code.
 
 Trusted host code supplies these ports, never proposal JSON:
@@ -25,12 +27,15 @@ Trusted host code supplies these ports, never proposal JSON:
   Feature 003 validated semantic `contract_digest` and complete `protected_paths`.
   It owns context/schema validation, scope/requirements/checks/dependencies/mode and
   freshness of prerequisite evidence. It must reject unknown/missing context fields.
-- `guard.compare_artifacts(approved, current, evidence)` returns `identical`,
-  `progress-only`, `renewal-required` or `ambiguous`. Snapshots retain exact raw bytes.
+- `guard.compare_artifacts(approved, current, evidence)` returns `ArtifactComparison`
+  with `progress-only`, `renewal-required` or `ambiguous` and a durable proof reference.
+  Byte-identical snapshots are compared directly. Snapshots retain exact raw bytes.
   Only Feature 003's documented checkbox and append-only verified EOF evidence
   normalization can return progress-only. It must reject changed/removed footers,
   invalid/stale references, fenced pseudo-tasks and all semantic/whitespace edits.
-- `authority.verify(approval_ref, binding_digest)` returns `ApprovalVerification`.
+- `authority.verify(approval_ref, target)` returns `ApprovalVerification`. The
+  `ApprovalTarget` contains action, original reviewed revision/package digest and
+  original content binding digest. The returned target must match exactly.
   The external verifier authenticates the configured owner/action, repository,
   immutable object identity/content, exact binding and current undeleted/unedited/
   undismissed object state. It supplies an inert durable evidence reference and
@@ -47,7 +52,10 @@ with no symlink/gitlink ancestors; physical modes are checked even if core.filem
 is false. Recheck the snapshot after external verification to reject concurrent drift.
 
 The result is sanitized comparison evidence: result, retained flag, approval
-assurance, binding digest, approved/current snapshots and a safe blocker code.
+assurance, original/current raw binding digests, approved/current snapshots,
+comparator revision/proof reference and a safe blocker code. The original reviewed
+revision is never relabeled as the new current revision. Progress normalization
+does not overwrite either raw identity or the approved package identity.
 `retained` means only this approval comparison passed; it grants no task execution,
 review, source-equivalence or publication permission. Supplied-local assurance can
 retain only an offline assertion. No approval identity is manufactured locally.
@@ -72,5 +80,8 @@ responses and semantic negatives; it is explicitly not the Feature 003 comparato
 Default unavailable adapters and absent/invalid/stale authority block. No test claims
 real provider authentication, generic normalization or live Symphony behavior.
 
-Run `python3 -m unittest discover -s tests -p test_approval_binding.py -v`, then
+Tests live under `scripts/` so the separately approved, frozen Feature 003 case
+collection remains unchanged; the operator-tooling acceptance path must execute
+every operator test strictly green in addition to the exact baseline verifier.
+Run `python3 -m unittest discover -s scripts -p test_approval_binding.py -v`, then
 `make check`. Keep baseline raw failures separate from these focused results.
