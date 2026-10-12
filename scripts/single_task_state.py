@@ -55,6 +55,7 @@ CREATE TABLE events (
     sequence INTEGER NOT NULL CHECK(sequence > 0),
     kind TEXT NOT NULL,
     payload_digest TEXT NOT NULL,
+    payload BLOB NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (attempt_id, sequence)
 );
@@ -260,15 +261,26 @@ class _Store:
     def read_events(self, attempt_id):
         self.read_attempt(attempt_id)
         try:
-            return [dict(row) for row in self._db.execute(
-                'SELECT * FROM events WHERE attempt_id=? ORDER BY sequence', (attempt_id,))]
-        except sqlite3.Error as error:
+            result = []
+            for row in self._db.execute(
+                    'SELECT * FROM events WHERE attempt_id=? ORDER BY sequence', (attempt_id,)):
+                event = dict(row)
+                payload = json.loads(event['payload'])
+                encoded = _canonical(payload)
+                if (encoded != event['payload'] or
+                        hashlib.sha256(encoded).hexdigest() != event['payload_digest']):
+                    raise InvalidState('Event payload does not match retained digest')
+                event['payload'] = payload
+                result.append(event)
+            return result
+        except (sqlite3.Error, ValueError, TypeError, UnicodeError) as error:
             raise InvalidState('Unreadable event evidence; operator recovery required') from error
 
     def append_event(self, attempt_id, kind, payload, progress=None):
         if not isinstance(kind, str) or not kind or (progress is not None and progress not in PROGRESS):
             raise InvalidState('Invalid event kind or progress')
-        digest = hashlib.sha256(_canonical(payload)).hexdigest()
+        encoded = _canonical(payload)
+        digest = hashlib.sha256(encoded).hexdigest()
         with self.transaction():
             attempt = self.read_attempt(attempt_id)
             if progress is not None and PROGRESS.index(progress) < PROGRESS.index(attempt['progress']):
@@ -276,8 +288,8 @@ class _Store:
             sequence = self._db.execute(
                 'SELECT COALESCE(MAX(sequence),0)+1 FROM events WHERE attempt_id=?',
                 (attempt_id,)).fetchone()[0]
-            self._db.execute('INSERT INTO events VALUES (?,?,?,?,?)',
-                             (attempt_id, sequence, kind, digest, _time()))
+            self._db.execute('INSERT INTO events VALUES (?,?,?,?,?,?)',
+                             (attempt_id, sequence, kind, digest, encoded, _time()))
             if progress is not None:
                 self._db.execute('UPDATE progress SET value=? WHERE attempt_id=?',
                                  (progress, attempt_id))
