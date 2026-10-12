@@ -119,6 +119,8 @@ def prepare(repository, source, base_ref, base, head_ref, head, timeout=300):
         if (base_ref == head_ref or any(not isinstance(ref, str)
                 or not re.fullmatch(r'refs/heads/[A-Za-z0-9._/-]+', ref) for ref in refs)):
             raise Blocked('invalid_refs')
+        if base_ref != 'refs/heads/main':
+            raise Blocked('invalid_pr_base')
         result.update(source=source, base=base, head=head)
         with tempfile.TemporaryDirectory(prefix='workharbor-prepublication-') as directory:
             temporary = Path(directory).resolve()
