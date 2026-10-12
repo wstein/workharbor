@@ -116,6 +116,13 @@ This exception requires a revision-bound owner approval of the matrix and argv;
 issue prose alone cannot waive the default green gate. For T002, follow the approved
 docs/development/bootstrap-t002.md and bootstrap-t002.json. No journal/CLI
 implementation or later-task execution is authorized by red-test acceptance.
+For owner-approved T003, use docs/development/bootstrap-t003.json: twelve direct
+state-module tests must pass. The pinned T002 verifier separately requires all
+31 baseline tests green and exactly ten remaining CLI reds. Those known initial
+reds are not out-of-scope repairs; record raw make check exit/status honestly.
+This scoped implementation gate requires its own revision-bound owner approval;
+neither the T002 exception nor ready labels grant it. Never change the old CLI or
+weaken tests to clear those reds during T003. The US3/final full-green gate remains.
 In implement or authorized rework state, run $speckit-analyze before code changes. If its read-only report identifies a
 blocking ambiguity or conflict for this task, stop for human clarification/review.
 Use the project single-task entry point documented in
