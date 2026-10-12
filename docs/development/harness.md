@@ -31,6 +31,25 @@ Review quality gaps and documentation freshness per release; do not schedule age
 or background services implicitly.
 
 ## CI
-The included GitHub Actions workflow runs the same bootstrap checks on pushes/PRs.
+The included GitHub Actions workflow runs `python3 scripts/check_ci.py` on pushes/PRs.
 It is optional infrastructure; local checks work without GitHub. Other forges can
 run `make check`. Publishing a remote or enabling CI is outside this bundle.
+
+The owner-approved T003 acceptance in [bootstrap-t003.md](bootstrap-t003.md) is a
+temporary CI phase: twelve direct state tests must pass, and the unchanged T002
+verifier must confirm all 31 baseline passes and exactly ten approved CLI assertion
+failures. Repository, diff, shell syntax and feature prerequisite checks must also
+pass. Raw `make check` still runs and must report exit 2; its full suite remains red,
+and CI acceptance does not claim CLI implementation or full-suite acceptance.
+
+The helper pins both approved contracts, both verifiers, the legacy guard and exact
+T003 task bytes. It verifies sealed T003 ancestry plus original/accepted T002 blob
+identities. Its tree may differ from sealed T003 only in this harness document,
+the CI helper and the workflow. Any other changed or untracked file, missing history,
+changed pin or successor task expires the phase and requires strict full-green
+`make check`, plus the direct state suite when that module exists. T004 cannot
+inherit the exception. Full-suite green is required at US3 and final acceptance.
+No verifier matrix, runtime pin, task marker or state implementation changes here.
+Run `python3 scripts/check_ci.py --self-test` for phase/pin/fallback regression checks.
+The committed prerequisite record reference/digest stays pinned; CI verifies local
+Git content and does not refresh external owner authorization.

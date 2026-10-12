@@ -10,4 +10,4 @@ jobs:
         with:
           # Tests verify pinned legacy code and evidence against ancestor commits.
           fetch-depth: 0
-      - run: python3 --version && make check
+      - run: python3 --version && python3 scripts/check_ci.py
