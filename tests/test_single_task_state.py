@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from test_single_task import (
@@ -974,3 +975,258 @@ for _boundary in ('after-acceptance', 'after-intent', 'after-replace'):
     def _case(self, boundary=_boundary):
         self.blocked_recovery(boundary, 'content', 3)
     setattr(TaskRecoveryTests, 'test_block_' + _boundary.replace('-', '_') + '_content', _case)
+
+
+class CompetingTaskProcessTests(unittest.TestCase):
+    """T024: real CLI owners paused by pipes at named durable boundaries."""
+
+    cli = TaskRecoveryTests.cli
+    outcome = TaskRecoveryTests.outcome
+    saved = TaskRecoveryTests.saved
+    call = TaskRecoveryTests.call
+    checks = TaskRecoveryTests.checks
+    write_review = TaskRecoveryTests.write_review
+    complete = TaskRecoveryTests.complete
+    commit = TaskRecoveryTests.commit
+    bind = TaskRecoveryTests.bind
+    retained = TaskRecoveryTests.retained
+
+    def setUp(self):
+        TaskRecoveryTests.setUp(self)
+        self.context_path = self.fixture.private/'competing-context.json'
+        self.context_path.write_bytes(canonical_bytes(self.context))
+
+    def pause(self, boundary, *args):
+        injection = r'''import pathlib,runpy,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+import single_task_state as state
+boundary=sys.argv.pop(2)
+append=state._Store.append_event
+def paused(self,attempt_id,kind,*args,**kwargs):
+    result=append(self,attempt_id,kind,*args,**kwargs)
+    if kind==boundary:
+        print('boundary:'+kind,flush=True)
+        assert sys.stdin.readline()=='release\n'
+    return result
+state._Store.append_event=paused
+sys.argv=sys.argv[1:]
+runpy.run_path(sys.argv[0],run_name='__main__')
+'''
+        process = subprocess.Popen(
+            [sys.executable, '-B', '-c', injection, str(SCRIPT), boundary, *args],
+            cwd=self.root, env=self.fixture.env, text=True, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        def cleanup():
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=5)
+        self.addCleanup(cleanup)
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            self.assertTrue(selector.select(timeout=10), 'CLI did not reach named boundary')
+            self.assertEqual('boundary:'+boundary+'\n', process.stdout.readline())
+        return process
+
+    def finish(self, process):
+        stdout, stderr = process.communicate('release\n', timeout=15)
+        result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+        value = self.outcome(result)
+        self.assertEqual(0, process.returncode, value)
+        return value
+
+    def conflict(self, *args):
+        # Observe committed SQLite rows directly while the real command owns the
+        # advisory lock. A conflicting CLI must neither append nor reset state.
+        path = self.root/'.symphony/single-task/journal.sqlite3'
+        def rows():
+            with closing(sqlite3.connect(path.as_uri()+'?mode=ro', uri=True)) as db:
+                return {name: db.execute('SELECT * FROM '+name).fetchall()
+                        for name in ('attempts', 'events', 'progress')}
+        before = rows()
+        tasks = self.tasks.read_bytes()
+        checks = self.checks()
+        result = self.cli(*args)
+        value = self.outcome(result)
+        self.assertEqual(5, result.returncode, value)
+        self.assertEqual('concurrent_attempt', value['errors'][0]['code'])
+        self.assertEqual('not-run', value['local_verification'])
+        self.assertEqual(before, rows())
+        self.assertEqual(tasks, self.tasks.read_bytes())
+        self.assertEqual(checks, self.checks())
+
+    def competitors(self):
+        self.conflict('begin', '--context', str(self.context_path))
+        self.conflict('complete', '--attempt', self.attempt_id,
+                      '--review', str(self.review_path))
+        self.conflict('rework', '--context', str(self.context_path))
+        self.conflict('status', '--attempt', self.attempt_id)
+
+    def test_complete_has_one_owner_and_conflicting_commands_do_not_write(self):
+        owner = self.pause('completion-intent', 'complete', '--attempt', self.attempt_id,
+                           '--review', str(self.review_path))
+        self.competitors()
+        result = self.finish(owner)
+        self.assertEqual(self.attempt_id, result['attempt_id'])
+        self.assertEqual('completed-awaiting-commit', result['progress'])
+        attempt, events = self.retained(self.initial_attempt, self.initial_events)
+        self.assertEqual(self.after, self.tasks.read_bytes())
+        self.assertEqual(['first', 'second'], self.checks())
+        for kind in ('completion-intent', 'checkbox-applied', 'completion'):
+            self.assertEqual(1, sum(event['kind'] == kind for event in events))
+        self.call('complete')
+        _, current = self.retained(attempt, events)
+        for kind in ('completion-intent', 'checkbox-applied', 'completion'):
+            self.assertEqual(1, sum(event['kind'] == kind for event in current))
+        self.assertEqual(['first', 'second'] * 2, self.checks())
+
+    def test_begin_has_one_owner_with_all_competitors_blocked(self):
+        # The setUp attempt belongs to another disposable fixture. Create a
+        # fresh clean repository for an actual first-entry competition.
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture = SingleTaskFixture(temporary.name)
+        self.root = self.fixture.root
+        self.tasks = self.fixture.feature/'tasks.md'
+        (self.root/'.gitignore').write_text('.symphony/\n')
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: competing entry baseline')
+        self.context = self.fixture.context()
+        self.context_path = self.fixture.private/'context.json'
+        self.context_path.write_bytes(canonical_bytes(self.context))
+        self.log = self.fixture.private/'checks.jsonl'
+        self.review_path = self.fixture.private/'review.json'
+        before = self.tasks.read_bytes()
+        owner = self.pause('entry', 'begin', '--context', str(self.context_path))
+        self.competitors()
+        value = self.finish(owner)
+        self.attempt_id = value['attempt_id']
+        attempt, events = self.saved()
+        self.assertEqual('active', attempt['progress'])
+        self.assertEqual(['entry'], [event['kind'] for event in events])
+        self.assertEqual(before, self.tasks.read_bytes())
+        result = self.cli('begin', '--context', str(self.context_path))
+        self.assertEqual(3, result.returncode)
+        current, appended = self.saved()
+        self.assertEqual(attempt, current)
+        self.assertEqual(events, appended[:len(events)])
+
+    def prepare_rework(self):
+        self.complete()
+        implementation = self.commit()
+        self.bind(implementation)
+        self.call('resume')
+        predecessor = self.attempt_id
+        old = self.saved()
+        self.context.update(mode='owner-authorized rework', prior_attempt_id=predecessor,
+                            prior_implementation_commit=implementation,
+                            rework_approval={'owner_ref': self.fixture.identities['owner'],
+                                            'evidence_ref': 'synthetic:explicit-correction'})
+        self.context['approval']['context_digest'] = context_digest(self.context)
+        self.context_path.write_bytes(canonical_bytes(self.context))
+        return predecessor, old
+
+    def test_rework_has_one_owner_and_preserves_predecessor_history(self):
+        predecessor, old = self.prepare_rework()
+        before = self.tasks.read_bytes()
+        owner = self.pause('entry', 'rework', '--context', str(self.context_path))
+        self.competitors()
+        value = self.finish(owner)
+        self.assertEqual('owner-authorized rework', value['mode'])
+        self.assertEqual(old, self.saved())
+        self.attempt_id = value['attempt_id']
+        attempt, events = self.saved()
+        self.assertEqual(predecessor, attempt['predecessor'])
+        self.assertEqual('active', attempt['progress'])
+        self.assertEqual(['entry'], [event['kind'] for event in events])
+        self.assertEqual(before, self.tasks.read_bytes())
+        result = self.cli('rework', '--context', str(self.context_path))
+        self.assertEqual(3, result.returncode)
+        self.assertEqual(attempt, self.saved()[0])
+
+    def test_killed_owner_releases_lock_and_same_attempt_resumes(self):
+        owner = self.pause('completion-intent', 'complete', '--attempt', self.attempt_id,
+                           '--review', str(self.review_path))
+        self.competitors()
+        owner.kill()
+        stdout, stderr = owner.communicate(timeout=5)
+        self.assertLess(owner.returncode, 0)
+        self.assertEqual(('', ''), (stdout, stderr))
+        attempt, events = self.saved()  # Actual reacquisition after SIGKILL.
+        self.assertEqual('completion-prepared', attempt['progress'])
+        self.assertEqual(self.before, self.tasks.read_bytes())
+        value = self.call('resume')
+        self.assertEqual(self.attempt_id, value['attempt_id'])
+        self.assertEqual(self.after, self.tasks.read_bytes())
+        _, current = self.retained(attempt, events)
+        self.assertEqual(['first', 'second'] * 2, self.checks())
+        for kind in ('completion-intent', 'completion'):
+            self.assertEqual(1, sum(event['kind'] == kind for event in current))
+
+    def persistence_failure(self, boundary):
+        injection = r'''import os,pathlib,runpy,sqlite3,stat,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+import single_task_state as state
+boundary=sys.argv.pop(2)
+connect=sqlite3.connect
+fsync=state.os.fsync
+fired=False
+class FailingConnection(sqlite3.Connection):
+    def execute(self,sql,*args,**kwargs):
+        global fired
+        result=super().execute(sql,*args,**kwargs)
+        if (boundary=='sqlite-intent' and not fired and sql.startswith('INSERT INTO events')
+                and args[0][2]=='completion-intent'):
+            fired=True
+            raise sqlite3.OperationalError('synthetic durable intent failure')
+        return result
+def failing_connect(*args,**kwargs):
+    kwargs['factory']=FailingConnection
+    return connect(*args,**kwargs)
+def failing_fsync(fd):
+    global fired
+    target=os.fstat(fd)
+    tasks=pathlib.Path('specs/synthetic/tasks.md')
+    if not fired and boundary=='publication-flush' and stat.S_ISREG(target.st_mode):
+        directory=pathlib.Path('.symphony/single-task/publication')
+        if directory.exists() and any(p.stat().st_ino==target.st_ino for p in directory.iterdir()):
+            fired=True
+            raise OSError('synthetic publication flush failure')
+    if (not fired and boundary=='marker-directory-flush' and stat.S_ISDIR(target.st_mode)
+            and b'[x] T001' in tasks.read_bytes()):
+        fired=True
+        raise OSError('synthetic marker directory flush failure')
+    return fsync(fd)
+sqlite3.connect=failing_connect
+state.os.fsync=failing_fsync
+sys.argv=sys.argv[1:]
+runpy.run_path(sys.argv[0],run_name='__main__')
+'''
+        result = self.cli(boundary, 'complete', '--attempt', self.attempt_id,
+                          '--review', str(self.review_path), injection=injection)
+        value = self.outcome(result)
+        self.assertEqual(6, result.returncode, value)
+        self.assertEqual('persistence_failure', value['errors'][0]['code'])
+        attempt, events = self.retained(self.initial_attempt, self.initial_events)
+        # Persistence failure is reported safely without trying to journal via
+        # the failed durability layer. The last successful seal is recoverable.
+        self.assertEqual('not-run', value['local_verification'])
+        expected = 'acceptance-recorded' if boundary == 'sqlite-intent' else 'completion-prepared'
+        self.assertEqual(expected, attempt['progress'])
+        self.assertEqual(self.after if boundary == 'marker-directory-flush' else self.before,
+                         self.tasks.read_bytes())
+        self.assertEqual(0, sum(event['kind'] == 'completion' for event in events))
+        self.call('resume')
+        _, recovered = self.retained(attempt, events)
+        self.assertEqual(self.after, self.tasks.read_bytes())
+        self.assertEqual(['first', 'second'] * 2, self.checks())
+        for kind in ('completion-intent', 'completion'):
+            self.assertEqual(1, sum(event['kind'] == kind for event in recovered))
+
+    def test_sqlite_intent_failure_retains_acceptance_and_recovers(self):
+        self.persistence_failure('sqlite-intent')
+
+    def test_publication_flush_failure_retains_intent_and_recovers(self):
+        self.persistence_failure('publication-flush')
+
+    def test_marker_directory_flush_failure_retains_intent_and_recovers(self):
+        self.persistence_failure('marker-directory-flush')
