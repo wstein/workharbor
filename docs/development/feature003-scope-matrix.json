@@ -1063,6 +1063,47 @@
       "full_suite_green": false,
       "owner_identity_authenticated": false,
       "live_dispatch_verified": false
+    },
+    {
+      "task": "T014",
+      "source_commit": "2d846c90e946a4a8e6e82d0444076d4b0ddeb9ad",
+      "status": "locally implemented; independent coherent draft review clear; exact marker identity audit pending",
+      "scope_cases": 81,
+      "scope_passes": 81,
+      "original_T014_cases_pass": 35,
+      "scope_raw_exit": 0,
+      "input_revision": "sha256:429a127deda0b7b91c4e8a40ec29f426b8a5de477faec096428e0231d1f224b6",
+      "source_snapshot_stable": true,
+      "scope_execution_parent_commit": "5f7bacb31e2958557b0e1316c11525df034e0d97",
+      "scope_execution_qualification": "Executed complete candidate working-tree source before freezing commitmetadata; code/test bytes unchanged when committed as source_commit. This snapshot is not claimed as the post-commit Git snapshot.",
+      "inspect_cases": 7,
+      "inspect_passes": 7,
+      "inspect_raw_exit": 0,
+      "inspect_execution_source_commit": "2d846c90e946a4a8e6e82d0444076d4b0ddeb9ad",
+      "future_inspect_after_completion": "Separate T017 completion remains command_unavailable; first8-case inspect run had7passes and its unchanged completion-dependent body assertion.",
+      "evidence": [
+        {
+          "path": "/private/tmp/workharbor-003-t014-raw.json",
+          "sha256": "38db97189593dd1bbabfe6322ea823b6eda9622333a5e366c5b58f4853789445"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t014-inspect-seven.log",
+          "sha256": "080de188c787aabb3cfc17a94aa9ab07dabe3feb5e6267217fa1045595055c03"
+        }
+      ],
+      "files": {
+        "scripts/single_task_scope.py": "9e5f3f05e6f970128beb84274ad584ccae16a66bf21cf048ded731a0128a52b5",
+        "scripts/single_task.py": "80ad42ebcd55c2030a5ec1c0923adc24ffca2798427506e5a3666c86b09d951e",
+        "tests/test_single_task_scope.py": "f2c0e1614fc9ed04cacb4ee63c4970707818f0a158b169cd889fd0c0d33b67a7",
+        "tests/test_single_task.py": "1d7658eb573c8132d6451bf29b58a537620375c27ea8d09236778fbca8227937"
+      },
+      "errors": 0,
+      "skips": 0,
+      "failed_subtests": 0,
+      "approved_red_wrapper_executed": false,
+      "full_suite_green": false,
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false
     }
   ]
 }
