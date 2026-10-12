@@ -390,6 +390,254 @@ class RecoveryTests(unittest.TestCase):
                 self.assertNotIn('sensitive-output', str(result))
 
 
+class PublicationTests(unittest.TestCase):
+    git = RecoveryTests.git
+    open = RecoveryTests.open
+    recovery = RecoveryTests.recovery
+    resume = RecoveryTests.resume
+    readiness = RecoveryTests.readiness
+
+    def setUp(self):
+        RecoveryTests.setUp(self)
+        import task_tracker as tracker
+        self.tracker_module = tracker
+        self.value.update(task_id='T015', issue={'repository': self.value['repository'], 'number': 17})
+        self.value['execution']['external_actions'] = ['publish-pr', 'write-evidence']
+        self.value.pop('package_digest')
+        self.value = package.build_package(self.value)
+        self.key = handoff.HandoffKey(self.value['repository'], '17',
+                                     self.value['package_digest'], 'guard-attempt')
+        self.request = dict(repository=str(self.root), source=self.commit, base_ref='refs/heads/main',
+            base='b' * 40, head_ref='refs/heads/task', head=self.commit)
+        self.source = dict(source_valid=True, blockers=[], snapshot=dict(root=str(self.root),
+            checker=self.commit, base='b' * 40, head=self.commit))
+        self.prepared = dict(status='PREPARED', source=self.commit, base='b' * 40,
+            head=self.commit, tree='c' * 40, checkout='d' * 40, check_exit=0)
+        self.writes = []
+        self.remote = {}
+        self.unknown = False
+        self.absent_unknown = False
+        test = self
+
+        class Publisher:
+            capabilities = {name: package.CapabilityEvidence(True, test.commit, True, None)
+                            for name in ('tracker.pr-publication', 'tracker.evidence')}
+
+            def find_pr(self, request):
+                return test.remote.get('pr')
+
+            def find_evidence(self, request):
+                return test.remote.get('evidence')
+
+            def write(self, kind, request, operation_key):
+                test.writes.append((kind, operation_key))
+                if not test.absent_unknown:
+                    test.remote[kind] = tracker.PublicationObject(kind + '-1',
+                        'https://github.com/fixture/offline/' + ('pull/19' if kind == 'pr'
+                        else 'issues/17#issuecomment-1'), handoff._digest(package.canonical_json(request['content'])))
+                if test.unknown or test.absent_unknown:
+                    raise tracker.WriteUnknown('sensitive-provider-output')
+
+            def publish_pr(self, request, *, operation_key):
+                self.write('pr', request, operation_key)
+
+            def write_evidence(self, request, *, operation_key):
+                self.write('evidence', request, operation_key)
+
+        class Authority:
+            def verify(self, reference, target):
+                return binding.ApprovalVerification(True, 'authenticated-provider', target, reference)
+
+        class Reviewer:
+            def verify(self, reference, target):
+                return handoff.IndependentReview(target, 'author-1', 'reviewer-1', reference,
+                                                 test.commit, 'authenticated-provider')
+
+        self.publisher, self.authority, self.reviewer = Publisher(), Authority(), Reviewer()
+
+    def publish(self, recovery, **ports):
+        return handoff.publish(recovery, self.value, {'root': self.root, 'head': self.commit}, {},
+            guard=ports.pop('guard', self.guard), readiness=self.readiness,
+            tracker=ports.pop('tracker', self.publisher), authority=ports.pop('authority', self.authority),
+            reviewer=ports.pop('reviewer', self.reviewer), implementer_id='author-1',
+            review_ref='sha256:' + 'a' * 64,
+            publication_ref=ports.pop('publication_ref', 'sha256:' + 'b' * 64),
+            validated_source=self.source, preparation=self.request, reviewed_checker=self.commit,
+            observe_refs=ports.pop('observe_refs', lambda: {'base': 'b' * 40, 'head': self.commit}),
+            pr_content=ports.pop('pr_content', {'title': 'fixture', 'body': 'scope/check evidence'}),
+            evidence_content={'checks': 'sha256:' + 'b' * 64}, **ports)
+
+    def prepared_port(self):
+        return patch('task_source.prepare_candidate', return_value=self.prepared)
+
+    def test_publication_and_evidence_reuse_after_uncertain_success(self):
+        self.unknown = True
+        with self.open() as journal, self.prepared_port() as prepare:
+            recovery = self.recovery(journal)
+            result = self.publish(recovery)
+            self.assertTrue(result['publication_valid'], result)
+            self.assertEqual('evidence-durable', result['progress'])
+            self.assertEqual(2, len(self.writes))
+            self.assertEqual(self.commit, prepare.call_args.args[1]['source'])
+        with self.open() as journal, self.prepared_port():
+            result = self.publish(self.recovery(journal, initialize=False))
+            self.assertTrue(result['publication_valid'], result)
+            self.assertEqual(2, len(self.writes))
+            self.assertEqual(self.commit, result['implementation_commit'])
+
+    def test_unknown_absence_retries_are_bounded_and_retained_before_blocker(self):
+        self.absent_unknown = True
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            result = self.publish(recovery)
+            self.assertFalse(result['publication_valid'])
+            self.assertEqual(4, len(self.writes))
+            self.assertEqual(1, len({key for _, key in self.writes}))
+            self.assertEqual('reviewed', result['progress'])
+            events = journal.events(self.key)
+            self.assertEqual('lifecycle-blocker', events[-1]['kind'])
+            self.assertTrue(any(event['kind'] == 'result' and event['payload']['status'] == 'write-unknown'
+                                for event in events[:-1]))
+            self.assertNotIn('sensitive-provider-output', str(events))
+
+    def test_missing_review_authority_capability_failed_check_and_ref_drift_write_nothing(self):
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            for ports in ({'reviewer': None}, {'authority': None}, {'tracker': None},
+                          {'observe_refs': lambda: {'base': 'f' * 40, 'head': self.commit}}):
+                self.assertFalse(self.publish(recovery, **ports)['publication_valid'])
+            with patch.object(self.guard, 'validate_acceptance', return_value=package.GuardValidation(False)):
+                self.assertFalse(self.publish(recovery)['publication_valid'])
+            self.assertEqual([], self.writes)
+
+    def test_changed_publication_input_conflicts_without_duplicate_write(self):
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            self.assertTrue(self.publish(recovery)['publication_valid'])
+            result = self.publish(recovery, pr_content={'title': 'changed', 'body': 'changed'})
+            self.assertFalse(result['publication_valid'])
+            self.assertEqual(2, len(self.writes))
+
+    def test_actual_authenticated_publication_facade_and_ambiguous_timeout(self):
+        import test_task_tracker as fixtures
+        tracker = self.tracker_module
+        test = self
+        class Host:
+            ambiguous = False
+            objects = {}
+            approval_payload = None
+            reads = []
+
+            def read(self, kind, identity):
+                self.reads.append(kind)
+                if kind == 'approval':
+                    return tracker.AuthenticatedRead('github', 'repo-1', 'host-verifier', 'e' * 40,
+                        fixtures.NOW, fixtures.encoded(self.approval_payload))
+                found = self.objects.get(kind)
+                matches = [] if found is None else [found] * (2 if self.ambiguous else 1)
+                return tracker.AuthenticatedRead('github', 'repo-1', 'host-verifier', 'e' * 40,
+                    fixtures.NOW, fixtures.encoded({'matches': matches}))
+
+            def write(self, kind, request, *, operation_key):
+                test.writes.append((kind, operation_key))
+                self.objects[kind] = dict(object_id=kind + '-1',
+                    url='https://github.com/fixture/offline/' + ('pull/19' if kind == 'pr'
+                    else 'issues/17#issuecomment-1'), identity=request['identity'],
+                    base=request['base'], head=request['head'], checker=request['checker'],
+                    base_ref=request['base_ref'], head_ref=request['head_ref'],
+                    head_repository=request['head_repository'],
+                    content_digest=handoff._digest(package.canonical_json(request['content'])))
+                if test.unknown:
+                    self.ambiguous = True
+                    raise tracker.WriteUnknown()
+        config = tracker.TrackerConfig('github', self.value['repository'], 'repo-1',
+                                       'owner-1', 'host-verifier', 'e' * 40)
+        host = Host()
+        actual = tracker.PublicationTracker(tracker.AuthenticatedTracker(config, host,
+            clock=lambda: fixtures.NOW), host)
+        actual.capabilities = self.publisher.capabilities
+        identity = dict(repository=self.value['repository'], issue='17', feature=self.value['feature'],
+            task_id='T015', package_digest=self.value['package_digest'], guard_attempt_id='guard-attempt',
+            implementation_commit=self.commit, content_digest='a' * 64)
+        common = dict(identity=identity, base='b' * 40, head=self.commit, checker=self.commit,
+                      base_ref='refs/heads/main', head_ref='refs/heads/task',
+                      head_repository=self.value['repository'])
+        requests = dict(pr={**common, 'content': {'title': 'fixture', 'body': 'scope/check evidence'}},
+                        evidence={**common, 'content': {'checks': 'sha256:' + 'b' * 64}})
+        digest = handoff._digest(package.canonical_json(dict(requests=requests,
+            preparation_tree='c' * 40, checks_ref='sha256:' + 'b' * 64)))
+        from dataclasses import asdict
+        target = tracker.DecisionTarget(self.value['repository'], self.value['feature'], 'T015',
+            'publication', self.commit, self.value['package_digest'], digest)
+        url = 'https://github.com/fixture/offline/issues/17#issuecomment-1'
+        host.approval_payload = dict(object_id='comment-1', repository=self.value['repository'],
+            actor_id='owner-1', state='approved', created_at=900, decided_at=900, updated_at=900,
+            expires_at=2000, target=asdict(target))
+        reference = tracker.ApprovalReference('comment-1', url,
+            handoff._digest(fixtures.encoded(host.approval_payload)), target)
+        authority = tracker.ApprovalAuthority(actual.reader, self.value['feature'], 'T015', {url: reference})
+        self.unknown = True
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            result = self.publish(recovery, tracker=actual, authority=authority, publication_ref=url)
+            self.assertFalse(result['publication_valid'])
+            self.assertEqual(1, len(self.writes))
+            statuses = [event['payload']['status'] for event in journal.events(self.key)
+                        if event['kind'] == 'result']
+            self.assertIn('ambiguous', statuses)
+            self.assertEqual('reviewed', result['progress'])
+            self.assertIn('approval', host.reads)
+            host.objects.clear()
+            host.ambiguous = False
+            retry = self.publish(recovery, tracker=actual, authority=authority, publication_ref=url)
+            self.assertFalse(retry['publication_valid'])
+            self.assertEqual(1, len(self.writes))
+
+    def test_ref_drift_before_evidence_and_nonindependent_review_block(self):
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            class SameActor:
+                def verify(self, reference, target):
+                    return handoff.IndependentReview(target, 'author-1', 'author-1', reference,
+                        'e' * 40, 'authenticated-provider')
+            self.assertFalse(self.publish(recovery, reviewer=SameActor())['publication_valid'])
+            self.assertEqual([], self.writes)
+            result = self.publish(recovery, observe_refs=lambda: {
+                'base': 'b' * 40 if not self.writes else 'f' * 40, 'head': self.commit})
+            self.assertFalse(result['publication_valid'])
+            self.assertEqual('published', result['progress'])
+            self.assertEqual(1, len(self.writes))
+
+    def test_preparation_failure_and_wrong_checker_write_nothing(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.prepared['check_exit'] = 1
+            with self.prepared_port():
+                self.assertFalse(self.publish(recovery)['publication_valid'])
+            self.prepared['check_exit'] = 0
+            self.request['source'] = 'f' * 40
+            with self.prepared_port():
+                self.assertFalse(self.publish(recovery)['publication_valid'])
+            self.assertEqual([], self.writes)
+
+    def test_interruption_after_remote_write_reconciles_existing_object(self):
+        with self.open() as journal, self.prepared_port():
+            recovery = self.recovery(journal)
+            def interrupted(*args):
+                if args[1].startswith('publish-pr:'):
+                    raise KeyboardInterrupt()
+                return original(*args)
+            original = journal.result
+            with patch.object(journal, 'result', side_effect=interrupted):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.publish(recovery)
+            self.assertEqual(1, len(self.writes))
+        with self.open() as journal, self.prepared_port():
+            result = self.publish(self.recovery(journal, initialize=False))
+            self.assertTrue(result['publication_valid'], result)
+            self.assertEqual(2, len(self.writes))
+
+
 class JournalTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

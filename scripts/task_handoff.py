@@ -28,6 +28,8 @@ import single_task_state as durable
 from single_task_state import InvalidState, PersistenceFailure, StateConflict
 import approval_binding as binding
 import task_package as package
+import task_tracker as tracker_ports
+import task_source
 
 
 LIMIT = 1024 * 1024
@@ -508,6 +510,173 @@ class Recovery:
             self.journal.append(self.key, 'lifecycle-blocker', {'code': code})
             result.update(self.status(), blockers=[{'code': code}])
         return result
+
+
+@dataclass(frozen=True)
+class IndependentReview:
+    """Authenticated host verifier result; review must identify a distinct actor."""
+    target: binding.ApprovalTarget
+    author_id: str
+    reviewer_id: str
+    evidence_ref: str
+    verifier_revision: str
+    assurance: str
+
+
+def _publication_operation(recovery, tracker, kind, request, before_write):
+    """Reconcile authoritative exact state before every bounded write attempt."""
+    journal, key = recovery.journal, recovery.key
+    operation_key = ('publish-pr:' if kind == 'pr' else 'write-evidence:') + tracker_ports.publication_identity(
+        request['identity'])
+    intent = {name: request[name] for name in
+              ('identity', 'base', 'head', 'checker', 'base_ref', 'head_ref', 'head_repository')}
+    intent['content_digest'] = _digest(package.canonical_json(request['content']))
+    journal.intent(key, operation_key, intent)
+    find = tracker.find_pr if kind == 'pr' else tracker.find_evidence
+    write = tracker.publish_pr if kind == 'pr' else tracker.write_evidence
+    while True:
+        recovery._ownership()
+        previous = journal.operation(key, operation_key)
+        if previous['status'] == 'ambiguous':
+            raise StateConflict('Ambiguous publication retained; explicit operator reconciliation required')
+        try:
+            found = find(request)
+        except tracker_ports.TrackerBlocked as error:
+            if str(error) in ('ambiguous-publication-match', 'conflicting-publication-match'):
+                journal.result(key, operation_key, 'ambiguous', {'reconcile': 'operator-required'})
+            raise StateConflict('Remote publication reconciliation blocked') from None
+        except Exception:
+            raise StateConflict('Remote publication lookup unavailable') from None
+        previous = journal.operation(key, operation_key)
+        if found is not None:
+            if (type(found) is not tracker_ports.PublicationObject
+                    or found.content_digest != intent['content_digest']):
+                raise StateConflict('Conflicting remote publication retained')
+            journal.result(key, operation_key, 'succeeded', asdict(found))
+            return operation_key, found
+        if previous['status'] == 'succeeded':
+            raise StateConflict('Recorded publication disappeared; retain evidence')
+        attempts = sum(event['kind'] == 'publication-attempt'
+                       and event['payload']['operation_key'] == operation_key
+                       for event in journal.events(key))
+        if attempts >= 4:  # Initial write plus at most three reconciled retries.
+            raise StateConflict('Publication retry limit reached; operator reconciliation required')
+        if previous['status'] in ('intent', 'write-unknown') and attempts:
+            journal.result(key, operation_key, 'safe-retry', {'authoritative_absence': True})
+        before_write()
+        recovery._ownership()
+        journal.append(key, 'publication-attempt', dict(operation_key=operation_key, attempt=attempts + 1))
+        try:
+            write(request, operation_key=operation_key)
+        except tracker_ports.WriteUnknown:
+            journal.result(key, operation_key, 'write-unknown', {'reconcile': 'exact-identity-content'})
+        else:
+            # Even a returned write receipt is uncertain until authenticated lookup.
+            journal.result(key, operation_key, 'write-unknown', {'reconcile': 'exact-identity-content'})
+
+
+def publish(recovery, value, snapshot, evidence, *, guard=None, readiness=None, tracker=None,
+            authority=None, reviewer=None, implementer_id=None, review_ref=None, publication_ref=None,
+            validated_source=None, preparation=None, reviewed_checker=None, observe_refs=None,
+            pr_content=None, evidence_content=None, live=False):
+    """Freshly verify one existing completion, then reconcile PR and evidence.
+
+    No provider or adapter is selected automatically. Preparation uses the accepted
+    checker helper; its pin identifies exact code and grants no owner authority.
+    The caller supplies separately authenticated review/publication ports. Final
+    labels are a later operation, never part of this function.
+    """
+    result = dict(recovery.status(), publication_valid=False, execution_eligible=False,
+                  authenticated_approval=None, independent_review=None, live_execution=None,
+                  pr=None, published_evidence=None, blockers=[])
+    code = 'publication-revalidation-blocked'
+    try:
+        resumed = recovery.resume(value, snapshot, evidence, guard=guard, readiness=readiness, live=live)
+        if not resumed['resume_valid'] or not resumed['verification_valid']:
+            result.update(resumed, publication_valid=False)
+            return result
+        code = 'publication-capability-unavailable'
+        for name in ('tracker.pr-publication', 'tracker.evidence'):
+            _, blocker = package._capability_evidence(name, getattr(tracker, 'capabilities', {}).get(name), live)
+            if blocker:
+                raise StateConflict('Demonstrated publication capability required')
+        code = 'publication-preparation-blocked'
+        if (not _matches(reviewed_checker, r'[0-9a-f]{40}') or type(preparation) is not dict
+                or preparation.get('source') != reviewed_checker
+                or preparation.get('head') != resumed['verification_head']
+                or preparation.get('base_ref') != 'refs/heads/main'):
+            raise StateConflict('Exact reviewed checker and source pins required')
+        prepared = task_source.prepare_candidate(validated_source, preparation)
+        if (type(prepared) is not dict or prepared.get('status') != 'PREPARED'
+                or prepared.get('check_exit') != 0
+                or any(prepared.get(name) != preparation.get(name) for name in ('source', 'base', 'head'))
+                or not _matches(prepared.get('tree'), r'[0-9a-f]{40}')):
+            raise StateConflict('Checked pinned prepublication preparation required')
+        identity = dict(repository=value['repository'], issue=recovery.key.issue, feature=value['feature'],
+            task_id=value['task_id'], package_digest=value['package_digest'],
+            guard_attempt_id=resumed['rework_attempt_id'] or recovery.key.guard_attempt_id,
+            implementation_commit=resumed['rework_implementation_commit'] or resumed['implementation_commit'],
+            content_digest=resumed['rework_content_digest'] or resumed['content_digest'])
+        tracker_ports.publication_identity(identity)
+        requests = {kind: dict(identity=identity, base=prepared['base'], head=prepared['head'],
+                    checker=reviewed_checker, base_ref=preparation['base_ref'],
+                    head_ref=preparation['head_ref'], head_repository=value['repository'], content=content)
+                    for kind, content in (('pr', pr_content), ('evidence', evidence_content))}
+        if any(type(request['content']) is not dict for request in requests.values()):
+            raise StateConflict('Explicit publication content required')
+        binding_digest = _digest(package.canonical_json(dict(requests=requests,
+            preparation_tree=prepared['tree'], checks_ref=resumed['checks_ref'])))
+        code = 'publication-review-or-authorization-blocked'
+        review_target = binding.ApprovalTarget('review', prepared['head'], value['package_digest'], binding_digest)
+        publication_target = binding.ApprovalTarget('publication', prepared['head'],
+                                                   value['package_digest'], binding_digest)
+        if any(not reference or not package._reference(reference) for reference in (review_ref, publication_ref)):
+            raise StateConflict('Explicit review and publication references required')
+
+        def proofs():
+            review = _guard_call(reviewer.verify, review_ref, review_target) if reviewer else None
+            permission = _guard_call(authority.verify, publication_ref, publication_target) if authority else None
+            if (type(review) is not IndependentReview or review.target != review_target
+                    or review.assurance != 'authenticated-provider' or review.author_id != implementer_id
+                    or not tracker_ports._id(review.author_id) or not tracker_ports._id(review.reviewer_id)
+                    or review.author_id == review.reviewer_id or review.evidence_ref != review_ref
+                    or not _matches(review.verifier_revision, r'[0-9a-f]{40}')
+                    or type(permission) is not binding.ApprovalVerification
+                    or permission.approved is not True or permission.assurance != 'authenticated-provider'
+                    or permission.target != publication_target or not permission.evidence_ref
+                    or not package._reference(permission.evidence_ref)):
+                raise StateConflict('Fresh independent review and owner publication permission required')
+            return review, permission
+
+        review, permission = proofs()
+        if not {'publish-pr', 'write-evidence'} <= set(value['execution']['external_actions']):
+            raise StateConflict('Package publication actions absent')
+        proof = dict(review=asdict(review), permission=asdict(permission), binding_digest=binding_digest)
+        recovery.journal.append(recovery.key, 'publication-proof', proof)
+        recovery.advance('reviewed', dict(candidate=prepared['head'], evidence_ref='sha256:' + _digest(_encode(proof))))
+
+        def before_write():
+            nonlocal code
+            code = 'publication-fresh-proof-blocked'
+            recovery._ready(readiness, 'post-check', recovery.status())
+            proofs()
+            if not callable(observe_refs) or _guard_call(observe_refs) != {
+                    'base': prepared['base'], 'head': prepared['head']}:
+                raise StateConflict('Publication refs moved; retain evidence')
+
+        for kind, target in (('pr', 'published'), ('evidence', 'evidence-durable')):
+            code = 'publication-remote-reconciliation-blocked'
+            operation_key, found = _publication_operation(recovery, tracker, kind, requests[kind], before_write)
+            recovery.advance(target, {'operation_key': operation_key})
+            result['pr' if kind == 'pr' else 'published_evidence'] = asdict(found)
+        result.update(recovery.status(), publication_valid=True, blockers=[],
+                      independent_review=review.evidence_ref, authenticated_approval=permission.evidence_ref)
+    except (PersistenceFailure, InvalidState):
+        raise
+    except Exception:
+        recovery.journal.append(recovery.key, 'lifecycle-blocker', {'code': code})
+        result.update(recovery.status(), blockers=[{'code': code}])
+    return result
 
 
 def _schema(connection):
