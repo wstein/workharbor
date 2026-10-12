@@ -133,6 +133,23 @@ class SourceTests(unittest.TestCase):
         self.commit('scripts/test_check_ci.py', 'pass\n')
         self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
 
+    def test_post_adoption_base_allows_docs_but_revalidates_operator_and_protected_content(self):
+        policy = self.adopt_fixture_policy()
+        base = self.commit('docs/adopted-base-advance.md')
+        self.git('checkout', '--quiet', '--detach', policy)
+        head = self.commit('docs/post-adoption-proposal.md')
+        context = self.merge(base, head)
+        self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+        for name, mode in (('scripts/single_task.py', None),
+                           ('scripts/test_check_ci.py', None),
+                           ('scripts/check_ci.py', 0o755)):
+            with self.subTest(path=name, mode=mode):
+                self.git('checkout', '--quiet', '--detach', base)
+                changed = self.commit(name, (self.root/name).read_text() + ('\n' if mode is None else ''), mode)
+                context = self.merge(changed, head)
+                self.assertEqual(context, ci.source_context(self.root, *context))
+                self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+
     def test_operator_suite_requires_nonempty_strict_green_for_every_tool(self):
         for body, expected in ((
                 'import unittest\nclass Probe(unittest.TestCase):\n'
