@@ -555,7 +555,27 @@ def artifacts_binding_fields(self):
         self.exercise('artifacts', 'approval_digest')
 
 
+def schema_valid_rework(self):
+    self.context.update(mode='owner-authorized rework', prior_attempt_id='synthetic-prior-attempt',
+                        prior_implementation_commit=self.fixture.baseline,
+                        rework_approval={'owner_ref': self.fixture.identities['owner'],
+                                        'evidence_ref': 'synthetic:explicit-corrective-approval'})
+    self.seal()
+    self.exercise('schema', None)
+
+
+def schema_unicode_feature(self):
+    self.context['feature'] = '_équipe'
+    for name, record in self.context['reviewed_artifacts'].items():
+        record['path'] = f'specs/_équipe/{name}'
+    self.context['source_assertion']['path'] = 'specs/_équipe/tasks.md'
+    self.seal()
+    self.exercise('schema', None)
+
+
 EXTRA_CASES = {
+    'schema_unicode_feature': (schema_unicode_feature, 'schema', None, 'T006'),
+    'schema_valid_rework': (schema_valid_rework, 'schema', None, 'T006'),
     'schema_valid': (schema_valid, 'schema', None, 'T006'),
     'canonical_vector': (canonical_vector, 'canonical', None, 'T006'),
     'schema_nested_fields': (schema_nested, 'schema', 'context_schema', 'T006'),
