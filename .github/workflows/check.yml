@@ -5,9 +5,38 @@ permissions:
 jobs:
   bootstrap:
     runs-on: ubuntu-24.04
+    env:
+      # Owner configuration after exact independent review; never a proposal pin.
+      WORKHARBOR_CI_POLICY_SOURCE: ${{ vars.WORKHARBOR_CI_POLICY_SOURCE }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Tests verify pinned legacy code and evidence against ancestor commits.
+          path: integration
           fetch-depth: 0
-      - run: python3 --version && python3 scripts/check_ci.py
+          persist-credentials: false
+      - name: Materialize the adopted policy source
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          pin = os.environ.get('WORKHARBOR_CI_POLICY_SOURCE', '')
+          if not re.fullmatch('[0-9a-f]{40}', pin):
+              raise SystemExit('Configure the independently reviewed WORKHARBOR_CI_POLICY_SOURCE pin.')
+          root = Path(os.environ['GITHUB_WORKSPACE']) / 'integration'
+          def git(*args):
+              return subprocess.check_output(['git', *args], cwd=root)
+          if git('cat-file', '-t', pin) != b'commit\n':
+              raise SystemExit('Policy pin must identify an available commit.')
+          entry = git('ls-tree', pin, '--', 'scripts/check_ci.py').split()
+          if (len(entry) != 4 or entry[0] not in (b'100644', b'100755')
+                  or entry[1] != b'blob' or entry[3] != b'scripts/check_ci.py'):
+              raise SystemExit('Policy checker must be a regular tracked file.')
+          git('worktree', 'add', '--detach', str(root.parent / 'trusted-policy'), pin)
+          PY
+      - name: Validate integration with the adopted policy
+        run: |
+          python3 trusted-policy/scripts/check_ci.py \
+            --root "$GITHUB_WORKSPACE/integration" \
+            --policy-source "$WORKHARBOR_CI_POLICY_SOURCE"
