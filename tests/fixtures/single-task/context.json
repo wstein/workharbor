@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "feature": "synthetic",
+  "task_id": "T002",
+  "mode": "implement",
+  "reviewed_artifacts": {},
+  "approval": {"owner_ref": "${owner_ref}", "evidence_ref": "${approval_ref}", "context_digest": "${context_digest}"},
+  "dependencies": ["T001"],
+  "source_assertion": {"path": "specs/synthetic/tasks.md", "sha256": "${tasks_sha256}", "excerpt": "${dependency_table}", "owner_ref": "${owner_ref}"},
+  "prerequisite_evidence": [],
+  "allowed_paths": ["followup.md"],
+  "semantic_constraints": ["Only write the synthetic followup; preserve the guide and all other task bytes."],
+  "checks": [{"id": "local-diff", "argv": ["git", "diff", "--check"], "cwd": ".", "timeout_seconds": 10, "expected_exit": 0}]
+}

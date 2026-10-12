@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "attempt_id": "${attempt_id}",
+  "task_id": "T002",
+  "context_digest": "${context_digest}",
+  "content_manifest_digest": "${content_manifest_digest}",
+  "reviewer_ref": "${reviewer_ref}",
+  "evidence_ref": "${review_ref}",
+  "approved": true
+}
