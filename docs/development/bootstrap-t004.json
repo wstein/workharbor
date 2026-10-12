@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "status": "proposal-only; T003 owner accepted and merged; T004 approval and dispatch baseline pending",
+  "feature": "003-single-task-entry",
+  "task": "T004",
+  "issue": 5,
+  "dependencies": [
+    "T003"
+  ],
+  "preparation_base": "586696f7cc1956d430647b918869fbf8caedd660",
+  "prerequisite": {
+    "implementation": "586696f7cc1956d430647b918869fbf8caedd660",
+    "base": "74ec3d91cc313aeca4e73919c7fc271ec7f4c0c5",
+    "pull_request": "https://github.com/wstein/workharbor-nxt/pull/32",
+    "owner_accepted": true,
+    "merged": true,
+    "state": "owner accepted and merged in PR32; sealed state/task blobs verified unchanged",
+    "merge": "a36bf7e1fc9b09bd07226078b7d70c5d299d9324",
+    "merged_by": "wstein",
+    "merged_at": "2026-10-12T01:59:26Z",
+    "merged_implementation": "e6cfd38594b14997c438a3ecf83712d582913b21"
+  },
+  "allowed_paths": [
+    "scripts/single_task.py"
+  ],
+  "completion_path": "specs/003-single-task-entry/tasks.md",
+  "completion_task": "T004",
+  "external_guard": {
+    "source_commit": "92471ee162599a4360436dec870b9b6ba3aa3c49",
+    "source_path": "scripts/single_task.py",
+    "sha256": "7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4",
+    "location": "operator-owned regular file outside the implementation worktree; hash before every use",
+    "commands": [
+      "begin",
+      "verify",
+      "complete"
+    ]
+  },
+  "verifier_sha256": "39aaa54427eb12085b65513bcb64e8d1cc56f50e7dfb3e396c8bf8be9752b074",
+  "frozen_files": {
+    "tests/test_harness.py": "730ac1101c8b1b25f47cf2620416fedd9f6dcb167d75622ba498e486bea37442",
+    "tests/test_single_task.py": "783959757b0c0ab948e446d0daff93d709c35d0ee254d8823f70405376570c30",
+    "tests/test_single_task_state.py": "dec8d23e2e5dd40641c14268216583d93283360668bc5353556e5e6dc4002c39",
+    "tests/test_symphony.py": "ea935c48fb430a1ca3d84ce6a488daeedd84c4c7a7e9ab21285ccbd27a0da428",
+    "scripts/single_task_state.py": "d20e07e054ff5569f581a7cf5727479839ad5dc92aa57694f0b1409aa1589123",
+    "scripts/verify_t003_state.py": "3bba2eeff6d6e1abe14ead36ce98c5f4e2a749fbb71f7d4c03012af9e6e78b0f",
+    "scripts/verify_t002_red.py": "c863cb1f16f5c0eda3c57631e24401612fd56abf49708dd294b389974a9cfffb",
+    "docs/development/bootstrap-t002.json": "597b2c2d31f90afd8118b0e593f9cf1b998ec1bfd7f21558e5cff45ab0596461",
+    "docs/development/bootstrap-t003.json": "b5cc969a053f461ccd2c0bcda68dac075d036adad6cebfc1e7c4b7689ee91ba6",
+    "specs/003-single-task-entry/spec.md": "a5303ca858283d9103e823fb95b6241412f7924c489845090c4cb84bf6fea296",
+    "specs/003-single-task-entry/plan.md": "4685b2f3e336eb67c478186304a92f760025f02b1cc300c36679199d24579bb7",
+    "specs/003-single-task-entry/contracts/cli.md": "e12ad76312bce961cec8d33138694b34e3b70f87e958ce355d49a18bf68208cf",
+    "tests/fixtures/single-task/context.json": "139a942cdbbaf82819f929c1c75b2077d696c68163a68b5ee5aef104e924202b",
+    "tests/fixtures/single-task/plan.md": "fb8817d2daf98dc219999e37c81cd31040d8629812ef9f83e31af07fedbc2334",
+    "tests/fixtures/single-task/prerequisite.json": "53e0bd9301b35af57d3dca1b416f0db4a2d09329180e07193b9f8574fe6ed47d",
+    "tests/fixtures/single-task/review.json": "1ab04c4a6d0665bf4df151048b86e9fc83b25756f22973eba7c21be2ffa9a4fb",
+    "tests/fixtures/single-task/spec.md": "753f89072133ad610954a7d515902421883369a75133642cb5f96ee0430c8bdc",
+    "tests/fixtures/single-task/tasks.md": "cd190c73473a145a12a9626312753348927b0a8d2459c0d541c4f98a13751079"
+  },
+  "baseline_test_ids": [
+    "test_harness.HarnessTests.test_broken_document_link_rejected",
+    "test_harness.HarnessTests.test_development_orchestrator_rejected_in_product",
+    "test_harness.HarnessTests.test_provider_dependency_rejected_outside_adapter",
+    "test_harness.HarnessTests.test_repository_checker_validates_required_manifest",
+    "test_harness.HarnessTests.test_workspace_path_traversal_rejected",
+    "test_single_task.SingleTaskFixtureTests.test_fixture_creation_rejects_network",
+    "test_single_task.SingleTaskFixtureTests.test_git_configuration_hooks_and_signing_are_isolated",
+    "test_single_task.SingleTaskFixtureTests.test_protected_features_remain_unchanged",
+    "test_single_task.SingleTaskFixtureTests.test_runtime_context_prerequisite_review",
+    "test_single_task.SingleTaskFixtureTests.test_tracker_credentials_are_removed_without_logging",
+    "test_single_task.SingleTaskFixtureTests.test_two_task_feature",
+    "test_single_task.SingleTaskTests.test_absent_file_differs_from_sentinel_contents",
+    "test_single_task.SingleTaskTests.test_acceptance_cannot_mutate_scope_or_complete",
+    "test_single_task.SingleTaskTests.test_committed_violation_hidden_by_revert",
+    "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task",
+    "test_single_task.SingleTaskTests.test_dirty_checkout_and_unknown_task_rejected",
+    "test_single_task.SingleTaskTests.test_early_completion_without_evidence_rejected",
+    "test_single_task.SingleTaskTests.test_failed_acceptance_does_not_complete",
+    "test_single_task.SingleTaskTests.test_historical_other_task_hidden_by_revert",
+    "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update",
+    "test_single_task.SingleTaskTests.test_mode_change_requires_rework_even_without_git_filemode",
+    "test_single_task.SingleTaskTests.test_reject_other_checkbox_and_selected_description",
+    "test_single_task.SingleTaskTests.test_reject_outside_scope_committed_and_untracked",
+    "test_single_task.SingleTaskTests.test_staged_other_task_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected",
+    "test_symphony.SymphonyTests.test_creation_hook_uses_pinned_nondefault_commit",
+    "test_symphony.SymphonyTests.test_prepare_fails_without_environment",
+    "test_symphony.SymphonyTests.test_render_preserves_secret_reference",
+    "test_symphony.SymphonyTests.test_retry_can_repair_failed_checks"
+  ],
+  "authored_green_ids": [
+    "test_single_task_state.SingleTaskStateTests.test_corrupt_state_retained",
+    "test_single_task_state.SingleTaskStateTests.test_unsupported_state_retained",
+    "test_single_task_state.SingleTaskStateTests.test_legacy_state_retained",
+    "test_single_task_state.SingleTaskStateTests.test_sanitized_structured_error",
+    "test_single_task_state.SingleTaskStateTests.test_invalid_entry_preserves_tasks"
+  ],
+  "retained_red_cases": [
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_one_lock_owner",
+      "failure": "'usage:' not found in ''",
+      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
+      "successor": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_lock_released_after_exit",
+      "failure": "'usage:' not found in ''",
+      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
+      "successor": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_transaction_rollback",
+      "failure": "'usage:' not found in ''",
+      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
+      "successor": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_append_only_events",
+      "failure": "'usage:' not found in ''",
+      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
+      "successor": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_immutable_context",
+      "failure": "'usage:' not found in ''",
+      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
+      "successor": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+    }
+  ],
+  "direct_green_ids": [
+    "__main__.CliBoundaryTests.test_legacy_success_envelope",
+    "__main__.CliBoundaryTests.test_argument_errors_are_safe_and_stable",
+    "__main__.CliBoundaryTests.test_deferred_commands_do_not_enter_or_execute",
+    "__main__.CliBoundaryTests.test_malformed_context_is_not_echoed",
+    "__main__.CliBoundaryTests.test_scope_blocker_exit_three",
+    "__main__.CliBoundaryTests.test_acceptance_exit_four_does_not_echo_output_or_argv",
+    "__main__.CliBoundaryTests.test_persistence_exit_six_is_safe",
+    "__main__.CliBoundaryTests.test_all_commands_share_nonblocking_store_lock",
+    "__main__.CliBoundaryTests.test_lock_released_after_cli_error",
+    "__main__.CliBoundaryTests.test_unsafe_lock_paths_rejected_without_external_writes",
+    "__main__.CliBoundaryTests.test_mixed_legacy_and_sqlite_is_never_adopted",
+    "__main__.CliBoundaryTests.test_legacy_acceptance_holds_lock_against_all_commands"
+  ],
+  "required_exit_categories": [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "stable_codes": {
+    "2": [
+      "invalid_arguments",
+      "command_unavailable"
+    ],
+    "3": [
+      "scope_blocker",
+      "state_blocker"
+    ],
+    "4": [
+      "acceptance_failed"
+    ],
+    "5": [
+      "concurrent_attempt"
+    ],
+    "6": [
+      "persistence_failure"
+    ]
+  },
+  "checks": [
+    [
+      "python3",
+      "scripts/verify_t004_cli.py"
+    ],
+    [
+      "python3",
+      "scripts/verify_t003_state.py"
+    ],
+    [
+      "python3",
+      "scripts/check_repo.py"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "cwd": ".",
+  "expected_exit": 0,
+  "raw_make_check_expected_exit": 2,
+  "raw_unittest_expected_exit": 1,
+  "handoff": "operator-assisted; no queue/push/merge/label authorization",
+  "owner_decisions_pending": [
+    "Approve this exact T004 output/error/lock matrix, direct verifier and retained-red transition.",
+    "Approve temporary lock-only legacy compatibility with expiry/migration at T010; no SQLite adoption or T003 API changes.",
+    "Bind final execution pin and prerequisite merge/content evidence before any T004 entry or queue."
+  ],
+  "authoritative_source_branch": "chore/issue-2-bootstrap-entry",
+  "authoritative_source_base": "5d1dc6563c7ae1f8479f01af0901c39792b3f8b8",
+  "prerequisite_merge": "a36bf7e1fc9b09bd07226078b7d70c5d299d9324",
+  "dispatch_baseline": null,
+  "prerequisite_seals": {
+    "scripts/single_task_state.py": {
+      "git_blob": "5a44b62723cb98568763331374d957e18f873133",
+      "sha256": "d20e07e054ff5569f581a7cf5727479839ad5dc92aa57694f0b1409aa1589123"
+    },
+    "specs/003-single-task-entry/tasks.md": {
+      "git_blob": "ee05afd7b22d1d849b77871a55e50e308e11cf42",
+      "sha256": "c180e72fbb9e0fba51579629657cd24aa41808ddec79d8a58c191dd6d451c6ab"
+    }
+  },
+  "source_guidance": {
+    "pull_request": "https://github.com/wstein/workharbor-nxt/pull/33",
+    "merged_by": "wstein",
+    "merge": "5d1dc6563c7ae1f8479f01af0901c39792b3f8b8",
+    "merged_at": "2026-10-12T02:13:31Z"
+  },
+  "preserved_concurrent_head": "b96421c9915bb0c69835efa8a01cf1654f1bc956",
+  "execution_pin_binding": "Final independently reviewed and published PR34 head SHA, recorded externally in owner approval; not approved by this preparation.",
+  "preparation_ci": {
+    "status": "exact preparation validation proposed in a separate reviewed CI commit; no T004 implementation acceptance",
+    "failed_runs": [
+      "https://github.com/wstein/workharbor-nxt/actions/runs/38194960688",
+      "https://github.com/wstein/workharbor-nxt/actions/runs/38194959152"
+    ],
+    "observed": "strict full green; T003 12 green; raw make check exit 2 with 41 tests and ten known T002 failures",
+    "runtime_checks_unchanged": true
+  },
+  "history_reconstruction": {
+    "reason": "GitHub PR34 rebase conflict replayed already accepted T003 CI commit; reconstruct proposal-only history on accepted source",
+    "base": "5d1dc6563c7ae1f8479f01af0901c39792b3f8b8",
+    "preserved_published_head": "b96421c9915bb0c69835efa8a01cf1654f1bc956",
+    "backup_branch": "backup/5-t004-remote-b96421c",
+    "preserved_ci_candidate": "da9968c88313a80f7a04b59148b3b4b5fa24b94a",
+    "publication": "same PR34 only after independent review, with exact predecessor lease; no task approval"
+  }
+}
