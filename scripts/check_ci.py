@@ -12,6 +12,7 @@ import importlib
 import json
 import os
 import re
+import runpy
 import shlex
 import subprocess
 import tempfile
@@ -214,9 +215,12 @@ def load_manifest(root):
     return value
 
 
-def flatten(suite):
-    for test in suite:
-        yield from flatten(test) if isinstance(test, unittest.TestSuite) else (test,)
+# Load the adjacent shared implementation by exact path, including under -I.
+_outcomes = runpy.run_path(str(Path(__file__).with_name('task_outcomes.py')))
+flatten = _outcomes['flatten']
+Outcomes = _outcomes['Outcomes']
+evaluate = _outcomes['evaluate']
+validate_collection = _outcomes['validate_collection']
 
 
 def collect(root):
@@ -232,61 +236,11 @@ def collect(root):
     return suite
 
 
-class Outcomes(unittest.TextTestResult):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.observed = []
-        self.failed_subtests = []
-
-    def addSuccess(self, test):
-        super().addSuccess(test)
-        self.observed.append((test.id(), 'pass', None))
-
-    def addFailure(self, test, error):
-        super().addFailure(test, error)
-        # Setup can alias or delegate to the test method. Require unittest's
-        # actual test dispatch, and exclude lifecycle dispatch even if setup
-        # itself calls _callTestMethod. Compare code objects, never frame names.
-        method = getattr(getattr(test, getattr(test, '_testMethodName', ''), None), '__code__', None)
-        dispatch = unittest.TestCase._callTestMethod.__code__
-        lifecycle = {getattr(owner, name).__code__ for owner in (unittest.TestCase, type(test))
-                     for name in ('_callSetUp', '_callTearDown', '_callCleanup')
-                     if hasattr(getattr(owner, name, None), '__code__')}
-        trace = error[2]
-        body = called = during_lifecycle = False
-        while trace is not None:
-            body = body or trace.tb_frame.f_code is method
-            called = called or trace.tb_frame.f_code is dispatch
-            during_lifecycle = during_lifecycle or trace.tb_frame.f_code in lifecycle
-            trace = trace.tb_next
-        kind = 'assertion' if error[0] is AssertionError and body and called and not during_lifecycle else 'other-failure'
-        self.observed.append((test.id(), kind, str(error[1])))
-
-    def addSubTest(self, test, subtest, error):
-        super().addSubTest(test, subtest, error)
-        if error is not None:
-            self.failed_subtests.append(test.id())
-
-
-def evaluate(ids, manifest, result):
-    expected = {case['id']: case['message'] for case in manifest['retained_assertion_failures']}
-    observed = {name: (kind, message) for name, kind, message in result.observed}
-    return (bool(ids) and len(ids) == len(set(ids))
-            and set(manifest['required_test_ids']) <= set(ids)
-            and result.testsRun == len(ids) and len(result.observed) == len(ids)
-            and set(observed) == set(ids)
-            and not (result.errors or result.skipped or result.expectedFailures or result.unexpectedSuccesses
-                     or result.failed_subtests)
-            and all(observed[name] == ('assertion', expected[name]) if name in expected
-                    else observed[name] == ('pass', None) for name in ids))
-
-
 def acceptance_suite(root):
     manifest = load_manifest(root)
     suite = collect(root)
     ids = [case.id() for case in flatten(suite)]
-    if not ids or len(ids) != len(set(ids)) or not set(manifest['required_test_ids']) <= set(ids):
-        raise ValueError('Empty, duplicate or missing required test discovery')
+    validate_collection(ids, manifest['required_test_ids'])
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     accepted = evaluate(ids, manifest, result)
     print(f'Acceptance: {result.testsRun} tests; {len(result.failures)} raw failures; '
@@ -297,14 +251,16 @@ def acceptance_suite(root):
 def source_identity(root, source):
     if not re.fullmatch('[0-9a-f]{40}', source) or git(root, 'cat-file', '-t', source) != b'commit\n':
         raise ValueError('Source must identify an exact available commit')
-    checker = Path(__file__)
-    entry = git(root, 'ls-tree', source, '--', 'scripts/check_ci.py').split()
-    mode = b'100755' if checker.stat().st_mode & 0o111 else b'100644'
-    if (len(entry) != 4 or entry[:2] != [mode, b'blob'] or checker.is_symlink()
-            or git(root, 'show', source + ':scripts/check_ci.py') != checker.read_bytes()
-            or (root/'scripts/check_ci.py').read_bytes() != checker.read_bytes()
-            or bool((root/'scripts/check_ci.py').stat().st_mode & 0o111) != (mode == b'100755')):
-        raise ValueError('Source pin must match loaded and checked checker code; it is not approval')
+    for name in ('check_ci.py', 'task_outcomes.py'):
+        checker = Path(__file__).with_name(name)
+        relative = 'scripts/' + name
+        entry = git(root, 'ls-tree', source, '--', relative).split()
+        mode = b'100755' if checker.stat().st_mode & 0o111 else b'100644'
+        if (len(entry) != 4 or entry[:2] != [mode, b'blob'] or checker.is_symlink()
+                or git(root, 'show', source + ':' + relative) != checker.read_bytes()
+                or (root/relative).read_bytes() != checker.read_bytes()
+                or bool((root/relative).stat().st_mode & 0o111) != (mode == b'100755')):
+            raise ValueError('Source pin must match loaded and checked runner code; it is not approval')
 
 
 def run(argv, root):

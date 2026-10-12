@@ -68,6 +68,33 @@ class PackageOutcomeTests(unittest.TestCase):
             result = self.run_check(changed, approved=[check])
         self.assertFalse(result['accepted']); launch.assert_not_called()
 
+    def test_check_order_is_bound_and_each_raw_exit_and_outcome_is_retained(self):
+        first = self.check()
+        second = dict(first, id='second-check')
+        result = outcomes.run_checks(self.root, [first, second], approved_checks=[first, second])
+        self.assertTrue(result['accepted'])
+        self.assertEqual(['fixture-check', 'second-check'], [check['id'] for check in result['checks']])
+        self.assertEqual([0, 0], [check['raw_exit'] for check in result['checks']])
+        self.assertEqual(first['cases'], result['checks'][0]['observed'])
+        with mock.patch.object(outcomes.subprocess, 'Popen') as launch:
+            result = outcomes.run_checks(self.root, [second, first], approved_checks=[first, second])
+        self.assertFalse(result['accepted']); launch.assert_not_called()
+
+    def test_cli_invalid_arguments_and_oversize_duplicate_inputs_are_sanitized(self):
+        tool = str(Path(outcomes.__file__).resolve())
+        result = subprocess.run([sys.executable, '-I', '-B', tool, '--private-value=credential-value'],
+                                capture_output=True, text=True)
+        self.assertEqual(4, result.returncode)
+        self.assertNotIn('credential-value', result.stdout + result.stderr)
+        matrix = Path(self.temporary.name)/'matrix.json'
+        for content in ('{"duplicate":1,"duplicate":2}', 'x' * (1024 * 1024 + 1)):
+            matrix.write_text(content)
+            result = subprocess.run([sys.executable, '-I', '-B', tool, '--matrix', str(matrix),
+                                     '--root', str(self.root), '--approved-digest', 'sha256:' + '0' * 64],
+                                    capture_output=True, text=True)
+            self.assertEqual(4, result.returncode)
+            self.assertEqual('invalid_or_unavailable_outcomes', json.loads(result.stdout)['blocker'])
+
     def test_assertions_need_distinct_reviewed_matrix_and_exact_fingerprint(self):
         self.source.write_text('import unittest\nclass Probe(unittest.TestCase):\n    def test_case(self): self.fail("reviewed")\n')
         case = {'id': 'test_probe.Probe.test_case', 'expected': 'assertion',
@@ -200,7 +227,7 @@ class InvocationStageTests(unittest.TestCase):
 
     def test_body_method_aliased_to_lifecycle_name_keeps_actual_body_stage(self):
         observed = self.classify('class Probe(unittest.TestCase):\n    def helper(self): self.fail("known")\n'
-                                 '    test_case = helper\n    def setUp(self): pass\n    tearDown = setUp\n')
+                                 '    test_case = helper\n    _callCleanup = helper\n')
         self.assertEqual('assertion', observed[0][1])
 
     def test_nested_dispatch_from_setup_and_cleanup_cannot_claim_body(self):
@@ -211,6 +238,13 @@ class InvocationStageTests(unittest.TestCase):
             with self.subTest(hook=hook):
                 observed = self.classify(source)
                 self.assertTrue(any(kind == 'other-failure' for _, kind, _ in observed))
+
+    def test_explicit_lifecycle_dispatch_inside_body_cannot_qualify_its_assertion(self):
+        for body, stage in (('self._callSetUp()', 'def setUp(self):\n        if hasattr(self, "entered"): self.fail("known")\n        self.entered=True'),
+                            ('self._callCleanup(self.fail, "known")', 'def setUp(self): pass')):
+            source = 'class Probe(unittest.TestCase):\n    def test_case(self): ' + body + '\n    ' + stage
+            with self.subTest(body=body):
+                self.assertEqual('other-failure', self.classify(source)[0][1])
 
     def test_overridden_dispatch_failure_without_body_is_not_body_assertion(self):
         observed = self.classify('class Probe(unittest.TestCase):\n    def test_case(self): pass\n'

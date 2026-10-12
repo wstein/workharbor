@@ -185,6 +185,7 @@ class SourceTests(unittest.TestCase):
         (self.root/'scripts').mkdir()
         (self.root/'scripts/check_ci.py').write_bytes(Path(ci.__file__).read_bytes())
         (self.root/'scripts/check_ci.py').chmod(Path(ci.__file__).stat().st_mode & 0o777)
+        (self.root/'scripts/task_outcomes.py').write_bytes(Path(ci.__file__).with_name('task_outcomes.py').read_bytes())
         self.git('add', '.')
         self.git('commit', '--quiet', '-m', 'test: baseline')
         self.base = self.git('rev-parse', 'HEAD')
@@ -300,6 +301,11 @@ class SourceTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises((ValueError, subprocess.CalledProcessError)):
                 ci.source_identity(self.root, source)
         self.commit('scripts/check_ci.py', 'pass\n')
+        with self.assertRaises(ValueError): ci.source_identity(self.root, self.base)
+
+    def test_source_pin_binds_extracted_classifier_dependency(self):
+        ci.source_identity(self.root, self.base)
+        self.commit('scripts/task_outcomes.py', 'pass\n')
         with self.assertRaises(ValueError): ci.source_identity(self.root, self.base)
 
     def test_python_cache_is_external_for_current_and_child_imports_and_restored(self):
