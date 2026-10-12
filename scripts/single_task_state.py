@@ -434,10 +434,9 @@ def _validated_completion_acceptance(root, store, attempt):
     try:
         if attempt['progress'] != 'acceptance-recorded':
             raise InvalidState('Fresh durable acceptance is required before completion')
-        events = [event for event in store.read_events(attempt['attempt_id'])
-                  if event['kind'] == 'acceptance']
-        if not events:
-            raise InvalidState('Durable acceptance evidence is missing')
+        events = store.read_events(attempt['attempt_id'])
+        if not events or events[-1]['kind'] != 'acceptance':
+            raise InvalidState('Fresh durable acceptance evidence is missing or superseded')
         event = events[-1]
         value = event['payload']
         fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
