@@ -322,12 +322,15 @@ class _Store:
 
 
 @contextmanager
-def open_store(worktree_root, *, preflight=None, require_existing=False):
+def open_store(worktree_root, *, preflight=None, require_existing=False, writable_existing=False):
     """Own the command lock; preflight precedes creation, existing-only reads are RO.
 
     The callback is trusted caller code, never a context-supplied executable.
-    Existing-only callers cannot create a journal or write through this store.
+    Existing-only callers cannot create a journal. Writes additionally require the
+    explicit writable_existing adapter; default existing-only reads remain RO.
     """
+    if writable_existing and not require_existing:
+        raise InvalidState('Writable existing adapter requires an existing journal')
     descriptors = []
     connection = None
     try:
@@ -390,7 +393,7 @@ def open_store(worktree_root, *, preflight=None, require_existing=False):
                     _Store(probe, directory, contexts)._validate()
                 except sqlite3.Error as error:
                     raise InvalidState('Invalid journal schema; operator recovery required') from error
-                if require_existing:
+                if require_existing and not writable_existing:
                     yield _Store(probe, directory, contexts)
                     return
         connection = sqlite3.connect(journal, isolation_level=None, timeout=0)

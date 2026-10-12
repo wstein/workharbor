@@ -52,6 +52,21 @@ class AcceptanceExecutionTests(unittest.TestCase):
         self.review['attempt_id'] = self.attempt_id
         self.tasks_before = (self.fixture.feature/'tasks.md').read_bytes()
 
+    def test_existing_write_adapter_preserves_read_only_default(self):
+        with self.assertRaises(state.InvalidState):
+            with state.open_store(self.root, require_existing=True, writable_existing=True):
+                self.fail('Missing attempt journal must not become writable')
+        self.assertFalse((self.root/'.symphony/single-task/journal.sqlite3').exists())
+        self.begin([self.check()])
+        with self.assertRaises(state.PersistenceFailure):
+            with state.open_store(self.root, require_existing=True) as store:
+                store.append_event(self.attempt_id, 'blocker', {'code': 'test'})
+        with state.open_store(self.root, require_existing=True, writable_existing=True) as store:
+            store.append_event(self.attempt_id, 'blocker', {'code': 'test'})
+        with state.open_store(self.root, require_existing=True) as store:
+            self.assertEqual({'code': 'test'}, store.read_events(self.attempt_id)[-1]['payload'])
+            self.assertEqual('active', store.read_attempt(self.attempt_id)['progress'])
+
     def owner(self):
         path = ROOT/'scripts/single_task_acceptance.py'
         self.assertTrue(path.is_file(), 'T015 owning acceptance execution is missing')
