@@ -104,6 +104,14 @@ class AcceptanceTests(unittest.TestCase):
                 manifest = {'required_test_ids': ids, 'retained_assertion_failures': [{'id': ids[0], 'message': 'known'}]}
                 self.assertFalse(ci.evaluate(ids, manifest, result))
 
+    def test_setup_alias_and_delegation_cannot_impersonate_test_dispatch(self):
+        for setup in ('setUp = test_case', 'def setUp(self): self.test_case()',
+                      'def setUp(self): self._callTestMethod(self.test_case)'):
+            body = 'class Probe(unittest.TestCase):\n    def test_case(self): self.fail("known")\n    ' + setup
+            with self.subTest(setup=setup):
+                ids, manifest, result = self.run_cases(body, [(0, 'known')])
+                self.assertFalse(ci.evaluate(ids, manifest, result))
+
     def test_manifest_rejects_duplicates_missing_rationale_and_unknown_fields(self):
         good = {'schema_version': 1, 'required_test_ids': ['probe.test'], 'retained_assertion_failures': [
             {'id': 'probe.test', 'message': 'known', 'reason': 'pending behavior', 'removal_condition': 'reviewed implementation'}]}
