@@ -27,26 +27,33 @@ Full Git IDs resolve locally; never implicitly fetch arbitrary input references.
   own matrices and approvals.
 - `approval_refs`: distinct spec/plan/execution/matrix/rework references as required.
 
-Hash immutable fields except `approval_refs` to obtain `package_digest`; the approval
-then explicitly binds that digest/action without circularity. Guard context retains
-its documented excluded self-digest. Timestamps/local output paths/random attempt IDs
+Hash immutable fields except `approval_refs` to obtain `package_digest`, identifying
+one complete package/source snapshot. Content approval authenticates the original
+approved content binding/action, defined below; package digest is separate provenance.
+Guard context retains its documented excluded self-digest. Timestamps/local output paths/random attempt IDs
 do not affect identity. Repeat inputs reuse package/summary; changed bytes create a
 new revision, never overwrite. Approval comparison does not mutate the package.
 
 ## ApprovalDecision and ApprovalComparison
 
 Decision fields: provider object ID/URL/repository, immutable actor ID, configured
-owner ID, action, reviewed revision/package digest, object content digest, times,
+owner ID, action, original approved content binding, original reviewed revision/package
+digest, object content digest, times,
 assurance (`supplied-local` or `authenticated-provider`), verifier/source identity.
 Offline assurance stays local. Spec/plan approval cannot substitute for execution,
 independent review or publication permission. Store approval object state and reject
 edited/deleted/dismissed/mismatched records at readiness.
-Comparison fields: approved/current raw artifact digests, Feature 003 comparator
+Never rewrite the original approval's binding, package digest or reviewed revision
+to describe a later snapshot. Comparison fields: original approved/current content
+bindings and raw artifact digests, Feature 003 comparator
 revision, normalized identities/evidence references, result (`identical`,
 `progress-only`, `renewal-required`, `ambiguous`) and safe reason. Only the first two
 retain approval; no broad section/whitespace normalization. The bounded adapter
 records approved/current guard-validated contract digests, protected path/mode/raw-byte
-digests and comparator revision. Whole-tree/source identity remains provenance, not
+digests and comparator revision. Narrow progress-only raw-byte changes may produce
+a different current binding: retention authenticates the original approved binding
+and records the guard's equivalence proof, never claims approval of the new binding.
+Whole-tree/source identity remains provenance, not
 the content-approval binding; a changed source snapshot must still be recorded and
 revalidated. Missing guard comparison/authentication means execution unavailable.
 See the [bounded contract](bounded-source-contract.md).

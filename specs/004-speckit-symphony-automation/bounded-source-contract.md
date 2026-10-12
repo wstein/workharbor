@@ -95,10 +95,15 @@ identity is recorded separately. Never exclude requirements, task text/scope,
 acceptance, dependencies or order merely because another commit changed them.
 `progress-only` retention requires equal validated contract digests, unchanged exact
 protected path inventory/modes and the guard's narrowly proved checkbox/appended-
-evidence normalization. Do not introduce a general whitespace/section normalizer.
+evidence normalization. Those permitted raw-byte changes can yield a different
+current binding. Retention authenticates the original approved binding/action and
+records approved/current bindings plus guard equivalence; it never rewrites the
+original approved package/revision or claims provider approval of the new binding.
+Do not introduce a general whitespace/section normalizer.
 
 An authenticated provider port verifies owner identity/action/reference and the
-approved binding. Supplied offline approvals are fixtures only. Missing Feature 003
+original approved binding. Package/source digests identify each snapshot separately
+and are not substituted for that approval identity. Supplied offline approvals are fixtures only. Missing Feature 003
 comparison/context APIs and missing authenticated approval ports fail closed; default
 unavailable adapters cannot approve execution. A fake port proves the adapter
 contract only. Do not duplicate the missing guard or reinterpret legacy begin as it.
