@@ -61,7 +61,7 @@ class SingleTaskStateTests(unittest.TestCase):
         result = subprocess.run(argv, cwd=self.root, env=self.fixture.env,
                                 capture_output=True, text=True, timeout=10)
         # Raw synthetic-only observations are separate from verifier acceptance.
-        evidence = SCRIPT.parent.parent/'.symphony/t002-cli-evidence.jsonl'
+        evidence = self.fixture.private/'t002-cli-evidence.jsonl'
         evidence.parent.mkdir(exist_ok=True)
         with evidence.open('a', encoding='utf-8') as stream:
             stream.write(json.dumps({'test_id': self.id(), 'argv': argv,
