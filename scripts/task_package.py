@@ -6,6 +6,7 @@ or a hostile-code sandbox. Callers must revalidate inputs at their action bounda
 """
 from contextlib import contextmanager
 from dataclasses import dataclass
+import hashlib
 import json
 import math
 import os
@@ -457,3 +458,282 @@ def assess_capabilities(action, mode, *, guard=None, tracker=None, runtime=None,
                 capabilities_satisfied=not blockers, required_capabilities=list(required),
                 evidence=evidence, blockers=blockers, authenticated_approval=None,
                 independent_review=None, live_execution=None)
+
+
+# Package envelope schema. The context stays opaque: Feature 003 alone owns its
+# keys, dependency semantics, exclusions, approval comparison and scope rules.
+
+_PACKAGE_KEYS = frozenset(('schema_version', 'repository', 'issue', 'feature', 'task_id',
+                           'mode', 'context', 'source', 'execution', 'outcomes', 'approval_refs'))
+_SOURCE_KEYS = frozenset(('accepted_commit', 'accepted_tree', 'proposal_commit', 'proposal_tree',
+                          'proposal_commits', 'artifact_revisions', 'equivalence_evidence_digest'))
+_EXECUTION_KEYS = frozenset(('symphony_revision', 'build_provenance', 'workflow_digest',
+                             'template_digest', 'configuration_digest', 'guard_revision',
+                             'capabilities', 'external_actions', 'publication_scope'))
+_APPROVAL_KEYS = frozenset(('spec', 'plan', 'execution', 'matrix', 'rework'))
+_EXTERNAL_ACTIONS = frozenset(('publish-pr', 'write-evidence', 'replace-labels'))
+
+
+def _matches(value, pattern):
+    return type(value) is str and re.fullmatch(pattern, value) is not None
+
+
+def _revision(value):
+    return _matches(value, r'[0-9a-f]{40}|[0-9a-f]{64}')
+
+
+def _digest(value):
+    return _matches(value, r'[0-9a-f]{64}')
+
+
+def _reference(value):
+    # Inert content-addressed/local evidence or a credential-free GitHub object
+    # URL. Query strings, userinfo, arbitrary URLs and raw output are not stored.
+    if value is None or _matches(value, r'sha256:[0-9a-f]{64}'):
+        return True
+    if _matches(value, r'https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(?:pull|issues)/[1-9][0-9]*(?:#(?:issuecomment|discussion_r|pullrequestreview)-[1-9][0-9]*)?'):
+        return True
+    try:
+        _path_parts(value)
+        return True
+    except PackageError:
+        return False
+
+
+def _package_shape(value):
+    require_keys(value, _PACKAGE_KEYS, {'package_digest'})
+    if (type(value['schema_version']) is not int or value['schema_version'] != 1
+            or not _matches(value['repository'], r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
+            or not _matches(value['feature'], r'[0-9]{3}-[a-z0-9]+(?:-[a-z0-9]+)*')
+            or value['mode'] not in _MODES or type(value['context']) is not dict
+            or type(value['outcomes']) is not list or not value['outcomes']):
+        raise PackageError('invalid-package')
+    issue = value['issue']
+    if issue is not None:
+        require_keys(issue, {'repository', 'number'})
+        if (issue['repository'] != value['repository'] or type(issue['number']) is not int
+                or issue['number'] <= 0 or not _matches(value['task_id'], r'T[0-9]{3}')):
+            raise PackageError('invalid-package-issue')
+    elif not _matches(value['task_id'], r'T[0-9]{3}|fixture:[a-z0-9][a-z0-9-]{0,63}'):
+        raise PackageError('invalid-package-task')
+    source = require_keys(value['source'], _SOURCE_KEYS)
+    if (any(not _revision(source[key]) for key in
+            ('accepted_commit', 'accepted_tree', 'proposal_commit', 'proposal_tree'))
+            or type(source['proposal_commits']) is not list
+            or any(not _revision(item) for item in source['proposal_commits'])
+            or len(set(source['proposal_commits'])) != len(source['proposal_commits'])
+            or source['equivalence_evidence_digest'] is not None
+            and not _digest(source['equivalence_evidence_digest'])):
+        raise PackageError('invalid-package-source')
+    artifacts = source['artifact_revisions']
+    if type(artifacts) is not list or len(artifacts) != 3:
+        raise PackageError('invalid-package-artifacts')
+    paths = []
+    for artifact in artifacts:
+        require_keys(artifact, {'path', 'commit', 'sha256'})
+        _path_parts(artifact['path'])
+        if not _revision(artifact['commit']) or not _digest(artifact['sha256']):
+            raise PackageError('invalid-package-artifacts')
+        paths.append(artifact['path'])
+    expected = {f"specs/{value['feature']}/{name}" for name in ('spec.md', 'plan.md', 'tasks.md')}
+    if len(set(paths)) != 3 or set(paths) != expected:
+        raise PackageError('invalid-package-artifacts')
+    execution = require_keys(value['execution'], _EXECUTION_KEYS)
+    if (any(execution[key] is not None and not _revision(execution[key])
+            for key in ('symphony_revision', 'guard_revision'))
+            or any(execution[key] is not None and not _digest(execution[key])
+                   for key in ('build_provenance', 'workflow_digest', 'template_digest', 'configuration_digest'))
+            or type(execution['capabilities']) is not dict
+            or type(execution['external_actions']) is not list
+            or any(type(action) is not str or action not in _EXTERNAL_ACTIONS
+                   for action in execution['external_actions'])
+            or len(set(execution['external_actions'])) != len(execution['external_actions'])):
+        raise PackageError('invalid-package-execution')
+    for action, names in execution['capabilities'].items():
+        required_capabilities(action, value['mode'])
+        if (type(names) is not list or any(not _matches(name, r'(?:guard|tracker|runtime)\.[a-z][a-z-]{0,63}')
+                                         for name in names) or len(set(names)) != len(names)):
+            raise PackageError('invalid-package-capabilities')
+    publication = execution['publication_scope']
+    if publication is not None:
+        require_keys(publication, {'repository', 'base_ref', 'head_ref'})
+        if (publication['repository'] != value['repository'] or publication['base_ref'] != 'refs/heads/main'
+                or not _matches(publication['head_ref'], r'refs/heads/[a-zA-Z0-9][a-zA-Z0-9/_-]{0,127}')
+                or '..' in publication['head_ref']):
+            raise PackageError('invalid-publication-scope')
+    approvals = require_keys(value['approval_refs'], _APPROVAL_KEYS)
+    if any(not _reference(reference) for reference in approvals.values()):
+        raise PackageError('invalid-approval-reference')
+
+
+def _package_identity(value):
+    # Do not recalculate or remove the guard's context self-digest: its owning
+    # implementation validates that documented exclusion. The exact opaque
+    # supplied context is preserved, including its existing identity field.
+    immutable = {key: item for key, item in value.items()
+                 if key not in ('approval_refs', 'package_digest')}
+    return hashlib.sha256(canonical_json(immutable)).hexdigest()
+
+
+def build_package(value, *, timestamp=None, output_path=None, attempt_id=None):
+    """Return a detached canonical proposal; transient run metadata is never stored.
+
+    No file is created/overwritten here. T007's writer uses revision bytes for
+    immutable output reuse. Runtime actions, references and assertions grant no
+    permission. Outcome/context schemas remain delegated to their owning validators.
+    """
+    snapshot = parse_json(canonical_json(value))
+    _package_shape(snapshot)
+    identity = _package_identity(snapshot)
+    if 'package_digest' in snapshot and snapshot['package_digest'] != identity:
+        raise PackageError('package-digest-mismatch')
+    snapshot['package_digest'] = identity
+    return snapshot
+
+
+def package_bytes(value):
+    if type(value) is not dict or 'package_digest' not in value:
+        raise PackageError('package-digest-missing')
+    return canonical_json(build_package(value))
+
+
+def package_revision_digest(value):
+    """Raw immutable serialization identity, distinct from content approval/package identity."""
+    return hashlib.sha256(package_bytes(value)).hexdigest()
+
+
+@dataclass(frozen=True)
+class GuardValidation:
+    """Port result only; this does not define or implement a TaskContext schema."""
+    accepted: bool
+    unmet_prerequisites: tuple[str, ...] = ()
+
+
+def _validate_source_identities(root, source):
+    # Only exact provenance objects/artifact bytes are checked here. Ancestry,
+    # scope, rebase equivalence and wrapper/history policy belong to T009/003.
+    for prefix in ('accepted', 'proposal'):
+        commit = source[prefix + '_commit']
+        tree = source[prefix + '_tree']
+        resolve_git_object(root, commit)
+        resolve_git_object(root, tree, expected_type='tree')
+        if _git(root, 'rev-parse', commit + '^{tree}').strip() != tree.encode('ascii'):
+            raise PackageError('source-tree-mismatch')
+    for commit in source['proposal_commits']:
+        resolve_git_object(root, commit)
+    for artifact in source['artifact_revisions']:
+        resolve_git_object(root, artifact['commit'])
+        entries = _git(root, 'ls-tree', '-z', artifact['commit'], '--',
+                       ':(literal)' + artifact['path']).split(b'\0')
+        entries = [entry for entry in entries if entry]
+        if len(entries) != 1:
+            raise PackageError('artifact-identity-mismatch')
+        header, name = entries[0].split(b'\t', 1)
+        mode, kind, identity = header.split(b' ')
+        if (name != artifact['path'].encode('utf-8') or mode not in (b'100644', b'100755')
+                or kind != b'blob' or int(_git(root, 'cat-file', '-s', identity.decode('ascii')))
+                > MAX_JSON_BYTES):
+            raise PackageError('artifact-identity-mismatch')
+        data = _git(root, 'cat-file', 'blob', identity.decode('ascii'))
+        if hashlib.sha256(data).hexdigest() != artifact['sha256']:
+            raise PackageError('artifact-identity-mismatch')
+
+
+def _guard_verdict(value):
+    if (not isinstance(value, GuardValidation) or type(value.accepted) is not bool
+            or type(value.unmet_prerequisites) is not tuple
+            or len(value.unmet_prerequisites) > 1000
+            or any(not _matches(item, r'T[0-9]{3}|fixture:[a-z0-9][a-z0-9-]{0,63}')
+                   for item in value.unmet_prerequisites)
+            or len(set(value.unmet_prerequisites)) != len(value.unmet_prerequisites)
+            or value.accepted and value.unmet_prerequisites):
+        raise PackageError('invalid-guard-result')
+    return value
+
+
+def validate(value, repository_snapshot, evidence, capabilities, *, guard=None, outcome_validator=None):
+    """Side-effect-free structural/provenance validation with opaque guard delegation.
+
+    Host supplies repository/root and approved/current snapshots; package text
+    never selects an adapter. No checks, prerequisite work, publication, provider
+    lookup or guard mutation is performed. All execution remains ineligible.
+    """
+    result = dict(schema_version=1, package_digest=None, revision_digest=None,
+                  structural_valid=False, execution_eligible=False, approval_assurance=None,
+                  authenticated_approval=None, independent_review=None, live_execution=None,
+                  raw_exits=[], unmet_prerequisites=[], blockers=[])
+    def block(code):
+        result['blockers'].append(dict(code=code))
+    try:
+        package_bytes(value)
+        value = build_package(value)
+        result['package_digest'] = value['package_digest']
+        result['revision_digest'] = package_revision_digest(value)
+        if value['repository'] != repository_snapshot['repository']:
+            raise PackageError('repository-mismatch')
+        with _root_directory(repository_snapshot['root']) as (root, _descriptor, _links):
+            _validate_source_identities(root, value['source'])
+        result['structural_valid'] = True
+    except PackageError as error:
+        # These errors are from the fixed local validators, never adapter text.
+        block(error.code)
+        return result
+    except Exception:
+        block('package-validation-unavailable')
+        return result
+    approvals = value['approval_refs']
+    if any(reference is not None for reference in approvals.values()):
+        result['approval_assurance'] = 'supplied-local'
+    for action in ('spec', 'plan', 'execution'):
+        if approvals[action] is None:
+            block(action + '-approval-reference-missing')
+    if value['mode'] == 'owner-authorized rework' and approvals['rework'] is None:
+        block('rework-approval-reference-missing')
+    if any(value['execution'][key] is None for key in
+           ('symphony_revision', 'build_provenance', 'workflow_digest',
+            'template_digest', 'configuration_digest', 'guard_revision')):
+        block('execution-identity-unavailable')
+    if outcome_validator is None:
+        block('outcome-validator-unavailable')
+    else:
+        try:
+            # T006 validates shape/outcomes only. This never calls its runner.
+            checked = outcome_validator(parse_json(canonical_json(value['outcomes'])))
+            if checked != value['outcomes']:
+                raise ValueError
+            if (any(case['expected'] == 'assertion' for check in checked for case in check['cases'])
+                    and approvals['matrix'] is None):
+                block('matrix-approval-reference-missing')
+        except Exception:
+            block('invalid-outcomes')
+            result['structural_valid'] = False
+    guard = guard if guard is not None else UnavailableGuard()
+    try:
+        verdict = _guard_verdict(guard.validate_context(value['context'], evidence))
+        result['unmet_prerequisites'] = list(verdict.unmet_prerequisites)
+        if not verdict.accepted:
+            block('guard-context-blocked')
+        else:
+            try:
+                comparison = guard.compare_artifacts(repository_snapshot['approved'],
+                                                     repository_snapshot['current'], evidence)
+                if comparison not in ('identical', 'progress-only'):
+                    block('guard-comparison-blocked')
+            except Exception:
+                block('guard-comparison-blocked')
+            for step, operation, arguments in (
+                    ('scope', guard.validate_scope, (repository_snapshot, value['context'], evidence)),
+                    ('acceptance', guard.validate_acceptance, (value['context'], evidence))):
+                try:
+                    if not _guard_verdict(operation(*arguments)).accepted:
+                        block('guard-' + step + '-blocked')
+                except Exception:
+                    block('guard-' + step + '-blocked')
+    except Exception:
+        block('guard-unavailable' if isinstance(guard, UnavailableGuard) else 'guard-context-blocked')
+    ports = capabilities if type(capabilities) is dict else {}
+    assessment = assess_capabilities('validate', value['mode'], guard=guard,
+                                    tracker=ports.get('tracker'), runtime=ports.get('runtime'))
+    result['capabilities'] = assessment
+    result['blockers'].extend(assessment['blockers'])
+    return result
