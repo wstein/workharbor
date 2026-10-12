@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Sealed T003 acceptance and T004 preparation; other trees require green."""
+import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import NamedTuple
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,62 +46,119 @@ T004_REJECTION_SHA256 = '60f9589d0fabb34d3b95847ea2521d6458a2a3d0a10ce8a091ffa30
 DOCUMENTATION_BASE = '8f8211afdda9e46984ccfb95505f83434da06db7'
 
 
-def approved_documentation(root):
-    """Docs may reuse accepted behavior, never change its executable/test tree.
+class SourceContext(NamedTuple):
+    event: str
+    base: str
+    head: str
+    checkout: str
 
-    The checker itself is reviewed CI authority, not self-authenticating code.
-    All other executable/configuration paths remain identical to the accepted base.
+
+def clean_checkout(root, revision):
+    """Compare bytes and modes explicitly, including assume-unchanged files."""
+    for options in ((), ('--cached',)):
+        git(root, 'diff', *options, '--quiet', revision, '--')
+    if git(root, 'ls-files', '--others', '--exclude-standard', '-z'):
+        raise ValueError('Untracked checkout content')
+    algorithm = git(root, 'rev-parse', '--show-object-format').decode().strip()
+    for entry in git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+        if not entry:
+            continue
+        metadata, name = entry.split(b'\t', 1)
+        mode, blob, stage = metadata.split()
+        path = root/os.fsdecode(name)
+        if (stage != b'0' or mode not in (b'100644', b'100755')
+                or path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
+                or bool(path.stat().st_mode & 0o111) != (mode == b'100755')
+                or any(parent.is_symlink() for parent in path.parents if root in parent.parents)):
+            raise ValueError('Unsafe checkout type or mode')
+        content = path.read_bytes()
+        actual = hashlib.new(algorithm, b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+        if actual.encode() != blob:
+            raise ValueError('Checkout bytes differ from index')
+
+
+def _source_context(root, event=None, base=None, head=None, checkout=None):
+    """Validate proposal identity independently of its integration checkout.
+
+    Explicit pins are caller-supplied trusted metadata, never approval evidence.
+    GitHub metadata is additionally checked when present; no stale-event override.
     """
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('Expected regular checkout root')
+    actual = git(root, 'rev-parse', 'HEAD').decode().strip()
+    provided = (event, base, head, checkout)
+    if any(value is not None for value in provided) and not all(provided):
+        raise ValueError('Source context requires all four pins')
+    github_event = os.environ.get('GITHUB_EVENT_NAME')
+    if github_event:
+        if github_event not in ('push', 'pull_request') or os.environ.get('GITHUB_SHA') != actual:
+            raise ValueError('Stale or unsupported event')
+        payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+        if github_event == 'pull_request':
+            pr = payload['pull_request']
+            if any(pr[side]['repo']['full_name'] != 'wstein/workharbor-nxt' for side in ('base', 'head')):
+                raise ValueError('Unexpected event repository')
+            observed = SourceContext('pull_request', pr['base']['sha'], pr['head']['sha'], actual)
+        else:
+            if payload['repository']['full_name'] != 'wstein/workharbor-nxt' or payload['after'] != actual:
+                raise ValueError('Stale push event')
+            observed = SourceContext('push', DOCUMENTATION_BASE, actual, actual)
+        if all(provided) and SourceContext(*provided) != observed:
+            raise ValueError('Explicit pins disagree with event')
+        event, base, head, checkout = observed
+    elif not any(provided):
+        event, base, head, checkout = 'local', DOCUMENTATION_BASE, actual, actual
+    if event not in ('pull_request', 'push', 'local') or checkout != actual:
+        raise ValueError('Unexpected checkout identity')
+    for revision in (base, head, checkout):
+        if (not isinstance(revision, str) or not re.fullmatch('[0-9a-f]{40}', revision)
+                or git(root, 'cat-file', '-t', revision) != b'commit\n'):
+            raise ValueError('Missing exact commit object')
+    if event == 'pull_request':
+        parents = git(root, 'rev-list', '--parents', '-n', '1', checkout).decode().split()[1:]
+        if base == head or parents != [base, head]:
+            raise ValueError('Unexpected synthetic merge parents')
+        # A valid merge includes independent base updates. Never require head-tree equality.
+        merged = git(root, 'merge-tree', '--write-tree', base, head).decode().strip()
+        tree = git(root, 'rev-parse', checkout + '^{tree}').decode().strip()
+        if merged != tree:
+            raise ValueError('Synthetic checkout differs from actual merge')
+    elif checkout != head:
+        raise ValueError('Non-PR checkout must be proposal head')
+    clean_checkout(root, checkout)
+    return SourceContext(event, base, head, checkout)
+
+
+def source_context(root, event=None, base=None, head=None, checkout=None):
     try:
-        head = git(root, 'rev-parse', 'HEAD').decode().strip()
-        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, head)
-        event_name = os.environ.get('GITHUB_EVENT_NAME')
-        if event_name:
-            if event_name not in ('push', 'pull_request') or os.environ.get('GITHUB_SHA') != head:
-                return False
-            if event_name == 'pull_request':
-                event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())['pull_request']
-                parents = git(root, 'rev-list', '--parents', '-n', '1', head).decode().split()[1:]
-                if (parents != [event['base']['sha'], event['head']['sha']]
-                        or event['base']['repo']['full_name'] != 'wstein/workharbor-nxt'
-                        or event['head']['repo']['full_name'] != 'wstein/workharbor-nxt'):
-                    return False
-                git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, parents[0])
-                git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, parents[1])
-                git(root, 'diff', '--quiet', parents[1], head, '--')
-        for options in ((), ('--cached',)):
-            git(root, 'diff', *options, '--quiet', head, '--')
-        if git(root, 'ls-files', '--others', '--exclude-standard', '-z'):
-            return False
-        # Check actual types/modes even when core.filemode is disabled locally.
-        for entry in git(root, 'ls-files', '--stage', '-z').split(b'\0'):
-            if not entry:
-                continue
-            metadata, name = entry.split(b'\t', 1)
-            mode, _, stage = metadata.split()
-            path = root/os.fsdecode(name)
-            if (stage != b'0' or mode not in (b'100644', b'100755')
-                    or path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
-                    or bool(path.stat().st_mode & 0o111) != (mode == b'100755')
-                    or any(parent.is_symlink() for parent in path.parents if root in parent.parents)):
-                return False
-        # Existing acceptance contracts, verifiers and task markers cannot drift.
+        return _source_context(root, event, base, head, checkout)
+    except (OSError, subprocess.CalledProcessError, KeyError, TypeError, UnicodeError) as error:
+        raise ValueError('Unavailable or invalid source evidence') from error
+
+
+def approved_documentation(root, context=None):
+    """Scope/approval inputs come from proposal head; tests use the actual merge."""
+    try:
+        context = source_context(root, *context) if context else source_context(root)
+        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, context.head)
+        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, context.base)
         pins = dict(PINS, **{name: value[0] for name, value in T004_PREP_PINS.items()})
         for name, digest in pins.items():
             if hashlib.sha256((root/name).read_bytes()).hexdigest() != digest:
                 return False
-        changed = git(root, 'diff', '--name-only', '--no-renames', '-z', DOCUMENTATION_BASE, head)
+        changed = git(root, 'diff', '--name-only', '--no-renames', '-z', DOCUMENTATION_BASE, context.head)
         for raw in changed.split(b'\0'):
             if not raw:
                 continue
             name = os.fsdecode(raw)
             path = Path(name)
             if name == 'scripts/check_ci.py':
-                continue  # Changes to this authority require independent CI review.
+                continue  # Removed by the separate accepted-source scope change.
             if not (name == 'README.md' or (path.parts[0] in ('docs', 'specs', 'contracts')
                     and path.suffix in ('.md', '.json'))):
                 return False
-            for revision in (DOCUMENTATION_BASE, head):
+            for revision in (DOCUMENTATION_BASE, context.head):
                 entry = git(root, 'ls-tree', revision, '--', name)
                 if entry and not entry.startswith(b'100644 blob '):
                     return False
@@ -172,7 +232,7 @@ def expected_t004_rejection(result):
         return False
 
 
-def check_t004_preparation(root, documentation=False):
+def check_t004_preparation(root, documentation=False, context=None):
     print('CI mode: documentation only; accepted baseline behavior, no implementation acceptance.'
           if documentation else 'CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
     for argv in ([sys.executable, 'scripts/verify_t004_cli.py', '--self-test'],
@@ -199,7 +259,8 @@ def check_t004_preparation(root, documentation=False):
     raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
     print(f'Raw make check exit: {raw}; full suite remains RED; preparation only.', flush=True)
     boundary = approved_documentation if documentation else approved_t004_preparation
-    return 0 if raw == 2 and boundary(root) else 1
+    valid = boundary(root, context) if documentation else boundary(root)
+    return 0 if raw == 2 and valid else 1
 
 
 def git(root, *args):
@@ -266,11 +327,17 @@ def strict_suite(root):
             and not result.expectedFailures)
 
 
-def check(root):
+def check(root, context=None):
+    if context is not None:
+        try:
+            context = source_context(root, *context)
+        except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+            print('CI blocked: invalid source context.', flush=True)
+            return 1
     if approved_t004_preparation(root):
         return check_t004_preparation(root)
-    if approved_documentation(root):
-        return check_t004_preparation(root, documentation=True)
+    if approved_documentation(root, context):
+        return check_t004_preparation(root, documentation=True, context=context)
     scoped = approved_t003(root)
     print('CI mode: approved T003 phase' if scoped else 'CI mode: strict full green', flush=True)
     if scoped:
@@ -294,7 +361,13 @@ def check(root):
     print(f'Raw make check exit: {raw}; full suite ' + ('remains RED (not implementation acceptance).' if scoped else 'must be GREEN.'), flush=True)
     if raw != (2 if scoped else 0):
         return 1
-    return 0 if scoped or strict_suite(root) else 1
+    accepted = scoped or strict_suite(root)
+    if context is not None:
+        try:
+            accepted = accepted and source_context(root, *context) == context
+        except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+            accepted = False
+    return 0 if accepted else 1
 
 
 def self_test():
@@ -552,9 +625,23 @@ def self_test():
     return 0 if result.wasSuccessful() and result.testsRun == 14 else 1
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--self-test', action='store_true')
+    parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--event', choices=('pull_request', 'push', 'local'))
+    for name in ('base', 'head', 'checkout'):
+        parser.add_argument('--' + name)
+    args = parser.parse_args(argv)
+    context = (args.event, args.base, args.head, args.checkout)
+    if any(context) and not all(context):
+        parser.error('event/base/head/checkout must be supplied together')
+    if args.self_test:
+        if any(context) or args.root != ROOT:
+            parser.error('self-test does not accept source overrides')
+        return self_test()
+    return check(args.root, SourceContext(*context) if all(context) else None)
+
+
 if __name__ == '__main__':
-    if sys.argv[1:] == ['--self-test']:
-        raise SystemExit(self_test())
-    if sys.argv[1:]:
-        raise SystemExit('CI gate accepts no phase or scope override arguments')
-    raise SystemExit(check(ROOT))
+    raise SystemExit(main())
