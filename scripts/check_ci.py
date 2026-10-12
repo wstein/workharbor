@@ -313,9 +313,9 @@ def source_identity(root, source):
             raise ValueError('Source pin must match loaded and checked runner code; it is not approval')
 
 
-def run(argv, root):
+def run(argv, root, *, timeout=300):
     print('+ ' + shlex.join(argv), flush=True)
-    return subprocess.run(argv, cwd=root, timeout=300).returncode
+    return subprocess.run(argv, cwd=root, timeout=timeout).returncode
 
 
 def check(root, context=None, source=None):
@@ -344,7 +344,10 @@ def check(root, context=None, source=None):
             # A fresh process keeps discovery/import state out of the parent.
             code = ('import runpy,sys; m=runpy.run_path(sys.argv[1]); '
                     'raise SystemExit(0 if m["acceptance_suite"](m["Path"](sys.argv[2])) else 1)')
-            valid = run(python_argv('-c', code, str(execution/'scripts/check_ci.py'), str(execution)), execution) == 0 and valid
+            # Aggregate repository discovery needs its own finite budget as green suites grow.
+            # This does not change any approved package per-check deadline.
+            valid = run(python_argv('-c', code, str(execution/'scripts/check_ci.py'), str(execution)),
+                        execution, timeout=600) == 0 and valid
             clean_checkout(execution, context.checkout, allow_generated=True)
         if source_context(root, *context) != context:
             raise ValueError('Source changed during checks')

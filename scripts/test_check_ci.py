@@ -563,6 +563,32 @@ class SourceTests(unittest.TestCase):
             self.assertEqual(1, ci.check(self.root, ('local', None, None, None)))
             run.assert_not_called()
 
+    def test_command_timeouts_remain_finite_and_explicit(self):
+        with mock.patch.object(ci.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(0, ci.run(['probe'], self.root))
+            self.assertEqual(300, run.call_args.kwargs['timeout'])
+            self.assertEqual(0, ci.run(['suite'], self.root, timeout=600))
+            self.assertEqual(600, run.call_args.kwargs['timeout'])
+
+    def test_aggregate_suite_timeout_is_bounded_and_fails_closed(self):
+        original_run = ci.subprocess.run
+        observed = []
+        def commands(argv, *args, **kwargs):
+            if argv[:2] == ['bash', '.specify/scripts/bash/check-prerequisites.sh']:
+                return subprocess.CompletedProcess(argv, 0)
+            return original_run(argv, *args, **kwargs)
+        def checks(argv, root, **kwargs):
+            observed.append(kwargs)
+            if kwargs.get('timeout') == 600:
+                raise subprocess.TimeoutExpired(argv, 600)
+            return 0
+        with mock.patch.object(ci, 'load_manifest', return_value={'retained_assertion_failures': []}), \
+                mock.patch.object(ci, 'run', side_effect=checks), \
+                mock.patch.object(ci.subprocess, 'run', side_effect=commands):
+            self.assertEqual(1, ci.check(self.root))
+        self.assertEqual({'timeout': 600}, observed[-1])
+        self.assertTrue(all(not arguments for arguments in observed[:-1]))
+
     def test_post_check_source_drift_blocks(self):
         manifest = {'retained_assertion_failures': []}
         original_run = ci.subprocess.run
@@ -571,7 +597,7 @@ class SourceTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 0)
             return original_run(argv, *args, **kwargs)
         for drift in (False, True):
-            def successful_checks(argv, root):
+            def successful_checks(argv, root, **kwargs):
                 if drift:
                     (self.root/'guide.md').write_text('changed\n')
                 return 0
