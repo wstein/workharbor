@@ -1,6 +1,7 @@
 # WorkHarbor
 
 [![Repository checks](https://github.com/wstein/workharbor-nxt/actions/workflows/check.yml/badge.svg)](https://github.com/wstein/workharbor-nxt/actions/workflows/check.yml)
+[![License: EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-blue)](LICENSE)
 [![Status: bootstrap](https://img.shields.io/badge/status-bootstrap-orange)](#first-implementation)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](#start)
 [![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)](#baseline)
@@ -62,7 +63,9 @@ without reviewing its changes.
 activation procedure. It requires separate tracker/runtime configuration; nothing
 has been installed on your host or activated. No product dependency on Symphony.
 
-## Provenance and license
+## License and provenance
+WorkHarbor is licensed under the [European Union Public Licence 1.2 (EUPL-1.2)](LICENSE).
+
 [Third-party provenance](third_party/README.md) records the exact Spec Kit snapshot
-and its MIT notice. WorkHarbor's own project license awaits an owner decision.
+and its MIT notice.
 [References](docs/references.md) distinguish inspiration from implementation.

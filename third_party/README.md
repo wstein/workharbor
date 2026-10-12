@@ -12,5 +12,5 @@ CLI version: 1.1.4.dev0 (development snapshot, pinned by commit).
 The generated `.specify/` infrastructure and `.agents/skills/` originate from this
 snapshot. Its MIT notice is retained in `spec-kit/LICENSE`. The project constitution
 is WorkHarbor-specific. Review release migration before upgrading; do not overwrite
-project documents. No Symphony source is vendored. WorkHarbor's own license is
-pending an owner decision; the third-party MIT license does not license WorkHarbor.
+project documents. No Symphony source is vendored. WorkHarbor is licensed under
+the [EUPL-1.2](../LICENSE); the third-party MIT license does not license WorkHarbor.
