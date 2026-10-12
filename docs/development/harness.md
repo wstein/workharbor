@@ -31,7 +31,8 @@ Review quality gaps and documentation freshness per release; do not schedule age
 or background services implicitly.
 
 ## CI
-The included GitHub Actions workflow runs `python3 scripts/check_ci.py` on pushes/PRs.
+The included GitHub Actions workflow runs the owner-pinned trusted checker with
+`python3 -I -B` on pushes/PRs.
 It is optional infrastructure; local checks work without GitHub. Other forges can
 run `make check`. Publishing a remote or enabling CI is outside this bundle.
 
@@ -108,6 +109,12 @@ independent review and checks, without automatically changing the adopted pin.
 CI execution requires a pristine isolated checkout, including ignored files:
 ignored source or bytecode can alter imports. The gate routes Python caches to
 fresh external storage and blocks preexisting untracked inputs before checks.
+Launch tools with `-I -B` before imports; isolated child interpreters receive the
+fresh cache location explicitly through `-X pycache_prefix`. Inherited Python
+path/home/user-site overrides are removed for descendants. The trusted source
+checkout is checked separately. Frozen tests run in a disposable checkout of the
+same exact integration commit, so their legacy `.symphony` evidence never becomes
+an input in the pristine operator checkout. Raw exits remain unchanged.
 Use prepublication scratch when a working checkout contains legitimate local
 `.specify` or `.symphony` state; the gate does not delete that state. Ordinary
 root `make check` remains available with its raw result reported separately.
@@ -128,12 +135,12 @@ policy_source=None)` runs the relevant checks and returns an exit code. A truste
 source checker can inspect a separate integration root with:
 
 ```sh
-python3 /trusted/source/scripts/check_ci.py --root /isolated/integration \
+python3 -I -B /trusted/source/scripts/check_ci.py --root /isolated/integration \
   --event pull_request --base BASE_SHA --head HEAD_SHA --checkout MERGE_SHA
 ```
 
 All four source options are required together. `--policy-source` adds the separate
 explicit adoption input for operator validation; it never selects a task exception.
-Run `python3 scripts/check_ci.py --self-test` and
-`python3 scripts/test_check_ci.py` for legacy baseline and new source regressions.
+Run `python3 -I -B scripts/check_ci.py --self-test` and
+`python3 -I -B scripts/test_check_ci.py` for legacy baseline and new source regressions.
 Frozen verifier inputs remain unchanged; no external approval is refreshed by CI.

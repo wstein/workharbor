@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - name: Materialize the adopted policy source
         run: |
-          python3 - <<'PY'
+          python3 -I -B - <<'PY'
           import os
           import re
           import subprocess
@@ -27,7 +27,13 @@ jobs:
           root = Path(os.environ['GITHUB_WORKSPACE']) / 'integration'
           def git(*args):
               return subprocess.check_output(['git', *args], cwd=root)
-          if git('cat-file', '-t', pin) != b'commit\n':
+          try:
+              kind = git('cat-file', '-t', pin)
+          except subprocess.CalledProcessError:
+              # Rebase-merged policy objects may be outside integration history.
+              git('fetch', '--no-tags', 'origin', pin)
+              kind = git('cat-file', '-t', pin)
+          if kind != b'commit\n':
               raise SystemExit('Policy pin must identify an available commit.')
           entry = git('ls-tree', pin, '--', 'scripts/check_ci.py').split()
           if (len(entry) != 4 or entry[0] not in (b'100644', b'100755')
@@ -37,6 +43,6 @@ jobs:
           PY
       - name: Validate integration with the adopted policy
         run: |
-          python3 trusted-policy/scripts/check_ci.py \
+          python3 -I -B trusted-policy/scripts/check_ci.py \
             --root "$GITHUB_WORKSPACE/integration" \
             --policy-source "$WORKHARBOR_CI_POLICY_SOURCE"

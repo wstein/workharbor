@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Sealed T003 acceptance and T004 preparation; other trees require green."""
+import sys
+
+if __name__ == '__main__' and not sys.flags.isolated:
+    print('CI blocked: launch the trusted checker with python -I -B.', file=sys.stderr)
+    raise SystemExit(1)
+
 import argparse
 import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
-import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -298,20 +304,22 @@ def approved_operator_tooling(root, context, policy_source):
 def isolated_python_cache():
     """Keep cache reads and generated files outside the candidate checkout."""
     with tempfile.TemporaryDirectory(prefix='workharbor-ci-cache-') as cache:
-        names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1'}
-        previous = {name: os.environ.get(name) for name in names}
+        names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1',
+                 'PYTHONNOUSERSITE': '1', 'PYTHONSAFEPATH': '1'}
+        previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON')}
         prefix, no_write = sys.pycache_prefix, sys.dont_write_bytecode
+        for name in previous:
+            os.environ.pop(name)
         os.environ.update(names)
         sys.pycache_prefix, sys.dont_write_bytecode = cache, True
         try:
-            yield
+            yield cache
         finally:
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, no_write
-            for name, value in previous.items():
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
+            for name in tuple(os.environ):
+                if name.startswith('PYTHON'):
+                    os.environ.pop(name)
+            os.environ.update(previous)
 
 
 def operator_suite(root):
@@ -323,8 +331,9 @@ def operator_suite(root):
             "'scripts', 'test_*.py', sys.argv[3:]) else 1)")
     try:
         clean_checkout(root, git(root, 'rev-parse', 'HEAD').decode().strip())
-        with isolated_python_cache():
-            result = subprocess.run([sys.executable, '-B', '-c', code, str(Path(__file__).resolve()),
+        with isolated_python_cache() as cache:
+            result = subprocess.run([sys.executable, '-I', '-B', '-X', 'pycache_prefix=' + cache,
+                                     '-c', code, str(Path(__file__).resolve()),
                                      str(root.resolve()), *modules], cwd=root, timeout=300)
         return result.returncode == 0
     except (OSError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -400,6 +409,37 @@ def check_t004_preparation(root, documentation=False, context=None, policy_sourc
     print('CI mode: operator validation only; task execution and live approval are FALSE.'
           if policy_source else 'CI mode: documentation only; accepted baseline behavior, no implementation acceptance.'
           if documentation else 'CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
+    try:
+        # Frozen tests deliberately emit local evidence; keep it off the
+        # pristine integration checkout and never exempt an ignored prefix.
+        with baseline_execution(root) as execution:
+            print('Sealed checks execute in disposable checkout of ' +
+                  git(execution, 'rev-parse', 'HEAD').decode().strip(), flush=True)
+            raw = sealed_checks(execution)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return 1
+    if policy_source:
+        valid = operator_suite(root) and approved_operator_tooling(root, context, policy_source)
+    else:
+        boundary = approved_documentation if documentation else approved_t004_preparation
+        valid = boundary(root, context) if documentation else boundary(root)
+    return 0 if raw == 2 and valid else 1
+
+
+@contextmanager
+def baseline_execution(root):
+    with tempfile.TemporaryDirectory(prefix='workharbor-baseline-') as directory:
+        execution = Path(directory)/'checkout'
+        revision = git(root, 'rev-parse', 'HEAD').decode().strip()
+        git(root, 'worktree', 'add', '--quiet', '--detach', str(execution), revision)
+        try:
+            clean_checkout(execution, revision)
+            yield execution
+        finally:
+            git(root, 'worktree', 'remove', '--force', str(execution))
+
+
+def sealed_checks(root):
     for argv in ([sys.executable, 'scripts/verify_t004_cli.py', '--self-test'],
                  [sys.executable, '-m', 'py_compile', 'scripts/verify_t004_cli.py'],
                  [sys.executable, 'scripts/verify_t003_state.py'],
@@ -407,7 +447,7 @@ def check_t004_preparation(root, documentation=False, context=None, policy_sourc
                  [sys.executable, 'scripts/check_repo.py'], ['git', 'diff', '--check']):
         if run(argv, root):
             return 1
-    rejection = subprocess.run([sys.executable, 'scripts/verify_t004_cli.py'], cwd=root,
+    rejection = subprocess.run(python_argv('scripts/verify_t004_cli.py'), cwd=root,
                                capture_output=True, text=True, timeout=120)
     if not expected_t004_rejection(rejection):
         print('Preparation blocked: T004 preimplementation rejection changed.', flush=True)
@@ -421,14 +461,9 @@ def check_t004_preparation(root, documentation=False, context=None, policy_sourc
     if subprocess.run(['bash', '.specify/scripts/bash/check-prerequisites.sh', '--json',
                        '--require-tasks', '--include-tasks'], cwd=root, env=env).returncode:
         return 1
-    raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
+    raw = run(['make', 'check', 'PYTHON=' + shlex.join(python_argv())], root)
     print(f'Raw make check exit: {raw}; full suite remains RED; preparation only.', flush=True)
-    if policy_source:
-        valid = operator_suite(root) and approved_operator_tooling(root, context, policy_source)
-    else:
-        boundary = approved_documentation if documentation else approved_t004_preparation
-        valid = boundary(root, context) if documentation else boundary(root)
-    return 0 if raw == 2 and valid else 1
+    return raw
 
 
 def git(root, *args):
@@ -501,8 +536,15 @@ def approved_t003(root):
 
 
 def run(argv, root):
+    if argv[0] == sys.executable:
+        argv = python_argv(*argv[1:])
     print('+ ' + ' '.join(argv), flush=True)
     return subprocess.run(argv, cwd=root).returncode
+
+
+def python_argv(*args):
+    prefix = ['-X', 'pycache_prefix=' + sys.pycache_prefix] if sys.pycache_prefix else []
+    return [sys.executable, '-I', '-B', *prefix, *args]
 
 
 def strict_suite(root, directory='tests', pattern='test*.py', required_modules=()):
@@ -565,7 +607,7 @@ def _check(root, context=None, policy_source=None):
     elif (root/'scripts/single_task_state.py').exists():
         if run([sys.executable, 'scripts/verify_t003_state.py'], root):
             return 1
-    raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
+    raw = run(['make', 'check', 'PYTHON=' + shlex.join(python_argv())], root)
     print(f'Raw make check exit: {raw}; full suite ' + ('remains RED (not implementation acceptance).' if scoped else 'must be GREEN.'), flush=True)
     if raw != (2 if scoped else 0):
         return 1
@@ -847,6 +889,11 @@ def self_test():
 
 
 def main(argv=None):
+    try:
+        clean_checkout(ROOT, git(ROOT, 'rev-parse', 'HEAD').decode().strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print('CI blocked: trusted source must be a pristine isolated checkout, including ignored files.', flush=True)
+        return 1
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--root', type=Path, default=ROOT)
@@ -861,7 +908,8 @@ def main(argv=None):
     if args.self_test:
         if any(context) or args.root != ROOT or args.policy_source:
             parser.error('self-test does not accept source overrides')
-        return self_test()
+        with isolated_python_cache():
+            return self_test()
     return check(args.root, SourceContext(*context) if all(context) else None, args.policy_source)
 
 
