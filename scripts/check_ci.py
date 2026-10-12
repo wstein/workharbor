@@ -40,6 +40,71 @@ T004_PREP_PINS = {
     'scripts/verify_t004_cli.py': ('39aaa54427eb12085b65513bcb64e8d1cc56f50e7dfb3e396c8bf8be9752b074', True),
 }
 T004_REJECTION_SHA256 = '60f9589d0fabb34d3b95847ea2521d6458a2a3d0a10ce8a091ffa30f8321d0e0'
+DOCUMENTATION_BASE = '8f8211afdda9e46984ccfb95505f83434da06db7'
+
+
+def approved_documentation(root):
+    """Docs may reuse accepted behavior, never change its executable/test tree.
+
+    The checker itself is reviewed CI authority, not self-authenticating code.
+    All other executable/configuration paths remain identical to the accepted base.
+    """
+    try:
+        head = git(root, 'rev-parse', 'HEAD').decode().strip()
+        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, head)
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        if event_name:
+            if event_name not in ('push', 'pull_request') or os.environ.get('GITHUB_SHA') != head:
+                return False
+            if event_name == 'pull_request':
+                event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())['pull_request']
+                parents = git(root, 'rev-list', '--parents', '-n', '1', head).decode().split()[1:]
+                if (parents != [event['base']['sha'], event['head']['sha']]
+                        or event['base']['repo']['full_name'] != 'wstein/workharbor-nxt'
+                        or event['head']['repo']['full_name'] != 'wstein/workharbor-nxt'):
+                    return False
+                git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, parents[0])
+                git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_BASE, parents[1])
+                git(root, 'diff', '--quiet', parents[1], head, '--')
+        for options in ((), ('--cached',)):
+            git(root, 'diff', *options, '--quiet', head, '--')
+        if git(root, 'ls-files', '--others', '--exclude-standard', '-z'):
+            return False
+        # Check actual types/modes even when core.filemode is disabled locally.
+        for entry in git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+            if not entry:
+                continue
+            metadata, name = entry.split(b'\t', 1)
+            mode, _, stage = metadata.split()
+            path = root/os.fsdecode(name)
+            if (stage != b'0' or mode not in (b'100644', b'100755')
+                    or path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
+                    or bool(path.stat().st_mode & 0o111) != (mode == b'100755')
+                    or any(parent.is_symlink() for parent in path.parents if root in parent.parents)):
+                return False
+        # Existing acceptance contracts, verifiers and task markers cannot drift.
+        pins = dict(PINS, **{name: value[0] for name, value in T004_PREP_PINS.items()})
+        for name, digest in pins.items():
+            if hashlib.sha256((root/name).read_bytes()).hexdigest() != digest:
+                return False
+        changed = git(root, 'diff', '--name-only', '--no-renames', '-z', DOCUMENTATION_BASE, head)
+        for raw in changed.split(b'\0'):
+            if not raw:
+                continue
+            name = os.fsdecode(raw)
+            path = Path(name)
+            if name == 'scripts/check_ci.py':
+                continue  # Changes to this authority require independent CI review.
+            if not (name == 'README.md' or (path.parts[0] in ('docs', 'specs', 'contracts')
+                    and path.suffix in ('.md', '.json'))):
+                return False
+            for revision in (DOCUMENTATION_BASE, head):
+                entry = git(root, 'ls-tree', revision, '--', name)
+                if entry and not entry.startswith(b'100644 blob '):
+                    return False
+        return True
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+        return False
 
 
 def approved_t004_preparation(root):
@@ -107,8 +172,9 @@ def expected_t004_rejection(result):
         return False
 
 
-def check_t004_preparation(root):
-    print('CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
+def check_t004_preparation(root, documentation=False):
+    print('CI mode: documentation only; accepted baseline behavior, no implementation acceptance.'
+          if documentation else 'CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
     for argv in ([sys.executable, 'scripts/verify_t004_cli.py', '--self-test'],
                  [sys.executable, '-m', 'py_compile', 'scripts/verify_t004_cli.py'],
                  [sys.executable, 'scripts/verify_t003_state.py'],
@@ -132,7 +198,8 @@ def check_t004_preparation(root):
         return 1
     raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
     print(f'Raw make check exit: {raw}; full suite remains RED; preparation only.', flush=True)
-    return 0 if raw == 2 and approved_t004_preparation(root) else 1
+    boundary = approved_documentation if documentation else approved_t004_preparation
+    return 0 if raw == 2 and boundary(root) else 1
 
 
 def git(root, *args):
@@ -202,6 +269,8 @@ def strict_suite(root):
 def check(root):
     if approved_t004_preparation(root):
         return check_t004_preparation(root)
+    if approved_documentation(root):
+        return check_t004_preparation(root, documentation=True)
     scoped = approved_t003(root)
     print('CI mode: approved T003 phase' if scoped else 'CI mode: strict full green', flush=True)
     if scoped:
@@ -231,7 +300,7 @@ def check(root):
 def self_test():
     class GateTests(unittest.TestCase):
         def test_approved_content_and_prerequisites(self):
-            self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT))
+            self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT) or approved_documentation(ROOT))
 
         def test_rebased_anchor_without_original_commit(self):
             original_git = git
@@ -240,7 +309,7 @@ def self_test():
                     raise subprocess.CalledProcessError(128, args)
                 return original_git(root, *args)
             with mock.patch(__name__ + '.git', side_effect=without_original):
-                self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT))
+                self.assertTrue(approved_t003(ROOT) or approved_t004_preparation(ROOT) or approved_documentation(ROOT))
 
         def test_reviewed_docs_and_successor_mutations(self):
             with tempfile.TemporaryDirectory() as directory:
@@ -316,12 +385,14 @@ def self_test():
 
         def test_strict_fallback_requires_green(self):
             with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.strict_suite', return_value=True):
                 for raw in (0, 1, 2):
                     with self.subTest(raw=raw), mock.patch(__name__ + '.run', side_effect=[0, raw]):
                         self.assertEqual(0 if raw == 0 else 1, check(ROOT))
             with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=False), \
                     mock.patch(__name__ + '.run', return_value=0), \
                     mock.patch(__name__ + '.strict_suite', return_value=False):
@@ -346,6 +417,7 @@ def self_test():
 
         def test_scoped_checks_and_raw_red_required(self):
             with mock.patch(__name__ + '.approved_t004_preparation', return_value=False), \
+                    mock.patch(__name__ + '.approved_documentation', return_value=False), \
                     mock.patch(__name__ + '.approved_t003', return_value=True), \
                     mock.patch('subprocess.run', return_value=mock.Mock(returncode=0)):
                 for raw in (0, 1, 2):
@@ -357,14 +429,23 @@ def self_test():
                 with mock.patch(__name__ + '.run', return_value=0), \
                         mock.patch('subprocess.run', return_value=mock.Mock(returncode=1)):
                     self.assertEqual(1, check(ROOT))
-        def test_preparation_mutations_expire_gate(self):
+        def test_documentation_mutations_expire_gate(self):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)/'checkout'
                 subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
-                self.assertTrue(approved_t004_preparation(root))
-                names = (*T004_PREP_PINS, *T004_CI_PATHS, 'scripts/single_task.py',
+                for name in ('docs/proposal.json', 'specs/proposal/spec.md'):
+                    path = root/name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('{}\n' if path.suffix == '.json' else '# Proposal\n')
+                subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
+                subprocess.run(['git', '-C', str(root), '-c', 'user.name=Synthetic',
+                                '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                                '-m', 'docs: synthetic proposals'], check=True)
+                self.assertTrue(approved_documentation(root))
+                names = (*T004_PREP_PINS, 'scripts/check_ci.py', 'scripts/single_task.py',
                          'scripts/single_task_state.py', 'tests/test_single_task_state.py',
-                         'specs/003-single-task-entry/tasks.md', '.github/workflows/check.yml')
+                         'specs/003-single-task-entry/tasks.md', '.github/workflows/check.yml',
+                         'docs/proposal.json', 'specs/proposal/spec.md')
                 for name in names:
                     path = root/name
                     content, mode = path.read_bytes(), path.stat().st_mode
@@ -372,28 +453,31 @@ def self_test():
                         with self.subTest(path=name, mutation=mutation):
                             path.unlink()
                             if mutation == 'symlink':
-                                path.symlink_to(ROOT/name)
+                                path.symlink_to(ROOT/'README.md')
                             elif mutation != 'missing':
                                 path.write_bytes(content + (b'\n' if mutation == 'changed' else b''))
                                 path.chmod(mode ^ 0o111 if mutation == 'mode' else mode)
-                            self.assertFalse(approved_t004_preparation(root))
+                            self.assertFalse(approved_documentation(root))
                             subprocess.run(['git', '-C', str(root), 'add', '--', name], check=True)
-                            self.assertFalse(approved_t004_preparation(root))
+                            self.assertFalse(approved_documentation(root))
                             subprocess.run(['git', '-C', str(root), 'restore', '--staged', '--worktree', '--', name], check=True)
-                extra = root/'scripts/unapproved.py'
-                extra.write_text('pass\n')
-                self.assertFalse(approved_t004_preparation(root))
+                extra = root/'docs/untracked.md'
+                extra.write_text('# Untracked\n')
+                self.assertFalse(approved_documentation(root))
                 extra.unlink()
+                # A committed runtime successor cannot inherit docs-only acceptance.
+                (root/'scripts/single_task.py').write_text('pass\n')
+                subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Synthetic',
                                 '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
-                                '--allow-empty', '-m', 'test: later CI commit expires seal'], check=True)
-                self.assertFalse(approved_t004_preparation(root))
+                                '-m', 'test: executable successor'], check=True)
+                self.assertFalse(approved_documentation(root))
 
         def test_preparation_unknown_history_refused(self):
             with mock.patch(__name__ + '.git', side_effect=subprocess.CalledProcessError(1, ['git'])):
                 self.assertFalse(approved_t004_preparation(ROOT))
 
-        def test_preparation_synthetic_merge_is_exact(self):
+        def test_documentation_synthetic_merge_is_exact(self):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)/'checkout'
                 subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
@@ -403,7 +487,7 @@ def self_test():
                            GIT_AUTHOR_EMAIL='fixture@example.invalid', GIT_COMMITTER_EMAIL='fixture@example.invalid')
                 event_path = Path(directory)/'event.json'
                 event = {'pull_request': {
-                    'base': {'sha': T004_SOURCE, 'ref': 'chore/issue-2-bootstrap-entry',
+                    'base': {'sha': DOCUMENTATION_BASE, 'ref': 'chore/issue-2-bootstrap-entry',
                              'repo': {'full_name': 'wstein/workharbor-nxt'}},
                     'head': {'sha': candidate, 'ref': 'chore/5-t004-preparation',
                              'repo': {'full_name': 'wstein/workharbor-nxt'}}}}
@@ -416,27 +500,27 @@ def self_test():
                                               text=True, capture_output=True, check=True).stdout.strip()
                     subprocess.run(['git', '-C', str(root), 'switch', '--quiet', '--detach', revision], check=True)
                     return revision
-                revision = merge([T004_SOURCE, candidate])
+                revision = merge([DOCUMENTATION_BASE, candidate])
                 with mock.patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request',
                         'GITHUB_SHA': revision, 'GITHUB_EVENT_PATH': str(event_path)}):
-                    self.assertTrue(approved_t004_preparation(root))
-                    for key, wrong in (('GITHUB_SHA', candidate), ('GITHUB_EVENT_NAME', 'push')):
+                    self.assertTrue(approved_documentation(root))
+                    for key, wrong in (('GITHUB_SHA', candidate), ('GITHUB_EVENT_NAME', 'workflow_dispatch')):
                         with mock.patch.dict(os.environ, {key: wrong}):
-                            self.assertFalse(approved_t004_preparation(root))
+                            self.assertFalse(approved_documentation(root))
                     changed = json.loads(json.dumps(event))
-                    changed['pull_request']['head']['sha'] = T004_SOURCE
+                    changed['pull_request']['head']['sha'] = DOCUMENTATION_BASE
                     event_path.write_text(json.dumps(changed))
-                    self.assertFalse(approved_t004_preparation(root))
+                    self.assertFalse(approved_documentation(root))
                     event_path.write_text(json.dumps(event))
                     (root/'scripts/check_ci.py').write_text('dirty wrapper checker\n')
-                    self.assertFalse(approved_t004_preparation(root))
+                    self.assertFalse(approved_documentation(root))
                     subprocess.run(['git', '-C', str(root), 'restore', '--', 'scripts/check_ci.py'], check=True)
-                    for parents, selected_tree in (([candidate, T004_SOURCE], tree),
-                            ([T004_SOURCE, candidate, ACCEPTED_T003], tree),
-                            ([T004_SOURCE, candidate], git(root, 'rev-parse', T004_SOURCE + '^{tree}').decode().strip())):
+                    for parents, selected_tree in (([candidate, DOCUMENTATION_BASE], tree),
+                            ([DOCUMENTATION_BASE, candidate, ACCEPTED_T003], tree),
+                            ([DOCUMENTATION_BASE, candidate], git(root, 'rev-parse', DOCUMENTATION_BASE + '^{tree}').decode().strip())):
                         wrong = merge(parents, selected_tree)
                         with mock.patch.dict(os.environ, {'GITHUB_SHA': wrong}):
-                            self.assertFalse(approved_t004_preparation(root))
+                            self.assertFalse(approved_documentation(root))
 
         def test_preparation_rejection_is_exact(self):
             observed = subprocess.run([sys.executable, 'scripts/verify_t004_cli.py'], cwd=ROOT,
