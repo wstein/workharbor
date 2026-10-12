@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -641,6 +642,78 @@ def dependency_bare_cr(self):
     self.exercise('dependencies', 'dependency_table')
 
 
+def entry_status_readonly(self):
+    begun = self.deferred(None)
+    before = self.snapshot()
+    result = subprocess.run([sys.executable, '-B', str(ROOT/'scripts/single_task.py'),
+                             'status', '--attempt', begun['attempt_id']], cwd=self.root,
+                            env=self.fixture.env, capture_output=True, text=True, timeout=10)
+    self.assertEqual(0, result.returncode, result.stderr)
+    self.assertEqual(begun, json.loads(result.stdout))
+    self.assertEqual(before, self.snapshot())
+
+
+def entry_rejections_preserve_evidence(self):
+    original = copy.deepcopy(self.context)
+    for field, value, seal, code in [('unknown', 'inert', True, 'context_schema'),
+                                     ('task_id', 'T999', True, 'scope_context')]:
+        self.context = copy.deepcopy(original)
+        self.context[field] = value
+        if seal:
+            self.seal()
+        self.deferred(code)
+    self.context = copy.deepcopy(original)
+    self.context['approval']['context_digest'] = '0'*64
+    self.deferred('approval_digest')
+    self.context = copy.deepcopy(original)
+    self.context['source_assertion']['excerpt'] += '\n'
+    self.seal()
+    self.deferred('dependency_mismatch')
+
+
+def entry_legacy_rejected(self):
+    before = self.snapshot()
+    result = subprocess.run([sys.executable, '-B', str(ROOT/'scripts/single_task.py'),
+                             'begin', '--feature', 'synthetic', '--task', 'T001',
+                             '--allow', 'guide.md', '--check', '["true"]'], cwd=self.root,
+                            env=self.fixture.env, capture_output=True, text=True, timeout=10)
+    self.assertEqual(2, result.returncode)
+    self.assertEqual('invalid_arguments', json.loads(result.stdout)['errors'][0]['code'])
+    self.assertEqual('', result.stderr)
+    self.assertEqual(before, self.snapshot())
+
+
+def entry_event_rollback(self):
+    self.input.write_bytes(canonical_bytes(self.context))
+    before = self.snapshot(include_state=False)
+    injection = '''import pathlib,runpy,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+import single_task_state as backend
+original=backend._Store.append_event
+def failed(self,attempt_id,kind,payload,progress=None):
+    if kind=='entry': raise backend.PersistenceFailure('synthetic entry event failure')
+    return original(self,attempt_id,kind,payload,progress)
+backend._Store.append_event=failed
+sys.argv=sys.argv[1:]
+runpy.run_path(sys.argv[0],run_name='__main__')
+'''
+    result = subprocess.run([sys.executable, '-B', '-c', injection,
+                             str(ROOT/'scripts/single_task.py'), 'begin', '--context', str(self.input)],
+                            cwd=self.root, env=self.fixture.env, capture_output=True, text=True, timeout=10)
+    self.assertEqual(6, result.returncode)
+    self.assertEqual('persistence_failure', json.loads(result.stdout)['errors'][0]['code'])
+    self.assertEqual('', result.stderr)
+    self.assertEqual(before, self.snapshot(include_state=False))
+    journal = self.root/'.symphony/single-task/journal.sqlite3'
+    with sqlite3.connect(journal.as_uri() + '?mode=ro', uri=True) as connection:
+        tables = connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        for (name,) in tables:
+            quoted = '"' + name.replace('"', '""') + '"'
+            self.assertEqual([], connection.execute('SELECT * FROM ' + quoted).fetchall())
+    self.assertEqual(1, len(list((self.root/'.symphony/single-task/contexts').iterdir())))
+    self.assertEqual(b'Retain prior local evidence\n', (self.root/'.symphony/prior-evidence').read_bytes())
+
+
 def schema_valid_rework(self):
     self.context.update(mode='owner-authorized rework', prior_attempt_id='synthetic-prior-attempt',
                         prior_implementation_commit=self.fixture.baseline,
@@ -784,6 +857,10 @@ def scope_gitlink_output(self):
 
 
 EXTRA_CASES = {
+    'entry_event_rollback': (entry_event_rollback, 'entry', None, 'T010'),
+    'entry_status_readonly': (entry_status_readonly, 'entry', None, 'T010'),
+    'entry_rejections_preserve_evidence': (entry_rejections_preserve_evidence, 'entry', None, 'T010'),
+    'entry_legacy_rejected': (entry_legacy_rejected, 'entry', None, 'T010'),
     'dependency_bare_cr': (dependency_bare_cr, 'dependencies', 'dependency_table', 'T009'),
     'prerequisites_valid': (prerequisites_valid, 'dependencies', None, 'T009'),
     'prerequisites_fenced_crlf': (prerequisites_fenced_crlf, 'dependencies', None, 'T009'),

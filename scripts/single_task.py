@@ -13,7 +13,11 @@ import sys
 from pathlib import Path
 from contextlib import contextmanager
 
+# Entry/status must not create source-checkout bytecode as a side effect.
+sys.dont_write_bytecode = True
 import single_task_state as backend
+import single_task_context as contexts
+import single_task_scope as entry_scope
 
 STATE = '.symphony/single-task.json'
 TASK = re.compile(r'^(- \[)([ xX])(\] (T\d{3}) .+)$', re.M)
@@ -35,9 +39,13 @@ MESSAGES = {
     'concurrent_attempt': 'Another command owns the worktree lock; retry after it exits.',
     'persistence_failure': 'Required persistence unavailable; retain evidence for operator recovery.',
 }
+for _code in ('context_schema', 'invalid_json', 'scope_context', 'dirty_baseline',
+              'artifact_commit', 'artifact_digest', 'approval_digest', 'artifact_drift',
+              'dependency_table', 'dependency_mismatch', 'prerequisite_evidence'):
+    MESSAGES[_code] = 'Task context rejected; review the approved local inputs and retained evidence.'
 
 
-def response(error=None, state=None, verification='not-run'):
+def response(error=None, state=None, verification='not-run', attempt=None):
     # Legacy metadata is deliberately distinct from journal progress/readiness.
     value = dict(schema_version=1, attempt_id=None, mode=None, progress=None,
                  local_verification=verification, owner_identity_authenticated=False,
@@ -45,6 +53,12 @@ def response(error=None, state=None, verification='not-run'):
     if state is not None:
         value['mode'] = state['phase']
         value['progress'] = 'legacy-completed' if state['phase'] == 'handoff-only' else 'legacy-active'
+    if attempt is not None:
+        value['attempt_id'] = attempt['attempt_id']
+        value['progress'] = attempt['progress']
+        value['mode'] = ('handoff-only' if attempt['progress'] in
+                         ('checkbox-applied', 'completed-awaiting-commit', 'handoff-ready')
+                         else attempt['entry_mode'])
     if error is not None:
         value['errors'] = [dict(code=error.code, message=MESSAGES[error.code],
                                 affected_paths=[], affected_ids=[])]
@@ -323,16 +337,11 @@ def arguments():
     args.legacy = False
     if args.command == 'begin':
         old = (args.feature, args.task, args.allow, args.check)
-        if args.context is not None:
-            valid = bool(args.context) and not any(item is not None for item in old)
-        else:
-            valid = all(old) and all(args.allow) and all(args.check)
-            args.legacy = True
+        valid = bool(args.context) and not any(item is not None for item in old)
     elif args.command == 'rework':
         valid = bool(args.context)
     elif args.command in ('verify', 'complete'):
-        args.legacy = args.attempt is None and args.review is None
-        valid = args.legacy or bool(args.attempt and args.review)
+        valid = bool(args.attempt and args.review)
     else:
         valid = bool(args.attempt)
         if args.command == 'resume':
@@ -410,6 +419,8 @@ ERRORS = (CliError, backend.StateConflict, backend.InvalidState, backend.Persist
 def failure(caught):
     if isinstance(caught, CliError):
         error = caught
+    elif isinstance(caught, contexts.ContextError):
+        error = CliError(2, caught.code)
     elif isinstance(caught, backend.StateConflict):
         error = CliError(5, 'concurrent_attempt')
     elif isinstance(caught, backend.InvalidState):
@@ -430,19 +441,52 @@ def main():
         except CliError as error:
             args = None
             parse_error = error
-        root = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').strip()).resolve()
+        root = Path(os.fsdecode(entry_scope.git(Path.cwd(), 'rev-parse', '--show-toplevel').stdout.strip())).resolve()
+        if parse_error is None and args.command == 'begin':
+            prepared = {}
+
+            def validate_entry():
+                context = contexts.load_context(args.context)
+                if context['mode'] != 'implement':
+                    raise contexts.ContextError('context_schema')
+                scope = entry_scope.validate_entry_scope(root, context)
+                contexts.validate_reviewed_artifacts(root, context)
+                contexts.validate_prerequisites(root, context)
+                prepared.update(context=context, scope=scope)
+
+            with backend.open_store(root, preflight=validate_entry) as store:
+                active = store.active_attempt()
+                if active is not None:
+                    store.append_event(active['attempt_id'], 'blocker', {'code': 'state_blocker'})
+                    raise CliError(3, 'state_blocker')
+                import uuid
+                attempt_id = uuid.uuid4().hex
+                scope = prepared['scope']
+                with store.transaction():
+                    store.create_attempt(attempt_id=attempt_id, context=prepared['context'],
+                                         baseline=scope['baseline_commit'], tasks_bytes=scope['tasks_bytes'],
+                                         entry_mode='implement',
+                                         approval_context_digest=prepared['context']['approval']['context_digest'])
+                    store.append_event(attempt_id, 'entry', {'context_digest': prepared['context']['approval']['context_digest']})
+                response(attempt=store.read_attempt(attempt_id))
+            return 0
+        if parse_error is None and args.command == 'status':
+            with backend.open_store(root, require_existing=True) as store:
+                response(attempt=store.read_attempt(args.attempt))
+            return 0
         with lock_only(root) as (legacy, journal):
             try:
                 if parse_error:
                     raise parse_error
-                if not journal or args.legacy:
-                    execute(root, args, legacy, journal)
-                    return 0
+                if legacy:
+                    raise backend.InvalidState('Legacy migration required')
+                if not journal:
+                    raise CliError(2, 'command_unavailable')
             except ERRORS as error:
                 return failure(error)
             # No mutable journal/task data is carried across this lock transition.
             # T003 revalidates all evidence under its own full-lifetime lock.
-        with backend.open_store(root):
+        with backend.open_store(root, require_existing=True):
             return failure(CliError(2, 'command_unavailable'))
     except ERRORS as error:
         return failure(error)

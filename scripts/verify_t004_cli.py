@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tests'))
 sys.path.insert(0, str(ROOT/'scripts'))
-from test_single_task import SingleTaskFixture, canonical_bytes
+from test_single_task import SingleTaskFixture, canonical_bytes, context_digest
 from verify_t002_red import Outcomes as BaseOutcomes, evaluate, flatten
 import single_task_state as backend
 
@@ -53,7 +53,8 @@ class CliBoundaryTests(unittest.TestCase):
         self.index = self.fixture.git('ls-tree', 'HEAD', '--', 'specs/synthetic/tasks.md').stdout
         self.context = self.root/'.symphony/input.json'
         self.context.parent.mkdir()
-        self.context.write_bytes(canonical_bytes(self.fixture.context()))
+        self.entry_context = self.fixture.context()
+        self.context.write_bytes(canonical_bytes(self.entry_context))
         self.script = ROOT/'scripts/single_task.py'
 
     def tearDown(self):
@@ -106,6 +107,22 @@ class CliBoundaryTests(unittest.TestCase):
                         '--allow', 'guide.md', '--check', json.dumps(
                             check or [sys.executable, '-c', 'pass']))
 
+    def validated_begin(self, check=None):
+        self.entry_context['checks'] = [{'id': 'boundary-check', 'argv': check or [sys.executable, '-c', 'pass'],
+                                         'cwd': '.', 'timeout_seconds': 10, 'expected_exit': 0}]
+        self.entry_context['approval']['context_digest'] = context_digest(self.entry_context)
+        self.context.write_bytes(canonical_bytes(self.entry_context))
+        value = self.response(self.cli('begin', '--context', str(self.context)), 0)
+        self.attempt = value['attempt_id']
+        return value
+
+    def verify_arguments(self):
+        review = self.fixture.review(self.entry_context)
+        review['attempt_id'] = self.attempt
+        path = self.fixture.private/'review.json'
+        path.write_bytes(canonical_bytes(review))
+        return ['verify', '--attempt', self.attempt, '--review', str(path)]
+
     def seed(self):
         with backend.open_store(self.root) as store:
             store.create_attempt(attempt_id='synthetic-attempt', context=self.fixture.context(),
@@ -125,15 +142,17 @@ class CliBoundaryTests(unittest.TestCase):
         ]
 
     def test_legacy_success_envelope(self):
-        value = self.response(self.legacy_begin(), 0, legacy=True)
-        self.assertIsNone(value['attempt_id'])
+        self.response(self.legacy_begin(), 2, code='invalid_arguments')
+        value = self.validated_begin()
+        self.assertTrue(value['attempt_id'])
         self.assertEqual('implement', value['mode'])
-        self.assertEqual('legacy-active', value['progress'])
+        self.assertEqual('active', value['progress'])
         self.assertEqual('not-run', value['local_verification'])
-        self.assertFalse((self.root/'.symphony/single-task/journal.sqlite3').exists())
-        value = self.response(self.cli('verify'), 0, legacy=True)
+        self.assertTrue((self.root/'.symphony/single-task/journal.sqlite3').exists())
+        self.assertFalse((self.root/'.symphony/single-task.json').exists())
+        value = self.response(self.cli(*self.verify_arguments()), 0)
         self.assertEqual('passed', value['local_verification'])
-        self.assertEqual('legacy-active', value['progress'])
+        self.assertEqual('active', value['progress'])
 
     def test_argument_errors_are_safe_and_stable(self):
         secret = 'synthetic-T004-secret-argv'
@@ -151,7 +170,7 @@ class CliBoundaryTests(unittest.TestCase):
     def test_deferred_commands_do_not_enter_or_execute(self):
         marker = self.root/'.symphony/prior-evidence'
         marker.write_bytes(b'keep prior evidence')
-        for argv in self.commands():
+        for argv in [command for command in self.commands() if command[0] not in ('begin', 'status')]:
             with self.subTest(command=argv[0]):
                 value = self.response(self.cli(*argv), 2, code='command_unavailable')
                 self.assertEqual('not-run', value['local_verification'])
@@ -162,29 +181,33 @@ class CliBoundaryTests(unittest.TestCase):
                 self.assertFalse((self.root/'.symphony/single-task/contexts').exists())
                 self.assertFalse((self.root/'.symphony/single-task.json').exists())
                 self.assertEqual(b'keep prior evidence', marker.read_bytes())
+        begun = self.validated_begin()
+        status = self.response(self.cli('status', '--attempt', begun['attempt_id']), 0)
+        self.assertEqual(begun, status)
+        self.assertEqual(b'keep prior evidence', marker.read_bytes())
 
     def test_malformed_context_is_not_echoed(self):
         secret = 'synthetic-T004-secret-context'
         content = canonical_bytes({'unknown': secret, 'checks': [{'argv': [secret]}]})
         self.context.write_bytes(content)
         result = self.cli('begin', '--context', str(self.context))
-        self.response(result, 2, code='command_unavailable')
+        self.response(result, 2, code='context_schema')
         self.assertNotIn(secret, result.stdout + result.stderr)
         self.assertNotIn(content.decode(), result.stdout + result.stderr)
         self.assertEqual(content, self.context.read_bytes())
 
     def test_scope_blocker_exit_three(self):
-        self.response(self.legacy_begin(), 0, legacy=True)
+        self.validated_begin()
         (self.root/'outside.md').write_text('out of scope\n', encoding='utf-8')
-        result = self.cli('verify')
+        result = self.cli(*self.verify_arguments())
         self.response(result, 3, code='scope_blocker', legacy=True)
         self.assertIn('Out-of-scope', result.stderr)
 
     def test_acceptance_exit_four_does_not_echo_output_or_argv(self):
         secret = 'synthetic-T004-secret-check'
         check = [sys.executable, '-c', f'import sys; print({secret!r}); print({secret!r}, file=sys.stderr); sys.exit(7)']
-        self.response(self.legacy_begin(check), 0, legacy=True)
-        result = self.cli('verify')
+        self.validated_begin(check)
+        result = self.cli(*self.verify_arguments())
         value = self.response(result, 4, code='acceptance_failed', legacy=True)
         self.assertEqual('failed', value['local_verification'])
         self.assertNotIn(secret, result.stdout + result.stderr)
@@ -220,11 +243,12 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         self.assertFalse((self.root/'.symphony/single-task.json').exists())
 
     def test_lock_released_after_cli_error(self):
+        self.context.write_bytes(b'{"unknown":"inert"}')
         self.response(self.cli('begin', '--context', str(self.context)), 2,
-                      code='command_unavailable')
+                      code='context_schema')
         # A separate CLI process and the real primitive can each reacquire it.
         self.response(self.cli('begin', '--context', str(self.context)), 2,
-                      code='command_unavailable')
+                      code='context_schema')
         with backend.open_store(self.root):
             pass
 
@@ -270,9 +294,9 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         check = [sys.executable, '-c',
                  'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ready\\n"); '
                  'open(sys.argv[2]).read(1)', str(ready), str(release)]
-        self.response(self.legacy_begin(check), 0, legacy=True)
+        self.validated_begin(check)
         read_fd = os.open(ready, os.O_RDONLY | os.O_NONBLOCK)
-        process = subprocess.Popen([sys.executable, str(self.script), 'verify'],
+        process = subprocess.Popen([sys.executable, str(self.script), *self.verify_arguments()],
                                    cwd=self.root, env=self.fixture.env, text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    start_new_session=True)
@@ -281,11 +305,11 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                 selector.register(read_fd, selectors.EVENT_READ)
                 self.assertTrue(selector.select(5), 'Acceptance did not signal readiness')
             self.assertEqual(b'ready\n', os.read(read_fd, 100))
-            legacy = self.root/'.symphony/single-task.json'
-            before = legacy.read_bytes()
+            journal = self.root/'.symphony/single-task/journal.sqlite3'
+            before = journal.read_bytes()
             for argv in self.commands() + [['verify'], ['complete']]:
                 self.response(self.cli(*argv), 5, code='concurrent_attempt')
-                self.assertEqual(before, legacy.read_bytes())
+                self.assertEqual(before, journal.read_bytes())
             # Nonblocking write avoids hanging if the checker died unexpectedly.
             with os.fdopen(os.open(release, os.O_WRONLY | os.O_NONBLOCK), 'w') as stream:
                 stream.write('x')

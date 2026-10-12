@@ -120,7 +120,7 @@ class SingleTaskFixture:
             if file.is_symlink() or not file.is_file():
                 raise ValueError('Fixture manifest requires regular files')
             content = file.read_bytes()
-            if path == 'specs/synthetic/tasks.md':
+            if path == self.feature.relative_to(self.root).as_posix() + '/tasks.md':
                 content = content.replace(f'- [x] {task}'.encode(), f'- [ ] {task}'.encode())
             entries.append({'path': path, 'type': 'regular',
                             'mode': '100755' if file.stat().st_mode & 0o111 else '100644',
@@ -158,7 +158,7 @@ class SingleTaskFixture:
 
     def review(self, context):
         value = self.template('review.json')
-        manifest = self.manifest(context['allowed_paths'] + ['specs/synthetic/tasks.md'], context['task_id'])
+        manifest = self.manifest(context['allowed_paths'] + [f'specs/{context["feature"]}/tasks.md'], context['task_id'])
         value.update(attempt_id=self.identities['attempt'], task_id=context['task_id'],
                      context_digest=context['approval']['context_digest'],
                      content_manifest_digest=digest(canonical_bytes(manifest)),
@@ -392,33 +392,76 @@ class SingleTaskTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.fixture = SingleTaskFixture(self.tmp.name)
+        self.root = self.fixture.root
         self.feature = self.root/'specs/demo'
-        self.feature.mkdir(parents=True)
+        self.fixture.feature.rename(self.feature)
+        self.fixture.feature = self.feature
         for name in ('spec.md', 'plan.md'):
             (self.feature/name).write_text('Reviewed artifact\n')
-        self.tasks = '- [ ] T001 Document guide in guide.md\n- [ ] T002 Other task in other.md\n'
+        self.tasks = ('- [ ] T001 Document guide in guide.md\n- [ ] T002 Other task in other.md\n'
+                      '\n## Dependencies\n\n| Task | Prerequisites |\n| --- | --- |\n'
+                      '| T001 | none |\n| T002 | T001 |\n')
         (self.feature/'tasks.md').write_text(self.tasks)
         (self.root/'.gitignore').write_text('.symphony/\n')
         (self.root/'guide.md').write_text('Before\n')
-        self.git('init', '-b', 'main')
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'test: baseline')
+        self.reviewed_commit = self.git('rev-parse', 'HEAD').stdout.decode().strip()
+        self.reviewed_bytes = {name: (self.feature/name).read_bytes() for name in ('spec.md', 'plan.md', 'tasks.md')}
+        self.attempt = None
 
     def git(self, *args):
-        return subprocess.run(['git', *args], cwd=self.root, capture_output=True, check=True)
+        return subprocess.run(['git', '-c', f'core.hooksPath={self.fixture.hooks}',
+                               '-c', 'core.fsmonitor=false', '-c', 'credential.helper=', *args],
+                              cwd=self.root, env=self.fixture.env, capture_output=True, check=True, timeout=10)
 
     def cli(self, *args, ok=True):
-        run = subprocess.run([sys.executable, str(SCRIPT), *args], cwd=self.root, capture_output=True, text=True)
+        if args[0] in ('verify', 'complete') and self.attempt is not None:
+            path = self.fixture.private/'review.json'
+            paths = self.entry_context['allowed_paths'] + ['specs/demo/tasks.md']
+            if all(not (self.root/item).is_symlink() and
+                   (not (self.root/item).exists() or (self.root/item).is_file()) for item in paths):
+                self.prepare_review()
+            # Unsafe mutations use the legitimate review retained before the
+            # mutation, so the CLI must reject the actual file-type change.
+            args = (*args, '--attempt', self.attempt, '--review', str(path))
+        run = subprocess.run([sys.executable, '-B', str(SCRIPT), *args], cwd=self.root,
+                             env=self.fixture.env, capture_output=True, text=True, timeout=10)
         if ok:
             self.assertEqual(0, run.returncode, run.stderr)
         else:
             self.assertNotEqual(0, run.returncode)
+            if args[0] in ('verify', 'complete'):
+                self.assertNotEqual('command_unavailable', json.loads(run.stdout)['errors'][0]['code'],
+                                    'Retained completion/retry scenario requires T017/T023')
         return run
 
+    def entry(self, check=None, **changes):
+        context = self.fixture.context()
+        context.update(feature='demo', reviewed_artifacts={name: {'path': f'specs/demo/{name}',
+                       'commit': self.reviewed_commit, 'sha256': digest(content)}
+                       for name, content in self.reviewed_bytes.items()})
+        context['source_assertion'].update(path='specs/demo/tasks.md', sha256=digest(self.reviewed_bytes['tasks.md']),
+                                           excerpt=self.tasks.split('\n\n')[-1].rstrip('\n'))
+        context['checks'] = [{'id': 'local-check', 'argv': check or [sys.executable, '-c', 'pass'],
+                              'cwd': '.', 'timeout_seconds': 10, 'expected_exit': 0}]
+        context.update(changes)
+        context['approval']['context_digest'] = context_digest(context)
+        path = self.fixture.private/'entry-context.json'
+        path.write_bytes(canonical_bytes(context))
+        self.entry_context = context
+        return path
+
     def begin(self, check=None):
-        self.cli('begin', '--feature', 'demo', '--task', 'T001', '--allow', 'guide.md',
-                 '--check', json.dumps(check or [sys.executable, '-c', 'pass']))
+        result = self.cli('begin', '--context', str(self.entry(check)))
+        self.attempt = json.loads(result.stdout)['attempt_id']
+        self.prepare_review()
+
+    def prepare_review(self):
+        review = self.fixture.review(self.entry_context)
+        review['attempt_id'] = self.attempt
+        (self.fixture.private/'review.json').write_bytes(canonical_bytes(review))
 
     def test_complete_and_retry_preserve_other_task(self):
         self.begin()
@@ -545,14 +588,15 @@ class SingleTaskTests(unittest.TestCase):
         self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
 
     def test_dirty_checkout_and_unknown_task_rejected(self):
-        self.cli('begin', '--feature', 'demo', '--task', 'T999', '--allow', 'guide.md', '--check', '["true"]', ok=False)
+        result = self.cli('begin', '--context', str(self.entry(task_id='T999')), ok=False)
+        self.assertEqual('scope_context', json.loads(result.stdout)['errors'][0]['code'])
         (self.root/'guide.md').write_text('Existing work\n')
-        run = self.cli('begin', '--feature', 'demo', '--task', 'T001', '--allow', 'guide.md', '--check', '["true"]', ok=False)
-        self.assertIn('clean checkout', run.stderr)
+        run = self.cli('begin', '--context', str(self.entry()), ok=False)
+        self.assertEqual('dirty_baseline', json.loads(run.stdout)['errors'][0]['code'])
 
     def test_traversal_and_symlink_rejected(self):
-        self.cli('begin', '--feature', '../demo', '--task', 'T001', '--allow', 'guide.md', '--check', '["true"]', ok=False)
-        self.cli('begin', '--feature', 'demo', '--task', 'T001', '--allow', '../outside', '--check', '["true"]', ok=False)
+        self.cli('begin', '--context', str(self.entry(feature='../demo')), ok=False)
+        self.cli('begin', '--context', str(self.entry(allowed_paths=['../outside'])), ok=False)
         self.begin()
         (self.root/'guide.md').unlink()
         (self.root/'guide.md').symlink_to(self.feature/'spec.md')
