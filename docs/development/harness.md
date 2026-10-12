@@ -58,51 +58,54 @@ failures. Repository, diff, shell syntax and feature prerequisite checks must al
 pass. Raw `make check` still runs and must report exit 2; its full suite remains red,
 and CI acceptance does not claim CLI implementation or full-suite acceptance.
 
-The helper pins both approved contracts, both verifiers, the legacy guard and exact
-T003 task bytes. It requires either sealed T003 ancestry or the exact owner-merged
-PR #32 commit (`a36bf7e1fc9b09bd07226078b7d70c5d299d9324`), comparing against that
-anchor without requiring orphaned pre-rebase commits. Accepted T002 blobs must
-match the common pre-T003 baseline. Its tree may differ from the anchor only in
-this harness document, the CI helper and the workflow. The exact reviewed
-AGENTS.md and WORKFLOW.md pair from `c329e4c71e246eb286bcd49c6b3689c93317f313` is
-also permitted only when both byte hashes, regular non-executable file modes and
-index contents match. Any other changed or untracked file, missing history,
-changed pin or successor task expires the phase and requires strict full-green
-`make check`, plus the direct state suite when that module exists. T004 cannot
-inherit the exception. Full-suite green is required at US3 and final acceptance.
-No verifier matrix, runtime pin, task marker or state implementation changes here.
-Run `python3 scripts/check_ci.py --self-test` for phase/pin/fallback regression checks.
-The committed prerequisite record reference/digest stays pinned; CI verifies local
-Git content and does not refresh external owner authorization.
+The helper retains the exact accepted T003 identities, contracts, prerequisite
+blobs and verifier matrices. Documentation validation uses a separately pinned
+accepted CI policy source (`2d965c15587cdc4d9fc9a00083bd00d7788b8306`), while the
+behavior baseline remains unchanged. It checks proposal changes from the merge
+base through every intervening commit, including reverted changes. Independent
+base documentation changes are allowed; changed protected prerequisites, runtime,
+tests, Feature 001–003 artifacts or executable inputs require strict acceptance.
+A proposal cannot authenticate changes to the CI helper itself.
 
-### Sealed T004 preparation validation
+PR source metadata binds exact base, proposal head and integration commits. The
+checkout must have exactly those ordered parents and the tree produced by Git's
+actual merge. Index bytes, physical file types/modes and worktree content must
+match that checkout; dirty, staged, untracked, symlink and hidden mode changes
+block. Executable Git configuration is refused or disabled before inspection.
+Scope is checked against the proposal head; integration checks run against the
+synthetic merge, which may include unrelated accepted base documentation changes.
+Missing objects, stale/foreign event metadata, conflicts or uncertain identity
+block without inferring rebase equivalence. The accepted T003 rebase identity
+remains explicit and does not require its orphaned original commit.
 
-PR34's preparation is a separate CI mode, with no T004 implementation acceptance
-or entry authorization. It recognizes immutable preparation commit
-`f6a69470f8a3e5c396e134326c033a3b1195de7b` above accepted source `5d1dc656…`,
-pins all three preparation artifact hashes/modes, and permits exactly one CI
-commit changing only this document and `scripts/check_ci.py`, plus one direct
-PR-wrapper fix above reviewed CI head `4826a9a36b3f7f8e74d46b2238cf7653e3947911`.
-HEAD, index and
-worktree must otherwise match that preparation seal; untracked files and dirty
-CI edits block. Any later commit, implementation, marker, test, workflow or
-preparation change expires the mode and returns to the existing strict path.
-The checker does not hash itself or authenticate its own approval: independent
-review of the exact final CI commit remains required.
+An independently reviewed, explicitly host-adopted immutable policy source can
+validate the bounded operator-tool category with `--policy-source SHA`. This pin
+must identify the loaded checker's exact bytes and mode, and the proposal's
+operator/authority files must match that reviewed source. The category enumerates
+three tools and their separate `scripts/test_*.py` files; it never permits arbitrary
+scripts or changes to frozen baseline behavior. All new tool suites must be
+nonempty and strictly green, with no skips or expected failures. The unchanged
+12 direct state tests, 31 baseline passes, ten exact known CLI assertions and 53-case
+T004 rejection remain required, together with repository/shell/prerequisite checks.
+Raw `make check` must still report exit 2. This is **operator validation only**:
+it grants no task execution, live approval, publication or full-green acceptance.
+Absent or invalid policy adoption leaves executable changes on strict full-green
+acceptance. Supplying a SHA is host trust input, not proof of review or adoption;
+the coordinator must verify those separately. Current GitHub workflow adoption
+requires its own reviewed change.
 
-This mode runs the preparation verifier self-test/syntax, the twelve T003 green
-cases, T002's exact 31-green/ten-red verifier, repository/diff/shell/prerequisite
-checks, and raw `make check` (required exit 2, explicitly red). It also requires
-exit 1 and the exact canonical SHA-256 of the known 53-case T004 rejection
-report. Missing/extra cases, changed outcomes, generic nonzero errors or an
-unexpected T004 pass block. Known unimplemented errors are accepted only as
-preparation evidence; they can never pass T004's delivered-behavior verifier.
-Successful CI labels itself **PREPARATION ONLY**. The runtime task's four ordered
-acceptance argv, immutable external guard and pending owner gates are unchanged.
+The checker's callable `source_context(root, event, base, head, checkout)` returns
+validated immutable metadata or raises `ValueError`. `check(root, context,
+policy_source=None)` runs the relevant checks and returns an exit code. A trusted
+source checker can inspect a separate integration root with:
 
-For a pull-request event, Actions' synthetic merge is recognized only when its
-first parent is the exact accepted source, its second parent is the sealed
-proposal candidate, its complete tree equals that candidate, and the event's
-source/head commits, branch names and repository identities agree. Extra/wrong
-parents, changed merge trees and dirty index/worktree state block. This wrapper
-does not extend the preparation phase to a later implementation commit.
+```sh
+python3 /trusted/source/scripts/check_ci.py --root /isolated/integration \
+  --event pull_request --base BASE_SHA --head HEAD_SHA --checkout MERGE_SHA
+```
+
+All four source options are required together. `--policy-source` adds the separate
+explicit adoption input for operator validation; it never selects a task exception.
+Run `python3 scripts/check_ci.py --self-test` and
+`python3 scripts/test_check_ci.py` for legacy baseline and new source regressions.
+Frozen verifier inputs remain unchanged; no external approval is refreshed by CI.

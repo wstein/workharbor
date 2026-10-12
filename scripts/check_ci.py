@@ -47,6 +47,15 @@ DOCUMENTATION_BASE = '8f8211afdda9e46984ccfb95505f83434da06db7'
 # Accepted CI authority, distinct from the unchanged behavioral baseline pins.
 DOCUMENTATION_POLICY_SOURCE = '2d965c15587cdc4d9fc9a00083bd00d7788b8306'
 
+# A bounded operator-tool category. Extending it requires a reviewed policy source.
+OPERATOR_TOOLS = {
+    'scripts/check_ci.py': 'scripts/test_check_ci.py',
+    'scripts/prepare_publication.py': 'scripts/test_prepare_publication.py',
+    'scripts/approval_binding.py': 'scripts/test_approval_binding.py',
+}
+OPERATOR_POLICY_PATHS = {'scripts/check_ci.py', 'AGENTS.md', 'WORKFLOW.md'}
+OPERATOR_PATHS = set(OPERATOR_TOOLS) | set(OPERATOR_TOOLS.values()) | OPERATOR_POLICY_PATHS
+
 
 class SourceContext(NamedTuple):
     event: str
@@ -149,7 +158,7 @@ def documentation_path(name):
         path.parts[0] in ('docs', 'specs', 'contracts') and path.suffix in ('.md', '.json'))))
 
 
-def history_scope(root, baseline, revision, allowed):
+def history_scope(root, baseline, revision, allowed, operator=False):
     """Inspect every changed version, so a revert cannot erase scope/type drift."""
     git(root, 'merge-base', '--is-ancestor', baseline, revision)
     commits = git(root, 'rev-list', baseline + '..' + revision).decode().splitlines()
@@ -161,7 +170,8 @@ def history_scope(root, baseline, revision, allowed):
             if not allowed(name):
                 return False
             entry = git(root, 'ls-tree', commit, '--', name)
-            if entry and not entry.startswith(b'100644 blob '):
+            modes = (b'100644 blob ', b'100755 blob ') if operator and name in OPERATOR_TOOLS else (b'100644 blob ',)
+            if entry and not entry.startswith(modes):
                 return False
     return True
 
@@ -197,6 +207,60 @@ def approved_documentation(root, context=None):
                 and history_scope(root, fork[0], context.head, documentation_path)
                 and protected_baseline(root, (base, context.head, context.checkout)))
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+        return False
+
+
+def approved_operator_tooling(root, context, policy_source):
+    """Local validation only, gated by externally adopted reviewed policy source.
+
+    A supplied immutable pin is host trust input. This function cannot authenticate
+    the review/adoption action, and never grants task execution or publication.
+    """
+    try:
+        if (not isinstance(policy_source, str) or not re.fullmatch('[0-9a-f]{40}', policy_source)
+                or git(root, 'cat-file', '-t', policy_source) != b'commit\n'):
+            return False
+        policy_file = Path(__file__)
+        entry = git(root, 'ls-tree', policy_source, '--', 'scripts/check_ci.py')
+        if (policy_file.is_symlink() or not policy_file.is_file()
+                or not entry.startswith(b'100755 blob ' if policy_file.stat().st_mode & 0o111 else b'100644 blob ')
+                or git(root, 'show', policy_source + ':scripts/check_ci.py') != policy_file.read_bytes()):
+            return False
+        context = source_context(root, *context) if context else source_context(root)
+        git(root, 'merge-base', '--is-ancestor', policy_source, context.head)
+        base = context.base if context.event == 'pull_request' else DOCUMENTATION_POLICY_SOURCE
+        allowed = lambda name: name in OPERATOR_PATHS or documentation_path(name)
+        if (not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
+                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, documentation_path)
+                or not history_scope(root, policy_source, context.head, documentation_path)
+                or not protected_baseline(root, (policy_source, base, context.head, context.checkout))):
+            return False
+        # All executable and authority inputs must be exactly the reviewed source.
+        # Independent base docs are allowed; changed operator code needs a new pin.
+        for name in sorted(OPERATOR_PATHS):
+            expected = git(root, 'ls-tree', policy_source, '--', name)
+            for revision in (context.head, context.checkout):
+                if git(root, 'ls-tree', revision, '--', name) != expected:
+                    return False
+        tests = {path.relative_to(root).as_posix() for path in root.glob('scripts/test_*.py')}
+        required = {test for tool, test in OPERATOR_TOOLS.items() if (root/tool).is_file()}
+        return tests == required and bool(tests)
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+        return False
+
+
+def operator_suite(root):
+    # Run all bounded new tests in a fresh interpreter, with a deadline and strict
+    # unittest outcomes. The parent has already checked the complete inventory.
+    modules = [Path(test).stem for tool, test in OPERATOR_TOOLS.items() if (root/tool).is_file()]
+    code = ("import runpy,sys; m=runpy.run_path(sys.argv[1]); "
+            "raise SystemExit(0 if m['strict_suite'](m['Path'](sys.argv[2]), "
+            "'scripts', 'test_*.py', sys.argv[3:]) else 1)")
+    try:
+        result = subprocess.run([sys.executable, '-B', '-c', code, str(Path(__file__).resolve()),
+                                 str(root.resolve()), *modules], cwd=root, timeout=300)
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -265,8 +329,9 @@ def expected_t004_rejection(result):
         return False
 
 
-def check_t004_preparation(root, documentation=False, context=None):
-    print('CI mode: documentation only; accepted baseline behavior, no implementation acceptance.'
+def check_t004_preparation(root, documentation=False, context=None, policy_source=None):
+    print('CI mode: operator validation only; task execution and live approval are FALSE.'
+          if policy_source else 'CI mode: documentation only; accepted baseline behavior, no implementation acceptance.'
           if documentation else 'CI mode: sealed T004 PREPARATION ONLY; no implementation acceptance.', flush=True)
     for argv in ([sys.executable, 'scripts/verify_t004_cli.py', '--self-test'],
                  [sys.executable, '-m', 'py_compile', 'scripts/verify_t004_cli.py'],
@@ -291,13 +356,34 @@ def check_t004_preparation(root, documentation=False, context=None):
         return 1
     raw = run(['make', 'check', 'PYTHON=' + sys.executable], root)
     print(f'Raw make check exit: {raw}; full suite remains RED; preparation only.', flush=True)
-    boundary = approved_documentation if documentation else approved_t004_preparation
-    valid = boundary(root, context) if documentation else boundary(root)
+    if policy_source:
+        valid = operator_suite(root) and approved_operator_tooling(root, context, policy_source)
+    else:
+        boundary = approved_documentation if documentation else approved_t004_preparation
+        valid = boundary(root, context) if documentation else boundary(root)
     return 0 if raw == 2 and valid else 1
 
 
 def git(root, *args):
-    return subprocess.run(['git', *args], cwd=root, capture_output=True, check=True).stdout
+    # Repository config and attributes are executable inputs. Do not trigger
+    # clean/process filters, fsmonitor, custom merge drivers or external diffs.
+    env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0')
+    command = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
+               '-c', 'core.attributesFile=' + os.devnull, '-c', 'submodule.recurse=false']
+    config = subprocess.run(command + ['config', '--null', '--list', '--no-includes'],
+                            cwd=root, env=env, capture_output=True, check=True).stdout
+    for entry in filter(None, config.split(b'\0')):
+        key = entry.split(b'\n', 1)[0].lower()
+        if (key.startswith((b'filter.', b'include.', b'includeif.'))
+                or (key.startswith(b'merge.') and key.endswith(b'.driver'))
+                or (key.startswith(b'diff.') and key.endswith((b'.command', b'.textconv')))
+                or key == b'diff.external'):
+            raise ValueError('Executable or external Git configuration is unsupported')
+    if args and args[0] in ('diff', 'diff-tree'):
+        args = (args[0], '--no-ext-diff', '--no-textconv', *args[1:])
+    return subprocess.run(command + list(args), cwd=root, env=env,
+                          capture_output=True, check=True).stdout
 
 
 def reviewed_docs(root):
@@ -352,25 +438,37 @@ def run(argv, root):
     return subprocess.run(argv, cwd=root).returncode
 
 
-def strict_suite(root):
+def strict_suite(root, directory='tests', pattern='test*.py', required_modules=()):
     # unittest's successful exit alone also permits skips/xfail and empty discovery.
-    suite = unittest.defaultTestLoader.discover(str(root/'tests'))
+    suite = unittest.defaultTestLoader.discover(str(root/directory), pattern=pattern)
+    def cases(value):
+        for test in value:
+            yield from cases(test) if isinstance(test, unittest.TestSuite) else (test,)
+    ids = [test.id() for test in cases(suite)]
+    if len(ids) != len(set(ids)) or any(not any(name.startswith(module + '.') for name in ids)
+                                      for module in required_modules):
+        return False
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return (result.wasSuccessful() and result.testsRun > 0 and not result.skipped
             and not result.expectedFailures)
 
 
-def check(root, context=None):
-    if context is not None:
+def check(root, context=None, policy_source=None):
+    if context is not None or policy_source is not None:
         try:
-            context = source_context(root, *context)
+            context = source_context(root, *context) if context else source_context(root)
         except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
             print('CI blocked: invalid source context.', flush=True)
             return 1
+    if policy_source is not None:
+        if not approved_operator_tooling(root, context, policy_source):
+            print('CI blocked: untrusted policy source or operator scope.', flush=True)
+            return 1
+        return check_t004_preparation(root, context=context, policy_source=policy_source)
     if approved_t004_preparation(root):
         return check_t004_preparation(root)
     if approved_documentation(root, context):
-        return check_t004_preparation(root, documentation=True, context=context)
+        return check_t004_preparation(root, documentation=True, context=context or source_context(root))
     scoped = approved_t003(root)
     print('CI mode: approved T003 phase' if scoped else 'CI mode: strict full green', flush=True)
     if scoped:
@@ -672,6 +770,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--policy-source', help='Host-adopted independently reviewed immutable policy pin')
     parser.add_argument('--event', choices=('pull_request', 'push', 'local'))
     for name in ('base', 'head', 'checkout'):
         parser.add_argument('--' + name)
@@ -680,10 +779,10 @@ def main(argv=None):
     if any(context) and not all(context):
         parser.error('event/base/head/checkout must be supplied together')
     if args.self_test:
-        if any(context) or args.root != ROOT:
+        if any(context) or args.root != ROOT or args.policy_source:
             parser.error('self-test does not accept source overrides')
         return self_test()
-    return check(args.root, SourceContext(*context) if all(context) else None)
+    return check(args.root, SourceContext(*context) if all(context) else None, args.policy_source)
 
 
 if __name__ == '__main__':
