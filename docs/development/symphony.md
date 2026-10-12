@@ -123,6 +123,19 @@ This is a prompt/issue contract, not a mechanical tracker gate. Live dispatch an
 skill-scope behavior require the documented smoke test before unattended operation.
 
 ## Retry and rework states
+If acceptance succeeds but Git reports that `.git/index.lock` cannot be created,
+record a blocked handoff and preserve the checkout and ignored evidence. The current
+noninteractive approval policy cannot grant an agent additional Git metadata access.
+An authorized operator can finish the commit: compare the worktree and index with
+the approved baseline, check intervening commits, and match every staged path,
+content digest, file type and mode against the sealed acceptance evidence. Stage
+only the approved files and selected task checkbox; commit them together, rerun
+the exact acceptance commands and record the resulting commit and clean status.
+Keep the original evidence and append an operator recovery record. Publication and
+the final review-label switch still require the normal authorization and evidence.
+Do not reset the checkout, recreate task state or relax sandbox policy to recover.
+This is an operator-assisted handoff; unattended Git commits remain unverified.
+
 A pending approved task uses `implement`. After acceptance passes and its checkbox
 is checked, a retry uses `handoff-only` if matching implementation commits and test
 evidence exist for that issue/task/revision. Verify the commits and rerun acceptance
