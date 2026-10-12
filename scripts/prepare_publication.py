@@ -73,13 +73,14 @@ class Commands:
 
     def git(self, cwd, *argv):
         command = ['git', '--no-replace-objects']
-        code, path = self.run(command + ['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+        code, path = self.run(command + ['rev-parse', '--path-format=absolute', '--git-common-dir'],
                               cwd, 'git_failed', checked=False)
         if not code:
-            graft = Path(os.fsdecode(path.strip()))
+            info = Path(os.fsdecode(path.strip()))/'info'
+            graft = info/'grafts'
             replacements = self.run(command + ['for-each-ref', '--format=%(refname)', 'refs/replace/'],
                                     cwd, 'git_failed')[1]
-            if graft.exists() or graft.is_symlink() or replacements:
+            if info.is_symlink() or graft.exists() or graft.is_symlink() or replacements:
                 raise Blocked('git_object_substitution')
         return self.run(command + list(argv), cwd, 'git_failed')[1].decode('ascii')
 

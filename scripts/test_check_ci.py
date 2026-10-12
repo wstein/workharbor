@@ -151,6 +151,21 @@ class SourceTests(unittest.TestCase):
             commands.git(self.root, 'rev-list', policy)
         self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
         graft.unlink()
+        graft.symlink_to(self.root/'absent-graft-target')
+        for read, error in ((lambda: ci.git(self.root, 'rev-list', policy), ValueError),
+                            (lambda: binding._git(self.root, 'rev-list', policy), binding.BindingBlocked),
+                            (lambda: commands.git(self.root, 'rev-list', policy), preparation.Blocked)):
+            with self.assertRaises(error):
+                read()
+        graft.unlink()
+        info = graft.parent
+        saved_info = info.with_name('saved-info')
+        info.rename(saved_info)
+        info.symlink_to(saved_info, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            ci.git(self.root, 'rev-list', policy)
+        info.unlink()
+        saved_info.rename(info)
         self.git('update-ref', 'refs/alternate-replacements/' + policy, replacement)
         with mock.patch.dict(os.environ, GIT_REPLACE_REF_BASE='refs/alternate-replacements',
                              GIT_NO_REPLACE_OBJECTS='0'):
