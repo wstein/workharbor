@@ -28,14 +28,14 @@ class Transport:
         self.calls.append((kind, object_id))
         if self.failures:
             raise self.failures.pop(0)
-        return tracker.AuthenticatedRead('github', 'repo-1', 'host-verifier', NOW,
+        return tracker.AuthenticatedRead('github', 'repo-1', 'host-verifier', 'e' * 40, NOW,
                                          encoded(self.payload))
 
 
 class TrackerTests(unittest.TestCase):
     def setUp(self):
         self.config = tracker.TrackerConfig('github', 'fixture/repo', 'repo-1',
-                                             'owner-1', 'host-verifier')
+                                             'owner-1', 'host-verifier', 'e' * 40)
         self.target = tracker.DecisionTarget('fixture/repo', '004-fixture', 'T011',
                                             'execution', REVISION, DIGEST, 'c' * 64)
         self.payload = dict(object_id='comment-1', repository='fixture/repo',
@@ -62,6 +62,7 @@ class TrackerTests(unittest.TestCase):
         self.assertEqual(self.reference.content_digest, decision.object_digest)
         self.assertEqual(('owner-1', 'owner-1', 'host-verifier'),
                          (decision.actor_id, decision.owner_id, decision.verifier_id))
+        self.assertEqual('e' * 40, decision.verifier_revision)
         self.assertEqual((900, 900, 900, 2000, NOW),
                          (decision.created_at, decision.decided_at, decision.updated_at,
                           decision.expires_at, decision.observed_at))
@@ -88,7 +89,7 @@ class TrackerTests(unittest.TestCase):
 
     def test_provider_repository_and_verifier_envelope_are_host_pinned(self):
         good = self.transport.read('approval', 'comment-1')
-        for field in ('provider_id', 'repository_id', 'verifier_id'):
+        for field in ('provider_id', 'repository_id', 'verifier_id', 'verifier_revision'):
             with self.subTest(field=field), patch.object(self.transport, 'read', return_value=replace(good, **{field: 'wrong'})):
                 self.reject()
 
@@ -103,6 +104,7 @@ class TrackerTests(unittest.TestCase):
                                                      self.transport, clock=lambda: NOW)
                 with self.assertRaises(tracker.TrackerBlocked):
                     port.read_approval(reference)
+        self.transport.payload = self.payload
         good = self.transport.read('approval', 'comment-1')
         for observed in (NOW - 301, NOW + 1):
             with patch.object(self.transport, 'read', return_value=replace(good, observed_at=observed)):
@@ -112,6 +114,7 @@ class TrackerTests(unittest.TestCase):
         local = tracker.supplied_local(self.reference)
         self.assertEqual('supplied-local', local.assurance)
         self.assertIsNone(local.verifier_id)
+        self.assertIsNone(local.verifier_revision)
         with self.assertRaises(tracker.TrackerBlocked):
             self.port.read_approval(local)
         self.assertEqual([], self.transport.calls)
@@ -180,6 +183,19 @@ class TrackerTests(unittest.TestCase):
         with self.assertRaises(tracker.TrackerBlocked):
             self.port.read_issue(tracker.IssueIdentity('other/repo', 17))
         self.assertEqual(before, len(self.transport.calls))
+
+    def test_invalid_configuration_and_reference_are_rejected_before_transport(self):
+        for field, value in (('provider_id', 'unconfigured'), ('owner_id', 'bad identity'),
+                             ('repository_id', ''), ('verifier_revision', 'main'),
+                             ('max_observation_age', True), ('max_decision_age', 0)):
+            with self.subTest(field=field), self.assertRaises(tracker.TrackerBlocked):
+                tracker.AuthenticatedTracker(replace(self.config, **{field: value}), self.transport)
+        for reference in (replace(self.reference, url=self.url + '?token=synthetic-secret'),
+                          replace(self.reference, content_digest='short'),
+                          replace(self.reference, target=replace(self.target, action='unknown'))):
+            with self.subTest(reference=reference), self.assertRaises(tracker.TrackerBlocked):
+                self.port.read_approval(reference)
+        self.assertEqual([], self.transport.calls)
 
     def test_no_files_logs_children_or_ambient_credentials_are_used(self):
         with patch('builtins.open', side_effect=AssertionError('file access')), \
