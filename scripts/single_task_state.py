@@ -440,6 +440,38 @@ def open_store(worktree_root, *, preflight=None, require_existing=False, writabl
             os.close(fd)
 
 
+def validate_completion_intent_schema(value):
+    fields = {'schema_version', 'attempt_id', 'tasks_path', 'tasks_before_hex',
+              'tasks_after_hex', 'tasks_before_sha256', 'tasks_after_sha256',
+              'file_mode', 'acceptance_sequence', 'acceptance_digest', 'context_digest',
+              'content_manifest', 'content_manifest_digest', 'semantic_review_digest'}
+    if (type(value) is not dict or set(value) != fields or
+            type(value['schema_version']) is not int or value['schema_version'] != 1 or
+            type(value['file_mode']) is not int or not 0 <= value['file_mode'] <= 0o7777 or
+            type(value['acceptance_sequence']) is not int or value['acceptance_sequence'] < 1):
+        raise InvalidState('Invalid completion intent schema')
+    for key in ('attempt_id', 'tasks_path'):
+        if type(value[key]) is not str or not value[key]:
+            raise InvalidState('Invalid completion intent identity')
+    for key in ('tasks_before_hex', 'tasks_after_hex'):
+        if type(value[key]) is not str or bytes.fromhex(value[key]).hex() != value[key]:
+            raise InvalidState('Invalid exact completion bytes')
+    for key in ('tasks_before_sha256', 'tasks_after_sha256', 'acceptance_digest',
+                'context_digest', 'content_manifest_digest', 'semantic_review_digest'):
+        if (type(value[key]) is not str or len(value[key]) != 64 or
+                any(c not in '0123456789abcdef' for c in value[key])):
+            raise InvalidState('Invalid completion digest identity')
+
+
+def validate_acceptance_schema(value):
+    fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
+              'content_manifest', 'content_manifest_digest', 'semantic_review',
+              'semantic_review_digest', 'verification_head', 'checks'}
+    if (type(value) is not dict or set(value) != fields or
+            type(value['schema_version']) is not int or value['schema_version'] != 1):
+        raise InvalidState('Invalid durable acceptance evidence')
+
+
 def _validated_completion_acceptance(root, store, attempt, event=None, *, check_head=True):
     """Read a durable acceptance record and independently revalidate its bindings."""
     import single_task_scope as scope
@@ -454,12 +486,7 @@ def _validated_completion_acceptance(root, store, attempt, event=None, *, check_
         if event['kind'] != 'acceptance':
             raise InvalidState('Invalid acceptance record kind')
         value = event['payload']
-        fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
-                  'content_manifest', 'content_manifest_digest', 'semantic_review',
-                  'semantic_review_digest', 'verification_head', 'checks'}
-        if (type(value) is not dict or set(value) != fields or
-                type(value['schema_version']) is not int or value['schema_version'] != 1):
-            raise InvalidState('Invalid durable acceptance evidence')
+        validate_acceptance_schema(value)
         inspection = scope.prepare_inspection(root, attempt)
         scope.validate_manifest(value['content_manifest'])
         context = attempt['context']
@@ -594,6 +621,30 @@ def _finish_completion_intent(root, store, attempt, event):
         os.close(parent_fd)
 
 
+
+def validate_retained_completion_phase(attempt, events, event, after, current):
+    """Reject contradictory phase evidence independently of current execution scope."""
+    intent = event['payload']
+    applied = [row for row in events if row['kind'] == 'checkbox-applied']
+    completed = [row for row in events if row['kind'] == 'completion']
+    expected_applied = {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                        'tasks_sha256': intent['tasks_after_sha256']}
+    expected_completed = {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                          'content_manifest_digest': intent['content_manifest_digest']}
+    progress = attempt['progress']
+    if (len(applied) > 1 or len(completed) > 1 or
+            (applied and (_canonical(applied[0]['payload']) != _canonical(expected_applied) or
+                          applied[0]['sequence'] <= event['sequence'])) or
+            (completed and (not applied or
+                            _canonical(completed[0]['payload']) != _canonical(expected_completed) or
+                            completed[0]['sequence'] <= applied[0]['sequence'])) or
+            (progress == 'completion-prepared' and (applied or completed)) or
+            (progress == 'checkbox-applied' and (len(applied) != 1 or completed)) or
+            (progress in ('completed-awaiting-commit', 'handoff-ready') and
+             (len(applied) != 1 or len(completed) != 1)) or
+            (applied and current != after)):
+        raise InvalidState('Retained completion phase contradicts intent or task bytes')
+
 def recover_completion(worktree_root, store, attempt_id, review):
     """Rerun current acceptance and complete only the same immutable attempt."""
     import single_task_scope as scope
@@ -619,15 +670,7 @@ def recover_completion(worktree_root, store, attempt_id, review):
             raise InvalidState('Contradictory completion intent')
         event = intents[0]
         intent = event['payload']
-        fields = {'schema_version', 'attempt_id', 'tasks_path', 'tasks_before_hex',
-                  'tasks_after_hex', 'tasks_before_sha256', 'tasks_after_sha256',
-                  'file_mode', 'acceptance_sequence', 'acceptance_digest', 'context_digest',
-                  'content_manifest', 'content_manifest_digest', 'semantic_review_digest'}
-        if (type(intent) is not dict or set(intent) != fields or
-                type(intent['schema_version']) is not int or intent['schema_version'] != 1 or
-                type(intent['file_mode']) is not int or not 0 <= intent['file_mode'] <= 0o7777 or
-                type(intent['acceptance_sequence']) is not int or intent['acceptance_sequence'] < 1):
-            raise InvalidState('Invalid retained completion intent')
+        validate_completion_intent_schema(intent)
         before = bytes.fromhex(intent['tasks_before_hex'])
         after = bytes.fromhex(intent['tasks_after_hex'])
         selected = scope.task_lines(before).get(attempt['context']['task_id'])
@@ -643,25 +686,7 @@ def recover_completion(worktree_root, store, attempt_id, review):
                 scope.read_regular(root, task_path) not in (before, after) or
                 recorded is None or recorded['payload_digest'] != intent['acceptance_digest']):
             raise InvalidState('Recovery bytes or acceptance disagree with retained intent')
-        applied = [row for row in events if row['kind'] == 'checkbox-applied']
-        completed = [row for row in events if row['kind'] == 'completion']
-        expected_applied = {'schema_version': 1, 'intent_digest': event['payload_digest'],
-                            'tasks_sha256': intent['tasks_after_sha256']}
-        expected_completed = {'schema_version': 1, 'intent_digest': event['payload_digest'],
-                              'content_manifest_digest': intent['content_manifest_digest']}
-        progress = attempt['progress']
-        if (len(applied) > 1 or len(completed) > 1 or
-                (applied and (_canonical(applied[0]['payload']) != _canonical(expected_applied) or
-                              applied[0]['sequence'] <= event['sequence'])) or
-                (completed and (not applied or
-                                _canonical(completed[0]['payload']) != _canonical(expected_completed) or
-                                completed[0]['sequence'] <= applied[0]['sequence'])) or
-                (progress == 'completion-prepared' and (applied or completed)) or
-                (progress == 'checkbox-applied' and (len(applied) != 1 or completed)) or
-                (progress in ('completed-awaiting-commit', 'handoff-ready') and
-                 (len(applied) != 1 or len(completed) != 1)) or
-                (applied and scope.read_regular(root, task_path) != after)):
-            raise InvalidState('Retained completion phase contradicts intent or task bytes')
+        validate_retained_completion_phase(attempt, events, event, after, scope.read_regular(root, task_path))
         descriptor = scope._path_fd(root, task_path)
         try:
             if stat.S_IMODE(os.fstat(descriptor).st_mode) != intent['file_mode']:
@@ -730,15 +755,7 @@ def bind_implementation(worktree_root, store, attempt_id, commit):
             raise InvalidState('One durable completion intent is required')
         event = intents[0]
         intent = event['payload']
-        intent_fields = {'schema_version', 'attempt_id', 'tasks_path', 'tasks_before_hex',
-                         'tasks_after_hex', 'tasks_before_sha256', 'tasks_after_sha256',
-                         'file_mode', 'acceptance_sequence', 'acceptance_digest', 'context_digest',
-                         'content_manifest', 'content_manifest_digest', 'semantic_review_digest'}
-        if (type(intent) is not dict or set(intent) != intent_fields or
-                type(intent['schema_version']) is not int or intent['schema_version'] != 1 or
-                type(intent['acceptance_sequence']) is not int or intent['acceptance_sequence'] < 1 or
-                type(intent['file_mode']) is not int or not 0 <= intent['file_mode'] <= 0o7777):
-            raise InvalidState('Invalid completion intent schema')
+        validate_completion_intent_schema(intent)
         context = attempt['context']
         task_path = f"specs/{context['feature']}/tasks.md"
         manifest = scope.validate_manifest(intent['content_manifest'])
@@ -837,3 +854,22 @@ def bind_implementation(worktree_root, store, attempt_id, commit):
         return value
     except (ValueError, KeyError, TypeError, UnicodeError):
         raise InvalidState('Invalid implementation binding evidence') from None
+
+
+def create_rework(worktree_root, store, value):
+    """Create one new immutable linked attempt after all corrective entry gates."""
+    import uuid
+    import single_task_context as contexts
+    context = contexts.validate_context(value)
+    entry = contexts.validate_rework_context(worktree_root, context, store)
+    if store.active_attempt() is not None:
+        raise InvalidState('An unfinished attempt prevents corrective entry')
+    attempt_id = uuid.uuid4().hex
+    with store.transaction():
+        store.create_attempt(attempt_id=attempt_id, context=context,
+                             baseline=entry['baseline_commit'], tasks_bytes=entry['tasks_bytes'],
+                             entry_mode='owner-authorized rework', predecessor=context['prior_attempt_id'],
+                             approval_context_digest=context['approval']['context_digest'])
+        store.append_event(attempt_id, 'entry', {'context_digest': context['approval']['context_digest'],
+                                               'predecessor': context['prior_attempt_id']})
+    return store.read_attempt(attempt_id)
