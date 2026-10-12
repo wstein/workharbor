@@ -51,7 +51,7 @@ class TaskContextEntryTests(unittest.TestCase):
         self.commit()
         commit = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
         self.context['reviewed_artifacts'] = {
-            name: {'path': f'specs/synthetic/{name}', 'commit': commit,
+            name: {'path': f'specs/{self.context["feature"]}/{name}', 'commit': commit,
                    'sha256': digest((self.fixture.feature/name).read_bytes())}
             for name in ('spec.md', 'plan.md', 'tasks.md')
         }
@@ -221,6 +221,9 @@ class TaskContextEntryTests(unittest.TestCase):
             self.review_current()
         elif name == 'unknown_feature':
             self.context['feature'] = 'nonexistent'
+            for artifact, record in self.context['reviewed_artifacts'].items():
+                record['path'] = f'specs/nonexistent/{artifact}'
+            self.context['source_assertion']['path'] = 'specs/nonexistent/tasks.md'
         elif name == 'dirty_tracked':
             (self.root/'guide.md').write_text('Uncommitted\n')
         elif name == 'dirty_index':
@@ -573,7 +576,143 @@ def schema_unicode_feature(self):
     self.exercise('schema', None)
 
 
+def scope_unicode_feature(self):
+    renamed = self.root/'specs/_équipe'
+    self.fixture.feature.rename(renamed)
+    self.fixture.feature = renamed
+    self.tasks = renamed/'tasks.md'
+    self.context['feature'] = '_équipe'
+    self.context['source_assertion']['path'] = 'specs/_équipe/tasks.md'
+    self.review_current()
+    self.exercise('scope', None)
+
+
+def scope_feature_symlink(self):
+    outside = self.fixture.private/'external-feature'
+    self.fixture.feature.rename(outside)
+    self.fixture.feature.symlink_to(outside, target_is_directory=True)
+    self.commit()
+    self.exercise('scope', 'scope_context')
+
+
+def scope_specs_symlink(self):
+    outside = self.fixture.private/'external-specs'
+    (self.root/'specs').rename(outside)
+    (self.root/'specs').symlink_to(outside, target_is_directory=True)
+    self.commit()
+    self.exercise('scope', 'scope_context')
+
+
+def scope_check_cwd_symlink(self):
+    (self.root/'linked').symlink_to(self.fixture.private, target_is_directory=True)
+    self.commit()
+    self.context['checks'][0]['cwd'] = 'linked'
+    self.seal()
+    self.exercise('scope', 'scope_context')
+
+
+def scope_hidden_tracked(self):
+    subprocess.run(['git', 'update-index', '--assume-unchanged', '--', 'guide.md'],
+                   cwd=self.root, env=self.fixture.env, check=True, capture_output=True, timeout=10)
+    (self.root/'guide.md').write_text('Hidden modified bytes\n')
+    self.assertEqual('', self.fixture.git('status', '--porcelain').stdout)
+    self.exercise('scope', 'dirty_baseline')
+
+
+def scope_hidden_mode(self):
+    self.fixture.git('config', 'core.filemode', 'false')
+    path = self.root/'guide.md'
+    path.chmod(path.stat().st_mode | 0o111)
+    self.assertEqual('', self.fixture.git('status', '--porcelain').stdout)
+    self.exercise('scope', 'dirty_baseline')
+
+
+def scope_git_hooks(self):
+    sentinel = self.fixture.private/'fsmonitor-ran'
+    hook = self.fixture.private/'fsmonitor'
+    hook.write_text('#!/bin/sh\ntouch "' + str(sentinel) + '"\nprintf "2\\0"\n')
+    hook.chmod(0o700)
+    self.fixture.git('config', 'core.fsmonitor', str(hook))
+    self.exercise('scope', None)
+    self.assertFalse(sentinel.exists())
+
+
+def scope_executable_filter(self):
+    (self.root/'.gitattributes').write_text('guide.md filter=probe\n')
+    self.commit()
+    sentinel = self.fixture.private/'filter-ran'
+    self.fixture.git('config', 'filter.probe.clean', 'touch "' + str(sentinel) + '"; cat')
+    self.exercise('scope', 'scope_context')
+    self.assertFalse(sentinel.exists())
+
+
+def scope_alias_paths(self):
+    original = self.context['allowed_paths']
+    for path in ('.GIT/config', '.SYMPHONY/single-task/lock', 'specs/SYNTHETIC/tasks.md'):
+        self.context['allowed_paths'] = [path]
+        self.seal()
+        self.exercise('scope', 'scope_context')
+    self.context['allowed_paths'] = original
+
+
+def gitlink_fixture(self):
+    directory = self.fixture.private/'submodule-fixture'
+    directory.mkdir()
+    submodule = SingleTaskFixture(directory)
+    destination = self.root/'vendor'
+    submodule.root.rename(destination)
+    submodule.root = destination
+    subprocess.run(['git', 'update-index', '--add', '--cacheinfo',
+                    f'160000,{submodule.baseline},vendor'], cwd=self.root,
+                   env=self.fixture.env, check=True, capture_output=True, timeout=10)
+    self.fixture.git('commit', '-m', 'test: retain baseline submodule')
+    return submodule
+
+
+def scope_clean_gitlink(self):
+    submodule = gitlink_fixture(self)
+    self.assertEqual('', self.fixture.git('status', '--porcelain').stdout)
+    self.exercise('scope', None)
+    submodule.root.rename(self.fixture.private/'uninitialized-retained')
+    self.exercise('scope', None)
+    (self.root/'vendor').mkdir()
+    self.exercise('scope', None)
+
+
+def scope_changed_gitlink(self):
+    submodule = gitlink_fixture(self)
+    path = submodule.root/'guide.md'
+    path.write_bytes(b'Uncommitted submodule bytes\n')
+    self.exercise('scope', 'dirty_baseline')
+    submodule.git('add', '.')
+    submodule.git('commit', '-m', 'test: changed submodule commit')
+    self.exercise('scope', 'dirty_baseline')
+
+
+def scope_gitlink_output(self):
+    gitlink_fixture(self)
+    self.context['allowed_paths'] = ['vendor/new.md']
+    self.seal()
+    self.exercise('scope', 'scope_context')
+    self.context['allowed_paths'] = ['guide.md']
+    self.context['checks'][0]['cwd'] = 'vendor'
+    self.seal()
+    self.exercise('scope', 'scope_context')
+
+
 EXTRA_CASES = {
+    'scope_clean_gitlink': (scope_clean_gitlink, 'scope', None, 'T007'),
+    'scope_changed_gitlink': (scope_changed_gitlink, 'scope', 'dirty_baseline', 'T007'),
+    'scope_gitlink_output': (scope_gitlink_output, 'scope', 'scope_context', 'T007'),
+    'scope_unicode_feature': (scope_unicode_feature, 'scope', None, 'T007'),
+    'scope_feature_symlink': (scope_feature_symlink, 'scope', 'scope_context', 'T007'),
+    'scope_specs_symlink': (scope_specs_symlink, 'scope', 'scope_context', 'T007'),
+    'scope_check_cwd_symlink': (scope_check_cwd_symlink, 'scope', 'scope_context', 'T007'),
+    'scope_hidden_tracked': (scope_hidden_tracked, 'scope', 'dirty_baseline', 'T007'),
+    'scope_hidden_mode': (scope_hidden_mode, 'scope', 'dirty_baseline', 'T007'),
+    'scope_git_hooks': (scope_git_hooks, 'scope', None, 'T007'),
+    'scope_executable_filter': (scope_executable_filter, 'scope', 'scope_context', 'T007'),
+    'scope_alias_paths': (scope_alias_paths, 'scope', 'scope_context', 'T007'),
     'schema_unicode_feature': (schema_unicode_feature, 'schema', None, 'T006'),
     'schema_valid_rework': (schema_valid_rework, 'schema', None, 'T006'),
     'schema_valid': (schema_valid, 'schema', None, 'T006'),
