@@ -18,6 +18,7 @@ from types import MappingProxyType
 from typing import Mapping, Protocol
 
 import single_task_state as state
+import approval_binding
 
 MAX_JSON_BYTES = 1024 * 1024
 
@@ -650,6 +651,114 @@ def _guard_verdict(value):
             or value.accepted and value.unmet_prerequisites):
         raise PackageError('invalid-guard-result')
     return value
+
+
+def assess_content_approval(approved, current, repository_snapshot, evidence, *,
+                            guard=None, authority=None, action='execution', live=False):
+    """Bridge immutable packages to the existing content-binding adapter.
+
+    The injected guard's context API returns approval_binding.ValidatedContract;
+    it owns dependencies and comparison semantics. Its scope API returns
+    GuardValidation and owns current/index/history scope. This enhanced API is
+    deliberately separate from the structural validator's older fixture port.
+    Missing demonstrated APIs block; no legacy CLI or local schema substitutes.
+
+    Retention authenticates the original package/revision/binding, never the
+    current raw snapshot. Even successful live-port validation grants no entry,
+    independent review, publication or eligibility; T013 composes those gates.
+    """
+    result = dict(schema_version=1, content_approval_retained=False,
+                  guard_entry_valid=False, execution_eligible=False,
+                  approval_assurance=None, authenticated_approval=False,
+                  independent_review=None, live_execution=None,
+                  original_approval=None, current_snapshot=None, comparison=None,
+                  capabilities=None, unmet_prerequisites=[], blockers=[])
+
+    def block(code):
+        result['blockers'].append(dict(code=code))
+
+    try:
+        if type(action) is not str or action not in _APPROVAL_KEYS:
+            raise PackageError('invalid-approval-action')
+        package_bytes(approved)
+        package_bytes(current)
+        approved, current = build_package(approved), build_package(current)
+        identity = ('repository', 'issue', 'feature', 'task_id')
+        if (any(approved[key] != current[key] for key in identity)
+                or current['repository'] != repository_snapshot['repository']):
+            raise PackageError('approval-package-mismatch')
+        reference = approved['approval_refs'][action]
+        if reference is None:
+            raise PackageError('approval-reference-missing')
+        with _root_directory(repository_snapshot['root']) as (root, _descriptor, _links):
+            _validate_source_identities(root, approved['source'])
+            _validate_source_identities(root, current['source'])
+        result['original_approval'] = dict(action=action, reference=reference,
+            reviewed_revision=approved['source']['proposal_commit'],
+            package_digest=approved['package_digest'],
+            revision_digest=package_revision_digest(approved), binding_digest=None)
+        result['current_snapshot'] = dict(revision=current['source']['proposal_commit'],
+            package_digest=current['package_digest'],
+            revision_digest=package_revision_digest(current), binding_digest=None)
+        assessment = assess_capabilities('entry', current['mode'], guard=guard, live=live)
+        result['capabilities'] = assessment
+        result['blockers'].extend(assessment['blockers'])
+        if not assessment['capabilities_satisfied']:
+            return result
+        revision = guard.revision
+        if (revision != current['execution']['guard_revision']
+                or any(item['implementation_revision'] != revision
+                       for item in assessment['evidence'])):
+            raise PackageError('guard-revision-mismatch')
+    except PackageError as error:
+        block(error.code)
+        return result
+    except Exception:
+        block('approval-validation-unavailable')
+        return result
+
+    request = dict(schema_version=1,
+        approved_revision=approved['source']['proposal_commit'],
+        current_revision=current['source']['proposal_commit'],
+        approved_context=approved['context'], current_context=current['context'],
+        evidence=evidence, approval_ref=reference, approval_action=action,
+        approved_package_digest=approved['package_digest'])
+    try:
+        comparison = approval_binding.assess_retention(root, request, guard=guard, authority=authority)
+        # Adapter evidence can contain provider diagnostics. Accept only inert
+        # references before exposing its otherwise sanitized result.
+        for key in ('comparison_evidence_ref', 'approval_evidence_ref'):
+            if comparison[key] is not None and not _reference(comparison[key]):
+                raise ValueError
+        result['comparison'] = comparison
+        result['original_approval']['binding_digest'] = comparison['binding_digest']
+        result['current_snapshot']['binding_digest'] = comparison['current_binding_digest']
+        if (comparison['retained'] is not True or comparison['blocker'] is not None
+                or comparison['result'] not in ('identical', 'progress-only')):
+            block('content-approval-blocked')
+            return result
+        result['content_approval_retained'] = True
+        result['approval_assurance'] = comparison['approval_assurance']
+        result['authenticated_approval'] = comparison['approval_assurance'] == 'authenticated-provider'
+        if live and not result['authenticated_approval']:
+            block('authenticated-approval-required')
+            return result
+    except Exception:
+        block('content-approval-blocked')
+        return result
+
+    try:
+        # Pass a detached package and provenance snapshot; guard checks must not
+        # silently adopt another baseline or mutate the caller's proposal.
+        scope_snapshot = dict(repository_snapshot, approved=approved, current=current)
+        verdict = _guard_verdict(guard.validate_scope(scope_snapshot, current['context'], evidence))
+        result['unmet_prerequisites'] = list(verdict.unmet_prerequisites)
+        if not verdict.accepted:
+            raise ValueError
+        result['guard_entry_valid'] = True
+    except Exception:
+        block('guard-scope-blocked')
+    return result
 
 
 def validate(value, repository_snapshot, evidence, capabilities, *, guard=None, outcome_validator=None):
