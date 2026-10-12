@@ -152,8 +152,9 @@ def _root_directory(root):
 
 
 def _git(root, *args):
-    environment = {key: value for key, value in os.environ.items()
-                   if not key.startswith('GIT_')}
+    # Offline provenance lookups need no credentials or interpreter settings.
+    environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR')
+                   if key in os.environ}
     environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                        GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1',
                        GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='', GIT_OPTIONAL_LOCKS='0')
@@ -737,3 +738,112 @@ def validate(value, repository_snapshot, evidence, capabilities, *, guard=None, 
     result['capabilities'] = assessment
     result['blockers'].extend(assessment['blockers'])
     return result
+
+
+def write_preparation(root, output, value, summary):
+    """Create/reuse one immutable serialization; preserve conflicts/partial writes.
+
+    The caller explicitly chooses a contained output directory. Exclusive directory
+    and file creation never overwrites existing evidence. An interrupted incomplete
+    revision is a blocker, not permission to repair or adopt another writer's work.
+    """
+    parts = _path_parts(output)
+    revision = package_revision_digest(value)
+    content = {'package.json': package_bytes(value), 'summary.json': canonical_json(summary)}
+    descriptors = []
+    try:
+        with _root_directory(root) as (_root, parent, links):
+            try:
+                _repository(root)
+                gate_paths = [parts + [revision, name] for name in content]
+                before_index = tuple(_index_gate(root, path) for path in gate_paths)
+                if any(before_index):
+                    raise PackageError('unsafe-output')
+                for name in parts:
+                    try:
+                        os.mkdir(name, mode=0o700, dir_fd=parent)
+                        os.fsync(parent)
+                    except FileExistsError:
+                        pass
+                    initial = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                    child = state._directory(parent, name)
+                    descriptors.append(child)
+                    links.append((parent, name, child, initial))
+                    parent = child
+                _check_links(links)
+                try:
+                    os.mkdir(revision, mode=0o700, dir_fd=parent)
+                    reused = False
+                except FileExistsError:
+                    reused = True
+                initial = os.stat(revision, dir_fd=parent, follow_symlinks=False)
+                directory = state._directory(parent, revision)
+                descriptors.append(directory)
+                links.append((parent, revision, directory, initial))
+                _check_links(links)
+                if reused:
+                    names = set(os.listdir(directory))
+                    if names < content.keys():
+                        raise PackageError('output-incomplete')
+                    if names != content.keys():
+                        raise PackageError('output-conflict')
+                files = []
+                for name, data in content.items():
+                    _check_links(links)
+                    if reused:
+                        state._regular(directory, name, required=True)
+                        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                             dir_fd=directory)
+                    else:
+                        descriptor = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                             0o600, dir_fd=directory)
+                    descriptors.append(descriptor)
+                    info = os.fstat(descriptor)
+                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                        raise PackageError('unsafe-output')
+                    files.append((name, data, descriptor, info))
+                    if not reused:
+                        remaining = memoryview(data)
+                        while remaining:
+                            written = os.write(descriptor, remaining)
+                            if written <= 0:
+                                raise PackageError('output-unavailable')
+                            remaining = remaining[written:]
+                        os.fsync(descriptor)
+                if tuple(_index_gate(root, path) for path in gate_paths) != before_index:
+                    raise PackageError('repository-input-raced')
+                os.fsync(directory)
+                os.fsync(parent)
+                # Verify the complete output after all writes, index probes and
+                # durability work. Keep both descriptors until the snapshot ends.
+                observed = []
+                for name, data, descriptor, initial in files:
+                    checked = os.fstat(descriptor)
+                    if (not stat.S_ISREG(checked.st_mode) or checked.st_nlink != 1
+                            or _identity(checked) != _identity(initial)):
+                        raise PackageError('unsafe-output')
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    if checked.st_size != len(data) or os.read(descriptor, len(data) + 1) != data:
+                        raise PackageError('output-conflict')
+                    observed.append(checked)
+                for (name, _data, descriptor, _initial), checked in zip(files, observed):
+                    if (_file_identity(checked) != _file_identity(os.fstat(descriptor))
+                            or _file_identity(checked) != _file_identity(
+                                os.stat(name, dir_fd=directory, follow_symlinks=False))):
+                        raise PackageError('unsafe-output')
+                if set(os.listdir(directory)) != content.keys():
+                    raise PackageError('output-conflict')
+                _check_links(links)
+                return dict(reused=reused, package=revision + '/package.json',
+                            summary=revision + '/summary.json')
+            except OSError:
+                raise PackageError('output-unavailable') from None
+    except PackageError:
+        raise
+    except state.InvalidState:
+        raise PackageError('unsafe-output') from None
+    except OSError:
+        raise PackageError('output-unavailable') from None
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
