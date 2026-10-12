@@ -29,7 +29,10 @@ class CompletionPublicationTests(unittest.TestCase):
         self.fixture.git('add', '.')
         self.fixture.git('commit', '-m', 'test: completion baseline')
         self.context = self.fixture.context()
-        self.context['checks'] = [{'id': 'control', 'argv': [sys.executable, '-B', '-c', 'pass'],
+        self.fail_control = self.fixture.private/'fail-check'
+        program = 'import pathlib,sys; sys.exit(1 if pathlib.Path(sys.argv[1]).exists() else 0)'
+        self.context['checks'] = [{'id': 'control', 'argv': [sys.executable, '-B', '-c', program,
+                                                          str(self.fail_control)],
                                   'cwd': '.', 'timeout_seconds': 5, 'expected_exit': 0}]
         self.context['approval']['context_digest'] = context_digest(self.context)
         path = self.fixture.private/'context.json'
@@ -111,6 +114,25 @@ class CompletionPublicationTests(unittest.TestCase):
             with self.assertRaises(state.InvalidState):
                 function(self.root, store, self.attempt_id)
             self.assertEqual(events, store.read_events(self.attempt_id))
+        self.assertEqual(self.before, self.tasks.read_bytes())
+
+    def test_later_failed_acceptance_invalidates_prior_success(self):
+        self.accept()
+        with state.open_store(self.root, require_existing=True) as store:
+            successful_events = store.read_events(self.attempt_id)
+        self.fail_control.write_bytes(b'fail')
+        with self.assertRaises(acceptance.AcceptanceFailure) as failure:
+            self.accept()
+        self.assertEqual('nonzero_exit', failure.exception.category)
+        function = self.owner()
+        with state.open_store(self.root) as store:
+            failed_events = store.read_events(self.attempt_id)
+            self.assertEqual(successful_events, failed_events[:len(successful_events)])
+            self.assertEqual('check-result', failed_events[-1]['kind'])
+            self.assertEqual('nonzero_exit', failed_events[-1]['payload']['category'])
+            with self.assertRaises(state.InvalidState):
+                function(self.root, store, self.attempt_id)
+            self.assertEqual(failed_events, store.read_events(self.attempt_id))
         self.assertEqual(self.before, self.tasks.read_bytes())
 
     def test_manual_marker_cannot_become_completion_intent(self):
