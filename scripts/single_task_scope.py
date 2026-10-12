@@ -1,4 +1,4 @@
-"""Read-only local entry scope, task identity and clean baseline validation."""
+"""Read-only entry and execution scope inventories for Feature 003."""
 import hashlib
 import os
 import re
@@ -228,3 +228,190 @@ def validate_entry_scope(root, value):
     baseline = _clean_baseline(root, context)
     return {'baseline_commit': baseline, 'tasks_path': tasks_path,
             'tasks_bytes': tasks_bytes, 'tasks': tasks}
+
+
+def validate_manifest(value):
+    """Validate the exact typed, ordered ContentManifest schema."""
+    import copy
+    if (type(value) is not dict or set(value) != {'schema_version', 'entries'} or
+            type(value['schema_version']) is not int or value['schema_version'] != 1 or
+            type(value['entries']) is not list or not value['entries']):
+        reject()
+    paths = []
+    for entry in value['entries']:
+        if type(entry) is not dict or set(entry) != {'path', 'type', 'mode', 'sha256'}:
+            reject()
+        canonical_path(entry['path'])
+        paths.append(entry['path'])
+        if entry['type'] == 'absent':
+            if entry['mode'] is not None or entry['sha256'] is not None:
+                reject()
+        elif entry['type'] == 'regular':
+            if (entry['mode'] not in ('100644', '100755') or
+                    type(entry['sha256']) is not str or
+                    re.fullmatch('[0-9a-f]{64}', entry['sha256']) is None):
+                reject()
+        else:
+            reject()
+    if paths != sorted(set(paths)):
+        reject()
+    return copy.deepcopy(value)
+
+
+def _normalized_selected(data, task_id):
+    selected = task_lines(data).get(task_id)
+    if selected is None:
+        reject()
+    offset = selected['marker_offset']
+    return data[:offset] + b' ' + data[offset + 1:]
+
+
+def _inventory_config(root):
+    names = git(root, 'config', '--local', '--no-includes', '--name-only', '--list').stdout
+    if any(name.lower().startswith((b'filter.', b'include.', b'includeif.'))
+           for name in names.splitlines()):
+        reject()
+
+
+def _git_inventory(root, revision=None):
+    """Read raw stage/tree modes and object IDs without text conversion."""
+    result = {}
+    records = (git(root, 'ls-files', '--stage', '-z').stdout if revision is None else
+               git(root, 'ls-tree', '-r', '-z', revision).stdout)
+    for record in records.split(b'\0'):
+        if not record:
+            continue
+        metadata, path = record.split(b'\t', 1)
+        mode, middle, last = metadata.split()
+        identity = middle if revision is None else last
+        if revision is None and last != b'0':
+            reject()
+        relative = path.decode('utf-8')
+        canonical_path(relative)
+        if mode not in (b'100644', b'100755', b'120000', b'160000') or relative in result:
+            reject()
+        result[relative] = (mode.decode('ascii'), identity.decode('ascii'))
+    return result
+
+
+def _blob(root, identity):
+    return git(root, 'cat-file', 'blob', identity).stdout
+
+
+def _physical(root, relative, algorithm):
+    """Return mode/object ID/raw bytes, without following any link component."""
+    parent, name = relative.rsplit('/', 1) if '/' in relative else ('.', relative)
+    # Inspect a final link as link bytes; directory traversal remains no-follow.
+    descriptor = _path_fd(root, parent, directory=True, absent=True)
+    if descriptor is None:
+        return None
+    try:
+        if name not in os.listdir(descriptor):
+            try:
+                os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                return None
+            reject()  # A case/Unicode alias is not a canonical absent path.
+        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode):
+            mode, content = '120000', os.fsencode(os.readlink(name, dir_fd=descriptor))
+        elif stat.S_ISREG(info.st_mode):
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
+            with os.fdopen(fd, 'rb') as stream:
+                mode = '100755' if os.fstat(stream.fileno()).st_mode & 0o111 else '100644'
+                content = stream.read()
+        else:
+            reject()
+    finally:
+        os.close(descriptor)
+    identity = hashlib.new(algorithm, b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+    return mode, identity, content
+
+
+def validate_scope(root, attempt):
+    """Validate every repository plane and return the current approved manifest."""
+    try:
+        root = Path(root)
+        context = validate_context(attempt['context'])
+        if root.is_symlink() or not root.is_dir():
+            reject()
+        if Path(os.fsdecode(git(root, 'rev-parse', '--show-toplevel').stdout.strip())).resolve() != root.resolve():
+            reject()
+        _inventory_config(root)
+        baseline = attempt['baseline']
+        if type(baseline) is not str or re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}', baseline) is None:
+            reject()
+        head = git(root, 'rev-parse', '--verify', 'HEAD^{commit}').stdout.strip().decode('ascii')
+        git(root, 'merge-base', '--is-ancestor', baseline, head)
+        allowed = set(context['allowed_paths'])
+        task_path = f"specs/{context['feature']}/tasks.md"
+        task_id = context['task_id']
+        entry_tasks = attempt['tasks_bytes']
+        normalized_tasks = _normalized_selected(entry_tasks, task_id)
+        original = _git_inventory(root, baseline)
+        if task_path not in original or _blob(root, original[task_path][1]) != entry_tasks:
+            reject()
+        algorithm = git(root, 'rev-parse', '--show-object-format').stdout.strip().decode('ascii')
+        if algorithm not in ('sha1', 'sha256'):
+            reject()
+
+        def validate_plane(inventory, reader):
+            for path in original.keys() | inventory.keys() | allowed | {task_path}:
+                before, current = original.get(path), inventory.get(path)
+                if path in allowed:
+                    if current is not None and current[0] not in ('100644', '100755'):
+                        reject()
+                elif path == task_path:
+                    if (current is None or current[0] not in ('100644', '100755') or
+                            current[0] != before[0] or
+                            _normalized_selected(reader(path, current), task_id) != normalized_tasks):
+                        reject()
+                elif before != current:
+                    reject()
+
+        for revision in [head] + git(root, 'rev-list', head, '^' + baseline).stdout.decode('ascii').splitlines():
+            validate_plane(_git_inventory(root, revision), lambda path, entry: _blob(root, entry[1]))
+        validate_plane(_git_inventory(root), lambda path, entry: _blob(root, entry[1]))
+
+        paths = original.keys() | allowed | {task_path}
+        untracked = git(root, 'ls-files', '--others', '--exclude-standard', '-z').stdout
+        paths |= {path.decode('utf-8') for path in untracked.split(b'\0') if path}
+        physical, contents = {}, {}
+        for path in paths:
+            canonical_path(path)
+            if original.get(path, (None,))[0] == '160000':
+                # Preserve safe unchanged baseline gitlinks, never enter outputs.
+                if path in allowed:
+                    reject()
+                fd = _path_fd(root, path, directory=True, absent=True)
+                if fd is not None:
+                    try:
+                        names = os.listdir(fd)
+                    finally:
+                        os.close(fd)
+                    if names:
+                        submodule = root/path
+                        if '.git' not in names or (submodule/'.git').is_symlink():
+                            reject()
+                        top = git(submodule, 'rev-parse', '--show-toplevel').stdout.strip()
+                        if (Path(os.fsdecode(top)).resolve() != submodule.resolve() or
+                                _clean_baseline(submodule) != original[path][1]):
+                            reject()
+                physical[path] = original[path]
+                continue
+            entry = _physical(root, path, algorithm)
+            if entry is not None:
+                physical[path] = entry[:2]
+                contents[path] = entry[2]
+        validate_plane(physical, lambda path, entry: contents[path])
+        entries = []
+        for path in sorted(allowed | {task_path}):
+            if path not in physical:
+                entries.append({'path': path, 'type': 'absent', 'mode': None, 'sha256': None})
+            else:
+                content = normalized_tasks if path == task_path else contents[path]
+                entries.append({'path': path, 'type': 'regular', 'mode': physical[path][0],
+                                'sha256': hashlib.sha256(content).hexdigest()})
+        return validate_manifest({'schema_version': 1, 'entries': entries})
+    except (OSError, ValueError, UnicodeError, KeyError, TypeError):
+        reject()

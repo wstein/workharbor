@@ -285,6 +285,50 @@ class SingleTaskScopeTests(unittest.TestCase):
         self.assertEqual(digest(b'absent'), regular['sha256'])
         self.assertNotEqual(absent['type'], regular['type'])
 
+    def test_unchanged_baseline_gitlink_and_symlink(self):
+        directory = self.fixture.private/'submodule-fixture'
+        directory.mkdir()
+        submodule = SingleTaskFixture(directory)
+        destination = self.root/'vendor'
+        submodule.root.rename(destination)
+        submodule.root = destination
+        self.git_plumbing('update-index', '--add', '--cacheinfo',
+                          '160000,' + submodule.baseline + ',vendor')
+        (self.root/'baseline-link').symlink_to('outside.md')
+        self.commit()
+        self.begin()
+        self.assertEqual(self.manifest(), self.inventory())
+        submodule.root.rename(self.fixture.private/'uninitialized-retained')
+        self.assertEqual(self.manifest(), self.inventory())
+        destination.mkdir()
+        self.assertEqual(self.manifest(), self.inventory())
+
+    def test_reject_baseline_submodule_content_drift(self):
+        directory = self.fixture.private/'submodule-fixture'
+        directory.mkdir()
+        submodule = SingleTaskFixture(directory)
+        destination = self.root/'vendor'
+        submodule.root.rename(destination)
+        submodule.root = destination
+        self.git_plumbing('update-index', '--add', '--cacheinfo',
+                          '160000,' + submodule.baseline + ',vendor')
+        self.commit()
+        self.begin()
+        (destination/'guide.md').write_bytes(b'Unapproved submodule bytes')
+        self.rejected_inventory()
+
+    def test_reject_hidden_physical_outside_bytes_and_mode(self):
+        self.fixture.git('config', 'core.filemode', 'false')
+        self.begin()
+        self.git_plumbing('update-index', '--assume-unchanged', 'outside.md')
+        path = self.root/'outside.md'
+        original = path.read_bytes()
+        path.write_bytes(b'Hidden unauthorized physical bytes')
+        self.rejected_inventory()
+        path.write_bytes(original)
+        path.chmod(0o755)
+        self.rejected_inventory()
+
     def test_canonical_unicode_binary_mode_and_absence_vector(self):
         self.begin()
         manifest = json.loads(VECTOR_BYTES)
