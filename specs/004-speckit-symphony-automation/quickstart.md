@@ -193,6 +193,18 @@ register and T017's checkbox: source/repository/diff checks and exact independen
 review bind that prose-only head to tested code; no full rerun at that head is claimed.
 Current-head forge checks must succeed before PR readiness.
 
+PR 47 portability follow-up: Linux run `38283008010` at `150bbeba` failed
+with 422 cases, 14 raw failures and zero errors (71.772 seconds). Readiness fixtures
+inherited the enclosing GitHub event/SHA/path, so the real source gate correctly
+rejected their unrelated local commits. The fixture now isolates/restores exactly
+those three variables, matching existing source fixtures; production validation,
+assertions, manifest and deadlines are unchanged. The original positive case
+reproduced that failure locally. After correction, all 32 readiness cases passed
+under inherited PR metadata (286.674 seconds, exit 0), including push/PR isolation,
+cleanup restoration and continued rejection of mismatched host event pins.
+The prior 422-case local result remains bound to `ebe4833`; no new full local
+run or current-head Linux success is claimed. Fresh forge validation is required.
+
 ## Remaining acceptance scenarios
 
 The scenarios below require live evidence beyond disposable fixture coverage.
