@@ -40,6 +40,21 @@ Persist only safe references and identifiers; no authentication tokens or raw ou
 - `prior_attempt_id`, `prior_implementation_commit`, `rework_approval`: all required
   only for rework; approval binds exact corrective scope and checks to prior evidence.
 
+### Proposed rework approval shape — owner decision pending
+
+For the strict T006 schema, propose that `rework_approval` has exactly
+`owner_ref` and `evidence_ref`, both nonempty strings. These are inert local
+operator references. The existing context approval digest binds this entire record,
+`prior_attempt_id`, `prior_implementation_commit`, corrective `allowed_paths`,
+`semantic_constraints` and `checks`. T022 must additionally resolve the retained
+prior attempt and implementation evidence; this record alone grants no rework.
+
+This clarification is proposed for owner review, not an accepted schema change.
+Until that decision, valid rework schema and mode-change binding controls remain
+blocked and T006 cannot be accepted as complete. The alternative is an explicit
+owner-reviewed task/design revision deferring that schema portion; no deferral is
+inferred here.
+
 Contexts use canonical JSON (UTF-8, sorted keys, compact separators) for digesting;
 exclude the approval.context_digest field itself from the digest. Evidence references
 are inert local references: never fetched, evaluated or assumed authentic.
