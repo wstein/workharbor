@@ -1,6 +1,7 @@
 """Local T010 port contracts; no real Feature 003, owner or live execution proof."""
 import copy
 import hashlib
+import os
 import unittest
 from unittest.mock import patch
 
@@ -253,6 +254,26 @@ class ApprovalBridgeTests(unittest.TestCase):
             target.clear()
             target.update(copy.deepcopy(original))
         self.assertEqual([], self.calls)
+
+    def test_bridge_git_children_exclude_credentials_and_disable_lazy_fetch(self):
+        run = binding.subprocess.run
+        children = []
+
+        def observe(argv, **kwargs):
+            children.append((argv, kwargs['env']))
+            return run(argv, **kwargs)
+
+        canary = 'credential-boundary-canary'
+        with patch.dict(os.environ, GITHUB_TOKEN=canary, AWS_SESSION_TOKEN=canary,
+                        UNRELATED_HOST_VARIABLE=canary), patch.object(
+                            binding.subprocess, 'run', side_effect=observe):
+            result = self.assess()
+        self.assertTrue(result['guard_entry_valid'], result)
+        self.assertTrue(children)
+        for argv, environment in children:
+            self.assertFalse(canary in environment.values(), 'host credential inherited')
+            self.assertIn('--no-lazy-fetch', argv)
+            self.assertEqual('1', environment['GIT_NO_LAZY_FETCH'])
 
     def test_root_replacement_during_adapter_or_scope_invalidates_entry(self):
         for owner, method in ((binding, 'assess_retention'), (self.guard, 'validate_scope')):
