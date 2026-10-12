@@ -150,3 +150,8 @@ accepted anchor and the complete approved source, head and actual merge trees
 must match. The validated source/head history and canonical-main metadata remain
 mandatory. The gate does not claim current prerequisites on that old base; it runs
 all protected snapshot and execution checks on the promoted head and integration.
+
+Full-range owner rebases retain the immutable source authority: a candidate may
+use a rewritten baseline identity only after proving its complete ordered prefix
+trees and exact baseline snapshot. Existing protected history and policy checks
+then begin at that proven candidate anchor; a missing snapshot fails closed.

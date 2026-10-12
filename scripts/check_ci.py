@@ -188,6 +188,32 @@ def linear_commits(root, baseline, revision):
     return commits
 
 
+def candidate_policy_anchor(root, revision):
+    """Authenticate a rewritten prefix through complete immutable tree states."""
+    try:
+        git(root, 'merge-base', '--is-ancestor', DOCUMENTATION_POLICY_SOURCE, revision)
+        return DOCUMENTATION_POLICY_SOURCE
+    except subprocess.CalledProcessError:
+        pass
+    common = git(root, 'merge-base', '--all', DOCUMENTATION_POLICY_SOURCE, revision).decode().splitlines()
+    if len(common) != 1:
+        raise ValueError('Ambiguous rewritten policy prefix')
+    trusted = [common[0]] + git(root, 'rev-list', '--reverse', '--topo-order',
+                              common[0] + '..' + DOCUMENTATION_POLICY_SOURCE).decode().splitlines()
+    trees = [git(root, 'rev-parse', commit + '^{tree}') for commit in trusted]
+    anchor_tree = git(root, 'rev-parse', DOCUMENTATION_POLICY_SOURCE + '^{tree}')
+    position = 0
+    for commit in linear_commits(root, common[0], revision):
+        tree = git(root, 'rev-parse', commit + '^{tree}')
+        try:
+            position = trees.index(tree, position)
+        except ValueError:
+            raise ValueError('Unreviewed rewritten prefix state') from None
+        if tree == anchor_tree:
+            return commit
+    raise ValueError('Missing equivalent accepted policy anchor')
+
+
 def policy_manifest(root, revision):
     """Raw tracked bytes/types/modes and inventory, solely from Git objects."""
     entries = git(root, 'ls-tree', '-z', revision, '--', *sorted(OPERATOR_PATHS))
@@ -307,11 +333,13 @@ def approved_operator_tooling(root, context, policy_source):
                 states.append(state)
         fork = git(root, 'merge-base', '--all', base, context.head).decode().splitlines()
         promotion = trusted_snapshot_promotion(root, context, policy_source)
+        head_anchor = candidate_policy_anchor(root, context.head)
+        base_anchor = candidate_policy_anchor(root, base) if not promotion else None
         protected = (policy_source, context.head, context.checkout) + (() if promotion else (base,))
         if (len(fork) != 1
                 or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
-                or (not promotion and not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, allowed, operator=True, policy_states=states))
-                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, context.head, allowed, operator=True, policy_states=states)
+                or (not promotion and not history_scope(root, base_anchor, base, allowed, operator=True, policy_states=states))
+                or not history_scope(root, head_anchor, context.head, allowed, operator=True, policy_states=states)
                 or not protected_baseline(root, protected)):
             return False
         if any(policy_manifest(root, revision) != states[-1]

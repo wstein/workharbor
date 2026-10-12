@@ -191,8 +191,9 @@ observations separately. These are required tests, not claimed passing results.
 ## Promotion of the complete approved snapshot to main
 
 A pre-baseline main base may be promoted only when it is an ancestor of the fixed
-accepted policy anchor, source and head retain that exact anchor and validated
-ordered history, and the complete source, head and actual integration trees match.
+accepted policy anchor, the source retains that immutable authority, the head
+proves its accepted prefix and validated ordered history, and the complete source,
+head and actual integration trees match.
 GitHub metadata must name main; local preparation uses the trusted canonical-main
 guard. This narrow path does not claim the old base has current prerequisites;
 all protected source/head/integration content and execution checks still apply.
@@ -200,3 +201,11 @@ all protected source/head/integration content and execution checks still apply.
 Policy identities use raw Git objects throughout materialization, comparison and
 check execution. Replacement refs and graft metadata are rejected before trusted
 identity/history reads; inherited Git substitution settings cannot redefine a pin.
+
+An owner full-range rebase may rewrite the baseline commit identity. The candidate
+then needs a unique trusted common prefix and linear complete-tree states matching
+the immutable accepted prefix in order, reaching the exact accepted baseline tree.
+Only that proven candidate anchor starts the existing ordered policy/history gates.
+Unknown or reversed prefix states, protected commit/revert and missing baseline
+snapshots fail closed; whole historical-prefix squash without that snapshot is
+unsupported. The owner rebase-only merge rule and original source pins remain.
