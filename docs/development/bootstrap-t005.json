@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "status": "preparation proposal only; T004 implementation/acceptance and T005 execution approval pending",
+  "feature": "003-single-task-entry",
+  "task": "T005",
+  "issue": 6,
+  "preparation_base": "8f8211afdda9e46984ccfb95505f83434da06db7",
+  "authoritative_source_branch": "chore/issue-2-bootstrap-entry",
+  "dependencies": [
+    "T004"
+  ],
+  "prerequisite": {
+    "issue": 5,
+    "approved_proposal_pin": "cf2be65eb912c580af041052f418b5f147b876e4",
+    "implementation_commit": null,
+    "acceptance_evidence": null,
+    "accepted": false
+  },
+  "allowed_paths": [
+    "tests/test_single_task_context.py"
+  ],
+  "completion": {
+    "path": "specs/003-single-task-entry/tasks.md",
+    "task": "T005",
+    "only_after_acceptance": true
+  },
+  "case_id_prefix": "test_single_task_context.TaskContextEntryTests.test_",
+  "case_columns": [
+    "method_suffix",
+    "fixture_mutation",
+    "final_feature_exit",
+    "implementing_successors"
+  ],
+  "proposed_case_count": 54,
+  "checkpoint_outcomes": {
+    "status": "unmeasured; resolve after accepted T004, before T005 dispatch",
+    "expected_red_failures": null,
+    "test_content_sha256": null,
+    "acceptance_record": null
+  },
+  "proposed_checks": [
+    [
+      "python3",
+      "tests/test_single_task_context.py",
+      "--self-test"
+    ],
+    [
+      "python3",
+      "tests/test_single_task_context.py",
+      "--verify-red"
+    ],
+    [
+      "python3",
+      "scripts/verify_t003_state.py"
+    ],
+    [
+      "python3",
+      "scripts/check_repo.py"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "raw_checks": [
+    [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_single_task_context.py",
+      "-v"
+    ],
+    [
+      "make",
+      "check"
+    ]
+  ],
+  "verifier_location": "future tests/test_single_task_context.py only; not implemented by preparation",
+  "reused_utilities": {
+    "scripts/verify_t004_cli.py": [
+      "Outcomes",
+      "validate_inventory",
+      "CliBoundaryTests"
+    ],
+    "scripts/verify_t002_red.py": [
+      "evaluate",
+      "flatten"
+    ]
+  },
+  "retained_t004_matrix": "docs/development/bootstrap-t004.json; 31 baseline + 5 authored + 12 direct green, exactly 5 retained red; accepted T004 evidence still required",
+  "dispatch": false,
+  "owner_identity_authenticated": false,
+  "live_dispatch_verified": false,
+  "cases": [
+    ["valid_empty_dependencies", "Valid T001 context with explicit [] and none table row", 0, "T006-T010"],
+    ["valid_satisfied_dependency", "Valid T002 with checked T001 and matching local manifest/check/commit evidence", 0, "T006-T010"],
+    ["malformed_json", "Truncated JSON context", 2, "T006"],
+    ["missing_field", "Omit required task_id from otherwise valid context", 2, "T006"],
+    ["extra_field", "Add unknown top-level field", 2, "T006"],
+    ["duplicate_json_key", "Duplicate task_id JSON key with conflicting values", 2, "T006"],
+    ["unsupported_schema", "Change schema_version to unsupported integer", 2, "T006"],
+    ["multiple_task_ids", "Replace task_id string with two IDs", 2, "T006"],
+    ["unknown_task_id", "Select T999 absent from task artifact", 2, "T007"],
+    ["duplicate_task_id", "Duplicate a real T001 task line outside fences; reseal artifact and context", 2, "T007"],
+    ["fenced_pseudo_task", "Select T999 appearing only inside fenced code; reseal artifacts", 2, "T007"],
+    ["fenced_duplicate_ignored", "Add fenced duplicate T001 task/table examples to valid artifact; reseal", 0, "T007/T009/T010"],
+    ["unknown_feature", "Select nonexistent direct specs child", 2, "T007"],
+    ["dirty_tracked", "Change tracked guide after approved baseline", 2, "T007"],
+    ["dirty_index", "Stage guide change then restore worktree bytes", 2, "T007"],
+    ["dirty_untracked", "Add nonignored untracked file before entry", 2, "T007"],
+    ["missing_artifact", "Delete required plan.md and commit fixture change", 2, "T007"],
+    ["unknown_artifact_commit", "Use locally unresolvable reviewed commit", 2, "T008"],
+    ["nonancestor_artifact_commit", "Use locally resolvable reviewed commit outside HEAD ancestry", 2, "T008"],
+    ["artifact_digest_mismatch", "Change reviewed spec SHA-256 without changing artifact bytes", 2, "T008"],
+    ["missing_approval", "Remove approval record", 2, "T006/T008"],
+    ["changed_approval_binding", "Change allowed_paths after approval digest without resealing approval", 2, "T008"],
+    ["missing_dependency_table", "Remove sole dependency table; reseal artifacts/source/context", 2, "T009"],
+    ["malformed_dependency_table", "Replace exact separator with malformed separator; reseal", 2, "T009"],
+    ["omitted_dependency_row", "Remove one real task row; reseal", 2, "T009"],
+    ["extra_dependency_row", "Add sorted row for nonexistent T999; reseal", 2, "T009"],
+    ["duplicate_dependency_row", "Repeat identical T001 row; reseal", 2, "T009"],
+    ["duplicate_dependency_table", "Append second complete table outside fences; reseal", 2, "T009"],
+    ["unknown_dependency_id", "Reference T999 in selected prerequisite list; reseal", 2, "T009"],
+    ["self_dependency", "Make selected T001 depend on T001; reseal", 2, "T009"],
+    ["dependency_cycle", "Declare T001 to T002 and T002 to T001; reseal", 2, "T009"],
+    ["contradictory_dependency_rows", "Duplicate T002 with contradictory prerequisite lists; reseal", 2, "T009"],
+    ["unsorted_dependency_rows", "Reverse real task rows; reseal", 2, "T009"],
+    ["duplicate_dependency_ids", "Repeat T001 within one prerequisite list; reseal", 2, "T009"],
+    ["context_table_mismatch", "Keep T002 table dependency T001 but set approved context dependencies []", 2, "T009"],
+    ["source_digest_mismatch", "Bind source_assertion to wrong reviewed tasks raw digest", 2, "T009"],
+    ["source_excerpt_mismatch", "Bind source_assertion to excerpt differing from exact table lines", 2, "T009"],
+    ["unchecked_prerequisite", "Valid evidence but current T001 marker pending", 2, "T009"],
+    ["missing_prerequisite_evidence", "Remove required T001 evidence record", 2, "T009"],
+    ["extra_prerequisite_evidence", "Supply record outside selected dependency set", 2, "T009"],
+    ["duplicate_prerequisite_evidence", "Supply T001 evidence record twice", 2, "T009"],
+    ["stale_prerequisite_commit", "Reference commit whose tree does not contain recorded manifest", 2, "T009"],
+    ["stale_prerequisite_digest", "Alter one manifest entry digest without matching commit tree", 2, "T009"],
+    ["stale_prerequisite_check", "Bind passing check to different manifest digest", 2, "T009"],
+    ["failed_prerequisite_check", "Keep matching manifest but check result exit nonzero", 2, "T009"],
+    ["progress_checkbox_only", "Current tasks differ from reviewed artifact only by prior task completion marker", 0, "T008/T010"],
+    ["progress_evidence_footer", "Append valid EOF evidence footer referencing matching local bytes", 0, "T008/T010"],
+    ["semantic_spec_drift", "Change current spec prose against reviewed commit and commit fixture change", 2, "T008"],
+    ["semantic_plan_drift", "Change current plan prose against reviewed commit and commit fixture change", 2, "T008"],
+    ["semantic_task_description", "Change current task description against reviewed commit", 2, "T008"],
+    ["semantic_task_order", "Reorder real task lines against reviewed commit", 2, "T008"],
+    ["changed_existing_evidence", "Change already reviewed evidence-footer record", 2, "T008"],
+    ["removed_existing_evidence", "Remove already reviewed evidence-footer record", 2, "T008"],
+    ["invalid_evidence_footer", "Append nonconforming or digest-mismatching evidence-footer line", 2, "T008"]
+  ]
+}
