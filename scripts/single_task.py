@@ -96,6 +96,13 @@ def lock_only(root):
                 descriptors.append(contexts)
                 for child in os.listdir(contexts):
                     backend._regular(contexts, child, required=True)
+            elif name == 'publication':
+                publication = backend._directory(directory, name)
+                descriptors.append(publication)
+                for child in os.listdir(publication):
+                    if len(child) != 64 or any(c not in '0123456789abcdef' for c in child):
+                        raise backend.InvalidState('Unsupported publication evidence')
+                    backend._regular(publication, child, required=True)
             elif name in ('lock', 'journal.sqlite3', 'journal.sqlite3-journal'):
                 backend._regular(directory, name, required=True)
             else:
@@ -531,6 +538,55 @@ def main():
                     store.append_event(attempt_id, 'entry', {'context_digest': prepared['context']['approval']['context_digest']})
                 response(attempt=store.read_attempt(attempt_id))
             return 0
+        if parse_error is None and args.command == 'rework':
+            with backend.open_store(root, require_existing=True, writable_existing=True) as store:
+                context = contexts.load_context(args.context)
+                response(attempt=backend.create_rework(root, store, context))
+            return 0
+        if parse_error is None and args.command in ('record-commit', 'resume'):
+            with backend.open_store(root, require_existing=True, writable_existing=True) as store:
+                attempt = None
+                try:
+                    attempt = store.read_attempt(args.attempt)
+                    if args.command == 'record-commit':
+                        backend.bind_implementation(root, store, args.attempt, args.commit)
+                        response(attempt=store.read_attempt(args.attempt))
+                        return 0
+                    binding = backend.implementation_binding(store, args.attempt)
+                    if (attempt['progress'] in ('completed-awaiting-commit', 'handoff-ready') and
+                            binding is None):
+                        raise backend.InvalidState('A bound implementation is required for full handoff')
+                    review = load_review(args.review)
+                    backend.recover_completion(root, store, args.attempt, review)
+                    if binding is not None:
+                        # Revalidate the original identity across all current planes;
+                        # current HEAD is a separate append-only verification identity.
+                        fresh = next(row for row in reversed(store.read_events(args.attempt))
+                                     if row['kind'] == 'acceptance')
+                        backend.bind_implementation(root, store, args.attempt, binding['implementation_commit'])
+                        # Pin readiness to the exact newly checked revision, including
+                        # a second current-content/HEAD check after binding inspection.
+                        backend._validated_completion_acceptance(root, store,
+                                                                 store.read_attempt(args.attempt), fresh)
+                        store.append_event(args.attempt, 'handoff-verification',
+                                           {'schema_version': 1,
+                                            'implementation_commit': binding['implementation_commit'],
+                                            'verification_head': fresh['payload']['verification_head'],
+                                            'acceptance_sequence': fresh['sequence'],
+                                            'acceptance_digest': fresh['payload_digest']},
+                                           progress='handoff-ready')
+                    response(attempt=store.read_attempt(args.attempt), verification='passed')
+                    return 0
+                except acceptance.AcceptanceFailure as error:
+                    store.append_event(args.attempt, 'blocker',
+                                       {'code': 'acceptance_failed', 'category': error.category})
+                    return failure(CliError(4, 'acceptance_failed', category=error.category))
+                except ERRORS as error:
+                    if attempt is not None and not isinstance(error,
+                            (backend.PersistenceFailure, backend.StateConflict, OSError)):
+                        code = error.code if isinstance(error, (CliError, contexts.ContextError)) else 'state_blocker'
+                        store.append_event(args.attempt, 'blocker', {'code': code})
+                    return failure(error)
         if parse_error is None and args.command == 'inspect':
             with backend.open_store(root, require_existing=True) as store:
                 attempt = store.read_attempt(args.attempt)

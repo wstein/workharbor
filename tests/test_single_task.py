@@ -490,7 +490,7 @@ class SingleTaskTests(unittest.TestCase):
         self.cli('verify')
         (self.feature/'tasks.md').write_text(self.tasks.replace('[ ] T001', '[x] T001'))
         # Prepare a real interrupted intent using the same publication API;
-        # recovery belongs to T021/T023 and must remain an explicit body blocker.
+        # T021/T023 recover this same intent without reopening either task.
         sys.path.insert(0, str(SCRIPT.parent))
         import single_task_state as backend
         (self.feature/'tasks.md').write_text(self.tasks)
