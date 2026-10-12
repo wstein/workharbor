@@ -223,6 +223,52 @@ evaluate = _outcomes['evaluate']
 validate_collection = _outcomes['validate_collection']
 
 
+def package_acceptance(value, repository_snapshot, evidence, capabilities, *,
+                       approved_revision, approved_checks, guard=None, matrix_approved=False):
+    """Check one host-approved package; local decisions grant no execution authority.
+
+    The host supplies exact serialization/check approval and guard ports separately
+    from package data. This optional entry does not change repository acceptance.
+    Checks execute only after the shared validator clears every blocker; absent
+    guards fail closed. The outcome runner owns argv, collection and classification.
+    """
+    # Package primitives import the adjacent state traversal library. Only this
+    # requested entry loads them; ordinary repository CI needs no guard/package.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import task_package as package
+    finally:
+        sys.path.pop(0)
+    result = dict(accepted=False, execution_eligible=False, authenticated_approval=None,
+                  independent_review=None, live_execution=None,
+                  validation=None, outcomes=None, blocker=None)
+    try:
+        value = package.parse_json(package.package_bytes(value))
+        approved = package.parse_json(package.canonical_json(approved_checks))
+        if (type(approved_revision) is not str
+                or approved_revision != package.package_revision_digest(value)):
+            raise ValueError('approval_mismatch')
+        _outcomes['validate_checks'](approved)
+        if _outcomes['canonical'](approved) != _outcomes['canonical'](value['outcomes']):
+            raise ValueError('approval_mismatch')
+        root = Path(repository_snapshot['root'])
+        validation = package.validate(value, repository_snapshot, evidence, capabilities,
+                                      guard=guard, outcome_validator=_outcomes['validate_checks'])
+        result['validation'] = validation
+        if not validation['structural_valid'] or validation['blockers']:
+            result['blocker'] = 'package_validation_blocked'
+            return result
+        outcome = _outcomes['run_checks'](root, value['outcomes'], approved_checks=approved,
+                                         matrix_approved=matrix_approved)
+        result['outcomes'] = outcome
+        validation['raw_exits'] = [check['raw_exit'] for check in outcome['checks']]
+        result['accepted'] = outcome['accepted'] is True
+        result['blocker'] = None if result['accepted'] else 'package_outcomes_blocked'
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError):
+        result['blocker'] = 'invalid_or_unavailable_package_inputs'
+    return result
+
+
 def collect(root):
     # Separate loaders avoid top-level-directory state between the two roots.
     sys.path[:0] = [str(root/'tests'), str(root/'scripts')]
@@ -251,7 +297,7 @@ def acceptance_suite(root):
 def source_identity(root, source):
     if not re.fullmatch('[0-9a-f]{40}', source) or git(root, 'cat-file', '-t', source) != b'commit\n':
         raise ValueError('Source must identify an exact available commit')
-    for name in ('check_ci.py', 'task_outcomes.py'):
+    for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py'):
         checker = Path(__file__).with_name(name)
         relative = 'scripts/' + name
         entry = git(root, 'ls-tree', source, '--', relative).split()
