@@ -54,6 +54,11 @@ Physical reads reuse Feature 003's descriptor-relative directory traversal, open
 files without following links, reject hardlinked/nonregular files and bound reads
 to the expected Git blob size. Limit protected paths to 1,000, blobs to 1 MiB each,
 and each local Git call to ten seconds; exceeding limits blocks.
+Before status can inspect content, effective repository configuration (including
+includes/worktree configuration) must contain no clean, smudge or process filter
+keys. Configured filters block without execution. Committed or indexed gitlinks
+also block; status explicitly disables submodule recursion. Global/system Git
+configuration and inherited Git overrides are excluded, and fsmonitor is disabled.
 
 The result is sanitized comparison evidence: result, retained flag, approval
 assurance, original/current raw binding digests, approved/current snapshots,

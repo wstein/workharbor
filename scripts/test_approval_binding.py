@@ -3,9 +3,11 @@ import copy
 import hashlib
 import json
 import os
+import shlex
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -237,6 +239,55 @@ class ApprovalBindingTests(unittest.TestCase):
                       'feature003-context-comparator-unavailable')
         self.rejected(assess_retention(self.root, self.request, guard=self.guard),
                       'approval-authority-unavailable')
+
+    def test_clean_and_process_filters_are_refused_without_executing_shell(self):
+        marker = self.fixture.private / 'filter-executed'
+        attributes = self.root / '.gitattributes'
+        attributes.write_text('*.md filter=fixture\n')
+        self.commit()
+        self.request['approved_revision'] = self.request['current_revision']
+        for key in ('clean', 'process', 'smudge'):
+            with self.subTest(key=key):
+                self.fixture.git('config', f'filter.fixture.{key}', f'touch {marker}; cat')
+                (self.root / 'guide.md').write_bytes((self.root / 'guide.md').read_bytes())
+                self.rejected(self.assess(), 'executable-git-filter-unsupported')
+                self.assertFalse(marker.exists(), 'Repository filter executed a shell command')
+                self.fixture.git('config', '--unset', f'filter.fixture.{key}')
+
+    def test_included_filter_config_is_refused_without_executing_shell(self):
+        marker = self.fixture.private / 'included-filter-executed'
+        (self.root / '.gitattributes').write_text('*.md filter=fixture\n')
+        self.commit()
+        self.request['approved_revision'] = self.request['current_revision']
+        included = self.fixture.private / 'included-config'
+        included.write_text(f'[filter "fixture"]\n clean = touch {marker}; cat\n')
+        self.fixture.git('config', 'include.path', str(included))
+        (self.root / 'guide.md').write_bytes((self.root / 'guide.md').read_bytes())
+        self.rejected(self.assess(), 'executable-git-filter-unsupported')
+        self.assertFalse(marker.exists())
+
+    def test_fsmonitor_is_disabled_without_executing_repository_hook(self):
+        marker = self.fixture.private / 'fsmonitor-executed'
+        hook = self.fixture.private / 'fsmonitor-hook'
+        hook.write_text('#!/bin/sh\ntouch ' + shlex.quote(str(marker)) + '\n')
+        hook.chmod(0o755)
+        self.fixture.git('config', 'core.fsmonitor', str(hook))
+        self.assertTrue(self.assess()['retained'])
+        self.assertFalse(marker.exists(), 'Repository fsmonitor hook executed')
+
+    def test_index_gitlink_is_refused_before_recursive_status(self):
+        subprocess.run(['git', 'update-index', '--add', '--cacheinfo',
+                        '160000', self.fixture.baseline, 'nested'], cwd=self.root,
+                       env=self.fixture.env, check=True, capture_output=True)
+        self.rejected(self.assess(), 'submodule-source-unsupported')
+
+    def test_committed_gitlink_is_refused_before_recursive_status(self):
+        subprocess.run(['git', 'update-index', '--add', '--cacheinfo',
+                        '160000', self.fixture.baseline, 'nested'], cwd=self.root,
+                       env=self.fixture.env, check=True, capture_output=True)
+        self.fixture.git('commit', '-m', 'test: unsupported nested repository')
+        self.request['current_revision'] = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+        self.rejected(self.assess(), 'submodule-source-unsupported')
 
     def test_stale_binding_and_unverified_authority_block(self):
         self.authority.accepted_target = 'stale-target'
