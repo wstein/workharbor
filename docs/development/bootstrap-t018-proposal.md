@@ -190,3 +190,29 @@ The 47 reds still stop at unsupported public-command behavior; deeper recovery a
 binding assertions remain unexecuted. T020/T021/T023 must implement that behavior,
 with genuine checked-rework entry requiring T022/T023. A matching red matrix does
 not claim those behaviors work or a green raw/full repository suite.
+
+## T020 implementation checkpoint
+The separately reviewed owning implementation is frozen at
+`b4e9cc5442af154996b6590362a6a8fc162fa508`. Direct commit-binding
+controls passed **12/12**, raw exit **0**, with zero errors, skips or failed
+subtests. The before/after source snapshot was identical:
+`sha256:f3fc101dca09b805544dc2362dd6c2d04d4672d5ce273cbf42667de4c52013b5`.
+The actual command was `/opt/homebrew/bin/python3.14 -B
+/private/tmp/collect-feature003-handoff.py test_single_task_binding.py t020-final`.
+- `/private/tmp/workharbor-003-t020-final-raw.json`: SHA-256 `a59a383106d73d0478cdccdd953632adfa3b1ec0d1fe12010ea089859e190592`.
+- `/private/tmp/workharbor-003-t020-final-raw.log`: SHA-256 `31ca588e2ac9e95249b47c06aec3570b60e6c1436185302e6fc6c88248af789f`.
+- `/private/tmp/workharbor-003-t020-rework-red.log`: SHA-256 `4ff4ed07207292c69bf027e3b26689d7f2abe77d45c4c31849b96dea170cdde7`.
+- `/private/tmp/workharbor-003-t020-rework-green.log`: SHA-256 `c08cd0ce21dd7be9e077f641f1a48d938bbd6cad820dd25afa7ccc2e823b8671`.
+
+The rejected rework fixture run failed on stale semantic-review preparation
+before binding; it does not establish a criterion-specific production RED.
+The corrected positive uses an explicitly primitive-created linked checked
+rework attempt, actual acceptance/publication and actual binding to prove exact
+uppercase `[X]` preservation. It does not claim T022 entry authorization.
+The first 11-case frozen run remains earlier-source evidence.
+
+The original owner-approved test-authoring matrix and acceptance above remain
+unchanged. T020 binds one immutable reachable matching local implementation
+commit and appends later verification identities separately. T021 recovery,
+T022 authorized entry and T023 public integration remain undelivered here;
+there is no full-suite, handoff-ready, CI-policy or live-execution claim.
