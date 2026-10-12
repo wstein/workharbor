@@ -254,6 +254,26 @@ class ApprovalBridgeTests(unittest.TestCase):
             target.update(copy.deepcopy(original))
         self.assertEqual([], self.calls)
 
+    def test_root_replacement_during_adapter_or_scope_invalidates_entry(self):
+        for owner, method in ((binding, 'assess_retention'), (self.guard, 'validate_scope')):
+            with self.subTest(boundary=method):
+                operation = getattr(owner, method)
+                moved = self.root.with_name('relocated-repository')
+
+                def replace_root(*args, **kwargs):
+                    self.root.rename(moved)
+                    self.root.symlink_to(moved, target_is_directory=True)
+                    return operation(*args, **kwargs)
+
+                try:
+                    with patch.object(owner, method, side_effect=replace_root):
+                        result = self.assess()
+                    self.assert_blocked(result, 'repository-input-raced')
+                finally:
+                    if self.root.is_symlink():
+                        self.root.unlink()
+                        moved.rename(self.root)
+
 
 if __name__ == '__main__':
     unittest.main()
