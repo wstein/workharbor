@@ -169,6 +169,28 @@
       "owner_identity_authenticated": false,
       "live_dispatch_verified": false,
       "full_suite_green": false
+    },
+    {
+      "task": "T008",
+      "source_commit": "1bd2702d9edbb942d8d11b9586c3dba47a107a63",
+      "checks_digest": "sha256:e0864d61e18b9776b5c15f8f50de6f22ec734b9e53d46f724d92b0136ff5026f",
+      "input_revision": "sha256:1a0875047b45a793c7201787e8de0c809f233fbf1425728242c170ca8579658c",
+      "runner_exit": 0,
+      "accepted": true,
+      "focused_cases": 122,
+      "focused_passes": 92,
+      "focused_expected_assertions": 30,
+      "focused_raw_exit": 1,
+      "direct_passes": 24,
+      "direct_raw_exit": 0,
+      "files": {
+        "scripts/single_task_context.py": "5b77d87c0ed7056c908eca6eb95c63558fcf2f54a74467585774485335bdce55",
+        "scripts/single_task_scope.py": "449ad5e2f163dcbaf33686e1f3a97e7dda442947828c1bfecf68fe6c820124f5",
+        "tests/test_single_task_context.py": "a724e7a92d120c774721c85063eaab285114ad7a9a3680de04c09cf666adb16a"
+      },
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false,
+      "full_suite_green": false
     }
   ],
   "cases": [
