@@ -96,6 +96,105 @@
     "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore",
     "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore",
     "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected",
+    "test_single_task_context.TaskContextEntryTests.test_artifact_digest_mismatch",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_append_existing_footer",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_binding_fields",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_crlf_bytes",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_fenced_checkbox",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_fenced_footer",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_footer_records",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_rework_binding",
+    "test_single_task_context.TaskContextEntryTests.test_artifacts_spec_plan_footer",
+    "test_single_task_context.TaskContextEntryTests.test_canonical_vector",
+    "test_single_task_context.TaskContextEntryTests.test_changed_approval_binding",
+    "test_single_task_context.TaskContextEntryTests.test_changed_existing_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_context_table_mismatch",
+    "test_single_task_context.TaskContextEntryTests.test_contradictory_dependency_rows",
+    "test_single_task_context.TaskContextEntryTests.test_dependency_bare_cr",
+    "test_single_task_context.TaskContextEntryTests.test_dependency_cycle",
+    "test_single_task_context.TaskContextEntryTests.test_dependency_sorted_lists",
+    "test_single_task_context.TaskContextEntryTests.test_dirty_index",
+    "test_single_task_context.TaskContextEntryTests.test_dirty_tracked",
+    "test_single_task_context.TaskContextEntryTests.test_dirty_untracked",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_ids",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_row",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_table",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_json_key",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_prerequisite_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_duplicate_task_id",
+    "test_single_task_context.TaskContextEntryTests.test_entry_event_rollback",
+    "test_single_task_context.TaskContextEntryTests.test_entry_legacy_rejected",
+    "test_single_task_context.TaskContextEntryTests.test_entry_rejections_preserve_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_entry_status_readonly",
+    "test_single_task_context.TaskContextEntryTests.test_extra_dependency_row",
+    "test_single_task_context.TaskContextEntryTests.test_extra_field",
+    "test_single_task_context.TaskContextEntryTests.test_extra_prerequisite_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_failed_prerequisite_check",
+    "test_single_task_context.TaskContextEntryTests.test_fenced_duplicate_ignored",
+    "test_single_task_context.TaskContextEntryTests.test_fenced_pseudo_task",
+    "test_single_task_context.TaskContextEntryTests.test_invalid_evidence_footer",
+    "test_single_task_context.TaskContextEntryTests.test_malformed_dependency_table",
+    "test_single_task_context.TaskContextEntryTests.test_malformed_json",
+    "test_single_task_context.TaskContextEntryTests.test_missing_approval",
+    "test_single_task_context.TaskContextEntryTests.test_missing_artifact",
+    "test_single_task_context.TaskContextEntryTests.test_missing_dependency_table",
+    "test_single_task_context.TaskContextEntryTests.test_missing_field",
+    "test_single_task_context.TaskContextEntryTests.test_missing_prerequisite_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_multiple_task_ids",
+    "test_single_task_context.TaskContextEntryTests.test_nonancestor_artifact_commit",
+    "test_single_task_context.TaskContextEntryTests.test_omitted_dependency_row",
+    "test_single_task_context.TaskContextEntryTests.test_prerequisite_manifest_types",
+    "test_single_task_context.TaskContextEntryTests.test_prerequisites_fenced_crlf",
+    "test_single_task_context.TaskContextEntryTests.test_prerequisites_valid",
+    "test_single_task_context.TaskContextEntryTests.test_progress_checkbox_only",
+    "test_single_task_context.TaskContextEntryTests.test_progress_evidence_footer",
+    "test_single_task_context.TaskContextEntryTests.test_removed_existing_evidence",
+    "test_single_task_context.TaskContextEntryTests.test_schema_allowed_paths",
+    "test_single_task_context.TaskContextEntryTests.test_schema_checks",
+    "test_single_task_context.TaskContextEntryTests.test_schema_nested_fields",
+    "test_single_task_context.TaskContextEntryTests.test_schema_primitive_types",
+    "test_single_task_context.TaskContextEntryTests.test_schema_rework_fields",
+    "test_single_task_context.TaskContextEntryTests.test_schema_unicode_feature",
+    "test_single_task_context.TaskContextEntryTests.test_schema_valid",
+    "test_single_task_context.TaskContextEntryTests.test_schema_valid_rework",
+    "test_single_task_context.TaskContextEntryTests.test_scope_alias_paths",
+    "test_single_task_context.TaskContextEntryTests.test_scope_allowed_directory",
+    "test_single_task_context.TaskContextEntryTests.test_scope_allowed_symlink_component",
+    "test_single_task_context.TaskContextEntryTests.test_scope_changed_gitlink",
+    "test_single_task_context.TaskContextEntryTests.test_scope_check_cwd_symlink",
+    "test_single_task_context.TaskContextEntryTests.test_scope_checked_implement",
+    "test_single_task_context.TaskContextEntryTests.test_scope_clean_gitlink",
+    "test_single_task_context.TaskContextEntryTests.test_scope_executable_filter",
+    "test_single_task_context.TaskContextEntryTests.test_scope_feature_symlink",
+    "test_single_task_context.TaskContextEntryTests.test_scope_fence_lengths",
+    "test_single_task_context.TaskContextEntryTests.test_scope_git_hooks",
+    "test_single_task_context.TaskContextEntryTests.test_scope_gitlink_output",
+    "test_single_task_context.TaskContextEntryTests.test_scope_hidden_mode",
+    "test_single_task_context.TaskContextEntryTests.test_scope_hidden_tracked",
+    "test_single_task_context.TaskContextEntryTests.test_scope_nonregular_artifact",
+    "test_single_task_context.TaskContextEntryTests.test_scope_specs_symlink",
+    "test_single_task_context.TaskContextEntryTests.test_scope_symlink_artifact",
+    "test_single_task_context.TaskContextEntryTests.test_scope_traversal",
+    "test_single_task_context.TaskContextEntryTests.test_scope_unicode_feature",
+    "test_single_task_context.TaskContextEntryTests.test_self_dependency",
+    "test_single_task_context.TaskContextEntryTests.test_semantic_plan_drift",
+    "test_single_task_context.TaskContextEntryTests.test_semantic_spec_drift",
+    "test_single_task_context.TaskContextEntryTests.test_semantic_task_description",
+    "test_single_task_context.TaskContextEntryTests.test_semantic_task_order",
+    "test_single_task_context.TaskContextEntryTests.test_source_digest_mismatch",
+    "test_single_task_context.TaskContextEntryTests.test_source_excerpt_mismatch",
+    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_check",
+    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_commit",
+    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_digest",
+    "test_single_task_context.TaskContextEntryTests.test_unchecked_prerequisite",
+    "test_single_task_context.TaskContextEntryTests.test_unknown_artifact_commit",
+    "test_single_task_context.TaskContextEntryTests.test_unknown_dependency_id",
+    "test_single_task_context.TaskContextEntryTests.test_unknown_feature",
+    "test_single_task_context.TaskContextEntryTests.test_unknown_task_id",
+    "test_single_task_context.TaskContextEntryTests.test_unsorted_dependency_rows",
+    "test_single_task_context.TaskContextEntryTests.test_unsupported_schema",
+    "test_single_task_context.TaskContextEntryTests.test_valid_empty_dependencies",
+    "test_single_task_context.TaskContextEntryTests.test_valid_satisfied_dependency",
     "test_single_task_state.SingleTaskStateTests.test_append_only_events",
     "test_single_task_state.SingleTaskStateTests.test_corrupt_state_retained",
     "test_single_task_state.SingleTaskStateTests.test_immutable_context",
@@ -133,460 +232,122 @@
     "verify_t004_cli.CliBoundaryTests.test_mixed_legacy_and_sqlite_is_never_adopted",
     "verify_t004_cli.CliBoundaryTests.test_persistence_exit_six_is_safe",
     "verify_t004_cli.CliBoundaryTests.test_scope_blocker_exit_three",
-    "verify_t004_cli.CliBoundaryTests.test_unsafe_lock_paths_rejected_without_external_writes",
-    "test_single_task_context.TaskContextEntryTests.test_artifact_digest_mismatch",
-    "test_single_task_context.TaskContextEntryTests.test_artifacts_binding_fields",
-    "test_single_task_context.TaskContextEntryTests.test_artifacts_fenced_checkbox",
-    "test_single_task_context.TaskContextEntryTests.test_artifacts_footer_records",
-    "test_single_task_context.TaskContextEntryTests.test_artifacts_spec_plan_footer",
-    "test_single_task_context.TaskContextEntryTests.test_canonical_vector",
-    "test_single_task_context.TaskContextEntryTests.test_changed_approval_binding",
-    "test_single_task_context.TaskContextEntryTests.test_changed_existing_evidence",
-    "test_single_task_context.TaskContextEntryTests.test_context_table_mismatch",
-    "test_single_task_context.TaskContextEntryTests.test_contradictory_dependency_rows",
-    "test_single_task_context.TaskContextEntryTests.test_dependency_cycle",
-    "test_single_task_context.TaskContextEntryTests.test_dirty_index",
-    "test_single_task_context.TaskContextEntryTests.test_dirty_tracked",
-    "test_single_task_context.TaskContextEntryTests.test_dirty_untracked",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_ids",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_row",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_table",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_json_key",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_prerequisite_evidence",
-    "test_single_task_context.TaskContextEntryTests.test_duplicate_task_id",
-    "test_single_task_context.TaskContextEntryTests.test_extra_dependency_row",
-    "test_single_task_context.TaskContextEntryTests.test_extra_field",
-    "test_single_task_context.TaskContextEntryTests.test_extra_prerequisite_evidence",
-    "test_single_task_context.TaskContextEntryTests.test_failed_prerequisite_check",
-    "test_single_task_context.TaskContextEntryTests.test_fenced_duplicate_ignored",
-    "test_single_task_context.TaskContextEntryTests.test_fenced_pseudo_task",
-    "test_single_task_context.TaskContextEntryTests.test_invalid_evidence_footer",
-    "test_single_task_context.TaskContextEntryTests.test_malformed_dependency_table",
-    "test_single_task_context.TaskContextEntryTests.test_malformed_json",
-    "test_single_task_context.TaskContextEntryTests.test_missing_approval",
-    "test_single_task_context.TaskContextEntryTests.test_missing_artifact",
-    "test_single_task_context.TaskContextEntryTests.test_missing_dependency_table",
-    "test_single_task_context.TaskContextEntryTests.test_missing_field",
-    "test_single_task_context.TaskContextEntryTests.test_missing_prerequisite_evidence",
-    "test_single_task_context.TaskContextEntryTests.test_multiple_task_ids",
-    "test_single_task_context.TaskContextEntryTests.test_nonancestor_artifact_commit",
-    "test_single_task_context.TaskContextEntryTests.test_omitted_dependency_row",
-    "test_single_task_context.TaskContextEntryTests.test_progress_checkbox_only",
-    "test_single_task_context.TaskContextEntryTests.test_progress_evidence_footer",
-    "test_single_task_context.TaskContextEntryTests.test_removed_existing_evidence",
-    "test_single_task_context.TaskContextEntryTests.test_schema_allowed_paths",
-    "test_single_task_context.TaskContextEntryTests.test_schema_checks",
-    "test_single_task_context.TaskContextEntryTests.test_schema_nested_fields",
-    "test_single_task_context.TaskContextEntryTests.test_schema_primitive_types",
-    "test_single_task_context.TaskContextEntryTests.test_schema_rework_fields",
-    "test_single_task_context.TaskContextEntryTests.test_schema_unicode_feature",
-    "test_single_task_context.TaskContextEntryTests.test_schema_valid",
-    "test_single_task_context.TaskContextEntryTests.test_schema_valid_rework",
-    "test_single_task_context.TaskContextEntryTests.test_scope_allowed_directory",
-    "test_single_task_context.TaskContextEntryTests.test_scope_allowed_symlink_component",
-    "test_single_task_context.TaskContextEntryTests.test_scope_checked_implement",
-    "test_single_task_context.TaskContextEntryTests.test_scope_fence_lengths",
-    "test_single_task_context.TaskContextEntryTests.test_scope_nonregular_artifact",
-    "test_single_task_context.TaskContextEntryTests.test_scope_symlink_artifact",
-    "test_single_task_context.TaskContextEntryTests.test_scope_traversal",
-    "test_single_task_context.TaskContextEntryTests.test_self_dependency",
-    "test_single_task_context.TaskContextEntryTests.test_semantic_plan_drift",
-    "test_single_task_context.TaskContextEntryTests.test_semantic_spec_drift",
-    "test_single_task_context.TaskContextEntryTests.test_semantic_task_description",
-    "test_single_task_context.TaskContextEntryTests.test_semantic_task_order",
-    "test_single_task_context.TaskContextEntryTests.test_source_digest_mismatch",
-    "test_single_task_context.TaskContextEntryTests.test_source_excerpt_mismatch",
-    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_check",
-    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_commit",
-    "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_digest",
-    "test_single_task_context.TaskContextEntryTests.test_unchecked_prerequisite",
-    "test_single_task_context.TaskContextEntryTests.test_unknown_artifact_commit",
-    "test_single_task_context.TaskContextEntryTests.test_unknown_dependency_id",
-    "test_single_task_context.TaskContextEntryTests.test_unknown_feature",
-    "test_single_task_context.TaskContextEntryTests.test_unknown_task_id",
-    "test_single_task_context.TaskContextEntryTests.test_unsorted_dependency_rows",
-    "test_single_task_context.TaskContextEntryTests.test_unsupported_schema",
-    "test_single_task_context.TaskContextEntryTests.test_valid_empty_dependencies",
-    "test_single_task_context.TaskContextEntryTests.test_valid_satisfied_dependency"
+    "verify_t004_cli.CliBoundaryTests.test_unsafe_lock_paths_rejected_without_external_writes"
   ],
   "retained_assertion_failures": [
     {
-      "id": "test_single_task_state.SingleTaskStateTests.test_one_lock_owner",
-      "message": "'usage:' not found in ''",
-      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
-      "removal_condition": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+      "id": "test_single_task.SingleTaskTests.test_absent_file_differs_from_sentinel_contents",
+      "message": "0 != 2 : ",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_state.SingleTaskStateTests.test_lock_released_after_exit",
-      "message": "'usage:' not found in ''",
-      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
-      "removal_condition": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+      "id": "test_single_task.SingleTaskTests.test_acceptance_cannot_mutate_scope_or_complete",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_state.SingleTaskStateTests.test_transaction_rollback",
-      "message": "'usage:' not found in ''",
-      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
-      "removal_condition": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+      "id": "test_single_task.SingleTaskTests.test_committed_violation_hidden_by_revert",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_state.SingleTaskStateTests.test_append_only_events",
-      "message": "'usage:' not found in ''",
-      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
-      "removal_condition": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+      "id": "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task",
+      "message": "0 != 2 : ",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017/T023. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017/T023 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_state.SingleTaskStateTests.test_immutable_context",
-      "message": "'usage:' not found in ''",
-      "reason": "Unchanged T002 helper still requires legacy argparse stderr for exit 2; T004 JSON deferred-entry blocker has empty stderr. Deeper scenario remains unexercised until T010.",
-      "removal_condition": "T010 validated entry and explicit regression migration; later story/final all-green checks"
+      "id": "test_single_task.SingleTaskTests.test_early_completion_without_evidence_rejected",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_artifact_digest_mismatch",
-      "message": "'artifact_digest' != 'command_unavailable'\n- artifact_digest\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change reviewed spec SHA-256 without changing artifact bytes. Successor T008; original fingerprint sha256:290a485e1b3f87307590350c7a9dbc4a4007791a78febee6be2ef3f43fc43920.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "id": "test_single_task.SingleTaskTests.test_failed_acceptance_does_not_complete",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_artifacts_binding_fields",
-      "message": "'approval_digest' != 'command_unavailable'\n- approval_digest\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: artifacts binding fields. Successor T008; original fingerprint sha256:58272ad9db978ac3b328111c5f4010276eadfd6fe82a5086514eecb365049356.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "id": "test_single_task.SingleTaskTests.test_historical_other_task_hidden_by_revert",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_artifacts_fenced_checkbox",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: artifacts fenced checkbox. Successor T008; original fingerprint sha256:24386ce819f6ff5be3b5359bce4381026551a054ae34966194a0d76c1637a0fd.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "id": "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update",
+      "message": "0 != 2 : ",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017/T023. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017/T023 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_artifacts_footer_records",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: artifacts footer records. Successor T008; original fingerprint sha256:874639570d33c1465d6688acd03e7d47bf1fc823bcba7889f8d59d38dca69d5b.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "id": "test_single_task.SingleTaskTests.test_mode_change_requires_rework_even_without_git_filemode",
+      "message": "0 != 2 : ",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017/T023. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017/T023 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_artifacts_spec_plan_footer",
+      "id": "test_single_task.SingleTaskTests.test_reject_other_checkbox_and_selected_description",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "test_single_task.SingleTaskTests.test_reject_outside_scope_committed_and_untracked",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "test_single_task.SingleTaskTests.test_staged_other_task_hidden_by_worktree_restore",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected",
+      "message": "'command_unavailable' == 'command_unavailable' : Retained completion/retry scenario requires T017/T023",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "verify_t004_cli.CliBoundaryTests.test_acceptance_exit_four_does_not_echo_output_or_argv",
+      "message": "4 != 2",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "verify_t004_cli.CliBoundaryTests.test_legacy_acceptance_holds_lock_against_all_commands",
+      "message": "[] is not true : Acceptance did not signal readiness",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
+    },
+    {
+      "id": "verify_t004_cli.CliBoundaryTests.test_legacy_success_envelope",
       "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: artifacts spec plan footer. Successor T008; original fingerprint sha256:1bd12e1bff34e27b5cfd60d5a956a573781db91ef86c15f528e7e78e803656a6.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     },
     {
-      "id": "test_single_task_context.TaskContextEntryTests.test_changed_approval_binding",
-      "message": "'approval_digest' != 'command_unavailable'\n- approval_digest\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change allowed_paths after approval digest without resealing approval. Successor T008; original fingerprint sha256:44d912eae711bcd9f0f132c3b0f0be424435965a9daf1a3e0e006db6853f6264.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_changed_existing_evidence",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change already reviewed evidence-footer record. Successor T008; original fingerprint sha256:998f127d0be0d9843631f65cf7f7f8e273f6665433924b712520fcadc5a63efb.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_context_table_mismatch",
-      "message": "'dependency_mismatch' != 'command_unavailable'\n- dependency_mismatch\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Keep T002 table dependency T001 but set approved context dependencies []. Successor T009; original fingerprint sha256:15f366dc1b1f1bfc4462643b7276d85da84e02365098a26e7275172f0dd46ce1.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_contradictory_dependency_rows",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Duplicate T002 with contradictory prerequisite lists; reseal. Successor T009; original fingerprint sha256:6d1bcf77d1ed133ac5eefff6c9d5f8bfeac9a9f06b5dd33ad46a71f02a29184c.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_dependency_cycle",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Declare T001 to T002 and T002 to T001; reseal. Successor T009; original fingerprint sha256:be3fcafc0d406900aff89f7f1ea81ba4f63983d69a8a75c23a6f5df337931447.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_dirty_index",
-      "message": "'dirty_baseline' != 'command_unavailable'\n- dirty_baseline\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Stage guide change then restore worktree bytes. Successor T007; original fingerprint sha256:dc8ccec43318f56b08d1c7787283f70b7646401dd4ce0594d6ceb9c87078d050.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_dirty_tracked",
-      "message": "'dirty_baseline' != 'command_unavailable'\n- dirty_baseline\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Change tracked guide after approved baseline. Successor T007; original fingerprint sha256:d5bb5fabefa2778bb12e61b90afdb23caa851fe1325c60818e381c97aab61faf.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_dirty_untracked",
-      "message": "'dirty_baseline' != 'command_unavailable'\n- dirty_baseline\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Add nonignored untracked file before entry. Successor T007; original fingerprint sha256:40455db0b45e8ea9dfbf0f10ec1832ac71aea799da17bd0028d2367cb7314c2e.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_ids",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Repeat T001 within one prerequisite list; reseal. Successor T009; original fingerprint sha256:6a9e0c3982640bb41ce1554827cbfda1b875533d020a6820923261d8d64cfb64.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_row",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Repeat identical T001 row; reseal. Successor T009; original fingerprint sha256:f334f5dc6d0d35929db4b57541959939ef671e6106cc7e635310de7dfd5b226a.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_duplicate_dependency_table",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Append second complete table outside fences; reseal. Successor T009; original fingerprint sha256:bd43c7e83bbdc0986104049c6f4d3ffa4ab4c2c27215ca565a4c7a9a3ba0c46f.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_duplicate_prerequisite_evidence",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Supply T001 evidence record twice. Successor T009; original fingerprint sha256:ab192a97c7278a271213bbf5096d5d7d64ffd3dd777e9f05966e2607bb81a3cd.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_duplicate_task_id",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Duplicate a real T001 task line outside fences; reseal artifact and context. Successor T007; original fingerprint sha256:cf8eba6f6e880be9047543cd87eb314faaa0f81da2316f245244551c9e9b87c2.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_extra_dependency_row",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Add sorted row for nonexistent T999; reseal. Successor T009; original fingerprint sha256:1ec52f0a9c81b57a30a46741d067269f27497796a5083dc71756576983e564a5.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_extra_prerequisite_evidence",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Supply record outside selected dependency set. Successor T009; original fingerprint sha256:48e4245a4238bff22eed114e5a99455fb8f5170ae4c86c5232362280cf4baf1c.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_failed_prerequisite_check",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Keep matching manifest but check result exit nonzero. Successor T009; original fingerprint sha256:348b6bd3ef0bd83a0b592d200da447f5dfb7370bd8454766947750685de127ab.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_fenced_duplicate_ignored",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing scope behavior: Add fenced duplicate T001 task/table examples to valid artifact; reseal. Successor T007; original fingerprint sha256:1c9c4b9fe592c1b6368d96180dec66e29880d375ad568d26ba74964c5d5f254a.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_fenced_pseudo_task",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Select T999 appearing only inside fenced code; reseal artifacts. Successor T007; original fingerprint sha256:9c6a74a6e89c42fea9ad8a38e86249d1c027494ad29dadf8213e8477ed6269d6.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_invalid_evidence_footer",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Append nonconforming or digest-mismatching evidence-footer line. Successor T008; original fingerprint sha256:606757bbb26d0ca44e0175dffcec1ca3076158c40b96a81cf34c76133fb39bbc.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_malformed_dependency_table",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Replace exact separator with malformed separator; reseal. Successor T009; original fingerprint sha256:e8dff5ec9ffef78036b4b57cc231e9b3bf5e884158d6d74dc3d302825c0070e2.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_missing_artifact",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Delete required plan.md and commit fixture change. Successor T007; original fingerprint sha256:59bc96c98a6183a2414cd571373061009dee4b02c4e62585d85f7d5af30d60b7.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_missing_dependency_table",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Remove sole dependency table; reseal artifacts/source/context. Successor T009; original fingerprint sha256:1b62ebbb12fa2d879a8a2d3e2705d6059d2bdba09e55832c33d84c41bf846bc5.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_missing_prerequisite_evidence",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Remove required T001 evidence record. Successor T009; original fingerprint sha256:e01af98ced768ef507e88c0d953eb43f77805f5a6db5ae807e12e42e5f36b286.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_nonancestor_artifact_commit",
-      "message": "'artifact_commit' != 'command_unavailable'\n- artifact_commit\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Use locally resolvable reviewed commit outside HEAD ancestry. Successor T008; original fingerprint sha256:58cd5667ad3ecc36547d7e5319c0ed7f4419936be8542c87318bc1429cd6a184.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_omitted_dependency_row",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Remove one real task row; reseal. Successor T009; original fingerprint sha256:41f84f4230d95f7d410c8999f68f8db337d4d4b843d58b34aace563c45df81d6.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_progress_checkbox_only",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Current tasks differ from reviewed artifact only by prior task completion marker. Successor T008; original fingerprint sha256:1385d71dd265394009ee1a76dc15ff2960d6e629cad526d2c96513e29633e8f5.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_progress_evidence_footer",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Append valid EOF evidence footer referencing matching local bytes. Successor T008; original fingerprint sha256:6affb41185ad06e9f4dcbaaaf0adb00e85fc75c7d0f0e5e8310655ba13a6f6e5.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_removed_existing_evidence",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Remove already reviewed evidence-footer record. Successor T008; original fingerprint sha256:cf57a879beaac641d285fd5b878e1b8975397e875579344d8731e02d781ac53c.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_allowed_directory",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope allowed directory. Successor T007; original fingerprint sha256:5de43a4fc67d3058fa59c55ece10c9d88cab8df732682fa57506dc7e7351be10.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_allowed_symlink_component",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope allowed symlink component. Successor T007; original fingerprint sha256:7475cf7bdf28a7d6a689fec56b422a88564e5bce744d5855c7e537894e7d30b4.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_checked_implement",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope checked implement. Successor T007; original fingerprint sha256:909541754538ca03ba2ffc12b72b5209dff4b566596a780d2ccf77ea659760fd.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_fence_lengths",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope fence lengths. Successor T007; original fingerprint sha256:69d34f0ae268bdb3bbd432723736ea4a6088fab8f14270fabb49302bae114d82.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_nonregular_artifact",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope nonregular artifact. Successor T007; original fingerprint sha256:3ff4eae41f7c7c6d655c8cdba806bda41c22d83a8095dd3fd76b9c8cbbaad38d.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_symlink_artifact",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope symlink artifact. Successor T007; original fingerprint sha256:6905af66a2f3dd1a57a85ce165dfed2d6e672014a2710475fe31ac62966aec05.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_scope_traversal",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: scope traversal. Successor T007; original fingerprint sha256:ae2b233bacfd649bd44e2471e026adbdfe44a853f32b8acaa983fa69e2d8c729.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_self_dependency",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Make selected T001 depend on T001; reseal. Successor T009; original fingerprint sha256:11457e8d98b10a7f9b5f001d3a1556409bd6d4ea2bdae59b252b3f087499f35f.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_semantic_plan_drift",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change current plan prose against reviewed commit and commit fixture change. Successor T008; original fingerprint sha256:fbf69ed455a6f8a73e046400b322652d4cdb60d695f72805151b3725710f895d.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_semantic_spec_drift",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change current spec prose against reviewed commit and commit fixture change. Successor T008; original fingerprint sha256:ad0c7936e06629a5b72e8551c5d543419c1e9172e8549a6dd1d27801cd2badba.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_semantic_task_description",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Change current task description against reviewed commit. Successor T008; original fingerprint sha256:4db16470a254ad4d62da7f7f4cb776071c18e778d2f70e6761fb5c07b21a3fd9.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_semantic_task_order",
-      "message": "'artifact_drift' != 'command_unavailable'\n- artifact_drift\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Reorder real task lines against reviewed commit. Successor T008; original fingerprint sha256:2851d80724590c7274b1436057b0751a1c7f1cf9d7203abdc15f34f8fb063106.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_source_digest_mismatch",
-      "message": "'dependency_mismatch' != 'command_unavailable'\n- dependency_mismatch\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Bind source_assertion to wrong reviewed tasks raw digest. Successor T009; original fingerprint sha256:1d2a2098d3ddb111c43ea9b66070082f9ec805c55f8ebb475abf80dc4425218a.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_source_excerpt_mismatch",
-      "message": "'dependency_mismatch' != 'command_unavailable'\n- dependency_mismatch\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Bind source_assertion to excerpt differing from exact table lines. Successor T009; original fingerprint sha256:ca19cbdec4293d8a1c42be7c4c6c5281c0637d590936f89038ec27cdb926363a.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_check",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Bind passing check to different manifest digest. Successor T009; original fingerprint sha256:47676a04f76d4038b69348875704d4eedd98e427b1727738a7d24faca15d1d90.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_commit",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Reference commit whose tree does not contain recorded manifest. Successor T009; original fingerprint sha256:db8911799b309cde5ed3f57028043a81985a30ed3223c6133981be592360586f.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_stale_prerequisite_digest",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Alter one manifest entry digest without matching commit tree. Successor T009; original fingerprint sha256:623de411bd21eddf4468cf40c78732b25d47f55e493c4aecac41d22003cf50fc.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unchecked_prerequisite",
-      "message": "'prerequisite_evidence' != 'command_unavailable'\n- prerequisite_evidence\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Valid evidence but current T001 marker pending. Successor T009; original fingerprint sha256:6f5d9e3443fd2dc7585c0c5c2cdf7152d9968781638fed773e68010f4cc8d7e0.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unknown_artifact_commit",
-      "message": "'artifact_commit' != 'command_unavailable'\n- artifact_commit\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing artifacts behavior: Use locally unresolvable reviewed commit. Successor T008; original fingerprint sha256:efd1eaa9be39627002b1ff9af3196cb2bed21add1319fdec1b8cb3b46666a910.",
-      "removal_condition": "Reviewed T008 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unknown_dependency_id",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Reference T999 in selected prerequisite list; reseal. Successor T009; original fingerprint sha256:ec19a73b03880efdd943456c5073d233183e160140608a9eaf84e26a6a87349d.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unknown_feature",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Select nonexistent direct specs child. Successor T007; original fingerprint sha256:11495fb830f93528d09fb58556bad616afcc5dee7ee92f61f00f23d51f7be9e5.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unknown_task_id",
-      "message": "'scope_context' != 'command_unavailable'\n- scope_context\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing scope behavior: Select T999 absent from task artifact. Successor T007; original fingerprint sha256:32cda5a8ecf50b67323ee9595456c60bafa2b01c69a83d0f7af08483c7660105.",
-      "removal_condition": "Reviewed T007 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_unsorted_dependency_rows",
-      "message": "'dependency_table' != 'command_unavailable'\n- dependency_table\n+ command_unavailable\n",
-      "reason": "T005 preserved future assertion; missing dependencies behavior: Reverse real task rows; reseal. Successor T009; original fingerprint sha256:c482d9e11c2c83ee7ac30b1f3d936ba592d9f100d213758c80bf6bab6ae7d867.",
-      "removal_condition": "Reviewed T009 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_valid_empty_dependencies",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing entry behavior: Valid T001 context with explicit [] and none table row. Successor T010; original fingerprint sha256:32ff3fbb8b2e1a9e082c7626ff430e8f2a554bb51840a956b91e4262d942bf5f.",
-      "removal_condition": "Reviewed T010 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
-    },
-    {
-      "id": "test_single_task_context.TaskContextEntryTests.test_valid_satisfied_dependency",
-      "message": "0 != 2",
-      "reason": "T005 preserved future assertion; missing entry behavior: Valid T002 with checked T001 and matching local manifest/check/commit evidence. Successor T010; original fingerprint sha256:2a448d7bd3a8289a98f8f1af2a6e2364c7ba5be66b79e32a2ec90f2aec360ddb.",
-      "removal_condition": "Reviewed T010 implementation makes this preserved regression pass; remove this retained outcome in the same owner-reviewed migration, retain its required ID, and keep all implemented cases green."
+      "id": "verify_t004_cli.CliBoundaryTests.test_scope_blocker_exit_three",
+      "message": "3 != 2",
+      "reason": "US1 validated entry now reaches this retained verification/completion assertion; its actual behavior remains pending T017. The test body and security/scope invariants remain required.",
+      "removal_condition": "Remove only after T017 implements the retained scenario and independent review verifies this required test passes without weakening its assertions."
     }
   ]
 }
