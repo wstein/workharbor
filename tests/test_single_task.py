@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 import uuid
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from pathlib import Path
 from unittest import mock
 
@@ -68,6 +68,7 @@ class SingleTaskFixture:
             'GIT_COMMITTER_NAME': 'Synthetic Fixture',
             'GIT_COMMITTER_EMAIL': 'fixture@example.invalid',
             'LC_ALL': 'C',
+            'PYTHONDONTWRITEBYTECODE': '1',
         }
         self.commands = []
         self.outputs = []
@@ -601,3 +602,462 @@ class SingleTaskTests(unittest.TestCase):
         (self.root/'guide.md').unlink()
         (self.root/'guide.md').symlink_to(self.feature/'spec.md')
         self.cli('verify', ok=False)
+
+
+class SingleTaskAcceptanceTests(unittest.TestCase):
+    """Proposed T012 public CLI contracts; no task entry/completion authority."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture = SingleTaskFixture(temporary.name)
+        self.root = self.fixture.root
+        self.private = self.fixture.private
+        self.tasks = self.fixture.feature/'tasks.md'
+        (self.root/'.gitignore').write_text('.symphony/\n', encoding='utf-8')
+        (self.root/'checks').mkdir()
+        (self.root/'checks/.keep').write_bytes(b'')
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: prepare acceptance fixture')
+        baseline = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+        for artifact in self.fixture.reviewed_artifacts.values():
+            artifact['commit'] = baseline
+        self.context = self.fixture.context()
+        self.attempt = None
+        self.trace = self.private/'trace.jsonl'
+        self.review_path = self.private/'review.json'
+
+    def cli(self, command, *args):
+        run = subprocess.run([sys.executable, '-B', str(SCRIPT), command, *args],
+                             cwd=self.root, env=self.fixture.env, capture_output=True,
+                             text=True, timeout=15)
+        value = json.loads(run.stdout)
+        self.assertEqual(1, value['schema_version'])
+        self.assertIs(False, value['owner_identity_authenticated'])
+        self.assertIs(False, value['live_dispatch_verified'])
+        self.assertIsInstance(value['errors'], list)
+        return run, value
+
+    def expect(self, run, exit_code):
+        self.assertEqual(exit_code, run.returncode,
+                         'T012 ' + self._testMethodName + ' requires its public CLI contract')
+
+    def check(self, code='pass', *, check_id='local-check', cwd='.', timeout=2):
+        return {'id': check_id, 'argv': [sys.executable, '-B', '-c', code],
+                'cwd': cwd, 'timeout_seconds': timeout, 'expected_exit': 0}
+
+    def begin(self, checks=None, allowed=None):
+        if checks is not None:
+            self.context['checks'] = checks
+        if allowed is not None:
+            self.context['allowed_paths'] = allowed
+        self.context['approval']['context_digest'] = context_digest(self.context)
+        path = self.private/'context.json'
+        path.write_bytes(canonical_bytes(self.context))
+        run, value = self.cli('begin', '--context', str(path))
+        self.assertEqual(0, run.returncode, 'T012 fixture entry must be valid before behavior assertions')
+        self.attempt = value['attempt_id']
+        self.assertTrue(self.attempt)
+        self.assertEqual('implement', value['mode'])
+        self.assertEqual('active', value['progress'])
+        self.before_tasks = self.tasks.read_bytes()
+        self.before_attempt, self.before_events = self.journal()
+        self.review()
+
+    def journal(self):
+        import sqlite3
+        with closing(sqlite3.connect(self.root/'.symphony/single-task/journal.sqlite3')) as db:
+            attempts = db.execute('SELECT * FROM attempts ORDER BY attempt_id').fetchall()
+            events = db.execute('SELECT * FROM events ORDER BY attempt_id,sequence').fetchall()
+        return attempts, events
+
+    def content(self):
+        values = {}
+        for path in self.context['allowed_paths'] + ['specs/synthetic/tasks.md']:
+            file = self.root/path
+            values[path] = None if not file.exists() else (file.read_bytes(), file.stat().st_mode & 0o777)
+        return values
+
+    def review(self, **changes):
+        value = self.fixture.review(self.context)
+        value['attempt_id'] = self.attempt
+        value.update(changes)
+        self.review_path.write_bytes(canonical_bytes(value))
+        return value
+
+    def invoke(self, command='verify', review=True):
+        args = ['--attempt', self.attempt]
+        if review:
+            args += ['--review', str(self.review_path)]
+        return self.cli(command, *args)
+
+    def blocked(self, exit_code=3, command='verify'):
+        before = self.tasks.read_bytes()
+        run, value = self.invoke(command)
+        self.assertEqual(before, self.tasks.read_bytes())
+        self.assertFalse(self.trace.exists())
+        attempts, events = self.journal()
+        self.assertEqual(self.before_attempt, attempts)
+        self.assertEqual(self.before_events, events[:len(self.before_events)])
+        self.assertNotEqual('handoff-only', value['mode'])
+        self.assertNotIn('completed', str(value['progress']))
+        self.assertNotEqual('passed', value['local_verification'])
+        self.expect(run, exit_code)
+        self.assertTrue(value['errors'])
+        self.assertNotEqual('command_unavailable', value['errors'][0]['code'])
+        return run, value
+
+    def tracing_check(self, token='check', *, cwd='.', extra=''):
+        code = ('import json,os,sys; from pathlib import Path; '
+                f'p=Path({str(self.trace)!r}); '
+                f'p.open("a").write(json.dumps([{token!r},os.getcwd(),sys.argv[1:]])+"\\n"); ' + extra)
+        return self.check(code, check_id=token, cwd=cwd)
+
+    def trace_rows(self):
+        return [json.loads(row) for row in self.trace.read_text().splitlines()]
+
+    def test_inspect_identities(self):
+        self.begin()
+        (self.root/'guide.md').write_bytes(b'Permitted change\n')
+        run, value = self.invoke('inspect', review=False)
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 0)
+        self.assertEqual(self.attempt, value['attempt_id'])
+        self.assertEqual('T001', value['task_id'])
+        self.assertEqual(context_digest(self.context), value['context_digest'])
+        expected = self.fixture.manifest(['guide.md', 'specs/synthetic/tasks.md'], 'T001')
+        self.assertEqual(expected, value['content_manifest'])
+        self.assertEqual(digest(canonical_bytes(expected)), value['content_manifest_digest'])
+        self.assertNotEqual('passed', value['local_verification'])
+
+    def test_inspect_canonical_manifest(self):
+        # The expected digest uses literal independently assembled entries/bytes.
+        self.fixture.git('config', 'core.precomposeUnicode', 'false')
+        paths = ['a\u0301.md', 'é.bin', '脚本.sh', 'missing.md']
+        for path, content in zip(paths, (b'Combining\n', b'\x00\xff\n', b'#!/bin/sh\n')):
+            (self.root/path).write_bytes(content)
+        (self.root/'脚本.sh').chmod(0o755)
+        self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\n', b'\r\n'))
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: canonical byte fixture')
+        revision = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+        for name, artifact in self.context['reviewed_artifacts'].items():
+            artifact.update(commit=revision, sha256=digest((self.fixture.feature/name).read_bytes()))
+        self.context['source_assertion']['sha256'] = digest(self.tasks.read_bytes())
+        self.begin(allowed=paths)
+        run, value = self.invoke('inspect', review=False)
+        self.expect(run, 0)
+        expected = {'schema_version': 1, 'entries': [
+            {'path': path, 'type': 'absent' if path == 'missing.md' else 'regular',
+             'mode': None if path == 'missing.md' else '100755' if path == '脚本.sh' else '100644',
+             'sha256': None if path == 'missing.md' else digest((self.root/path).read_bytes())}
+            for path in sorted(paths + ['specs/synthetic/tasks.md'])]}
+        encoded = json.dumps(expected, sort_keys=True, separators=(',', ':'),
+                             ensure_ascii=False, allow_nan=False).encode('utf-8')
+        self.assertEqual(expected, value['content_manifest'])
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(), value['content_manifest_digest'])
+        self.assertIn('a\u0301.md'.encode(), encoded)
+        self.assertIn(b'\r\n', self.tasks.read_bytes())
+
+    def test_inspect_does_not_execute_checks(self):
+        self.begin([self.tracing_check()])
+        run, value = self.invoke('inspect', review=False)
+        self.assertFalse(self.trace.exists())
+        self.assertEqual(self.before_events, self.journal()[1])
+        self.expect(run, 0)
+        self.assertNotEqual('passed', value['local_verification'])
+
+    def test_inspect_preserves_content_and_events(self):
+        self.begin()
+        (self.root/'guide.md').write_bytes(b'Edited\n')
+        content, journal = self.content(), self.journal()
+        index = (self.root/'.git/index').read_bytes()
+        run, _ = self.invoke('inspect', review=False)
+        self.assertEqual(content, self.content())
+        self.assertEqual(journal, self.journal())
+        self.assertEqual(index, (self.root/'.git/index').read_bytes())
+        self.expect(run, 0)
+
+    def test_inspect_reflects_current_content(self):
+        self.begin()
+        run, first = self.invoke('inspect', review=False)
+        self.expect(run, 0)
+        (self.root/'guide.md').write_bytes(b'Second snapshot\n')
+        run, second = self.invoke('inspect', review=False)
+        self.expect(run, 0)
+        self.assertNotEqual(first['content_manifest_digest'], second['content_manifest_digest'])
+        expected = self.fixture.manifest(['guide.md', 'specs/synthetic/tasks.md'], 'T001')
+        self.assertEqual(expected, second['content_manifest'])
+
+    def test_inspect_rejects_invalid_scope(self):
+        self.begin([self.tracing_check()])
+        (self.root/'outside.md').write_bytes(b'Outside\n')
+        run, value = self.invoke('inspect', review=False)
+        self.assertFalse(self.trace.exists())
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 3)
+        self.assertIn('outside.md', value['errors'][0]['affected_paths'])
+
+    def test_inspect_respects_worktree_lock(self):
+        import selectors
+        self.begin([self.tracing_check()])
+        lock = self.root/'.symphony/single-task/lock'
+        code = ('import fcntl,sys; f=open(sys.argv[1],"r+"); '
+                'fcntl.flock(f,fcntl.LOCK_EX); print("ready",flush=True); sys.stdin.read()')
+        child = subprocess.Popen([sys.executable, '-B', '-c', code, str(lock)],
+                                 env=self.fixture.env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True)
+        try:
+            with selectors.DefaultSelector() as ready:
+                ready.register(child.stdout, selectors.EVENT_READ)
+                self.assertTrue(ready.select(5), 'Lock holder did not signal readiness')
+                self.assertEqual('ready\n', child.stdout.readline())
+            run, value = self.invoke('inspect', review=False)
+            self.assertFalse(self.trace.exists())
+            self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+            self.assertEqual((self.before_attempt, self.before_events), self.journal())
+            self.expect(run, 5)
+            self.assertEqual('concurrent_attempt', value['errors'][0]['code'])
+        finally:
+            child.communicate('', timeout=5)
+
+    def test_acceptance_ordered_argv(self):
+        self.begin([self.tracing_check('first'), self.tracing_check('second')])
+        run, _ = self.invoke()
+        self.expect(run, 0)
+        self.assertEqual(['first', 'second'], [row[0] for row in self.trace_rows()])
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+
+    def test_acceptance_literal_metacharacters(self):
+        check = self.tracing_check()
+        literal = ['space argument', '"quoted"', ';', '$(touch shell-sentinel)', '`touch shell-sentinel`']
+        check['argv'] += literal
+        self.begin([check])
+        run, _ = self.invoke()
+        self.expect(run, 0)
+        self.assertEqual(literal, self.trace_rows()[0][2])
+        self.assertFalse((self.root/'shell-sentinel').exists())
+
+    def test_acceptance_validated_cwd(self):
+        self.begin([self.tracing_check(cwd='checks')])
+        run, _ = self.invoke()
+        self.expect(run, 0)
+        self.assertEqual(str(self.root/'checks'), self.trace_rows()[0][1])
+
+    def test_acceptance_missing_executable(self):
+        check = self.check()
+        check['argv'] = [str(self.private/'definitely-missing-executable')]
+        self.begin([check])
+        self.blocked(4, 'complete')
+
+    def test_acceptance_nonzero_exit(self):
+        self.begin([self.check('raise SystemExit(17)')])
+        self.blocked(4, 'complete')
+
+    def test_acceptance_timeout(self):
+        self.begin([self.check('import time; time.sleep(30)', timeout=0.1)])
+        run, value = self.blocked(4, 'complete')
+        self.assertIn('timeout', json.dumps(value).lower())
+
+    def test_acceptance_missing_required_check(self):
+        missing = self.check(check_id='missing')
+        missing['argv'] = [str(self.private/'missing-second-executable')]
+        self.begin([self.tracing_check('first'), missing])
+        run, _ = self.invoke('complete')
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 4)
+        self.assertEqual(['first'], [row[0] for row in self.trace_rows()])
+
+    def test_acceptance_does_not_reuse_old_success(self):
+        control = self.private/'fail'
+        self.begin([self.tracing_check(extra=f'raise SystemExit(17 if Path({str(control)!r}).exists() else 0)')])
+        run, _ = self.invoke()
+        self.expect(run, 0)
+        control.write_bytes(b'fail')
+        run, _ = self.invoke('complete')
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 4)
+        self.assertEqual(2, len(self.trace_rows()))
+
+    def test_acceptance_safe_failure_evidence(self):
+        secret = 'synthetic-output-secret-' + uuid.uuid4().hex
+        output = self.private/'synthetic-output.txt'
+        output.write_text(secret, encoding='utf-8')
+        code = (f'from pathlib import Path; import sys; s=Path({str(output)!r}).read_text(); '
+                'print(s); print(s,file=sys.stderr); raise SystemExit(17)')
+        self.begin([self.check(code)])
+        run, _ = self.invoke('complete')
+        # Output-specific data lives outside the reviewed argv/context.
+        self.assertNotIn(secret, run.stdout + run.stderr)
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 4)
+        for path in (self.root/'.symphony/single-task').rglob('*'):
+            if path.is_file() and path.name != 'lock':
+                self.assertNotIn(secret.encode(), path.read_bytes())
+
+    def test_acceptance_local_only_envelope(self):
+        self.begin()
+        run, value = self.invoke()
+        self.expect(run, 0)
+        self.assertEqual('passed', value['local_verification'])
+        self.assertEqual('implement', value['mode'])
+        self.assertEqual([], value['errors'])
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+
+    def test_review_missing(self):
+        self.begin([self.tracing_check()])
+        run, value = self.invoke(review=False)
+        self.assertFalse(self.trace.exists())
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 2)
+        self.assertEqual('invalid_arguments', value['errors'][0]['code'])
+
+    def test_review_not_approved(self):
+        self.begin([self.tracing_check()])
+        self.review(approved=False)
+        self.blocked()
+
+    def test_review_wrong_attempt(self):
+        self.begin([self.tracing_check()])
+        self.review(attempt_id='different-existing-identity')
+        self.blocked()
+
+    def test_review_wrong_task(self):
+        self.begin([self.tracing_check()])
+        self.review(task_id='T002')
+        self.blocked()
+
+    def test_review_wrong_context_digest(self):
+        self.begin([self.tracing_check()])
+        self.review(context_digest='0'*64)
+        self.blocked()
+
+    def test_review_wrong_manifest_digest(self):
+        self.begin([self.tracing_check()])
+        self.review(content_manifest_digest='0'*64)
+        self.blocked()
+
+    def test_review_stale_bytes(self):
+        self.begin([self.tracing_check()])
+        (self.root/'guide.md').write_bytes(b'Stale review\n')
+        self.blocked()
+
+    def test_review_stale_mode(self):
+        self.begin([self.tracing_check()])
+        self.fixture.git('config', 'core.filemode', 'false')
+        (self.root/'guide.md').chmod(0o755)
+        self.blocked()
+
+    def test_review_stale_absence(self):
+        self.begin([self.tracing_check()], allowed=['missing.md'])
+        (self.root/'missing.md').write_bytes(b'<absent>')
+        self.blocked()
+
+    def mutated_check(self, code):
+        self.begin([self.check(code)])
+        run, value = self.invoke('complete')
+        self.expect(run, 4)
+        self.assertNotEqual('handoff-only', value['mode'])
+        self.assertNotIn('completed', str(value['progress']))
+        self.assertEqual(self.before_attempt, self.journal()[0])
+        return value
+
+    def test_check_mutates_allowed_content(self):
+        self.mutated_check("from pathlib import Path; Path('guide.md').write_bytes(b'Changed during check')")
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.assertEqual(b'Changed during check', (self.root/'guide.md').read_bytes())
+
+    def test_check_mutates_task_content(self):
+        self.mutated_check("from pathlib import Path; p=Path('specs/synthetic/tasks.md'); p.write_bytes(p.read_bytes().replace(b'[ ] T002',b'[x] T002'))")
+        self.assertEqual(self.before_tasks.replace(b'[ ] T002', b'[x] T002'), self.tasks.read_bytes())
+
+    def test_check_mutates_outside_scope(self):
+        self.mutated_check("from pathlib import Path; Path('outside.md').write_bytes(b'Outside')")
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.assertEqual(b'Outside', (self.root/'outside.md').read_bytes())
+
+    def test_check_mutates_allowed_mode(self):
+        self.fixture.git('config', 'core.filemode', 'false')
+        self.mutated_check("from pathlib import Path; Path('guide.md').chmod(0o755)")
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.assertTrue((self.root/'guide.md').stat().st_mode & 0o111)
+
+    def test_check_removes_allowed_content(self):
+        self.mutated_check("from pathlib import Path; Path('guide.md').unlink()")
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.assertFalse((self.root/'guide.md').exists())
+
+    def test_verify_preserves_pending_marker(self):
+        self.begin([self.tracing_check()])
+        run, value = self.invoke()
+        self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+        self.expect(run, 0)
+        self.assertEqual('implement', value['mode'])
+        self.assertEqual(['check'], [row[0] for row in self.trace_rows()])
+        self.assertGreater(len(self.journal()[1]), len(self.before_events))
+
+    def test_complete_selected_checkbox_only(self):
+        self.begin()
+        (self.root/'guide.md').write_bytes(b'Accepted change\n')
+        self.review()
+        run, value = self.invoke('complete')
+        self.expect(run, 0)
+        self.assertEqual(self.before_tasks.replace(b'[ ] T001', b'[x] T001', 1), self.tasks.read_bytes())
+        self.assertEqual('handoff-only', value['mode'])
+        self.assertEqual('completed-awaiting-commit', value['progress'])
+
+    def test_complete_reruns_after_verify(self):
+        self.begin([self.tracing_check()])
+        run, _ = self.invoke()
+        self.expect(run, 0)
+        run, _ = self.invoke('complete')
+        self.expect(run, 0)
+        self.assertEqual(['check', 'check'], [row[0] for row in self.trace_rows()])
+
+    def test_complete_failed_check_preserves_marker(self):
+        self.begin([self.check('raise SystemExit(9)')])
+        self.blocked(4, 'complete')
+
+    def test_complete_idempotent_same_attempt(self):
+        self.begin()
+        run, first = self.invoke('complete')
+        self.expect(run, 0)
+        expected = self.tasks.read_bytes()
+        run, second = self.invoke('complete')
+        self.expect(run, 0)
+        self.assertEqual(expected, self.tasks.read_bytes())
+        self.assertEqual(self.attempt, first['attempt_id'])
+        self.assertEqual(self.attempt, second['attempt_id'])
+        self.assertEqual(1, len(self.journal()[0]))
+        self.assertEqual('handoff-only', second['mode'])
+        self.assertEqual('completed-awaiting-commit', second['progress'])
+
+    def test_complete_preserves_immutable_entry_mode(self):
+        self.begin()
+        run, _ = self.invoke('complete')
+        self.expect(run, 0)
+        attempts, events = self.journal()
+        self.assertEqual(self.before_attempt, attempts)
+        self.assertEqual(self.before_events, events[:len(self.before_events)])
+        run, value = self.cli('status', '--attempt', self.attempt)
+        self.expect(run, 0)
+        self.assertEqual('handoff-only', value['mode'])
+        self.assertEqual('completed-awaiting-commit', value['progress'])
+
+    def test_inspect_after_completion_is_read_only(self):
+        self.begin()
+        review = self.review()
+        run, _ = self.invoke('complete')
+        self.expect(run, 0)
+        content, journal = self.content(), self.journal()
+        run, value = self.invoke('inspect', review=False)
+        self.assertEqual(content, self.content())
+        self.assertEqual(journal, self.journal())
+        self.expect(run, 0)
+        self.assertEqual(review['content_manifest_digest'], value['content_manifest_digest'])
+
+    def test_complete_rejects_manual_marker(self):
+        self.begin([self.tracing_check()])
+        self.tasks.write_bytes(self.before_tasks.replace(b'[ ] T001', b'[x] T001', 1))
+        self.review()
+        self.blocked(3, 'complete')
