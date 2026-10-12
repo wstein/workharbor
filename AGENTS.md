@@ -18,3 +18,6 @@ never expose credentials, silently widen scope or bypass ownership/provider gate
 Resume existing work on retries; use a per-issue branch. Submit review evidence;
 do not merge, publish or deploy without owner authorization. Keep AI tooling outside
 product dependencies. Update the authoritative spec/ADR when decisions change.
+Keep GitHub comments short, precise and focused: lead with the result or action,
+and link durable evidence. Follow the tracker-comment guidance in
+[WORKFLOW.md](WORKFLOW.md).
