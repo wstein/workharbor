@@ -593,6 +593,54 @@ def artifacts_fenced_footer(self):
     self.exercise('artifacts', 'artifact_drift')
 
 
+def prerequisites_valid(self):
+    self.assertEqual({}, self.exercise('dependencies', None))
+    self.dependency()
+    self.assertEqual({'T001'}, set(self.exercise('dependencies', None)))
+
+
+def prerequisites_fenced_crlf(self):
+    self.tasks.write_bytes(self.tasks.read_bytes() + b'\n~~~~markdown\n' +
+                          self.fixture.dependency_table.encode() + b'\n~~~~\n')
+    self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\n', b'\r\n'))
+    self.review_current()
+    self.assertEqual({}, self.exercise('dependencies', None))
+    self.replace_tasks('| T001 | none |', '```markdown\nUnrelated example\n```\n| T001 | none |')
+    self.exercise('dependencies', 'dependency_table')
+
+
+def dependency_sorted_lists(self):
+    self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\n## Dependencies',
+                          b'\n- [ ] T003 Third task\n\n## Dependencies') + b'| T003 | T001, T002 |\n')
+    self.review_current()
+    self.assertEqual({}, self.exercise('dependencies', None))
+    original = self.tasks.read_bytes()
+    for value in (b'T002, T001', b'none, T001', b'T001,T002', b'T001; T002'):
+        self.tasks.write_bytes(original.replace(b'T001, T002', value))
+        self.review_current()
+        self.exercise('dependencies', 'dependency_table')
+
+
+def prerequisite_manifest_types(self):
+    self.dependency()
+    original = copy.deepcopy(self.context['prerequisite_evidence'][0])
+    for replacement in ({'path': 'guide.md', 'type': 'regular', 'mode': '100755',
+                         'sha256': original['content_manifest']['entries'][0]['sha256']},
+                        {'path': 'guide.md', 'type': 'absent', 'mode': None, 'sha256': None}):
+        record = copy.deepcopy(original)
+        record['content_manifest']['entries'][0] = replacement
+        record['check_results'][0]['content_manifest_digest'] = digest(canonical_bytes(record['content_manifest']))
+        self.context['prerequisite_evidence'] = [record]
+        self.seal()
+        self.exercise('dependencies', 'prerequisite_evidence')
+
+
+def dependency_bare_cr(self):
+    self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\n', b'\r'))
+    self.review_current()
+    self.exercise('dependencies', 'dependency_table')
+
+
 def schema_valid_rework(self):
     self.context.update(mode='owner-authorized rework', prior_attempt_id='synthetic-prior-attempt',
                         prior_implementation_commit=self.fixture.baseline,
@@ -736,6 +784,11 @@ def scope_gitlink_output(self):
 
 
 EXTRA_CASES = {
+    'dependency_bare_cr': (dependency_bare_cr, 'dependencies', 'dependency_table', 'T009'),
+    'prerequisites_valid': (prerequisites_valid, 'dependencies', None, 'T009'),
+    'prerequisites_fenced_crlf': (prerequisites_fenced_crlf, 'dependencies', None, 'T009'),
+    'dependency_sorted_lists': (dependency_sorted_lists, 'dependencies', None, 'T009'),
+    'prerequisite_manifest_types': (prerequisite_manifest_types, 'dependencies', 'prerequisite_evidence', 'T009'),
     'artifacts_rework_binding': (artifacts_rework_binding, 'artifacts', 'approval_digest', 'T008'),
     'artifacts_append_existing_footer': (artifacts_append_existing_footer, 'artifacts', None, 'T008'),
     'artifacts_crlf_bytes': (artifacts_crlf_bytes, 'artifacts', None, 'T008'),
