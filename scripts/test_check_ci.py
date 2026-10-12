@@ -276,9 +276,67 @@ class SourceTests(unittest.TestCase):
                                     'import json,sys;print(json.dumps([sys.pycache_prefix,sys.dont_write_bytecode]))'],
                                    check=True, text=True, capture_output=True)
             self.assertEqual([str(prefix), True], json.loads(child.stdout))
+            isolated = subprocess.run(ci.python_argv('-c',
+                'import json,sys;print(json.dumps([sys.flags.isolated,sys.pycache_prefix,sys.dont_write_bytecode]))'),
+                check=True, text=True, capture_output=True)
+            self.assertEqual([1, str(prefix), True], json.loads(isolated.stdout))
         self.assertFalse(prefix.exists())
         self.assertEqual(before, (sys.pycache_prefix, sys.dont_write_bytecode,
                                  os.environ.get('PYTHONPYCACHEPREFIX'), os.environ.get('PYTHONDONTWRITEBYTECODE')))
+
+    def test_actual_cli_startup_rejects_hidden_imports_before_execution(self):
+        policy = self.adopt_fixture_policy()
+        sentinel = Path(self.temporary.name)/'startup-executed'
+        hidden = self.root/'scripts/json.py'
+        hidden.write_text('open(' + repr(str(sentinel)) + ',"w").write("executed")\nraise RuntimeError("injected")\n')
+        exclude = self.root/'.git/info/exclude'
+        exclude.write_text(exclude.read_text() + '\n/scripts/json.py\n')
+        for flags in (('-B',), ('-I', '-B')):
+            with self.subTest(flags=flags):
+                result = subprocess.run([sys.executable, *flags, str(self.root/'scripts/check_ci.py'),
+                                         '--root', str(self.root), '--policy-source', policy],
+                                        capture_output=True, text=True)
+                self.assertEqual(1, result.returncode)
+                self.assertFalse(sentinel.exists())
+        tool = Path(self.temporary.name)/'trusted-tool'
+        tool.mkdir()
+        (tool/'prepare_publication.py').write_bytes((ci.ROOT/'scripts/prepare_publication.py').read_bytes())
+        (tool/'json.py').write_bytes(hidden.read_bytes())
+        for flags in (('-B',), ('-I', '-B')):
+            result = subprocess.run([sys.executable, *flags, str(tool/'prepare_publication.py')],
+                                    capture_output=True, text=True)
+            self.assertEqual(3, result.returncode)
+            self.assertFalse(sentinel.exists())
+        # Host Python injection must not propagate into checked subprocesses.
+        poison = Path(self.temporary.name)/'poison'
+        poison.mkdir()
+        (poison/'sitecustomize.py').write_text(hidden.read_text())
+        with mock.patch.dict(os.environ, {'PYTHONPATH': str(poison), 'PYTHONHOME': str(poison)}):
+            with ci.isolated_python_cache():
+                result = subprocess.run([sys.executable, '-c', 'print("safe")'], capture_output=True, text=True)
+                self.assertEqual((0, 'safe\n'), (result.returncode, result.stdout))
+        self.assertFalse(sentinel.exists())
+
+    def test_frozen_evidence_is_generated_only_in_same_tree_disposable_checkout(self):
+        context = self.proposal()
+        original_tree = self.git('rev-parse', 'HEAD^{tree}')
+        with ci.isolated_python_cache():
+            with ci.baseline_execution(self.root) as execution:
+                self.assertNotEqual(self.root, execution)
+                self.assertEqual(context.checkout, subprocess.check_output(
+                    ['git', 'rev-parse', 'HEAD'], cwd=execution, text=True).strip())
+                code = ("import sys,unittest;sys.path.insert(0,'tests');import test_single_task_state as t;"
+                        "r=unittest.TextTestRunner().run(unittest.TestSuite([t.SingleTaskStateTests('test_invalid_entry_preserves_tasks')]));"
+                        "raise SystemExit(0 if r.wasSuccessful() else 1)")
+                result = subprocess.run(ci.python_argv('-c', code), cwd=execution,
+                                        capture_output=True, text=True)
+                self.assertEqual(1, result.returncode)
+                self.assertIn('structured JSON response absent', result.stderr)
+                self.assertTrue((execution/'.symphony/t002-cli-evidence.jsonl').is_file())
+        self.assertFalse(execution.exists())
+        self.assertFalse((self.root/'.symphony').exists())
+        self.assertEqual(original_tree, self.git('rev-parse', 'HEAD^{tree}'))
+        self.assertEqual(context, ci.source_context(self.root, *context))
 
     def test_operator_suite_requires_nonempty_strict_green_for_every_tool(self):
         for body, expected in ((
@@ -414,7 +472,7 @@ class SourceTests(unittest.TestCase):
 
     def test_workflow_requires_external_available_regular_policy_source(self):
         workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
-        block = workflow.split("python3 - <<'PY'\n", 1)[1].split('          PY\n', 1)[0]
+        block = workflow.split("python3 -I -B - <<'PY'\n", 1)[1].split('          PY\n', 1)[0]
         import textwrap
         block = textwrap.dedent(block)
         self.root.rename(self.root.parent/'integration')
@@ -450,12 +508,37 @@ class SourceTests(unittest.TestCase):
                          cwd=self.root.parent/'trusted-policy', text=True).strip())
         self.assertNotEqual(policy, self.git('rev-parse', 'HEAD'))
 
+    def test_workflow_fetches_the_approved_policy_outside_integration_history(self):
+        policy = self.adopt_fixture_policy()
+        self.git('branch', 'fixture/base', SOURCE)
+        self.git('branch', 'fixture/policy', policy)
+        remote = Path(self.temporary.name)/'remote.git'
+        subprocess.run(['git', 'clone', '--quiet', '--bare', str(self.root), str(remote)], check=True)
+        workspace = Path(self.temporary.name)/'fetched'
+        workspace.mkdir()
+        integration = workspace/'integration'
+        subprocess.run(['git', 'clone', '--quiet', '--depth=1', '--single-branch', '--branch',
+                        'fixture/base', remote.as_uri(), str(integration)], check=True)
+        self.assertNotEqual(0, subprocess.run(['git', 'cat-file', '-e', policy], cwd=integration,
+                                             capture_output=True).returncode)
+        import textwrap
+        block = textwrap.dedent((ci.ROOT/'.github/workflows/check.yml').read_text().split(
+            "python3 -I -B - <<'PY'\n", 1)[1].split('          PY\n', 1)[0])
+        result = subprocess.run([sys.executable, '-I', '-B', '-c', block], cwd=workspace,
+                                env=dict(os.environ, GITHUB_WORKSPACE=str(workspace),
+                                         WORKHARBOR_CI_POLICY_SOURCE=policy), capture_output=True)
+        self.assertEqual(0, result.returncode)
+        self.assertEqual(policy, subprocess.check_output(['git', 'rev-parse', 'HEAD'],
+                         cwd=workspace/'trusted-policy', text=True).strip())
+        self.assertEqual(SOURCE, subprocess.check_output(['git', 'rev-parse', 'HEAD'],
+                         cwd=integration, text=True).strip())
+
     def test_integration_checks_execute_in_merge_worktree(self):
         context = self.proposal()
         roots = []
         def run(argv, root):
             roots.append(root)
-            self.assertEqual(context.checkout, self.git('rev-parse', 'HEAD'))
+            self.assertEqual(context.checkout, subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip())
             self.assertTrue((root/'docs/unrelated-base.md').is_file())
             return 2 if argv[0] == 'make' else 0
         rejection = subprocess.CompletedProcess([], 1, '{}', '')
@@ -469,7 +552,8 @@ class SourceTests(unittest.TestCase):
                 mock.patch.object(ci.subprocess, 'run', side_effect=commands):
             self.assertEqual(0, ci.check(self.root, context))
         self.assertTrue(roots)
-        self.assertEqual({self.root}, set(roots))
+        self.assertEqual(1, len(set(roots)))
+        self.assertNotIn(self.root, roots)
 
 
 if __name__ == '__main__':

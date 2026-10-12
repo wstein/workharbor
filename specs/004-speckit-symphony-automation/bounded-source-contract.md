@@ -106,7 +106,7 @@ existing check/outcome gates. These are required cases, not passing-test claims.
 The bounded interface is a separate preparation tool, not the future package CLI:
 
 ```text
-python3 scripts/prepare_publication.py --repository REMOTE --source ACCEPTED_SHA
+python3 -I -B scripts/prepare_publication.py --repository REMOTE --source ACCEPTED_SHA
   --base-ref refs/heads/main --base BASE_SHA
   --head-ref refs/heads/topic --head HEAD_SHA [--timeout SECONDS]
 ```
