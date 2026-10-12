@@ -11,4 +11,5 @@
 - [Concept paper: optional AI execution board](papers/optional-ai-execution.md)
 - [Harness](development/harness.md), [Symphony](development/symphony.md)
 - [Execution plans](exec-plans/README.md), [quality register](quality.md)
+- [Milestone roadmap and completion checklists](milestones.md)
 - [Source references](references.md)
