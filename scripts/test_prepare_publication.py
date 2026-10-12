@@ -101,6 +101,21 @@ class PreparationTests(unittest.TestCase):
         self.assertTrue(created)
         self.assertTrue(all(not path.exists() for path in created))
 
+    def test_non_main_base_is_rejected_before_subprocesses(self):
+        for branch in ('chore/issue-2-bootstrap-entry', 'master', 'topic-base'):
+            with self.subTest(branch=branch):
+                self.git('branch', branch, self.base)
+                with mock.patch.object(publication.Commands, 'run') as run:
+                    result = self.prepare(base_ref='refs/heads/' + branch)
+                self.assertEqual(('BLOCKED', 'invalid_pr_base', None),
+                                 (result['status'], result['blocker'], result['check_exit']))
+                run.assert_not_called()
+
+    def test_bootstrap_head_can_be_prepared_for_main(self):
+        self.git('branch', 'chore/issue-2-bootstrap-entry', self.head)
+        result = self.prepare(head_ref='refs/heads/chore/issue-2-bootstrap-entry')
+        self.assertEqual(('PREPARED', 0), (result['status'], result['check_exit']))
+
     def test_base_and_head_advance_after_checks_are_blocked(self):
         original = publication.Commands.run
         for ref in ('refs/heads/main', 'refs/heads/topic'):

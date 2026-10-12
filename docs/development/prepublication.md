@@ -5,13 +5,18 @@ explicitly pinned remote base in private disposable Git storage. It never pushes
 opens a PR, merges, changes labels or grants publication permission. Owner approval
 and independent exact-candidate review remain separate prerequisites.
 
+The publication base is always `refs/heads/main`, independent of the task's
+execution baseline or accepted checker source. Other bases return `BLOCKED` with
+`invalid_pr_base` before fetching or running checks. Follow the
+[PR target and linear-history rule](../../WORKFLOW.md#pr-target).
+
 Use Python 3.11+, POSIX process groups and Git with `merge-tree --write-tree` support:
 
 ```sh
-python3 scripts/prepare_publication.py \
+python3 -I -B scripts/prepare_publication.py \
   --repository https://github.com/wstein/workharbor-nxt \
   --source ACCEPTED_CHECKER_COMMIT \
-  --base-ref refs/heads/chore/issue-2-bootstrap-entry --base BASE_COMMIT \
+  --base-ref refs/heads/main --base BASE_COMMIT \
   --head-ref refs/heads/topic --head PROPOSAL_COMMIT \
   --timeout 300
 ```
@@ -65,7 +70,7 @@ transaction. On movement, fetch fresh pins and perform a new preparation/review.
 Run the additional operator tests explicitly:
 
 ```sh
-python3 -B scripts/test_prepare_publication.py -v
+python3 -I -B scripts/test_prepare_publication.py -v
 make check
 ```
 
