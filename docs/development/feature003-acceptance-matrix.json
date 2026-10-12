@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "measured executable test proposal; exact owner matrix approval and task entry/completion pending",
+  "status": "T012 test-authoring accepted at the owner-approved immutable source; expected reds retained, behavior implementation remains pending",
   "feature": "003-single-task-entry",
   "task": "T012",
   "issue": 13,
@@ -43,7 +43,8 @@
   "completion": {
     "path": "specs/003-single-task-entry/tasks.md",
     "selected_task": "T012",
-    "permitted_now": false
+    "permitted_now": true,
+    "completed_after_approved_matrix_acceptance": true
   },
   "new_case_count": 39,
   "case_id_prefix": "test_single_task.SingleTaskAcceptanceTests.test_",
@@ -111,7 +112,13 @@
       0,
       1
     ],
-    "owner_exact_matrix_approval": null,
+    "owner_exact_matrix_approval": {
+      "supplied": true,
+      "source": "Owner session authorization conveyed by coordinator",
+      "approved_revision": "4fde142667f4a33651dc79da1c0de6b546e04bd8",
+      "checks_digest": "sha256:7eee1eaf5fe67ae1da72387a04b196602917ddc50d98f448924c9387b102e51b",
+      "identity_independently_authenticated": false
+    },
     "acceptance_claim": false
   },
   "runner": {
@@ -206,7 +213,8 @@
     ],
     "executable_now": false,
     "approval_flag_permitted_now": false,
-    "final_input_binding": "External exact-checks file generated after final proposal commit, rebinding input_revision only; observed test/tool bytes and outcomes remain pinned."
+    "final_input_binding": "Accepted exact matrix remains sealed to approved_source/input snapshot below; later marker/evidence bookkeeping does not silently refresh that approval.",
+    "approval_flag_authorized_at_approved_revision": true
   },
   "retained_legacy_case_prefix": "test_single_task.SingleTaskTests.",
   "retained_legacy_cases": [
@@ -239,7 +247,7 @@
   "boundaries": {
     "task_entry": false,
     "test_authoring": true,
-    "marker_edit": false,
+    "marker_edit": true,
     "implementation": false,
     "owner_identity_authenticated": false,
     "live_dispatch_verified": false
@@ -551,5 +559,76 @@
       "raw_exit": 1,
       "tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd"
     }
-  ]
+  ],
+  "accepted_expected_outcome_evidence": {
+    "approved_source": "4fde142667f4a33651dc79da1c0de6b546e04bd8",
+    "approved_input_snapshot": "sha256:2a5a6ba33e16cb91b6e60128a0be1c1775a2a0b9616a7b41ee9a12cc3df7dbab",
+    "post_verifier_snapshot": "sha256:2a5a6ba33e16cb91b6e60128a0be1c1775a2a0b9616a7b41ee9a12cc3df7dbab",
+    "matrix_digest": "sha256:7eee1eaf5fe67ae1da72387a04b196602917ddc50d98f448924c9387b102e51b",
+    "tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
+    "verifier_exit": 0,
+    "accepted": true,
+    "counts": {
+      "assertion": 56,
+      "cases": 194,
+      "pass": 138
+    },
+    "raw_child_exits": [
+      1,
+      0,
+      0,
+      1
+    ],
+    "owner_approval_source": "Owner session instruction conveyed by crewbook/desk; local supplied authorization, not independent identity authentication",
+    "source_edits_before_acceptance": false,
+    "task_marker_edited_before_acceptance": false,
+    "matrix_approval_supplied": true,
+    "verifier_result_sha256": "e067952fb34cb49b371de523e137e48661253183313849bcba00e835a0f98c33",
+    "approved_matrix_reproduction": "Copy observed_checks and replace only every input_revision with approved_input_snapshot; canonical native checks digest equals matrix_digest.",
+    "check_results": [
+      {
+        "id": "feature003-t012-cli",
+        "accepted": true,
+        "raw_exit": 1,
+        "runner_exit": 1,
+        "case_count": 61,
+        "blocker": null
+      },
+      {
+        "id": "feature003-t012-retained-context",
+        "accepted": true,
+        "raw_exit": 0,
+        "runner_exit": 0,
+        "case_count": 99,
+        "blocker": null
+      },
+      {
+        "id": "feature003-t012-retained-state",
+        "accepted": true,
+        "raw_exit": 0,
+        "runner_exit": 0,
+        "case_count": 10,
+        "blocker": null
+      },
+      {
+        "id": "feature003-t012-retained-direct",
+        "accepted": true,
+        "raw_exit": 1,
+        "runner_exit": 1,
+        "case_count": 24,
+        "blocker": null
+      }
+    ],
+    "new_case_outcomes": {
+      "pass": 2,
+      "assertion": 37
+    },
+    "retained_case_outcomes": {
+      "pass": 136,
+      "assertion": 19
+    },
+    "behavior_implementation_claim": false,
+    "raw_full_repository_suite_run": false,
+    "canonical_repository_acceptance_run": false
+  }
 }

@@ -1,6 +1,6 @@
 # T012 executable test proposal
 
-Status: **measured proposal; owner approval and task entry/completion pending**.
+Status: **T012 test-authoring accepted; behavior implementation remains pending**.
 [Issue 13](https://github.com/wstein/workharbor-nxt/issues/13) selects
 [Feature 003 T012](../../specs/003-single-task-entry/tasks.md). The
 [JSON record](feature003-acceptance-matrix.json) pins 39 proposed CLI cases, their
@@ -85,26 +85,40 @@ focused checks rerun. A separate canonical-case entry failure was rejected and f
 before the narrow CLI rerun. Native Git emitted macOS temporary-directory warnings;
 there were no Python resource warnings in the final capture.
 
-## Owner decision and remaining gate
+## Approved expected-outcome acceptance
 
-The external exact-checks file is generated after the final proposal commit using
-its native `snapshot(root)` binding. It preserves observed cases/tool bytes and
-rebinds only the input revision. Its exact checks digest, final candidate SHA and
-wrapper argv are supplied in the handoff, avoiding self-referential commit hashes.
-The JSON's placeholder wrapper shows the structure, not executable authorization.
-No matrix approval flag, zero-exit expected-red acceptance or authenticated owner
-claim was supplied. Measurement-only child requests expected all cases green and
-recorded actual results; they did not accept the red matrix.
+The owner authorized the exact frozen proposal `4fde142667f4a33651dc79da1c0de6b546e04bd8`
+and native checks digest
+`sha256:7eee1eaf5fe67ae1da72387a04b196602917ddc50d98f448924c9387b102e51b`.
+The recorded exact wrapper argv ran with explicit matrix approval before any
+source or task-marker edit. It returned **exit 0, accepted=true**, with no blocker.
+All four ordered inventories, fingerprints and raw exits matched the sealed matrix.
+The approved input and measured post-verifier snapshots were identical:
+`sha256:2a5a6ba33e16cb91b6e60128a0be1c1775a2a0b9616a7b41ee9a12cc3df7dbab`.
 
-The owner must approve the exact revision-bound matrix and runnable argv before
-SingleTask entry or the expected-red acceptance gate. Task authoring is the bounded
-preparation authorized here; T012's checkbox stays pending. Then run the reviewed
-native verifier with explicit matrix approval, required repository checks and scope
-validation before any completion decision. Preserve raw reds separately. Missing,
-extra, unexpected green/red, import/setup/cleanup failure, skip, unfinished process
-or source mutation blocks acceptance. No permissive nonzero-exit exception applies.
+Actual results remain **194 cases: 138 passes and 56 expected assertions** (37 new,
+19 retained), with raw child exits **1, 0, 0, 1**. The safe full verifier result has
+SHA-256 `e067952fb34cb49b371de523e137e48661253183313849bcba00e835a0f98c33`.
+The JSON records the source/input/tool bindings and actual per-check acceptance.
+Its exact approved native matrix is reproducible from `observed_checks` by replacing
+only each input revision with the approved input snapshot, retaining every other
+field and outcome. No new binding was substituted during execution.
 
-Repository/document and whitespace checks accompany this proposal. Canonical
-`make check` and raw full suites are unperformed here and remain coordinator-owned.
-No guard implementation, real Feature 001/002 mutation, provider/runtime operation,
-tracker change, publication or activation was performed.
+The earlier measurements and their historical pending-approval status did not grant
+authorization. Owner session authorization was supplied separately; this tooling
+still makes no independent identity-authentication claim. Only after the accepted
+verifier result was preserved did bookkeeping update T012's checkbox and this
+evidence. The later bookkeeping revision is distinct from the approved execution
+source; it does not silently refresh the old matrix digest or source approval.
+
+T012 completion means verified expected-red test evidence. T014–T017 still own
+missing behavior; the 19 retained T017/T023 assertions remain explicit blockers.
+No raw red suite is called passing. Canonical `make check` and raw full repository
+suites were not run by this leaf and remain coordinator-owned. Repository/document
+and whitespace checks passed for the frozen proposal before execution; no tests or
+guard code changed during completion bookkeeping.
+
+No actual repository SingleTask attempt was created by this preparation route.
+The executed task attempts were isolated test fixtures. No guard implementation,
+real Feature 001/002 mutation, provider/runtime operation, tracker change,
+publication or activation was performed.
