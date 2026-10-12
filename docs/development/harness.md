@@ -105,6 +105,12 @@ unrelated documentation. Frozen baseline inputs and all source/checkout/merge
 checks remain required. Changed policy, scope, checks or dependencies require
 owner approval of a new content anchor. A new candidate SHA still requires fresh
 independent review and checks, without automatically changing the adopted pin.
+CI execution requires a pristine isolated checkout, including ignored files:
+ignored source or bytecode can alter imports. The gate routes Python caches to
+fresh external storage and blocks preexisting untracked inputs before checks.
+Use prepublication scratch when a working checkout contains legitimate local
+`.specify` or `.symphony` state; the gate does not delete that state. Ordinary
+root `make check` remains available with its raw result reported separately.
 After exact independent review and authorized publication, the owner can configure
 that immutable reviewed revision with:
 
