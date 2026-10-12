@@ -91,6 +91,58 @@ class PublicationTrackerTests(unittest.TestCase):
                 publisher.find_evidence(self.request)
 
 
+class ConditionalLabelTests(unittest.TestCase):
+    def setUp(self):
+        self.config = tracker.TrackerConfig('github', 'fixture/repo', 'repo-1',
+                                           'owner-1', 'host-verifier', 'e' * 40)
+        self.identity = tracker.IssueIdentity('fixture/repo', 17)
+        self.payload = dict(object_id='issue-17', repository='fixture/repo', number=17,
+                            state='open', labels=['human-review', 'unrelated'], updated_at=900)
+        self.transport = Transport(self.payload)
+        self.reader = tracker.AuthenticatedTracker(self.config, self.transport, clock=lambda: NOW)
+        self.expected = dict(object_digest='a' * 64, labels=('unrelated', 'workharbor-ready'))
+        self.desired = ('human-review', 'unrelated')
+        self.key = 'final-labels:' + 'b' * 64
+
+    def test_missing_conditional_writer_performs_no_provider_call(self):
+        port = tracker.ConditionalLabels(self.reader)
+        with self.assertRaises(tracker.TrackerBlocked):
+            port.replace_labels(self.identity, self.expected, self.desired, operation_key=self.key)
+        self.assertEqual([], self.transport.calls)
+
+    def test_authenticated_returned_receipt_needs_no_postwrite_read(self):
+        test = self
+        class Writer:
+            def replace_labels(self, identity, expected, desired, *, operation_key):
+                test.assertEqual(test.identity, identity)
+                test.assertEqual(test.expected, expected)
+                test.assertEqual(test.desired, desired)
+                test.assertEqual(test.key, operation_key)
+                return test.transport.read('fixture-receipt', 'fixture')
+        port = tracker.ConditionalLabels(self.reader, Writer())
+        receipt = port.replace_labels(self.identity, self.expected, self.desired, operation_key=self.key)
+        self.assertEqual(self.desired, receipt.labels)
+        self.assertEqual('open', receipt.state)
+        self.assertEqual([('fixture-receipt', 'fixture')], self.transport.calls)
+
+    def test_closed_wrong_labels_or_unauthenticated_receipt_remain_unknown(self):
+        test = self
+        class Writer:
+            def replace_labels(self, *args, **kwargs):
+                return test.transport.read('fixture-receipt', 'fixture')
+        port = tracker.ConditionalLabels(self.reader, Writer())
+        for changes in ({'state': 'closed'}, {'labels': ['human-review']},
+                        {'repository': 'other/repository'}):
+            self.transport.payload = {**self.payload, **changes}
+            with self.subTest(changes=changes), self.assertRaises(tracker.WriteUnknown):
+                port.replace_labels(self.identity, self.expected, self.desired, operation_key=self.key)
+        self.transport.payload = self.payload
+        response = self.transport.read('fixture-receipt', 'fixture')
+        with patch.object(self.transport, 'read', return_value=replace(response, repository_id='other')):
+            with self.assertRaises(tracker.WriteUnknown):
+                port.replace_labels(self.identity, self.expected, self.desired, operation_key=self.key)
+
+
 class TrackerTests(unittest.TestCase):
     def setUp(self):
         self.config = tracker.TrackerConfig('github', 'fixture/repo', 'repo-1',
