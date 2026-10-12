@@ -2,11 +2,11 @@
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md),
 [data-model.md](data-model.md), [CLI contract](contracts/cli.md), [quickstart.md](quickstart.md).
-**Status**: Generated proposal; all tasks pending. No owner approval or implementation
-is inferred from generation. Obtain required human reviews and run analyze before work.
+**Status**: Implementation and verification in progress; checkboxes record accepted
+task evidence. Task generation itself grants no owner approval or execution authority.
 **Regeneration basis**: Current design includes canonical inspection/review identities,
 dependency-table grammar v1, phased regression migration and pre-intent recovery.
-Existing T001–T028 IDs and all pending markers are retained.
+Existing T001–T028 IDs are retained; markers below reflect reviewed progress.
 **Tests**: Explicitly required by FR-010 and SC-001–SC-006; write the specified failing
 cases before the corresponding implementation, then verify each story checkpoint.
 **Constraints**: Python 3.11+ standard library and Git only. Features 001/002,
