@@ -35,3 +35,14 @@ workspace. Imported repos are never implicitly rewritten or recursively cloned.
 The owner can create, inspect, access, stop and restart a workspace using only the
 browser. Disconnected hosts display uncertainty. Restart retains committed and
 uncommitted project files. No product path requires a tracker or AI subscription.
+
+## Proposed future option
+
+[ADR 0006](adr/0006-optional-ai-execution.md) proposes a later optional internal
+execution board linking Spec Kit artifacts, Symphony scheduling and WorkHarbor
+workspaces, resources, interventions and evidence. This is outside the accepted
+baseline and the sequence above; AI features remain current non-goals. The
+[concept paper](papers/optional-ai-execution.md) describes the owner experience.
+Product implementation requires separate explicit owner scope and constitutional
+approval, followed by an approved feature spec and plan. Saving this proposal
+does not provide that authorization.

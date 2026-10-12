@@ -6,6 +6,8 @@
 - [Git workspaces](adr/0003-workspace-git.md)
 - [Bundles](adr/0004-bundles.md)
 - [Development methodology](adr/0005-development.md)
+- [Optional execution integration (proposed)](adr/0006-optional-ai-execution.md)
+- [Concept paper: optional AI execution board](papers/optional-ai-execution.md)
 - [Harness](development/harness.md), [Symphony](development/symphony.md)
 - [Execution plans](exec-plans/README.md), [quality register](quality.md)
 - [Source references](references.md)
