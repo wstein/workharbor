@@ -18,17 +18,19 @@ sys.dont_write_bytecode = True
 import single_task_state as backend
 import single_task_context as contexts
 import single_task_scope as entry_scope
+import single_task_acceptance as acceptance
 
 STATE = '.symphony/single-task.json'
 TASK = re.compile(r'^(- \[)([ xX])(\] (T\d{3}) .+)$', re.M)
 
 
 class CliError(Exception):
-    def __init__(self, exit_code, code, diagnostic=None, *, affected_paths=()):
+    def __init__(self, exit_code, code, diagnostic=None, *, affected_paths=(), category=None):
         self.exit_code = exit_code
         self.code = code
         self.diagnostic = diagnostic
         self.affected_paths = list(affected_paths)
+        self.category = category
 
 
 MESSAGES = {
@@ -65,6 +67,8 @@ def response(error=None, state=None, verification='not-run', attempt=None, inspe
     if error is not None:
         value['errors'] = [dict(code=error.code, message=MESSAGES[error.code],
                                 affected_paths=error.affected_paths, affected_ids=[])]
+        if error.category is not None:
+            value['errors'][0]['category'] = error.category
         if error.diagnostic:
             print(error.diagnostic, file=sys.stderr)
     print(json.dumps(value, sort_keys=True))
@@ -437,6 +441,59 @@ def failure(caught):
     return error.exit_code
 
 
+def load_review(path):
+    """Read one regular local JSON object without ambiguous keys or numbers."""
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError('Duplicate review field')
+            value[key] = item
+        return value
+
+    def invalid_number(value):
+        raise ValueError('Nonfinite review number')
+
+    descriptor = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError('Review must be regular')
+        with os.fdopen(descriptor, 'rb') as stream:
+            descriptor = None
+            return json.loads(stream.read().decode('utf-8'), object_pairs_hook=unique,
+                              parse_constant=invalid_number)
+    except (OSError, ValueError, UnicodeError):
+        raise CliError(3, 'scope_blocker') from None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def validate_completion_phase(root, store, attempt):
+    """Retain exact entry bytes before intent and the immutable seal afterward."""
+    task_path = f"specs/{attempt['context']['feature']}/tasks.md"
+    current = entry_scope.read_regular(root, task_path)
+    if attempt['progress'] in ('active', 'acceptance-recorded'):
+        if current != attempt['tasks_bytes']:
+            raise CliError(3, 'scope_blocker', affected_paths=[task_path])
+        return
+    if attempt['progress'] not in ('completed-awaiting-commit', 'handoff-ready'):
+        raise backend.InvalidState('Prepared transition requires explicit recovery')
+    intents = [event for event in store.read_events(attempt['attempt_id'])
+               if event['kind'] == 'completion-intent']
+    if len(intents) != 1:
+        raise backend.InvalidState('Completed attempt requires one durable intent')
+    intent = intents[0]['payload']
+    inspection = entry_scope.prepare_inspection(root, attempt)
+    if (current != bytes.fromhex(intent['tasks_after_hex']) or
+            hashlib.sha256(current).hexdigest() != intent['tasks_after_sha256'] or
+            inspection['content_manifest'] != intent['content_manifest'] or
+            inspection['content_manifest_digest'] != intent['content_manifest_digest'] or
+            inspection['context_digest'] != intent['context_digest']):
+        raise CliError(3, 'scope_blocker', affected_paths=[task_path])
+
+
 def main():
     try:
         try:
@@ -484,6 +541,29 @@ def main():
                                    affected_paths=getattr(error, 'affected_paths', ())) from None
                 response(attempt=attempt, inspection=inspection)
             return 0
+        if parse_error is None and args.command in ('verify', 'complete'):
+            with backend.open_store(root, require_existing=True, writable_existing=True) as store:
+                attempt = None
+                try:
+                    attempt = store.read_attempt(args.attempt)
+                    validate_completion_phase(root, store, attempt)
+                    review = load_review(args.review)
+                    acceptance.execute_acceptance(root, attempt, review, store)
+                    if args.command == 'complete' and attempt['progress'] in ('active', 'acceptance-recorded'):
+                        # No outer SQL transaction: durable intent must be visible
+                        # independently before the atomic marker publication.
+                        backend.publish_completion(root, store, args.attempt)
+                    response(attempt=store.read_attempt(args.attempt), verification='passed')
+                    return 0
+                except acceptance.AcceptanceFailure as error:
+                    store.append_event(args.attempt, 'blocker',
+                                       {'code': 'acceptance_failed', 'category': error.category})
+                    return failure(CliError(4, 'acceptance_failed', category=error.category))
+                except ERRORS as error:
+                    if attempt is not None and isinstance(error, (CliError, contexts.ContextError, backend.InvalidState)):
+                        code = error.code if isinstance(error, (CliError, contexts.ContextError)) else 'state_blocker'
+                        store.append_event(args.attempt, 'blocker', {'code': code})
+                    return failure(error)
         if parse_error is None and args.command == 'status':
             with backend.open_store(root, require_existing=True) as store:
                 response(attempt=store.read_attempt(args.attempt))

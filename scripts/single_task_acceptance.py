@@ -123,6 +123,8 @@ def execute_acceptance(root, attempt, review, store):
                 'content_manifest_digest': inspection['content_manifest_digest'],
                 'semantic_review': review, 'semantic_review_digest': review_digest,
                 'verification_head': head, 'checks': results}
+    progress = store.read_attempt(attempt['attempt_id'])['progress']
     store.append_event(attempt['attempt_id'], 'acceptance', evidence,
-                       progress='acceptance-recorded')
+                       progress='acceptance-recorded' if progress in
+                       ('active', 'acceptance-recorded') else None)
     return evidence
