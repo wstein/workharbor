@@ -1,15 +1,31 @@
 # Documentation index
 
+## Product and architecture
+
 - [Product](product.md) and [architecture](architecture.md)
+- [Constitution](../.specify/memory/constitution.md)
+
+## Development
+
+- [Harness](development/harness.md), [Symphony](development/symphony.md)
+
+## Planning and evidence
+
+- [Milestone roadmap and completion checklists](milestones.md)
+- [Execution plans](exec-plans/README.md)
+- [Quality register](quality.md)
+
+## Architecture decisions
+
 - [Stack](adr/0001-stack.md)
 - [Host identity](adr/0002-host-identity.md)
 - [Git workspaces](adr/0003-workspace-git.md)
 - [Bundles](adr/0004-bundles.md)
 - [Development methodology](adr/0005-development.md)
-- [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
 - [Optional execution integration (proposed)](adr/0006-optional-ai-execution.md)
+- [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
+
+## Background and references
+
 - [Concept paper: optional AI execution board](papers/optional-ai-execution.md)
-- [Harness](development/harness.md), [Symphony](development/symphony.md)
-- [Execution plans](exec-plans/README.md), [quality register](quality.md)
-- [Milestone roadmap and completion checklists](milestones.md)
 - [Source references](references.md)
