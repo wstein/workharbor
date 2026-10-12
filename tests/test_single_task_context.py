@@ -907,5 +907,314 @@ for _name, (_function, _route, _code, _successor) in EXTRA_CASES.items():
     setattr(TaskContextEntryTests, 'test_' + _name, _function)
 
 
+class TaskContextReworkTests(unittest.TestCase):
+    """T019 proposal: real predecessors, with future CLI gates in test bodies.
+
+    No bound-commit event is synthesized. Cases needing a bound predecessor first
+    call record-commit; until T023 exists their deeper T022 assertions are unreached.
+    Synthetic approval references below are local fixture data, not authentication.
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture = SingleTaskFixture(temporary.name)
+        self.root = self.fixture.root
+        self.tasks = self.fixture.feature/'tasks.md'
+        (self.root/'.git/info').mkdir(exist_ok=True)
+        with (self.root/'.git/info/exclude').open('a') as exclude:
+            exclude.write('\n.symphony/\n')
+        sys.path.insert(0, str(ROOT/'scripts'))
+        self.addCleanup(sys.path.remove, str(ROOT/'scripts'))
+        import single_task_state
+        self.state = single_task_state
+        wrong_task = self._testMethodName == 'test_wrong_predecessor_task'
+        prerequisite = self.fixture.complete_prerequisite() if wrong_task else None
+        self.prior_context = self.fixture.context('T002' if wrong_task else 'T001', prerequisite)
+        entry_tasks = self.tasks.read_bytes()
+        self.prior_checks = self.fixture.private/'prior-checks'
+        self.corrective_checks = self.fixture.private/'corrective-checks'
+        self.prior_context['checks'] = self.checks('prior', self.prior_checks)
+        self.seal(self.prior_context)
+        path = self.fixture.private/'prior-context.json'
+        path.write_bytes(canonical_bytes(self.prior_context))
+        run, response = self.cli('begin', '--context', str(path))
+        self.assertEqual(0, run.returncode, 'Real implement entry is required fixture setup')
+        self.prior_id = response['attempt_id']
+        (self.root/self.prior_context['allowed_paths'][0]).write_bytes(b'Original implemented output\n')
+        review = self.review(self.prior_id, self.prior_context)
+        for command in ('verify', 'complete'):
+            run, response = self.cli(command, '--attempt', self.prior_id, '--review', str(review))
+            self.assertEqual(0, run.returncode, 'Real reviewed completion is required fixture setup')
+        self.assertEqual('completed-awaiting-commit', response['progress'])
+        self.assertEqual('handoff-only', response['mode'])
+        task_id = self.prior_context['task_id'].encode('ascii')
+        self.assertEqual(entry_tasks.replace(b'[ ] ' + task_id, b'[x] ' + task_id),
+                         self.tasks.read_bytes())
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: actual completed predecessor')
+        self.prior_commit = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+        self.assertEqual('', self.fixture.git('status', '--porcelain').stdout)
+        self.context = copy.deepcopy(self.prior_context)
+        self.context.update(mode='owner-authorized rework', prior_attempt_id=self.prior_id,
+                            prior_implementation_commit=self.prior_commit,
+                            rework_approval={'owner_ref': self.fixture.identities['owner'],
+                                             'evidence_ref': 'synthetic:corrective-authorization'})
+        self.context['semantic_constraints'] = ['Correct only the synthetic guide output; retain checked tasks.']
+        self.context['checks'] = self.checks('correction', self.corrective_checks)
+        self.seal(self.context)
+        self.capture_prior()
+
+    def checks(self, name, counter):
+        program = 'from pathlib import Path; p=Path(__import__("sys").argv[1]); p.write_bytes((p.read_bytes() if p.exists() else b"")+b"ran\\n")'
+        return [{'id': name, 'argv': [sys.executable, '-B', '-c', program, str(counter)],
+                 'cwd': '.', 'timeout_seconds': 5, 'expected_exit': 0}]
+
+    def seal(self, context):
+        context['approval']['context_digest'] = context_digest(context)
+
+    def cli(self, *arguments):
+        run = subprocess.run([sys.executable, '-B', str(ROOT/'scripts/single_task.py'), *arguments],
+                             cwd=self.root, env=self.fixture.env, capture_output=True,
+                             text=True, timeout=15)
+        value = json.loads(run.stdout)
+        self.assertEqual('', run.stderr)
+        self.assertEqual(1, value['schema_version'])
+        self.assertFalse(value['owner_identity_authenticated'])
+        self.assertFalse(value['live_dispatch_verified'])
+        return run, value
+
+    def review(self, attempt_id, context):
+        counts = [path.read_bytes() if path.exists() else None
+                  for path in (self.prior_checks, self.corrective_checks)]
+        run, inspection = self.cli('inspect', '--attempt', attempt_id)
+        self.assertEqual(0, run.returncode, 'Actual inspect must prepare the review fixture')
+        value = self.fixture.review(context)
+        value.update(attempt_id=attempt_id,
+                     content_manifest_digest=inspection['content_manifest_digest'])
+        self.assertEqual(value['context_digest'], inspection['context_digest'])
+        self.assertEqual(context['task_id'], inspection['task_id'])
+        self.assertEqual(counts, [path.read_bytes() if path.exists() else None
+                                 for path in (self.prior_checks, self.corrective_checks)])
+        path = self.fixture.private/(attempt_id + '-review.json')
+        path.write_bytes(canonical_bytes(value))
+        return path
+
+    def capture_prior(self):
+        with self.state.open_store(self.root, require_existing=True) as store:
+            self.prior_attempt = store.read_attempt(self.prior_id)
+            self.prior_events = store.read_events(self.prior_id)
+        self.prior_copies = {path.name: (path.stat().st_mode, path.read_bytes())
+                             for path in (self.root/'.symphony/single-task/contexts').iterdir()}
+        self.checked_bytes = self.tasks.read_bytes()
+
+    def preserve_prior(self, *, include_progress=True):
+        with self.state.open_store(self.root, require_existing=True) as store:
+            current = store.read_attempt(self.prior_id)
+            if include_progress:
+                self.assertEqual(self.prior_attempt, current)
+            else:
+                self.assertEqual({key: value for key, value in self.prior_attempt.items() if key != 'progress'},
+                                 {key: value for key, value in current.items() if key != 'progress'})
+            self.assertEqual(self.prior_events, store.read_events(self.prior_id)[:len(self.prior_events)])
+        for name, value in self.prior_copies.items():
+            path = self.root/'.symphony/single-task/contexts'/name
+            self.assertEqual(value, (path.stat().st_mode, path.read_bytes()))
+        self.assertEqual(self.checked_bytes, self.tasks.read_bytes())
+
+    def rework(self):
+        path = self.fixture.private/'rework-context.json'
+        path.write_bytes(canonical_bytes(self.context))
+        self.rework_product = self.product()
+        return self.cli('rework', '--context', str(path))
+
+    def product(self):
+        files = {}
+        for path in self.root.rglob('*'):
+            relative = path.relative_to(self.root).as_posix()
+            if relative.startswith(('.git/', '.symphony/')):
+                continue
+            if path.is_file():
+                files[relative] = (path.stat().st_mode, path.read_bytes())
+        return files, (self.root/'.git/index').read_bytes(), self.fixture.git('rev-parse', 'HEAD').stdout
+
+    def assert_blocked(self, run, response, exit_code, code):
+        self.preserve_prior()
+        self.assertEqual(self.rework_product, self.product())
+        self.assertEqual(set(self.prior_copies),
+                         {path.name for path in (self.root/'.symphony/single-task/contexts').iterdir()})
+        self.assertFalse(self.corrective_checks.exists())
+        self.assertEqual('not-run', response['local_verification'])
+        self.assertEqual(exit_code, run.returncode, 'Rework must return its specific blocker category')
+        self.assertEqual(code, response['errors'][0]['code'], 'Rework must validate the supplied corrective context')
+        self.assertIsNone(response['mode'])
+        self.assertNotEqual('handoff-ready', response['progress'])
+
+    def bind_prior(self):
+        return self.cli('record-commit', '--attempt', self.prior_id, '--commit', self.prior_commit)
+
+    def bound(self, run, response):
+        self.assertEqual([], response['errors'])
+        self.assertEqual(self.prior_id, response['attempt_id'])
+        self.preserve_prior(include_progress=False)
+        review = self.review(self.prior_id, self.prior_context)
+        run, response = self.cli('resume', '--attempt', self.prior_id, '--review', str(review))
+        self.assertEqual(0, run.returncode, 'Real fresh resume capability is required before rework semantics')
+        self.assertEqual('handoff-ready', response['progress'])
+        self.assertEqual('handoff-only', response['mode'])
+        self.preserve_prior(include_progress=False)
+        self.capture_prior()
+
+    def assert_linked(self, run, response):
+        self.assertEqual(0, run.returncode, 'Authorized rework must create a linked attempt')
+        self.assertEqual(self.rework_product, self.product())
+        self.assertEqual('owner-authorized rework', response['mode'])
+        self.assertEqual('active', response['progress'])
+        self.assertEqual([], response['errors'])
+        self.assertNotEqual(self.prior_id, response['attempt_id'])
+        self.assertFalse(self.corrective_checks.exists())
+        with self.state.open_store(self.root, require_existing=True) as store:
+            current = store.read_attempt(response['attempt_id'])
+            self.assertEqual(response['attempt_id'], store.active_attempt()['attempt_id'])
+            self.assertEqual(self.context, current['context'])
+            self.assertEqual(self.prior_id, current['predecessor'])
+            self.assertEqual(self.prior_commit, current['baseline'])
+            self.assertEqual(self.checked_bytes, current['tasks_bytes'])
+            self.assertEqual('owner-authorized rework', current['entry_mode'])
+        self.assertEqual(1, len({path.name for path in
+                                (self.root/'.symphony/single-task/contexts').iterdir()} - set(self.prior_copies)))
+        self.preserve_prior()
+        return response['attempt_id']
+
+    def test_missing_rework_approval(self):
+        del self.context['rework_approval']
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 2, 'context_schema')
+
+    def test_missing_prior_attempt(self):
+        del self.context['prior_attempt_id']
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 2, 'context_schema')
+
+    def test_missing_prior_implementation(self):
+        del self.context['prior_implementation_commit']
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 2, 'context_schema')
+
+    def test_unrenewed_corrective_scope(self):
+        self.context['allowed_paths'] = ['correction.md']
+        self.assert_blocked(*self.rework(), 2, 'approval_digest')
+
+    def test_unrenewed_corrective_checks(self):
+        self.context['checks'][0]['id'] = 'unapproved-replacement'
+        self.assert_blocked(*self.rework(), 2, 'approval_digest')
+
+    def test_retry_counter_cannot_authorize_rework(self):
+        del self.context['rework_approval']
+        self.context['retry_count'] = 2
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 2, 'context_schema')
+
+    def test_ready_assertion_cannot_authorize_rework(self):
+        del self.context['rework_approval']
+        self.context['ready'] = True
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 2, 'context_schema')
+
+    def test_absent_retained_predecessor(self):
+        self.context['prior_attempt_id'] = 'synthetic-absent-attempt'
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 3, 'state_blocker')
+
+    def test_unbound_prior_implementation_cannot_authorize_rework(self):
+        self.assertEqual('completed-awaiting-commit', self.prior_attempt['progress'])
+        self.assertEqual(self.prior_commit, self.fixture.git('rev-parse', 'HEAD').stdout.strip())
+        self.assert_blocked(*self.rework(), 3, 'state_blocker')
+
+    def test_wrong_predecessor_task(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        # Both tasks are checked: a real T002 predecessor cannot authorize T001.
+        replacement = self.fixture.context('T001')
+        replacement.update({key: copy.deepcopy(self.context[key]) for key in
+                            ('mode', 'prior_attempt_id', 'prior_implementation_commit', 'rework_approval',
+                             'checks', 'semantic_constraints')})
+        self.context = replacement
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 3, 'state_blocker')
+
+    def test_wrong_prior_implementation_commit(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        self.context['prior_implementation_commit'] = self.fixture.baseline
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 3, 'state_blocker')
+
+    def test_unavailable_prior_implementation_commit(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        self.context['prior_implementation_commit'] = '0' * 40
+        self.seal(self.context)
+        self.assert_blocked(*self.rework(), 3, 'state_blocker')
+
+    def test_semantic_artifact_drift_requires_renewal(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        (self.fixture.feature/'plan.md').write_bytes(b'Changed corrective requirements\n')
+        self.fixture.git('add', '.')
+        self.fixture.git('commit', '-m', 'test: semantic plan drift')
+        self.assert_blocked(*self.rework(), 2, 'artifact_drift')
+
+    def test_dirty_rework_baseline_preserves_work(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        (self.root/'guide.md').write_bytes(b'Uncommitted correction must be retained\n')
+        self.assert_blocked(*self.rework(), 2, 'dirty_baseline')
+        self.assertEqual(b'Uncommitted correction must be retained\n', (self.root/'guide.md').read_bytes())
+
+    def test_authorized_entry_retains_marker_and_prior_evidence(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        self.assert_linked(*self.rework())
+
+    def test_corrective_completion_retains_checked_bytes_and_old_history(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        attempt_id = self.assert_linked(*self.rework())
+        (self.root/'guide.md').write_bytes(b'Explicitly authorized corrective output\n')
+        review = self.review(attempt_id, self.context)
+        for command in ('verify', 'complete'):
+            run, response = self.cli(command, '--attempt', attempt_id, '--review', str(review))
+            self.assertEqual(0, run.returncode, 'Current reviewed corrective acceptance must pass')
+        self.assertEqual(b'ran\nran\n', self.corrective_checks.read_bytes())
+        self.assertEqual('handoff-only', response['mode'])
+        self.assertEqual('completed-awaiting-commit', response['progress'])
+        with self.state.open_store(self.root, require_existing=True) as store:
+            intent = [event['payload'] for event in store.read_events(attempt_id)
+                      if event['kind'] == 'completion-intent']
+            self.assertEqual(1, len(intent))
+            self.assertEqual(self.checked_bytes, bytes.fromhex(intent[0]['tasks_before_hex']))
+            self.assertEqual(self.checked_bytes, bytes.fromhex(intent[0]['tasks_after_hex']))
+        self.preserve_prior()
+
+    def test_renewed_corrective_scope_and_checks_are_bound(self):
+        run, response = self.bind_prior()
+        self.assertEqual(0, run.returncode, 'Real record-commit capability is required before rework semantics')
+        self.bound(run, response)
+        self.context['allowed_paths'] = ['correction.md']
+        self.context['semantic_constraints'] = ['Write only correction.md; preserve old implementation and tasks.']
+        self.context['checks'][0]['id'] = 'renewed-corrective-check'
+        self.context['rework_approval']['evidence_ref'] = 'synthetic:renewed-corrective-scope-and-checks'
+        self.seal(self.context)
+        self.assert_linked(*self.rework())
+
+
 if __name__ == '__main__':
     unittest.main()
