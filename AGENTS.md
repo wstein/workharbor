@@ -8,6 +8,7 @@ Start with [README](README.md) and the [constitution](.specify/memory/constituti
 - Current feature: [001 spec](specs/001-workspace-lifecycle/spec.md),
   [plan](specs/001-workspace-lifecycle/plan.md), [tasks](specs/001-workspace-lifecycle/tasks.md).
 - Development: [harness](docs/development/harness.md), [Symphony](docs/development/symphony.md).
+- CI acceptance: [manifest](docs/development/ci-acceptance.json), [ADR 0007](docs/adr/0007-explicit-ci-acceptance.md).
 - Execution records: [plans](docs/exec-plans/README.md), [quality](docs/quality.md).
 
 Select the relevant feature with `python3 scripts/select_feature.py <feature>`

@@ -71,7 +71,7 @@ at entry and after checks; drift blocks without adopting new pins or baselines.
 
 ## PrepublicationPreparation — bounded observation
 
-Trusted accepted checker source; remote/ref identities; pinned base/head; synthetic
+Exact reviewed checker-code source (identity, not owner adoption); remote/ref identities; pinned base/head; synthetic
 checkout/actual merge tree; raw check exit; final remote-ref observations; sanitized
 PREPARED/BLOCKED result. Retain head scope/content evidence separately from integration
 evidence. A changed ref invalidates preparation; the authorized publisher separately
