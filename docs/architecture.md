@@ -50,3 +50,15 @@ Host agent can control Docker and is privileged infrastructure. A compromised
 workspace must not obtain agent credentials, control sockets or other owners' data.
 Use a dedicated host for untrusted workloads; microVM providers are a later option.
 Runtime backups and Git configuration backups are separate recovery concerns.
+
+## Proposed optional execution integration
+
+[ADR 0006](adr/0006-optional-ai-execution.md) describes a future option outside this
+target baseline. An internal LiveView board would connect execution evidence to
+WorkHarbor's authorized workspaces and resources; Symphony alone would schedule
+agents. The first proposed topology keeps separate OS processes/BEAM instances,
+versioned integration boundaries, updates and restarts. Same-BEAM hosting needs
+later proof of instanceable names, configuration and compatible dependencies.
+Neither topology is implemented or approved for product work. The
+[concept paper](papers/optional-ai-execution.md) records identity, intervention and
+credential questions for a separately approved design.
