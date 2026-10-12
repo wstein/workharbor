@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "feature": "synthetic",
+  "task_id": "T001",
+  "completed": true,
+  "content_manifest": {"schema_version": 1, "entries": []},
+  "implementation_commit": "${implementation_commit}",
+  "check_results": [],
+  "evidence_ref": "${prerequisite_ref}"
+}

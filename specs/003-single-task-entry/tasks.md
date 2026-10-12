@@ -18,7 +18,7 @@ Use disposable synthetic repositories; never mutate the real earlier features in
 
 Purpose: reusable offline fixtures with safe local evidence.
 
-- [ ] T001 Create synthetic two-task feature/context/prerequisite/review fixtures under `tests/fixtures/single-task/` and fixture helpers in `tests/test_single_task.py`; generate local commits/digests at runtime, isolate Git config/hooks/signing, and remove tracker credentials without printing them; assert fixture creation makes no network request (FR-010, FR-011).
+- [x] T001 Create synthetic two-task feature/context/prerequisite/review fixtures under `tests/fixtures/single-task/` and fixture helpers in `tests/test_single_task.py`; generate local commits/digests at runtime, isolate Git config/hooks/signing, and remove tracker credentials without printing them; assert fixture creation makes no network request (FR-010, FR-011).
 
 ## Phase 2: Foundational — durable attempt infrastructure
 
