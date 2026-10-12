@@ -257,6 +257,28 @@ def approved_documentation(root, context=None):
         return False
 
 
+def trusted_snapshot_promotion(root, context, policy_source):
+    """Promote only a complete reviewed snapshot over its exact trusted prefix.
+
+    Explicit contexts are trusted caller metadata; the prepublication caller
+    enforces refs/heads/main. GitHub contexts must prove that branch here too.
+    The immutable accepted anchor authenticates all pre-anchor history.
+    """
+    if context.event != 'pull_request' or context.base == DOCUMENTATION_POLICY_SOURCE:
+        return False
+    try:
+        git(root, 'merge-base', '--is-ancestor', context.base, DOCUMENTATION_POLICY_SOURCE)
+        if 'GITHUB_EVENT_NAME' in os.environ:
+            payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+            if payload['pull_request']['base']['ref'] != 'main':
+                return False
+        tree = git(root, 'rev-parse', policy_source + '^{tree}')
+        return all(git(root, 'rev-parse', revision + '^{tree}') == tree
+                   for revision in (context.head, context.checkout))
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError):
+        return False
+
+
 def approved_operator_tooling(root, context, policy_source):
     """Local validation only, gated by externally adopted reviewed policy source.
 
@@ -284,11 +306,13 @@ def approved_operator_tooling(root, context, policy_source):
             if state != states[-1]:
                 states.append(state)
         fork = git(root, 'merge-base', '--all', base, context.head).decode().splitlines()
+        promotion = trusted_snapshot_promotion(root, context, policy_source)
+        protected = (policy_source, context.head, context.checkout) + (() if promotion else (base,))
         if (len(fork) != 1
                 or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
-                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, allowed, operator=True, policy_states=states)
+                or (not promotion and not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, allowed, operator=True, policy_states=states))
                 or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, context.head, allowed, operator=True, policy_states=states)
-                or not protected_baseline(root, (policy_source, base, context.head, context.checkout))):
+                or not protected_baseline(root, protected)):
             return False
         if any(policy_manifest(root, revision) != states[-1]
                for revision in (context.head, context.checkout)):

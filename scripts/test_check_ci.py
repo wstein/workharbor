@@ -207,6 +207,49 @@ class SourceTests(unittest.TestCase):
         context = self.merge(self.git('rev-parse', 'HEAD'), head)
         self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
 
+    def test_main_promotion_requires_trusted_prefix_and_complete_approved_snapshot(self):
+        policy = self.adopt_fixture_policy()
+        main = 'd04f711e7b43f67bd6495cc4fae5ad40e73bab4c'
+        context = self.merge(main, policy)
+        self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+        # A trusted prefix is an exact object, not merely an identical final tree.
+        self.git('checkout', '--quiet', '--detach', main)
+        bad = self.commit('Makefile', 'unapproved\n')
+        self.git('revert', '--no-edit', bad)
+        context = self.merge(self.git('rev-parse', 'HEAD'), policy)
+        self.assertEqual(self.git('rev-parse', policy + '^{tree}'), self.git('rev-parse', 'HEAD^{tree}'))
+        self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+        self.git('checkout', '--quiet', '--detach', policy)
+        bad = self.commit('Makefile', 'unapproved\n')
+        self.git('revert', '--no-edit', bad)
+        context = self.merge(main, self.git('rev-parse', 'HEAD'))
+        self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+        self.git('checkout', '--quiet', '--detach', policy)
+        head = self.commit('docs/extra-promotion-content.md')
+        self.assertFalse(ci.approved_operator_tooling(self.root, self.merge(main, head), policy))
+        forged = self.merge(main, policy, tree=self.git('rev-parse', main + '^{tree}'))
+        self.assertFalse(ci.approved_operator_tooling(self.root, forged, policy))
+
+    def test_main_promotion_rejects_nonmain_event_and_ignored_checkout(self):
+        policy = self.adopt_fixture_policy()
+        context = self.merge('d04f711e7b43f67bd6495cc4fae5ad40e73bab4c', policy)
+        event = Path(self.temporary.name)/'promotion-event.json'
+        repo = {'full_name': 'wstein/workharbor-nxt'}
+        payload = {'pull_request': {'base': {'sha': context.base, 'repo': repo, 'ref': 'main'},
+                                    'head': {'sha': context.head, 'repo': repo}}}
+        event.write_text(json.dumps(payload))
+        with mock.patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request',
+                'GITHUB_SHA': context.checkout, 'GITHUB_EVENT_PATH': str(event)}):
+            self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+            payload['pull_request']['base']['ref'] = 'chore/issue-2-bootstrap-entry'
+            event.write_text(json.dumps(payload))
+            self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+        hidden = self.root/'ignored.py'
+        hidden.write_text('pass\n')
+        exclude = self.root/'.git/info/exclude'
+        exclude.write_text(exclude.read_text() + '\n/ignored.py\n')
+        self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+
     def test_rewritten_history_cannot_hide_policy_or_contract_tampering(self):
         policy = self.adopt_fixture_policy()
         for name in ('scripts/check_ci.py', '.github/workflows/check.yml',
