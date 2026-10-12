@@ -19,14 +19,14 @@ spec.loader.exec_module(publication)
 CHECKER = '''import argparse, os, subprocess, sys, time
 from pathlib import Path
 p = argparse.ArgumentParser()
-for name in ('root', 'event', 'base', 'head', 'checkout', 'policy-source'):
+for name in ('root', 'event', 'base', 'head', 'checkout', 'source'):
     p.add_argument('--' + name, required=True)
 a = p.parse_args()
 r = Path(a.root)
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=r).decode().strip()
 assert a.event == 'pull_request'
-assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Path(__file__).parents[1]).decode().strip() == a.policy_source
+assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Path(__file__).parents[1]).decode().strip() == a.source
 assert git('rev-parse', 'HEAD') == a.checkout
 assert git('show', '-s', '--format=%P', 'HEAD') == a.base + ' ' + a.head
 assert git('rev-parse', 'HEAD^{tree}') == git('merge-tree', '--write-tree', a.base, a.head)

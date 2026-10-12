@@ -389,16 +389,13 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         self.unchanged_tasks()
 
     def test_legacy_state_retained(self):
-        # Execute the actual pinned legacy guard even after the current CLI has
-        # migrated. Handwritten JSON alone is not valid legacy-bootstrap evidence.
-        source = subprocess.run(
-            [GIT, '-C', str(SCRIPT.parent.parent), 'show',
-             '92471ee162599a4360436dec870b9b6ba3aa3c49:scripts/single_task.py'],
-            env=self.fixture.env, capture_output=True, timeout=10, check=True)
+        # Reviewed fixture bytes preserve actual legacy behavior without an
+        # orphaned Git object dependency in fresh/shallow CI checkouts.
+        source = (SCRIPT.parent.parent/'tests/fixtures/single-task/legacy_single_task.py').read_bytes()
         self.assertEqual('7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4',
-                         digest(source.stdout))
+                         digest(source))
         legacy_script = self.fixture.private/'legacy_single_task.py'
-        legacy_script.write_bytes(source.stdout)
+        legacy_script.write_bytes(source)
         legacy = self.cli('begin', '--feature', 'synthetic', '--task', 'T001',
                           '--allow', 'guide.md', '--check', '["git", "diff", "--check"]',
                           script=legacy_script)

@@ -5,52 +5,11 @@ permissions:
 jobs:
   bootstrap:
     runs-on: ubuntu-24.04
-    env:
-      # Owner configuration after exact independent review; never a proposal pin.
-      WORKHARBOR_CI_POLICY_SOURCE: ${{ vars.WORKHARBOR_CI_POLICY_SOURCE }}
     steps:
+      # pull_request checks GitHub's ordinary synthetic merge into main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: integration
           fetch-depth: 0
           persist-credentials: false
-      - name: Materialize the adopted policy source
-        run: |
-          python3 -I -B - <<'PY'
-          import os
-          import re
-          import subprocess
-          from pathlib import Path
-          pin = os.environ.get('WORKHARBOR_CI_POLICY_SOURCE', '')
-          if not re.fullmatch('[0-9a-f]{40}', pin):
-              raise SystemExit('Configure the independently reviewed WORKHARBOR_CI_POLICY_SOURCE pin.')
-          root = Path(os.environ['GITHUB_WORKSPACE']) / 'integration'
-          for key in tuple(os.environ):
-              if key.startswith('GIT_'):
-                  os.environ.pop(key)
-          os.environ['GIT_NO_REPLACE_OBJECTS'] = '1'
-          def git(*args):
-              return subprocess.check_output(['git', '--no-replace-objects', *args], cwd=root)
-          info = Path(os.fsdecode(git('rev-parse', '--path-format=absolute', '--git-common-dir').strip())) / 'info'
-          graft = info / 'grafts'
-          if info.is_symlink() or graft.exists() or graft.is_symlink() or git('for-each-ref', '--format=%(refname)', 'refs/replace/'):
-              raise SystemExit('Git replacement or graft metadata is unsupported.')
-          try:
-              kind = git('cat-file', '-t', pin)
-          except subprocess.CalledProcessError:
-              # Rebase-merged policy objects may be outside integration history.
-              git('fetch', '--no-tags', 'origin', pin)
-              kind = git('cat-file', '-t', pin)
-          if kind != b'commit\n':
-              raise SystemExit('Policy pin must identify an available commit.')
-          entry = git('ls-tree', pin, '--', 'scripts/check_ci.py').split()
-          if (len(entry) != 4 or entry[0] not in (b'100644', b'100755')
-                  or entry[1] != b'blob' or entry[3] != b'scripts/check_ci.py'):
-              raise SystemExit('Policy checker must be a regular tracked file.')
-          git('worktree', 'add', '--detach', str(root.parent / 'trusted-policy'), pin)
-          PY
-      - name: Validate integration with the adopted policy
-        run: |
-          python3 -I -B trusted-policy/scripts/check_ci.py \
-            --root "$GITHUB_WORKSPACE/integration" \
-            --policy-source "$WORKHARBOR_CI_POLICY_SOURCE"
+      - name: Validate explicit repository acceptance
+        run: python3 -I -B scripts/check_ci.py

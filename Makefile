@@ -1,6 +1,9 @@
 PYTHON ?= python3
-.PHONY: check test
+.PHONY: check check-raw test
 check:
+	$(PYTHON) -I -B scripts/check_ci.py
+
+check-raw:
 	$(PYTHON) scripts/check_repo.py
 	$(PYTHON) -m unittest discover -s tests -v
 	@for script in .specify/scripts/bash/*.sh scripts/*.sh; do bash -n "$$script" || exit; done

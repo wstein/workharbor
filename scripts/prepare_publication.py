@@ -167,7 +167,7 @@ def prepare(repository, source, base_ref, base, head_ref, head, timeout=300):
             code, _ = commands.run([sys.executable, '-I', '-B', str(checker), '--root', str(integration),
                                     '--event', 'pull_request', '--base', base,
                                     '--head', head, '--checkout', checkout,
-                                    '--policy-source', source],
+                                    '--source', source],
                                    integration, 'check_failed', checked=False)
             result['check_exit'] = code
             # Observe both refs even when checks fail; a race never becomes a pass.
