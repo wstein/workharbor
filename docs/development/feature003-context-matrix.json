@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "preparation candidate; exact matrix owner approval pending; T005 unchecked",
+  "status": "T005 accepted under owner-approved exact expected-outcome matrix; implementation remains pending",
   "feature": "003-single-task-entry",
   "task": "T005",
   "base": "96facc24e1fdbfd8742b2dea46e56a67872a9daa",
@@ -98,6 +98,32 @@
     "T006": "14 delivered schema/canonical cases green; remaining 58 new cases stay meaningfully red; rework schema decision and positive control required",
     "T007": "T006 accepted plus 16 scope cases green; remaining 42 new cases stay red",
     "T008": "T007 accepted plus 17 artifact cases green; remaining T009 23 and T010 2 cases remain red; no full-suite green claim"
+  },
+  "acceptance_record": {
+    "source_commit": "624bb958a093e02c69c83bb5b2f201822650f32e",
+    "original_owner_reviewed_commit": "9b7fa407dd1aebf2278a946df9ce45d02e8b775a",
+    "owner_approval": "Explicit owner approval in the current 2026-10-12 session of the original matrix/command/rework schema and the refreshed fixture-repair source binding",
+    "checks_digest": "sha256:6516958817e23b7879d9abe0696893271b50441d38122cb9e0a1958783a1da7a",
+    "input_revision": "sha256:460ce289b602384574045328b81e5a3b09551bb2f6d6f6b075af2bc48539ecf0",
+    "runner_exit": 0,
+    "accepted": true,
+    "focused_raw_exit": 1,
+    "focused_cases": 104,
+    "new_expected_assertions": 72,
+    "existing_retained_assertions": 5,
+    "focused_passes": 27,
+    "direct_raw_exit": 0,
+    "direct_passes": 24,
+    "owner_identity_authenticated": false,
+    "live_dispatch_verified": false,
+    "full_suite_green": false,
+    "rejected_prior_run": {
+      "source_commit": "9b7fa407dd1aebf2278a946df9ce45d02e8b775a",
+      "runner_exit": 4,
+      "blocker": "mutating_check",
+      "cause": "Existing T002 CLI evidence appended under source root; repaired only the synthetic fixture log path",
+      "case_outcomes_matched": true
+    }
   },
   "cases": [
     {"id":"test_single_task.SingleTaskFixtureTests.test_fixture_creation_rejects_network","expected":"pass","assertion":null,"fingerprint":null},

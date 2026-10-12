@@ -39,7 +39,7 @@ approval and unmet prerequisites fail before acceptance commands or implementati
 
 ### Tests
 
-- [ ] T005 [US1] Add failing context/entry tests in `tests/test_single_task_context.py` for malformed/missing/extra fields, duplicate/multiple/unknown task IDs, fenced-code pseudo-tasks, dirty worktrees, invalid artifact commits/digests, missing/changed approvals, missing/malformed dependency tables, omitted/extra/duplicate rows, duplicate tables, unknown/self IDs, cycles, contradictory rows, context/table mismatches, stale prerequisite evidence and progress-only versus semantic changes; assert preserved bytes and no implicit prerequisite execution (US1/AC1–AC3; SC-002, SC-005).
+- [x] T005 [US1] Add failing context/entry tests in `tests/test_single_task_context.py` for malformed/missing/extra fields, duplicate/multiple/unknown task IDs, fenced-code pseudo-tasks, dirty worktrees, invalid artifact commits/digests, missing/changed approvals, missing/malformed dependency tables, omitted/extra/duplicate rows, duplicate tables, unknown/self IDs, cycles, contradictory rows, context/table mismatches, stale prerequisite evidence and progress-only versus semantic changes; assert preserved bytes and no implicit prerequisite execution (US1/AC1–AC3; SC-002, SC-005).
 
 ### Implementation
 
