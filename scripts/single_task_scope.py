@@ -10,6 +10,13 @@ from pathlib import Path
 from single_task_context import ARTIFACTS, ContextError, canonical_path, validate_context
 
 
+class ScopeError(ContextError):
+    """Safe inventory blocker with only already-validated relative paths."""
+    def __init__(self, paths=()):
+        super().__init__('scope_blocker')
+        self.affected_paths = list(paths)
+
+
 def reject(code='scope_context'):
     raise ContextError(code)
 
@@ -374,7 +381,7 @@ def validate_scope(root, attempt):
                             _normalized_selected(reader(path, current), task_id) != normalized_tasks):
                         reject()
                 elif before != current:
-                    reject()
+                    raise ScopeError([path])
 
         for revision in [head] + git(root, 'rev-list', head, '^' + baseline).stdout.decode('ascii').splitlines():
             validate_plane(_git_inventory(root, revision), lambda path, entry: _blob(root, entry[1]))
@@ -420,5 +427,55 @@ def validate_scope(root, attempt):
                 entries.append({'path': path, 'type': 'regular', 'mode': physical[path][0],
                                 'sha256': hashlib.sha256(content).hexdigest()})
         return validate_manifest({'schema_version': 1, 'entries': entries})
+    except ScopeError:
+        raise
     except (OSError, ValueError, UnicodeError, KeyError, TypeError):
-        reject()
+        raise ScopeError() from None
+
+
+def normalize_tasks_bytes(data, task_id):
+    """Normalize only the selected real checkbox byte; preserve every other byte."""
+    if (type(data) is not bytes or type(task_id) is not str or
+            re.fullmatch('T[0-9]{3}', task_id) is None):
+        reject('scope_blocker')
+    return _normalized_selected(data, task_id)
+
+
+def canonical_manifest_bytes(value):
+    """Serialize an exact manifest as canonical UTF-8, without normalization."""
+    from single_task_context import canonical_bytes
+    return canonical_bytes(validate_manifest(value))
+
+
+def validate_semantic_review(value, attempt, manifest):
+    """Bind a strict positive review to this persisted attempt and current bytes."""
+    import copy
+    fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
+              'content_manifest_digest', 'reviewer_ref', 'evidence_ref', 'approved'}
+    if (type(value) is not dict or set(value) != fields or
+            type(value['schema_version']) is not int or value['schema_version'] != 1 or
+            value['approved'] is not True):
+        reject('scope_blocker')
+    for field in fields - {'schema_version', 'approved'}:
+        if type(value[field]) is not str or not value[field] or '\0' in value[field]:
+            reject('scope_blocker')
+    context = validate_context(attempt['context'])
+    identity = hashlib.sha256(canonical_manifest_bytes(manifest)).hexdigest()
+    if (value['attempt_id'] != attempt['attempt_id'] or
+            value['task_id'] != context['task_id'] or
+            value['context_digest'] != context['approval']['context_digest'] or
+            value['content_manifest_digest'] != identity):
+        reject('scope_blocker')
+    # Ensure references themselves are representable by the versioned UTF-8 format.
+    from single_task_context import canonical_bytes
+    canonical_bytes(value)
+    return copy.deepcopy(value)
+
+
+def prepare_inspection(root, attempt):
+    """Return current identity without running checks or publishing any state."""
+    manifest = validate_scope(root, attempt)
+    return {'attempt_id': attempt['attempt_id'], 'task_id': attempt['context']['task_id'],
+            'context_digest': attempt['context']['approval']['context_digest'],
+            'content_manifest': manifest,
+            'content_manifest_digest': hashlib.sha256(canonical_manifest_bytes(manifest)).hexdigest()}

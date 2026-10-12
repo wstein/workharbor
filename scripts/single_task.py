@@ -24,10 +24,11 @@ TASK = re.compile(r'^(- \[)([ xX])(\] (T\d{3}) .+)$', re.M)
 
 
 class CliError(Exception):
-    def __init__(self, exit_code, code, diagnostic=None):
+    def __init__(self, exit_code, code, diagnostic=None, *, affected_paths=()):
         self.exit_code = exit_code
         self.code = code
         self.diagnostic = diagnostic
+        self.affected_paths = list(affected_paths)
 
 
 MESSAGES = {
@@ -45,7 +46,7 @@ for _code in ('context_schema', 'invalid_json', 'scope_context', 'dirty_baseline
     MESSAGES[_code] = 'Task context rejected; review the approved local inputs and retained evidence.'
 
 
-def response(error=None, state=None, verification='not-run', attempt=None):
+def response(error=None, state=None, verification='not-run', attempt=None, inspection=None):
     # Legacy metadata is deliberately distinct from journal progress/readiness.
     value = dict(schema_version=1, attempt_id=None, mode=None, progress=None,
                  local_verification=verification, owner_identity_authenticated=False,
@@ -59,9 +60,11 @@ def response(error=None, state=None, verification='not-run', attempt=None):
         value['mode'] = ('handoff-only' if attempt['progress'] in
                          ('checkbox-applied', 'completed-awaiting-commit', 'handoff-ready')
                          else attempt['entry_mode'])
+    if inspection is not None:
+        value.update(inspection)
     if error is not None:
         value['errors'] = [dict(code=error.code, message=MESSAGES[error.code],
-                                affected_paths=[], affected_ids=[])]
+                                affected_paths=error.affected_paths, affected_ids=[])]
         if error.diagnostic:
             print(error.diagnostic, file=sys.stderr)
     print(json.dumps(value, sort_keys=True))
@@ -420,7 +423,8 @@ def failure(caught):
     if isinstance(caught, CliError):
         error = caught
     elif isinstance(caught, contexts.ContextError):
-        error = CliError(2, caught.code)
+        error = CliError(3 if caught.code == 'scope_blocker' else 2, caught.code,
+                         affected_paths=getattr(caught, 'affected_paths', ()))
     elif isinstance(caught, backend.StateConflict):
         error = CliError(5, 'concurrent_attempt')
     elif isinstance(caught, backend.InvalidState):
@@ -469,6 +473,16 @@ def main():
                                          approval_context_digest=prepared['context']['approval']['context_digest'])
                     store.append_event(attempt_id, 'entry', {'context_digest': prepared['context']['approval']['context_digest']})
                 response(attempt=store.read_attempt(attempt_id))
+            return 0
+        if parse_error is None and args.command == 'inspect':
+            with backend.open_store(root, require_existing=True) as store:
+                attempt = store.read_attempt(args.attempt)
+                try:
+                    inspection = entry_scope.prepare_inspection(root, attempt)
+                except contexts.ContextError as error:
+                    raise CliError(3, 'scope_blocker',
+                                   affected_paths=getattr(error, 'affected_paths', ())) from None
+                response(attempt=attempt, inspection=inspection)
             return 0
         if parse_error is None and args.command == 'status':
             with backend.open_store(root, require_existing=True) as store:
