@@ -38,6 +38,10 @@ class SymphonyTests(unittest.TestCase):
             self.assertEqual(['open'], config['tracker']['active_states'])
             self.assertEqual(['closed'], config['tracker']['terminal_states'])
             self.assertEqual('$GITHUB_TOKEN', config['tracker']['provider']['token'])
+            self.assertEqual({'granular': {
+                'sandbox_approval': False, 'rules': False, 'mcp_elicitations': False,
+                'request_permissions': False, 'skill_approval': False,
+            }}, config['codex']['approval_policy'])
             self.assertEqual('test-owner/test-repo', config['tracker']['provider']['repo'])
             self.assertEqual(str((base/'issues').resolve()), config['workspace']['root'])
             self.assertIn('git switch -c "work/$key" ' + 'a'*40, config['hooks']['after_create'])
