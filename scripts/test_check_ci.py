@@ -124,7 +124,9 @@ class SourceTests(unittest.TestCase):
                                   (self.root/'scripts/test_check_ci.py').read_text() + '# unapproved marker\n')
         original = self.git('ls-tree', policy, '--', 'scripts/test_check_ci.py')
         self.git('replace', policy, replacement)
-        self.assertNotEqual(original, self.git('ls-tree', policy, '--', 'scripts/test_check_ci.py'))
+        with mock.patch.dict(os.environ):
+            os.environ.pop('GIT_NO_REPLACE_OBJECTS', None)
+            self.assertNotEqual(original, self.git('ls-tree', policy, '--', 'scripts/test_check_ci.py'))
         with self.assertRaises(ValueError):
             ci.git(self.root, 'ls-tree', policy, '--', 'scripts/test_check_ci.py')
         self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
