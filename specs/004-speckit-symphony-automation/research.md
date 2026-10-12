@@ -90,3 +90,22 @@ unknown final writes need operator reconciliation, not continued agent execution
 **Rationale**: lost responses differ from failed writes. Prospective timing includes
 all preparation/approval/check/configuration/handoff repair, with explicit exclusions.
 **Alternatives considered**: new PR on retry, replaced history, or code-only timing.
+
+## Bounded corrections: PR delta, prepublication and content approval
+
+**Decision**: apply the [bounded source contract](bounded-source-contract.md).
+Task head/history scope is distinct from the actual pinned integration tree. Accepted
+base changes are checked against affected protected prerequisites instead of blanket
+whole-tree equality. A reusable scratch fetch/merge/check gate observes both remote
+pins again; publication needs its own final re-read and separate authorization.
+
+**Rationale**: a synthetic merge includes legitimate base work; treating all of it as
+task scope wrongly rejects unrelated updates. Conversely, accepting any merge tree
+without independently checking the head can hide unauthorized proposal changes.
+Content retention needs guard-proved semantics, while exact-candidate review stays
+revision-bound. The current Feature 003 comparator/context API is unavailable; the
+adapter must report that limitation instead of implementing a second guard.
+
+**Alternatives considered**: whole repository digest as approval identity (invalidates
+unrelated base changes); automatic pin refresh (hides drift); proposal-owned checker
+(self-validation); a final ref read presented as atomic publication (unsupported).

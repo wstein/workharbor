@@ -44,7 +44,12 @@ edited/deleted/dismissed/mismatched records at readiness.
 Comparison fields: approved/current raw artifact digests, Feature 003 comparator
 revision, normalized identities/evidence references, result (`identical`,
 `progress-only`, `renewal-required`, `ambiguous`) and safe reason. Only the first two
-retain approval; no broad section/whitespace normalization.
+retain approval; no broad section/whitespace normalization. The bounded adapter
+records approved/current guard-validated contract digests, protected path/mode/raw-byte
+digests and comparator revision. Whole-tree/source identity remains provenance, not
+the content-approval binding; a changed source snapshot must still be recorded and
+revalidated. Missing guard comparison/authentication means execution unavailable.
+See the [bounded contract](bounded-source-contract.md).
 
 ## EffectiveExecution — observed snapshot
 
@@ -56,6 +61,15 @@ fixture result and live observation reference when required. Requested execution
 derives its required set. Unavailable guards/runtime provenance/authentication/safe
 labels/publication block live readiness. Preview is inert, not activation. Revalidate
 at entry and after checks; drift blocks without adopting new pins or baselines.
+
+## PrepublicationPreparation — bounded observation
+
+Trusted accepted checker source; remote/ref identities; pinned base/head; synthetic
+checkout/actual merge tree; raw check exit; final remote-ref observations; sanitized
+PREPARED/BLOCKED result. Retain head scope/content evidence separately from integration
+evidence. A changed ref invalidates preparation; the authorized publisher separately
+rechecks both pins immediately before writing. This record proves no atomic write,
+independent review, approval authentication, PR publication or merge permission.
 
 ## HandoffRecord — separate durable orchestration journal
 

@@ -76,6 +76,20 @@ Changed workflow/runtime/argv requires renewal. Rendering neither starts Symphon
 adds ready nor proves actual sandbox/secret behavior. Dirty retries preserve work and
 use guard recovery; no clean-baseline invention.
 
+## Bounded correction interfaces
+
+The [bounded source contract](../bounded-source-contract.md) specifies the separate
+prepublication CLI, source-context/head-versus-merge gates and content-approval adapter.
+It does not make the future package CLI above available. Source validation may return
+a frozen context or a safe blocker; no synthetic checkout can clear failed head scope.
+Accepted checker code is pinned independently of proposal data. New accepted base
+content requires affected protected-prerequisite revalidation, not blanket tree equality.
+
+The approval adapter calls the guard's comparison port; its default unavailable port
+blocks execution until Feature 003 demonstrates the required APIs. Offline fakes
+prove interface behavior only. An authenticated owner/action/binding port is separate
+from local content comparison. Exact-candidate review and publication remain separate.
+
 ## Guard and tracker ports
 
 Call Feature 003's planned context-based begin/inspect/verify/complete/record-commit/
