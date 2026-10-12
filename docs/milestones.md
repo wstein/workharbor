@@ -47,7 +47,7 @@ not authorize reimplementation if T001 has already been accepted.
 
 Priority: after M2. Scope: [Feature 004](../specs/004-speckit-symphony-automation/tasks.md).
 
-- [x] T001–T018: local automation and fixture evidence accepted in the merged baseline; this is not live verification.
+- [ ] Revalidate T001–T018 local automation and fixture evidence against the final approved guard integration. Their earlier local implementation is accepted in the merged baseline; integrated and live verification remain pending.
 - [ ] Revalidate real Feature 003 guard capabilities and provider/runtime gates against the approved execution revision.
 - [ ] T019: obtain separate live authorization and observe normal completion, interruption and verified resume with no duplicate implementation or PR.
 - [ ] Verify authenticated approval binding, durable publication evidence and final-label reconciliation, preserving unrelated labels and blocking uncertain writes.
