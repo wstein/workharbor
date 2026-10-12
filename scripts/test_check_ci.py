@@ -303,6 +303,15 @@ class SourceTests(unittest.TestCase):
             self.assertEqual([1, str(prefix), True], json.loads(result.stdout))
         self.assertFalse(prefix.exists()); self.assertEqual(before, (sys.pycache_prefix, sys.dont_write_bytecode))
 
+    def test_normal_cli_subprocess_retains_adjacent_module_imports(self):
+        (self.root/'scripts/adjacent_module.py').write_text('VALUE = 7\n')
+        (self.root/'scripts/probe.py').write_text('import adjacent_module\nprint(adjacent_module.VALUE)\n')
+        with ci.isolated_python_cache():
+            self.assertNotIn('PYTHONSAFEPATH', os.environ)
+            result = subprocess.run([sys.executable, str(self.root/'scripts/probe.py')],
+                                    cwd=self.root, capture_output=True, text=True)
+        self.assertEqual((0, '7\n'), (result.returncode, result.stdout))
+
     def test_actual_cli_startup_rejects_hidden_imports_before_execution(self):
         sentinel = Path(self.temporary.name)/'executed'
         (self.root/'scripts/json.py').write_text('open(' + repr(str(sentinel)) + ',"w").write("executed")\n')
