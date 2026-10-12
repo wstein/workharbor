@@ -67,6 +67,44 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(context, ci.source_context(self.root, *context))
         self.assertTrue(ci.approved_documentation(self.root, context))
 
+    def test_protected_base_advance_and_head_scope_changes_block(self):
+        for name in ('scripts/single_task.py', 'specs/003-single-task-entry/tasks.md',
+                     'docs/development/bootstrap-t003.json', 'tests/test_single_task_state.py'):
+            with self.subTest(path=name):
+                self.git('checkout', '--quiet', '--detach', SOURCE)
+                head = self.commit('docs/proposal.md')
+                self.git('checkout', '--quiet', '--detach', SOURCE)
+                base = self.commit(name, (self.root/name).read_text() + '\n')
+                context = self.merge(base, head)
+                self.assertEqual(context, ci.source_context(self.root, *context))
+                self.assertFalse(ci.approved_documentation(self.root, context))
+        self.git('checkout', '--quiet', '--detach', SOURCE)
+        self.commit('scripts/check_ci.py', 'pass\n')
+        self.assertFalse(ci.approved_documentation(self.root))
+
+    def test_out_of_scope_and_unsafe_mode_history_cannot_hide_in_revert(self):
+        for name, mode in (('scripts/single_task.py', None), ('docs/proposal.md', 0o755)):
+            with self.subTest(path=name):
+                self.git('checkout', '--quiet', '--detach', SOURCE)
+                if name == 'docs/proposal.md':
+                    before = self.commit(name)
+                    bad = self.commit(name, mode=mode)
+                else:
+                    before = SOURCE
+                    bad = self.commit(name, 'pass\n')
+                self.git('revert', '--no-edit', bad)
+                self.assertEqual('', self.git('diff', '--name-only', before, 'HEAD'))
+                self.assertFalse(ci.approved_documentation(self.root))
+
+    def test_unknown_accepted_identity_and_missing_objects_block(self):
+        context = self.proposal()
+        with mock.patch.object(ci, 'DOCUMENTATION_POLICY_SOURCE', '0'*40):
+            self.assertFalse(ci.approved_documentation(self.root, context))
+        with self.assertRaises(ValueError):
+            ci.source_context(self.root, *context._replace(head='0'*40))
+        with self.assertRaises(ValueError):
+            ci.source_context(self.root, *context._replace(head='HEAD'))
+
     def test_forged_merge_tree_and_wrong_parent_order_block(self):
         context = self.proposal()
         for parents, tree in (((context.head, context.base), None),
