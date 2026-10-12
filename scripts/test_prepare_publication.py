@@ -111,7 +111,7 @@ class PreparationTests(unittest.TestCase):
                      '-m', 'advance'], cwd=self.repository).decode().strip()
                 def run(commands, argv, cwd, failure, **kwargs):
                     outcome = original(commands, argv, cwd, failure, **kwargs)
-                    if len(argv) > 1 and argv[1].endswith('/scripts/check_ci.py'):
+                    if any(arg.endswith('/scripts/check_ci.py') for arg in argv):
                         self.git('update-ref', ref, advance)
                     return outcome
                 with mock.patch.object(publication.Commands, 'run', run):
