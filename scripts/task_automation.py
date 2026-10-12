@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import task_outcomes as outcomes
 import task_package as package
+import task_handoff as handoff
 
 TRANSPORT_RETRY_LIMIT = 3  # No transport is called by these offline commands.
 
@@ -75,7 +76,7 @@ def error_exit(code):
     return 2
 
 
-def main(argv=None, *, root=None, repository=None):
+def main(argv=None, *, root=None, repository=None, recovery=None, recovery_ports=None):
     """Host may inject repository identity; CLI uses local Git origin metadata."""
     result = envelope()
     try:
@@ -88,6 +89,12 @@ def main(argv=None, *, root=None, repository=None):
             child = commands.add_parser(name)
             child.add_argument('--package', required=True)
             child.add_argument('--offline', action='store_true', required=True)
+        resume = commands.add_parser('resume')
+        resume.add_argument('--package', required=True)
+        resume.add_argument('--attempt', required=True)
+        mode = resume.add_mutually_exclusive_group(required=True)
+        mode.add_argument('--offline', action='store_true')
+        mode.add_argument('--live-config')
         args = parser.parse_args(argv)
         root = Path.cwd() if root is None else Path(root)
         name = args.input if args.command == 'prepare' else args.package
@@ -96,6 +103,29 @@ def main(argv=None, *, root=None, repository=None):
         if args.command != 'prepare' and 'package_digest' not in package.parse_json(data):
             raise package.PackageError('package-digest-missing')
         repository = repository if repository is not None else repository_identity(root)
+        if args.command == 'resume':
+            result.update(package_digest=value['package_digest'],
+                          revision_digest=package.package_revision_digest(value),
+                          requested_mode=value['mode'], effective_mode=value['mode'],
+                          resume_valid=False)
+            if recovery is None:
+                result['blockers'] = [dict(code='recovery-host-unavailable')]
+                code = 3
+            elif (not isinstance(recovery, handoff.Recovery)
+                    or recovery.key.guard_attempt_id != args.attempt
+                    or recovery.key.repository != repository or recovery.journal.root != str(root.resolve())):
+                result['blockers'] = [dict(code='recovery-ownership-conflict')]
+                code = 5
+            else:
+                ports = dict(recovery_ports or {})
+                ports['live'] = bool(args.live_config)
+                observed = recovery.resume(value, ports.pop('snapshot', None),
+                                           ports.pop('evidence', None), **ports)
+                result.update(observed)
+                codes = {item['code'] for item in result['blockers']}
+                code = 0 if result['resume_valid'] else 5 if 'recovery-ownership-conflict' in codes else 3
+            print(package.canonical_json(result).decode('utf-8'))
+            return code
         snapshot = dict(root=root, repository=repository, approved=None, current=None)
         report = package.validate(value, snapshot, None, {}, outcome_validator=outcomes.validate_checks)
         result.update(report)
@@ -123,6 +153,12 @@ def main(argv=None, *, root=None, repository=None):
     except package.PackageError as error:
         result['blockers'] = [dict(code=error.code)]
         code = error_exit(error.code)
+    except handoff.PersistenceFailure:
+        result['blockers'] = [dict(code='recovery-persistence-unavailable')]
+        code = 6
+    except handoff.InvalidState:
+        result['blockers'] = [dict(code='recovery-evidence-invalid')]
+        code = 6
     except Exception:
         result['blockers'] = [dict(code='offline-command-unavailable')]
         code = 2

@@ -346,6 +346,48 @@ class RecoveryTests(unittest.TestCase):
                 self.resume(recovery)
             self.assertEqual(0, journal._db.execute('SELECT count(*) FROM records').fetchone()[0])
 
+    def test_resume_cli_default_blocks_and_injected_fixture_routes_exact_attempt(self):
+        import task_automation as automation
+        import contextlib
+        import io
+        import json
+        (self.root / 'package.json').write_bytes(package.package_bytes(self.value))
+        def invoke(**ports):
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                code = automation.main(['resume', '--package', 'package.json', '--attempt',
+                    self.key.guard_attempt_id, '--offline'], root=self.root,
+                    repository=self.value['repository'], **ports)
+            return code, json.loads(stream.getvalue())
+        code, result = invoke()
+        self.assertEqual(3, code)
+        self.assertFalse(result['resume_valid'])
+        self.assertFalse((self.root / '.symphony').exists())
+        with self.open() as journal:
+            missing = self.recovery(journal, initialize=False)
+            self.assertEqual(6, invoke(recovery=missing, recovery_ports={})[0])
+            self.assertEqual(0, journal._db.execute('SELECT count(*) FROM records').fetchone()[0])
+            recovery = self.recovery(journal)
+            code, result = invoke(recovery=recovery, recovery_ports=dict(
+                snapshot={'root': self.root, 'head': self.commit}, evidence={}, guard=self.guard,
+                readiness=self.readiness))
+            self.assertEqual(0, code, result)
+            self.assertEqual(self.commit, result['implementation_commit'])
+            self.assertFalse(result['execution_eligible'])
+            other = handoff.Recovery(journal, handoff.HandoffKey(self.key.repository, '17',
+                self.key.package_digest, 'other'), self.owner, ExclusiveOwnership())
+            self.assertEqual(5, invoke(recovery=other, recovery_ports={})[0])
+            other.key = handoff.HandoffKey('other/repository', '17', self.key.package_digest,
+                                           self.key.guard_attempt_id)
+            self.assertEqual(5, invoke(recovery=other, recovery_ports={})[0])
+            with patch.object(journal, 'root', str(self.root / 'other')):
+                self.assertEqual(5, invoke(recovery=recovery, recovery_ports={})[0])
+            for failure in (handoff.PersistenceFailure('sensitive-output'),
+                            handoff.InvalidState('sensitive-output')):
+                with patch.object(recovery, 'resume', side_effect=failure):
+                    code, result = invoke(recovery=recovery, recovery_ports={})
+                self.assertEqual(6, code)
+                self.assertNotIn('sensitive-output', str(result))
 
 
 class JournalTests(unittest.TestCase):
