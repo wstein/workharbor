@@ -25,8 +25,15 @@ jobs:
           if not re.fullmatch('[0-9a-f]{40}', pin):
               raise SystemExit('Configure the independently reviewed WORKHARBOR_CI_POLICY_SOURCE pin.')
           root = Path(os.environ['GITHUB_WORKSPACE']) / 'integration'
+          for key in tuple(os.environ):
+              if key.startswith('GIT_'):
+                  os.environ.pop(key)
+          os.environ['GIT_NO_REPLACE_OBJECTS'] = '1'
           def git(*args):
-              return subprocess.check_output(['git', *args], cwd=root)
+              return subprocess.check_output(['git', '--no-replace-objects', *args], cwd=root)
+          graft = Path(os.fsdecode(git('rev-parse', '--path-format=absolute', '--git-path', 'info/grafts').strip()))
+          if graft.exists() or graft.is_symlink() or git('for-each-ref', '--format=%(refname)', 'refs/replace/'):
+              raise SystemExit('Git replacement or graft metadata is unsupported.')
           try:
               kind = git('cat-file', '-t', pin)
           except subprocess.CalledProcessError:

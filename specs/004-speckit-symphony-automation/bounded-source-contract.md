@@ -196,3 +196,7 @@ ordered history, and the complete source, head and actual integration trees matc
 GitHub metadata must name main; local preparation uses the trusted canonical-main
 guard. This narrow path does not claim the old base has current prerequisites;
 all protected source/head/integration content and execution checks still apply.
+
+Policy identities use raw Git objects throughout materialization, comparison and
+check execution. Replacement refs and graft metadata are rejected before trusted
+identity/history reads; inherited Git substitution settings cannot redefine a pin.

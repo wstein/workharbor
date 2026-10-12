@@ -37,7 +37,7 @@ class Commands:
         self.env = dict(PATH=os.environ.get('PATH', os.defpath),
                         HOME=str(temporary), TMPDIR=str(temporary),
                         LC_ALL='C', PYTHONDONTWRITEBYTECODE='1',
-                        GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+                        GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_NO_REPLACE_OBJECTS='1',
                         GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='/usr/bin/false',
                         GIT_ALLOW_PROTOCOL='file:https',
                         GIT_AUTHOR_NAME='Prepublication',
@@ -72,7 +72,16 @@ class Commands:
             return process.returncode, output
 
     def git(self, cwd, *argv):
-        return self.run(['git', *argv], cwd, 'git_failed')[1].decode('ascii')
+        command = ['git', '--no-replace-objects']
+        code, path = self.run(command + ['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+                              cwd, 'git_failed', checked=False)
+        if not code:
+            graft = Path(os.fsdecode(path.strip()))
+            replacements = self.run(command + ['for-each-ref', '--format=%(refname)', 'refs/replace/'],
+                                    cwd, 'git_failed')[1]
+            if graft.exists() or graft.is_symlink() or replacements:
+                raise Blocked('git_object_substitution')
+        return self.run(command + list(argv), cwd, 'git_failed')[1].decode('ascii')
 
 
 def repository_location(value):

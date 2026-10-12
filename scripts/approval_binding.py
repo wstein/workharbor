@@ -122,8 +122,22 @@ def _git(root, *args):
     environment = {key: value for key, value in os.environ.items()
                    if not key.startswith('GIT_')}
     environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
-                       GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='', GIT_OPTIONAL_LOCKS='0')
-    run = subprocess.run(['git', '-c', 'core.fsmonitor=false', *args],
+                       GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='', GIT_OPTIONAL_LOCKS='0',
+                       GIT_NO_REPLACE_OBJECTS='1')
+    command = ['git', '--no-replace-objects', '-c', 'core.fsmonitor=false']
+    for probe in (['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+                  ['for-each-ref', '--format=%(refname)', 'refs/replace/']):
+        result = subprocess.run(command + probe, cwd=root, capture_output=True,
+                                env=environment, timeout=10)
+        if result.returncode:
+            raise BindingBlocked('source-object-unavailable')
+        if probe[0] == 'rev-parse':
+            graft = Path(os.fsdecode(result.stdout.strip()))
+            if graft.exists() or graft.is_symlink():
+                raise BindingBlocked('git-object-substitution')
+        elif result.stdout:
+            raise BindingBlocked('git-object-substitution')
+    run = subprocess.run(command + list(args),
                          cwd=root, capture_output=True, env=environment, timeout=10)
     if run.returncode:
         raise BindingBlocked('source-object-unavailable')

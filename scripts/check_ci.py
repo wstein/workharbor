@@ -329,8 +329,8 @@ def isolated_python_cache():
     """Keep cache reads and generated files outside the candidate checkout."""
     with tempfile.TemporaryDirectory(prefix='workharbor-ci-cache-') as cache:
         names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1',
-                 'PYTHONNOUSERSITE': '1', 'PYTHONSAFEPATH': '1'}
-        previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON')}
+                 'PYTHONNOUSERSITE': '1', 'PYTHONSAFEPATH': '1', 'GIT_NO_REPLACE_OBJECTS': '1'}
+        previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON') or name == 'GIT_NO_REPLACE_OBJECTS'}
         prefix, no_write = sys.pycache_prefix, sys.dont_write_bytecode
         for name in previous:
             os.environ.pop(name)
@@ -341,7 +341,7 @@ def isolated_python_cache():
         finally:
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, no_write
             for name in tuple(os.environ):
-                if name.startswith('PYTHON'):
+                if name.startswith('PYTHON') or name == 'GIT_NO_REPLACE_OBJECTS':
                     os.environ.pop(name)
             os.environ.update(previous)
 
@@ -494,8 +494,9 @@ def git(root, *args):
     # Repository config and attributes are executable inputs. Do not trigger
     # clean/process filters, fsmonitor, custom merge drivers or external diffs.
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
-    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0')
-    command = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
+    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0',
+               GIT_NO_REPLACE_OBJECTS='1')
+    command = ['git', '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
                '-c', 'core.attributesFile=' + os.devnull, '-c', 'submodule.recurse=false']
     config = subprocess.run(command + ['config', '--null', '--list', '--no-includes'],
                             cwd=root, env=env, capture_output=True, check=True).stdout
@@ -506,6 +507,12 @@ def git(root, *args):
                 or (key.startswith(b'diff.') and key.endswith((b'.command', b'.textconv')))
                 or key == b'diff.external'):
             raise ValueError('Executable or external Git configuration is unsupported')
+    graft = subprocess.run(command + ['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+                           cwd=root, env=env, capture_output=True, check=True).stdout.strip()
+    replacements = subprocess.run(command + ['for-each-ref', '--format=%(refname)', 'refs/replace/'],
+                                  cwd=root, env=env, capture_output=True, check=True).stdout
+    if Path(os.fsdecode(graft)).exists() or Path(os.fsdecode(graft)).is_symlink() or replacements:
+        raise ValueError('Git replacement or graft metadata is unsupported')
     if args and args[0] in ('diff', 'diff-tree'):
         args = (args[0], '--no-ext-diff', '--no-textconv', *args[1:])
     return subprocess.run(command + list(args), cwd=root, env=env,
