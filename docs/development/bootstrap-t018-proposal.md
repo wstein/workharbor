@@ -235,3 +235,30 @@ temporary-file fsync; reopen preserves the private intent-owned file and recover
 consumes it through atomic replacement with both directories flushed. Old events
 and attempt identity remain intact. T022 entry and T023 CLI/handoff remain pending;
 original test-authoring acceptance above is unchanged. No full-suite or live claim.
+
+## T023 implementation and final-qualification checkpoint
+
+Reviewed source `238fff8fa65c6e4e5b0b98e5f2bbacdea25dec9b` wires actual
+record-commit, resume and authorized rework under the worktree lock. First-draft
+public measurements passed 60 state/recovery, 116 context/rework, 65 retained CLI
+and 12 direct CLI cases. They precede the fixed readiness race and have no stable
+source-snapshot qualification; final combined acceptance remains pending.
+Actual race/ready-record controls passed 2/2 after the fix; the post-completion
+safe-argument control passed 1/1. Readiness now retains the exact fresh acceptance
+sequence/digest/checked HEAD, independently revalidated after binding inspection.
+- `/private/tmp/workharbor-003-t023-recovery-first.log`: SHA-256 `725c06a90e0dd692eca5c188734373662ba35eacdf0189c6db29887dd5dfc0c3`.
+- `/private/tmp/workharbor-003-t023-context-first.log`: SHA-256 `2cce52fa852a3dc2b23166c27809c4287abb00c0f480929e9b814fe71d84fd3c`.
+- `/private/tmp/workharbor-003-t023-retained-first.log`: SHA-256 `55184e7281c310b9fddf1a64ad89fe107a33d8e85f3a90b32e1a3cab3f6dfff4`.
+- `/private/tmp/workharbor-003-t023-direct-cli-behavior.log`: SHA-256 `f748ab6419f7411f8062cdcf26d97c25776b29c2dbbb96db7f58c54bb1832fc6`.
+- `/private/tmp/workharbor-003-t023-handoff-green.log`: SHA-256 `179303feba2227e1a2df8a19fbee0e9e5c0c7229173a2e1592bac25a4a11e12b`.
+- `/private/tmp/workharbor-003-t023-argument-green.log`: SHA-256 `bea9f3973c75aa2973820253d2f692aa91bd96f077eae6f5393c90d5ee783a7f`.
+- `/private/tmp/workharbor-003-t023-policy-inventory.json`: SHA-256 `ea82e48c24aeced75845869a5a7085ce0d859bc102b256a5f6899cf05775f144`.
+
+The legacy frozen `verify_t004_cli.py` wrapper was also invoked directly and
+correctly refused changed frozen inputs (exit 1); its historical seal is not current
+CI authority. The actual retained direct class passed through unittest discovery.
+The inventory proposal preserves 377 prior required IDs and adds all 108 new owning
+IDs (485 required; 791 total discovered), removing only the two now-passing T023
+body assertions. No classifier change, new exception, skip or owner-adoption claim.
+Original approval matrices and evidence above remain unchanged. T023's task marker
+will follow final combined acceptance; T024+ and live execution remain outside scope.

@@ -1,7 +1,7 @@
 # 0007: Explicit repository CI acceptance
 
 Date: 2026-10-12
-Status: Proposed; requires owner review and merge
+Status: Accepted by owner merge; US3 inventory extension proposed for owner review and merge
 Supersedes: the historical CI acceptance policy under [ADR 0005](0005-development.md),
 not its Feature 003 task-entry or ownership rules
 
@@ -39,17 +39,26 @@ The direct T004 class contributed four and remains in canonical collection.
 The [US1 checkpoint record](../development/feature003-context-matrix.json)
 preserves its exact outcomes and original test-authoring approval provenance.
 
-The US2 checkpoint proposes removing 17 of those records after actual reviewed
+Owner-merged PR #53 adopted the US2 checkpoint, removing 17 records after actual reviewed
 T013–T017 implementation and regression migration. It preserves all 232 required
 IDs and adds 145 scope, acceptance, completion and public CLI cases (377 total).
 Exactly two measured same-attempt commit-binding/interrupted-resume assertions
-remain pending T023, with exact messages and removal conditions. The
+then remained pending T023, with exact messages and removal conditions. The
 [US2 checkpoint record](../development/feature003-acceptance-matrix.json)
 retains raw measurements and original T012 approval records. Ordinary owner PR
-review and merge adopt this proposal; no classifier, skip or waiver changes.
+review and merge adopted that proposal; no classifier, skip or waiver changes.
+
+The US3 checkpoint proposes removing the final two retained outcomes after actual
+T020–T023 implementation and unchanged retry assertions pass. It preserves all
+377 required IDs and adds 108 recovery/rework/commit-binding owning controls
+(485 total). The original owner-approved T018/T019 test-authoring matrices remain
+historical evidence, including their then-missing public-command boundaries.
+Final combined acceptance must pass every discovered test with no retained failures;
+focused first-draft measurements are superseded-source evidence, not final source
+qualification. Ordinary owner PR review and merge adopt the inventory proposal.
 
 `make check` and CI run the same qualified acceptance policy and repository/static
-checks. Raw unittest results remain red: the initial historical direct baseline
+checks. Historical raw unittest results remained red: the initial direct baseline
 had 41 cases, 36 passes and five assertions; US1 focused/direct runs had 155 cases,
 136 passes and 19 assertions. US2 focused collection observed 276 cases, 274 passes
 and two assertions, with zero errors/skips/subtests; the direct 24 cases passed.
