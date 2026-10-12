@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -28,7 +29,7 @@ class PackageOutcomeTests(unittest.TestCase):
         self.source.write_text('import unittest\nclass Probe(unittest.TestCase):\n    def test_case(self): pass\n')
 
     def check(self, *, cases=None, raw_exit=0, deadline=10):
-        return {'id': 'fixture-check', 'argv': [sys.executable, '-m', 'unittest', 'discover',
+        return {'id': 'fixture-check', 'argv': [sys.executable, '-I', '-B', '-m', 'unittest', 'discover',
                 '-s', 'tests', '-p', 'test_*.py', '-v'], 'deadline_seconds': deadline,
                 'tool_revision': outcomes.tool_revision(), 'input_revision': outcomes.snapshot(self.root),
                 'cases': cases or [{'id': 'test_probe.Probe.test_case', 'expected': 'pass', 'fingerprint': None}],
@@ -94,6 +95,32 @@ class PackageOutcomeTests(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertEqual(4, result.returncode)
             self.assertEqual('invalid_or_unavailable_outcomes', json.loads(result.stdout)['blocker'])
+
+    def test_interpreter_alias_or_missing_isolation_flags_refused_before_launch(self):
+        check = self.check()
+        for argv in (["python3", *check['argv'][1:]], [sys.executable, *check['argv'][3:]],
+                     [sys.executable, '-B', *check['argv'][3:]], [sys.executable, '-I', *check['argv'][3:]]):
+            candidate = dict(check, argv=argv)
+            with self.subTest(argv=argv), mock.patch.object(outcomes.subprocess, 'Popen') as launch:
+                self.assertFalse(self.run_check(candidate)['accepted'])
+                launch.assert_not_called()
+        self.source.write_text('import unittest,sys\nclass Probe(unittest.TestCase):\n'
+                               '    def test_case(self):\n        self.assertTrue(sys.flags.isolated)\n'
+                               '        self.assertTrue(sys.dont_write_bytecode)\n'
+                               '        self.assertEqual(sys.argv[1], "discover")\n')
+        self.assertTrue(self.run_check(self.check())['accepted'])
+
+    def test_successful_parent_cannot_leave_delayed_mutating_descendant(self):
+        sentinel = self.root/'late-mutation'
+        child = 'import time; from pathlib import Path; time.sleep(0.5); Path(' + repr(str(sentinel)) + ').write_text("late")'
+        self.source.write_text('import unittest,subprocess,sys\nclass Probe(unittest.TestCase):\n'
+                               '    def test_case(self): subprocess.Popen([sys.executable,"-I","-B","-c",' + repr(child) + '])\n')
+        result = self.run_check(self.check(deadline=0.2))
+        self.assertFalse(result['accepted'])
+        self.assertEqual('unfinished_children', result['checks'][0]['blocker'])
+        self.assertEqual(0, result['checks'][0]['raw_exit'])
+        time.sleep(0.6)
+        self.assertFalse(sentinel.exists())
 
     def test_assertions_need_distinct_reviewed_matrix_and_exact_fingerprint(self):
         self.source.write_text('import unittest\nclass Probe(unittest.TestCase):\n    def test_case(self): self.fail("reviewed")\n')
