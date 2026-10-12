@@ -426,3 +426,128 @@ def open_store(worktree_root, *, preflight=None, require_existing=False):
             connection.close()
         for fd in reversed(descriptors):
             os.close(fd)
+
+
+def _validated_completion_acceptance(root, store, attempt):
+    """Read a durable acceptance record and independently revalidate its bindings."""
+    import single_task_scope as scope
+    try:
+        if attempt['progress'] != 'acceptance-recorded':
+            raise InvalidState('Fresh durable acceptance is required before completion')
+        events = [event for event in store.read_events(attempt['attempt_id'])
+                  if event['kind'] == 'acceptance']
+        if not events:
+            raise InvalidState('Durable acceptance evidence is missing')
+        event = events[-1]
+        value = event['payload']
+        fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
+                  'content_manifest', 'content_manifest_digest', 'semantic_review',
+                  'semantic_review_digest', 'verification_head', 'checks'}
+        if (type(value) is not dict or set(value) != fields or
+                type(value['schema_version']) is not int or value['schema_version'] != 1):
+            raise InvalidState('Invalid durable acceptance evidence')
+        inspection = scope.prepare_inspection(root, attempt)
+        scope.validate_manifest(value['content_manifest'])
+        context = attempt['context']
+        review = scope.validate_semantic_review(value['semantic_review'], attempt,
+                                               inspection['content_manifest'])
+        review_digest = hashlib.sha256(_canonical(review)).hexdigest()
+        expected_checks = [{'schema_version': 1, 'id': check['id'], 'argv': check['argv'],
+                            'cwd': check['cwd'], 'expected_exit': 0, 'exit': 0,
+                            'category': 'passed', 'timed_out': False,
+                            'context_digest': inspection['context_digest'],
+                            'content_manifest_digest': inspection['content_manifest_digest'],
+                            'semantic_review_digest': review_digest}
+                           for check in context['checks']]
+        if (value['attempt_id'] != attempt['attempt_id'] or
+                value['task_id'] != context['task_id'] or
+                value['context_digest'] != inspection['context_digest'] or
+                value['content_manifest'] != inspection['content_manifest'] or
+                value['content_manifest_digest'] != inspection['content_manifest_digest'] or
+                value['semantic_review_digest'] != review_digest or
+                value['verification_head'] != scope.git(root, 'rev-parse', 'HEAD').stdout.strip().decode('ascii') or
+                _canonical(value['checks']) != _canonical(expected_checks) or
+                attempt['approval_context_digest'] != inspection['context_digest'] or
+                attempt['entry_mode'] != context['mode']):
+            raise InvalidState('Durable acceptance no longer matches current content')
+        return event
+    except (ValueError, KeyError, TypeError, UnicodeError):
+        raise InvalidState('Invalid or stale durable acceptance evidence') from None
+
+
+def publish_completion(worktree_root, store, attempt_id):
+    """Seal durable exact intent, then publish only this task's marker under lock.
+
+    Interrupted prepared states remain evidence for explicit T021 recovery; this
+    operation never reconstructs intent or claims a bound implementation commit.
+    """
+    import single_task_scope as scope
+    import uuid
+    root = Path(worktree_root)
+    parent_fd = None
+    temporary = None
+    try:
+        attempt = store.read_attempt(attempt_id)
+        event = _validated_completion_acceptance(root, store, attempt)
+        evidence = event['payload']
+        context = attempt['context']
+        tasks_path = f"specs/{context['feature']}/tasks.md"
+        descriptor = scope._path_fd(root, tasks_path)
+        with os.fdopen(descriptor, 'rb') as stream:
+            before = stream.read()
+            mode = stat.S_IMODE(os.fstat(stream.fileno()).st_mode)
+        if before != attempt['tasks_bytes']:
+            raise InvalidState('Completion requires exact immutable entry task bytes')
+        selected = scope.task_lines(before).get(context['task_id'])
+        if selected is None or selected['checked'] != (attempt['entry_mode'] == 'owner-authorized rework'):
+            raise InvalidState('Selected entry marker does not match immutable mode')
+        offset = selected['marker_offset']
+        after = (before if selected['checked'] else before[:offset] + b'x' + before[offset + 1:])
+        intent = {'schema_version': 1, 'attempt_id': attempt_id, 'tasks_path': tasks_path,
+                  'tasks_before_hex': before.hex(), 'tasks_after_hex': after.hex(),
+                  'tasks_before_sha256': hashlib.sha256(before).hexdigest(),
+                  'tasks_after_sha256': hashlib.sha256(after).hexdigest(), 'file_mode': mode,
+                  'acceptance_sequence': event['sequence'], 'acceptance_digest': event['payload_digest'],
+                  'context_digest': evidence['context_digest'],
+                  'content_manifest': evidence['content_manifest'],
+                  'content_manifest_digest': evidence['content_manifest_digest'],
+                  'semantic_review_digest': evidence['semantic_review_digest']}
+        intent_digest = hashlib.sha256(_canonical(intent)).hexdigest()
+        store.append_event(attempt_id, 'completion-intent', intent, progress='completion-prepared')
+        parent, filename = tasks_path.rsplit('/', 1)
+        parent_fd = scope._path_fd(root, parent, directory=True)
+        candidate = '.single-task-' + uuid.uuid4().hex
+        descriptor = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             mode, dir_fd=parent_fd)
+        temporary = candidate
+        with os.fdopen(descriptor, 'wb') as stream:
+            os.fchmod(stream.fileno(), mode)
+            stream.write(after)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if scope.read_regular(root, tasks_path) != before:
+            raise InvalidState('Task bytes changed after durable completion intent')
+        os.replace(temporary, filename, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        temporary = None
+        os.fsync(parent_fd)
+        if scope.read_regular(root, tasks_path) != after:
+            raise InvalidState('Published marker does not match durable completion intent')
+        store.append_event(attempt_id, 'checkbox-applied',
+                           {'schema_version': 1, 'intent_digest': intent_digest,
+                            'tasks_sha256': intent['tasks_after_sha256']}, progress='checkbox-applied')
+        store.append_event(attempt_id, 'completion',
+                           {'schema_version': 1, 'intent_digest': intent_digest,
+                            'content_manifest_digest': intent['content_manifest_digest']},
+                           progress='completed-awaiting-commit')
+        return store.read_attempt(attempt_id)
+    except OSError as error:
+        raise PersistenceFailure('Completion publication durability unavailable; retain intent') from error
+    except (ValueError, KeyError, TypeError, UnicodeError):
+        raise InvalidState('Invalid completion evidence; retain intent') from None
+    finally:
+        if parent_fd is not None:
+            try:
+                if temporary is not None:
+                    os.unlink(temporary, dir_fd=parent_fd)
+            finally:
+                os.close(parent_fd)
