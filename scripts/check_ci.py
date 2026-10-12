@@ -54,7 +54,17 @@ OPERATOR_TOOLS = {
     'scripts/approval_binding.py': 'scripts/test_approval_binding.py',
 }
 OPERATOR_POLICY_PATHS = {'scripts/check_ci.py', '.github/workflows/check.yml', 'AGENTS.md', 'WORKFLOW.md'}
-OPERATOR_PATHS = set(OPERATOR_TOOLS) | set(OPERATOR_TOOLS.values()) | OPERATOR_POLICY_PATHS
+OPERATOR_CONTRACT_PATHS = {
+    '.specify/memory/constitution.md',
+    'docs/development/harness.md',
+    'docs/development/prepublication.md',
+    'docs/development/approval-binding.md',
+    'specs/004-speckit-symphony-automation/bounded-source-contract.md',
+    'specs/004-speckit-symphony-automation/contracts/cli.md',
+    'specs/004-speckit-symphony-automation/data-model.md',
+}
+OPERATOR_PATHS = (set(OPERATOR_TOOLS) | set(OPERATOR_TOOLS.values())
+                  | OPERATOR_POLICY_PATHS | OPERATOR_CONTRACT_PATHS)
 
 
 class SourceContext(NamedTuple):
@@ -150,7 +160,7 @@ def source_context(root, event=None, base=None, head=None, checkout=None):
 
 def documentation_path(name):
     path = Path(name)
-    protected = set(PINS) | set(T004_PREP_PINS) | set(DOC_PINS) | {
+    protected = set(PINS) | set(T004_PREP_PINS) | set(DOC_PINS) | OPERATOR_CONTRACT_PATHS | {
         'docs/development/bootstrap-t002.md', 'docs/development/bootstrap-t003.md'}
     return (name not in protected and not name.startswith((
         'specs/001-workspace-lifecycle/', 'specs/002-symphony-doc-smoke/',
@@ -158,10 +168,33 @@ def documentation_path(name):
         path.parts[0] in ('docs', 'specs', 'contracts') and path.suffix in ('.md', '.json'))))
 
 
-def history_scope(root, baseline, revision, allowed, operator=False):
+def linear_commits(root, baseline, revision):
+    """Reject ambiguous policy transitions instead of guessing a merge ordering."""
+    git(root, 'merge-base', '--is-ancestor', baseline, revision)
+    commits = git(root, 'rev-list', '--reverse', baseline + '..' + revision).decode().splitlines()
+    previous = baseline
+    for commit in commits:
+        parents = git(root, 'rev-list', '--parents', '-n', '1', commit).decode().split()[1:]
+        if parents != [previous]:
+            raise ValueError('Policy history must be linear')
+        previous = commit
+    return commits
+
+
+def policy_manifest(root, revision):
+    """Raw tracked bytes/types/modes and inventory, solely from Git objects."""
+    entries = git(root, 'ls-tree', '-z', revision, '--', *sorted(OPERATOR_PATHS))
+    inventory = tuple(entry for entry in git(root, 'ls-tree', '-r', '-z', revision, '--', 'scripts').split(b'\0')
+                      if entry and re.fullmatch(rb'scripts/test_[^/]+\.py', entry.split(b'\t', 1)[1]))
+    return entries, inventory
+
+
+def history_scope(root, baseline, revision, allowed, operator=False, policy_states=None):
     """Inspect every changed version, so a revert cannot erase scope/type drift."""
     git(root, 'merge-base', '--is-ancestor', baseline, revision)
-    commits = git(root, 'rev-list', baseline + '..' + revision).decode().splitlines()
+    commits = (linear_commits(root, baseline, revision) if policy_states is not None else
+               git(root, 'rev-list', baseline + '..' + revision).decode().splitlines())
+    state_index = 0
     for commit in commits:
         changed = git(root, 'diff-tree', '--root', '-m', '-r', '--no-commit-id',
                       '--no-renames', '--name-only', '-z', commit, '--')
@@ -172,6 +205,13 @@ def history_scope(root, baseline, revision, allowed, operator=False):
             entry = git(root, 'ls-tree', commit, '--', name)
             modes = (b'100644 blob ', b'100755 blob ') if operator and name in OPERATOR_TOOLS else (b'100644 blob ',)
             if entry and not entry.startswith(modes):
+                return False
+        if policy_states is not None:
+            # Only reviewed forward transitions may be collapsed by a squash.
+            # Reverts, mixed states and invented intermediate content fail closed.
+            try:
+                state_index = policy_states.index(policy_manifest(root, commit), state_index)
+            except ValueError:
                 return False
     return True
 
@@ -227,28 +267,25 @@ def approved_operator_tooling(root, context, policy_source):
                 or git(root, 'show', policy_source + ':scripts/check_ci.py') != policy_file.read_bytes()):
             return False
         context = source_context(root, *context) if context else source_context(root)
-        git(root, 'merge-base', '--is-ancestor', policy_source, context.head)
         base = context.base if context.event == 'pull_request' else DOCUMENTATION_POLICY_SOURCE
         allowed = lambda name: name in OPERATOR_PATHS or documentation_path(name)
-        try:
-            git(root, 'merge-base', '--is-ancestor', policy_source, base)
-            adopted_base = True
-        except subprocess.CalledProcessError:
-            adopted_base = False
-        base_anchor = policy_source if adopted_base else DOCUMENTATION_POLICY_SOURCE
-        if (not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
-                or not history_scope(root, base_anchor, base, documentation_path)
-                or not history_scope(root, policy_source, context.head, documentation_path)
+        # The external source authenticates content and ordered reviewed states;
+        # candidate commit identities never authenticate or refresh that approval.
+        states = [policy_manifest(root, DOCUMENTATION_POLICY_SOURCE)]
+        for commit in linear_commits(root, DOCUMENTATION_POLICY_SOURCE, policy_source):
+            state = policy_manifest(root, commit)
+            if state != states[-1]:
+                states.append(state)
+        fork = git(root, 'merge-base', '--all', base, context.head).decode().splitlines()
+        if (len(fork) != 1
+                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, policy_source, allowed, operator=True)
+                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, base, allowed, operator=True, policy_states=states)
+                or not history_scope(root, DOCUMENTATION_POLICY_SOURCE, context.head, allowed, operator=True, policy_states=states)
                 or not protected_baseline(root, (policy_source, base, context.head, context.checkout))):
             return False
-        # All executable and authority inputs must be exactly the reviewed source.
-        # Independent base docs are allowed; changed operator code needs a new pin.
-        for name in sorted(OPERATOR_PATHS):
-            expected = git(root, 'ls-tree', policy_source, '--', name)
-            revisions = (base, context.head, context.checkout) if adopted_base else (context.head, context.checkout)
-            for revision in revisions:
-                if git(root, 'ls-tree', revision, '--', name) != expected:
-                    return False
+        if any(policy_manifest(root, revision) != states[-1]
+               for revision in (context.head, context.checkout)):
+            return False
         tests = {path.relative_to(root).as_posix() for path in root.glob('scripts/test_*.py')}
         required = {test for tool, test in OPERATOR_TOOLS.items() if (root/tool).is_file()}
         return tests == required and bool(tests)

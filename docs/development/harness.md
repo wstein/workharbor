@@ -95,6 +95,16 @@ the coordinator must verify those separately. The GitHub workflow loads its chec
 variable `WORKHARBOR_CI_POLICY_SOURCE`, with credentials excluded from the checkout.
 Missing, malformed or unavailable pins block; there is no proposal-head default.
 The workflow itself must match the externally adopted policy source exactly.
+The adopted revision remains the owner-approved content anchor after a rebase or
+squash. The checker derives exact file/type/mode and test inventory bindings from
+that trusted Git object, including its operator contracts. It permits only the
+same ordered reviewed policy states or a forward collapse of those states; it
+rejects invented, mixed, reversed or ambiguous merge history. Head and integration
+must match the final manifest; a base may contain an earlier reviewed state plus
+unrelated documentation. Frozen baseline inputs and all source/checkout/merge
+checks remain required. Changed policy, scope, checks or dependencies require
+owner approval of a new content anchor. A new candidate SHA still requires fresh
+independent review and checks, without automatically changing the adopted pin.
 After exact independent review and authorized publication, the owner can configure
 that immutable reviewed revision with:
 
