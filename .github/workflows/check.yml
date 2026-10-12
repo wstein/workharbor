@@ -31,8 +31,9 @@ jobs:
           os.environ['GIT_NO_REPLACE_OBJECTS'] = '1'
           def git(*args):
               return subprocess.check_output(['git', '--no-replace-objects', *args], cwd=root)
-          graft = Path(os.fsdecode(git('rev-parse', '--path-format=absolute', '--git-path', 'info/grafts').strip()))
-          if graft.exists() or graft.is_symlink() or git('for-each-ref', '--format=%(refname)', 'refs/replace/'):
+          info = Path(os.fsdecode(git('rev-parse', '--path-format=absolute', '--git-common-dir').strip())) / 'info'
+          graft = info / 'grafts'
+          if info.is_symlink() or graft.exists() or graft.is_symlink() or git('for-each-ref', '--format=%(refname)', 'refs/replace/'):
               raise SystemExit('Git replacement or graft metadata is unsupported.')
           try:
               kind = git('cat-file', '-t', pin)

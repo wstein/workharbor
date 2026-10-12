@@ -507,11 +507,13 @@ def git(root, *args):
                 or (key.startswith(b'diff.') and key.endswith((b'.command', b'.textconv')))
                 or key == b'diff.external'):
             raise ValueError('Executable or external Git configuration is unsupported')
-    graft = subprocess.run(command + ['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+    common = subprocess.run(command + ['rev-parse', '--path-format=absolute', '--git-common-dir'],
                            cwd=root, env=env, capture_output=True, check=True).stdout.strip()
     replacements = subprocess.run(command + ['for-each-ref', '--format=%(refname)', 'refs/replace/'],
                                   cwd=root, env=env, capture_output=True, check=True).stdout
-    if Path(os.fsdecode(graft)).exists() or Path(os.fsdecode(graft)).is_symlink() or replacements:
+    info = Path(os.fsdecode(common))/'info'
+    graft = info/'grafts'
+    if info.is_symlink() or graft.exists() or graft.is_symlink() or replacements:
         raise ValueError('Git replacement or graft metadata is unsupported')
     if args and args[0] in ('diff', 'diff-tree'):
         args = (args[0], '--no-ext-diff', '--no-textconv', *args[1:])

@@ -125,15 +125,16 @@ def _git(root, *args):
                        GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='', GIT_OPTIONAL_LOCKS='0',
                        GIT_NO_REPLACE_OBJECTS='1')
     command = ['git', '--no-replace-objects', '-c', 'core.fsmonitor=false']
-    for probe in (['rev-parse', '--path-format=absolute', '--git-path', 'info/grafts'],
+    for probe in (['rev-parse', '--path-format=absolute', '--git-common-dir'],
                   ['for-each-ref', '--format=%(refname)', 'refs/replace/']):
         result = subprocess.run(command + probe, cwd=root, capture_output=True,
                                 env=environment, timeout=10)
         if result.returncode:
             raise BindingBlocked('source-object-unavailable')
         if probe[0] == 'rev-parse':
-            graft = Path(os.fsdecode(result.stdout.strip()))
-            if graft.exists() or graft.is_symlink():
+            info = Path(os.fsdecode(result.stdout.strip()))/'info'
+            graft = info/'grafts'
+            if info.is_symlink() or graft.exists() or graft.is_symlink():
                 raise BindingBlocked('git-object-substitution')
         elif result.stdout:
             raise BindingBlocked('git-object-substitution')
