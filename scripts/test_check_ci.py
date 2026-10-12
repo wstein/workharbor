@@ -175,6 +175,22 @@ class SourceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     ci.source_context(self.root, *wrong)
 
+    def test_invalid_implicit_event_cannot_fall_through_other_green_modes(self):
+        context = self.proposal()
+        path = Path(self.temporary.name)/'event.json'
+        path.write_text('{}')
+        for event in ('pull_request', 'workflow_dispatch', ''):
+            with self.subTest(event=event), mock.patch.dict(os.environ, {
+                    'GITHUB_EVENT_NAME': event, 'GITHUB_SHA': context.head,
+                    'GITHUB_EVENT_PATH': str(path)}), \
+                    mock.patch.object(ci, 'run', return_value=0) as run, \
+                    mock.patch.object(ci, 'strict_suite', return_value=True) as strict, \
+                    mock.patch.object(ci, 'approved_t003', return_value=True) as older:
+                self.assertEqual(1, ci.check(self.root))
+                run.assert_not_called()
+                strict.assert_not_called()
+                older.assert_not_called()
+
     def test_stale_and_foreign_event_metadata_block(self):
         context = self.proposal()
         event = {'pull_request': {

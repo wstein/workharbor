@@ -102,7 +102,7 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
     if any(value is not None for value in provided) and not all(provided):
         raise ValueError('Source context requires all four pins')
     github_event = os.environ.get('GITHUB_EVENT_NAME')
-    if github_event:
+    if github_event is not None:
         if github_event not in ('push', 'pull_request') or os.environ.get('GITHUB_SHA') != actual:
             raise ValueError('Stale or unsupported event')
         payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
@@ -454,7 +454,7 @@ def strict_suite(root, directory='tests', pattern='test*.py', required_modules=(
 
 
 def check(root, context=None, policy_source=None):
-    if context is not None or policy_source is not None:
+    if context is not None or policy_source is not None or 'GITHUB_EVENT_NAME' in os.environ:
         try:
             context = source_context(root, *context) if context else source_context(root)
         except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
