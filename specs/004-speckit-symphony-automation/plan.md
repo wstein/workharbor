@@ -15,6 +15,16 @@ remains the sole implementation/completion/rework guard. Deliver offline prepara
 first; gate later actions on demonstrated capabilities rather than every pending
 Feature 003 task. Keep pinned Symphony external and Features 001–003 unchanged.
 
+## Bounded owner-requested corrections
+
+The four requested corrections are defined in the
+[proposal/integration/approval contract](bounded-source-contract.md). This bounded
+authorization does not approve the remaining plan or authorize tasks/runtime changes.
+Keep head scope/content approval separate from synthetic integration; permit unrelated
+trusted-base updates, revalidate affected protected prerequisites, prepare/check an
+actual pinned merge before publication, and retain approval by guarded content contract.
+The contract is a design requirement until exact-revision implementation evidence exists.
+
 ## Technical Context
 
 **Language/Version**: Python 3.11+, existing Bash hooks, Git executable.
@@ -120,8 +130,11 @@ stay red. Keep old phase gates until separately reviewed migration.
 Source evidence distinguishes accepted base, proposal head and synthetic merge.
 Validate local objects, ordered parents, complete tree, index/worktree types/modes
 and intervening history. Rebase requires explicit old/new commit correspondence,
-protected artifact bytes and independent review of the new candidate; changed
-patches renew approval. Equivalence never silently refreshes pins. See the
+protected task-contract content and independent review of the new candidate; changed
+affected requirements/scope/checks/dependencies renew approval. Unrelated accepted base
+changes do not require whole-tree equality to the approved source. Head scope and
+integration checks are separate gates under the bounded contract. Equivalence never
+silently refreshes pins. See the
 [contract](contracts/cli.md) for readiness/rejection rules.
 
 ## Validation and handoff
@@ -133,7 +146,8 @@ boundaries must reject safely. Measure SC-001 only after live gates and SC-006
 observations. Guides/dry runs prove neither safety of unattended operation nor savings.
 
 Run `make check` and record raw exit. This approved base has ten known CLI failures;
-planning creates no exception and cannot claim green. The separate CI repair lane
-owns PR35/36; no CI edits belong to this planning change. Stop after Phase 1, obtain
+planning creates no exception and cannot claim green. CI changes belong to the
+separate bounded implementation lane; no CI edits belong to this design-document
+change. Stop after Phase 1, obtain
 independent exact-SHA review and owner plan approval before tasks. No complexity
 exceptions are requested.

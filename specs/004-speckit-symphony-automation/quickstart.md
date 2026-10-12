@@ -70,3 +70,15 @@ change. Unknown final writes remain incomplete until operator reconciliation.
 Then sample five consecutive eligible tasks, including specified categories/retry;
 publish each active/excluded interval and revisions. No guide/estimate/dry run proves
 live execution, unattended safety or efficiency.
+
+## Bounded correction verification
+
+The [bounded source contract](bounded-source-contract.md) is the acceptance matrix
+for the four owner-requested corrections. Its prepublication command and approval
+ports require implementation and exact-revision evidence before use. Use disposable
+remotes to test independent head/merge gates, unrelated base advancement, affected
+protected prerequisites, forged merge trees, ref races and unavailable guard/provider
+ports. Retained content approval must coexist with fresh exact-candidate review.
+Do not label offline fake-port results as owner authentication or live eligibility.
+The accepted source/PR38 revisions in the contract were inspected locally; a fresh
+forge fetch must be reported separately, including unavailable authentication.
