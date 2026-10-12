@@ -1,9 +1,15 @@
 # T003 preparation: direct state acceptance
 
-Status: prepared proposal, **not approved or dispatchable**. T002 / Issue 3 is
-running; no accepted T002 implementation commit or content-bound verifier evidence
-is available yet. Do not add `workharbor-ready` to Issue 4 or change the active
-T002 workflow/checkout. This preparation implements no state primitives.
+Status: owner-authorized dispatch preparation. The owner explicitly instructed
+accepting/merging T002, publishing this preparation, approving its proposed interface
+and twelve green checks, then pinning and queueing only Issue 4. T002 was accepted
+in [PR 31](https://github.com/wstein/workharbor-nxt/pull/31) and rebase-merged as
+`029a4ec83e1240b40f72eed004f513ff8fb8b5b0`; its two blobs match original
+implementation `ac8bcb6f4d7c23682c0a66d7c2d7a31fd9dcb4f2`. Exact prerequisite
+evidence, scope, verifier hashes and argv are in
+[bootstrap-t003.json](bootstrap-t003.json). This preparation implements no state
+primitives. Queue only after publication, isolated entry verification and a
+revision-bound tracker approval recording the owner's delegation.
 
 ## Acceptance gap and correction
 
@@ -33,9 +39,11 @@ remaining CLI failures must be recorded as red, not called implemented behavior.
 - Branch: `issue-4-t003-state`; preserve retries and use operator-assisted Git
   handoff as for T002. No automatic merge or successor dispatch.
 
-The owner must approve the eventual execution SHA, exact acceptance below and this
-primitive interface after T002's accepted test bodies and evidence are inspected.
-This request to prepare/fix the acceptance gap grants no T003 dispatch approval.
+T002's ten bodies and evidence were inspected and accepted. Both corrected Linux
+CI runs execute 41 tests with exactly ten expected failures and no errors; all 31
+baseline tests pass. Raw full-suite CI remains red, as approved. The owner has now
+authorized the interface and checks below for T003; record that delegation with
+the final execution SHA in Issue 4 before applying its ready label.
 
 ## Proposed primitive interface for review
 
@@ -125,7 +133,7 @@ An unexpected green requires reviewing the matrix, not forcing failure. Record
 raw state-suite/full-suite exits separately. Full-suite green remains mandatory
 at the US3/final checkpoint; this scoped proposal is not a general green waiver.
 
-## Remaining dispatch gates
+## Dispatch verification
 
 1. Review and accept T002's test bodies, exact red evidence and implementation
    commit; verify local prerequisite blobs and the completion marker.
@@ -138,4 +146,40 @@ at the US3/final checkpoint; this scoped proposal is not a general green waiver.
 
 Current preparation checks: source syntax and repository bootstrap remain testable;
 the direct verifier must currently fail because the state module is absent. That
-failure is a correct blocker, not passed T003 acceptance or a live dispatch result.
+failure is a correct pre-implementation result, not passed T003 acceptance or a
+live dispatch result. The initial ten CLI reds are the approved baseline described
+above; they do not authorize changing CLI integration during T003.
+
+## Exact legacy entry
+
+After verifying the published execution pin, owner approval, prerequisite evidence
+and a clean `issue-4-t003-state` branch, select Feature 003 and use this repository
+snippet. The real issue uses the existing legacy guard; the proposed Python store
+API above is exercised only by acceptance in disposable repositories.
+
+```sh
+python3 scripts/select_feature.py 003-single-task-entry
+python3 - <<'PY'
+import hashlib, json, subprocess
+from pathlib import Path
+c = json.loads(Path('docs/development/bootstrap-t003.json').read_text())
+assert c['feature'] == '003-single-task-entry' and c['task'] == 'T003'
+assert c['dependencies'] == ['T002']
+subprocess.run(['git', 'merge-base', '--is-ancestor', c['minimum_baseline'], 'HEAD'], check=True)
+for path, field in [('scripts/single_task.py', 'guard_sha256'),
+                    ('scripts/verify_t003_state.py', 'primitive_verifier_sha256'),
+                    ('scripts/verify_t002_red.py', 'red_verifier_sha256')]:
+    assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == c[field]
+argv = ['python3', 'scripts/single_task.py', 'begin', '--feature', c['feature'], '--task', c['task']]
+for path in c['allowed_paths']:
+    argv += ['--allow', path]
+for check in c['checks']:
+    argv += ['--check', json.dumps(check)]
+subprocess.run(argv, check=True)
+PY
+```
+
+Use legacy verify/complete against the saved real-issue state; preserve retries.
+Only the state module and T003 checkbox may change. Preserve original T002 evidence
+and the reviewed verifier bytes. All four commands must exit zero at T003 completion;
+the twelve direct green tests cannot be substituted by matching CLI reds.
