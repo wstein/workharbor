@@ -150,6 +150,92 @@ class SourceTests(unittest.TestCase):
                 self.assertEqual(context, ci.source_context(self.root, *context))
                 self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
 
+    def squash_policy(self, policy, parent=SOURCE):
+        self.git('checkout', '--quiet', '--detach', parent)
+        self.git('read-tree', '--reset', '-u', policy)
+        self.git('commit', '--quiet', '-m', 'test: identical policy with rewritten history')
+        return self.git('rev-parse', 'HEAD')
+
+    def test_identical_nonancestor_squash_and_rebase_retain_policy_content(self):
+        first = self.adopt_fixture_policy()
+        policy = self.commit('scripts/test_check_ci.py', (self.root/'scripts/test_check_ci.py').read_text() + '\n')
+        squashed = self.squash_policy(policy)
+        self.assertNotEqual(policy, squashed)
+        self.assertFalse(subprocess.run(['git', 'merge-base', '--is-ancestor', policy, squashed],
+                                       cwd=self.root, capture_output=True).returncode == 0)
+        self.assertTrue(ci.approved_operator_tooling(self.root, None, policy))
+        self.git('checkout', '--quiet', '--detach', SOURCE)
+        base = self.commit('docs/unrelated-before-rebase.md')
+        self.git('cherry-pick', first, policy)
+        head = self.git('rev-parse', 'HEAD')
+        context = self.merge(base, head)
+        self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+
+    def test_policy_states_cannot_rewind_mix_or_use_ambiguous_merge_history(self):
+        first = self.adopt_fixture_policy()
+        second = self.commit('scripts/test_check_ci.py', (self.root/'scripts/test_check_ci.py').read_text() + '\n')
+        policy = self.commit('docs/development/harness.md', (self.root/'docs/development/harness.md').read_text() + '\n')
+        self.git('checkout', '--quiet', '--detach', first)
+        base = self.commit('docs/intermediate-policy-base.md')
+        context = self.merge(base, policy)
+        self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+        self.squash_policy(policy)
+        self.git('revert', '--no-edit', second)
+        self.git('cherry-pick', second)
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.squash_policy(policy)
+        self.git('revert', '--no-edit', policy)
+        self.git('cherry-pick', policy)
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.git('checkout', '--quiet', '--detach', first)
+        side = self.commit('docs/side.md')
+        self.git('checkout', '--quiet', '--detach', policy)
+        self.git('merge', '--no-ff', '--no-edit', side)
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
+    def test_nonancestor_adopted_base_allows_unrelated_docs_and_blocks_protected_revert(self):
+        policy = self.adopt_fixture_policy()
+        adopted = self.squash_policy(policy)
+        base = self.commit('docs/unrelated-adopted-base.md')
+        head = self.commit('docs/nonancestor-proposal.md')
+        context = self.merge(base, head)
+        self.assertTrue(ci.approved_operator_tooling(self.root, context, policy))
+        self.git('checkout', '--quiet', '--detach', adopted)
+        bad = self.commit('scripts/single_task.py', 'pass\n')
+        self.git('revert', '--no-edit', bad)
+        context = self.merge(self.git('rev-parse', 'HEAD'), head)
+        self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
+
+    def test_rewritten_history_cannot_hide_policy_or_contract_tampering(self):
+        policy = self.adopt_fixture_policy()
+        for name in ('scripts/check_ci.py', '.github/workflows/check.yml',
+                     'scripts/test_check_ci.py', 'scripts/prepare_publication.py',
+                     'specs/004-speckit-symphony-automation/contracts/cli.md',
+                     'specs/004-speckit-symphony-automation/bounded-source-contract.md',
+                     'Makefile', 'pyproject.toml', 'scripts/test_unknown.py'):
+            with self.subTest(path=name):
+                self.squash_policy(policy)
+                bad = self.commit(name, 'unapproved scope/check/dependency content\n')
+                self.git('revert', '--no-edit', bad)
+                self.assertEqual('', self.git('diff', '--name-only', policy, 'HEAD'))
+                self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
+    def test_rewritten_policy_mode_symlink_and_untracked_manifest_block(self):
+        policy = self.adopt_fixture_policy()
+        self.squash_policy(policy)
+        self.commit('scripts/test_check_ci.py', (self.root/'scripts/test_check_ci.py').read_text(), 0o755)
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.squash_policy(policy)
+        path = self.root/'scripts/test_check_ci.py'
+        path.unlink()
+        path.symlink_to('check_ci.py')
+        self.git('add', '--', 'scripts/test_check_ci.py')
+        self.git('commit', '--quiet', '-m', 'test: untrusted policy symlink')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        self.squash_policy(policy)
+        (self.root/'scripts/test_untracked.py').write_text('pass\n')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
     def test_operator_suite_requires_nonempty_strict_green_for_every_tool(self):
         for body, expected in ((
                 'import unittest\nclass Probe(unittest.TestCase):\n'
