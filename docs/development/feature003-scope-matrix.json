@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "status": "proposed-unobserved-preparation-only",
+  "status": "proposed-observed-executable-preparation-not-approved",
   "feature": "003-single-task-entry",
   "task_id": "T011",
-  "base_commit": "3cc1350a952b7dfed633d3ff03c4082ee54e7be8",
+  "base_commit": "e3e80a2e5b1cf0726e82c110793327a86eb35a72",
   "prerequisites": [
     "T010"
   ],
@@ -11,12 +11,12 @@
     "T013",
     "T014"
   ],
-  "gate": "No task entry, test implementation, completion, or expected-red acceptance until reviewed T010 integration and separate owner approval of the exact source-bound matrix and argv.",
+  "gate": "Executable preparation was authorized separately. No T011 task entry, completion checkbox, --matrix-approved invocation, or test-authoring acceptance until the owner approves this exact reviewed source-bound matrix and argv.",
   "authoring_scope": [
     "tests/test_single_task_scope.py",
     "docs/development/feature003-scope-matrix.json"
   ],
-  "fixture": "Reuse accepted SingleTaskFixture in isolated disposable Git repositories; begin/status must first succeed through accepted T010. Resolve direct T013/T014 scope APIs with their owner before implementing tests; absent modules or APIs are not assertion-red evidence.",
+  "fixture": "Every collected case successfully invokes the real reviewed T010 begin --context and status --attempt, then reads the actual persisted attempt from store.read_attempt. Each fixture is a disposable offline Git repository using existing SingleTaskFixture. The immutable context and entry task bytes are checked before each proposed owning seam.",
   "proposal_categories": [
     {
       "planned_id": "test_single_task_scope.SingleTaskScopeTests.test_allowed_worktree_index_and_committed_edits",
@@ -164,15 +164,19 @@
       "intent": "At the scope/preparation boundary inspect obtains identity without a review, checks, task mutation or acceptance/completion events; T012 covers public CLI envelope."
     }
   ],
-  "case_expansion": "Categories are design inventory, not a collected test count. Each required boundary/vector must reach its own test-body behavior assertion as a distinct collected method; no skipped, failed-subtest, import/setup, or missing-API qualification. Schema expansion and actual IDs must be reviewed before entry.",
+  "case_expansion": "The original 29 design categories below are retained; the current executable draft expands them into 76 distinct collected methods without failed subtests or skipped boundaries. Two literal normalization vectors cover pending/checked selected markers and preservation of another already-checked marker.",
   "expected_outcomes": {
-    "observed": false,
-    "collected_ids": null,
-    "assertion_fingerprints": null,
-    "raw_exit": null,
-    "tool_revision": null,
-    "input_revision": null,
-    "reason": "No tests authored or executed. Expected outcomes and fingerprints require valid T010-based fixtures and observed body assertions; no synthetic failure is accepted."
+    "status": "proposed-observed-not-approved",
+    "tests_run": 76,
+    "raw_exit": 1,
+    "errors": 0,
+    "skips": 0,
+    "failed_subtests": 0,
+    "observed": true,
+    "approved": false,
+    "qualified_body_assertions": 76,
+    "successful_begin_status_fixtures": 76,
+    "observation_scope": "All 76 observed reds are callable-capability assertions in test bodies after valid real T010 begin/status. No scope rejection, schema rejection, semantic-review rejection, canonical serialization, normalization, or direct inspection behavior has yet executed. Deeper assertions are executable future contracts, not reproduced implementation failures."
   },
   "canonical_vector": {
     "status": "fixed proposed oracle; implementation untested",
@@ -249,7 +253,7 @@
   },
   "proposed_check_argv": [
     [
-      "/opt/homebrew/bin/python3.14",
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
       "-I",
       "-B",
       "-m",
@@ -262,20 +266,7 @@
       "-v"
     ],
     [
-      "/opt/homebrew/bin/python3.14",
-      "-I",
-      "-B",
-      "-m",
-      "unittest",
-      "discover",
-      "-s",
-      "tests",
-      "-p",
-      "test_single_task*.py",
-      "-v"
-    ],
-    [
-      "/opt/homebrew/bin/python3.14",
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
       "-I",
       "-B",
       "scripts/check_repo.py"
@@ -286,15 +277,706 @@
       "--check"
     ]
   ],
-  "exact_verifier": "Use existing scripts/task_outcomes.py with ordered exact case IDs, pass/assertion outcomes and assertion fingerprints, approved discovery argv, deadlines and exact tool/input revisions. Freeze the executable matrix outside the checked root after accepted source is sealed, avoiding a self-referential snapshot. Approve matrix_argv output and its checks digest separately; --matrix-approved is supplied approval evidence, never authenticated identity. Require all implemented cases and the five pre-existing CI retained reds to match their exact baseline policy. Any new extra/missing case, unexpected green, unrelated failure, skip, import/setup error, timeout or check mutation blocks.",
-  "ci_policy": "Do not edit docs/development/ci-acceptance.json, scripts/check_ci.py or scripts/task_outcomes.py. Preserve the existing five retained assertion cases without reclassifying T010/T017/T023 migrations as completed. No broad raw-suite waiver.",
+  "exact_verifier": "Use unchanged scripts/task_outcomes.py. The externally sealed generic check binds all 76 ordered exact IDs, assertion outcomes/fingerprints, raw exit 1, reviewed discovery argv, finite deadline, tool revision and exact root snapshot. Approve its matrix_argv output and checks digest separately. No --matrix-approved invocation has occurred. Preserve the accepted final T010 policy of 19 retained failures and all implementation greens through coordinator-owned repository acceptance; these 76 new missing-capability reds are not a broad raw-suite waiver. Any extra/missing case, unexpected green/failure, skip, import/setup error, timeout, failed subtest or check mutation blocks.",
+  "ci_policy": "No changes to docs/development/ci-acceptance.json, scripts/check_ci.py or scripts/task_outcomes.py. The final reviewed T010 source supersedes original main’s five helper reds with 19 explicit remaining completion/retry/legacy-CLI assertions. Preserve that exact accepted source and policy; do not relabel pending migrations as implemented.",
   "ownership": "T011 owns direct inventory/manifest/schema/review and read-only preparation behavior. T012 owns public inspect identities/envelope and verify/complete acceptance execution, failures, mutations and selected-marker completion. No T015/T017 success implementation is required for T011 direct semantic validation.",
   "pending": [
-    "Accepted T010 source and fixture/API migration",
-    "Agreed direct scope API for strict manifest/review validation and side-effect-free preparation",
-    "Distinct collected IDs after schema/identity boundary expansion",
-    "Meaningful body-assertion observations and exact fingerprints on the source-bound candidate",
-    "Independent review and exact owner matrix/argv decision"
+    "Independent review of exact executable-preparation candidate",
+    "Owner decision on the versioned SemanticReview compatibility proposal and exact source-bound case matrix/argv",
+    "Coordinator rebinding after any combined publication/integration changes; no inherited approval across changed source"
   ],
-  "limitations": "Preparation only. No implementation evidence, observed red count, acceptance, task completion, publication, provider/runtime activation, or live authentication claim."
+  "limitations": "Preparation only. The observed reds establish absent owning capabilities after valid entry/status; deeper assertions remain unexecuted. No implementation evidence, accepted test-authoring outcome, T011 checkbox, provider/runtime activation, authenticated owner verification, publication, or live test claim. Canonical make check is coordinator-owned and was not run by this bounded leaf.",
+  "original_preparation_commit": "cebcd6c868a07b649ec8c95d6ef7c94ae234b2a6",
+  "proposed_owning_apis": [
+    {
+      "successor": "T013",
+      "signature": "validate_scope(root: Path, attempt: dict) -> ContentManifest",
+      "contract": "Inspect worktree, index, HEAD, intervening commits and nonignored untracked paths; reject unsafe paths/types and unauthorized task bytes, and return the exact typed current manifest."
+    },
+    {
+      "successor": "T013",
+      "signature": "validate_manifest(value: object) -> dict",
+      "contract": "Strictly validate exact manifest fields/types/modes/hashes/path order/uniqueness and return the validated manifest; invalid input raises ValueError."
+    },
+    {
+      "successor": "T014",
+      "signature": "canonical_manifest_bytes(value: dict) -> bytes",
+      "contract": "Return the contract canonical UTF-8 bytes; may reuse the existing canonical JSON utility. Fixed literal bytes and digest are the test oracle."
+    },
+    {
+      "successor": "T014",
+      "signature": "normalize_tasks_bytes(value: bytes, task_id: str) -> bytes",
+      "contract": "Replace only the selected real task marker with ASCII space while preserving every other byte, CRLF and another task marker; retain exact unnormalized snapshots separately."
+    },
+    {
+      "successor": "T014",
+      "signature": "validate_semantic_review(value: object, attempt: dict, manifest: dict) -> dict",
+      "contract": "Validate exact versioned review shape, nonempty references, approved is true and matching attempt/task/context/current content identities; invalid or missing input raises ValueError."
+    },
+    {
+      "successor": "T014",
+      "signature": "prepare_inspection(root: Path, attempt: dict) -> dict",
+      "contract": "Return exactly the five identity fields without a review, acceptance execution, task mutation, or acceptance/completion events. T012 separately tests the public inspect CLI."
+    }
+  ],
+  "cases": [
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_absent_is_distinct_from_sentinel_file",
+      "expected": "assertion",
+      "fingerprint": "sha256:043931ceb4bb53a51b9e536f6accceae9e8a63771b8c76ad5c92f263714f094c",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_allowed_committed_edits",
+      "expected": "assertion",
+      "fingerprint": "sha256:7b955b24904da38ff18cad6c9a416e30acc07137865e468a90da05feed789b06",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_allowed_staged_edits",
+      "expected": "assertion",
+      "fingerprint": "sha256:9e71238e7c29733ef93f69f066e1b13dfde2bafc63b55dd1aa47ebda311c03e8",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_allowed_worktree_edits",
+      "expected": "assertion",
+      "fingerprint": "sha256:ab20c139ed00c655ab8ccb851035d8fe48e51db24b1cb58c7f957a55d07138ba",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_canonical_unicode_binary_mode_and_absence_vector",
+      "expected": "assertion",
+      "fingerprint": "sha256:46ac63a9e1314c01926e58f9d644b4b1cbdfbc9f3d1af229011f981383515965",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: canonical_manifest_bytes",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_fixed_checkbox_normalization_vector",
+      "expected": "assertion",
+      "fingerprint": "sha256:bea884e270d69d65c5c5832a0f79aecc113a9893fdfb95b0006aa456a8c35b5e",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: normalize_tasks_bytes",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_fixed_normalization_preserves_other_checked_marker",
+      "expected": "assertion",
+      "fingerprint": "sha256:64d0224008ae583d700beb866d26a1a4f6c10a38ad2cb5baaefb5f247a0a2423",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: normalize_tasks_bytes",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_inspection_without_checks_task_or_acceptance_mutation",
+      "expected": "assertion",
+      "fingerprint": "sha256:312aad39334020ea7ab4438881f59447fedb557522f8223ce5114b3f8e5a30c9",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: prepare_inspection",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_entry_missing_mode",
+      "expected": "assertion",
+      "fingerprint": "sha256:df94ac90ca53726bf346c866016c9f8dcd3882d4db6e28bc3be480505299772e",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_entry_missing_path",
+      "expected": "assertion",
+      "fingerprint": "sha256:0452dd35b826e745bad2cdf0717fe86e2a15e625e8e9a9ccab2700ab7db16fa9",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_entry_missing_sha256",
+      "expected": "assertion",
+      "fingerprint": "sha256:ea8fc7c87073d104acff98c75db087b3051b1a65eb0f816e9a0fee11830f1fa4",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_entry_missing_type",
+      "expected": "assertion",
+      "fingerprint": "sha256:25afd7a70f89fe7d6dd7b2aed58921e832c4b3cd1d5cba9078485ac324222527",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_missing_entries",
+      "expected": "assertion",
+      "fingerprint": "sha256:e0d5c505d3731ef8560fe22e4c62d079831355ffb727a2e19ba3060f4dcc5093",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_missing_schema_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:5afc794465ed41efdcc59316e8734d200ebc2c0a2a4be2ab2105160cd08c789b",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_absent_nonnull_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:c077fd470acadced499e44dc88b4c2fa759fa397e6bba36f6345f7ffa8277713",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_absent_nonnull_mode",
+      "expected": "assertion",
+      "fingerprint": "sha256:cab87f19ceebff58c4c4594a3035e1068083d83cbdc641f22954b73db4db9a40",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_boolean_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:c7f1d8db3d5b23c2e473ff7b9e1aef3147c46ab4a7e117e11f15ada5148c29a6",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_duplicate_path",
+      "expected": "assertion",
+      "fingerprint": "sha256:28671c15a96235c0bf311f3f8844c32d121ad44d2f4915fae4cd8c12da769cfc",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_entries_wrong_type",
+      "expected": "assertion",
+      "fingerprint": "sha256:0f9c59d27c2ad6503d07e086587089431ec3dc3466beaa860217026d0aa5b51d",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_entry_unknown_field",
+      "expected": "assertion",
+      "fingerprint": "sha256:dce90309615f51f553233db3bb7709d78d28c68a9cce177a21f28465be6321aa",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_unknown_field",
+      "expected": "assertion",
+      "fingerprint": "sha256:f0757734525ec864ad579311dcddd4dc75b0d178d7212a5c15a150265c56859c",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_unsafe_path",
+      "expected": "assertion",
+      "fingerprint": "sha256:e64253a1b765d808f6b935fdf7cad7852af23835553275fbd5273af47e70481b",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_unsorted_paths",
+      "expected": "assertion",
+      "fingerprint": "sha256:b885e113d1076d7b861eb5d7ee37003e9a8bd9c2c28f6c8966f955cc8a1fd791",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_unsupported_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:b92b7be0e05510b20efaf934c80266005dce50e8bcc163f9839cd6e5873a2808",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_wrong_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:1ce8e151eb90469f477335eb24603ec7d487a1d0b803dcc506cd8da165045c26",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_wrong_mode",
+      "expected": "assertion",
+      "fingerprint": "sha256:8a918c0bd62f33a6ee81f248e48e26695879a04d8afffd6961d9d8d6ca6995d4",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_manifest_reject_wrong_type",
+      "expected": "assertion",
+      "fingerprint": "sha256:73dabf7cfa389c9d1b4edd221a3261fdf4faf50f9978d27d575551ae8000ed66",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_normalize_only_selected_checkbox_with_crlf",
+      "expected": "assertion",
+      "fingerprint": "sha256:7d2314d92e180c0c37b8fb2438607c6b694c5e350eaf12623523f444af5a0b12",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_physical_executable_mode_in_manifest",
+      "expected": "assertion",
+      "fingerprint": "sha256:27b4efdfe64140805ef1d0a218644528cf541f0b73aca8be0792b663128f8390",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_committed_change_hidden_by_revert",
+      "expected": "assertion",
+      "fingerprint": "sha256:4cf291c5758b5c1bada1ad6dac403f21480231e205de13a41effb932e07fdc83",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_directory_output",
+      "expected": "assertion",
+      "fingerprint": "sha256:4d9224451e6304038b48471e4aa402c9f4ae464d646c13e4c9135daac8251ce3",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_gitlink_hidden_by_revert",
+      "expected": "assertion",
+      "fingerprint": "sha256:05ed439e696d6ecea5f80278f996200ddd22e7088f7a64f148eec1b04db0e0f0",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_symlink_hidden_by_revert",
+      "expected": "assertion",
+      "fingerprint": "sha256:0fd6f7334baeb5f5e57e6d132852bafb032162be0fb701cceaea0403ed69dbe7",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_historical_task_mutation_hidden_by_revert",
+      "expected": "assertion",
+      "fingerprint": "sha256:ca00b02eda2b832b53def51fd8d3594e54f2ff7c0ce895fef41682b0fab916d1",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_index_gitlink",
+      "expected": "assertion",
+      "fingerprint": "sha256:9a931f7be9a779ed67c41feaf2f6967051f474ae1e4702753cc7d83a5f53a08c",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_missing_semantic_review",
+      "expected": "assertion",
+      "fingerprint": "sha256:f3af3bb76446d38166cbf2175139c146f30c47a3875dde259d2a866a0dcfd32a",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_negative_semantic_review",
+      "expected": "assertion",
+      "fingerprint": "sha256:798d7a13884742a76503eeb7203aab67618e0c975ad3f0be74a1e7867cc513d7",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_nonignored_untracked_change",
+      "expected": "assertion",
+      "fingerprint": "sha256:f39e2b329cea8ca293912f82411fecb2d957734051af08a50b9bb9b1c4e318a6",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_other_task_marker",
+      "expected": "assertion",
+      "fingerprint": "sha256:3c3bb38a2768efb9d9e74e4e01c932dbf70a9971b93ea1df85bac656130d530c",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_absent_output_creation",
+      "expected": "assertion",
+      "fingerprint": "sha256:fcac90ae3ceb32072018fe322cb2a326eb9359176c656af46c126723bfeeaff5",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_output_bytes_change",
+      "expected": "assertion",
+      "fingerprint": "sha256:b122ce35fa50d081bdd3431323ebd9ea24fb29c63842058efb2fc14661eb8e72",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_review_stale_after_output_mode_change",
+      "expected": "assertion",
+      "fingerprint": "sha256:e2b7821947ac3df6375f700d2a9209beb964b1b5163c94987fb03c41d203645b",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_selected_task_text",
+      "expected": "assertion",
+      "fingerprint": "sha256:a253d1208fc837cfdc23df01a34c6a141b6940008af9f4fcf1fb2b97972acb7b",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_change_hidden_by_worktree_restore",
+      "expected": "assertion",
+      "fingerprint": "sha256:01e893814f9c107c7f842713b02b06257a0d5cf6ef0720f408f3ec363609bd56",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_symlink_hidden_by_worktree_restore",
+      "expected": "assertion",
+      "fingerprint": "sha256:15f45d946bde60a9b8c9fc9dddfc4f3cbe04637a3f8a37e24161cb1974d7609a",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_staged_task_mutation_hidden_by_worktree_restore",
+      "expected": "assertion",
+      "fingerprint": "sha256:36b5d54623c96a1392c41bba8d8c1af6faf0d5c97463879b1cf8ceb29c554334",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_symlink_worktree",
+      "expected": "assertion",
+      "fingerprint": "sha256:7e6cfcaed7d4c71adf6ffca3189f010c473456274aafcf176c49605ea2e4b7c6",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_task_order",
+      "expected": "assertion",
+      "fingerprint": "sha256:c5290d4a4f12a16d0117fee72fb0b577824162574deec632c80cd740fbbb1185",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_reject_unauthorized_worktree_change",
+      "expected": "assertion",
+      "fingerprint": "sha256:8abf789c6b40d2ffad2496650ab55fdc797480d35d9be6d74132fdb778557d79",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_scope",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_mismatched_attempt_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:5bd8771e42dbcd05bcb5f1150a0da53c0e28cf1aa13cb4ce4b3f119a4addf5f3",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_mismatched_content_manifest_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:2faabf49574dc138b46dc40fe1a7243962a32d9efd696dad39a73edc9135eb89",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_mismatched_context_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:7086f59d6bd312c1981e699c41734529ed93d777bd1f027bdde5bc6dd5f3f381",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_mismatched_task_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:9c14f45e827cd24eb95e35bdf7ac5ba4a9b817a263b28fe791fae1db0839034a",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_approved",
+      "expected": "assertion",
+      "fingerprint": "sha256:f36f3675e14b68142d6742f87339c83ab533e3372d5ca936c6ac9b68e34918ce",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_attempt_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:6113a77b5e81838208797851d24be271c32e1d47d52accdbcd794c536d65cf19",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_content_manifest_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:1f738ffd95d25a247b894a0c309566903b98c0f7d1fae1cb99d609963c5461d3",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_context_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:79d1a2776c5d1765a289edf9eddbb7873ca8c990d5b6ba230148d26db019a391",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_evidence_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:cf9c76b27fff476412183e88c1822ff5573e6453366aea72beadec253437fd43",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_reviewer_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:38d747b77eb1818e3fddc682554b770d9b8eff45ae789ce2736a0b6031be96c4",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_schema_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:8cc6368d6d1f126b594a7ea95cfbf3f439bb593aaeeb6ee720b4357c9cdb5c4f",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_missing_task_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:ca9da645b335b6e84643a04ef8a5cb18a2d0205db8640a68443fc04caf27489c",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_reject_boolean_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:49176fcb135a8dff06f1752af9e653f2202f09fd1e10bfa0466c497bef8fbccb",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_reject_empty_evidence_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:79b575394310de8880995db921e11be26a31608dfd862c006e6138e002f7f3d0",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_reject_empty_reviewer_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:f9626d28fc30523ba36523764e66e98c8a0990f1d3c7c6d49a81db59bf51783c",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_reject_unknown_field",
+      "expected": "assertion",
+      "fingerprint": "sha256:11c94a68bda5596e1509d591ba0b65f35da68b66a5d815ca54bae1a2f3496986",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_reject_unsupported_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:3431dbb0e94b72b3e1a38bde27ff92ef199b1e0d9167e51205994b4035b17bbe",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_approved",
+      "expected": "assertion",
+      "fingerprint": "sha256:e2e20855c9860c0ac2c2231bd53f2793387c9870d7de6eb23e141797d276de7a",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_attempt_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:1a7e25c69b6cae10f21614a825139b02dfc29d1411d90c519b3042f1d3ce3068",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_content_manifest_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:05b88168dd333aa7dafff0cc5295e8ea73f5f391b8cfeb4ded94f8c7ff87938f",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_context_digest",
+      "expected": "assertion",
+      "fingerprint": "sha256:8defa1ff7eb555764ba5fd68029b3e8056a1adb34bc9fba1f0083da464c82226",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_evidence_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:95cb265a1d44702e0a16f43d39a2d3df3b7e9ad2707cd8a5c585fb9af9c1b4fc",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_reviewer_ref",
+      "expected": "assertion",
+      "fingerprint": "sha256:d7db35a42a2fb03d54392bc9badd6f453957b8768e2c955d43863483b7cd6cc1",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_schema_version",
+      "expected": "assertion",
+      "fingerprint": "sha256:8b2f979450526441008220795d3b5f975adb8a9b096248ac563878abf6599353",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_review_wrong_type_task_id",
+      "expected": "assertion",
+      "fingerprint": "sha256:c5ac5d3079ac64098079737f449411b808cb9222de5e1942b66b72eb1e7059ce",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_valid_manifest_schema",
+      "expected": "assertion",
+      "fingerprint": "sha256:892b7fe9e797a69ef0dbbe26721c071630cff0709a680435cec683a414231bb1",
+      "successor": "T013",
+      "observed_message": "False is not true : T013 owning behavior missing: validate_manifest",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    },
+    {
+      "id": "test_single_task_scope.SingleTaskScopeTests.test_valid_semantic_review",
+      "expected": "assertion",
+      "fingerprint": "sha256:169f021dd3f59254be869590194d236efebc0ee406aa44ce5395b9b67833ebf7",
+      "successor": "T014",
+      "observed_message": "False is not true : T014 owning behavior missing: validate_semantic_review",
+      "observed_boundary": "missing owning callable; deeper scenario assertions pending"
+    }
+  ],
+  "source_binding": {
+    "reviewed_t010_commit": "4683665f07c641c5dbfebca8e5a4f1c5619fadab",
+    "tests_sha256": "sha256:340d3a87e7675dfcbf567aa1abfaef78b6eff5b602e0616d1787df2274eb557a",
+    "task_outcomes_tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
+    "candidate_commit_and_input_snapshot": "Sealed outside this checked root after committing the proposal, to avoid self-referential snapshot fields. The owner decision must name that exact candidate, external matrix digest, input revision and executable argv; any later integration or source change requires rebinding.",
+    "accepted_main_commit": "e3e80a2e5b1cf0726e82c110793327a86eb35a72",
+    "retained_observation_source": "Observed against historical reviewed 4683665f07c641c5dbfebca8e5a4f1c5619fadab; accepted main e3e80a2 has byte-identical full tree. Rebinding changes commit/snapshot identity only; no test or implementation bytes changed.",
+    "interpreter": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "interpreter_note": "task_outcomes requires argv[0] equal to sys.executable, which resolves this Homebrew entry point to /opt/homebrew/opt/python@3.14/bin/python3.14."
+  },
+  "schema_version_compatibility_proposal": {
+    "status": "requires explicit owner decision; authoritative spec/contract unchanged",
+    "required_semantic_fields": [
+      "attempt_id",
+      "task_id",
+      "context_digest",
+      "content_manifest_digest",
+      "reviewer_ref",
+      "evidence_ref",
+      "approved"
+    ],
+    "additional_fixture_field": "Existing reviewed tests/fixtures/single-task/review.json includes schema_version: 1. Draft API tests preserve that versioned fixture and propose exactly these eight fields, with schema_version strictly integer 1. This is a documented compatibility proposal, not a silent amendment."
+  },
+  "baseline_policy": {
+    "reviewed_commit": "4683665f07c641c5dbfebca8e5a4f1c5619fadab",
+    "path": "docs/development/ci-acceptance.json",
+    "sha256": "sha256:3b35ddb741e581ebe8a7cebcb01d19e04d5471efa575c794dac2e0289c8194a8",
+    "retained_assertion_ids": [
+      "test_single_task.SingleTaskTests.test_absent_file_differs_from_sentinel_contents",
+      "test_single_task.SingleTaskTests.test_acceptance_cannot_mutate_scope_or_complete",
+      "test_single_task.SingleTaskTests.test_committed_violation_hidden_by_revert",
+      "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task",
+      "test_single_task.SingleTaskTests.test_early_completion_without_evidence_rejected",
+      "test_single_task.SingleTaskTests.test_failed_acceptance_does_not_complete",
+      "test_single_task.SingleTaskTests.test_historical_other_task_hidden_by_revert",
+      "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update",
+      "test_single_task.SingleTaskTests.test_mode_change_requires_rework_even_without_git_filemode",
+      "test_single_task.SingleTaskTests.test_reject_other_checkbox_and_selected_description",
+      "test_single_task.SingleTaskTests.test_reject_outside_scope_committed_and_untracked",
+      "test_single_task.SingleTaskTests.test_staged_other_task_hidden_by_worktree_restore",
+      "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore",
+      "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore",
+      "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected",
+      "verify_t004_cli.CliBoundaryTests.test_acceptance_exit_four_does_not_echo_output_or_argv",
+      "verify_t004_cli.CliBoundaryTests.test_legacy_acceptance_holds_lock_against_all_commands",
+      "verify_t004_cli.CliBoundaryTests.test_legacy_success_envelope",
+      "verify_t004_cli.CliBoundaryTests.test_scope_blocker_exit_three"
+    ],
+    "verification_status": "Retained from independently reviewed T010 final checkpoint; not rerun as a full canonical suite by this bounded leaf. Every new fixture freshly checks real implemented begin/status behavior."
+  }
 }
