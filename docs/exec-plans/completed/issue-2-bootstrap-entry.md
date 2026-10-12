@@ -103,3 +103,22 @@ not a Symphony dispatch or completed T001 acceptance.
 No ready label, agent startup, merge, push or deployment was performed. The renderer
 fix and this record require separate publication if they must be recreated on another
 host; the approved T001 checkout continues to use its published preparation pin.
+
+## Live startup blocker: Codex approval-policy protocol
+
+The first GH-2 attempts reached the correct clean `ac7aa0c` checkout and branch,
+but failed before an agent session with JSON-RPC code `-32600`: unknown approval
+variant `reject`. Installed Codex CLI 0.162.1 accepts `granular` instead. Its generated
+ThreadStartParams/TurnStartParams schemas and the official configuration reference
+confirm category booleans control whether prompts are allowed. The workflow now
+uses all five granular categories set to false, preserving auto-denial rather than
+loosening approvals; workspace-write sandboxing remains unchanged. The rendered
+local workflow was regenerated with the same approved pin, branch and feature.
+
+A direct local stdio app-server probe reproduced rejection of the old policy and
+accepted the corrected policy with `thread/start`, returning a thread identity.
+The probe used a temporary CODEX_HOME/cwd and started no model turn. This verifies
+protocol acceptance, not successful T001 execution. The renderer regression checks
+the exact five false categories; `make check` passes 25 tests and diff check passes.
+Existing GH-2 checkout/state was not reset or modified by the repair. Live retry
+and task handoff still require runtime evidence.

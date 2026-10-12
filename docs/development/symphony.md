@@ -11,6 +11,12 @@ this commit declares Erlang 28 and Elixir 1.19.5-otp-28. Consult upstream's READ
 for installation; these versions are Symphony tooling, not WorkHarbor product pins.
 The pinned runtime includes a GitHub Issues adapter. No extra adapter or GitHub
 Projects board is required. Tracker choice concerns development only.
+The workflow uses Codex's `granular` approval policy with all five categories set
+to false (auto-deny). Codex CLI 0.162.1 rejects the older `reject` variant; simply
+renaming it while retaining true values would allow approval prompts. Check the
+installed `codex app-server generate-json-schema` output when upgrading. The
+[official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+documents granular permission semantics. Workspace-write sandboxing remains in force.
 
 ## Operator activation
 Install the pinned Symphony separately, install/authenticate Codex CLI, and inspect
