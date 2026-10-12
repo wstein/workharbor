@@ -5,6 +5,7 @@ modifying its state. Returned bytes are a checked snapshot, not a filesystem loc
 or a hostile-code sandbox. Callers must revalidate inputs at their action boundary.
 """
 from contextlib import contextmanager
+from dataclasses import dataclass
 import json
 import math
 import os
@@ -12,6 +13,8 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+from types import MappingProxyType
+from typing import Mapping, Protocol
 
 import single_task_state as state
 
@@ -272,3 +275,185 @@ def resolve_git_object(root, object_id, *, expected_type='commit'):
         if _git(root, 'cat-file', '-t', object_id) != expected_type.encode('ascii') + b'\n':
             raise PackageError('invalid-git-object')
         return object_id
+
+
+# Capability evidence is supplied by trusted host code, never instantiated from
+# package text. These protocols describe missing enhanced Feature 003/provider
+# APIs; the legacy single_task CLI is deliberately not an adapter.
+@dataclass(frozen=True)
+class CapabilityEvidence:
+    available: bool
+    implementation_revision: str | None
+    fixture_result: bool | None
+    live_observation_ref: str | None
+
+
+class GuardPort(Protocol):
+    capabilities: Mapping[str, CapabilityEvidence]
+
+    def validate_context(self, context, evidence): ...
+    def compare_artifacts(self, approved_snapshot, current_snapshot, evidence): ...
+    def validate_scope(self, repository_snapshot, context, evidence): ...
+    def validate_acceptance(self, context, evidence): ...
+
+
+class TrackerPort(Protocol):
+    capabilities: Mapping[str, CapabilityEvidence]
+
+    def read_approval(self, reference): ...
+    def read_issue(self, identity): ...
+    def find_pr(self, identity): ...
+    def publish_pr(self, request): ...
+    def find_evidence(self, identity): ...
+    def write_evidence(self, request): ...
+    def replace_labels(self, identity, expected, desired): ...
+
+
+class RuntimePort(Protocol):
+    capabilities: Mapping[str, CapabilityEvidence]
+
+    def observe(self, execution): ...
+
+
+class UnavailableGuard:
+    capabilities = MappingProxyType({})
+
+    def validate_context(self, context, evidence):
+        raise PackageError('guard-unavailable')
+
+    def compare_artifacts(self, approved_snapshot, current_snapshot, evidence):
+        raise PackageError('guard-unavailable')
+
+    def validate_scope(self, repository_snapshot, context, evidence):
+        raise PackageError('guard-unavailable')
+
+    def validate_acceptance(self, context, evidence):
+        raise PackageError('guard-unavailable')
+
+
+class UnavailableTracker:
+    capabilities = MappingProxyType({})
+
+    def read_approval(self, reference):
+        raise PackageError('tracker-unavailable')
+
+    def read_issue(self, identity):
+        raise PackageError('tracker-unavailable')
+
+    def find_pr(self, identity):
+        raise PackageError('tracker-unavailable')
+
+    def publish_pr(self, request):
+        raise PackageError('tracker-unavailable')
+
+    def find_evidence(self, identity):
+        raise PackageError('tracker-unavailable')
+
+    def write_evidence(self, request):
+        raise PackageError('tracker-unavailable')
+
+    def replace_labels(self, identity, expected, desired):
+        raise PackageError('tracker-unavailable')
+
+
+class UnavailableRuntime:
+    capabilities = MappingProxyType({})
+
+    def observe(self, execution):
+        raise PackageError('runtime-unavailable')
+
+
+_ENTRY = frozenset(('guard.context', 'guard.dependencies', 'guard.artifact-comparison',
+                    'guard.scope-current', 'guard.scope-index', 'guard.scope-history'))
+_COMPLETION = frozenset(('guard.acceptance', 'guard.content-seal', 'guard.review-seal',
+                         'guard.commit-binding'))
+_RECOVERY = frozenset(('guard.recovery',))
+_TRACKER = frozenset(('tracker.approval-authentication', 'tracker.issue-ownership',
+                      'tracker.pr-publication', 'tracker.evidence', 'tracker.safe-labels'))
+_RUNTIME = frozenset(('runtime.provenance', 'runtime.workflow', 'runtime.configuration',
+                      'runtime.host-isolation'))
+_MODES = ('implement', 'handoff-only', 'owner-authorized rework')
+
+
+def required_capabilities(action, mode):
+    """Derive requirements per step; entry alone never requires completion APIs.
+
+    Readiness checks the entire proposed execution before making it eligible.
+    Preview/structural commands expose entry requirements without invoking them.
+    """
+    by_action = {
+        'prepare': _ENTRY, 'validate': _ENTRY, 'effective': _ENTRY,
+        'entry': _ENTRY, 'completion': _COMPLETION, 'resume': _ENTRY | _RECOVERY,
+        'handoff': _COMPLETION | _RECOVERY | _TRACKER,
+        'ready': _ENTRY | _COMPLETION | _RECOVERY | _TRACKER | _RUNTIME,
+    }
+    if type(action) is not str or action not in by_action or mode not in _MODES:
+        raise PackageError('invalid-capability-request')
+    required = by_action[action]
+    if mode == 'owner-authorized rework':
+        required |= {'guard.rework'}
+    if mode == 'handoff-only' and action in ('prepare', 'validate', 'effective', 'entry'):
+        required |= _RECOVERY
+    return tuple(sorted(required))
+
+
+def _capability_evidence(name, observation, live):
+    """Return sanitized observations; invalid supplied references never escape."""
+    empty = dict(capability=name, available=False, implementation_revision=None,
+                 fixture_result=None, live_observation_ref=None)
+    if observation is None:
+        return empty, 'capability-unavailable'
+    if (not isinstance(observation, CapabilityEvidence)
+            or type(observation.available) is not bool
+            or observation.fixture_result is not None and type(observation.fixture_result) is not bool
+            or observation.implementation_revision is not None and (
+                type(observation.implementation_revision) is not str
+                or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', observation.implementation_revision))
+            or observation.live_observation_ref is not None and (
+                type(observation.live_observation_ref) is not str
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', observation.live_observation_ref))):
+        return empty, 'invalid-capability-evidence'
+    value = dict(capability=name, available=observation.available,
+                 implementation_revision=observation.implementation_revision,
+                 fixture_result=observation.fixture_result,
+                 live_observation_ref=observation.live_observation_ref)
+    if not observation.available:
+        return value, 'capability-unavailable'
+    if observation.implementation_revision is None or observation.fixture_result is not True:
+        return value, 'capability-unverified'
+    if live and observation.live_observation_ref is None:
+        return value, 'live-capability-unobserved'
+    return value, None
+
+
+def assess_capabilities(action, mode, *, guard=None, tracker=None, runtime=None, live=False):
+    """Inspect host-supplied evidence only; never call guard/tracker/runtime operations.
+
+    Even complete evidence is no owner approval, review, actual execution or
+    execution permission. A later readiness validator owns those separate gates.
+    Live references here are safe SHA-256 evidence identifiers, not raw URLs or logs.
+    """
+    if type(live) is not bool:
+        raise PackageError('invalid-capability-request')
+    required = required_capabilities(action, mode)
+    ports = {'guard': guard if guard is not None else UnavailableGuard(),
+             'tracker': tracker if tracker is not None else UnavailableTracker(),
+             'runtime': runtime if runtime is not None else UnavailableRuntime()}
+    snapshots = {}
+    for category, port in ports.items():
+        try:
+            snapshots[category] = dict(port.capabilities)
+        except Exception:
+            # Host adapter diagnostics may contain credentials. Expose no raw error.
+            snapshots[category] = {}
+    evidence, blockers = [], []
+    for name in required:
+        observation = snapshots[name.split('.', 1)[0]].get(name)
+        value, blocker = _capability_evidence(name, observation, live)
+        evidence.append(value)
+        if blocker:
+            blockers.append(dict(capability=name, code=blocker))
+    return dict(structural_valid=True, execution_eligible=False,
+                capabilities_satisfied=not blockers, required_capabilities=list(required),
+                evidence=evidence, blockers=blockers, authenticated_approval=None,
+                independent_review=None, live_execution=None)
