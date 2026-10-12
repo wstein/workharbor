@@ -129,3 +129,33 @@ with all five granular categories false and then `Codex session started` for GH-
 thread `01a12d74-df99-77b0-8140-891a4455217d`. The previous protocol startup failure
 is resolved in the live process. This establishes session startup only; T001
 acceptance, normal handoff and interrupted-handoff recovery are not yet verified.
+
+## T001 acceptance and operator-assisted commit recovery
+
+Attempt 4 implemented the seven approved T001 paths and completed only its checkbox.
+It passed acceptance but could not create `.git/index.lock`; escalation was denied
+by the configured policy. The issue was handed off as blocked, preserving its
+checkout, handoff-only state and original evidence. No sandbox relaxation occurred.
+
+On the owner's subsequent repair request, the operator independently reran the
+three approved checks and verified staged paths, content, type and mode against
+sealed evidence, protected feature artifacts and the original test class. The
+eight-file implementation was committed on `issue-2-t001-fixtures` as
+`962129de1acd43b4db8502bd9125fab5918edb0e`
+(`test(speckit): add isolated single-task fixtures for T001`). The source checkout
+does not contain that implementation; it remains in the preserved issue checkout.
+
+Post-commit `single_task.py verify` passed the exact three ordered checks: all six
+named fixture tests, bootstrap validation with all 30 repository tests, and diff
+validation. The issue checkout is clean and retains handoff-only state. Original
+`.symphony/issue-2-t001-evidence.json` remains byte-for-byte intact, SHA-256
+`7c87697e3a8428d90906bd959b27db419260e6e016aff84740d0d2aedd665342`.
+The appended `.symphony/issue-2-operator-handoff.json` binds the implementation
+commit, post-commit results and original evidence; SHA-256
+`ed186882f51300de0c79d76a90d8bc92eeced6a006ab8c3a61665e600f7846df`.
+
+No push, PR, merge, release or deployment was performed. This proves local T001
+acceptance and operator-assisted recovery of an interrupted Git handoff. It does
+not prove an unattended commit/PR/label handoff, a normal end-to-end Symphony run,
+or readiness for T002. Keep the issue out of dispatch while publication and owner
+review remain outstanding.
