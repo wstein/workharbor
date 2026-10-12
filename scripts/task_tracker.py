@@ -1,10 +1,11 @@
-"""Read-only host-injected approval/issue boundary; no credential acquisition.
+"""Host-injected approval/issue/publication boundary; no credential acquisition.
 
 The host owns transport authentication, provider parsing and immutable configuration.
 The transport must return structured decisions authenticated from provider objects,
 never approval claims extracted from issue prose. These fixtures/interfaces prove no
 live provider capability. This module performs no network, files, logging or children;
-credentials remain exclusively inside the injected host transport. No write API exists.
+credentials remain exclusively inside the injected host transport. Publication writes
+require a separate explicit transport; they prove nothing until authenticated lookup.
 """
 from dataclasses import dataclass
 import hashlib
@@ -14,7 +15,7 @@ from types import MappingProxyType
 from typing import Protocol
 
 from approval_binding import ApprovalTarget, ApprovalVerification
-from task_package import parse_json
+from task_package import parse_json, canonical_json
 
 
 ACTIONS = frozenset(('spec', 'plan', 'execution', 'matrix', 'rework', 'review', 'publication'))
@@ -27,6 +28,117 @@ class TrackerBlocked(ValueError):
 
 class TransientRead(Exception):
     """Host marks only a retryable read failure; never used for writes."""
+
+
+class WriteUnknown(Exception):
+    """A publication may have happened; exact remote reconciliation is required."""
+
+
+@dataclass(frozen=True)
+class PublicationObject:
+    object_id: str
+    url: str
+    content_digest: str
+
+
+def publication_identity(identity):
+    keys = ('repository', 'issue', 'feature', 'task_id', 'package_digest',
+            'guard_attempt_id', 'implementation_commit', 'content_digest')
+    if (not _keys(identity, keys) or not _repository(identity['repository'])
+            or not _match(identity['issue'], r'[1-9][0-9]{0,9}')
+            or not _match(identity['feature'], r'[0-9]{3}-[a-z0-9]+(?:-[a-z0-9]+)*')
+            or not _match(identity['task_id'], r'T[0-9]{3}') or not _id(identity['guard_attempt_id'])
+            or not _match(identity['implementation_commit'], r'[0-9a-f]{40}')
+            or any(not _match(identity[key], r'[0-9a-f]{64}')
+                   for key in ('package_digest', 'content_digest'))):
+        raise TrackerBlocked('invalid-publication-identity')
+    return hashlib.sha256(canonical_json(identity)).hexdigest()
+
+
+class PublicationTracker:
+    """Narrow fixture-capable host ports; never acquire credentials or adapters.
+
+    The read transport queries all matches by the stable identity digest, including
+    closed/existing objects. Empty means authoritative absence, never permission to
+    blind retry after an unauthenticated/failed read. Writes pass the stable key to
+    the host and require later authenticated exact identity/content reconciliation.
+    The host writer must atomically deduplicate operation_key across retries and
+    reject changed content for that key. Its read must distinguish authoritative
+    absence from eventual-consistency uncertainty. Availability evidence may be
+    supplied only after both properties are demonstrated; default capabilities
+    remain empty. Local locks/read-write-read do not establish these properties.
+    """
+    capabilities = MappingProxyType({})
+
+    def __init__(self, reader, writer=None):
+        if type(reader) is not AuthenticatedTracker:
+            raise TrackerBlocked('authenticated-publication-reader-required')
+        self.reader, self.writer = reader, writer
+
+    def _request(self, request):
+        if (not _keys(request, ('identity', 'base', 'head', 'checker', 'content',
+                               'base_ref', 'head_ref', 'head_repository'))
+                or any(not _match(request[key], r'[0-9a-f]{40}') for key in ('base', 'head', 'checker'))
+                or type(request['content']) is not dict or request['base_ref'] != 'refs/heads/main'
+                or not _match(request['head_ref'], r'refs/heads/[A-Za-z0-9._/-]+')):
+            raise TrackerBlocked('invalid-publication-request')
+        identity = publication_identity(request['identity'])
+        if request['identity']['repository'] != self.reader.config.repository:
+            raise TrackerBlocked('invalid-publication-request')
+        if request['head_repository'] != self.reader.config.repository:
+            raise TrackerBlocked('invalid-publication-request')
+        try:
+            content = canonical_json(request['content'])
+        except Exception:
+            raise TrackerBlocked('invalid-publication-content') from None
+        return identity, hashlib.sha256(content).hexdigest()
+
+    def _find(self, kind, request):
+        identity, content = self._request(request)
+        value, _, _ = self.reader._read(kind, identity)
+        if (not _keys(value, ('matches',)) or type(value['matches']) is not list
+                or len(value['matches']) > 1):
+            raise TrackerBlocked('ambiguous-publication-match')
+        if not value['matches']:
+            return None
+        found = value['matches'][0]
+        repository = re.escape(self.reader.config.repository)
+        url = (r'https://github\.com/' + repository + r'/pull/[1-9][0-9]*' if kind == 'pr'
+               else r'https://github\.com/' + repository + r'/issues/'
+                    + re.escape(request['identity']['issue']) + r'#issuecomment-[1-9][0-9]*')
+        if (not _keys(found, ('object_id', 'url', 'identity', 'base', 'head', 'checker',
+                             'base_ref', 'head_ref', 'head_repository', 'content_digest'))
+                or not _id(found['object_id']) or not _match(found['url'], url)
+                or any(found[key] != request[key] for key in
+                       ('identity', 'base', 'head', 'checker', 'base_ref', 'head_ref', 'head_repository'))
+                or found['content_digest'] != content):
+            raise TrackerBlocked('conflicting-publication-match')
+        return PublicationObject(found['object_id'], found['url'], found['content_digest'])
+
+    def find_pr(self, request):
+        return self._find('pr', request)
+
+    def find_evidence(self, request):
+        return self._find('evidence', request)
+
+    def _write(self, kind, request, operation_key):
+        self._request(request)
+        if self.writer is None or not callable(getattr(self.writer, 'write', None)):
+            raise TrackerBlocked('publication-write-unavailable')
+        if not _match(operation_key, r'(?:publish-pr|write-evidence):[A-Za-z0-9_-]{1,128}'):
+            raise TrackerBlocked('invalid-publication-operation-key')
+        try:
+            self.writer.write(kind, request, operation_key=operation_key)
+        except BaseException as error:
+            if not isinstance(error, Exception):
+                raise
+            raise WriteUnknown('publication-write-unknown') from None
+
+    def publish_pr(self, request, *, operation_key):
+        self._write('pr', request, operation_key)
+
+    def write_evidence(self, request, *, operation_key):
+        self._write('evidence', request, operation_key)
 
 
 def _match(value, pattern):

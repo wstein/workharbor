@@ -32,6 +32,65 @@ class Transport:
                                          encoded(self.payload))
 
 
+class PublicationTrackerTests(unittest.TestCase):
+    def setUp(self):
+        self.config = tracker.TrackerConfig('github', 'fixture/repo', 'repo-1',
+                                           'owner-1', 'host-verifier', 'e' * 40)
+        self.identity = dict(repository='fixture/repo', issue='17', feature='004-fixture',
+            task_id='T015', package_digest='a' * 64, guard_attempt_id='attempt',
+            implementation_commit='b' * 40, content_digest='c' * 64)
+        self.request = dict(identity=self.identity, base='d' * 40, head='e' * 40,
+                            checker='f' * 40, base_ref='refs/heads/main', head_ref='refs/heads/task',
+                            head_repository='fixture/repo', content={'title': 'fixture', 'body': 'safe'})
+        self.object = dict(object_id='pr-1', url='https://github.com/fixture/repo/pull/19',
+            identity=self.identity, base=self.request['base'], head=self.request['head'],
+            base_ref=self.request['base_ref'], head_ref=self.request['head_ref'],
+            head_repository=self.request['head_repository'],
+            checker=self.request['checker'], content_digest=hashlib.sha256(
+                encoded(self.request['content'])).hexdigest())
+        self.transport = Transport(dict(matches=[self.object]))
+        self.reader = tracker.AuthenticatedTracker(self.config, self.transport, clock=lambda: NOW)
+
+    def test_exact_authenticated_remote_lookup_and_ambiguous_conflicts(self):
+        publisher = tracker.PublicationTracker(self.reader)
+        found = publisher.find_pr(self.request)
+        self.assertEqual('pr-1', found.object_id)
+        self.transport.payload = {'matches': []}
+        self.assertIsNone(publisher.find_pr(self.request))
+        for matches in ([self.object, self.object], [{**self.object, 'head': 'f' * 40}],
+                        [{**self.object, 'base_ref': 'refs/heads/other'}],
+                        [{**self.object, 'head_ref': 'refs/heads/other'}],
+                        [{**self.object, 'head_repository': 'other/repository'}],
+                        [{**self.object, 'identity': {**self.identity, 'guard_attempt_id': 'other'}}]):
+            self.transport.payload = {'matches': matches}
+            with self.assertRaises(tracker.TrackerBlocked):
+                publisher.find_pr(self.request)
+
+    def test_writes_require_explicit_host_transport_and_sanitize_unknown_results(self):
+        publisher = tracker.PublicationTracker(self.reader)
+        with self.assertRaises(tracker.TrackerBlocked):
+            publisher.publish_pr(self.request, operation_key='publish-pr:fixture')
+        class Writer:
+            def write(self, *args, **kwargs):
+                raise RuntimeError('sensitive-provider-output')
+        publisher = tracker.PublicationTracker(self.reader, Writer())
+        with self.assertRaises(tracker.WriteUnknown) as failure:
+            publisher.publish_pr(self.request, operation_key='publish-pr:fixture')
+        self.assertNotIn('sensitive-provider-output', str(failure.exception))
+
+    def test_evidence_lookup_requires_exact_content_and_provider_envelope(self):
+        self.object['url'] = 'https://github.com/fixture/repo/issues/17#issuecomment-1'
+        publisher = tracker.PublicationTracker(self.reader)
+        self.assertEqual('pr-1', publisher.find_evidence(self.request).object_id)
+        self.object['content_digest'] = 'f' * 64
+        with self.assertRaises(tracker.TrackerBlocked):
+            publisher.find_evidence(self.request)
+        good = self.transport.read('evidence', 'fixture')
+        with patch.object(self.transport, 'read', return_value=replace(good, repository_id='other')):
+            with self.assertRaises(tracker.TrackerBlocked):
+                publisher.find_evidence(self.request)
+
+
 class TrackerTests(unittest.TestCase):
     def setUp(self):
         self.config = tracker.TrackerConfig('github', 'fixture/repo', 'repo-1',
