@@ -973,3 +973,191 @@ def write_preparation(root, output, value, summary):
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+
+
+def assess_readiness(approved, current, repository_snapshot, evidence, *, guard=None,
+                     authority=None, tracker=None, runtime=None, ownership=None,
+                     owner=None, authorized_actions=(), action_refs=None, live=True):
+    """Read all host gates for the entire approved execution; perform no write.
+
+    Host adapters are injected, never selected by a package/configuration file.
+    Feature 003 owns context, prerequisites, semantic comparison and scope. Source
+    and runtime retain their existing validators; missing real adapters block.
+    The returned binding supports fresh entry/post-check observation, not a lease.
+    """
+    import task_handoff
+    import task_outcomes
+    import task_source
+    import task_tracker
+
+    result = dict(schema_version=1, readiness_valid=False, execution_eligible=False,
+                  binding_digest=None, package_digest=None, revision_digest=None,
+                  approval_assurance=None, authenticated_approval=False,
+                  independent_review=None, live_execution=None, raw_exits=[],
+                  issue_digest=None, issue_labels=None, blockers=[])
+    try:
+        if type(live) is not bool:
+            raise PackageError('invalid-readiness-request')
+        package_bytes(approved)
+        package_bytes(current)
+        approved, current = build_package(approved), build_package(current)
+        result.update(package_digest=current['package_digest'],
+                      revision_digest=package_revision_digest(current))
+        if (current['issue'] is None or current['repository'] != repository_snapshot['repository']
+                or any(approved[key] != current[key]
+                       for key in ('repository', 'issue', 'feature', 'task_id', 'mode'))):
+            raise PackageError('readiness-identity-mismatch')
+        # These execution inputs are separate from artifact progress retention.
+        if any(canonical_json(approved[key]) != canonical_json(current[key])
+               for key in ('execution', 'outcomes')):
+            raise PackageError('execution-approval-renewal-required')
+        if any(current['execution'][key] is None for key in
+               ('symphony_revision', 'build_provenance', 'workflow_digest',
+                'template_digest', 'configuration_digest', 'guard_revision')):
+            raise PackageError('execution-identity-unavailable')
+        checks = task_outcomes.validate_checks(current['outcomes'])
+        capabilities = assess_capabilities('ready', current['mode'], guard=guard,
+                                          tracker=tracker, runtime=runtime, live=live)
+        result['blockers'].extend(capabilities['blockers'])
+        if not capabilities['capabilities_satisfied']:
+            return result
+        # Also require any extra capability named by the approved execution.
+        ports = dict(guard=guard, tracker=tracker, runtime=runtime)
+        for names in current['execution']['capabilities'].values():
+            for name in names:
+                _, blocker = _capability_evidence(name,
+                    ports[name.split('.')[0]].capabilities.get(name), live)
+                if blocker:
+                    raise PackageError('approved-capability-unavailable')
+        actions = current['execution']['external_actions']
+        if (type(authorized_actions) not in (tuple, list)
+                or any(type(action) is not str for action in authorized_actions)
+                or not set(actions) <= set(authorized_actions)):
+            raise PackageError('external-action-not-authorized')
+        if 'publish-pr' in actions and current['execution']['publication_scope'] is None:
+            raise PackageError('publication-scope-unavailable')
+        identity = task_tracker.IssueIdentity(current['repository'], current['issue']['number'])
+        if (type(owner) is not task_handoff.Owner
+                or owner.checkout != str(repository_snapshot['root'])):
+            raise PackageError('ownership-unavailable')
+
+        def observe_owner():
+            observed = ownership.observe(identity.repository, str(identity.number), owner)
+            if (type(observed) is not task_handoff.OwnershipEvidence
+                    or observed.repository != identity.repository
+                    or observed.issue != str(identity.number) or observed.owner != owner
+                    or observed.state != 'exclusive' or not _reference(observed.reference)
+                    or observed.reference is None or not _matches(observed.verifier, r'[A-Za-z0-9._-]{1,128}')):
+                raise PackageError('ownership-unavailable')
+            return observed
+
+        initial_owner = observe_owner()
+        issue = tracker.read_issue(identity)
+        if (type(issue) is not task_tracker.IssueObservation
+                or issue.repository != identity.repository or issue.number != identity.number
+                or issue.state != 'open' or not _digest(issue.object_digest)
+                or type(issue.labels) is not tuple or len(issue.labels) > 100
+                or any(not _matches(label, r'[A-Za-z0-9][A-Za-z0-9 ._/-]{0,49}') for label in issue.labels)
+                or len(set(issue.labels)) != len(issue.labels)):
+            raise PackageError('issue-not-eligible')
+        content = assess_content_approval(approved, current, repository_snapshot, evidence,
+                                         guard=guard, authority=authority, live=live)
+        result.update(approval_assurance=content['approval_assurance'],
+                      authenticated_approval=content['authenticated_approval'])
+        if not content['guard_entry_valid'] or not content['authenticated_approval']:
+            result['blockers'].extend(content['blockers'])
+            raise PackageError('authenticated-content-approval-required')
+        original = content['original_approval']
+        required = ['spec', 'plan']
+        if any(case['expected'] == 'assertion' for check in checks for case in check['cases']):
+            required.append('matrix')
+        if current['mode'] == 'owner-authorized rework':
+            required.append('rework')
+        references = dict(approved['approval_refs'])
+        if 'publish-pr' in actions:
+            required.append('publication')
+            if type(action_refs) is not dict:
+                raise PackageError('publication-approval-required')
+            references['publication'] = action_refs.get('publication')
+        for action in required:
+            reference = references.get(action)
+            if reference is None or not _reference(reference):
+                raise PackageError('action-approval-reference-missing')
+            target = approval_binding.ApprovalTarget(action, original['reviewed_revision'],
+                original['package_digest'], original['binding_digest'])
+            decision = authority.verify(reference, target)
+            if (type(decision) is not approval_binding.ApprovalVerification
+                    or decision.approved is not True or decision.assurance != 'authenticated-provider'
+                    or decision.target != target or decision.evidence_ref is None
+                    or not _reference(decision.evidence_ref)):
+                raise PackageError('authenticated-action-approval-required')
+        observed_runtime = runtime.observe_effective(build_package(current), evidence, live=live)
+        if (type(observed_runtime) is not dict or observed_runtime.get('local_verified') is not True
+                or live and observed_runtime.get('live_verified') is not True
+                or observed_runtime.get('blockers') != []
+                or not _digest(observed_runtime.get('binding_digest'))):
+            raise PackageError('runtime-readiness-blocked')
+        execution = observed_runtime.get('execution')
+        if (type(execution) is not dict
+                or any(execution.get(key) != current['execution'][key] for key in
+                       ('symphony_revision', 'build_provenance', 'workflow_digest',
+                        'template_digest', 'configuration_digest', 'guard_revision'))
+                or execution.get('argv_digest') != hashlib.sha256(canonical_json(
+                    [check['argv'] for check in checks])).hexdigest()
+                or execution.get('actions_digest') != hashlib.sha256(canonical_json(actions)).hexdigest()):
+            raise PackageError('runtime-execution-renewal-required')
+        live_ref = observed_runtime.get('live_execution')
+        if live and (not _matches(live_ref, r'sha256:[0-9a-f]{64}')):
+            raise PackageError('runtime-live-observation-unavailable')
+        # Observe source after all ports, catching drift during approval/runtime
+        # calls. This never creates a clean baseline over a dirty retry.
+        source = task_source.validate_source(repository_snapshot['root'],
+            repository_snapshot['accepted'], repository_snapshot['checker'],
+            repository_snapshot['source_context'], current['context'], evidence,
+            guard=guard, mode=current['mode'], live=live)
+        if (source['source_valid'] is not True
+                or source['snapshot']['accepted'] != current['source']['accepted_commit']
+                or source['snapshot']['head'] != current['source']['proposal_commit']
+                or source['snapshot']['head_tree'] != current['source']['proposal_tree']):
+            raise PackageError('source-readiness-blocked')
+        if tracker.read_issue(identity) != issue or observe_owner() != initial_owner:
+            raise PackageError('readiness-observation-drift')
+        # Recheck after the final host observations too: ownership/provider ports
+        # cannot hide a changed worktree or capability during their reads.
+        if runtime.observe_effective(build_package(current), evidence, live=live) != observed_runtime:
+            raise PackageError('runtime-readiness-drift')
+        repeated_source = task_source.validate_source(repository_snapshot['root'],
+            repository_snapshot['accepted'], repository_snapshot['checker'],
+            repository_snapshot['source_context'], current['context'], evidence,
+            guard=guard, mode=current['mode'], live=live)
+        repeated_caps = assess_capabilities('ready', current['mode'], guard=guard,
+                                           tracker=tracker, runtime=runtime, live=live)
+        if (not repeated_source['source_valid'] or repeated_source['snapshot'] != source['snapshot']
+                or repeated_caps != capabilities
+                or package_revision_digest(current) != result['revision_digest']):
+            raise PackageError('readiness-observation-drift')
+        binding = dict(revision=result['revision_digest'], source=source['snapshot'],
+            runtime=observed_runtime['binding_digest'], checks=task_outcomes.checks_digest(checks),
+            actions=actions, action_refs=action_refs, issue=current['issue'],
+            owner=dict(checkout=owner.checkout, host=owner.host, process=owner.process),
+            capabilities=capabilities['evidence'])
+        result.update(readiness_valid=True, binding_digest=hashlib.sha256(canonical_json(binding)).hexdigest(),
+                      issue_digest=issue.object_digest, issue_labels=list(issue.labels),
+                      live_execution=live_ref if live else None)
+    except PackageError as error:
+        result['blockers'].append(dict(code=error.code))
+    except Exception:
+        result['blockers'].append(dict(code='readiness-observation-unavailable'))
+    return result
+
+
+def revalidate_readiness(prior, approved, current, repository_snapshot, evidence, *, boundary, **ports):
+    """Repeat all gates at entry/post-check; never replace the original binding."""
+    result = assess_readiness(approved, current, repository_snapshot, evidence, **ports)
+    if (boundary not in ('entry', 'post-check', 'eligibility') or type(prior) is not dict
+            or prior.get('readiness_valid') is not True
+            or not _digest(prior.get('binding_digest'))
+            or result['binding_digest'] != prior['binding_digest']):
+        result['readiness_valid'] = False
+        result['blockers'].append(dict(code='readiness-binding-drift'))
+    return result

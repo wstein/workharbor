@@ -1,7 +1,8 @@
 # Validation guide: Task automation
 
-Status: T001–T007 provide local offline preparation and preview. Guard-backed
-execution, CI package integration and live readiness/handoff remain pending.
+Status: local package preparation, source/approval/runtime ports and readiness
+composition are implemented with disposable fixture evidence. Actual guard-backed
+execution and live readiness/handoff remain blocked on demonstrated host adapters.
 No live runtime is activated; offline results prove no owner authentication or
 Feature 004 completion.
 
@@ -72,6 +73,30 @@ and live observation remain null, execution eligibility false. Declaration of an
 intended red in the test-authoring fixture proves no executed/approved matrix;
 raw outcomes remain separate. Preparation/preview make no network, tracker,
 runtime, check or prerequisite calls. Canonical acceptance still reports the separate five retained raw baseline reds.
+
+## Readiness and entry revalidation
+
+```sh
+/opt/homebrew/bin/python3.14 -B -m unittest discover -s scripts -p test_task_readiness.py -v
+/opt/homebrew/bin/python3.14 -I -B scripts/task_automation.py ready --package PACKAGE.json --live-config LIVE.json
+```
+
+`ready` requires trusted host-injected guard, authenticated authority/tracker,
+runtime and exclusive ownership ports. `LIVE.json` is inert non-secret configuration;
+the standalone command returns exit 3 (`readiness-host-unavailable`) and writes
+nothing. Missing Feature 003 APIs, live observations or GitHub conditional safe-label
+capability also block. No legacy guard fallback or provider/configuration factory is
+supplied. Fake ports exercise the gate without proving live capability.
+
+Readiness validates every capability needed by the approved execution, not only
+entry, authenticates separate owner actions and checks exact source/runtime/settings/
+argv/actions. Publication approval is separate from execution approval. Guard-owned
+content comparison alone may retain proven progress-only changes. Runtime/workflow/
+argv drift requires renewal. Two fresh readiness observations precede one conditional
+write adding ready to the selected open issue while preserving unrelated labels.
+Unknown/failed writes are incomplete, never blindly retried. Repeat the original
+binding at entry and post-check; changed/dirty retry state blocks and is preserved.
+No reset, pin adoption, journal deletion or baseline recreation is a recovery step.
 
 ## Remaining acceptance scenarios
 

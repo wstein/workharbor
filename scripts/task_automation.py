@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline task preparation and preview; no execution or live adapters."""
+"""Task preparation, preview and host-injected fail-closed readiness."""
 import argparse
 from pathlib import Path
 import re
@@ -67,6 +67,8 @@ def validation_exit(report):
 
 
 def error_exit(code):
+    if code == 'readiness-host-unavailable':
+        return 3
     if code == 'output-conflict':
         return 5
     if code in ('output-unavailable', 'output-incomplete'):
@@ -76,7 +78,51 @@ def error_exit(code):
     return 2
 
 
-def main(argv=None, *, root=None, repository=None, recovery=None, recovery_ports=None):
+def ready(approved, current, snapshot, evidence, **ports):
+    """One conditional eligibility write after two fresh complete observations.
+
+    This is a host API. No package/configuration can construct its adapters.
+    Unsupported provider writes are never attempted; an uncertain write is not
+    retried and remains incomplete for operator reconciliation.
+    """
+    import task_tracker
+    result = package.assess_readiness(approved, current, snapshot, evidence, **ports)
+    if not result['readiness_valid']:
+        return result
+    result = package.revalidate_readiness(result, approved, current, snapshot, evidence,
+                                         boundary='eligibility', **ports)
+    if not result['readiness_valid']:
+        return result
+    try:
+        if (ports.get('live') is not True or 'replace-labels' not in ports.get('authorized_actions', ())
+                or 'replace-labels' not in current['execution']['external_actions']):
+            raise package.PackageError('eligibility-action-not-authorized')
+        tracker = ports['tracker']
+        identity = task_tracker.IssueIdentity(current['repository'], current['issue']['number'])
+        # Use the exact version/set from the final complete assessment. Another
+        # provider read here could change source/ownership after its last proof.
+        expected = dict(object_digest=result['issue_digest'], labels=tuple(result['issue_labels']))
+        if 'workharbor-ready' in expected['labels']:
+            result['execution_eligible'] = True
+            return result
+        desired = tuple(sorted((*expected['labels'], 'workharbor-ready')))
+        # The provider must enforce this exact observed version/set atomically,
+        # or prove serialization of all writers. A read/PUT/read is insufficient.
+        written = tracker.replace_labels(identity, expected, desired)
+        if written is not True:
+            result['blockers'].append(dict(code='eligibility-write-incomplete'))
+            return result
+        result['execution_eligible'] = True
+    except package.PackageError as error:
+        result['readiness_valid'] = False
+        result['blockers'].append(dict(code=error.code))
+    except Exception:
+        result['blockers'].append(dict(code='eligibility-write-uncertain'))
+    return result
+
+
+def main(argv=None, *, root=None, repository=None, readiness_host=None,
+         recovery=None, recovery_ports=None):
     """Host may inject repository identity; CLI uses local Git origin metadata."""
     result = envelope()
     try:
@@ -95,6 +141,9 @@ def main(argv=None, *, root=None, repository=None, recovery=None, recovery_ports
         mode = resume.add_mutually_exclusive_group(required=True)
         mode.add_argument('--offline', action='store_true')
         mode.add_argument('--live-config')
+        child = commands.add_parser('ready')
+        child.add_argument('--package', required=True)
+        child.add_argument('--live-config', required=True)
         args = parser.parse_args(argv)
         root = Path.cwd() if root is None else Path(root)
         name = args.input if args.command == 'prepare' else args.package
@@ -124,6 +173,27 @@ def main(argv=None, *, root=None, repository=None, recovery=None, recovery_ports
                 result.update(observed)
                 codes = {item['code'] for item in result['blockers']}
                 code = 0 if result['resume_valid'] else 5 if 'recovery-ownership-conflict' in codes else 3
+            print(package.canonical_json(result).decode('utf-8'))
+            return code
+        if args.command == 'ready':
+            if value['repository'] != repository:
+                raise package.PackageError('repository-mismatch')
+            # Configuration is inert non-secret input. Only trusted embedding
+            # code can provide ports; CLI defaults cannot acquire credentials,
+            # instantiate providers or turn configuration claims into authority.
+            config = package.parse_json(package.read_repository_file(
+                root, relative_path(root, args.live_config)))
+            if type(config) is not dict or not callable(readiness_host):
+                raise package.PackageError('readiness-host-unavailable')
+            host = readiness_host(value, config)
+            result.update(ready(host['approved'], value, host['snapshot'], host['evidence'],
+                                **host['ports']))
+            result.update(requested_mode=value['mode'], effective_mode=value['mode'])
+            code = 0 if result['execution_eligible'] else (
+                6 if any(b['code'] in ('eligibility-write-incomplete', 'eligibility-write-uncertain')
+                         for b in result['blockers']) else 3)
+            result.update(progress='eligible' if code == 0 else 'blocked',
+                          offline_result='not-requested')
             print(package.canonical_json(result).decode('utf-8'))
             return code
         snapshot = dict(root=root, repository=repository, approved=None, current=None)

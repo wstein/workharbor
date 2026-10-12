@@ -296,5 +296,299 @@ class ApprovalBridgeTests(unittest.TestCase):
                         moved.rename(self.root)
 
 
+class ReadinessTests(unittest.TestCase):
+    """Full readiness uses disposable ports, never actual dispatch authority."""
+    git = fixtures.RepositoryPrimitiveTests.git
+
+    def setUp(self):
+        ApprovalBridgeTests.setUp(self)
+        import task_handoff as handoff
+        import task_tracker as tracker
+        from pathlib import Path
+        import shutil
+        # Exercise the real source helper with its exact checker pin, rather
+        # than replacing source/history validation with a permissive fake.
+        (self.root / 'scripts').mkdir()
+        for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py'):
+            shutil.copy2(Path(package.__file__).with_name(name), self.root / 'scripts' / name)
+        self.git('add', '.')
+        self.git('commit', '-qm', 'fixture checker')
+        self.commit = self.git('rev-parse', 'HEAD').decode().strip()
+        tree = self.git('rev-parse', 'HEAD^{tree}').decode().strip()
+        self.input['source'].update(accepted_commit=self.commit, accepted_tree=tree,
+                                   proposal_commit=self.commit, proposal_tree=tree)
+        for artifact in self.input['source']['artifact_revisions']:
+            artifact['commit'] = self.commit
+        self.guard.revision = self.commit
+        self.input['execution']['guard_revision'] = self.commit
+        self.input.update(issue=dict(repository='fixture/offline', number=7), task_id='T013')
+        self.input['execution'].update(build_provenance='d' * 64,
+            external_actions=['publish-pr', 'write-evidence', 'replace-labels'],
+            publication_scope=dict(repository='fixture/offline', base_ref='refs/heads/main',
+                                   head_ref='refs/heads/task'))
+        self.input['approval_refs'].update(spec=REFERENCE, plan=REFERENCE, execution=REFERENCE)
+        self.approved = package.build_package(self.input)
+        self.current = copy.deepcopy(self.approved)
+        self.snapshot.update(accepted=self.commit, checker=self.commit,
+                             source_context=('local', self.commit, self.commit, self.commit))
+        self.authority.assurance = 'authenticated-provider'
+        self.owner = handoff.Owner(str(self.root), 'fixture-host', 'fixture-process')
+        self.issue = tracker.IssueObservation('fixture', 'repo-id', 'issue-id', 'fixture/offline',
+            7, 'open', ('unrelated',), 1, 'f' * 64, 1, 'verifier', self.commit)
+        test = self
+        capabilities = {name: package.CapabilityEvidence(True, self.commit, True, REFERENCE)
+                        for name in package.required_capabilities('ready', 'implement')}
+        self.guard.capabilities = capabilities
+
+        class Tracker:
+            def read_issue(self, identity):
+                test.calls.append(('issue', identity))
+                return test.issue
+
+            def replace_labels(self, identity, expected, desired):
+                test.calls.append(('write', identity, expected, desired))
+                return True
+
+        class Runtime:
+            def observe_effective(self, value, evidence, *, live=False):
+                test.calls.append(('runtime', value, live))
+                execution = dict(value['execution'],
+                    argv_digest=hashlib.sha256(package.canonical_json(
+                        [check['argv'] for check in value['outcomes']])).hexdigest(),
+                    actions_digest=hashlib.sha256(package.canonical_json(
+                        value['execution']['external_actions'])).hexdigest())
+                return dict(local_verified=True, live_verified=live, execution=execution,
+                            binding_digest='c' * 64, live_execution=REFERENCE, blockers=[])
+
+        class Ownership:
+            def observe(self, repository, issue, owner):
+                test.calls.append(('ownership',))
+                return handoff.OwnershipEvidence(repository, issue, owner, 'exclusive',
+                                                'fixture-verifier', REFERENCE)
+
+        self.tracker, self.runtime, self.ownership = Tracker(), Runtime(), Ownership()
+        self.tracker.capabilities = dict(capabilities)
+        self.runtime.capabilities = dict(capabilities)
+        self.ports = dict(guard=self.guard, authority=self.authority, tracker=self.tracker,
+            runtime=self.runtime, ownership=self.ownership, owner=self.owner,
+            authorized_actions=tuple(self.input['execution']['external_actions']),
+            action_refs={'publication': REFERENCE}, live=True)
+        self.evidence = {'fixture': 'fresh'}
+
+    def assess(self, **ports):
+        return package.assess_readiness(self.approved, self.current, self.snapshot,
+                                       self.evidence, **dict(self.ports, **ports))
+
+    def ready(self, **ports):
+        import task_automation as automation
+        return automation.ready(self.approved, self.current, self.snapshot,
+                                self.evidence, **dict(self.ports, **ports))
+
+    def assert_blocked(self, result):
+        self.assertFalse(result['readiness_valid'], result)
+        self.assertFalse(result['execution_eligible'], result)
+        self.assertFalse(any(call[0] == 'write' for call in self.calls))
+
+    def test_one_selected_issue_eligible_only_after_full_revalidation(self):
+        assessed = self.assess()
+        self.assertTrue(assessed['readiness_valid'], assessed)
+        self.assertFalse(assessed['execution_eligible'])
+        result = self.ready()
+        self.assertTrue(result['execution_eligible'], result)
+        writes = [call for call in self.calls if call[0] == 'write']
+        self.assertEqual(1, len(writes))
+        self.assertEqual(7, writes[0][1].number)
+        self.assertEqual(('unrelated', 'workharbor-ready'), writes[0][3])
+        self.assertEqual('write', self.calls[-1][0])
+
+    def test_missing_entire_execution_capabilities_write_nothing(self):
+        for name in package.required_capabilities('ready', 'implement'):
+            category = name.split('.')[0]
+            port = self.ports[category]
+            original = port.capabilities
+            port.capabilities = dict(original, **{name: package.CapabilityEvidence(False, None, None, None)})
+            with self.subTest(capability=name):
+                self.assert_blocked(self.ready())
+            port.capabilities = original
+
+    def test_github_safe_labels_false_blocks_without_write(self):
+        import task_tracker as tracker
+        configured = tracker.AuthenticatedTracker(tracker.TrackerConfig('github', 'fixture/offline',
+            'repo-id', 'owner-id', 'verifier', self.commit), type('Transport', (), {'read': lambda *a: None})())
+        self.assert_blocked(self.ready(tracker=configured))
+
+    def test_separate_actions_and_authenticated_owner_approvals_required(self):
+        for action in ('spec', 'plan', 'execution', 'publication'):
+            original = self.authority.verify
+            def reject(reference, target):
+                if target.action == action:
+                    return binding.ApprovalVerification(False, 'authenticated-provider', target, REFERENCE)
+                return original(reference, target)
+            with self.subTest(action=action), patch.object(self.authority, 'verify', side_effect=reject):
+                self.assert_blocked(self.ready())
+        self.authority.assurance = 'supplied-local'
+        self.assert_blocked(self.ready())
+        self.authority.assurance = 'authenticated-provider'
+        self.assert_blocked(self.ready(authorized_actions=('replace-labels',)))
+        self.assert_blocked(self.ready(action_refs={}))
+
+    def test_owner_source_dirty_retry_and_semantic_execution_drift_preserve_inputs(self):
+        with patch.object(self.ownership, 'observe', return_value=None):
+            self.assert_blocked(self.ready())
+        path = self.root / 'data/input.json'
+        original = path.read_bytes()
+        path.write_bytes(b'dirty retry')
+        self.assert_blocked(self.ready())
+        self.assertEqual(b'dirty retry', path.read_bytes())
+        path.write_bytes(original)
+        for key in ('workflow_digest', 'symphony_revision', 'configuration_digest'):
+            self.current = copy.deepcopy(self.approved)
+            self.current.pop('package_digest')
+            self.current['execution'][key] = 'f' * len(self.current['execution'][key])
+            self.current = package.build_package(self.current)
+            with self.subTest(key=key):
+                result = self.ready()
+                self.assert_blocked(result)
+                self.assertIn('execution-approval-renewal-required', [b['code'] for b in result['blockers']])
+
+    def test_check_argv_change_requires_renewal(self):
+        self.current.pop('package_digest')
+        self.current['outcomes'][0]['argv'][-2] = 'other_*.py'
+        self.current = package.build_package(self.current)
+        result = self.ready()
+        self.assert_blocked(result)
+        self.assertIn('execution-approval-renewal-required', [b['code'] for b in result['blockers']])
+
+    def test_drift_during_runtime_observation_blocks_before_write(self):
+        original = self.runtime.observe_effective
+        def drift(*args, **kwargs):
+            result = original(*args, **kwargs)
+            (self.root / 'data/input.json').write_bytes(b'changed during observation')
+            return result
+        with patch.object(self.runtime, 'observe_effective', side_effect=drift):
+            self.assert_blocked(self.ready())
+
+    def test_entry_and_post_check_revalidate_without_reset_or_baseline_adoption(self):
+        prior = self.assess()
+        self.assertTrue(prior['readiness_valid'], prior)
+        for boundary in ('entry', 'post-check'):
+            result = package.revalidate_readiness(prior, self.approved, self.current,
+                self.snapshot, self.evidence, boundary=boundary, **self.ports)
+            self.assertTrue(result['readiness_valid'], result)
+        self.tracker.capabilities.pop('guard.recovery', None)
+        self.guard.capabilities.pop('guard.recovery')
+        self.assert_blocked(package.revalidate_readiness(prior, self.approved, self.current,
+            self.snapshot, self.evidence, boundary='entry', **self.ports))
+
+    def test_runtime_and_provider_errors_are_sanitized(self):
+        for port, method in ((self.runtime, 'observe_effective'), (self.tracker, 'read_issue'),
+                             (self.ownership, 'observe')):
+            with self.subTest(method=method), patch.object(port, method, side_effect=RuntimeError('secret-canary')):
+                result = self.ready()
+                self.assert_blocked(result)
+                self.assertNotIn('secret-canary', package.canonical_json(result).decode())
+
+    def test_unknown_write_is_incomplete_and_never_retried(self):
+        for effect in (False, RuntimeError('secret-canary')):
+            self.calls.clear()
+            with self.subTest(effect=type(effect).__name__):
+                if isinstance(effect, Exception):
+                    replacement = patch.object(self.tracker, 'replace_labels', side_effect=effect)
+                else:
+                    replacement = patch.object(self.tracker, 'replace_labels', return_value=effect)
+                with replacement as write:
+                    result = self.ready()
+                self.assertFalse(result['execution_eligible'], result)
+                self.assertEqual(1, write.call_count)
+                self.assertIn(result['blockers'][-1]['code'],
+                              ('eligibility-write-incomplete', 'eligibility-write-uncertain'))
+                self.assertNotIn('secret-canary', package.canonical_json(result).decode())
+
+    def test_final_issue_read_drift_blocks_before_conditional_write(self):
+        for changed in ('source', 'safe-labels', 'runtime', 'ownership'):
+            with self.subTest(changed=changed):
+                self.calls.clear()
+                original = self.tracker.read_issue
+                reads = 0
+                runtime = self.runtime.observe_effective
+                path = self.root / 'data/input.json'
+                before = path.read_bytes()
+                caps = dict(self.tracker.capabilities)
+                def late_read(identity):
+                    nonlocal reads
+                    reads += 1
+                    if reads == 4:
+                        if changed == 'source':
+                            path.write_bytes(b'late dirty retry')
+                        elif changed == 'safe-labels':
+                            self.tracker.capabilities.pop('tracker.safe-labels')
+                        elif changed == 'runtime':
+                            def drift(*args, **kwargs):
+                                observed = runtime(*args, **kwargs)
+                                observed['binding_digest'] = 'f' * 64
+                                return observed
+                            self.runtime.observe_effective = drift
+                        else:
+                            self.ownership.observe = lambda *args: None
+                    return original(identity)
+                observe = self.ownership.observe
+                try:
+                    with patch.object(self.tracker, 'read_issue', side_effect=late_read):
+                        self.assert_blocked(self.ready())
+                    self.assertEqual(4, reads)
+                    if changed == 'source':
+                        self.assertEqual(b'late dirty retry', path.read_bytes())
+                finally:
+                    path.write_bytes(before)
+                    self.tracker.capabilities = caps
+                    self.runtime.observe_effective = runtime
+                    self.ownership.observe = observe
+
+    def test_missing_or_tampered_package_seals_never_adopted(self):
+        for which in ('approved', 'current'):
+            value = getattr(self, which)
+            for seal in (None, 'f' * 64):
+                changed = copy.deepcopy(value)
+                if seal is None:
+                    changed.pop('package_digest')
+                else:
+                    changed['package_digest'] = seal
+                with self.subTest(which=which, seal=seal), patch.object(self, which, changed):
+                    result = self.ready()
+                    self.assert_blocked(result)
+                    self.assertIn(result['blockers'][-1]['code'],
+                                  ('package-digest-missing', 'package-digest-mismatch'))
+
+    def test_entry_runtime_binding_drift_blocks_without_adoption(self):
+        prior = self.assess()
+        original = self.runtime.observe_effective
+        def changed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            result['binding_digest'] = 'f' * 64
+            return result
+        with patch.object(self.runtime, 'observe_effective', side_effect=changed):
+            result = package.revalidate_readiness(prior, self.approved, self.current,
+                self.snapshot, self.evidence, boundary='post-check', **self.ports)
+        self.assert_blocked(result)
+        self.assertEqual('c' * 64, original(self.current, self.evidence)['binding_digest'])
+        self.assertIn('readiness-binding-drift', [b['code'] for b in result['blockers']])
+
+    def test_ready_cli_defaults_unavailable_without_host_ports(self):
+        import contextlib
+        import io
+        import task_automation as automation
+        (self.root / 'package.json').write_bytes(package.package_bytes(self.current))
+        (self.root / 'live.json').write_bytes(b'{"provider":"github"}')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = automation.main(['ready', '--package', 'package.json', '--live-config', 'live.json'],
+                                   root=self.root, repository='fixture/offline')
+        response = package.parse_json(output.getvalue().encode())
+        self.assertEqual(3, code)
+        self.assertFalse(response['execution_eligible'])
+        self.assertEqual([{'code': 'readiness-host-unavailable'}], response['blockers'])
+        self.assertFalse(any(call[0] == 'write' for call in self.calls))
+
+
 if __name__ == '__main__':
     unittest.main()
