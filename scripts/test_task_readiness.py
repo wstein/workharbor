@@ -301,6 +301,13 @@ class ReadinessTests(unittest.TestCase):
     git = fixtures.RepositoryPrimitiveTests.git
 
     def setUp(self):
+        # This disposable repository has local source pins, independent of the
+        # enclosing Actions checkout. Restore host event evidence on cleanup.
+        events = patch.dict(os.environ)
+        events.start()
+        self.addCleanup(events.stop)
+        for name in ('GITHUB_EVENT_NAME', 'GITHUB_SHA', 'GITHUB_EVENT_PATH'):
+            os.environ.pop(name, None)
         ApprovalBridgeTests.setUp(self)
         import task_handoff as handoff
         import task_tracker as tracker
@@ -636,6 +643,28 @@ class ReadinessTests(unittest.TestCase):
             self.assertIn('--no-lazy-fetch', argv)
             self.assertEqual('1', environment.get('GIT_NO_LAZY_FETCH'))
             self.assertEqual('', environment.get('GIT_ALLOW_PROTOCOL'))
+
+
+class ReadinessFixtureEnvironmentTests(unittest.TestCase):
+    def test_local_fixture_isolates_and_restores_host_event_without_weakening_gate(self):
+        import check_ci
+        for event in ('push', 'pull_request'):
+            host = dict(GITHUB_EVENT_NAME=event, GITHUB_SHA='f' * 40,
+                        GITHUB_EVENT_PATH='/unread-host-event.json')
+            with self.subTest(event=event), patch.dict(os.environ, host):
+                fixture = ReadinessTests('test_one_selected_issue_eligible_only_after_full_revalidation')
+                try:
+                    fixture.setUp()
+                    for name in host:
+                        self.assertNotIn(name, os.environ)
+                    self.assertTrue(fixture.ready()['execution_eligible'])
+                    # Production must still reject mismatched host-event pins.
+                    with patch.dict(os.environ, host), self.assertRaisesRegex(
+                            ValueError, 'Stale or unsupported event'):
+                        check_ci.source_context(fixture.root, *fixture.snapshot['source_context'])
+                finally:
+                    fixture.doCleanups()
+                self.assertEqual(host, {name: os.environ.get(name) for name in host})
 
 
 if __name__ == '__main__':
