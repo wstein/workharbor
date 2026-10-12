@@ -98,6 +98,21 @@ Unknown/failed writes are incomplete, never blindly retried. Repeat the original
 binding at entry and post-check; changed/dirty retry state blocks and is preserved.
 No reset, pin adoption, journal deletion or baseline recreation is a recovery step.
 
+T013 local evidence: accepted GitHub `main` was freshly read/cloned at
+`2cc1825413573ea9c49c01db92e44a221bf18d13`; implementation commits are `55bb1eb`
+and `c49eff1`. Python 3.14.8, with `/opt/homebrew/bin` first in child PATH:
+`/opt/homebrew/bin/python3.14 -B -m unittest discover -s scripts -p PATTERN -v`
+passed for `test_task_readiness.py` (31), `test_task_automation.py` (28) and
+`test_check_ci.py` (44), each exit 0. `git diff --check` passed. Review regressions
+cover missing seals, final-read source/runtime/ownership drift, extra-capability
+loss/change and credential-free local-only Git children. The shared Git helper
+correction was explicitly authorized after that credential-boundary finding;
+acceptance policy/classifier/manifest and Feature 001–003 guard/contracts are unchanged.
+The initial missing-API run and intermediate run overlapping checker-file edits
+were red and are not acceptance evidence. Canonical `make check` and raw baseline
+reporting belong to the coordinator's final combined T017 run, not these focused
+results. No actual provider/runtime/guard capability or live dispatch was verified.
+
 ## Remaining acceptance scenarios
 
 The scenarios below belong to later tasks and are not claimed by this offline MVP.
