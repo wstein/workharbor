@@ -13,6 +13,8 @@ cross-host exclusion. Callers supply non-secret, bounded evidence only.
 """
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime
+from decimal import Decimal
 import errno
 import fcntl
 import hashlib
@@ -149,6 +151,175 @@ def _matches(value, expression):
 
 def _reference(value):
     return _matches(value, r'sha256:[0-9a-f]{64}')
+
+
+ADMINISTRATION = frozenset(('preparation', 'approval', 'check', 'configuration',
+                            'handoff', 'handoff-repair', 'administration'))
+EXCLUSIONS = frozenset(('implementation', 'computation', 'waiting'))
+MEASUREMENT_CATEGORIES = frozenset(('documentation', 'implementation', 'test-authoring',
+                                  'interrupted-retry'))
+
+
+@dataclass(frozen=True)
+class AdministrationInterval:
+    started_at: str
+    ended_at: str
+    activity: str
+    attempt_id: str
+    evidence_ref: str
+
+
+@dataclass(frozen=True)
+class AdministrationObservation:
+    """One eligible task from preparation through review handoff, across retries.
+
+    attempts is the ordered retry chain: every entry after the first retries its
+    predecessor. Evidence binds that relationship and every classified interval.
+    Supplied records are not proof of live execution, eligibility or efficiency.
+    """
+
+    sample: int
+    task: str
+    categories: tuple[str, ...]
+    package_digest: str
+    source_revision: str
+    runtime_revision: str
+    tool_revisions: dict[str, str]
+    started_at: str
+    ended_at: str
+    active_administration_seconds: int | float
+    intervals: tuple[AdministrationInterval, ...]
+    attempts: tuple[str, ...]
+    evidence_ref: str
+
+    def encoded(self):
+        validate_administration_observation(self)
+        return _encode(asdict(self))
+
+
+def _measurement_time(value):
+    if not _matches(value, r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z'):
+        raise InvalidState('Measurement boundaries require explicit UTC timestamps')
+    try:
+        return datetime.fromisoformat(value[:-1] + '+00:00')
+    except ValueError:
+        raise InvalidState('Invalid measurement boundary') from None
+
+
+def _exact_revision(value):
+    return _matches(value, r'[0-9a-f]{40}') or _reference(value)
+
+
+def validate_administration_observation(value):
+    """Reject unaccounted time; count active approval/check work, not waiting.
+
+    Every interval is wholly active administration or one explicit exclusion.
+    Microsecond boundaries are retained; active work is never rounded down.
+    """
+    if type(value) is not AdministrationObservation:
+        raise InvalidState('Administration observation required')
+    if type(value.sample) is not int or value.sample < 1:
+        raise InvalidState('Positive measurement sample ordinal required')
+    _text(value.task)
+    if (type(value.categories) is not tuple or not value.categories
+            or any(type(item) is not str for item in value.categories)
+            or len(set(value.categories)) != len(value.categories)
+            or not set(value.categories) <= MEASUREMENT_CATEGORIES):
+        raise InvalidState('Invalid measurement task categories')
+    if (not _matches(value.package_digest, r'[0-9a-f]{64}')
+            or not _matches(value.source_revision, r'[0-9a-f]{40}')
+            or not _exact_revision(value.runtime_revision)
+            or type(value.tool_revisions) is not dict or not value.tool_revisions
+            or not _reference(value.evidence_ref)):
+        raise InvalidState('Exact measurement revisions and evidence required')
+    for tool, revision in value.tool_revisions.items():
+        _text(tool)
+        if not (_exact_revision(revision) or _matches(
+                revision, r'version:[0-9]+(?:\.[0-9]+)+(?:[-+][0-9A-Za-z.-]+)?')):
+            raise InvalidState('Exact tool commit, digest or version required')
+    if (type(value.attempts) is not tuple or not value.attempts
+            or any(type(item) is not str for item in value.attempts)):
+        raise InvalidState('Ordered measurement attempt chain required')
+    for attempt in value.attempts:
+        _text(attempt)
+    if (len(set(value.attempts)) != len(value.attempts)
+            or (len(value.attempts) > 1) != ('interrupted-retry' in value.categories)):
+        raise InvalidState('Retry chain and interrupted-retry category conflict')
+    if type(value.active_administration_seconds) not in (int, float):
+        raise InvalidState('Numeric active administration seconds required')
+    seconds = Decimal(str(value.active_administration_seconds))
+    if not seconds.is_finite() or seconds < 0:
+        raise InvalidState('Finite nonnegative active administration seconds required')
+    start, end = _measurement_time(value.started_at), _measurement_time(value.ended_at)
+    if end <= start or type(value.intervals) is not tuple or not value.intervals:
+        raise InvalidState('Complete measurement timeline required')
+    boundary, active_microseconds, attempts = start, 0, []
+    for interval in value.intervals:
+        if (type(interval) is not AdministrationInterval
+                or type(interval.activity) is not str
+                or interval.activity not in ADMINISTRATION | EXCLUSIONS
+                or type(interval.attempt_id) is not str
+                or interval.attempt_id not in value.attempts
+                or not _reference(interval.evidence_ref)):
+            raise InvalidState('Classified measurement interval and evidence required')
+        left, right = _measurement_time(interval.started_at), _measurement_time(interval.ended_at)
+        if left != boundary or right <= left or right > end:
+            raise InvalidState('Measurement intervals have a gap, overlap or omitted boundary')
+        if interval.activity in ADMINISTRATION:
+            duration = right - left
+            active_microseconds += ((duration.days * 86400 + duration.seconds) * 1000000
+                                    + duration.microseconds)
+        if not attempts or attempts[-1] != interval.attempt_id:
+            attempts.append(interval.attempt_id)
+        boundary = right
+    if boundary != end or tuple(attempts) != value.attempts:
+        raise InvalidState('Measurement timeline or retry chain is incomplete')
+    if seconds * 1000000 != active_microseconds:
+        raise InvalidState('Active administration total omits or adds classified time')
+    _encode(asdict(value))
+    return value
+
+
+def validate_administration_sample(observations, expected_samples):
+    """Validate five consecutive tasks against the caller's complete roster.
+
+    The caller supplies eligible-task order from separately authorized evidence;
+    this validator cannot authenticate it. Keep target misses in the sample.
+    Validation neither asserts the <10-minute target nor creates measurements.
+    """
+    if (type(observations) not in (tuple, list) or type(expected_samples) not in (tuple, list)
+            or len(observations) != 5 or len(expected_samples) != 5):
+        raise InvalidState('Five consecutive individual measurement records required')
+    roster = []
+    for entry in expected_samples:
+        if (type(entry) not in (tuple, list) or len(entry) != 2
+                or type(entry[0]) is not int or entry[0] < 1):
+            raise InvalidState('Complete eligible-task roster required')
+        _text(entry[1])
+        roster.append(tuple(entry))
+    if (len({task for _, task in roster}) != 5
+            or [sample for sample, _ in roster] != list(range(roster[0][0], roster[0][0] + 5))):
+        raise InvalidState('Missing, duplicate or selectively omitted eligible task')
+    categories = set()
+    for value, expected in zip(observations, roster):
+        validate_administration_observation(value)
+        if (value.sample, value.task) != expected:
+            raise InvalidState('Measurement sample does not match complete eligible-task roster')
+        categories.update(value.categories)
+    if not MEASUREMENT_CATEGORIES <= categories:
+        raise InvalidState('Measurement sample lacks required task categories or interrupted retry')
+    return tuple(observations)
+
+
+def _administration_from_payload(payload):
+    try:
+        fields = dict(payload)
+        fields['categories'] = tuple(fields['categories'])
+        fields['attempts'] = tuple(fields['attempts'])
+        fields['intervals'] = tuple(AdministrationInterval(**item) for item in fields['intervals'])
+        return validate_administration_observation(AdministrationObservation(**fields))
+    except (TypeError, ValueError, KeyError):
+        raise InvalidState('Invalid retained administration observation') from None
 
 
 def _guard_call(method, *args, **kwargs):
@@ -1001,9 +1172,34 @@ class Journal:
                                             (identity,))]
 
     def append(self, key, kind, payload):
-        if kind in ('intent', 'result'):
-            raise InvalidState('Operation events require the intent/result API')
+        if kind in ('intent', 'result', 'administration-observation'):
+            raise InvalidState('Reserved event requires its validated journal API')
         return self._append(key, kind, payload)
+
+    def administration_observations(self, key):
+        values = tuple(_administration_from_payload(event['payload']) for event in self.events(key)
+                       if event['kind'] == 'administration-observation')
+        if len(values) > 1:
+            raise InvalidState('Conflicting administration observations retained')
+        for value in values:
+            if value.package_digest != key.package_digest or value.attempts[0] != key.guard_attempt_id:
+                raise InvalidState('Administration observation belongs to another package or attempt')
+        return values
+
+    def capture_administration(self, key, value):
+        """Retain one exact observation; repeats do not double-count a retry."""
+        self._key(key)
+        encoded = value.encoded() if type(value) is AdministrationObservation else None
+        if (encoded is None or value.package_digest != key.package_digest
+                or value.attempts[0] != key.guard_attempt_id):
+            raise InvalidState('Administration observation belongs to another package or attempt')
+        with self.transaction():
+            previous = self.administration_observations(key)
+            if previous:
+                if previous[0].encoded() != encoded:
+                    raise StateConflict('Changed administration observation; retain original evidence')
+                return
+            self._append(key, 'administration-observation', asdict(value))
 
     def _append(self, key, kind, payload):
         _text(kind)
@@ -1113,6 +1309,7 @@ class Journal:
             identity, encoded = self._key(key)
             if record['key'] != identity or record['identity'] != encoded:
                 raise InvalidState('Corrupt handoff identity retained')
+            self.administration_observations(key)
             operations = {}
             for sequence, event in enumerate(self.events(key), 1):
                 _text(event['kind'])
