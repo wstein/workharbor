@@ -48,6 +48,7 @@
     "test_check_ci.SourceTests.test_git_objects_refuse_replacements_and_grafts",
     "test_check_ci.SourceTests.test_invalid_source_blocks_before_any_check_runs",
     "test_check_ci.SourceTests.test_missing_objects_and_partial_context_block",
+    "test_check_ci.SourceTests.test_normal_cli_subprocess_retains_adjacent_module_imports",
     "test_check_ci.SourceTests.test_post_check_source_drift_blocks",
     "test_check_ci.SourceTests.test_python_cache_is_external_for_current_and_child_imports_and_restored",
     "test_check_ci.SourceTests.test_source_pin_identifies_exact_code_without_adoption",

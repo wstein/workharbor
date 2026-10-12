@@ -113,8 +113,10 @@ def source_context(root, event=None, base=None, head=None, checkout=None):
 def isolated_python_cache():
     """Keep cache reads and generated files outside the candidate checkout."""
     with tempfile.TemporaryDirectory(prefix='workharbor-ci-cache-') as cache:
+        # Runner/check interpreters use -I. Normal CLI subprocesses under test
+        # still need Python's script-directory imports for adjacent modules.
         names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1',
-                 'PYTHONNOUSERSITE': '1', 'PYTHONSAFEPATH': '1', 'GIT_NO_REPLACE_OBJECTS': '1'}
+                 'PYTHONNOUSERSITE': '1', 'GIT_NO_REPLACE_OBJECTS': '1'}
         previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON') or name == 'GIT_NO_REPLACE_OBJECTS'}
         prefix, no_write = sys.pycache_prefix, sys.dont_write_bytecode
         for name in previous:
