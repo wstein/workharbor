@@ -265,6 +265,40 @@ class SourceTests(unittest.TestCase):
         context = self.merge(self.git('rev-parse', 'HEAD'), head)
         self.assertFalse(ci.approved_operator_tooling(self.root, context, policy))
 
+    def test_full_rebase_rewrites_baseline_and_rejects_unreviewed_prefix_states(self):
+        policy = self.adopt_fixture_policy()
+        original_tree = self.git('rev-parse', policy + '^{tree}')
+        main = 'd04f711e7b43f67bd6495cc4fae5ad40e73bab4c'
+        with mock.patch.dict(os.environ, GIT_COMMITTER_DATE='2000-01-01T00:00:00Z'):
+            self.git('rebase', '--force-rebase', main)
+        rewritten = self.git('rev-parse', 'HEAD')
+        self.assertNotEqual(policy, rewritten)
+        self.assertEqual(original_tree, self.git('rev-parse', rewritten + '^{tree}'))
+        self.assertNotEqual(0, subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor',
+                                            ci.DOCUMENTATION_POLICY_SOURCE, rewritten],
+                                           cwd=self.root, capture_output=True).returncode)
+        anchor = ci.candidate_policy_anchor(self.root, rewritten)
+        self.assertNotEqual(ci.DOCUMENTATION_POLICY_SOURCE, anchor)
+        self.assertEqual(self.git('rev-parse', ci.DOCUMENTATION_POLICY_SOURCE + '^{tree}'),
+                         self.git('rev-parse', anchor + '^{tree}'))
+        self.assertTrue(ci.approved_operator_tooling(self.root, None, policy))
+        base = self.commit('docs/after-main-rebase.md')
+        self.git('checkout', '--quiet', '--detach', rewritten)
+        head = self.commit('docs/after-main-proposal.md')
+        self.assertTrue(ci.approved_operator_tooling(self.root, self.merge(base, head), policy))
+        # Insert an unreviewed protected state before the equivalent anchor,
+        # then restore its exact tree. Final equality cannot erase that state.
+        prefix = self.git('rev-parse', anchor + '^')
+        self.git('checkout', '--quiet', '--detach', prefix)
+        bad = self.commit('Makefile', 'unreviewed metadata fixture\n')
+        self.git('revert', '--no-edit', bad)
+        self.git('read-tree', '--reset', '-u', anchor)
+        self.git('commit', '--quiet', '-m', 'test: exact equivalent anchor after hidden change')
+        self.git('read-tree', '--reset', '-u', rewritten)
+        self.git('commit', '--quiet', '-m', 'test: exact final tree after hidden change')
+        self.assertEqual(original_tree, self.git('rev-parse', 'HEAD^{tree}'))
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+
     def test_main_promotion_requires_trusted_prefix_and_complete_approved_snapshot(self):
         policy = self.adopt_fixture_policy()
         main = 'd04f711e7b43f67bd6495cc4fae5ad40e73bab4c'
