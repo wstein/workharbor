@@ -14,7 +14,8 @@
   "gate": "Executable preparation was authorized separately. No T011 task entry, completion checkbox, --matrix-approved invocation, or test-authoring acceptance until the owner approves this exact reviewed source-bound matrix and argv.",
   "authoring_scope": [
     "tests/test_single_task_scope.py",
-    "docs/development/feature003-scope-matrix.json"
+    "docs/development/feature003-scope-matrix.json",
+    "specs/003-single-task-entry/data-model.md (proposed SemanticReview clarification only)"
   ],
   "fixture": "Every collected case successfully invokes the real reviewed T010 begin --context and status --attempt, then reads the actual persisted attempt from store.read_attempt. Each fixture is a disposable offline Git repository using existing SingleTaskFixture. The immutable context and entry task bytes are checked before each proposed owning seam.",
   "proposal_categories": [
@@ -281,8 +282,8 @@
   "ci_policy": "No changes to docs/development/ci-acceptance.json, scripts/check_ci.py or scripts/task_outcomes.py. The final reviewed T010 source supersedes original main’s five helper reds with 19 explicit remaining completion/retry/legacy-CLI assertions. Preserve that exact accepted source and policy; do not relabel pending migrations as implemented.",
   "ownership": "T011 owns direct inventory/manifest/schema/review and read-only preparation behavior. T012 owns public inspect identities/envelope and verify/complete acceptance execution, failures, mutations and selected-marker completion. No T015/T017 success implementation is required for T011 direct semantic validation.",
   "pending": [
-    "Independent review of exact executable-preparation candidate",
-    "Owner decision on the versioned SemanticReview compatibility proposal and exact source-bound case matrix/argv",
+    "Final independent review of the doc-only clarification and exact source/input rebinding",
+    "Owner decision on the explicit versioned SemanticReview shape clarification and exact T011/T012 source-bound matrices/argv",
     "Coordinator rebinding after any combined publication/integration changes; no inherited approval across changed source"
   ],
   "limitations": "Preparation only. The observed reds establish absent owning capabilities after valid entry/status; deeper assertions remain unexecuted. No implementation evidence, accepted test-authoring outcome, T011 checkbox, provider/runtime activation, authenticated owner verification, publication, or live test claim. Canonical make check is coordinator-owned and was not run by this bounded leaf.",
@@ -935,13 +936,18 @@
     "task_outcomes_tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
     "candidate_commit_and_input_snapshot": "Sealed outside this checked root after committing the proposal, to avoid self-referential snapshot fields. The owner decision must name that exact candidate, external matrix digest, input revision and executable argv; any later integration or source change requires rebinding.",
     "accepted_main_commit": "e3e80a2e5b1cf0726e82c110793327a86eb35a72",
-    "retained_observation_source": "Observed against historical reviewed 4683665f07c641c5dbfebca8e5a4f1c5619fadab; accepted main e3e80a2 has byte-identical full tree. Rebinding changes commit/snapshot identity only; no test or implementation bytes changed.",
+    "retained_observation_source": "The 76-case capture used reviewed T0104683665 plus draft tests SHA256 340d3a87e7675dfcbf567aa1abfaef78b6eff5b602e0616d1787df2274eb557a, frozen in proposal46aeb517. Accepted main e3e80a2 has the same full prerequisite tree. This revision changes proposal/model prose only; test, runner and execution blobs remain byte-identical. No new raw test run is claimed.",
     "interpreter": "/opt/homebrew/opt/python@3.14/bin/python3.14",
-    "interpreter_note": "task_outcomes requires argv[0] equal to sys.executable, which resolves this Homebrew entry point to /opt/homebrew/opt/python@3.14/bin/python3.14."
+    "interpreter_note": "task_outcomes requires argv[0] equal to sys.executable, which resolves this Homebrew entry point to /opt/homebrew/opt/python@3.14/bin/python3.14.",
+    "prior_executable_proposal_commit": "46aeb51797d54747dc6fd24cd5e253093a7cfe0e"
   },
   "schema_version_compatibility_proposal": {
-    "status": "requires explicit owner decision; authoritative spec/contract unchanged",
-    "required_semantic_fields": [
+    "status": "explicit clarification proposed for owner review; no new evidence format",
+    "existing_authority": "data-model.md introductory rule requires schema_version: 1 for all context/evidence formats and rejects unknown/missing fields; SemanticReview lists seven semantic fields.",
+    "approved_fixture_provenance": "T001 tests/fixtures/single-task/review.json at accepted main e3e80a2e5b1cf0726e82c110793327a86eb35a72 already contains schema_version: 1 plus those seven semantic fields.",
+    "proposed_artifact": "specs/003-single-task-entry/data-model.md#semanticreview-immutable-per-acceptance-identity",
+    "exact_keys": [
+      "schema_version",
       "attempt_id",
       "task_id",
       "context_digest",
@@ -950,7 +956,8 @@
       "evidence_ref",
       "approved"
     ],
-    "additional_fixture_field": "Existing reviewed tests/fixtures/single-task/review.json includes schema_version: 1. Draft API tests preserve that versioned fixture and propose exactly these eight fields, with schema_version strictly integer 1. This is a documented compatibility proposal, not a silent amendment."
+    "version_rule": "schema_version must be integer 1; reject missing/unknown keys. Existing semantic rules and approved=true requirement are unchanged.",
+    "owner_decision": "Approve this explicit shape clarification together with the exact T011/T012 matrices and source-bound argv; no approval is inferred."
   },
   "baseline_policy": {
     "reviewed_commit": "4683665f07c641c5dbfebca8e5a4f1c5619fadab",
