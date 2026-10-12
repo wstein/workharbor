@@ -553,3 +553,136 @@ def publish_completion(worktree_root, store, attempt_id):
                     os.unlink(temporary, dir_fd=parent_fd)
             finally:
                 os.close(parent_fd)
+
+
+def implementation_binding(store, attempt_id):
+    """Return the one immutable implementation identity, never latest check HEAD."""
+    events = [event for event in store.read_events(attempt_id)
+              if event['kind'] == 'implementation-binding']
+    if len(events) > 1:
+        raise InvalidState('Conflicting implementation evidence')
+    return events[0]['payload'] if events else None
+
+
+def bind_implementation(worktree_root, store, attempt_id, commit):
+    """Bind an existing matching local commit; do not execute checks or mark ready."""
+    import re
+    import single_task_scope as scope
+    from single_task_context import _tree_entry
+    try:
+        root = Path(worktree_root)
+        attempt = store.read_attempt(attempt_id)
+        if attempt['progress'] not in ('completed-awaiting-commit', 'handoff-ready'):
+            raise InvalidState('Completion is required before implementation binding')
+        events = store.read_events(attempt_id)
+        intents = [event for event in events if event['kind'] == 'completion-intent']
+        if len(intents) != 1:
+            raise InvalidState('One durable completion intent is required')
+        event = intents[0]
+        intent = event['payload']
+        intent_fields = {'schema_version', 'attempt_id', 'tasks_path', 'tasks_before_hex',
+                         'tasks_after_hex', 'tasks_before_sha256', 'tasks_after_sha256',
+                         'file_mode', 'acceptance_sequence', 'acceptance_digest', 'context_digest',
+                         'content_manifest', 'content_manifest_digest', 'semantic_review_digest'}
+        if (type(intent) is not dict or set(intent) != intent_fields or
+                type(intent['schema_version']) is not int or intent['schema_version'] != 1 or
+                type(intent['acceptance_sequence']) is not int or intent['acceptance_sequence'] < 1 or
+                type(intent['file_mode']) is not int or not 0 <= intent['file_mode'] <= 0o7777):
+            raise InvalidState('Invalid completion intent schema')
+        context = attempt['context']
+        task_path = f"specs/{context['feature']}/tasks.md"
+        manifest = scope.validate_manifest(intent['content_manifest'])
+        manifest_digest = hashlib.sha256(scope.canonical_manifest_bytes(manifest)).hexdigest()
+        current = scope.prepare_inspection(root, attempt)
+        post = bytes.fromhex(intent['tasks_after_hex'])
+        pre = bytes.fromhex(intent['tasks_before_hex'])
+        expected = bytearray(attempt['tasks_bytes'])
+        selected = scope.task_lines(expected).get(context['task_id'])
+        if selected is None:
+            raise InvalidState('Selected completion marker is missing')
+        expected[selected['marker_offset']] = ord('x')
+        if (intent['attempt_id'] != attempt_id or intent['tasks_path'] != task_path or
+                pre != attempt['tasks_bytes'] or post != bytes(expected) or
+                hashlib.sha256(pre).hexdigest() != intent['tasks_before_sha256'] or
+                hashlib.sha256(post).hexdigest() != intent['tasks_after_sha256'] or
+                scope.read_regular(root, task_path) != post or
+                current['context_digest'] != intent['context_digest'] or
+                current['content_manifest'] != manifest or
+                manifest_digest != intent['content_manifest_digest']):
+            raise InvalidState('Completed seal no longer matches current content')
+        acceptance = next((row for row in events if row['sequence'] == intent['acceptance_sequence']), None)
+        if (acceptance is None or acceptance['kind'] != 'acceptance' or
+                acceptance['payload_digest'] != intent['acceptance_digest'] or
+                acceptance['payload']['content_manifest'] != manifest or
+                acceptance['payload']['semantic_review_digest'] != intent['semantic_review_digest']):
+            raise InvalidState('Completion acceptance evidence does not match its intent')
+        review = scope.validate_semantic_review(acceptance['payload']['semantic_review'], attempt, manifest)
+        if (hashlib.sha256(_canonical(review)).hexdigest() != intent['semantic_review_digest'] or
+                acceptance['payload']['context_digest'] != current['context_digest'] or
+                acceptance['payload']['content_manifest_digest'] != manifest_digest):
+            raise InvalidState('Completion review identity does not match its seal')
+        if type(commit) is not str or re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}', commit) is None:
+            raise InvalidState('A full local implementation commit is required')
+        resolved = scope.git(root, 'rev-parse', '--verify', '--end-of-options', commit + '^{commit}').stdout.strip().decode('ascii')
+        if resolved != commit:
+            raise InvalidState('Implementation identity must name its commit exactly')
+        head = scope.git(root, 'rev-parse', '--verify', 'HEAD^{commit}').stdout.strip().decode('ascii')
+        scope.git(root, 'merge-base', '--is-ancestor', attempt['baseline'], commit)
+        # A local object alone is insufficient: it must be reachable from HEAD
+        # or an existing local ref. No transport or implicit checkout is used.
+        reachable = scope.git(root, 'merge-base', '--is-ancestor', commit, head, allowed=(0, 1)).returncode == 0
+        if not reachable and not scope.git(root, 'for-each-ref', '--contains', commit, '--format=%(objectname)').stdout.strip():
+            raise InvalidState('Implementation commit is not locally reachable')
+        original = scope._git_inventory(root, attempt['baseline'])
+        for revision in [commit] + scope.git(root, 'rev-list', commit, '^' + attempt['baseline']).stdout.decode('ascii').splitlines():
+            inventory = scope._git_inventory(root, revision)
+            for path in original.keys() | inventory.keys():
+                if path in context['allowed_paths']:
+                    if path in inventory and inventory[path][0] not in ('100644', '100755'):
+                        raise InvalidState('Unsafe implementation output type')
+                elif path == task_path:
+                    entry = inventory.get(path)
+                    if (entry is None or entry[0] != original[path][0] or
+                            scope.normalize_tasks_bytes(scope._blob(root, entry[1]), context['task_id']) !=
+                            scope.normalize_tasks_bytes(attempt['tasks_bytes'], context['task_id'])):
+                        raise InvalidState('Implementation task history changed protected bytes')
+                elif inventory.get(path) != original.get(path):
+                    raise InvalidState('Implementation history changed protected content')
+        for revision in (commit, head, None):
+            inventory = scope._git_inventory(root, revision)
+            for entry in manifest['entries']:
+                path = entry['path']
+                actual = inventory.get(path)
+                if entry['type'] == 'absent':
+                    if actual is not None:
+                        raise InvalidState('Sealed absence does not match implementation')
+                    continue
+                if actual is None or actual[0] != entry['mode']:
+                    raise InvalidState('Sealed implementation type or mode does not match')
+                if revision is not None:
+                    tree_entry = _tree_entry(root, revision, path)
+                    if tree_entry is None or tree_entry[1] != b'blob':
+                        raise InvalidState('Unsafe implementation tree component')
+                content = scope._blob(root, actual[1])
+                if path == task_path:
+                    if content != post:
+                        raise InvalidState('Implementation requires exact completed task bytes')
+                    content = scope.normalize_tasks_bytes(content, context['task_id'])
+                if hashlib.sha256(content).hexdigest() != entry['sha256']:
+                    raise InvalidState('Sealed implementation bytes do not match')
+        value = {'schema_version': 1, 'implementation_commit': commit,
+                 'context_digest': current['context_digest'],
+                 'content_manifest_digest': manifest_digest,
+                 'completion_intent_digest': event['payload_digest']}
+        existing = implementation_binding(store, attempt_id)
+        if existing is not None:
+            if _canonical(existing) != _canonical(value):
+                raise InvalidState('Original implementation identity cannot be replaced')
+            store.append_event(attempt_id, 'implementation-verification',
+                               {'schema_version': 1, 'implementation_commit': commit,
+                                'verification_head': head})
+        else:
+            store.append_event(attempt_id, 'implementation-binding', value)
+        return value
+    except (ValueError, KeyError, TypeError, UnicodeError):
+        raise InvalidState('Invalid implementation binding evidence') from None
