@@ -301,3 +301,132 @@ def validate_reviewed_artifacts(root, value):
     except (ContextError, UnicodeError, OSError, ValueError):
         raise ContextError('artifact_drift') from None
     return reviewed
+
+
+def _dependency_table(content):
+    from single_task_scope import task_lines
+    try:
+        tasks = task_lines(content)
+        lines = []
+        fence = None
+        raw_lines = content.split(b'\n')
+        for index, line in enumerate(raw_lines):
+            if index < len(raw_lines) - 1 and line.endswith(b'\r'):
+                line = line[:-1]  # Only CRLF is the documented comparison exception.
+            marker = re.match(rb' {0,3}(`{3,}|~{3,})(.*)', line)
+            if fence:
+                lines.append('')  # Fences cannot join otherwise noncontiguous table rows.
+                if marker and marker[1][:1] == fence[0] and len(marker[1]) >= fence[1] and not marker[2].strip():
+                    fence = None
+            elif marker and not (marker[1][:1] == b'`' and b'`' in marker[2]):
+                lines.append('')
+                fence = (marker[1][:1], len(marker[1]))
+            else:
+                lines.append(line.decode('utf-8'))
+        header = '| Task | Prerequisites |'
+        if lines.count(header) != 1:
+            raise ValueError()
+        start = lines.index(header)
+        if lines[start + 1] != '| --- | --- |':
+            raise ValueError()
+        end = start + 2
+        rows = []
+        graph = {}
+        while end < len(lines) and lines[end].startswith('|'):
+            row = re.fullmatch(r'\| (T[0-9]{3}) \| (none|T[0-9]{3}(?:, T[0-9]{3})*) \|', lines[end])
+            if row is None:
+                raise ValueError()
+            identity, prerequisites = row.groups()
+            dependencies = [] if prerequisites == 'none' else prerequisites.split(', ')
+            if identity in graph or dependencies != sorted(set(dependencies)) or identity in dependencies:
+                raise ValueError()
+            rows.append(identity)
+            graph[identity] = dependencies
+            end += 1
+        if rows != sorted(tasks) or any(set(deps) - set(tasks) for deps in graph.values()):
+            raise ValueError()
+        pending = {identity: set(dependencies) for identity, dependencies in graph.items()}
+        while pending:
+            ready = {identity for identity, dependencies in pending.items() if not dependencies}
+            if not ready:
+                raise ValueError()
+            pending = {identity: dependencies - ready for identity, dependencies in pending.items() if identity not in ready}
+        return graph, '\n'.join(lines[start:end])
+    except (ContextError, ValueError, IndexError, UnicodeError):
+        raise ContextError('dependency_table') from None
+
+
+def _tree_entry(root, commit, path):
+    """Inspect every tree component, distinguishing absence from unsafe types."""
+    from single_task_scope import git
+    components = canonical_path(path).split('/')
+    for index in range(len(components)):
+        prefix = '/'.join(components[:index + 1])
+        raw = git(root, 'ls-tree', '-z', commit, '--', ':(literal)' + prefix).stdout
+        if not raw:
+            return None
+        metadata, actual = raw.rstrip(b'\0').split(b'\t')
+        mode, kind, identity = metadata.split()
+        if actual.decode('utf-8') != prefix:
+            raise ValueError()
+        if index < len(components) - 1:
+            if mode != b'040000' or kind != b'tree':
+                raise ValueError()
+        else:
+            return mode.decode('ascii'), kind, identity.decode('ascii')
+
+
+def _validate_prerequisite(root, context, record, current_tasks):
+    from single_task_scope import git, task_lines
+    if (record['feature'] != context['feature'] or not record['completed'] or
+            record['task_id'] not in current_tasks or not current_tasks[record['task_id']]['checked']):
+        raise ValueError()
+    commit = git(root, 'rev-parse', '--verify', '--end-of-options',
+                 record['implementation_commit'] + '^{commit}').stdout.strip().decode('ascii')
+    tasks_path = f'specs/{context["feature"]}/tasks.md'
+    if tasks_path not in {entry['path'] for entry in record['content_manifest']['entries']}:
+        raise ValueError()
+    for entry in record['content_manifest']['entries']:
+        actual = _tree_entry(root, commit, entry['path'])
+        if entry['type'] == 'absent':
+            if actual is not None or entry['path'] == tasks_path:
+                raise ValueError()
+            continue
+        if actual is None or actual[0] != entry['mode'] or actual[1] != b'blob':
+            raise ValueError()
+        content = git(root, 'cat-file', 'blob', actual[2]).stdout
+        if entry['path'] == tasks_path:
+            selected = task_lines(content).get(record['task_id'])
+            if selected is None or not selected['checked']:
+                raise ValueError()
+            normalized = bytearray(content)
+            normalized[selected['marker_offset']] = ord(' ')
+            content = bytes(normalized)
+        if hashlib.sha256(content).hexdigest() != entry['sha256']:
+            raise ValueError()
+    manifest_digest = hashlib.sha256(canonical_bytes(record['content_manifest'])).hexdigest()
+    if any(check['exit'] != 0 or check['content_manifest_digest'] != manifest_digest for check in record['check_results']):
+        raise ValueError()
+
+
+def validate_prerequisites(root, value):
+    """Validate reviewed dependency grammar and exact local prerequisite records."""
+    from single_task_scope import read_regular, task_lines
+    context = validate_context(value)
+    source = context['source_assertion']
+    reviewed = reviewed_bytes(root, context['reviewed_artifacts']['tasks.md'])
+    graph, excerpt = _dependency_table(reviewed)
+    if (source['sha256'] != hashlib.sha256(reviewed).hexdigest() or source['excerpt'] != excerpt
+            or graph.get(context['task_id']) != context['dependencies']):
+        raise ContextError('dependency_mismatch')
+    try:
+        current = task_lines(read_regular(root, source['path']))
+        records = context['prerequisite_evidence']
+        ids = [record['task_id'] for record in records]
+        if sorted(ids) != context['dependencies']:
+            raise ValueError()
+        for record in records:
+            _validate_prerequisite(root, context, record, current)
+    except (ContextError, OSError, ValueError, UnicodeError):
+        raise ContextError('prerequisite_evidence') from None
+    return {record['task_id']: record for record in records}
