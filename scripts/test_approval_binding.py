@@ -10,6 +10,7 @@ import tempfile
 import subprocess
 import unittest
 from unittest.mock import patch
+import approval_binding as binding
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tests'))
 from approval_binding import (
@@ -114,6 +115,26 @@ class ApprovalBindingTests(unittest.TestCase):
         self.assertEqual('identical', second['result'])
         self.assertEqual(first['binding_digest'], second['binding_digest'])
         self.assertNotEqual(second['approved_snapshot']['tree'], second['current_snapshot']['tree'])
+
+    def test_git_children_exclude_host_credentials_and_disable_lazy_fetch(self):
+        run = subprocess.run
+        children = []
+
+        def observe(argv, **kwargs):
+            children.append((argv, kwargs['env']))
+            return run(argv, **kwargs)
+
+        canary = 'credential-boundary-canary'
+        with patch.dict(os.environ, GITHUB_TOKEN=canary, AWS_SESSION_TOKEN=canary,
+                        UNRELATED_HOST_VARIABLE=canary), patch.object(
+                            binding.subprocess, 'run', side_effect=observe):
+            result = self.assess()
+        self.assertTrue(result['retained'], result)
+        self.assertTrue(children)
+        for argv, environment in children:
+            self.assertFalse(canary in environment.values(), 'host credential inherited')
+            self.assertIn('--no-lazy-fetch', argv)
+            self.assertEqual('1', environment['GIT_NO_LAZY_FETCH'])
 
     def test_changed_scope_requirements_checks_dependencies_or_mode_requires_renewal(self):
         for key, value in [('scope', ['other.md']), ('requirements', 'two edits'),
