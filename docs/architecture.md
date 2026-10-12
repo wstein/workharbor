@@ -45,6 +45,12 @@ supported provider materialization strategy. Unsupported attachments fail before
 provisioning. OCI bundle contents are not assumed to be runnable container images.
 Lifecycle hooks and bundles execute only after workspace trust is granted.
 
+The deferred [shared Nix environment direction](adr/0008-shared-nix-environments.md)
+centers reusable modules in a common repository, composed and pinned by each
+project. Full future devenv integration would build project-specific OCI images
+from those inputs and use the existing container boundary. This is not implemented
+and does not add Nix or devenv to the current runtime requirements.
+
 ## Isolation
 Host agent can control Docker and is privileged infrastructure. A compromised
 workspace must not obtain agent credentials, control sockets or other owners' data.

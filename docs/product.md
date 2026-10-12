@@ -38,6 +38,12 @@ uncommitted project files. No product path requires a tracker or AI subscription
 
 ## Proposed future option
 
+[Shared Nix configuration](adr/0008-shared-nix-environments.md) is a deferred
+environment option: projects import pinned common modules and add their own
+configuration, with local/CI use and OCI image generation covered by one later
+integration design. No partial devenv runtime support is planned before that
+feature is approved and verified; the current Docker/devcontainer baseline remains.
+
 [ADR 0006](adr/0006-optional-ai-execution.md) proposes a later optional internal
 execution board linking Spec Kit artifacts, Symphony scheduling and WorkHarbor
 workspaces, resources, interventions and evidence. This is outside the accepted
