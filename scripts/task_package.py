@@ -673,6 +673,24 @@ def assess_content_approval(approved, current, repository_snapshot, evidence, *,
                   independent_review=None, live_execution=None,
                   original_approval=None, current_snapshot=None, comparison=None,
                   capabilities=None, unmet_prerequisites=[], blockers=[])
+    try:
+        # Keep every directory identity anchored through adapter authentication
+        # and guard scope validation. The adapter resolves paths itself; a
+        # replacement observed on exit invalidates the bridge's entry result.
+        with _root_directory(repository_snapshot['root']) as (root, _descriptor, _links):
+            return _assess_content_approval(approved, current, repository_snapshot, evidence,
+                root, result, guard=guard, authority=authority, action=action, live=live)
+    except PackageError as error:
+        result['guard_entry_valid'] = False
+        result['blockers'].append(dict(code=error.code))
+    except Exception:
+        result['guard_entry_valid'] = False
+        result['blockers'].append(dict(code='approval-validation-unavailable'))
+    return result
+
+
+def _assess_content_approval(approved, current, repository_snapshot, evidence, root, result, *,
+                             guard, authority, action, live):
 
     def block(code):
         result['blockers'].append(dict(code=code))
@@ -690,9 +708,8 @@ def assess_content_approval(approved, current, repository_snapshot, evidence, *,
         reference = approved['approval_refs'][action]
         if reference is None:
             raise PackageError('approval-reference-missing')
-        with _root_directory(repository_snapshot['root']) as (root, _descriptor, _links):
-            _validate_source_identities(root, approved['source'])
-            _validate_source_identities(root, current['source'])
+        _validate_source_identities(root, approved['source'])
+        _validate_source_identities(root, current['source'])
         result['original_approval'] = dict(action=action, reference=reference,
             reviewed_revision=approved['source']['proposal_commit'],
             package_digest=approved['package_digest'],
