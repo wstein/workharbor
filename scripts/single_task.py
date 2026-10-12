@@ -560,7 +560,8 @@ def main():
                                        {'code': 'acceptance_failed', 'category': error.category})
                     return failure(CliError(4, 'acceptance_failed', category=error.category))
                 except ERRORS as error:
-                    if attempt is not None and isinstance(error, (CliError, contexts.ContextError, backend.InvalidState)):
+                    if attempt is not None and not isinstance(error,
+                            (backend.PersistenceFailure, backend.StateConflict, OSError)):
                         code = error.code if isinstance(error, (CliError, contexts.ContextError)) else 'state_blocker'
                         store.append_event(args.attempt, 'blocker', {'code': code})
                     return failure(error)
