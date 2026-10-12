@@ -244,15 +244,22 @@ class Outcomes(unittest.TextTestResult):
 
     def addFailure(self, test, error):
         super().addFailure(test, error)
-        # The same message from setup/teardown/cleanup does not exercise the
-        # retained scenario. Require its actual test method in the traceback.
+        # Setup can alias or delegate to the test method. Require unittest's
+        # actual test dispatch, and exclude lifecycle dispatch even if setup
+        # itself calls _callTestMethod. Compare code objects, never frame names.
         method = getattr(getattr(test, getattr(test, '_testMethodName', ''), None), '__code__', None)
+        dispatch = unittest.TestCase._callTestMethod.__code__
+        lifecycle = {getattr(owner, name).__code__ for owner in (unittest.TestCase, type(test))
+                     for name in ('_callSetUp', '_callTearDown', '_callCleanup')
+                     if hasattr(getattr(owner, name, None), '__code__')}
         trace = error[2]
-        body = False
+        body = called = during_lifecycle = False
         while trace is not None:
             body = body or trace.tb_frame.f_code is method
+            called = called or trace.tb_frame.f_code is dispatch
+            during_lifecycle = during_lifecycle or trace.tb_frame.f_code in lifecycle
             trace = trace.tb_next
-        kind = 'assertion' if error[0] is AssertionError and body else 'other-failure'
+        kind = 'assertion' if error[0] is AssertionError and body and called and not during_lifecycle else 'other-failure'
         self.observed.append((test.id(), kind, str(error[1])))
 
     def addSubTest(self, test, subtest, error):

@@ -38,6 +38,7 @@
     "test_check_ci.AcceptanceTests.test_new_failure_changed_message_unexpected_pass_and_nonassertion_fail",
     "test_check_ci.AcceptanceTests.test_new_green_regressions_do_not_require_manifest_updates",
     "test_check_ci.AcceptanceTests.test_passing_subtests_and_teardown_failures_are_distinguished",
+    "test_check_ci.AcceptanceTests.test_setup_alias_and_delegation_cannot_impersonate_test_dispatch",
     "test_check_ci.AcceptanceTests.test_skips_xfails_and_decorator_unexpected_success_fail",
     "test_check_ci.SourceTests.test_actual_cli_startup_rejects_hidden_imports_before_execution",
     "test_check_ci.SourceTests.test_actual_merge_preserves_unrelated_base_advance",
