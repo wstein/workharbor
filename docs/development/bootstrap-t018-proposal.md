@@ -216,3 +216,22 @@ unchanged. T020 binds one immutable reachable matching local implementation
 commit and appends later verification identities separately. T021 recovery,
 T022 authorized entry and T023 public integration remain undelivered here;
 there is no full-suite, handoff-ready, CI-policy or live-execution claim.
+
+## T021 implementation checkpoint
+
+Reviewed source `e2a8383d7f44c6dab29230527f2007b959763ee5` passed
+15 owning recovery controls, raw exit 0, zero errors/skips/failed subtests.
+Exact before/after snapshot: `sha256:f320734949c19a124d5bd968a09ea0aa1f6f8c05e9f03c77a9a9099b153c220f`.
+Command: `/opt/homebrew/bin/python3.14 -B /private/tmp/collect-feature003-handoff.py test_single_task_recovery.py t021-final`.
+- `/private/tmp/workharbor-003-t021-final-raw.json`: SHA-256 `1018c0c62333e1ce953a26226576608d33dda48535578c65e516da08d6de2211`.
+- `/private/tmp/workharbor-003-t021-final-raw.log`: SHA-256 `0de39510759f2562e92d4c70ae0d477355595dfece437e18a57d29802f8c0ac9`.
+- `/private/tmp/workharbor-003-t021-completion-regression.log`: SHA-256 `4f42c97fbf9bdff2435457adf81d5edcec23be822ee3f9f2c004a1ed35958218`.
+- `/private/tmp/workharbor-003-t021-first-red.log`: SHA-256 `a85fb91bddd89454aab024bb841c22616f7bb530d4e27b981234d0eec0ffb6c0`.
+
+The existing ten completion controls also passed on the earlier coherent draft;
+the final recovery controls exercise actual fresh checks, exact retained intent,
+phase-corruption rejection and FIFO-race rejection. A real child exits after
+temporary-file fsync; reopen preserves the private intent-owned file and recovery
+consumes it through atomic replacement with both directories flushed. Old events
+and attempt identity remain intact. T022 entry and T023 CLI/handoff remain pending;
+original test-authoring acceptance above is unchanged. No full-suite or live claim.
