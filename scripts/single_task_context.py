@@ -204,3 +204,100 @@ def load_context(path):
     except (OSError, ValueError, UnicodeError):
         raise ContextError('invalid_json') from None
     return validate_context(value)
+
+
+def reviewed_bytes(root, record):
+    """Resolve a reviewed ancestor and read its exact blob without fetching."""
+    from single_task_scope import git
+    try:
+        commit = git(root, 'rev-parse', '--verify', '--end-of-options',
+                     record['commit'] + '^{commit}').stdout.strip().decode('ascii')
+        if git(root, 'merge-base', '--is-ancestor', commit, 'HEAD', allowed=(0, 1)).returncode:
+            raise ContextError('artifact_commit')
+        entry = git(root, 'ls-tree', '-z', commit, '--', record['path']).stdout
+        metadata, path = entry.rstrip(b'\0').split(b'\t')
+        mode, kind, identity = metadata.split()
+        if mode not in (b'100644', b'100755') or kind != b'blob' or path.decode('utf-8') != record['path']:
+            raise ContextError('artifact_commit')
+        content = git(root, 'cat-file', 'blob', identity.decode('ascii')).stdout
+    except (ContextError, UnicodeError, ValueError):
+        raise ContextError('artifact_commit') from None
+    if hashlib.sha256(content).hexdigest() != record['sha256']:
+        raise ContextError('artifact_digest')
+    return content
+
+
+def _footer_parts(content):
+    """Recognize a terminal structured footer only outside Markdown fences."""
+    offset = 0
+    fence = None
+    start = None
+    for line in content.splitlines(keepends=True):
+        marker = re.match(rb' {0,3}(`{3,}|~{3,})([^\r\n]*)', line)
+        if fence:
+            if marker and marker[1][:1] == fence[0] and len(marker[1]) >= fence[1] and not marker[2].strip():
+                fence = None
+        elif marker and not (marker[1][:1] == b'`' and b'`' in marker[2]):
+            fence = (marker[1][:1], len(marker[1]))
+        elif line in (b'## Execution evidence\n', b'## Execution evidence\r\n'):
+            start = offset
+        offset += len(line)
+    if start is None:
+        return content, None, []
+    footer = content[start:]
+    lines = footer.splitlines(keepends=True)
+    records = []
+    for line in lines[1:]:
+        record = re.fullmatch(rb'- Evidence: (T[0-9]{3}) ([^ \t\r\n]+) ([0-9a-f]{64})(?:\r?\n)?', line)
+        if record is None:
+            return content, None, []
+        records.append(record.groups())
+    if not records:
+        return content, None, []
+    return content[:start], footer, records
+
+
+def _approval_body(content, tasks):
+    if not tasks:
+        return content
+    from single_task_scope import task_lines
+    value = bytearray(content)
+    for task in task_lines(content).values():
+        value[task['marker_offset']] = ord(' ')
+    return bytes(value)
+
+
+def validate_reviewed_artifacts(root, value):
+    """Bind approval and compare prose, permitting only documented progress."""
+    from single_task_scope import read_regular, task_lines
+    context = validate_context(value)
+    if context_digest(context) != context['approval']['context_digest']:
+        raise ContextError('approval_digest')
+    reviewed = {name: reviewed_bytes(root, record)
+                for name, record in context['reviewed_artifacts'].items()}
+    try:
+        current = {name: read_regular(root, record['path'])
+                   for name, record in context['reviewed_artifacts'].items()}
+        tasks = task_lines(current['tasks.md'])
+        for name in ARTIFACTS:
+            before, old_footer, old_records = _footer_parts(reviewed[name])
+            after, new_footer, new_records = _footer_parts(current[name])
+            before = _approval_body(before, name == 'tasks.md')
+            after = _approval_body(after, name == 'tasks.md')
+            if old_footer is not None:
+                matches = after == before and new_footer is not None and new_footer.startswith(old_footer)
+            elif new_footer is not None:
+                newline = b'\r\n' if new_footer.startswith(b'## Execution evidence\r\n') else b'\n'
+                matches = after in (before, before + newline)
+            else:
+                matches = after == before
+            if not matches:
+                raise ContextError('artifact_drift')
+            for task, path, digest in old_records + new_records:
+                path = path.decode('utf-8')
+                canonical_path(path)
+                if task.decode('ascii') not in tasks or hashlib.sha256(read_regular(root, path)).hexdigest().encode() != digest:
+                    raise ContextError('artifact_drift')
+    except (ContextError, UnicodeError, OSError, ValueError):
+        raise ContextError('artifact_drift') from None
+    return reviewed

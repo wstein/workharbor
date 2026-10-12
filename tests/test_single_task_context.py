@@ -558,6 +558,41 @@ def artifacts_binding_fields(self):
         self.exercise('artifacts', 'approval_digest')
 
 
+def artifacts_rework_binding(self):
+    self.context.update(mode='owner-authorized rework', prior_attempt_id='synthetic-prior-attempt',
+                        prior_implementation_commit=self.fixture.baseline,
+                        rework_approval={'owner_ref': self.fixture.identities['owner'],
+                                        'evidence_ref': 'synthetic:explicit-corrective-approval'})
+    self.exercise('artifacts', 'approval_digest')
+
+
+def artifacts_append_existing_footer(self):
+    self.tasks.write_bytes(self.tasks.read_bytes() + self.footer().encode())
+    self.review_current()
+    record = self.footer().splitlines()[-1].encode() + b'\n'
+    self.tasks.write_bytes(self.tasks.read_bytes() + record)
+    self.commit()
+    self.exercise('artifacts', None)
+
+
+def artifacts_crlf_bytes(self):
+    self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\n', b'\r\n'))
+    self.review_current()
+    self.replace_tasks('[ ] T002', '[x] T002', reviewed=False)
+    self.exercise('artifacts', None)
+    self.tasks.write_bytes(self.tasks.read_bytes().replace(b'\r\n', b'\n'))
+    self.commit()
+    self.exercise('artifacts', 'artifact_drift')
+
+
+def artifacts_fenced_footer(self):
+    self.tasks.write_bytes(self.tasks.read_bytes() + b'\n```markdown\n')
+    self.review_current()
+    self.tasks.write_bytes(self.tasks.read_bytes() + self.footer().encode())
+    self.commit()
+    self.exercise('artifacts', 'artifact_drift')
+
+
 def schema_valid_rework(self):
     self.context.update(mode='owner-authorized rework', prior_attempt_id='synthetic-prior-attempt',
                         prior_implementation_commit=self.fixture.baseline,
@@ -701,6 +736,10 @@ def scope_gitlink_output(self):
 
 
 EXTRA_CASES = {
+    'artifacts_rework_binding': (artifacts_rework_binding, 'artifacts', 'approval_digest', 'T008'),
+    'artifacts_append_existing_footer': (artifacts_append_existing_footer, 'artifacts', None, 'T008'),
+    'artifacts_crlf_bytes': (artifacts_crlf_bytes, 'artifacts', None, 'T008'),
+    'artifacts_fenced_footer': (artifacts_fenced_footer, 'artifacts', 'artifact_drift', 'T008'),
     'scope_clean_gitlink': (scope_clean_gitlink, 'scope', None, 'T007'),
     'scope_changed_gitlink': (scope_changed_gitlink, 'scope', 'dirty_baseline', 'T007'),
     'scope_gitlink_output': (scope_gitlink_output, 'scope', 'scope_context', 'T007'),
