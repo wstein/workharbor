@@ -1,8 +1,9 @@
 # Feature 003 local validation guide
 
-Status: the context/attempt/review/journal CLI is implemented locally; final feature
-acceptance still requires the matrix and platform evidence below. See the
-[operator guide](../../docs/development/single-task.md) for the current commands.
+Status: the context/attempt/review/journal CLI and T024–T027 local/Linux checks
+are accepted; current macOS canonical acceptance remains unmet and T028 is pending.
+See the [evidence record](../../docs/exec-plans/completed/003-single-task-entry.md)
+and [operator guide](../../docs/development/single-task.md).
 No live tracker, Symphony service, credentials or product host is required; live
 dispatch remains unverified.
 
