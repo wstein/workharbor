@@ -1,20 +1,114 @@
 #!/usr/bin/env python3
 """Local single-task scope/acceptance guard; not a sandbox or approval authority."""
 import argparse
+import errno
+import fcntl
 import hashlib
 import json
+import os
 import re
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from contextlib import contextmanager
+
+import single_task_state as backend
 
 STATE = '.symphony/single-task.json'
 TASK = re.compile(r'^(- \[)([ xX])(\] (T\d{3}) .+)$', re.M)
 
 
+class CliError(Exception):
+    def __init__(self, exit_code, code, diagnostic=None):
+        self.exit_code = exit_code
+        self.code = code
+        self.diagnostic = diagnostic
+
+
+MESSAGES = {
+    'invalid_arguments': 'Invalid command arguments; use the reviewed command form.',
+    'command_unavailable': 'Command unavailable until its approved implementation task.',
+    'scope_blocker': 'Scope or completion evidence rejected; retain evidence for review.',
+    'state_blocker': 'State evidence rejected; retain it for explicit operator migration or recovery.',
+    'acceptance_failed': 'Acceptance failed; review the check and rerun current-content verification.',
+    'concurrent_attempt': 'Another command owns the worktree lock; retry after it exits.',
+    'persistence_failure': 'Required persistence unavailable; retain evidence for operator recovery.',
+}
+
+
+def response(error=None, state=None, verification='not-run'):
+    # Legacy metadata is deliberately distinct from journal progress/readiness.
+    value = dict(schema_version=1, attempt_id=None, mode=None, progress=None,
+                 local_verification=verification, owner_identity_authenticated=False,
+                 live_dispatch_verified=False, errors=[])
+    if state is not None:
+        value['mode'] = state['phase']
+        value['progress'] = 'legacy-completed' if state['phase'] == 'handoff-only' else 'legacy-active'
+    if error is not None:
+        value['errors'] = [dict(code=error.code, message=MESSAGES[error.code],
+                                affected_paths=[], affected_ids=[])]
+        if error.diagnostic:
+            print(error.diagnostic, file=sys.stderr)
+    print(json.dumps(value, sort_keys=True))
+
+
+@contextmanager
+def lock_only(root):
+    """Temporary legacy/empty-state adapter; migrate callers at T010/T017/T023.
+
+    Share T003's canonical inode without adopting legacy JSON or creating SQLite.
+    The caller retains this nonblocking lock through its response publication.
+    """
+    descriptors = []
+    try:
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        descriptors.append(root_fd)
+        backend._local_filesystem(root_fd)
+        symphony = backend._directory(root_fd, '.symphony', create=True)
+        descriptors.append(symphony)
+        directory = backend._directory(symphony, 'single-task', create=True)
+        descriptors.append(directory)
+        for name in os.listdir(directory):
+            if name == 'contexts':
+                contexts = backend._directory(directory, name)
+                descriptors.append(contexts)
+                for child in os.listdir(contexts):
+                    backend._regular(contexts, child, required=True)
+            elif name in ('lock', 'journal.sqlite3', 'journal.sqlite3-journal'):
+                backend._regular(directory, name, required=True)
+            else:
+                raise backend.InvalidState('Unsupported state evidence')
+        backend._regular(directory, 'lock')
+        lock = os.open('lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                       0o600, dir_fd=directory)
+        descriptors.append(lock)
+        info = os.fstat(lock)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise backend.InvalidState('Unsafe lock')
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            if error.errno in (errno.EACCES, errno.EAGAIN):
+                raise backend.StateConflict('Worktree lock held') from error
+            raise backend.PersistenceFailure('Lock unavailable') from error
+        os.fsync(lock)
+        os.fsync(directory)
+        legacy = backend._regular(symphony, 'single-task.json')
+        if backend._regular(symphony, 'single-task.tmp'):
+            raise backend.InvalidState('Unfinished legacy publication')
+        journal = backend._regular(directory, 'journal.sqlite3')
+        contexts_exist = 'contexts' in os.listdir(directory)
+        if (legacy and (journal or contexts_exist)) or (contexts_exist and not journal):
+            raise backend.InvalidState('Mixed or incomplete evidence')
+        yield legacy, journal
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
 def git(root, *args):
-    return subprocess.check_output(['git', *args], cwd=root).decode()
+    return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.PIPE).decode()
 
 
 def path_in_repo(root, value):
@@ -36,11 +130,19 @@ def task_lines(text):
 
 
 def write_state(root, state):
-    path = root/STATE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(state, indent=2) + '\n')
-    temporary.replace(path)
+    directory = os.open(root/'.symphony', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        backend._regular(directory, 'single-task.json')
+        fd = os.open('single-task.tmp', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                     | os.O_CLOEXEC, 0o600, dir_fd=directory)
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(json.dumps(state, indent=2) + '\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace('single-task.tmp', 'single-task.json', src_dir_fd=directory, dst_dir_fd=directory)
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def begin(root, args):
@@ -72,7 +174,7 @@ def begin(root, args):
                  tasks_path=tasks, tasks_before=text, allowed=allowed, checks=checks,
                  phase='implement', results=[])
     write_state(root, state)
-    print(f'Prepared {args.feature}/{args.task}; scope guard active, approvals not verified.')
+    return state
 
 
 def scope(root, state):
@@ -158,24 +260,31 @@ def verify(root, state):
     results = []
     write_state(root, state)
     for command in state['checks']:
-        run = subprocess.run(command, cwd=root)
+        try:
+            run = subprocess.run(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except OSError as error:
+            state['last_failure'] = [dict(check_index=len(results), category='unavailable')]
+            write_state(root, state)
+            raise CliError(4, 'acceptance_failed') from error
         results.append(dict(command=command, exit_code=run.returncode))
         if run.returncode:
-            state['last_failure'] = results
+            state['last_failure'] = [dict(check_index=len(results) - 1, exit_code=run.returncode)]
             write_state(root, state)
-            raise ValueError(f'Acceptance failed: {command}')
+            raise CliError(4, 'acceptance_failed')
     # Checks may themselves mutate files: inspect again before accepting completion.
     # Retain previous completed-task evidence while validating current checks.
     state['results'] = previous
-    _, _, after = scope(root, state)
+    try:
+        _, _, after = scope(root, state)
+    except ValueError as error:
+        raise CliError(4, 'acceptance_failed', diagnostic(error)) from error
     if after != signature:
-        raise ValueError('Acceptance commands changed task content; rerun verification')
+        raise CliError(4, 'acceptance_failed')
     state['results'] = results
     state['verified_files'] = signature
     state.pop('last_failure', None)
     state['verified_head'] = git(root, 'rev-parse', 'HEAD').strip()
     write_state(root, state)
-    print('Scope and acceptance passed; live Symphony behavior not evaluated.')
 
 
 def complete(root, state):
@@ -184,33 +293,160 @@ def complete(root, state):
     (root/state['tasks_path']).write_text(text[:row.start(2)] + 'x' + text[row.end(2):])
     state['phase'] = 'handoff-only'
     write_state(root, state)
-    print('Selected task complete; finish evidence/commit/PR before final label switch.')
+
+
+class SafeParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise CliError(2, 'invalid_arguments')
+
+
+def arguments():
+    # No argparse diagnostic/help path may echo untrusted argv or bypass locking.
+    parser = SafeParser(description=__doc__, add_help=False, allow_abbrev=False)
+    sub = parser.add_subparsers(dest='command', required=True)
+    for name in ('begin', 'rework', 'inspect', 'verify', 'complete', 'record-commit', 'resume', 'status'):
+        command = sub.add_parser(name, add_help=False, allow_abbrev=False)
+        if name in ('begin', 'rework'):
+            command.add_argument('--context')
+        if name == 'begin':
+            command.add_argument('--feature')
+            command.add_argument('--task')
+            command.add_argument('--allow', action='append')
+            command.add_argument('--check', action='append')
+        if name not in ('begin', 'rework'):
+            command.add_argument('--attempt')
+        if name in ('verify', 'complete', 'resume'):
+            command.add_argument('--review')
+        if name == 'record-commit':
+            command.add_argument('--commit')
+    args = parser.parse_args()
+    args.legacy = False
+    if args.command == 'begin':
+        old = (args.feature, args.task, args.allow, args.check)
+        if args.context is not None:
+            valid = bool(args.context) and not any(item is not None for item in old)
+        else:
+            valid = all(old) and all(args.allow) and all(args.check)
+            args.legacy = True
+    elif args.command == 'rework':
+        valid = bool(args.context)
+    elif args.command in ('verify', 'complete'):
+        args.legacy = args.attempt is None and args.review is None
+        valid = args.legacy or bool(args.attempt and args.review)
+    else:
+        valid = bool(args.attempt)
+        if args.command == 'resume':
+            valid = valid and bool(args.review)
+        if args.command == 'record-commit':
+            valid = valid and bool(args.commit)
+    if not valid:
+        raise CliError(2, 'invalid_arguments')
+    return args
+
+
+def diagnostic(error):
+    # Match only fixed internal guard messages, then emit a fixed regression token.
+    message = str(error)
+    for token in ('Out-of-scope', 'evidence', 'checkbox', 'rework', 'Unsafe file type', 'clean checkout'):
+        if token in message:
+            return token
+    return None
+
+
+def read_legacy(root):
+    directory = os.open(root/'.symphony', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        backend._regular(directory, 'single-task.json', required=True)
+        fd = os.open('single-task.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+        with os.fdopen(fd) as stream:
+            state = json.load(stream)
+        if (not isinstance(state, dict) or state.get('phase') not in ('implement', 'handoff-only')
+                or not all(isinstance(state.get(key), str) and state[key]
+                           for key in ('feature', 'task', 'baseline', 'tasks_path', 'tasks_before'))
+                or not isinstance(state.get('allowed'), list) or not state['allowed']
+                or not all(isinstance(path, str) for path in state['allowed'])
+                or not isinstance(state.get('checks'), list) or not state['checks']
+                or not all(isinstance(cmd, list) and cmd and all(isinstance(x, str) and x for x in cmd)
+                           for cmd in state['checks'])
+                or not isinstance(state.get('results'), list)):
+            raise backend.InvalidState('Invalid legacy evidence')
+        path_in_repo(root, state['tasks_path'])
+        for path in state['allowed']:
+            path_in_repo(root, path)
+        return state
+    except (ValueError, KeyError, TypeError, UnicodeError) as error:
+        raise backend.InvalidState('Unreadable legacy evidence') from error
+    finally:
+        os.close(directory)
+
+
+def execute(root, args, legacy, journal):
+    if not args.legacy:
+        if legacy:
+            raise backend.InvalidState('Legacy migration required')
+        raise CliError(2, 'command_unavailable')
+    if journal:
+        raise backend.InvalidState('Journal cannot be used by legacy commands')
+    state = None
+    try:
+        if args.command == 'begin':
+            state = begin(root, args)
+        else:
+            state = read_legacy(root)
+            if args.command == 'verify':
+                verify(root, state)
+            else:
+                complete(root, state)
+    except ValueError as error:
+        code = 'invalid_arguments' if args.command == 'begin' else 'scope_blocker'
+        raise CliError(2 if args.command == 'begin' else 3, code, diagnostic(error)) from error
+    response(state=state, verification='not-run' if args.command == 'begin' else 'passed')
+
+
+ERRORS = (CliError, backend.StateConflict, backend.InvalidState, backend.PersistenceFailure,
+          OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError, UnicodeError)
+
+
+def failure(caught):
+    if isinstance(caught, CliError):
+        error = caught
+    elif isinstance(caught, backend.StateConflict):
+        error = CliError(5, 'concurrent_attempt')
+    elif isinstance(caught, backend.InvalidState):
+        error = CliError(3, 'state_blocker')
+    elif isinstance(caught, (backend.PersistenceFailure, OSError)):
+        error = CliError(6, 'persistence_failure')
+    else:
+        error = CliError(3, 'state_blocker')
+    response(error, verification='failed' if error.exit_code == 4 else 'not-run')
+    return error.exit_code
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest='command', required=True)
-    start = sub.add_parser('begin')
-    start.add_argument('--feature', required=True)
-    start.add_argument('--task', required=True)
-    start.add_argument('--allow', action='append', required=True, help='Exact approved file path; repeat as needed')
-    start.add_argument('--check', action='append', required=True, help='Approved argv JSON, run at repo root; repeat')
-    sub.add_parser('verify')
-    sub.add_parser('complete')
-    args = parser.parse_args()
-    root = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').strip()).resolve()
-    if args.command == 'begin':
-        begin(root, args)
-    else:
-        state = json.loads((root/STATE).read_text())
-        if args.command == 'verify':
-            verify(root, state)
-        else:
-            complete(root, state)
+    try:
+        try:
+            args = arguments()
+            parse_error = None
+        except CliError as error:
+            args = None
+            parse_error = error
+        root = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').strip()).resolve()
+        with lock_only(root) as (legacy, journal):
+            try:
+                if parse_error:
+                    raise parse_error
+                if not journal or args.legacy:
+                    execute(root, args, legacy, journal)
+                    return 0
+            except ERRORS as error:
+                return failure(error)
+            # No mutable journal/task data is carried across this lock transition.
+            # T003 revalidates all evidence under its own full-lifetime lock.
+        with backend.open_store(root):
+            return failure(CliError(2, 'command_unavailable'))
+    except ERRORS as error:
+        return failure(error)
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
-        sys.exit(str(exc))
+    sys.exit(main())
