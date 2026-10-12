@@ -355,6 +355,15 @@ def open_store(worktree_root, *, preflight=None, require_existing=False, writabl
                 info = os.stat(name, dir_fd=directory, follow_symlinks=False)
                 if not stat.S_ISDIR(info.st_mode):
                     raise InvalidState('Unsafe context directory')
+            elif name == 'publication':
+                publication = _directory(directory, name)
+                try:
+                    for child in os.listdir(publication):
+                        if len(child) != 64 or any(c not in '0123456789abcdef' for c in child):
+                            raise InvalidState('Unsupported publication evidence retained')
+                        _regular(publication, child, required=True)
+                finally:
+                    os.close(publication)
             elif name in ('lock', 'journal.sqlite3', 'journal.sqlite3-journal'):
                 _regular(directory, name, required=True)
             else:
@@ -431,16 +440,19 @@ def open_store(worktree_root, *, preflight=None, require_existing=False, writabl
             os.close(fd)
 
 
-def _validated_completion_acceptance(root, store, attempt):
+def _validated_completion_acceptance(root, store, attempt, event=None, *, check_head=True):
     """Read a durable acceptance record and independently revalidate its bindings."""
     import single_task_scope as scope
     try:
-        if attempt['progress'] != 'acceptance-recorded':
-            raise InvalidState('Fresh durable acceptance is required before completion')
-        events = store.read_events(attempt['attempt_id'])
-        if not events or events[-1]['kind'] != 'acceptance':
-            raise InvalidState('Fresh durable acceptance evidence is missing or superseded')
-        event = events[-1]
+        if event is None:
+            if attempt['progress'] != 'acceptance-recorded':
+                raise InvalidState('Fresh durable acceptance is required before completion')
+            events = store.read_events(attempt['attempt_id'])
+            if not events or events[-1]['kind'] != 'acceptance':
+                raise InvalidState('Fresh durable acceptance evidence is missing or superseded')
+            event = events[-1]
+        if event['kind'] != 'acceptance':
+            raise InvalidState('Invalid acceptance record kind')
         value = event['payload']
         fields = {'schema_version', 'attempt_id', 'task_id', 'context_digest',
                   'content_manifest', 'content_manifest_digest', 'semantic_review',
@@ -467,7 +479,7 @@ def _validated_completion_acceptance(root, store, attempt):
                 value['content_manifest'] != inspection['content_manifest'] or
                 value['content_manifest_digest'] != inspection['content_manifest_digest'] or
                 value['semantic_review_digest'] != review_digest or
-                value['verification_head'] != scope.git(root, 'rev-parse', 'HEAD').stdout.strip().decode('ascii') or
+                (check_head and value['verification_head'] != scope.git(root, 'rev-parse', 'HEAD').stdout.strip().decode('ascii')) or
                 _canonical(value['checks']) != _canonical(expected_checks) or
                 attempt['approval_context_digest'] != inspection['context_digest'] or
                 attempt['entry_mode'] != context['mode']):
@@ -484,10 +496,7 @@ def publish_completion(worktree_root, store, attempt_id):
     operation never reconstructs intent or claims a bound implementation commit.
     """
     import single_task_scope as scope
-    import uuid
     root = Path(worktree_root)
-    parent_fd = None
-    temporary = None
     try:
         attempt = store.read_attempt(attempt_id)
         event = _validated_completion_acceptance(root, store, attempt)
@@ -516,43 +525,184 @@ def publish_completion(worktree_root, store, attempt_id):
                   'semantic_review_digest': evidence['semantic_review_digest']}
         intent_digest = hashlib.sha256(_canonical(intent)).hexdigest()
         store.append_event(attempt_id, 'completion-intent', intent, progress='completion-prepared')
-        parent, filename = tasks_path.rsplit('/', 1)
-        parent_fd = scope._path_fd(root, parent, directory=True)
-        candidate = '.single-task-' + uuid.uuid4().hex
-        descriptor = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             mode, dir_fd=parent_fd)
-        temporary = candidate
-        with os.fdopen(descriptor, 'wb') as stream:
-            os.fchmod(stream.fileno(), mode)
-            stream.write(after)
-            stream.flush()
-            os.fsync(stream.fileno())
-        if scope.read_regular(root, tasks_path) != before:
-            raise InvalidState('Task bytes changed after durable completion intent')
-        os.replace(temporary, filename, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
-        temporary = None
-        os.fsync(parent_fd)
-        if scope.read_regular(root, tasks_path) != after:
-            raise InvalidState('Published marker does not match durable completion intent')
-        store.append_event(attempt_id, 'checkbox-applied',
-                           {'schema_version': 1, 'intent_digest': intent_digest,
-                            'tasks_sha256': intent['tasks_after_sha256']}, progress='checkbox-applied')
-        store.append_event(attempt_id, 'completion',
-                           {'schema_version': 1, 'intent_digest': intent_digest,
-                            'content_manifest_digest': intent['content_manifest_digest']},
-                           progress='completed-awaiting-commit')
-        return store.read_attempt(attempt_id)
+        event = store.read_events(attempt_id)[-1]
+        return _finish_completion_intent(root, store, attempt, event)
     except OSError as error:
         raise PersistenceFailure('Completion publication durability unavailable; retain intent') from error
     except (ValueError, KeyError, TypeError, UnicodeError):
         raise InvalidState('Invalid completion evidence; retain intent') from None
+
+
+def _finish_completion_intent(root, store, attempt, event):
+    """Publish the retained bytes, consuming only the intent-owned private temporary."""
+    import single_task_scope as scope
+    intent = event['payload']
+    before, after = bytes.fromhex(intent['tasks_before_hex']), bytes.fromhex(intent['tasks_after_hex'])
+    task_path, mode = intent['tasks_path'], intent['file_mode']
+    name = event['payload_digest']
+    parent, filename = task_path.rsplit('/', 1)
+    parent_fd = scope._path_fd(root, parent, directory=True)
+    temporary_fd = None
+    try:
+        temporary_fd = _directory(store._directory, 'publication', create=True)
+        os.fsync(store._directory)
+        if set(os.listdir(temporary_fd)) - {name}:
+            raise InvalidState('Unexpected publication evidence retained')
+        if _regular(temporary_fd, name):
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=temporary_fd)
+            with os.fdopen(descriptor, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+                        stat.S_IMODE(info.st_mode) != mode or stream.read() != after):
+                    raise InvalidState('Publication temporary does not match retained intent')
+        else:
+            descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 mode, dir_fd=temporary_fd)
+            with os.fdopen(descriptor, 'wb') as stream:
+                os.fchmod(stream.fileno(), mode)
+                stream.write(after)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.fsync(temporary_fd)
+        current = scope.read_regular(root, task_path)
+        if current == before:
+            os.replace(name, filename, src_dir_fd=temporary_fd, dst_dir_fd=parent_fd)
+        elif current == after:
+            # A replacement may have completed before the journal was advanced.
+            # Consume a matching regenerated temporary through the same rename.
+            os.replace(name, filename, src_dir_fd=temporary_fd, dst_dir_fd=parent_fd)
+        else:
+            raise InvalidState('Task bytes differ from both retained intent states')
+        os.fsync(temporary_fd)
+        os.fsync(parent_fd)
+        if scope.read_regular(root, task_path) != after:
+            raise InvalidState('Published marker does not match durable completion intent')
+        events = store.read_events(attempt['attempt_id'])
+        if not any(row['kind'] == 'checkbox-applied' for row in events):
+            store.append_event(attempt['attempt_id'], 'checkbox-applied',
+                               {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                                'tasks_sha256': intent['tasks_after_sha256']}, progress='checkbox-applied')
+        if not any(row['kind'] == 'completion' for row in events):
+            store.append_event(attempt['attempt_id'], 'completion',
+                               {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                                'content_manifest_digest': intent['content_manifest_digest']},
+                               progress='completed-awaiting-commit')
+        return store.read_attempt(attempt['attempt_id'])
     finally:
-        if parent_fd is not None:
+        if temporary_fd is not None:
+            os.close(temporary_fd)
+        os.close(parent_fd)
+
+
+def recover_completion(worktree_root, store, attempt_id, review):
+    """Rerun current acceptance and complete only the same immutable attempt."""
+    import single_task_scope as scope
+    import single_task_acceptance as acceptance
+    root = Path(worktree_root)
+    try:
+        attempt = store.read_attempt(attempt_id)
+        events = store.read_events(attempt_id)
+        intents = [row for row in events if row['kind'] == 'completion-intent']
+        task_path = f"specs/{attempt['context']['feature']}/tasks.md"
+        if not intents:
+            if (attempt['progress'] not in ('active', 'acceptance-recorded') or
+                    scope.read_regular(root, task_path) != attempt['tasks_bytes']):
+                raise InvalidState('Recovery requires exact entry bytes or retained intent')
+            if attempt['progress'] == 'acceptance-recorded':
+                recorded = next((row for row in reversed(events) if row['kind'] == 'acceptance'), None)
+                if recorded is None:
+                    raise InvalidState('Recorded acceptance is missing')
+                _validated_completion_acceptance(root, store, attempt, recorded, check_head=False)
+            acceptance.execute_acceptance(root, attempt, review, store)
+            return publish_completion(root, store, attempt_id)
+        if len(intents) != 1 or attempt['progress'] in ('active', 'acceptance-recorded'):
+            raise InvalidState('Contradictory completion intent')
+        event = intents[0]
+        intent = event['payload']
+        fields = {'schema_version', 'attempt_id', 'tasks_path', 'tasks_before_hex',
+                  'tasks_after_hex', 'tasks_before_sha256', 'tasks_after_sha256',
+                  'file_mode', 'acceptance_sequence', 'acceptance_digest', 'context_digest',
+                  'content_manifest', 'content_manifest_digest', 'semantic_review_digest'}
+        if (type(intent) is not dict or set(intent) != fields or
+                type(intent['schema_version']) is not int or intent['schema_version'] != 1 or
+                type(intent['file_mode']) is not int or not 0 <= intent['file_mode'] <= 0o7777 or
+                type(intent['acceptance_sequence']) is not int or intent['acceptance_sequence'] < 1):
+            raise InvalidState('Invalid retained completion intent')
+        before = bytes.fromhex(intent['tasks_before_hex'])
+        after = bytes.fromhex(intent['tasks_after_hex'])
+        selected = scope.task_lines(before).get(attempt['context']['task_id'])
+        if selected is None or selected['checked'] != (attempt['entry_mode'] == 'owner-authorized rework'):
+            raise InvalidState('Intent entry marker disagrees with immutable mode')
+        offset = selected['marker_offset']
+        expected = before if selected['checked'] else before[:offset] + b'x' + before[offset+1:]
+        recorded = next((row for row in events if row['sequence'] == intent['acceptance_sequence']), None)
+        if (before != attempt['tasks_bytes'] or after != expected or
+                intent['attempt_id'] != attempt_id or intent['tasks_path'] != task_path or
+                hashlib.sha256(before).hexdigest() != intent['tasks_before_sha256'] or
+                hashlib.sha256(after).hexdigest() != intent['tasks_after_sha256'] or
+                scope.read_regular(root, task_path) not in (before, after) or
+                recorded is None or recorded['payload_digest'] != intent['acceptance_digest']):
+            raise InvalidState('Recovery bytes or acceptance disagree with retained intent')
+        applied = [row for row in events if row['kind'] == 'checkbox-applied']
+        completed = [row for row in events if row['kind'] == 'completion']
+        expected_applied = {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                            'tasks_sha256': intent['tasks_after_sha256']}
+        expected_completed = {'schema_version': 1, 'intent_digest': event['payload_digest'],
+                              'content_manifest_digest': intent['content_manifest_digest']}
+        progress = attempt['progress']
+        if (len(applied) > 1 or len(completed) > 1 or
+                (applied and (_canonical(applied[0]['payload']) != _canonical(expected_applied) or
+                              applied[0]['sequence'] <= event['sequence'])) or
+                (completed and (not applied or
+                                _canonical(completed[0]['payload']) != _canonical(expected_completed) or
+                                completed[0]['sequence'] <= applied[0]['sequence'])) or
+                (progress == 'completion-prepared' and (applied or completed)) or
+                (progress == 'checkbox-applied' and (len(applied) != 1 or completed)) or
+                (progress in ('completed-awaiting-commit', 'handoff-ready') and
+                 (len(applied) != 1 or len(completed) != 1)) or
+                (applied and scope.read_regular(root, task_path) != after)):
+            raise InvalidState('Retained completion phase contradicts intent or task bytes')
+        descriptor = scope._path_fd(root, task_path)
+        try:
+            if stat.S_IMODE(os.fstat(descriptor).st_mode) != intent['file_mode']:
+                raise InvalidState('Recovery task mode differs from retained intent')
+        finally:
+            os.close(descriptor)
+        if (attempt['progress'] in ('completed-awaiting-commit', 'handoff-ready') and
+                scope.read_regular(root, task_path) != after):
+            raise InvalidState('Completed recovery requires exact post bytes')
+        _validated_completion_acceptance(root, store, attempt, recorded, check_head=False)
+        evidence = recorded['payload']
+        if any(intent[key] != evidence[key] for key in
+               ('context_digest', 'content_manifest', 'content_manifest_digest', 'semantic_review_digest')):
+            raise InvalidState('Recovery seal disagrees with retained acceptance')
+        # Check any interrupted private temporary before executing reviewed commands.
+        publication = _directory(store._directory, 'publication') if 'publication' in os.listdir(store._directory) else None
+        if publication is not None:
             try:
-                if temporary is not None:
-                    os.unlink(temporary, dir_fd=parent_fd)
+                if (set(os.listdir(publication)) - {event['payload_digest']} or
+                        (attempt['progress'] in ('completed-awaiting-commit', 'handoff-ready') and
+                         os.listdir(publication))):
+                    raise InvalidState('Unexpected publication evidence retained')
+                if _regular(publication, event['payload_digest']):
+                    fd = os.open(event['payload_digest'], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=publication)
+                    with os.fdopen(fd, 'rb') as stream:
+                        info = os.fstat(stream.fileno())
+                        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+                                stat.S_IMODE(info.st_mode) != intent['file_mode'] or stream.read() != after):
+                            raise InvalidState('Interrupted temporary does not match intent')
             finally:
-                os.close(parent_fd)
+                os.close(publication)
+        acceptance.execute_acceptance(root, attempt, review, store)
+        if attempt['progress'] in ('completed-awaiting-commit', 'handoff-ready'):
+            if scope.read_regular(root, task_path) != after:
+                raise InvalidState('Completed recovery requires exact post bytes')
+            return store.read_attempt(attempt_id)
+        return _finish_completion_intent(root, store, attempt, event)
+    except OSError as error:
+        raise PersistenceFailure('Recovery durability unavailable; retain evidence') from error
+    except (KeyError, TypeError, UnicodeError, ValueError):
+        raise InvalidState('Invalid recovery evidence retained') from None
 
 
 def implementation_binding(store, attempt_id):
