@@ -32,23 +32,33 @@ assertions and the five historical records, with 74 required context tests.
 [That proposal](../development/pr49-acceptance-proposal.md) remains a historical
 record of its exact scope and provenance.
 
-The US1 checkpoint proposes replacing those 63 records after reviewed T007–T010
-implementation makes every corresponding test pass. It preserves all required
-IDs, requires all 99 context tests, and retains exactly 19 measured test-body
-assertions for pending T017/T023 verification, completion and retry behavior.
-The direct T004 class contributes four of those records and remains part of
-canonical collection. The [checkpoint record](../development/feature003-context-matrix.json)
-contains exact IDs, messages, fingerprints, successors and removal conditions.
-This replacement is a proposal until ordinary owner PR review and merge adopt it;
-no classifier change, skipped test or acceptance waiver is introduced.
+Owner-merged PR #50 adopted the US1 checkpoint: reviewed T007–T010 made all
+63 previous retained records pass, preserved every required ID, required all
+99 context tests, and retained 19 measured T017/T023 test-body assertions.
+The direct T004 class contributed four and remains in canonical collection.
+The [US1 checkpoint record](../development/feature003-context-matrix.json)
+preserves its exact outcomes and original test-authoring approval provenance.
+
+The US2 checkpoint proposes removing 17 of those records after actual reviewed
+T013–T017 implementation and regression migration. It preserves all 232 required
+IDs and adds 145 scope, acceptance, completion and public CLI cases (377 total).
+Exactly two measured same-attempt commit-binding/interrupted-resume assertions
+remain pending T023, with exact messages and removal conditions. The
+[US2 checkpoint record](../development/feature003-acceptance-matrix.json)
+retains raw measurements and original T012 approval records. Ordinary owner PR
+review and merge adopt this proposal; no classifier, skip or waiver changes.
 
 `make check` and CI run the same qualified acceptance policy and repository/static
 checks. Raw unittest results remain red: the initial historical direct baseline
-had 41 cases, 36 passes and five assertions; the measured US1 focused and direct
-runs have 155 cases, 136 passes and 19 assertions, zero errors or skips, with
-both raw commands exiting 1. These are focused measurements, not a claim that
-the complete repository suite passed. Qualified green never describes a raw
-red suite as green or grants task execution permission.
+had 41 cases, 36 passes and five assertions; US1 focused/direct runs had 155 cases,
+136 passes and 19 assertions. US2 focused collection observed 276 cases, 274 passes
+and two assertions, with zero errors/skips/subtests; the direct 24 cases passed.
+The US2 focused source snapshot was unqualified because concurrent preparation
+created linked Git worktrees during collection. Those raw results remain evidence,
+with the exact administrative delta recorded; final repository qualification uses
+an independent publication clone. These focused measurements do not claim a raw
+full-suite pass. Qualified green never describes a raw red suite as green or grants
+task execution permission.
 
 Use ordinary PR synthetic-merge checkout into `main`, read-only contents permission
 and no persisted credentials. Keep focused Conventional Commits and exact-candidate

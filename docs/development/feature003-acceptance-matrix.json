@@ -734,6 +734,124 @@
       "full_suite_green": false,
       "owner_identity_authenticated": false,
       "live_dispatch_verified": false
+    },
+    {
+      "task": "T017",
+      "source_commit": "52b0d3dc86689440c0f90f765925293a64da38d1",
+      "status": "locally implemented; source independently reviewed clear; final marker identity audit pending",
+      "focused_cases": 276,
+      "focused_passes": 274,
+      "focused_assertions": 2,
+      "focused_raw_exit": 1,
+      "errors": 0,
+      "skips": 0,
+      "failed_subtests": 0,
+      "raw_argv": [
+        "/opt/homebrew/bin/python3.14",
+        "-B",
+        "/private/tmp/collect-feature003-scope.py",
+        "test_single_task*.py",
+        "t017-final"
+      ],
+      "input_before": "sha256:de9a7980dc7f2327d965cb9f7295631d2e6539d6d1fb09784eb51a7805a9678e",
+      "input_after": "sha256:9a21cd56e1e17ee88b791caafeb6de84883fd95d3ced6d8aa9d4a8fc59addaa0",
+      "source_snapshot_stable": false,
+      "snapshot_qualification": "Unqualified: concurrent T018/T019 preparation created linked worktree administration, refs and reflogs. Reconstructing the preexisting bytes without those identified additions exactly matches input_before (diagnostic only, not guard exclusion). Final qualification must use an independent publication Gitdir.",
+      "direct_CLI_cases": 12,
+      "direct_CLI_passes": 12,
+      "direct_state_cases": 12,
+      "direct_state_passes": 12,
+      "direct_raw_exit": 0,
+      "evidence": [
+        {
+          "path": "/private/tmp/workharbor-003-t017-final-raw.json",
+          "sha256": "b347c606696ff04e8e80345e93d24c50fe5f465448572d95555c585a79fc718e"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-final-raw.log",
+          "sha256": "aa8dfe70821a7fac6e6d8cbfe7ec05b1ffa687e2845dde4c3dca1268ad2c9774"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-snapshot-diagnosis.json",
+          "sha256": "2c3b88264624dc083235b6d3432ce50267b0a5aad2c407240b4cb3fa9e93b8d5"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-public-first.log",
+          "sha256": "fbfe8152681fe8561b9e7fbbc27c0afd984522965826e3340885144a528a42ea"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-review-negatives.log",
+          "sha256": "e255e522eb135aa1c489c7bcf1645815e05701cfd3c89a415884332112c6f70f"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-state-adapter.log",
+          "sha256": "f632760e65c1b5600e22cdefcfd6dc4371c9b7b9f4269a22b00a4b0fce6dab42"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-direct-second.log",
+          "sha256": "2d6a4848696677efaedaea7e83dee6f488431b5274ed2eb1991af32fe4eb7f21"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-primitives.log",
+          "sha256": "e2ad2fc5f1bbe7600f677f24c5c4a10f0a6fa6cf663a1a810de30c0ef9dc9722"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-legacy-second.log",
+          "sha256": "30bdcee22298c110e3b8518735c006fa0dc82100f228e167a08a449d2c8d9b33"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-blocker-final.log",
+          "sha256": "c7af27ba09c3446743d9cb2709a97c222d627c02c9fbeb82c0cd44f53057ec0f"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t017-first-red.log",
+          "sha256": "e84a0fc56e24349c21caaf92846eb0acf6a02f70c9deeb1632e2908272b35ab7"
+        }
+      ],
+      "files": {
+        "scripts/single_task.py": "9d5742ae933ef2ac345fe153554707f144f0508375fb4e81abdabacbeca486df",
+        "scripts/single_task_scope.py": "9e5f3f05e6f970128beb84274ad584ccae16a66bf21cf048ded731a0128a52b5",
+        "scripts/single_task_state.py": "6c1ac27008bdeda71191534445452e4d55268c15aa03d381f3e83beaa5204788",
+        "scripts/single_task_acceptance.py": "2ccc7dcf820cbd9e57cc8f2fd0fa6f6358a5d4e78d50c2fb64c2ec3eeebbe656",
+        "scripts/verify_t004_cli.py": "7943b1414aceab1949f36b9b5df12255781f6fea53976ced2c4b7036244196e9",
+        "tests/test_single_task.py": "b9ae1f4ff7221d803c3f09ef12ccf47bfe7fcb8d84cdaed212ae12c6aa4edca6",
+        "tests/test_single_task_scope.py": "f2c0e1614fc9ed04cacb4ee63c4970707818f0a158b169cd889fd0c0d33b67a7",
+        "tests/test_single_task_acceptance.py": "f946d210a840656f831611a4e24d6af284b280a31ad0f49c9ae746f15dc7cf48",
+        "tests/test_single_task_completion.py": "a756363b8865d7b9bdffd12ae820ed7fd51f69e3ed17f4b7a9147aada7cc1189",
+        "docs/development/ci-acceptance.json": "cc90f85f11fdb51f30cda84163fc524f1753e824cff14387d49ab69ee1914398"
+      },
+      "policy_proposal": {
+        "status": "proposal pending ordinary owner PR review and merge",
+        "prior_required_ids": 232,
+        "required_ids": 377,
+        "added_required_ids": 145,
+        "removed_now_green_retained_rows": 17,
+        "remaining_retained_rows": 2,
+        "future_cases": [
+          {
+            "fingerprint": "sha256:6fbda3db786e8ca9901cd98b2ba05413b4d97c850272cacc7600a5405ebf571b",
+            "id": "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task",
+            "message": "0 != 2 : T023 must bind the same completed implementation commit",
+            "outcome": "assertion",
+            "successor": "T023",
+            "removal_condition": "Remove only after T023 implements this retained same-attempt record-commit or interrupted-resume scenario and independent review verifies the unchanged security/identity assertions pass."
+          },
+          {
+            "fingerprint": "sha256:c745b3dd94e83da3317073cf7d7863bd00dd74d1c69bca68957318984f609679",
+            "id": "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update",
+            "message": "0 != 2 : T023 must recover the same interrupted completion",
+            "outcome": "assertion",
+            "successor": "T023",
+            "removal_condition": "Remove only after T023 implements this retained same-attempt record-commit or interrupted-resume scenario and independent review verifies the unchanged security/identity assertions pass."
+          }
+        ]
+      },
+      "completion_boundary": "Actual verify and complete rerun fresh content-bound acceptance under one uninterrupted lock. Durable completion intent precedes atomic publication; repeated complete validates the original seal without a new attempt or implicit task selection. No outer SQL transaction hides intent.",
+      "remaining_future_boundary": "record-commit/resume/rework and interrupted transition recovery remain pending US3; completed-awaiting-commit is not handoff-ready.",
+      "approved_red_wrapper_executed": false,
+      "full_suite_green": false,
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false
     }
   ]
 }
