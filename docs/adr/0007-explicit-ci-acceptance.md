@@ -19,7 +19,7 @@ Use one repository-owned runner, `scripts/check_ci.py`, and the reviewed
 and `scripts/test_*.py`, plus the direct T004 CLI and T003 state classes. Required
 IDs must remain present. Additional green regressions need no manifest/hash change.
 
-The initial manifest retains exactly five T004 assertion failures, with exact test
+The initial historical manifest retained exactly five T004 assertion failures, with exact test
 IDs/messages, reasons and removal conditions. Only assertions arising in the test
 body qualify. Missing IDs, new failures, unexpected passes, errors, skips, xfails,
 failed subtests, duplicate outcomes/IDs and empty discovery fail acceptance. Changes
@@ -27,17 +27,28 @@ to required inventory or retained outcomes require owner PR review and merge;
 a manifest edit or passing check cannot approve itself. Remove retained outcomes
 with reviewed implementation and regression migration when their conditions hold.
 
-PR #49 proposes extending that same manifest to the 58 preserved T005 assertions
-for pending T007–T010 behavior at the T006 checkpoint, while requiring all 74
-context tests, including the 16 implemented green controls. The five historical
-records remain unchanged. [The proposal](../development/pr49-acceptance-proposal.md)
-records exact scope and provenance; owner PR review and merge must adopt this
-extension. It does not approve task execution or describe the raw suite as green.
+Owner-merged PR #49 adopted the T006 checkpoint proposal: 58 pending T005
+assertions and the five historical records, with 74 required context tests.
+[That proposal](../development/pr49-acceptance-proposal.md) remains a historical
+record of its exact scope and provenance.
+
+The US1 checkpoint proposes replacing those 63 records after reviewed T007–T010
+implementation makes every corresponding test pass. It preserves all required
+IDs, requires all 99 context tests, and retains exactly 19 measured test-body
+assertions for pending T017/T023 verification, completion and retry behavior.
+The direct T004 class contributes four of those records and remains part of
+canonical collection. The [checkpoint record](../development/feature003-context-matrix.json)
+contains exact IDs, messages, fingerprints, successors and removal conditions.
+This replacement is a proposal until ordinary owner PR review and merge adopt it;
+no classifier change, skipped test or acceptance waiver is introduced.
 
 `make check` and CI run the same qualified acceptance policy and repository/static
-checks. `make check-raw` retains the honest baseline unittest result: currently 41
-cases, 36 passes, five assertion failures, exit 2. Qualified green never describes
-that raw suite as green or grants task execution permission.
+checks. Raw unittest results remain red: the initial historical direct baseline
+had 41 cases, 36 passes and five assertions; the measured US1 focused and direct
+runs have 155 cases, 136 passes and 19 assertions, zero errors or skips, with
+both raw commands exiting 1. These are focused measurements, not a claim that
+the complete repository suite passed. Qualified green never describes a raw
+red suite as green or grants task execution permission.
 
 Use ordinary PR synthetic-merge checkout into `main`, read-only contents permission
 and no persisted credentials. Keep focused Conventional Commits and exact-candidate
