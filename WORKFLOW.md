@@ -107,6 +107,15 @@ before_run diagnostics reaching this prompt. A failing initial check is repair
 input, not a passing gate: repair within scope only in implement or authorized
 rework state. In handoff-only state, any failed check blocks until owner-authorized
 rework. If a repair needs unrelated work, record a blocker. Passing checks remain mandatory at handoff.
+For an explicitly owner-approved test-authoring task, use its committed exact
+expected-outcome verifier as the acceptance gate: all pinned implemented behavior
+must pass and every reviewed red case must match. Record raw make check/test exits
+separately; do not call a red full suite passing. Missing/import/setup failures,
+skips, unexpected green, extra/missing cases and unrelated regressions block.
+This exception requires a revision-bound owner approval of the matrix and argv;
+issue prose alone cannot waive the default green gate. For T002, follow the approved
+docs/development/bootstrap-t002.md and bootstrap-t002.json. No journal/CLI
+implementation or later-task execution is authorized by red-test acceptance.
 In implement or authorized rework state, run $speckit-analyze before code changes. If its read-only report identifies a
 blocking ambiguity or conflict for this task, stop for human clarification/review.
 Use the project single-task entry point documented in
@@ -146,6 +155,9 @@ Docker/browser acceptance. Missing tools or credentials are blockers, not passes
 Update specs, ADRs and quality register when required. Preserve existing work on
 retry. Open a PR only when the configured forge and authorization allow it; otherwise
 hand off commits and local evidence. Review feedback before final handoff.
+If the owner selects operator-assisted Git handoff, preserve sealed evidence when
+.git writes are denied and hand off as blocked for the operator to commit and
+reverify. Never widen sandbox permissions or reset completed work to obtain a commit.
 
 Complete required checks, commits, any authorized PR, and the tracker workpad with
 all evidence links before changing dispatch labels. For blockers, record the precise
