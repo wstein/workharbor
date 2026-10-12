@@ -15,7 +15,7 @@ Use Python 3.11+, POSIX process groups and Git with `merge-tree --write-tree` su
 ```sh
 python3 -I -B scripts/prepare_publication.py \
   --repository https://github.com/wstein/workharbor-nxt \
-  --source ACCEPTED_CHECKER_COMMIT \
+  --source REVIEWED_CHECKER_COMMIT \
   --base-ref refs/heads/main --base BASE_COMMIT \
   --head-ref refs/heads/topic --head PROPOSAL_COMMIT \
   --timeout 300
@@ -33,18 +33,19 @@ resetting existing work, verifies the fetched pins, computes Git's actual merge
 tree and creates a deterministic synthetic commit with ordered base/head parents.
 A second scratch worktree loads `scripts/check_ci.py` from `--source`, independently
 of the integration tree. The checker receives `--root`, `--event pull_request`,
-`--base`, `--head`, `--checkout` and `--policy-source` equal to `--source`;
-its existing policy owns history, protected
-paths, tree/types/modes, index/worktree and acceptance validation. Preparation adds
-no task guard, approval exception or task-specific phase exemption.
+`--base`, `--head`, `--checkout` and `--source`. This exact source pin identifies
+the loaded and checked checker bytes/mode; it does not attest owner review or adoption.
+Use a reviewed checker revision matching the proposal's checker code. There is no
+external policy-source setting or historical-tree acceptance gate.
 
-The accepted checker must support this context interface. An older checker, missing
-tool/history, merge conflict, failed check, unsupported capability or elapsed
-deadline returns `BLOCKED`. Proposals changing checker code cannot authenticate
-their own acceptance: use an independently reviewed trusted checker revision.
-Any bounded operator-validation policy needs its own independently reviewed trusted
-source and exact inventory. Additional operator tests must be green; inherited
-reviewed reds remain raw red outcomes. This command defines no acceptance exception.
+The checker applies the repository's [explicit acceptance policy](harness.md#ci-and-explicit-acceptance)
+and reviewed manifest to actual integration. Its deprecated `--policy-source` alias
+is accepted only as the same code-identity pin and emits a deprecation diagnostic;
+the helper uses `--source` by default. Older unsupported checker interfaces, missing
+tools/objects, conflicts, failed checks and deadlines return `BLOCKED`. Independent
+exact-candidate review and owner authorization remain separate prerequisites.
+Preparation adds no task guard, approval exception or task-specific phase exemption.
+Raw suite failures remain visible even when the explicit acceptance matrix qualifies.
 
 After checks, the command rereads both refs. Any mismatch blocks, preserving the
 check exit separately. Exit 0 means `PREPARED`; exit 3 means `BLOCKED`. One JSON
@@ -72,7 +73,8 @@ Run the additional operator tests explicitly:
 ```sh
 python3 -I -B scripts/test_prepare_publication.py -v
 make check
+make check-raw  # current raw baseline: five assertion failures, Make exit 2
 ```
 
-The separate test location preserves the frozen Feature 003 case inventory. It
-does not waive either these additional tests or the repository's full check.
+The operator tests are also collected by `make check`. Historical Feature 003
+acceptance records remain intact; this location creates no test waiver.

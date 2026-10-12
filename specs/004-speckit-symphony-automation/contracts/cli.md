@@ -48,11 +48,13 @@ mutating checks invalidate evidence. Test-authoring verifier success can satisfy
 declared prerequisite while retaining reds; successor implementation needs its own
 acceptance. Default implementation/handoff matrices require every check pass.
 
-CI pins trusted validator/policy source independently of proposal data, without
-credentials/write permissions. Only revision-approved argv runs under host isolation;
-never execute task prose. Proposal changes to validator/CI require independent review
-and renewed trusted pin. No self-approved allowlist or task-specific exception fallback.
-Keep current sealed phase gates until separately reviewed migration.
+Repository CI follows [ADR 0007](../../../docs/adr/0007-explicit-ci-acceptance.md):
+ordinary read-only PR synthetic-merge checks, generic runner and explicit reviewed
+acceptance manifest. Required IDs are a minimum; new green regressions need no hash
+refresh. CI policy/manifest changes need owner PR review and merge, without an
+external adoption pin. This supersedes the historical CI trust/phase design here;
+it does not implement the future `task_outcomes.py` package interface above.
+Task argv still requires Feature 003 approval, and CI grants no execution permission.
 
 ## Source and effective readiness
 
@@ -82,7 +84,8 @@ The [bounded source contract](../bounded-source-contract.md) specifies the separ
 prepublication CLI, source-context/head-versus-merge gates and content-approval adapter.
 It does not make the future package CLI above available. Source validation may return
 a frozen context or a safe blocker; no synthetic checkout can clear failed head scope.
-Accepted checker code is pinned independently of proposal data. New accepted base
+Prepublication pins exact reviewed checker code; the pin does not authenticate
+owner adoption. Repository CI loads its ordinary checked-out runner and manifest. New accepted base
 content requires affected protected-prerequisite revalidation, not blanket tree equality.
 
 The approval adapter calls the guard's comparison port; its default unavailable port

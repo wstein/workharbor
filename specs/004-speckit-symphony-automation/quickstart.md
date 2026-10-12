@@ -11,17 +11,21 @@ use installed /opt/homebrew/bin/python3.14 through Make's PYTHON override.
 ```sh
 python3 scripts/select_feature.py 004-speckit-symphony-automation
 make check PYTHON=/opt/homebrew/bin/python3.14
-/opt/homebrew/bin/python3.14 scripts/verify_t002_red.py --self-test
+make check-raw PYTHON=/opt/homebrew/bin/python3.14  # raw baseline: expected exit 2
 /opt/homebrew/bin/python3.14 scripts/verify_t003_state.py
 git diff --check
 git diff 8f4debe5cd2ee2770f5963d292a9eb60af6270d7 -- specs/001-workspace-lifecycle specs/002-symphony-doc-smoke specs/003-single-task-entry specs/004-speckit-symphony-automation/spec.md
 ```
 
-Expected approved-source raw make check: exit 2, ten known CLI assertion failures,
-31 passes; suite is red. Direct primitive tests/verifier self-test are narrower evidence,
-not Feature 003 CLI or Feature 004 implementation. Final diff must be empty. Do not
-change old tests/contracts/CI to make planning green. Run repo/diff/shell/prerequisite
-checks separately when red Make stops early; report actual exits.
+Current repository acceptance follows [ADR 0007](../../docs/adr/0007-explicit-ci-acceptance.md):
+`make check` qualifies the reviewed manifest and includes static/operator/direct
+checks. `make check-raw` reports the actual baseline result: 41 tests, 36 passes,
+five exact assertion failures, Make exit 2. Direct primitive tests are narrower
+evidence, not Feature 003 CLI or Feature 004 implementation. Historical approved-base
+results (31 passes/ten CLI reds) remain evidence of that earlier source only.
+Feature 001–003 specs/guard contracts and the approved Feature 004 specification
+remain unchanged; the legacy test fixture's source loading migration is documented
+in ADR 0007. Report canonical acceptance and raw exits separately.
 
 ## Future offline acceptance
 

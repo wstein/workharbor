@@ -9,17 +9,15 @@ These are local provenance observations, not claims of a fresh forge fetch.
 
 ## Separate proposal and integration gates
 
-Use three distinct identities: trusted accepted policy source, current target base,
-and proposal head. The accepted policy pin is explicit and independently trusted;
-keep historical acceptance pins intact. Never add a blanket executable-path exemption
-or silently refresh an accepted pin to proposal code.
+Use three distinct identities: exact checker source, current target base and proposal
+head. The checker pin identifies code, not owner adoption. Repository CI uses the
+reviewed explicit acceptance manifest under [ADR 0007](../../docs/adr/0007-explicit-ci-acceptance.md),
+through ordinary owner PR review and merge. It needs no external policy-source
+variable or historical-tree authentication. Preserve historical evidence as records.
 
-Proposal scope and approval checks inspect the exact head, its index/worktree and
-each proposal commit from `merge-base(base, head)` through head. Validate the
-trusted accepted-base history and task's approved scope, including commit/revert,
-modes, symlinks and gitlinks; policy equivalence follows the contract below. A
-synthetic merge commit is never a task-authored commit and never changes the
-approved scope. A head failure cannot be cleared by merge checks.
+Task proposal scope and approval remain Feature 003 guard responsibilities. A
+synthetic merge is never a task-authored commit and cannot expand approved scope.
+CI acceptance alone cannot clear a task scope failure or approve execution.
 
 Integration separately authenticates the PR repository/event/base/head, exactly two
 ordered merge parents `(base, head)`, and the actual Git merge result. Recompute the
@@ -40,66 +38,21 @@ Protect the approved requirements, task description/scope, check argv/outcomes,
 dependencies/order, prerequisite evidence, verifier/policy code and execution inputs.
 If base changes touch a protected prerequisite, revalidate that prerequisite using
 its approved contract and trusted verifier. If required revalidation/comparison is
-unavailable, changed or ambiguous, block the affected action. The existing sealed
-bootstrap gate may conservatively block changed executable/test/configuration inputs
-until such evidence exists; it must not pretend that a blocked prerequisite passed.
-Proposal edits to protected inputs still need their own explicit authorization.
+unavailable, changed or ambiguous, block the affected action. Repository CI instead uses the explicit acceptance policy; it grants no task-content
+approval. Proposal edits to protected inputs still need their own explicit authorization.
 
-## Immutable policy authority, content-equivalent history
+## Reviewed explicit CI acceptance
 
-Status: proposed bounded plan revision for the owner's requested reduction in
-repeated approval administration; no claim of plan approval or implementation.
-The owner independently adopts one reviewed immutable policy commit. Keep that
-commit as authority and keep historical acceptance pins unchanged. New policy
-content requires one explicit owner adoption after independent review; a proposal,
-manifest or passing check cannot adopt itself. This changes no host permissions.
-
-The accepted checker derives a deterministic content manifest from that trusted
-Git object, never from candidate declarations. Record exact path inventory, Git
-type/mode and raw-blob digest for checker, workflow, operator tools and paired tests;
-bind the tool/test mapping, schema/contracts and authority inputs that define their
-scope, dependencies and ordered checks. The bounded inventory is `OPERATOR_PATHS`,
-`.specify/memory/constitution.md`, `docs/development/{harness,prepublication,approval-binding}.md`
-and Feature 004's `bounded-source-contract.md`, `contracts/cli.md`, `data-model.md`.
-Keep imported guard, build/check scripts,
-tests, dependency/configuration inputs and frozen Feature 001–003 artifacts under
-their existing immutable accepted baseline. Enumerate the dependency closure in
-trusted policy; added, removed or renamed inputs cannot escape by falling outside
-a candidate-supplied inventory. Ordinary documentation outside these protected
-inputs remains eligible for the existing documentation rule. Task-content approval
-still uses GuardPort's protected contract and comparison rules below.
-
-Head and actual integration must match the adopted manifest exactly. Validate the
-current accepted base separately, including its protected prerequisites. A real
-rebase or squash with identical protected content need not contain the policy
-commit as an ancestor and needs neither a new policy pin nor another policy-content
-approval. Record the new commit/tree identities and comparison evidence; retain
-fresh exact-candidate review and integration checks. Unrelated accepted-base
-updates need no policy renewal. Changed policy, scope, checks or dependencies
-invalidate affected approval; unavailable or ambiguous evidence blocks.
-
-Content equality does not replace history validation. From the existing trusted
-accepted-base anchor, validate the trusted policy history and current base history;
-then validate every proposal commit from the unique PR merge base to head. The
-base may end at a reviewed intermediate state before policy adoption; head and
-integration must reach the final adopted state. Keep
-protected-path commit/revert rejection. Permit policy transitions only by matching
-the complete protected-policy manifest states in the reviewed source history, in
-order. Consecutive duplicate states may collapse; a squash may skip contiguous
-reviewed transitions to their exact resulting state. Other changes must satisfy
-existing documentation/task scope and type rules. This permits reviewed policy
-replay, not arbitrary code changes on operator paths. Reject invented, reversed or
-mixed policy states, protected changes followed by reverts, missing objects and
-ambiguous/nonlinear transition evidence; do not delete ancestry guards wholesale.
-Synthetic integration parents remain a separate authenticated `(base, head)` gate.
-
-Required disposable-Git evidence includes actual rebase and squash candidates with
-identical manifests but no policy-commit ancestry, plus unrelated accepted-base
-updates. Negative cases change checker/workflow/tool/test bytes, inventory, modes,
-manifest/schema/contract inputs, scope or dependencies; include protected
-commit/revert, dirty/untracked/index content and symlinked paths/parents. Retain
-Git metadata/configuration, event/repository identity, frozen artifacts and all
-existing check/outcome gates. These are required cases, not passing-test claims.
+[ADR 0007](../../docs/adr/0007-explicit-ci-acceptance.md) supersedes the former
+immutable policy/history design here. Required test IDs and exactly enumerated
+retained assertions live in a repository manifest reviewed and merged by the owner.
+New green tests do not require another source pin. Changed required inventory or
+retained outcomes require owner review; manifests and passing checks cannot approve
+themselves. The runner rejects missing IDs, duplicates, empty discovery, unexpected
+passes/failures, errors, skips, xfails and failed subtests. Historical evidence remains
+available, but whole-tree prefix replay, adopted states and task hashes are not CI
+authority. Exact-candidate review, actual merge identity, source cleanliness and
+Feature 003 approval/scope gates remain separate requirements.
 
 ## Reusable prepublication preparation
 
@@ -113,9 +66,9 @@ python3 -I -B scripts/prepare_publication.py --repository REMOTE --source ACCEPT
 
 An authorized caller supplies a trusted credential-free local/HTTPS repository and
 exact full object IDs. In private scratch storage, fetch and verify those references
-and accepted checker source, construct the actual merge result, and invoke the
-accepted checker for the pinned PR context. Do not copy credentials or use a
-proposal-supplied checker. This tool may access the remote; offline package
+and exact checker source, construct the actual merge result, and invoke the
+reviewed checker for the pinned PR context. Do not copy credentials. The caller selects the exact reviewed checker code pin;
+that pin identifies code, not independent review or owner adoption. This tool may access the remote; offline package
 preparation remains network-free and inert.
 
 Emit sanitized JSON containing `schema_version: 1`, `status: PREPARED|BLOCKED`,
@@ -184,28 +137,15 @@ review transfer nor publication, rework, merge, release or deploy permission.
 | New candidate SHA with unchanged contract | Fresh exact-candidate independent review |
 
 Use disposable repositories and injected ports; include commit/revert and dirty
-index/mode cases. Keep all existing Features 001–003 artifacts and frozen acceptance
-contracts byte-identical. Report raw test exits, narrowed gate outcomes and live
+index/mode cases. Preserve Feature 003 guards and approval contracts. Historical acceptance records
+remain intact; explicit reviewed fixture/outcome migrations follow ADR 0007. Report raw test exits, narrowed gate outcomes and live
 observations separately. These are required tests, not claimed passing results.
 
-## Promotion of the complete approved snapshot to main
+## Ordinary main integration
 
-A pre-baseline main base may be promoted only when it is an ancestor of the fixed
-accepted policy anchor, the source retains that immutable authority, the head
-proves its accepted prefix and validated ordered history, and the complete source,
-head and actual integration trees match.
-GitHub metadata must name main; local preparation uses the trusted canonical-main
-guard. This narrow path does not claim the old base has current prerequisites;
-all protected source/head/integration content and execution checks still apply.
-
-Policy identities use raw Git objects throughout materialization, comparison and
-check execution. Replacement refs and graft metadata are rejected before trusted
-identity/history reads; inherited Git substitution settings cannot redefine a pin.
-
-An owner full-range rebase may rewrite the baseline commit identity. The candidate
-then needs a unique trusted common prefix and linear complete-tree states matching
-the immutable accepted prefix in order, reaching the exact accepted baseline tree.
-Only that proven candidate anchor starts the existing ordered policy/history gates.
-Unknown or reversed prefix states, protected commit/revert and missing baseline
-snapshots fail closed; whole historical-prefix squash without that snapshot is
-unsupported. The owner rebase-only merge rule and original source pins remain.
+PRs target `main` and use ordinary actual synthetic-merge checks. Owner review and
+merge adopt CI policy changes. No historical accepted-prefix tree reconstruction
+or external adoption pin is required. Prepublication source pins identify exact
+checker code only. Replacement refs and graft metadata are rejected before identity
+reads; inherited Git substitution settings cannot redefine a pin. Linear history,
+exact-candidate review and separate owner merge authorization remain required.

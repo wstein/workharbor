@@ -109,7 +109,7 @@ rework state. In handoff-only state, any failed check blocks until owner-authori
 rework. If a repair needs unrelated work, record a blocker. Passing checks remain mandatory at handoff.
 For an explicitly owner-approved test-authoring task, use its committed exact
 expected-outcome verifier as the acceptance gate: all pinned implemented behavior
-must pass and every reviewed red case must match. Record raw make check/test exits
+must pass and every reviewed red case must match. Record raw make check-raw/test exits
 separately; do not call a red full suite passing. Missing/import/setup failures,
 skips, unexpected green, extra/missing cases and unrelated regressions block.
 This exception requires a revision-bound owner approval of the matrix and argv;
@@ -119,7 +119,7 @@ implementation or later-task execution is authorized by red-test acceptance.
 For owner-approved T003, use docs/development/bootstrap-t003.json: twelve direct
 state-module tests must pass. The pinned T002 verifier separately requires all
 31 baseline tests green and exactly ten remaining CLI reds. Those known initial
-reds are not out-of-scope repairs; record raw make check exit/status honestly.
+reds are not out-of-scope repairs; record raw make check-raw exit/status honestly.
 This scoped implementation gate requires its own revision-bound owner approval;
 neither the T002 exception nor ready labels grant it. Never change the old CLI or
 weaken tests to clear those reds during T003. The US3/final full-green gate remains.
