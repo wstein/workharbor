@@ -91,7 +91,8 @@
       "required_action": "Owner reviews and updates authoritative data-model before T006 acceptance; add positive schema and mode-binding controls"
     },
     "option_b": "Owner revises T006 scope to defer rework schema validation to a later approved task; until such revision, retain T006 blocker and do not start T007",
-    "authoritative_proposal": "specs/003-single-task-entry/data-model.md: Proposed rework approval shape — owner decision pending"
+    "authoritative_proposal": "specs/003-single-task-entry/data-model.md: Proposed rework approval shape — owner decision pending",
+    "resolved_by": "Owner approved exact rework shape in current session; accepted authoritative schema commit7fe55ffccf565db1234c92c68f0a1ef36d9b9c75; valid rework schema positive passes; valid mode-binding control is due in T008."
   },
   "checkpoint_policy": {
     "T005": "Owner-approved exact initial 72-red matrix; 27 existing focused tests and 24 direct tests green; retain exactly 5 existing CI assertions separately",
@@ -125,6 +126,29 @@
       "case_outcomes_matched": true
     }
   },
+  "implementation_checkpoints": [
+    {
+      "task": "T006",
+      "source_commit": "75231c7099dec3fe9f85e9470ce55efc4745b9c4",
+      "checks_digest": "sha256:e199d0587f27d2d360ac841cf2b6306e440daf7c5d9798c54b86db4482ad04ad",
+      "input_revision": "sha256:c64ee01e7fea655d64edb202ed7a9cd2d3c1d7cf7e8a2284b202a37d33a50722",
+      "runner_exit": 0,
+      "accepted": true,
+      "focused_cases": 106,
+      "focused_passes": 43,
+      "focused_expected_assertions": 63,
+      "focused_raw_exit": 1,
+      "direct_passes": 24,
+      "direct_raw_exit": 0,
+      "files": {
+        "scripts/single_task_context.py": "320d2f2cba741201b1b1ff5b75c349fb54acc9e5af6b8cbdf14f8f8e1327d383",
+        "tests/test_single_task_context.py": "e3728c7828feb7a604b6fc0afd1e962465c829ea636cd5f823b04850736820df"
+      },
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false,
+      "full_suite_green": false
+    }
+  ],
   "cases": [
     {"id":"test_single_task.SingleTaskFixtureTests.test_fixture_creation_rejects_network","expected":"pass","assertion":null,"fingerprint":null},
     {"id":"test_single_task.SingleTaskFixtureTests.test_git_configuration_hooks_and_signing_are_isolated","expected":"pass","assertion":null,"fingerprint":null},
