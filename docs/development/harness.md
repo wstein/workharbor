@@ -65,7 +65,9 @@ PR34's preparation is a separate CI mode, with no T004 implementation acceptance
 or entry authorization. It recognizes immutable preparation commit
 `f6a69470f8a3e5c396e134326c033a3b1195de7b` above accepted source `5d1dc656…`,
 pins all three preparation artifact hashes/modes, and permits exactly one CI
-commit changing only this document and `scripts/check_ci.py`. HEAD, index and
+commit changing only this document and `scripts/check_ci.py`, plus one direct
+PR-wrapper fix above reviewed CI head `4826a9a36b3f7f8e74d46b2238cf7653e3947911`.
+HEAD, index and
 worktree must otherwise match that preparation seal; untracked files and dirty
 CI edits block. Any later commit, implementation, marker, test, workflow or
 preparation change expires the mode and returns to the existing strict path.
@@ -81,3 +83,10 @@ unexpected T004 pass block. Known unimplemented errors are accepted only as
 preparation evidence; they can never pass T004's delivered-behavior verifier.
 Successful CI labels itself **PREPARATION ONLY**. The runtime task's four ordered
 acceptance argv, immutable external guard and pending owner gates are unchanged.
+
+For a pull-request event, Actions' synthetic merge is recognized only when its
+first parent is the exact accepted source, its second parent is the sealed
+proposal candidate, its complete tree equals that candidate, and the event's
+source/head commits, branch names and repository identities agree. Extra/wrong
+parents, changed merge trees and dirty index/worktree state block. This wrapper
+does not extend the preparation phase to a later implementation commit.

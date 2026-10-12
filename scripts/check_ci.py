@@ -32,6 +32,7 @@ PINS = {
 }
 T004_SOURCE = '5d1dc6563c7ae1f8479f01af0901c39792b3f8b8'
 T004_PREPARATION = 'f6a69470f8a3e5c396e134326c033a3b1195de7b'
+T004_REVIEWED_CI = '4826a9a36b3f7f8e74d46b2238cf7653e3947911'
 T004_CI_PATHS = ('scripts/check_ci.py', 'docs/development/harness.md')
 T004_PREP_PINS = {
     'docs/development/bootstrap-t004.json': ('3c655a98d91a9ddf160be9795c6843843a04269e1d09ff19103e2b3478dc712c', False),
@@ -49,8 +50,32 @@ def approved_t004_preparation(root):
     """
     try:
         git(root, 'merge-base', '--is-ancestor', T004_SOURCE, T004_PREPARATION)
-        git(root, 'merge-base', '--is-ancestor', T004_PREPARATION, 'HEAD')
-        if len(git(root, 'rev-list', T004_PREPARATION + '..HEAD').splitlines()) != 1:
+        head = git(root, 'rev-parse', 'HEAD').decode().strip()
+        candidate = head
+        parents = git(root, 'rev-list', '--parents', '-n', '1', 'HEAD').decode().split()[1:]
+        if len(parents) == 2:
+            # Actions checks out refs/pull/N/merge. Accept that wrapper only
+            # when its trusted event and parent/tree identities agree exactly.
+            if (os.environ.get('GITHUB_EVENT_NAME') != 'pull_request'
+                    or os.environ.get('GITHUB_SHA') != head or parents[0] != T004_SOURCE):
+                return False
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())['pull_request']
+            if (event['base']['sha'] != T004_SOURCE or event['head']['sha'] != parents[1]
+                    or event['base']['ref'] != 'chore/issue-2-bootstrap-entry'
+                    or event['head']['ref'] != 'chore/5-t004-preparation'
+                    or event['base']['repo']['full_name'] != 'wstein/workharbor-nxt'
+                    or event['head']['repo']['full_name'] != 'wstein/workharbor-nxt'):
+                return False
+            candidate = parents[1]
+            git(root, 'diff', '--quiet', candidate, head, '--')
+        elif len(parents) != 1:
+            return False
+        git(root, 'merge-base', '--is-ancestor', T004_PREPARATION, candidate)
+        count = len(git(root, 'rev-list', T004_PREPARATION + '..' + candidate).splitlines())
+        # One narrowly scoped PR-wrapper fix may follow the reviewed CI head.
+        # No later commit, runtime change or general history allowance follows.
+        if count != 1 and not (count == 2 and
+                git(root, 'rev-parse', candidate + '^').decode().strip() == T004_REVIEWED_CI):
             return False
         for name, (digest, executable) in T004_PREP_PINS.items():
             path = root/name
@@ -66,7 +91,7 @@ def approved_t004_preparation(root):
         for options in ((), ('--cached',)):
             git(root, 'diff', *options, '--quiet', 'HEAD', '--', *T004_CI_PATHS)
         return not git(root, 'ls-files', '--others', '--exclude-standard', '-z')
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
         return False
 
 
@@ -368,6 +393,51 @@ def self_test():
             with mock.patch(__name__ + '.git', side_effect=subprocess.CalledProcessError(1, ['git'])):
                 self.assertFalse(approved_t004_preparation(ROOT))
 
+        def test_preparation_synthetic_merge_is_exact(self):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)/'checkout'
+                subprocess.run(['git', 'clone', '--quiet', '--shared', str(ROOT), str(root)], check=True)
+                candidate = git(root, 'rev-parse', 'HEAD').decode().strip()
+                tree = git(root, 'rev-parse', 'HEAD^{tree}').decode().strip()
+                env = dict(os.environ, GIT_AUTHOR_NAME='Synthetic', GIT_COMMITTER_NAME='Synthetic',
+                           GIT_AUTHOR_EMAIL='fixture@example.invalid', GIT_COMMITTER_EMAIL='fixture@example.invalid')
+                event_path = Path(directory)/'event.json'
+                event = {'pull_request': {
+                    'base': {'sha': T004_SOURCE, 'ref': 'chore/issue-2-bootstrap-entry',
+                             'repo': {'full_name': 'wstein/workharbor-nxt'}},
+                    'head': {'sha': candidate, 'ref': 'chore/5-t004-preparation',
+                             'repo': {'full_name': 'wstein/workharbor-nxt'}}}}
+                event_path.write_text(json.dumps(event))
+                def merge(parents, selected_tree=tree):
+                    argv = ['git', 'commit-tree', selected_tree]
+                    for parent in parents:
+                        argv += ['-p', parent]
+                    revision = subprocess.run(argv, cwd=root, env=env, input='synthetic wrapper\n',
+                                              text=True, capture_output=True, check=True).stdout.strip()
+                    subprocess.run(['git', '-C', str(root), 'switch', '--quiet', '--detach', revision], check=True)
+                    return revision
+                revision = merge([T004_SOURCE, candidate])
+                with mock.patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request',
+                        'GITHUB_SHA': revision, 'GITHUB_EVENT_PATH': str(event_path)}):
+                    self.assertTrue(approved_t004_preparation(root))
+                    for key, wrong in (('GITHUB_SHA', candidate), ('GITHUB_EVENT_NAME', 'push')):
+                        with mock.patch.dict(os.environ, {key: wrong}):
+                            self.assertFalse(approved_t004_preparation(root))
+                    changed = json.loads(json.dumps(event))
+                    changed['pull_request']['head']['sha'] = T004_SOURCE
+                    event_path.write_text(json.dumps(changed))
+                    self.assertFalse(approved_t004_preparation(root))
+                    event_path.write_text(json.dumps(event))
+                    (root/'scripts/check_ci.py').write_text('dirty wrapper checker\n')
+                    self.assertFalse(approved_t004_preparation(root))
+                    subprocess.run(['git', '-C', str(root), 'restore', '--', 'scripts/check_ci.py'], check=True)
+                    for parents, selected_tree in (([candidate, T004_SOURCE], tree),
+                            ([T004_SOURCE, candidate, ACCEPTED_T003], tree),
+                            ([T004_SOURCE, candidate], git(root, 'rev-parse', T004_SOURCE + '^{tree}').decode().strip())):
+                        wrong = merge(parents, selected_tree)
+                        with mock.patch.dict(os.environ, {'GITHUB_SHA': wrong}):
+                            self.assertFalse(approved_t004_preparation(root))
+
         def test_preparation_rejection_is_exact(self):
             observed = subprocess.run([sys.executable, 'scripts/verify_t004_cli.py'], cwd=ROOT,
                                       capture_output=True, text=True, timeout=120)
@@ -395,7 +465,7 @@ def self_test():
                 older.assert_not_called()
 
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(GateTests))
-    return 0 if result.wasSuccessful() and result.testsRun == 13 else 1
+    return 0 if result.wasSuccessful() and result.testsRun == 14 else 1
 
 
 if __name__ == '__main__':
