@@ -12,7 +12,8 @@ The preparation base is the independently reviewed T017 publication candidate
 and native runner are byte-identical to the historical preparation source
 `52b0d3dc86689440c0f90f765925293a64da38d1`.
 The exact collected IDs, ordered outcome records, assertion fingerprints, source
-snapshots and verifier argv are recorded in the accompanying JSON. An earlier
+snapshots and discovery argv are recorded in the
+[JSON proposal](feature003-rework-matrix.json). An earlier
 measurement with 16 setup errors was rejected and retained
 separately; those errors never qualify as expected failures.
 
@@ -64,6 +65,15 @@ identical and preserves the predecessor's event prefix and context copy.
 
 ## Acceptance boundary
 
+Actual native captures at `762e7614aa98dcc668f5d8c3c0cdda30088a6556` collected
+**181 cases: 162 passes and 19 assertion failures**, with raw child exits **1, 1**.
+Context contains 99 preserved passes plus 17 new capability assertions; CLI contains
+63 passes plus the two retained T023 retry assertions. No case was unclassified or
+missing, and both child captures emitted no stdout/stderr. Their source snapshots
+were identical before and after execution. The new nine direct negatives encounter
+unavailable `rework`; eight later cases encounter unavailable `record-commit`.
+The deeper authorization/rework assertions remain unreached.
+
 Focused measurement uses the unchanged native `task_outcomes.Outcomes` classifier
 with absolute Python 3.14, isolated mode and disabled bytecode. It collects the
 entire context and retained CLI suites; it rejects import/setup failures, missing
@@ -71,7 +81,10 @@ or extra cases, skipped tests and unclassified failures. Source snapshots must
 remain unchanged during each capture. Raw suite exits and expected-outcome verifier
 acceptance are separate results.
 
-The final matrix and exact wrapper argv require independent review and a distinct
+The executable matrix is generated outside the checkout after the final proposal
+commit, binding its new input snapshot while retaining the actual capture identities.
+The exact wrapper argv and checks digest accompany that final binding. They require
+independent review and a distinct
 owner approval before any `--matrix-approved` invocation or T019 completion.
 Canonical repository acceptance remains a separate required handoff gate. No full
 suite, authentication, platform coverage or live runtime result is claimed here.
