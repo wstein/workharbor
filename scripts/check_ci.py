@@ -53,7 +53,7 @@ OPERATOR_TOOLS = {
     'scripts/prepare_publication.py': 'scripts/test_prepare_publication.py',
     'scripts/approval_binding.py': 'scripts/test_approval_binding.py',
 }
-OPERATOR_POLICY_PATHS = {'scripts/check_ci.py', 'AGENTS.md', 'WORKFLOW.md'}
+OPERATOR_POLICY_PATHS = {'scripts/check_ci.py', '.github/workflows/check.yml', 'AGENTS.md', 'WORKFLOW.md'}
 OPERATOR_PATHS = set(OPERATOR_TOOLS) | set(OPERATOR_TOOLS.values()) | OPERATOR_POLICY_PATHS
 
 
