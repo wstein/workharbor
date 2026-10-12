@@ -685,6 +685,55 @@
       "full_suite_green": false,
       "owner_identity_authenticated": false,
       "live_dispatch_verified": false
+    },
+    {
+      "task": "T016",
+      "source_commit": "b20bf9763b3a5f4fed3a535605d7ea5046722070",
+      "status": "locally implemented; source independently reviewed clear; final marker identity audit pending",
+      "initial_red_cases": 8,
+      "initial_red_assertions": 8,
+      "initial_red_errors": 0,
+      "stale_acceptance_regression_red_exit": 1,
+      "direct_cases": 10,
+      "direct_passes": 10,
+      "direct_raw_exit": 0,
+      "errors": 0,
+      "skips": 0,
+      "failed_subtests": 0,
+      "input_revision": "sha256:45daa06b14ebbbfe7bc38228035d766af66394c44e8a66f86587ea2880e84101",
+      "source_snapshot_stable": true,
+      "evidence": [
+        {
+          "path": "/private/tmp/workharbor-003-t016-fixed-raw.json",
+          "sha256": "704b10bcf47aa744ba0c3f13f752e5c7c0a465a147fec39c64cae7b07cdbdad2"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t016-fixed-raw.log",
+          "sha256": "93e8d959ce9422a0375d61043513142e19d1d9cc58246db4f15415ec65a5d755"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t016-first-red.log",
+          "sha256": "7349fabeb8edcb54a25a1aa169b681bac6de27109a99d0f96027468e29aa067d"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t016-stale-red.log",
+          "sha256": "5795603c03b4143d1f1a31f75470cb380f26867ea20966ee9b7548ad7d43e596"
+        },
+        {
+          "path": "/private/tmp/workharbor-003-t016-stale-green.log",
+          "sha256": "eeb0b460377c94cfdaa7911a13d1a5dc93ba1c49b7d05ff1dbd9ee71b5f2554c"
+        }
+      ],
+      "files": {
+        "scripts/single_task_state.py": "373492fc1bfaaba28f4409693e3893c5149d9bbd173782e0787a6bcb42a3b7fe",
+        "tests/test_single_task_completion.py": "a756363b8865d7b9bdffd12ae820ed7fd51f69e3ed17f4b7a9147aada7cc1189"
+      },
+      "publication_boundary": "Durable latest acceptance and exact entry tasks required; exact pre/post intent retained before atomic directory-fd replacement and directory fsync. Interrupted prepared states remain explicit future recovery evidence.",
+      "remaining_CLI_boundary": "T016 provides owning publication API only; public verify/complete remain pending T017. No commit binding, recovery, or handoff-ready claim.",
+      "approved_red_wrapper_executed": false,
+      "full_suite_green": false,
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false
     }
   ]
 }
