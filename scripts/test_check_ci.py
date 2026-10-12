@@ -335,11 +335,20 @@ class SourceTests(unittest.TestCase):
 
     def test_post_check_source_drift_blocks(self):
         manifest = {'retained_assertion_failures': []}
-        def mutate(argv, root):
-            (self.root/'guide.md').write_text('changed\n')
-            return 0
-        with mock.patch.object(ci, 'load_manifest', return_value=manifest), mock.patch.object(ci, 'run', side_effect=mutate):
-            self.assertEqual(1, ci.check(self.root))
+        original_run = ci.subprocess.run
+        def commands(argv, *args, **kwargs):
+            if argv[:2] == ['bash', '.specify/scripts/bash/check-prerequisites.sh']:
+                return subprocess.CompletedProcess(argv, 0)
+            return original_run(argv, *args, **kwargs)
+        for drift in (False, True):
+            def successful_checks(argv, root):
+                if drift:
+                    (self.root/'guide.md').write_text('changed\n')
+                return 0
+            with self.subTest(drift=drift), mock.patch.object(ci, 'load_manifest', return_value=manifest), \
+                    mock.patch.object(ci, 'run', side_effect=successful_checks), \
+                    mock.patch.object(ci.subprocess, 'run', side_effect=commands):
+                self.assertEqual(1 if drift else 0, ci.check(self.root))
 
     def test_workflow_checks_ordinary_merge_without_external_policy_source(self):
         workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
