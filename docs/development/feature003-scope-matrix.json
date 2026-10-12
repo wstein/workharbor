@@ -1016,5 +1016,53 @@
     "matrix_approval_supplied": true,
     "owner_identity_authenticated": false,
     "evidence_boundary": "The verifier accepted the exact expected-red matrix, not implemented scope behavior. All76 observations remain missing-callable body assertions after valid real begin/status; deeper invariants remain unexecuted. This approved source/result capture precedes the later T011 checkbox/evidence commit."
-  }
+  },
+  "implementation_checkpoints": [
+    {
+      "task": "T013",
+      "source_commit": "c58fae2191e8db6031f85a6d4da5b2b5dfd141af",
+      "status": "locally implemented; independent source review clear; final marker identity audit pending",
+      "input_revision": "sha256:97a3c207050e0e0dffbc51ab974b1a970a57bb83ce79159a7eed06f3f78651ac",
+      "tool_revision": "sha256:3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd",
+      "scope_cases": 81,
+      "scope_passes": 46,
+      "original_T013_cases_pass": 41,
+      "additional_controls_pass": 5,
+      "remaining_T014_assertions": 35,
+      "remaining_original_fingerprints_unchanged": true,
+      "raw_exit": 1,
+      "errors": 0,
+      "skips": 0,
+      "failed_subtests": 0,
+      "source_snapshot_stable": true,
+      "raw_evidence": {
+        "path": "/private/tmp/workharbor-003-t013-raw.json",
+        "sha256": "cfd9d9b124cbd8b014b1caa85af49037853b37a6d6186f77ab6f64993174f29b"
+      },
+      "argv": [
+        "/opt/homebrew/bin/python3.14",
+        "-B",
+        "/private/tmp/collect-feature003-scope.py",
+        "test_single_task_scope.py",
+        "t013"
+      ],
+      "collector_sha256": "4643c0f9fecb15cdd56b3ac0d7acff219daa7eca8c85c1724ba06614e4187669",
+      "entry_regressions": {
+        "source_commit": "74fee07450357447ceeb4808294a32588bf2f7ab",
+        "cases": 99,
+        "raw_exit": 0,
+        "path": "/private/tmp/workharbor-003-t013-context-regression.log",
+        "sha256": "f84bd08a19957fa151151f6191847e836426c9730f0a41d8c4154db5c7d19fe6",
+        "qualification": "Later reviewed fixes affect only new manifest validation and physical inventory; existing entry functions unchanged."
+      },
+      "files": {
+        "scripts/single_task_scope.py": "50ef9b4135fa850e049bd351edd09962b9d61c217d79877d8a7a7466f7078ff4",
+        "tests/test_single_task_scope.py": "f2c0e1614fc9ed04cacb4ee63c4970707818f0a158b169cd889fd0c0d33b67a7"
+      },
+      "approved_red_wrapper_executed": false,
+      "full_suite_green": false,
+      "owner_identity_authenticated": false,
+      "live_dispatch_verified": false
+    }
+  ]
 }
