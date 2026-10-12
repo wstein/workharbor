@@ -290,5 +290,156 @@ class RepositoryPrimitiveTests(unittest.TestCase):
         self.assertNotIn('secret-canary', str(raised.exception))
 
 
+class CapabilityPortTests(unittest.TestCase):
+    def fixture_ports(self, required, *, live=False):
+        from types import SimpleNamespace
+        revision = 'a' * 40
+        reference = 'sha256:' + 'b' * 64 if live else None
+        ports = {}
+        for category in ('guard', 'tracker', 'runtime'):
+            ports[category] = SimpleNamespace(capabilities={
+                name: package.CapabilityEvidence(True, revision, True, reference)
+                for name in required if name.startswith(category + '.')})
+        return ports
+
+    def test_unavailable_defaults_keep_structural_success_ineligible(self):
+        result = package.assess_capabilities('ready', 'implement')
+        self.assertIs(result['structural_valid'], True)
+        self.assertIs(result['execution_eligible'], False)
+        self.assertIs(result['capabilities_satisfied'], False)
+        self.assertEqual(list(package.required_capabilities('ready', 'implement')),
+                         [item['capability'] for item in result['blockers']])
+        self.assertTrue(all(item['code'] == 'capability-unavailable' for item in result['blockers']))
+        self.assertTrue(all(item['implementation_revision'] is None for item in result['evidence']))
+        self.assertTrue(all(item['live_observation_ref'] is None for item in result['evidence']))
+
+    def test_requirements_are_action_and_mode_specific(self):
+        entry = set(package.required_capabilities('entry', 'implement'))
+        completion = set(package.required_capabilities('completion', 'implement'))
+        self.assertIn('guard.context', entry)
+        self.assertIn('guard.dependencies', entry)
+        self.assertIn('guard.scope-history', entry)
+        self.assertNotIn('guard.commit-binding', entry)
+        self.assertIn('guard.commit-binding', completion)
+        self.assertNotIn('tracker.safe-labels', entry | completion)
+        ready = set(package.required_capabilities('ready', 'implement'))
+        self.assertTrue(entry | completion <= ready)
+        self.assertIn('runtime.provenance', ready)
+        self.assertIn('tracker.approval-authentication', ready)
+        self.assertIn('tracker.safe-labels', ready)
+        rework = set(package.required_capabilities('entry', 'owner-authorized rework'))
+        self.assertEqual(entry | {'guard.rework'}, rework)
+        handoff = set(package.required_capabilities('handoff', 'handoff-only'))
+        self.assertIn('tracker.pr-publication', handoff)
+        self.assertIn('tracker.evidence', handoff)
+        self.assertIn('guard.recovery', handoff)
+        self.assertNotIn('guard.rework', handoff)
+
+    def test_preview_uses_execution_requirements_without_running_ports(self):
+        for action in ('prepare', 'validate', 'effective'):
+            result = package.assess_capabilities(action, 'implement')
+            self.assertIs(result['structural_valid'], True)
+            self.assertIs(result['execution_eligible'], False)
+            self.assertEqual(package.required_capabilities('entry', 'implement'),
+                             tuple(result['required_capabilities']))
+
+    def test_fixture_evidence_can_satisfy_only_offline_capability_assessment(self):
+        required = package.required_capabilities('entry', 'implement')
+        ports = self.fixture_ports(required)
+        result = package.assess_capabilities('entry', 'implement', **ports)
+        self.assertIs(result['capabilities_satisfied'], True)
+        self.assertIs(result['execution_eligible'], False)
+        self.assertEqual([], result['blockers'])
+        self.assertTrue(all(item['live_observation_ref'] is None for item in result['evidence']))
+        live = package.assess_capabilities('entry', 'implement', live=True, **ports)
+        self.assertIs(live['capabilities_satisfied'], False)
+        self.assertTrue(all(item['code'] == 'live-capability-unobserved' for item in live['blockers']))
+
+    def test_live_evidence_does_not_grant_execution_or_authentication(self):
+        required = package.required_capabilities('ready', 'implement')
+        result = package.assess_capabilities('ready', 'implement', live=True,
+                                            **self.fixture_ports(required, live=True))
+        self.assertIs(result['capabilities_satisfied'], True)
+        self.assertIs(result['execution_eligible'], False)
+        self.assertEqual([], result['blockers'])
+        self.assertIsNone(result['authenticated_approval'])
+        self.assertIsNone(result['independent_review'])
+        self.assertIsNone(result['live_execution'])
+
+    def test_unavailable_and_unverified_evidence_and_immutable_defaults(self):
+        from types import SimpleNamespace
+        required = package.required_capabilities('entry', 'implement')
+        for observation, code in (
+                (package.CapabilityEvidence(False, None, None, None), 'capability-unavailable'),
+                (package.CapabilityEvidence(True, None, True, None), 'capability-unverified'),
+                (package.CapabilityEvidence(True, 'a' * 40, False, None), 'capability-unverified')):
+            result = package.assess_capabilities('entry', 'implement',
+                guard=SimpleNamespace(capabilities={name: observation for name in required}))
+            self.assertTrue(all(item['code'] == code for item in result['blockers']))
+        with self.assertRaises(TypeError):
+            package.UnavailableGuard.capabilities['guard.context'] = observation
+
+    def test_partial_or_malformed_evidence_fails_closed_and_does_not_echo(self):
+        from types import SimpleNamespace
+        required = package.required_capabilities('entry', 'implement')
+        for evidence in ({'available': True},
+                         package.CapabilityEvidence(1, 'a' * 40, True, None),
+                         package.CapabilityEvidence(True, 'secret-canary', True, None),
+                         package.CapabilityEvidence(True, 'a' * 40, 1, None),
+                         package.CapabilityEvidence(True, 'a' * 40, True, 'secret-canary')):
+            with self.subTest(kind=type(evidence)):
+                result = package.assess_capabilities('entry', 'implement',
+                    guard=SimpleNamespace(capabilities={name: evidence for name in required}))
+                self.assertIs(result['capabilities_satisfied'], False)
+                self.assertNotIn('secret-canary', str(result))
+
+    def test_unavailable_operations_fail_closed_without_legacy_fallback(self):
+        guard = package.UnavailableGuard()
+        for method, arguments in (
+                ('validate_context', ({'opaque': 'secret-canary'}, {})),
+                ('compare_artifacts', ({}, {}, {})),
+                ('validate_scope', ({}, {}, {})),
+                ('validate_acceptance', ({}, {}))):
+            with self.subTest(method=method), self.assertRaises(package.PackageError) as raised:
+                getattr(guard, method)(*arguments)
+            self.assertEqual('guard-unavailable', raised.exception.code)
+        tracker = package.UnavailableTracker()
+        for method, arguments in (('read_approval', ('secret-canary',)),
+                                 ('read_issue', ({},)), ('find_pr', ({},)),
+                                 ('publish_pr', ({},)), ('find_evidence', ({},)),
+                                 ('write_evidence', ({},)), ('replace_labels', ({}, {}, {}))):
+            with self.subTest(method=method), self.assertRaises(package.PackageError) as raised:
+                getattr(tracker, method)(*arguments)
+            self.assertEqual('tracker-unavailable', raised.exception.code)
+        with self.assertRaises(package.PackageError) as raised:
+            package.UnavailableRuntime().observe({'secret-canary': True})
+        self.assertEqual('runtime-unavailable', raised.exception.code)
+
+    def test_no_adapter_loading_from_task_data(self):
+        from types import SimpleNamespace
+        result = package.assess_capabilities('entry', 'implement',
+                  guard=SimpleNamespace(capabilities={'adapter': 'secret-canary'}))
+        self.assertIs(result['capabilities_satisfied'], False)
+        self.assertNotIn('secret-canary', str(result))
+
+    def test_port_failures_are_sanitized(self):
+        class Broken:
+            @property
+            def capabilities(self):
+                raise RuntimeError('secret-canary')
+        result = package.assess_capabilities('ready', 'implement', guard=Broken())
+        self.assertIs(result['capabilities_satisfied'], False)
+        self.assertNotIn('secret-canary', str(result))
+
+    def test_invalid_action_mode_or_live_flag_is_safe(self):
+        for action, mode, live in (('secret-canary', 'implement', False),
+                                   ('ready', 'secret-canary', False),
+                                   ('ready', 'implement', 'secret-canary')):
+            with self.subTest(action=action, mode=mode), self.assertRaises(package.PackageError) as raised:
+                package.assess_capabilities(action, mode, live=live)
+            self.assertEqual('invalid-capability-request', raised.exception.code)
+            self.assertNotIn('secret-canary', str(raised.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
