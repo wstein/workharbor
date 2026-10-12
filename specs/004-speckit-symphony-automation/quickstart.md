@@ -142,6 +142,57 @@ or baseline invention. Fixture tests interrupt every progress boundary and final
 response/local persistence, including actual CLI unknown/crash retry; these prove
 no real provider/runtime operation. Combined canonical/raw evidence belongs to T017.
 
+## T017 combined local acceptance
+
+Verified 2026-10-12 against accepted GitHub `main`
+`2cc1825413573ea9c49c01db92e44a221bf18d13`, with tested code
+`ebe4833cd2750cfefa9b115116d00d8b69a05457`. The serial integration preserves
+reviewed atomic commits: T014 `c65cfc92` → `c8d8f03`, T013 `9864e993` →
+`77bf4e9`, T015 `49b326a6` → `e697d3a`, T016 `a618a89b` → `2225e59`.
+The combined ready/resume CLI conflict resolution retained both reviewed routes;
+99 shared readiness/handoff/automation cases passed before the final integration.
+T016's complete integrated tree equals its reviewed source tree.
+
+With `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, the raw check followed
+the initial timeout; the corrected canonical then passed on the listed snapshot:
+
+| Command | Exact tested code | Observed result |
+| --- | --- | --- |
+| `make check PYTHON=/opt/homebrew/bin/python3.14` | `ebe4833cd2750cfefa9b115116d00d8b69a05457` | Exit 0; 422 cases, 417 passes, five exact retained raw assertion failures, zero errors; manifest-qualified GREEN; 374.244 seconds |
+| `make check-raw PYTHON=/opt/homebrew/bin/python3.14` | `2225e5987b1b6e957c2779ec36c33365b13590f7` | Make exit 2; 41 cases, 36 passes, five assertion failures; 10.331 seconds |
+
+Tools: Python 3.14.8, Git 2.56.0, GNU Make 3.81, GNU Bash 5.3.20.
+Python 3.11 was not run on this host. Canonical acceptance includes all discovered
+new strict-green suites, minimum required IDs, exact retained outcomes, direct twelve
+T004 CLI and twelve T003 state cases, repository/diff/shell/prerequisite checks.
+No historical verifier entry point, per-task hash or new red exception is a gate.
+
+The first start refused ignored cache files before running tests. After preserving
+those outputs outside the checkout, the initial aggregate suite hit its fixed
+300-second timeout. Both failures remain failed evidence. Reviewed correction
+`ebe4833` keeps ordinary command limits at 300 seconds and gives only the aggregate
+repository suite a finite 600 seconds; package per-check deadlines, assertions,
+classifier and manifest are unchanged. Its two new regressions failed before the
+fix; all 46 CI tests and independent timeout/nonzero controls passed afterward.
+Raw baseline code is identical across this correction; no second raw run is claimed.
+
+Scope/history comparison to the accepted base leaves Feature 001–003 specs,
+`single_task.py`, `single_task_state.py`, `approval_binding.py`, Feature 004
+`spec.md`, the acceptance manifest and shared outcome classifier unchanged.
+The separately reviewed CI Git-child environment/no-lazy-fetch hardening changes
+no approval comparator/schema. Symphony remains external development tooling at
+pin `be10a1b79df723d6d7612b5651c8522704dafb2e`; no product/runtime activation occurred.
+
+T001–T017 deliver local tooling and combined acceptance. Disposable fixtures verify
+rejection, ownership, interruption/recovery and conditional-provider behavior;
+they authenticate no owner and prove no live guard/provider/isolation/safe-label
+capability. Standalone ready/resume/handoff remain blocked without trusted ports.
+T018–T020 remain pending: no live completion, measured saving or full Feature 004
+completion is claimed. The final evidence commit changes only this guide, the quality
+register and T017's checkbox: source/repository/diff checks and exact independent
+review bind that prose-only head to tested code; no full rerun at that head is claimed.
+Current-head forge checks must succeed before PR readiness.
+
 ## Remaining acceptance scenarios
 
 The scenarios below require live evidence beyond disposable fixture coverage.
