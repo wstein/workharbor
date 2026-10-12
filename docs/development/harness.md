@@ -35,6 +35,22 @@ The included GitHub Actions workflow runs `python3 scripts/check_ci.py` on pushe
 It is optional infrastructure; local checks work without GitHub. Other forges can
 run `make check`. Publishing a remote or enabling CI is outside this bundle.
 
+Documentation and proposals share one CI path above accepted source
+`8f8211afdda9e46984ccfb95505f83434da06db7`. Only regular non-executable Markdown
+or JSON under docs, specs or contracts, and README.md, may change. Existing pinned
+contracts, verifiers and task markers remain fixed. Executable, test, workflow,
+product and other configuration changes require strict full-green acceptance.
+The checker itself is CI authority and requires independent review; it cannot
+authenticate its own approval. Index/worktree drift, untracked files, unsafe file
+types/modes and inconsistent pull-request merge metadata block the docs path.
+
+This path validates current documents and reuses the accepted baseline checks:
+twelve direct state tests, 31 baseline passes and exactly ten approved CLI reds,
+the exact 53-case T004 preimplementation rejection, and all static checks. Raw
+`make check` must still exit 2 and is reported as red. This is documentation
+validation only; it grants no task execution, implementation acceptance or owner
+approval. New documentation does not require a task-specific CI exception.
+
 The owner-approved T003 acceptance in [bootstrap-t003.md](bootstrap-t003.md) is a
 temporary CI phase: twelve direct state tests must pass, and the unchanged T002
 verifier must confirm all 31 baseline passes and exactly ten approved CLI assertion
