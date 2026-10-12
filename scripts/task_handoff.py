@@ -26,6 +26,8 @@ import uuid
 
 import single_task_state as durable
 from single_task_state import InvalidState, PersistenceFailure, StateConflict
+import approval_binding as binding
+import task_package as package
 
 
 LIMIT = 1024 * 1024
@@ -113,6 +115,399 @@ class OwnershipEvidence:
 class UnavailableOwnership:
     def observe(self, repository, issue, owner):
         return None
+
+
+PROGRESS = ('prepared', 'validated-offline', 'ready', 'guard-active',
+            'completed-awaiting-handoff', 'reviewed', 'published', 'evidence-durable',
+            'final-label-intent', 'handed-off')
+
+
+@dataclass(frozen=True)
+class GuardRecovery:
+    """Trusted guard observation, not a second implementation of guard state.
+
+    resume must reconcile its existing attempt and return fresh acceptance/seal/
+    commit-binding evidence. No legacy single_task fallback is provided here.
+    Both resume/rework accept operation_key: an interrupted intent must reconcile
+    that same guard operation without duplicating implementation or a child attempt.
+    """
+    attempt_id: str
+    mode: str
+    progress: str
+    implementation_commit: str | None
+    content_digest: str | None
+    verification_head: str
+    checks_ref: str
+    predecessor_attempt_id: str | None = None
+
+
+def _matches(value, expression):
+    return type(value) is str and re.fullmatch(expression, value) is not None
+
+
+def _reference(value):
+    return _matches(value, r'sha256:[0-9a-f]{64}')
+
+
+def _guard_call(method, *args, **kwargs):
+    try:
+        return method(*args, **kwargs)
+    except Exception:
+        # Guard/backend diagnostics and exception classes are untrusted output;
+        # storage errors raised by our own journal still propagate separately.
+        raise StateConflict('Guard recovery unavailable; retain evidence') from None
+
+
+def _observation(value, attempt):
+    if (type(value) is not GuardRecovery or value.attempt_id != attempt
+            or value.progress not in ('active', 'completed')
+            or value.mode not in package._MODES
+            or not _matches(value.verification_head, r'[0-9a-f]{40}')
+            or not _reference(value.checks_ref)):
+        raise InvalidState('Invalid guard recovery evidence')
+    identity = value.implementation_commit, value.content_digest
+    if identity != (None, None) and not (
+            _matches(identity[0], r'[0-9a-f]{40}') and _matches(identity[1], r'[0-9a-f]{64}')):
+        raise InvalidState('Invalid guard implementation identity')
+    if (value.progress == 'completed' and (None in identity or value.mode != 'handoff-only')
+            or value.progress == 'active' and value.mode == 'handoff-only'):
+        raise InvalidState('Guard recovery mode conflict')
+    return value
+
+
+class Recovery:
+    """Append-only orchestration around host-injected Feature 003 recovery.
+
+    Keep the journal open for this object's entire lifetime. initialize is only
+    for a newly prepared package; resume never creates a missing record. Stage
+    evidence is supplied by trusted callers, not parsed from issue/package prose.
+    T015/T016 own external reconciliation; unknown operations cannot advance.
+    """
+
+    def __init__(self, journal, key, owner, ownership=None):
+        self.journal, self.key = journal, key
+        self.owner, self.ownership = owner, ownership
+
+    def _ownership(self):
+        return self.journal.require_ownership(self.owner, self.ownership)
+
+    def _inputs(self, value):
+        value = package.build_package(value)
+        if (value['repository'] != self.key.repository
+                or value['package_digest'] != self.key.package_digest
+                or value['issue'] is not None and str(value['issue']['number']) != self.key.issue):
+            raise StateConflict('Recovery package identity conflict')
+        return dict(revision_digest=package.package_revision_digest(value),
+                    package_digest=value['package_digest'], guard_attempt_id=self.key.guard_attempt_id,
+                    guard_revision=value['execution']['guard_revision'])
+
+    def initialize(self, value):
+        inputs = self._inputs(value)
+        self.journal.claim_owner(self.owner)
+        self._ownership()
+        # One active orchestration identity per issue. Generic T003 records may
+        # coexist, but a changed package/attempt cannot invent another baseline.
+        identity, _ = self.journal._key(self.key)
+        for row in self.journal._db.execute(
+                "SELECT DISTINCT key FROM events WHERE kind='lifecycle-inputs'"):
+            if row[0] != identity:
+                raise StateConflict('Existing issue recovery identity retained')
+        with self.journal.transaction():
+            self.journal.create_record(self.key)
+            events = self.journal.events(self.key)
+            if events:
+                if events[0]['kind'] != 'lifecycle-inputs' or events[0]['payload'] != inputs:
+                    raise StateConflict('Recovery inputs changed; original retained')
+                self.status()
+                return
+            self.journal.append(self.key, 'lifecycle-inputs', inputs)
+            self.journal.append(self.key, 'lifecycle-progress', dict(progress='prepared', evidence={}))
+
+    def status(self):
+        events = self.journal.events(self.key)
+        if not events or events[0]['kind'] != 'lifecycle-inputs':
+            raise InvalidState('Recovery record missing; retain evidence')
+        current = dict(progress=None, implementation_commit=None, content_digest=None,
+                       verification_head=None, checks_ref=None, effective_mode=None,
+                       binding_digest=None, review_candidate=None, verification_valid=False,
+                       rework_attempt_id=None, rework_implementation_commit=None,
+                       rework_content_digest=None, blockers=[])
+        for event in events[1:]:
+            kind, payload = event['kind'], event['payload']
+            if kind == 'lifecycle-progress':
+                if (type(payload) is not dict or set(payload) != {'progress', 'evidence'}
+                        or payload['progress'] not in PROGRESS):
+                    raise InvalidState('Unknown recovery progress retained')
+                target = payload['progress']
+                index = -1 if current['progress'] is None else PROGRESS.index(current['progress'])
+                if PROGRESS.index(target) != index + 1:
+                    raise InvalidState('Nonmonotonic recovery progress retained')
+                self._stage(target, payload['evidence'], current)
+                current['progress'] = target
+                if target == 'ready':
+                    current['binding_digest'] = payload['evidence']['binding_digest']
+                if target == 'reviewed':
+                    current['review_candidate'] = payload['evidence']['candidate']
+            elif kind == 'lifecycle-rework':
+                if (type(payload) is not dict or set(payload) != {
+                        'attempt_id', 'predecessor_attempt_id', 'prior_commit', 'prior_content_digest'}
+                        or payload['predecessor_attempt_id'] != self.key.guard_attempt_id
+                        or not _matches(payload['attempt_id'], r'[A-Za-z0-9_-]{1,128}')
+                        or payload['attempt_id'] == self.key.guard_attempt_id
+                        or payload['prior_commit'] != current['implementation_commit']
+                        or payload['prior_content_digest'] != current['content_digest']
+                        or current['rework_attempt_id'] not in (None, payload['attempt_id'])):
+                    raise InvalidState('Invalid guard-owned rework link retained')
+                current['rework_attempt_id'] = payload['attempt_id']
+                current['verification_valid'] = False
+            elif kind == 'lifecycle-verification':
+                if PROGRESS.index(current['progress']) < PROGRESS.index('guard-active'):
+                    raise InvalidState('Guard verification without active attempt retained')
+                attempt = current['rework_attempt_id'] or self.key.guard_attempt_id
+                observation = _observation(GuardRecovery(**payload), attempt)
+                self._identity(observation, current)
+                current.update(verification_head=observation.verification_head,
+                               checks_ref=observation.checks_ref, effective_mode=observation.mode,
+                               verification_valid=observation.progress == 'completed')
+                if observation.progress == 'completed':
+                    if current['rework_attempt_id']:
+                        current.update(rework_implementation_commit=observation.implementation_commit,
+                                       rework_content_digest=observation.content_digest)
+                    else:
+                        current.update(implementation_commit=observation.implementation_commit,
+                                       content_digest=observation.content_digest)
+            elif kind == 'lifecycle-blocker':
+                if type(payload) is not dict or set(payload) != {'code'} or not _matches(
+                        payload['code'], r'[a-z][a-z0-9-]{0,80}'):
+                    raise InvalidState('Unknown recovery blocker retained')
+                current['blockers'].append(payload)
+                current['verification_valid'] = False
+            elif kind.startswith('lifecycle-'):
+                raise InvalidState('Unknown recovery event retained')
+        if current['progress'] is None:
+            raise InvalidState('Recovery progress missing; retain evidence')
+        return current
+
+    def _identity(self, observation, state):
+        if state['rework_attempt_id']:
+            if (observation.attempt_id != state['rework_attempt_id']
+                    or observation.predecessor_attempt_id != self.key.guard_attempt_id):
+                raise StateConflict('Guard rework predecessor changed')
+            if state['rework_implementation_commit'] is not None and (
+                    (observation.implementation_commit, observation.content_digest)
+                    != (state['rework_implementation_commit'], state['rework_content_digest'])
+                    or observation.progress != 'completed'):
+                raise StateConflict('Immutable guard rework completion changed')
+        elif observation.predecessor_attempt_id is not None:
+            raise StateConflict('Unexpected guard predecessor')
+        elif state['implementation_commit'] is not None:
+            if ((observation.implementation_commit, observation.content_digest)
+                    != (state['implementation_commit'], state['content_digest'])
+                    or observation.progress != 'completed'
+                    and observation.mode != 'owner-authorized rework'):
+                raise StateConflict('Immutable guard completion changed; retain evidence')
+
+    def _stage(self, target, evidence, state):
+        if type(evidence) is not dict:
+            raise InvalidState('Invalid recovery stage evidence')
+        required = {
+            'prepared': set(), 'validated-offline': {'evidence_ref'}, 'ready': {'binding_digest'},
+            'guard-active': {'guard_attempt_id'}, 'completed-awaiting-handoff': {'checks_ref'},
+            'reviewed': {'candidate', 'evidence_ref'},
+            'published': {'operation_key'}, 'evidence-durable': {'operation_key'},
+            'final-label-intent': {'operation_key'}, 'handed-off': {'operation_key'},
+        }[target]
+        if set(evidence) != required:
+            raise InvalidState('Missing recovery stage evidence')
+        if 'evidence_ref' in evidence and not _reference(evidence['evidence_ref']):
+            raise InvalidState('Invalid recovery evidence reference')
+        if target == 'ready' and not _matches(evidence['binding_digest'], r'[0-9a-f]{64}'):
+            raise InvalidState('Invalid readiness binding')
+        if target == 'guard-active' and evidence['guard_attempt_id'] != self.key.guard_attempt_id:
+            raise StateConflict('Guard attempt changed')
+        if target == 'completed-awaiting-handoff' and (
+                state['implementation_commit'] is None or evidence['checks_ref'] != state['checks_ref']):
+            raise StateConflict('Guard completion evidence required')
+        if (PROGRESS.index(target) >= PROGRESS.index('completed-awaiting-handoff')
+                and not state['verification_valid']):
+            raise StateConflict('Fresh successful verification required after blocker')
+        if target == 'reviewed' and evidence['candidate'] != state['verification_head']:
+            raise StateConflict('Exact verification candidate review required')
+        if (PROGRESS.index(target) > PROGRESS.index('reviewed')
+                and state['review_candidate'] != state['verification_head']):
+            raise StateConflict('Exact candidate review is stale; retain completed implementation')
+        if 'operation_key' in evidence:
+            operation = self.journal.operation(self.key, evidence['operation_key'])
+            if (operation is None or target != 'final-label-intent'
+                    and operation['status'] != 'succeeded'):
+                raise StateConflict('Durable operation confirmation required')
+
+    def advance(self, target, evidence):
+        self._ownership()
+        state = self.status()
+        previous = [event for event in self.journal.events(self.key)
+                    if event['kind'] == 'lifecycle-progress'
+                    and event['payload']['progress'] == target]
+        if previous:
+            if previous[0]['payload']['evidence'] != evidence:
+                raise StateConflict('Changed recovery stage intent retained')
+            return state
+        if target not in PROGRESS or PROGRESS.index(target) != PROGRESS.index(state['progress']) + 1:
+            raise StateConflict('Recovery progress cannot skip or reopen work')
+        self._stage(target, evidence, state)
+        self.journal.append(self.key, 'lifecycle-progress', dict(progress=target, evidence=evidence))
+        return self.status()
+
+    def _ready(self, readiness, boundary, state):
+        result = _guard_call(readiness, boundary=boundary) if callable(readiness) else None
+        if (type(result) is not dict or result.get('readiness_valid') is not True
+                or result.get('blockers') != []
+                or result.get('binding_digest') != state['binding_digest']):
+            raise StateConflict('Fresh bound readiness required')
+
+    def _corrective(self, value, corrective, authority, state):
+        if (type(corrective) is not dict or set(corrective) != {
+                'prior_commit', 'prior_content_digest', 'scope', 'checks', 'approval_ref'}
+                or state['implementation_commit'] is None
+                or corrective['prior_commit'] != state['implementation_commit']
+                or corrective['prior_content_digest'] != state['content_digest']
+                or type(corrective['scope']) is not list or not corrective['scope']
+                or len(corrective['scope']) > 1000 or len(set(corrective['scope'])) != len(corrective['scope'])
+                or type(corrective['checks']) is not list or not corrective['checks']
+                or len(corrective['checks']) > 100 or not corrective['approval_ref']
+                or not package._reference(corrective['approval_ref'])):
+            raise StateConflict('Explicit corrective scope and checks required')
+        for path in corrective['scope']:
+            package._path_parts(path)
+        for argv in corrective['checks']:
+            if (type(argv) is not list or not argv or len(argv) > 100
+                    or any(not isinstance(arg, str) or not arg or '\x00' in arg for arg in argv)):
+                raise StateConflict('Explicit corrective check argv required')
+        target = binding.ApprovalTarget('rework', state['implementation_commit'],
+            self.key.package_digest, _digest(_encode(corrective)))
+        verification = authority.verify(corrective['approval_ref'], target) if authority else None
+        if (type(verification) is not binding.ApprovalVerification
+                or verification.approved is not True or verification.assurance != 'authenticated-provider'
+                or verification.target != target or not verification.evidence_ref
+                or not package._reference(verification.evidence_ref)):
+            raise StateConflict('Authenticated corrective owner approval required')
+        return verification
+
+    def resume(self, value, snapshot, evidence, *, guard=None, readiness=None, live=False,
+               corrective=None, authority=None):
+        """Reconcile one existing attempt; never begin/reset/check a task here.
+
+        readiness is a trusted host closure over T013's complete entry/post-check
+        revalidation. Guard ports own scope, acceptance, recovery and rework. All
+        exceptions become fixed blockers; backend diagnostics are never retained.
+        """
+        state = self.status()  # Missing/corrupt records cannot safely be appended.
+        result = dict(state, resume_valid=False, execution_eligible=False,
+                      authenticated_approval=None, independent_review=None, live_execution=None,
+                      blockers=[])
+        code = 'recovery-unavailable'
+        try:
+            code = 'recovery-input-conflict'
+            if self._inputs(value) != self.journal.events(self.key)[0]['payload']:
+                raise StateConflict('Recovery inputs changed')
+            if (type(snapshot) is not dict or not _matches(snapshot.get('head'), r'[0-9a-f]{40}')
+                    or str(Path(snapshot['root']).resolve()) != self.journal.root
+                    or live and value['issue'] is None):
+                raise StateConflict('Exact recovery source identity required')
+            code = 'recovery-ownership-conflict'
+            self._ownership()
+            code = 'recovery-progress-blocked'
+            if PROGRESS.index(state['progress']) < PROGRESS.index('ready'):
+                raise StateConflict('Existing ready attempt required')
+            mode = 'owner-authorized rework' if corrective is not None else value['mode']
+            code = 'recovery-capability-unavailable'
+            for action in ('resume', 'completion'):
+                assessment = package.assess_capabilities(action, mode, guard=guard, live=live)
+                if (not assessment['capabilities_satisfied'] or guard.revision != value['execution']['guard_revision']
+                        or any(item['implementation_revision'] != guard.revision
+                               for item in assessment['evidence'])):
+                    raise StateConflict('Demonstrated guard recovery required')
+            code = 'recovery-readiness-blocked'
+            self._ready(readiness, 'entry', state)
+            code = 'recovery-revalidation-failed'
+            verdicts = [_guard_call(guard.validate_scope, snapshot, value['context'], evidence)]
+            if corrective is None:
+                verdicts.append(_guard_call(guard.validate_acceptance, value['context'], evidence))
+            # Corrective entry is validated by guard.rework against the exact
+            # authenticated corrective scope/checks and predecessor below. A
+            # failed old acceptance is never itself rework authorization.
+            for verdict in verdicts:
+                if not package._guard_verdict(verdict).accepted:
+                    raise StateConflict('Fresh guard verification required')
+            self._ready(readiness, 'post-check', state)
+            code = 'recovery-ownership-conflict'
+            self._ownership()
+            if state['progress'] == 'ready':
+                self.advance('guard-active', {'guard_attempt_id': self.key.guard_attempt_id})
+            code = 'recovery-evidence-invalid'
+            attempt = state['rework_attempt_id'] or self.key.guard_attempt_id
+            if corrective is None:
+                operation_key = 'guard-resume:' + _digest(_encode(dict(
+                    inputs=self._inputs(value), attempt=attempt, head=snapshot['head'])))
+                self.journal.intent(self.key, operation_key, dict(
+                    attempt=attempt, verification_head=snapshot['head'],
+                    revision_digest=package.package_revision_digest(value)))
+                observation = _guard_call(guard.resume, value['context'], attempt, evidence,
+                                           operation_key=operation_key)
+            else:
+                code = 'recovery-corrective-approval-required'
+                authorization = self._corrective(value, corrective, authority, state)
+                operation_key = 'guard-rework:' + _digest(_encode(corrective))
+                self.journal.intent(self.key, operation_key, corrective)
+                previous = self.journal.operation(self.key, operation_key)
+                if previous['status'] == 'succeeded':
+                    observation = GuardRecovery(**previous['result'])
+                else:
+                    observation = _guard_call(guard.rework, value['context'], self.key.guard_attempt_id,
+                        corrective, authorization, operation_key=operation_key)
+            try:
+                if corrective is not None:
+                    if (type(observation) is not GuardRecovery
+                            or observation.attempt_id == self.key.guard_attempt_id
+                            or observation.predecessor_attempt_id != self.key.guard_attempt_id
+                            or state['rework_attempt_id'] not in (None, observation.attempt_id)):
+                        raise StateConflict('New linked guard-owned corrective attempt required')
+                    attempt = observation.attempt_id
+                observation = _observation(observation, attempt)
+            except InvalidState:
+                raise StateConflict('Invalid guard recovery evidence') from None
+            if (corrective is not None and observation.progress == 'active'
+                    and observation.mode != 'owner-authorized rework'):
+                raise StateConflict('Guard rework evidence required')
+            if corrective is None or state['rework_attempt_id']:
+                self._identity(observation, state)
+            if observation.verification_head != snapshot['head']:
+                raise StateConflict('Guard verification HEAD changed')
+            self._ready(readiness, 'post-check', state)
+            self._ownership()
+            with self.journal.transaction():
+                if corrective is not None and state['rework_attempt_id'] is None:
+                    self.journal.append(self.key, 'lifecycle-rework', dict(
+                        attempt_id=observation.attempt_id, predecessor_attempt_id=self.key.guard_attempt_id,
+                        prior_commit=state['implementation_commit'], prior_content_digest=state['content_digest']))
+                self.journal.append(self.key, 'lifecycle-verification', asdict(observation))
+                if corrective is not None:
+                    self.journal.result(self.key, operation_key, 'succeeded', asdict(observation))
+                elif observation.progress == 'completed':
+                    self.journal.result(self.key, operation_key, 'succeeded', dict(
+                        implementation_commit=observation.implementation_commit,
+                        content_digest=observation.content_digest))
+                if (observation.progress == 'completed'
+                        and self.status()['progress'] == 'guard-active'):
+                    self.advance('completed-awaiting-handoff', {'checks_ref': observation.checks_ref})
+            result.update(self.status(), resume_valid=True, blockers=[])
+        except (PersistenceFailure, InvalidState):
+            # The storage layer may be unusable; never replace or repair it.
+            raise
+        except Exception:
+            self.journal.append(self.key, 'lifecycle-blocker', {'code': code})
+            result.update(self.status(), blockers=[{'code': code}])
+        return result
 
 
 def _schema(connection):

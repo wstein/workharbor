@@ -10,6 +10,8 @@ from unittest.mock import patch
 from contextlib import closing
 
 import task_handoff as handoff
+import task_package as package
+import approval_binding as binding
 
 
 class ExclusiveOwnership:
@@ -20,6 +22,330 @@ class ExclusiveOwnership:
     def observe(self, repository, issue, owner):
         return handoff.OwnershipEvidence(repository, issue, self.owner or owner,
                                          self.state, 'fixture-verifier', 'fixture-observation')
+
+
+class RecoveryTests(unittest.TestCase):
+    """Host-injected recovery fixtures, never a real Feature 003 backend."""
+
+    def setUp(self):
+        import test_task_package as fixtures
+        fixtures.PackageContractTests.setUp(self)
+        self.value = package.build_package(self.input)
+        self.key = handoff.HandoffKey(self.value['repository'], '17',
+                                     self.value['package_digest'], 'guard-attempt')
+        self.owner = handoff.Owner(str(self.root), 'host', 'process')
+        self.calls = []
+        self.binding = 'd' * 64
+        self.verification_head = self.commit
+        test = self
+
+        class Guard:
+            revision = test.value['execution']['guard_revision']
+            capabilities = {name: package.CapabilityEvidence(True, test.value['execution']['guard_revision'], True, None)
+                            for name in set(package.required_capabilities('resume', 'implement'))
+                            | set(package.required_capabilities('completion', 'implement'))
+                            | {'guard.rework'}}
+
+            def validate_scope(self, snapshot, context, evidence):
+                test.calls.append('scope')
+                return package.GuardValidation(True)
+
+            def validate_acceptance(self, context, evidence):
+                test.calls.append('acceptance')
+                return package.GuardValidation(True)
+
+            def resume(self, context, attempt, evidence, *, operation_key):
+                test.calls.append('resume')
+                test.assertTrue(operation_key.startswith('guard-resume:'))
+                return test.observation
+
+            def rework(self, context, attempt, corrective, authorization, *, operation_key):
+                test.calls.append('rework')
+                test.assertTrue(operation_key.startswith('guard-rework:'))
+                return handoff.GuardRecovery('corrective-attempt', 'owner-authorized rework', 'active',
+                    None, None, test.commit, 'sha256:' + 'b' * 64, predecessor_attempt_id=attempt)
+
+        self.guard = Guard()
+        self.observation = handoff.GuardRecovery('guard-attempt', 'handoff-only', 'completed',
+            self.commit, 'a' * 64, self.commit, 'sha256:' + 'b' * 64)
+
+    def git(self, *args):
+        import test_task_package as fixtures
+        return fixtures.RepositoryPrimitiveTests.git(self, *args)
+
+    def readiness(self, *, boundary):
+        self.calls.append(boundary)
+        return dict(readiness_valid=True, binding_digest=self.binding, blockers=[])
+
+    def open(self):
+        return handoff.open_journal(self.root, self.key.repository, self.key.issue)
+
+    def recovery(self, journal, *, initialize=True):
+        result = handoff.Recovery(journal, self.key, self.owner, ExclusiveOwnership())
+        if initialize:
+            result.initialize(self.value)
+            result.advance('validated-offline', {'evidence_ref': 'sha256:' + 'c' * 64})
+            result.advance('ready', {'binding_digest': self.binding})
+        return result
+
+    def resume(self, recovery, **ports):
+        return recovery.resume(self.value, {'root': self.root, 'head': self.verification_head}, {},
+            guard=ports.pop('guard', self.guard), readiness=ports.pop('readiness', self.readiness),
+            **ports)
+
+    def test_completed_resume_reuses_identity_and_tracks_separate_verification(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            first = self.resume(recovery)
+            self.assertTrue(first['resume_valid'], first)
+            self.assertEqual('completed-awaiting-handoff', first['progress'])
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.observation = handoff.GuardRecovery('guard-attempt', 'handoff-only', 'completed',
+                self.commit, 'a' * 64, 'e' * 40, 'sha256:' + 'f' * 64)
+            self.verification_head = 'e' * 40
+            second = self.resume(recovery)
+            self.assertTrue(second['resume_valid'], second)
+            self.assertEqual(self.commit, second['implementation_commit'])
+            self.assertEqual('e' * 40, second['verification_head'])
+            self.assertEqual('handoff-only', second['effective_mode'])
+            self.assertFalse(second['execution_eligible'])
+            self.assertNotIn('rework', self.calls)
+
+    def test_changed_serialized_inputs_and_different_key_conflict(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.value['approval_refs']['execution'] = 'sha256:' + 'e' * 64
+            result = self.resume(recovery)
+            self.assertIn('recovery-input-conflict', [x['code'] for x in result['blockers']])
+            self.assertNotIn('resume', self.calls)
+            other = handoff.HandoffKey(self.key.repository, '17', 'e' * 64, 'another-attempt')
+            with self.assertRaises(handoff.StateConflict):
+                handoff.Recovery(journal, other, self.owner, ExclusiveOwnership()).initialize(self.value)
+
+    def test_failed_revalidation_preserves_completed_identity_and_appends_blocker(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            with patch.object(self.guard, 'validate_acceptance',
+                              return_value=package.GuardValidation(False)):
+                failed = self.resume(recovery)
+            self.assertFalse(failed['resume_valid'])
+            self.assertEqual('completed-awaiting-handoff', failed['progress'])
+            self.assertEqual(self.commit, failed['implementation_commit'])
+            self.assertEqual('lifecycle-blocker', journal.events(self.key)[-1]['kind'])
+            self.assertNotIn('rework', self.calls)
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('reviewed', {'candidate': self.commit,
+                                             'evidence_ref': 'sha256:' + 'c' * 64})
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            recovery.advance('reviewed', {'candidate': self.commit,
+                                         'evidence_ref': 'sha256:' + 'c' * 64})
+
+    def test_missing_corrupt_changed_or_regressed_guard_completion_blocks(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            for observation in (None, True,
+                    handoff.GuardRecovery('other', 'handoff-only', 'completed', self.commit,
+                                          'a' * 64, self.commit, 'sha256:' + 'b' * 64),
+                    handoff.GuardRecovery('guard-attempt', 'handoff-only', 'completed', 'e' * 40,
+                                          'a' * 64, self.commit, 'sha256:' + 'b' * 64),
+                    handoff.GuardRecovery('guard-attempt', 'implement', 'active', None,
+                                          None, self.commit, 'sha256:' + 'b' * 64)):
+                self.observation = observation
+                with self.subTest(observation=observation):
+                    result = self.resume(recovery)
+                    self.assertFalse(result['resume_valid'])
+                    self.assertEqual(self.commit, result['implementation_commit'])
+                    self.assertEqual('completed-awaiting-handoff', result['progress'])
+
+    def test_unavailable_guard_readiness_and_changed_postcheck_preserve_work(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            for ports in ({'guard': None}, {'readiness': None}):
+                self.assertFalse(self.resume(recovery, **ports)['resume_valid'])
+            def drift(*, boundary):
+                return dict(readiness_valid=True, binding_digest=self.binding if boundary == 'entry'
+                            else 'f' * 64, blockers=[])
+            self.assertFalse(self.resume(recovery, readiness=drift)['resume_valid'])
+            self.assertEqual('ready', recovery.status()['progress'])
+            self.assertNotIn('rework', self.calls)
+
+    def test_recovery_requires_fresh_ownership_at_each_guard_boundary(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            recovery.ownership = ExclusiveOwnership('unknown')
+            self.assertFalse(self.resume(recovery)['resume_valid'])
+            self.assertEqual([], self.calls)
+            recovery.ownership = ExclusiveOwnership()
+            original = self.guard.validate_acceptance
+            def lost(*args):
+                recovery.ownership = ExclusiveOwnership('conflict')
+                return original(*args)
+            with patch.object(self.guard, 'validate_acceptance', side_effect=lost):
+                self.assertFalse(self.resume(recovery)['resume_valid'])
+            self.assertNotIn('resume', self.calls)
+
+    def test_monotonic_progress_and_unknown_results_remain_incomplete(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('published', {'operation_key': 'publication'})
+            recovery.advance('reviewed', {'candidate': self.commit,
+                                         'evidence_ref': 'sha256:' + 'c' * 64})
+            journal.intent(self.key, 'publication', {'commit': self.commit})
+            journal.result(self.key, 'publication', 'write-unknown', {})
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('published', {'operation_key': 'publication'})
+            self.assertEqual('reviewed', recovery.status()['progress'])
+            journal.result(self.key, 'publication', 'succeeded', {'id': 'one-pr'})
+            recovery.advance('published', {'operation_key': 'publication'})
+            journal.intent(self.key, 'evidence', {'commit': self.commit})
+            journal.result(self.key, 'evidence', 'succeeded', {'id': 'one-evidence'})
+            recovery.advance('evidence-durable', {'operation_key': 'evidence'})
+            journal.intent(self.key, 'labels', {'target': 'human-review'})
+            recovery.advance('final-label-intent', {'operation_key': 'labels'})
+            journal.result(self.key, 'labels', 'write-unknown', {})
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('handed-off', {'operation_key': 'labels'})
+            journal.result(self.key, 'labels', 'succeeded', {'confirmed': True})
+            recovery.advance('handed-off', {'operation_key': 'labels'})
+            self.assertEqual('handed-off', recovery.status()['progress'])
+
+    def test_unknown_lifecycle_event_is_retained_and_blocks(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            journal.append(self.key, 'lifecycle-future', {'progress': 'magic'})
+            before = journal.events(self.key)
+            with self.assertRaises(handoff.InvalidState):
+                recovery.status()
+            self.assertEqual(before, journal.events(self.key))
+
+    def test_changed_verification_head_requires_fresh_review_before_publication(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            recovery.advance('reviewed', {'candidate': self.commit,
+                                         'evidence_ref': 'sha256:' + 'c' * 64})
+            self.verification_head = 'e' * 40
+            self.observation = handoff.GuardRecovery('guard-attempt', 'handoff-only', 'completed',
+                self.commit, 'a' * 64, self.verification_head, 'sha256:' + 'f' * 64)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            journal.intent(self.key, 'publication', {'commit': self.verification_head})
+            journal.result(self.key, 'publication', 'succeeded', {'id': 'one-pr'})
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('published', {'operation_key': 'publication'})
+            self.assertEqual('reviewed', recovery.status()['progress'])
+            self.assertEqual(self.commit, recovery.status()['implementation_commit'])
+            with self.assertRaises(handoff.StateConflict):
+                recovery.advance('reviewed', {'candidate': self.verification_head,
+                                             'evidence_ref': 'sha256:' + 'e' * 64})
+
+    def test_rework_needs_exact_owner_authorization_scope_checks_and_predecessor(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            corrective = dict(prior_commit=self.commit, prior_content_digest='a' * 64,
+                              scope=['guide.md'], checks=[['approved-check']],
+                              approval_ref='sha256:' + 'c' * 64)
+            class Authority:
+                def verify(self, reference, target):
+                    return binding.ApprovalVerification(True, 'authenticated-provider', target,
+                                                        'sha256:' + 'd' * 64)
+            for change in ({'prior_commit': 'e' * 40}, {'scope': []}, {'checks': []}):
+                self.assertFalse(self.resume(recovery, corrective={**corrective, **change},
+                                             authority=Authority())['resume_valid'])
+            self.assertFalse(self.resume(recovery, corrective=corrective)['resume_valid'])
+            self.assertNotIn('rework', self.calls)
+            valid = self.resume(recovery, corrective=corrective, authority=Authority())
+            self.assertTrue(valid['resume_valid'], valid)
+            self.assertEqual('owner-authorized rework', valid['effective_mode'])
+            self.assertEqual(self.commit, valid['implementation_commit'])
+            self.assertEqual('completed-awaiting-handoff', valid['progress'])
+            self.assertEqual(1, self.calls.count('rework'))
+            self.assertEqual('corrective-attempt', valid['rework_attempt_id'])
+            self.assertFalse(valid['verification_valid'])
+            self.assertTrue(self.resume(recovery, corrective=corrective,
+                                       authority=Authority())['resume_valid'])
+            self.assertEqual(1, self.calls.count('rework'))
+            self.observation = handoff.GuardRecovery('corrective-attempt', 'handoff-only', 'completed',
+                'e' * 40, 'e' * 64, self.commit, 'sha256:' + 'e' * 64,
+                predecessor_attempt_id='guard-attempt')
+            complete = self.resume(recovery)
+            self.assertTrue(complete['resume_valid'], complete)
+            self.assertEqual(self.commit, complete['implementation_commit'])
+            self.assertEqual('e' * 40, complete['rework_implementation_commit'])
+
+    def test_interruption_after_guard_completion_reuses_attempt_and_operation_key(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            original = journal.append
+            def interrupted(key, kind, payload):
+                if kind == 'lifecycle-verification':
+                    raise KeyboardInterrupt()
+                return original(key, kind, payload)
+            with patch.object(journal, 'append', side_effect=interrupted):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.resume(recovery)
+            pending = [event['payload']['operation_key'] for event in journal.events(self.key)
+                       if event['kind'] == 'intent']
+            self.assertEqual(1, len(pending))
+            self.assertEqual('intent', journal.operation(self.key, pending[0])['status'])
+            self.assertEqual('guard-active', recovery.status()['progress'])
+        with self.open() as journal:
+            recovery = self.recovery(journal, initialize=False)
+            result = self.resume(recovery)
+            self.assertTrue(result['resume_valid'], result)
+            self.assertEqual(self.commit, result['implementation_commit'])
+            self.assertEqual('succeeded', journal.operation(self.key, pending[0])['status'])
+            self.assertEqual(1, len([event for event in journal.events(self.key)
+                                    if event['kind'] == 'intent']))
+
+    def test_actual_tracker_authority_routes_corrective_work_after_failed_acceptance(self):
+        import task_tracker as tracker
+        import test_task_tracker as fixtures
+        from dataclasses import asdict
+        import hashlib
+        self.value['task_id'] = 'T014'
+        self.value.pop('package_digest')
+        self.value = package.build_package(self.value)
+        self.key = handoff.HandoffKey(self.value['repository'], '17',
+                                     self.value['package_digest'], 'guard-attempt')
+        with self.open() as journal:
+            recovery = self.recovery(journal)
+            self.assertTrue(self.resume(recovery)['resume_valid'])
+            url = 'https://github.com/fixture/offline/issues/17#issuecomment-1'
+            corrective = dict(prior_commit=self.commit, prior_content_digest='a' * 64,
+                              scope=['guide.md'], checks=[['approved-check']], approval_ref=url)
+            digest = hashlib.sha256(package.canonical_json(corrective)).hexdigest()
+            target = tracker.DecisionTarget(self.value['repository'], self.value['feature'],
+                self.value['task_id'], 'rework', self.commit, self.value['package_digest'], digest)
+            payload = dict(object_id='comment-1', repository=self.value['repository'],
+                actor_id='owner-1', state='approved', created_at=900, decided_at=900,
+                updated_at=900, expires_at=2000, target=asdict(target))
+            reference = tracker.ApprovalReference('comment-1', url,
+                hashlib.sha256(fixtures.encoded(payload)).hexdigest(), target)
+            config = tracker.TrackerConfig('github', self.value['repository'], 'repo-1',
+                                           'owner-1', 'host-verifier', 'e' * 40)
+            port = tracker.AuthenticatedTracker(config, fixtures.Transport(payload), clock=lambda: 1000)
+            authority = tracker.ApprovalAuthority(port, self.value['feature'], 'T014', {url: reference})
+            with patch.object(self.guard, 'validate_acceptance',
+                              return_value=package.GuardValidation(False)):
+                self.assertFalse(self.resume(recovery)['resume_valid'])
+                result = self.resume(recovery, corrective=corrective, authority=authority)
+            self.assertTrue(result['resume_valid'], result)
+            self.assertEqual(self.commit, result['implementation_commit'])
+            self.assertEqual('corrective-attempt', result['rework_attempt_id'])
+
+    def test_missing_record_cannot_resume_or_create_baseline(self):
+        with self.open() as journal:
+            recovery = self.recovery(journal, initialize=False)
+            with self.assertRaises(handoff.InvalidState):
+                self.resume(recovery)
+            self.assertEqual(0, journal._db.execute('SELECT count(*) FROM records').fetchone()[0])
+
 
 
 class JournalTests(unittest.TestCase):
