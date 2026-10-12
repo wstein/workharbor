@@ -1192,6 +1192,7 @@ def failing_fsync(fd):
             fired=True
             raise OSError('synthetic publication flush failure')
     if (not fired and boundary=='marker-directory-flush' and stat.S_ISDIR(target.st_mode)
+            and (target.st_dev,target.st_ino)==(tasks.parent.stat().st_dev,tasks.parent.stat().st_ino)
             and b'[x] T001' in tasks.read_bytes()):
         fired=True
         raise OSError('synthetic marker directory flush failure')
@@ -1199,7 +1200,10 @@ def failing_fsync(fd):
 sqlite3.connect=failing_connect
 state.os.fsync=failing_fsync
 sys.argv=sys.argv[1:]
-runpy.run_path(sys.argv[0],run_name='__main__')
+try:
+    runpy.run_path(sys.argv[0],run_name='__main__')
+finally:
+    assert fired, 'Named durable failure must execute'
 '''
         result = self.cli(boundary, 'complete', '--attempt', self.attempt_id,
                           '--review', str(self.review_path), injection=injection)
