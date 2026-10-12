@@ -262,3 +262,26 @@ IDs (485 required; 791 total discovered), removing only the two now-passing T023
 body assertions. No classifier change, new exception, skip or owner-adoption claim.
 Original approval matrices and evidence above remain unchanged. T023's task marker
 will follow final combined acceptance; T024+ and live execution remain outside scope.
+
+### Final local combined check: incomplete at aggregate deadline
+
+Frozen candidate `abebbd637e470e7eb94febb26a14c3964f2163cb` ran exactly
+`make check PYTHON=/opt/homebrew/bin/python3.14` once, with
+`PATH=/opt/homebrew/opt/python@3.14/libexec/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
+Both outer and nested `python3` resolve to Python 3.14.8. Actual Make exit was **2**:
+the unchanged raw aggregate 300-second deadline expired during a T018 recovery case.
+Before the deadline, 343 completed `ok` lines and no failure/error lines were observed.
+The qualified phase did not run. Cleanup removed the disposable baseline while the
+child suite finished, producing a final 393-case summary with 44 missing-file errors
+and two assertions; this cleanup cascade is retained, never classified as accepted
+or a complete product test result. A narrow process probe confirmed the named run
+had drained before bookkeeping or integration; the sole checkout remained clean.
+- `/private/tmp/workharbor-003-us3-make-check.log`: SHA-256 `6fb2eac7357dfbba0572479eb77bd20cf439c9d5375e2317c5c323bd91c64f6f`.
+- `/private/tmp/workharbor-003-us3-canonical-record.json`: SHA-256 `80a99f72cfc1f81afe6d792d3d9439ec17d4e5f8f6163884d9eae4c07f9b4d71`.
+
+No deadline/policy waiver or repeated local canonical run was introduced. T023's
+marker remains unchecked pending final Linux qualification of all 791 collected
+cases on the combined published head. The subsequently integrated, independently
+reviewed milestone status changes are documentation only; tested source provenance
+above remains explicit. Owner PR review/merge is still required to adopt the inventory
+proposal. T024+ and live/provider/runtime activation remain outside this route.
