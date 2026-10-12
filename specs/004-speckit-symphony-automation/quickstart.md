@@ -1,18 +1,19 @@
 # Validation guide: Task automation
 
-Status: planning only. Future commands/scenarios are acceptance requirements, not
-observed results. No package CLI exists yet; no live runtime is activated.
+Status: T001–T007 provide local offline preparation and preview. Guard-backed
+execution, CI package integration and live readiness/handoff remain pending.
+No live runtime is activated; offline results prove no owner authentication or
+Feature 004 completion.
 
-## Runnable planning checks
+## Runnable offline checks
 
 Prerequisites: Git, Bash, Make, Python 3.11+. This host's system python3 is 3.9.6;
 use installed /opt/homebrew/bin/python3.14 through Make's PYTHON override.
 
 ```sh
-python3 scripts/select_feature.py 004-speckit-symphony-automation
 make check PYTHON=/opt/homebrew/bin/python3.14
 make check-raw PYTHON=/opt/homebrew/bin/python3.14  # raw baseline: expected exit 2
-/opt/homebrew/bin/python3.14 scripts/verify_t003_state.py
+/opt/homebrew/bin/python3.14 -B -m unittest discover -s scripts -p 'test_task_*.py' -v
 git diff --check
 git diff 8f4debe5cd2ee2770f5963d292a9eb60af6270d7 -- specs/001-workspace-lifecycle specs/002-symphony-doc-smoke specs/003-single-task-entry specs/004-speckit-symphony-automation/spec.md
 ```
@@ -27,26 +28,57 @@ Feature 001–003 specs/guard contracts and the approved Feature 004 specificati
 remain unchanged; the legacy test fixture's source loading migration is documented
 in ADR 0007. Report canonical acceptance and raw exits separately.
 
-## Future offline acceptance
+## Offline package preparation
 
-After approved tasks/implementation, use disposable repositories, cleared credentials,
-disabled network and fake runtime/tracker ports. Assert no attempted socket/network
-subprocess or external mutation. Fixtures: documentation task, owner-approved exact
-test-authoring matrix and implementation successor. Preparation must not run checks
-or prerequisites. Use [contract](contracts/cli.md) and [model](data-model.md).
-Fixture generator/tests must ship before these future commands can run:
+Run from the repository root with a supported interpreter. Local GitHub origin
+metadata supplies repository identity; no remote is contacted. Input is a complete
+TaskPackage envelope from [data-model.md](data-model.md), with locally available
+source/artifact objects and this interpreter's exact isolated discovery argv.
+T001 JSON files are intentionally inert fixture inputs, not CLI packages. The
+`test_three_fixture_mvp_uses_same_prepare_validate_effective_flow` case in
+`scripts/test_task_automation.py` adapts all three inside disposable repositories
+and exercises the same CLI flow without mutating real feature artifacts.
 
 ```sh
-python3 -m unittest discover -s tests -p 'test_task_*.py' -v
-python3 scripts/task_automation.py prepare --input INPUT.json --output OUTPUT
-python3 scripts/task_automation.py validate --package PACKAGE.json --offline
-python3 scripts/task_automation.py effective --package PACKAGE.json --offline
+/opt/homebrew/bin/python3.14 -B -m unittest discover -s scripts -p test_task_automation.py -v
+/opt/homebrew/bin/python3.14 -I -B scripts/task_automation.py prepare --input INPUT.json --output OUTPUT
+/opt/homebrew/bin/python3.14 -I -B scripts/task_automation.py validate --package OUTPUT/REVISION/package.json --offline
+/opt/homebrew/bin/python3.14 -I -B scripts/task_automation.py effective --package OUTPUT/REVISION/package.json --offline
 ```
 
-Repeat preparation: same digest/summary, no duplicates. Three packages use one
-validator/CI flow. Inject every missing/extra/duplicate/skipped/timeout/setup/subtest/
-unexpected outcome and regression; reject all, retain raw reds. Test-authoring proof
-can satisfy the declared successor prerequisite without claiming implemented behavior.
+`prepare` returns exit 0 for structurally valid preparation and emits the relative
+package/summary names. `REVISION` is the raw serialization digest, including approval
+references. Identical bytes reuse the same files; changed references create a new
+revision even when the package identity is unchanged. Existing different bytes or
+unknown files block with exit 5; incomplete interrupted output remains preserved
+and blocks with exit 6. Do not reset or adopt it. Paths must remain inside the
+repository, without symlinks/hardlinks/gitlinks; output files are created exclusively.
+Keep credentials out of input data: opaque guard context is preserved verbatim in
+the immutable package. Summaries/diagnostics omit context, raw argv and raw output;
+local Git children receive no credential environment.
+
+`validate --offline` performs shared package/source/outcome-shape validation. With
+current unavailable guard/authority it returns exit 3 and precise blockers, never
+runs the matrix or prerequisites and leaves raw exits empty. `effective --offline`
+returns exit 0 for a structural preview, showing expected source/execution identities,
+check/case counts and missing capabilities. Neither result grants eligibility.
+Malformed input/interface is exit 2, invalid outcomes 4, output ownership conflict 5
+and persistence/incomplete output 6; source/scope/capability blockers use 3.
+
+Inputs are bounded to 1 MiB, 100 checks and 10,000 cases, without truncation;
+positive deadlines retain T006's 300-second bound. Transport retry limit is three
+and offline transport attempts are always zero. Authentication, independent review
+and live observation remain null, execution eligibility false. Declaration of an
+intended red in the test-authoring fixture proves no executed/approved matrix;
+raw outcomes remain separate. Preparation/preview make no network, tracker,
+runtime, check or prerequisite calls. Canonical acceptance still reports the separate five retained raw baseline reds.
+
+## Remaining acceptance scenarios
+
+The scenarios below belong to later tasks and are not claimed by this offline MVP.
+Use disposable repositories, disabled network and fake runtime/tracker ports before
+separately authorized live work. Use [contract](contracts/cli.md) and
+[model](data-model.md); do not infer execution authority from these examples.
 
 Exercise semantic versus checkbox/evidence-only changes, local versus authenticated
 approval, unavailable guard/runtime capabilities, accepted/proposal/synthetic/rebased
