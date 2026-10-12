@@ -172,9 +172,9 @@ class CliBoundaryTests(unittest.TestCase):
         marker.write_bytes(b'keep prior evidence')
         for argv in [command for command in self.commands() if command[0] not in ('begin', 'status')]:
             with self.subTest(command=argv[0]):
-                implemented = argv[0] in ('inspect', 'verify', 'complete')
-                value = self.response(self.cli(*argv), 3 if implemented else 2,
-                                      code='state_blocker' if implemented else 'command_unavailable')
+                # Retained ID: every public command now rejects absent required
+                # journal state without entering or executing any checks.
+                value = self.response(self.cli(*argv), 3, code='state_blocker')
                 self.assertEqual('not-run', value['local_verification'])
                 self.assertIsNone(value['attempt_id'])
                 self.assertIsNone(value['mode'])
