@@ -114,8 +114,8 @@ Fixtures must assert identical canonical bytes/digests on Linux and macOS, inclu
 non-ASCII paths, executable files, absence and the selected checkbox transition.
 
 ## SemanticReview (immutable per acceptance identity)
-Clarification proposed for owner review: consistent with this document's versioned
-evidence rule and the approved T001 review fixture, the record has exactly eight
+Consistent with this document's versioned evidence rule and the owner-reviewed
+T011 matrix using the approved T001 review fixture, the record has exactly eight
 keys: `schema_version`, `attempt_id`, `task_id`, `context_digest`,
 `content_manifest_digest`, `reviewer_ref`, `evidence_ref` and `approved`.
 `schema_version` must be integer `1`; reject missing or unknown keys.
