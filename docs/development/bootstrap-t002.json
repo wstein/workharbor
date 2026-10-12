@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "feature": "003-single-task-entry",
+  "task": "T002",
+  "dependencies": [
+    "T001"
+  ],
+  "prerequisite_merge": "64951c8bb39ba53bede043c70b01c2e01b267f01",
+  "prerequisite_implementation": "962129de1acd43b4db8502bd9125fab5918edb0e",
+  "allowed_paths": [
+    "tests/test_single_task_state.py"
+  ],
+  "guard_sha256": "7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4",
+  "baseline_test_ids": [
+    "test_harness.HarnessTests.test_broken_document_link_rejected",
+    "test_harness.HarnessTests.test_development_orchestrator_rejected_in_product",
+    "test_harness.HarnessTests.test_provider_dependency_rejected_outside_adapter",
+    "test_harness.HarnessTests.test_repository_checker_validates_required_manifest",
+    "test_harness.HarnessTests.test_workspace_path_traversal_rejected",
+    "test_single_task.SingleTaskFixtureTests.test_fixture_creation_rejects_network",
+    "test_single_task.SingleTaskFixtureTests.test_git_configuration_hooks_and_signing_are_isolated",
+    "test_single_task.SingleTaskFixtureTests.test_protected_features_remain_unchanged",
+    "test_single_task.SingleTaskFixtureTests.test_runtime_context_prerequisite_review",
+    "test_single_task.SingleTaskFixtureTests.test_tracker_credentials_are_removed_without_logging",
+    "test_single_task.SingleTaskFixtureTests.test_two_task_feature",
+    "test_single_task.SingleTaskTests.test_absent_file_differs_from_sentinel_contents",
+    "test_single_task.SingleTaskTests.test_acceptance_cannot_mutate_scope_or_complete",
+    "test_single_task.SingleTaskTests.test_committed_violation_hidden_by_revert",
+    "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task",
+    "test_single_task.SingleTaskTests.test_dirty_checkout_and_unknown_task_rejected",
+    "test_single_task.SingleTaskTests.test_early_completion_without_evidence_rejected",
+    "test_single_task.SingleTaskTests.test_failed_acceptance_does_not_complete",
+    "test_single_task.SingleTaskTests.test_historical_other_task_hidden_by_revert",
+    "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update",
+    "test_single_task.SingleTaskTests.test_mode_change_requires_rework_even_without_git_filemode",
+    "test_single_task.SingleTaskTests.test_reject_other_checkbox_and_selected_description",
+    "test_single_task.SingleTaskTests.test_reject_outside_scope_committed_and_untracked",
+    "test_single_task.SingleTaskTests.test_staged_other_task_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore",
+    "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected",
+    "test_symphony.SymphonyTests.test_creation_hook_uses_pinned_nondefault_commit",
+    "test_symphony.SymphonyTests.test_prepare_fails_without_environment",
+    "test_symphony.SymphonyTests.test_render_preserves_secret_reference",
+    "test_symphony.SymphonyTests.test_retry_can_repair_failed_checks"
+  ],
+  "red_cases": [
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_one_lock_owner",
+      "failure": "T002/test_one_lock_owner: begin exit 2; expected 0",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_lock_released_after_exit",
+      "failure": "T002/test_lock_released_after_exit: begin exit 2; expected 0",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_transaction_rollback",
+      "failure": "T002/test_transaction_rollback: begin exit 2; expected 0",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_append_only_events",
+      "failure": "T002/test_append_only_events: begin exit 2; expected 0",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_immutable_context",
+      "failure": "T002/test_immutable_context: begin exit 2; expected 0",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_corrupt_state_retained",
+      "failure": "T002/test_corrupt_state_retained: status exit 2; expected 3",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_unsupported_state_retained",
+      "failure": "T002/test_unsupported_state_retained: status exit 2; expected 3",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_legacy_state_retained",
+      "failure": "T002/test_legacy_state_retained: status exit 2; expected 3",
+      "successor": "T003/T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_sanitized_structured_error",
+      "failure": "T002/test_sanitized_structured_error: structured JSON response absent",
+      "successor": "T004"
+    },
+    {
+      "id": "test_single_task_state.SingleTaskStateTests.test_invalid_entry_preserves_tasks",
+      "failure": "T002/test_invalid_entry_preserves_tasks: structured JSON response absent",
+      "successor": "T004"
+    }
+  ],
+  "checks": [
+    [
+      "python3",
+      "scripts/verify_t002_red.py"
+    ],
+    [
+      "python3",
+      "scripts/check_repo.py"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "cwd": ".",
+  "expected_exit": 0,
+  "handoff": "operator-assisted"
+}
