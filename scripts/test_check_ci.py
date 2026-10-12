@@ -118,6 +118,47 @@ class SourceTests(unittest.TestCase):
         self.git('commit', '--quiet', '-m', 'test: synthetic reviewed operator policy')
         return self.git('rev-parse', 'HEAD')
 
+    def test_policy_git_objects_refuse_replacements_and_grafts(self):
+        policy = self.adopt_fixture_policy()
+        replacement = self.commit('scripts/test_check_ci.py',
+                                  (self.root/'scripts/test_check_ci.py').read_text() + '# unapproved marker\n')
+        original = self.git('ls-tree', policy, '--', 'scripts/test_check_ci.py')
+        self.git('replace', policy, replacement)
+        self.assertNotEqual(original, self.git('ls-tree', policy, '--', 'scripts/test_check_ci.py'))
+        with self.assertRaises(ValueError):
+            ci.git(self.root, 'ls-tree', policy, '--', 'scripts/test_check_ci.py')
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        prepare_spec = importlib.util.spec_from_file_location('raw_preparation', ci.ROOT/'scripts/prepare_publication.py')
+        preparation = importlib.util.module_from_spec(prepare_spec)
+        prepare_spec.loader.exec_module(preparation)
+        commands = preparation.Commands(Path(self.temporary.name), 30)
+        with self.assertRaises(preparation.Blocked):
+            commands.git(self.root, 'ls-tree', policy)
+        binding_spec = importlib.util.spec_from_file_location('raw_binding', ci.ROOT/'scripts/approval_binding.py')
+        binding = importlib.util.module_from_spec(binding_spec)
+        sys.modules[binding_spec.name] = binding
+        binding_spec.loader.exec_module(binding)
+        with self.assertRaises(binding.BindingBlocked):
+            binding._git(self.root, 'ls-tree', policy)
+        self.git('replace', '-d', policy)
+        graft = self.root/'.git/info/grafts'
+        graft.write_text(policy + ' ' + SOURCE + '\n')
+        with self.assertRaises(ValueError):
+            ci.git(self.root, 'rev-list', policy)
+        with self.assertRaises(binding.BindingBlocked):
+            binding._git(self.root, 'rev-list', policy)
+        with self.assertRaises(preparation.Blocked):
+            commands.git(self.root, 'rev-list', policy)
+        self.assertFalse(ci.approved_operator_tooling(self.root, None, policy))
+        graft.unlink()
+        self.git('update-ref', 'refs/alternate-replacements/' + policy, replacement)
+        with mock.patch.dict(os.environ, GIT_REPLACE_REF_BASE='refs/alternate-replacements',
+                             GIT_NO_REPLACE_OBJECTS='0'):
+            self.assertEqual(original, ci.git(self.root, 'ls-tree', policy, '--',
+                                             'scripts/test_check_ci.py').decode().strip())
+            with ci.isolated_python_cache():
+                self.assertEqual('1', os.environ['GIT_NO_REPLACE_OBJECTS'])
+
     def test_operator_policy_requires_exact_trusted_source_and_frozen_baseline(self):
         policy = self.adopt_fixture_policy()
         self.assertTrue(ci.approved_operator_tooling(self.root, None, policy))
