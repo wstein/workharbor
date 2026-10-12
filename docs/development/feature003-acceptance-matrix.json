@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "status": "preparation design freeze only; not an executable or owner-approved outcome matrix",
+  "feature": "003-single-task-entry",
+  "task": "T012",
+  "issue": 13,
+  "preparation_base": "3cc1350a952b7dfed633d3ff03c4082ee54e7be8",
+  "prerequisite": {
+    "task": "T010",
+    "accepted": false,
+    "implementation_commit": null,
+    "acceptance_evidence": null,
+    "accepted_cli_inventory": null
+  },
+  "future_allowed_paths": [
+    "tests/test_single_task.py"
+  ],
+  "completion": {
+    "path": "specs/003-single-task-entry/tasks.md",
+    "selected_task": "T012",
+    "permitted_now": false
+  },
+  "new_case_count": 40,
+  "case_id_prefix": "test_single_task.SingleTaskAcceptanceTests.test_",
+  "case_columns": [
+    "method_suffix",
+    "valid_fixture_and_targeted_variation",
+    "final_contract_exit",
+    "required_behavior_assertion",
+    "implementing_successors"
+  ],
+  "cases": [
+    ["inspect_identities", "Valid active attempt with permitted guide.md edit; inspect without review", 0, "Return actual attempt/task/context IDs and manifest/digest; no verification/completion claim", ["T014"]],
+    ["inspect_canonical_manifest", "Allowed Unicode path, executable file and absent path; tasks retain CRLF", 0, "Independently hash exact canonical UTF-8 manifest bytes; typed absence, path order and only selected-marker normalization", ["T013", "T014"]],
+    ["inspect_does_not_execute_checks", "Approved check would emit private sentinel; inspect without review", 0, "No sentinel, subprocess acceptance call, acceptance event or completion event", ["T014"]],
+    ["inspect_preserves_content_and_events", "Snapshot tasks, allowed paths, index, immutable attempt and prior events", 0, "Same bytes/index/entry mode/events after inspection; no task mutation", ["T014"]],
+    ["inspect_reflects_current_content", "Inspect guide edit A then permitted guide edit B with no supplied review", 0, "Second manifest/digest changes and both snapshots match actual bytes; inspection grants no approval", ["T014"]],
+    ["inspect_rejects_invalid_scope", "Add nonignored outside.md after valid begin", 3, "Scope blocker identifies outside path; checks do not run; marker and prior evidence preserved", ["T013", "T014"]],
+    ["inspect_respects_worktree_lock", "Real lock holder signals readiness over pipe before inspect subprocess", 5, "Conflict response; no acceptance, marker, new attempt or acceptance/completion events", ["T014"]],
+    ["acceptance_ordered_argv", "Two reviewed harmless checks append distinct tokens to private fixture-local trace", 0, "Each exact argv executes once in declared order; evidence binds both check identities", ["T015", "T017"]],
+    ["acceptance_literal_metacharacters", "Reviewed Python argv contains spaces, quotes, semicolon, dollar substitution and backticks as literal arguments", 0, "Check receives exact literal argv; no shell expansion or extra-command sentinel", ["T015", "T017"]],
+    ["acceptance_validated_cwd", "Reviewed check cwd is existing repository-relative subdirectory committed before begin", 0, "Check observes exact validated cwd; evidence retains its reviewed cwd", ["T015", "T017"]],
+    ["acceptance_missing_executable", "Unique definitely absent executable is reviewed in valid context", 4, "Missing-tool acceptance category recorded safely; no success or marker", ["T015", "T017"]],
+    ["acceptance_nonzero_exit", "Reviewed finite local Python check exits 17", 4, "Exact nonzero result bound to check/current manifest; no marker", ["T015", "T017"]],
+    ["acceptance_timeout", "Reviewed finite local check blocks past its positive timeout with parent harness deadline larger", 4, "CLI returns acceptance timeout category within bounded outer deadline; no marker or successful result", ["T015", "T017"]],
+    ["acceptance_missing_required_check", "First required check passes; second reviewed executable is unavailable", 4, "First success cannot substitute for second required result; ordered safe evidence and unchanged marker", ["T015", "T017"]],
+    ["acceptance_does_not_reuse_old_success", "Verify succeeds, then same reviewed check becomes failing via fixture-private control input", 4, "Complete executes fresh check, records current failure and preserves pending marker", ["T015", "T017"]],
+    ["acceptance_safe_failure_evidence", "Failing check writes unique synthetic secret strings to stdout and stderr", 4, "Neither stream persisted/echoed in structured response, stderr or state bytes; safe identity/status/category remains", ["T015", "T017"]],
+    ["acceptance_local_only_envelope", "Successful verify using harmless offline check and current semantic review", 0, "Versioned safe envelope; owner_identity_authenticated and live_dispatch_verified remain false; no publication claims", ["T015", "T017"]],
+    ["review_missing", "Invoke verify without review option after valid active begin", 2, "Required-input blocker before checks; no acceptance or marker", ["T017"]],
+    ["review_not_approved", "Schema-valid matching SemanticReview except approved=false", 3, "Review/evidence blocker before checks; no marker", ["T014", "T017"]],
+    ["review_wrong_attempt", "Matching review except attempt_id identifies another retained attempt", 3, "Identity mismatch before checks; retain both histories", ["T014", "T017"]],
+    ["review_wrong_task", "Matching review except task_id is other existing task", 3, "Task mismatch before checks; neither task marker changes", ["T014", "T017"]],
+    ["review_wrong_context_digest", "Matching review except context_digest differs", 3, "Context binding blocker before checks; immutable saved context retained", ["T014", "T017"]],
+    ["review_wrong_manifest_digest", "Matching review except content_manifest_digest differs", 3, "Content binding blocker before checks; no passing evidence", ["T014", "T017"]],
+    ["review_stale_bytes", "Inspect/review guide A; replace with permitted guide B before verify", 3, "Recompute identity under lock; reject stale review before check sentinel", ["T014", "T017"]],
+    ["review_stale_mode", "Inspect/review guide then change executable mode with core.filemode=false", 3, "Raw mode changes manifest and invalidate review before checks", ["T013", "T014", "T017"]],
+    ["review_stale_absence", "Inspect/review absent allowed file then create literal bytes <absent>", 3, "Typed absence differs from regular-file bytes; reject review before checks", ["T013", "T014", "T017"]],
+    ["check_mutates_allowed_content", "Check changes permitted guide bytes after matching review", 4, "Post-check content comparison rejects passing exit; preserve pending marker and safe failure evidence", ["T014", "T015", "T017"]],
+    ["check_mutates_task_content", "Check changes other task text/checkbox", 4, "Post-check scope/content rejects; no tool-applied selected completion; retain mutation as blocker evidence", ["T013", "T015", "T017"]],
+    ["check_mutates_outside_scope", "Check creates nonignored outside.md", 4, "Post-check scope rejects despite process exit zero; no selected completion", ["T013", "T015", "T017"]],
+    ["check_mutates_allowed_mode", "Check toggles permitted regular-file execute bit with core.filemode=false", 4, "Post-check raw mode/content identity rejects stale result; no marker", ["T013", "T014", "T015", "T017"]],
+    ["check_removes_allowed_content", "Check removes reviewed allowed regular file", 4, "Post-check typed-absence change rejects stale result; no marker", ["T013", "T014", "T015", "T017"]],
+    ["verify_preserves_pending_marker", "Valid review and all required checks pass", 0, "Verify records acceptance against current identity but tasks remain byte-identical and mode remains implement", ["T015", "T017"]],
+    ["complete_selected_checkbox_only", "Valid review and passing checks; tasks include two pending tasks and nontrivial exact bytes", 0, "Exact tasks diff is selected ASCII checkbox byte only; other text/order/checkmarks/line endings preserved", ["T016", "T017"]],
+    ["complete_reruns_after_verify", "Verify succeeds then complete under same current manifest/review", 0, "Private execution trace proves every check ran again; new current acceptance precedes completion", ["T015", "T016", "T017"]],
+    ["complete_failed_check_preserves_marker", "Valid current review; required local check exits nonzero", 4, "No selected marker, completion claim or handoff mode; preserve safe blocker evidence", ["T015", "T016", "T017"]],
+    ["complete_idempotent_same_attempt", "Successful complete then repeat complete without implementation commit", 0, "Same attempt, same tasks bytes, no new attempt/next task; remains handoff-only awaiting commit", ["T016", "T017"]],
+    ["complete_preserves_immutable_entry_mode", "Successful completion then read journal/status", 0, "Immutable entry_mode=implement; effective mode=handoff-only; completed-awaiting-commit distinct from handoff-ready", ["T016", "T017"]],
+    ["acceptance_evidence_binds_current_identity", "Two passing reviewed checks and complete with matching semantic review", 0, "Acceptance event binds context/manifest/review and ordered argv/cwd/exit/timeout/error category without raw output", ["T015", "T016", "T017"]],
+    ["inspect_after_completion_is_read_only", "Completed-awaiting-commit attempt with existing acceptance/completion events", 0, "Normalized manifest identity retained; exact tasks/event/attempt snapshots unchanged; no acceptance rerun", ["T014", "T016", "T017"]],
+    ["complete_rejects_manual_marker", "Manually check selected task after begin without durable completion intent", 3, "Evidence blocker; no inferred completion, adopted baseline or silently created next attempt", ["T016", "T017"]]
+  ],
+  "proposed_checkpoint_outcomes": {
+    "new_cases": "assertion against unsupported public CLI behavior, conditional on accepted T010 observation; no assertion failures measured or authorized here",
+    "raw_exit": null,
+    "assertion_fingerprints": null,
+    "exact_collected_inventory": null,
+    "test_content_revision": null,
+    "matrix_digest": null,
+    "owner_exact_matrix_approval": null
+  },
+  "runner": {
+    "path": "scripts/task_outcomes.py",
+    "unchanged": true,
+    "check_keys": [
+      "id",
+      "argv",
+      "deadline_seconds",
+      "tool_revision",
+      "input_revision",
+      "cases",
+      "raw_exit"
+    ],
+    "case_keys": [
+      "id",
+      "expected",
+      "fingerprint"
+    ],
+    "check_ids": [
+      "feature003-t012-cli",
+      "feature003-t012-retained-context",
+      "feature003-t012-retained-state"
+    ],
+    "discovery_argv": [
+      [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_single_task.py",
+        "-v"
+      ],
+      [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_single_task_context.py",
+        "-v"
+      ],
+      [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_single_task_state.py",
+        "-v"
+      ]
+    ],
+    "deadline_seconds": 300,
+    "approval_candidate_argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-I",
+      "-B",
+      "<absolute-pinned-checkout>/scripts/task_outcomes.py",
+      "--matrix",
+      "<outside-root-exact-checks-json>",
+      "--root",
+      "<absolute-pinned-checkout>",
+      "--approved-digest",
+      "<sha256-of-canonical-exact-checks>"
+    ],
+    "executable_now": false,
+    "approval_flag_permitted_now": false
+  },
+  "retained_legacy_case_prefix": "test_single_task.SingleTaskTests.",
+  "retained_legacy_cases": [
+    {"id": "test_single_task.SingleTaskTests.test_complete_and_retry_preserve_other_task", "migration_owner": ["T017", "T023"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_interruption_after_checkbox_before_phase_update", "migration_owner": ["T023"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_reject_outside_scope_committed_and_untracked", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_reject_other_checkbox_and_selected_description", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_staged_violation_hidden_by_worktree_restore", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_committed_violation_hidden_by_revert", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_staged_other_task_hidden_by_worktree_restore", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_historical_other_task_hidden_by_revert", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_mode_change_requires_rework_even_without_git_filemode", "migration_owner": ["T023"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_absent_file_differs_from_sentinel_contents", "migration_owner": ["T023"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_staged_symlink_hidden_by_worktree_restore", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_failed_acceptance_does_not_complete", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_early_completion_without_evidence_rejected", "migration_owner": ["T017", "T023"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_acceptance_cannot_mutate_scope_or_complete", "migration_owner": ["T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_dirty_checkout_and_unknown_task_rejected", "migration_owner": ["T010"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"},
+    {"id": "test_single_task.SingleTaskTests.test_traversal_and_symlink_rejected", "migration_owner": ["T010", "T017"], "post_T010_outcome": "must be taken from accepted T010 inventory; unmeasured here"}
+  ],
+  "retained_fixture_cases": "All six SingleTaskFixtureTests at preparation base; preserve IDs/assertions and reconcile full accepted T010 collection before approval.",
+  "scope_peer": "T011 owns direct scope/manifest/review cases in tests/test_single_task_scope.py; not changed or silently treated green by T012.",
+  "boundaries": {
+    "task_entry": false,
+    "test_authoring": false,
+    "marker_edit": false,
+    "implementation": false,
+    "owner_identity_authenticated": false,
+    "live_dispatch_verified": false
+  }
+}
