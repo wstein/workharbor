@@ -237,10 +237,15 @@ class RuntimeObserver:
                 raise primitives.PackageError('runtime-artifact-mismatch')
             workflow = _local_file(inputs.workflow_root, inputs.workflow_path, content=True)
             template = _local_file(inputs.workflow_root, inputs.template_path, content=True)
-            parts = workflow.split(b'---', 2)
-            if len(parts) != 3 or parts[0].strip():
+            # The pinned runtime recognizes exact standalone delimiter lines,
+            # not marker substrings inside JSON. Keep our JSON-only subset and
+            # ordinary LF/CRLF/CR line endings compatible with that parser.
+            lines = re.split(rb'\r\n|\n|\r', workflow)
+            if lines[0] != b'---' or b'---' not in lines[1:]:
                 raise primitives.PackageError('runtime-workflow-invalid')
-            configuration = nonsecret_configuration(primitives.parse_json(parts[1].strip()))
+            closing = lines.index(b'---', 1)
+            configuration = nonsecret_configuration(
+                primitives.parse_json(b'\n'.join(lines[1:closing])))
             # JSON identity compares types too (True must never equal integer 1).
             if primitives.canonical_json(configuration) != primitives.canonical_json(inputs.configuration):
                 raise primitives.PackageError('runtime-configuration-mismatch')

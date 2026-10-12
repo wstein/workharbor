@@ -161,6 +161,35 @@ class RuntimeTests(unittest.TestCase):
         self.workflow.write_bytes(self.workflow.read_bytes() + b'Changed prompt.\n')
         self.assertFalse(self.observe()['local_verified'])
 
+    def test_workflow_markers_must_be_exact_standalone_lines(self):
+        original = self.workflow.read_bytes()
+        malformed = (original.replace(b'---\n', b'---', 1),
+                     original.replace(b'\n---\n', b'---\n', 1),
+                     original.replace(b'---\n', b' ---\n', 1),
+                     original.replace(b'\n---\n', b'\n---joined\n', 1))
+        for workflow in malformed:
+            with self.subTest(workflow_prefix=workflow[:8]):
+                self.workflow.write_bytes(workflow)
+                proposal = copy.deepcopy(self.proposal)
+                proposal['execution']['workflow_digest'] = self.digest(workflow)
+                result = self.observer().observe(proposal)
+                self.assertFalse(result['local_verified'])
+                self.assertEqual('runtime-workflow-invalid', result['blockers'][0]['code'])
+
+    def test_workflow_exact_lf_crlf_markers_and_literal_marker_in_json(self):
+        config = json.loads(self.workflow.read_text().split('---', 2)[1])
+        config['hooks']['after_create'] += '\n# literal --- inside a JSON string\n'
+        settings = runtime.nonsecret_configuration(config)
+        for newline in ('\n', '\r\n'):
+            workflow = ('---\n' + json.dumps(config, indent=2) + '\n---\nFixture prompt.\n')
+            data = workflow.replace('\n', newline).encode()
+            self.workflow.write_bytes(data)
+            proposal = copy.deepcopy(self.proposal)
+            proposal['execution']['workflow_digest'] = self.digest(data)
+            proposal['execution']['configuration_digest'] = self.digest(package.canonical_json(settings))
+            result = self.observer(configuration=settings).observe(proposal)
+            self.assertTrue(result['local_verified'], result)
+
     def test_symlinks_hardlinks_traversal_and_nonregular_files_block(self):
         for path in (self.metadata, self.artifact, self.workflow, self.template):
             original = path.read_bytes()
