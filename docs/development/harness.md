@@ -91,8 +91,20 @@ Raw `make check` must still report exit 2. This is **operator validation only**:
 it grants no task execution, live approval, publication or full-green acceptance.
 Absent or invalid policy adoption leaves executable changes on strict full-green
 acceptance. Supplying a SHA is host trust input, not proof of review or adoption;
-the coordinator must verify those separately. Current GitHub workflow adoption
-requires its own reviewed change.
+the coordinator must verify those separately. The GitHub workflow loads its checker from the owner-controlled repository
+variable `WORKHARBOR_CI_POLICY_SOURCE`, with credentials excluded from the checkout.
+Missing, malformed or unavailable pins block; there is no proposal-head default.
+The workflow itself must match the externally adopted policy source exactly.
+After exact independent review and authorized publication, the owner can configure
+that immutable reviewed revision with:
+
+```sh
+gh variable set WORKHARBOR_CI_POLICY_SOURCE --repo wstein/workharbor-nxt --body REVIEWED_POLICY_SHA
+```
+
+That external adoption is a separate owner action and has not been performed by
+these local checks. Existing repository CI requires this configuration before it
+can validate the new operator tooling.
 
 The checker's callable `source_context(root, event, base, head, checkout)` returns
 validated immutable metadata or raises `ValueError`. `check(root, context,

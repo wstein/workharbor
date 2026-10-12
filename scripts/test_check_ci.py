@@ -265,6 +265,44 @@ class SourceTests(unittest.TestCase):
             self.assertEqual(context, ci.source_context(self.root, *context))
         self.assertFalse(sentinel.exists())
 
+    def test_workflow_requires_external_available_regular_policy_source(self):
+        workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
+        block = workflow.split("python3 - <<'PY'\n", 1)[1].split('          PY\n', 1)[0]
+        import textwrap
+        block = textwrap.dedent(block)
+        self.root.rename(self.root.parent/'integration')
+        self.root = self.root.parent/'integration'
+        environment = dict(os.environ, GITHUB_WORKSPACE=str(self.root.parent))
+        for pin in ('', 'HEAD', '0'*40):
+            with self.subTest(pin=pin):
+                result = subprocess.run([sys.executable, '-c', block], cwd=self.root.parent,
+                                        env=dict(environment, WORKHARBOR_CI_POLICY_SOURCE=pin),
+                                        capture_output=True)
+                self.assertNotEqual(0, result.returncode)
+                self.assertFalse((self.root.parent/'trusted-policy').exists())
+        checker = self.root/'scripts/check_ci.py'
+        checker.unlink()
+        checker.symlink_to('../README.md')
+        self.git('add', '--', 'scripts/check_ci.py')
+        self.git('commit', '--quiet', '-m', 'test: synthetic unsafe policy source')
+        unsafe = self.git('rev-parse', 'HEAD')
+        result = subprocess.run([sys.executable, '-c', block], cwd=self.root.parent,
+                                env=dict(environment, WORKHARBOR_CI_POLICY_SOURCE=unsafe),
+                                capture_output=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse((self.root.parent/'trusted-policy').exists())
+        self.git('checkout', '--quiet', '--detach', SOURCE)
+        # A supplied valid commit is distinct from the integration head.
+        policy = self.adopt_fixture_policy()
+        self.commit('docs/after-policy.md')
+        result = subprocess.run([sys.executable, '-c', block], cwd=self.root.parent,
+                                env=dict(environment, WORKHARBOR_CI_POLICY_SOURCE=policy),
+                                capture_output=True)
+        self.assertEqual(0, result.returncode)
+        self.assertEqual(policy, subprocess.check_output(['git', 'rev-parse', 'HEAD'],
+                         cwd=self.root.parent/'trusted-policy', text=True).strip())
+        self.assertNotEqual(policy, self.git('rev-parse', 'HEAD'))
+
     def test_integration_checks_execute_in_merge_worktree(self):
         context = self.proposal()
         roots = []
