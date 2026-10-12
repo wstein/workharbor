@@ -582,6 +582,9 @@ def _finish_completion_intent(root, store, attempt, event):
                 if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
                         stat.S_IMODE(info.st_mode) != mode or stream.read() != after):
                     raise InvalidState('Publication temporary does not match retained intent')
+                # A failed earlier flush may have left only readable cached bytes.
+                # Reestablish file durability before publishing the retained inode.
+                os.fsync(stream.fileno())
         else:
             descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                                  mode, dir_fd=temporary_fd)

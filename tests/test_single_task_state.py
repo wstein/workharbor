@@ -1162,7 +1162,7 @@ runpy.run_path(sys.argv[0],run_name='__main__')
         for kind in ('completion-intent', 'completion'):
             self.assertEqual(1, sum(event['kind'] == kind for event in current))
 
-    def persistence_failure(self, boundary):
+    def persistence_failure(self, boundary, *, repeat_flush=False):
         injection = r'''import os,pathlib,runpy,sqlite3,stat,sys
 sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
 import single_task_state as state
@@ -1219,10 +1219,63 @@ finally:
         self.assertEqual(self.after if boundary == 'marker-directory-flush' else self.before,
                          self.tasks.read_bytes())
         self.assertEqual(0, sum(event['kind'] == 'completion' for event in events))
-        self.call('resume')
+        # A retained temporary may have readable cached bytes despite a failed
+        # flush. Recovery must successfully flush that exact inode before rename.
+        probe = r"""import os,pathlib,runpy,stat,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+import single_task_state as state
+repeat=sys.argv.pop(2)=='fail'
+fsync=state.os.fsync
+replace=state.os.replace
+flushed=set()
+attempted=False
+def checked_fsync(fd):
+    global attempted
+    info=os.fstat(fd)
+    publication=pathlib.Path('.symphony/single-task/publication')
+    if stat.S_ISREG(info.st_mode) and publication.exists():
+        identities={(p.stat().st_dev,p.stat().st_ino) for p in publication.iterdir()}
+        identity=(info.st_dev,info.st_ino)
+        if identity in identities:
+            attempted=True
+            if repeat: raise OSError('synthetic retained-file flush failure')
+            result=fsync(fd)
+            flushed.add(identity)
+            return result
+    return fsync(fd)
+def checked_replace(source,*args,**kwargs):
+    info=os.stat(source,dir_fd=kwargs['src_dir_fd'],follow_symlinks=False)
+    assert (info.st_dev,info.st_ino) in flushed, 'Retained file must be flushed before resumed rename'
+    return replace(source,*args,**kwargs)
+state.os.fsync=checked_fsync
+state.os.replace=checked_replace
+sys.argv=sys.argv[1:]
+try:
+    runpy.run_path(sys.argv[0],run_name='__main__')
+finally:
+    assert attempted, 'Recovery must attempt retained-file durability'
+"""
+        if repeat_flush:
+            result = self.cli('fail', 'resume', '--attempt', self.attempt_id,
+                              '--review', str(self.review_path), injection=probe)
+            value = self.outcome(result)
+            self.assertEqual(6, result.returncode, value)
+            self.assertEqual('persistence_failure', value['errors'][0]['code'])
+            attempt, events = self.retained(attempt, events)
+            self.assertEqual('completion-prepared', attempt['progress'])
+            self.assertEqual(self.before, self.tasks.read_bytes())
+            self.assertEqual(0, sum(event['kind'] == 'completion' for event in events))
+            self.assertEqual(['first', 'second'] * 2, self.checks())
+        if boundary == 'publication-flush':
+            result = self.cli('pass', 'resume', '--attempt', self.attempt_id,
+                              '--review', str(self.review_path), injection=probe)
+            value = self.outcome(result)
+            self.assertEqual(0, result.returncode, value)
+        else:
+            self.call('resume')
         _, recovered = self.retained(attempt, events)
         self.assertEqual(self.after, self.tasks.read_bytes())
-        self.assertEqual(['first', 'second'] * 2, self.checks())
+        self.assertEqual(['first', 'second'] * (3 if repeat_flush else 2), self.checks())
         for kind in ('completion-intent', 'completion'):
             self.assertEqual(1, sum(event['kind'] == kind for event in recovered))
 
@@ -1234,3 +1287,6 @@ finally:
 
     def test_marker_directory_flush_failure_retains_intent_and_recovers(self):
         self.persistence_failure('marker-directory-flush')
+
+    def test_repeated_retained_file_flush_failure_blocks_publication(self):
+        self.persistence_failure('publication-flush', repeat_flush=True)
