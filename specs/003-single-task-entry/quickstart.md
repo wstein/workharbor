@@ -32,9 +32,12 @@ Run these commands against the implementation under review. Required-file
 preflight prevents an empty unittest discovery from being mistaken for success:
 
 ```sh
-test -f tests/test_single_task_context.py &&
-test -f tests/test_single_task_state.py &&
-test -f tests/test_single_task_scope.py &&
+for suite in test_single_task.py test_single_task_context.py test_single_task_state.py \
+  test_single_task_scope.py test_single_task_acceptance.py test_single_task_completion.py \
+  test_single_task_binding.py test_single_task_recovery.py test_single_task_rework.py \
+  test_single_task_handoff.py; do
+  test -f "tests/$suite" || exit 1
+done
 python3 -m unittest discover -s tests -p 'test_single_task*.py' -v
 make check
 git diff --check
@@ -73,6 +76,12 @@ fixtures are known local programs, not arbitrary sandboxed commands.
 Record the pre-implementation baseline commit before making changes. Compare both
 `specs/001-workspace-lifecycle/` and `specs/002-symphony-doc-smoke/` tree identities
 against that baseline before/after tests and in the final diff; both must match.
+`ProtectedFeatureIdentityTests` pins pre-implementation commit
+`95b5bed59c918bc100880771ac6be4d127b8edb7` and both protected tree IDs, and
+compares current tree/index and raw file bytes. `OfflineCommandMatrixTests`
+instruments actual CLI children through all three modes; its injected entry-code
+network attempt must be detected before journal creation. These controls test local
+programs and do not sandbox arbitrary owner-approved acceptance commands.
 Record actual command/exit/platform results, scenario coverage and implementation
 commit in the review evidence. Do not put a commit's own hash in a file included in
 that commit: complete/commit first, then record the hash in local journal/review.

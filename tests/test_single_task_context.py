@@ -1218,3 +1218,110 @@ class TaskContextReworkTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# Import the module, not its TestCase: importing a TestCase into this module would
+# make unittest collect the same IDs twice in repository acceptance.
+import test_single_task as shared_contract
+
+
+class OfflineCommandMatrixTests(unittest.TestCase):
+    """T027 instruments the actual entry child, including its process launches."""
+
+    exercise_contract = shared_contract.SingleTaskMigrationAuditTests.exercise_contract
+
+    def setUp(self):
+        shared_contract.SingleTaskMigrationAuditTests.setUp(self)
+        self.report = self.fixture.private/'offline-report.json'
+        self.child_injection = r'''import http.client,json,os,pathlib,runpy,socket,subprocess,sys,urllib.request
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+import single_task_context as contexts
+report=pathlib.Path(__REPORT__)
+attempts=[]
+local_processes=0
+forbidden={'LINEAR_API_KEY','GITHUB_TOKEN','GH_TOKEN','OPENAI_API_KEY','SYMPHONY_TOKEN','SYMPHONY_ENDPOINT'}
+assert not forbidden.intersection(os.environ), 'Fixture must supply no credentials or services'
+def deny(*args,**kwargs):
+    attempts.append('network-or-unreviewed-process')
+    raise RuntimeError('offline-network-denied')
+for name in ('socket','create_connection','getaddrinfo'):
+    setattr(socket,name,deny)
+urllib.request.urlopen=deny
+http.client.HTTPConnection.connect=deny
+http.client.HTTPSConnection.connect=deny
+os.system=deny
+os.popen=deny
+popen=subprocess.Popen
+verbs={'rev-parse','merge-base','ls-tree','cat-file','config','ls-files','rev-list','for-each-ref','diff'}
+def local_only(argv,*args,**kwargs):
+    global local_processes
+    if not isinstance(argv,list) or not argv or kwargs.get('shell'): return deny()
+    if pathlib.Path(argv[0]).name!='git': return deny()
+    index=1
+    while index<len(argv) and argv[index]=='-c': index+=2
+    if index>=len(argv) or argv[index] not in verbs: return deny()
+    # Git itself must not acquire a transport, prompt, hook or lazy fetch.
+    env=kwargs.get('env') or os.environ
+    assert env.get('GIT_ALLOW_PROTOCOL')=='', 'No Git transport is permitted'
+    assert env.get('GIT_TERMINAL_PROMPT')=='0', 'No credential prompt is permitted'
+    local_processes+=1
+    return popen(argv,*args,**kwargs)
+subprocess.Popen=local_only
+__NEGATIVE_CONTROL__
+sys.argv=sys.argv[1:]
+try:
+    runpy.run_path(sys.argv[0],run_name='__main__')
+except RuntimeError as error:
+    if str(error)!='offline-network-denied': raise
+    raise SystemExit(90)
+finally:
+    report.write_text(json.dumps({'network_attempts':len(attempts),'local_processes':local_processes}))
+'''.replace('__REPORT__', repr(str(self.report)))
+        self.child_injection = self.child_injection.replace('__NEGATIVE_CONTROL__', '')
+
+    def invoke(self, *args, expected=0):
+        value = shared_contract.SingleTaskMigrationAuditTests.invoke(self, *args, expected=expected)
+        report = json.loads(self.report.read_text())
+        self.assertEqual(0, report['network_attempts'])
+        self.assertGreater(report['local_processes'], 0)
+        return value
+
+    def test_all_three_modes_run_offline_without_credentials_or_services(self):
+        self.exercise_contract()
+
+    def test_network_attempt_in_entry_code_is_detected_before_attempt_creation(self):
+        # The negative control modifies the actual child validator, not the test
+        # parent. The socket call is intercepted before any host network action.
+        control = '''validate=contexts.validate_context
+def attempted_network(value):
+    socket.create_connection(('example.invalid',443))
+    return validate(value)
+contexts.validate_context=attempted_network
+'''
+        injection = self.child_injection.replace('sys.argv=sys.argv[1:]',
+                                                  control+'\nsys.argv=sys.argv[1:]')
+        self.context_path.write_bytes(canonical_bytes(self.context))
+        tasks = (self.fixture.feature/'tasks.md').read_bytes()
+        result = subprocess.run([sys.executable, '-B', '-c', injection,
+                                 str(ROOT/'scripts/single_task.py'), 'begin', '--context',
+                                 str(self.context_path)], cwd=self.root, env=self.fixture.env,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(90, result.returncode, result.stderr)
+        self.assertEqual(('', ''), (result.stdout, result.stderr))
+        self.assertEqual(1, json.loads(self.report.read_text())['network_attempts'])
+        self.assertEqual(tasks, (self.fixture.feature/'tasks.md').read_bytes())
+        journal = self.root/'.symphony/single-task/journal.sqlite3'
+        self.assertFalse(journal.exists(), 'Network attempt must precede journal creation')
+
+    def test_protected_feature_paths_cannot_be_approved_as_outputs(self):
+        tasks = (self.fixture.feature/'tasks.md').read_bytes()
+        for prefix in ('specs/001-workspace-lifecycle', 'specs/002-symphony-doc-smoke'):
+            with self.subTest(protected=prefix):
+                self.context['allowed_paths'] = [prefix+'/spec.md']
+                self.context['approval']['context_digest'] = context_digest(self.context)
+                self.context_path.write_bytes(canonical_bytes(self.context))
+                value = self.invoke('begin', '--context', str(self.context_path), expected=2)
+                self.assertEqual('context_schema', value['errors'][0]['code'])
+                self.assertEqual(tasks, (self.fixture.feature/'tasks.md').read_bytes())
+                self.assertFalse((self.root/prefix).exists())
+        self.assertFalse((self.root/'.symphony/single-task/journal.sqlite3').exists())

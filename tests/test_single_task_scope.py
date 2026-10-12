@@ -531,3 +531,65 @@ for name, mutate in {
         'empty_evidence_ref': lambda value: value.update(evidence_ref=''),
 }.items():
     setattr(SingleTaskScopeTests, 'test_review_reject_' + name, review_rejection(mutate))
+
+
+class ProtectedFeatureIdentityTests(unittest.TestCase):
+    """T027 binds protected source trees to immutable pre-implementation bytes."""
+
+    BASELINE = '95b5bed59c918bc100880771ac6be4d127b8edb7'
+    TREES = {
+        'specs/001-workspace-lifecycle': '0fda80d6f62c7576394495969187f349f7d0a81a',
+        'specs/002-symphony-doc-smoke': '3b2dce04b696b247e21535c741759cc5633b514a',
+    }
+
+    def test_source_tree_ids_index_and_bytes_match_recorded_baseline(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        fixture = SingleTaskFixture(temporary.name)
+        self.assertFalse(fixture.root.is_relative_to(ROOT))
+        def git(*args):
+            result = subprocess.run(['git', '-c', 'core.fsmonitor=false', *args],
+                                    cwd=ROOT, env=fixture.env, capture_output=True, timeout=15)
+            self.assertEqual(0, result.returncode, result.stderr)
+            return result.stdout
+        def inventory():
+            result = {}
+            for prefix in self.TREES:
+                for path in (ROOT/prefix).rglob('*'):
+                    self.assertFalse(path.is_symlink())
+                    if path.is_file():
+                        result[path.relative_to(ROOT).as_posix()] = (path.stat().st_mode & 0o777,
+                                                                  path.read_bytes())
+            return result
+        before = inventory()
+        for prefix, tree in self.TREES.items():
+            for revision in (self.BASELINE, 'HEAD'):
+                self.assertEqual(tree, git('rev-parse', revision+':'+prefix).decode().strip())
+        baseline_paths = git('ls-tree', '-r', '--name-only', self.BASELINE, '--', *self.TREES).decode().splitlines()
+        self.assertEqual(set(baseline_paths), set(before))
+        for path, (mode, content) in before.items():
+            self.assertEqual(git('show', self.BASELINE+':'+path), content)
+            entry = git('ls-tree', self.BASELINE, '--', path).split()[0]
+            self.assertEqual(0o755 if entry == b'100755' else 0o644, mode)
+        fixture.complete_prerequisite()  # Only the disposable synthetic tree changes.
+        self.assertEqual(before, inventory())
+        for args in (('diff', self.BASELINE), ('diff', '--cached', self.BASELINE)):
+            self.assertEqual(b'', git(*args, '--', *self.TREES))
+        for prefix, tree in self.TREES.items():
+            self.assertEqual(tree, git('rev-parse', 'HEAD:'+prefix).decode().strip())
+
+    def test_synthetic_protected_tree_mutation_is_rejected_by_scope(self):
+        # Reuse only setup/helpers, not a second collected copy of scope tests.
+        for name in ('module', 'cli', 'owning', 'begin', 'rejected_inventory'):
+            setattr(self, name, getattr(SingleTaskScopeTests, name).__get__(self))
+        SingleTaskScopeTests.setUp(self)
+        self.begin()
+        before = self.tasks.read_bytes()
+        for prefix in self.TREES:
+            with self.subTest(protected=prefix):
+                path = self.root/prefix/'spec.md'
+                path.parent.mkdir(parents=True)
+                path.write_bytes(b'Disposable unauthorized output\n')
+                self.rejected_inventory()
+                self.assertEqual(before, self.tasks.read_bytes())
+                path.unlink()
