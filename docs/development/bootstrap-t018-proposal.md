@@ -285,3 +285,21 @@ cases on the combined published head. The subsequently integrated, independently
 reviewed milestone status changes are documentation only; tested source provenance
 above remains explicit. Owner PR review/merge is still required to adopt the inventory
 proposal. T024+ and live/provider/runtime activation remain outside this route.
+
+### T023 acceptance: both required Linux checks passed
+
+Both required jobs independently reported success for published implementation
+`c0d7d132e16b0167b14be9e0c0c2b4d8c99ff3db`, including the real approved
+T018/T019 deeper recovery/rework assertions and unchanged retained retry scenarios:
+
+- [PR run 38317718418](https://github.com/wstein/workharbor-nxt/actions/runs/38317718418), job `115038231198`: raw 393 tests passed in 122.039s, raw Make exit 0; combined 791 tests passed in 200.955s, zero raw failures/errors/skips, manifest-qualified GREEN. All job steps succeeded.
+- [Push run 38317682447](https://github.com/wstein/workharbor-nxt/actions/runs/38317682447), job `115038113581`: raw 393 tests passed in 117.560s, raw Make exit 0; combined 791 tests passed in 185.807s, zero raw failures/errors/skips, manifest-qualified GREEN. All job steps succeeded.
+
+The retained independent reviewer and coordinator verified both actual conclusions
+and logs before this bookkeeping change. T023's own marker now records delivered,
+reviewed, Linux-qualified behavior. The earlier macOS aggregate-timeout record
+above remains unchanged; it does not become a local pass. This delta changes only
+that marker, this acceptance evidence and milestone status. Production, tests,
+required inventory and classifier are unchanged; fresh Linux checks must qualify
+the final bookkeeping head before PR readiness. Owner PR review/merge still adopts
+the inventory proposal. No T024+, provider/live execution or merge is authorized.
