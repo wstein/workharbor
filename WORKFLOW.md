@@ -150,6 +150,17 @@ issues. Changes that invalidate approved scope/design return to these human gate
 Feature-wide $speckit-converge belongs to an explicitly authorized feature closure
 pass after implementation; never append unrelated convergence work in this issue.
 
+Before eligibility, require the host-side Feature 004 readiness gates for the entire
+approved execution, including completion/recovery/publication/evidence/final-label
+capabilities, exclusive ownership, separate authenticated owner decisions, exact
+source, effective runtime/workflow/configuration and approved check argv/actions.
+Repeat readiness at entry and after checks against its original binding. Any drift
+blocks; runtime/workflow/argv changes require renewed execution approval. Preserve
+dirty retry state instead of adopting/resetting a baseline. Configuration/rendering
+alone grants no capability. Current GitHub safe-label capability is unavailable:
+perform no eligibility write until conditional replacement or serialization of all
+writers is demonstrated. Offline fixture success never authorizes live dispatch.
+
 Confirm issue readiness and blockers. Maintain one workpad for plan, progress,
 validation and blockers using the configured tracker tool if available. Keep its
 updates short and link durable evidence rather than duplicating it across comments.

@@ -107,8 +107,23 @@ and commands. Approval evidence must identify the owner review and reviewed comm
 requirements, task descriptions, acceptance, dependencies or ordering changes require
 renewed approval. Pure checkbox updates and appended evidence references retain
 approval if their diff changes none of those semantics; record this comparison
-against the approved commit. Ambiguous changes block execution. Add `workharbor-ready` manually only
-after review and prerequisite completion. The template does not apply it automatically.
+against the approved commit. Ambiguous changes block execution.
+Feature 004's host-injected `ready` gate checks the entire approved execution before
+one selected eligibility write. Require exclusive ownership, separate authenticated
+spec/plan/execution decisions (plus matrix/rework/publication when applicable), exact
+source and effective runtime/workflow/configuration/check argv/actions, and all
+completion/recovery/publication/evidence/final-label capabilities. The template does
+not apply `workharbor-ready` automatically. Configuration files cannot supply ports
+or authenticate decisions; the standalone CLI remains blocked without trusted host
+adapters. Current GitHub safe-label capability is unavailable, so it performs no
+eligibility write. A local mutex or read/PUT/read-back does not prove serialization
+of all label writers. See the [readiness runbook](../../specs/004-speckit-symphony-automation/quickstart.md).
+
+Repeat the original readiness binding at entry and after checks. Changed runtime,
+workflow or argv requires renewed execution approval; other source/ownership/approval
+drift blocks without replacing pins. Retain dirty retries and use guard recovery,
+never reset, delete evidence or invent a fresh baseline. These gates retain the
+two-agent limit, one-task scope and evidence-before-final-label rules above.
 
 At each attempt the agent validates the issue fields, selects the existing feature
 with `scripts/select_feature.py`, reads its artifacts, runs initial checks and
