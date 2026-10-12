@@ -14,6 +14,7 @@ import subprocess
 from typing import Protocol
 
 from single_task import path_in_repo
+from single_task_state import _directory
 
 HEX = re.compile(r'[0-9a-f]{64}')
 REVISION = re.compile(r'[0-9a-f]{40}')
@@ -178,17 +179,38 @@ def _current(root, revision, paths):
         raise BindingBlocked('dirty-current-source')
     snapshot = _snapshot(root, revision, paths)
     for item in snapshot.artifacts:
-        physical = root
-        for part in Path(item.path).parts:
-            physical = physical / part
-            if physical.is_symlink():
-                raise BindingBlocked('unsafe-worktree-artifact')
-        metadata = physical.lstat()
+        metadata, data = _read_regular(root, item.path, len(item.data))
         mode = '100755' if metadata.st_mode & stat.S_IXUSR else '100644'
-        if (not stat.S_ISREG(metadata.st_mode) or mode != item.mode
-                or physical.read_bytes() != item.data):
+        if mode != item.mode or data != item.data:
             raise BindingBlocked('worktree-artifact-drift')
     return snapshot
+
+
+def _read_regular(root, path, expected_size):
+    """Reuse guard directory traversal; never follow a swapped component/file."""
+    directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        parts = Path(path).parts
+        for part in parts[:-1]:
+            child = _directory(directory, part)
+            os.close(directory)
+            directory = child
+        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+                             | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, 'rb') as stream:
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                    or before.st_size != expected_size):
+                raise BindingBlocked('worktree-artifact-drift')
+            data = stream.read(expected_size + 1)
+            after = os.fstat(stream.fileno())
+            stable = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_size',
+                      'st_mtime_ns', 'st_ctime_ns')
+            if any(getattr(before, key) != getattr(after, key) for key in stable):
+                raise BindingBlocked('worktree-artifact-drift')
+            return after, data
+    finally:
+        os.close(directory)
 
 
 def assess_retention(root, request, *, guard=None, authority=None):
