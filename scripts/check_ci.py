@@ -150,10 +150,14 @@ def baseline_execution(root):
 def git(root, *args):
     # Repository config and attributes are executable inputs. Do not trigger
     # clean/process filters, fsmonitor, custom merge drivers or external diffs.
-    env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+    # Source validation is reused by authenticated host readiness. Local object
+    # reads need neither tracker credentials nor interpreter/host settings.
+    env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR')
+           if key in os.environ}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0',
-               GIT_NO_REPLACE_OBJECTS='1')
-    command = ['git', '--no-replace-objects', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
+               GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1',
+               GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='')
+    command = ['git', '--no-replace-objects', '--no-lazy-fetch', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
                '-c', 'core.attributesFile=' + os.devnull, '-c', 'submodule.recurse=false']
     config = subprocess.run(command + ['config', '--null', '--list', '--no-includes'],
                             cwd=root, env=env, capture_output=True, check=True).stdout

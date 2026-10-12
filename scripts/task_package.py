@@ -1016,19 +1016,27 @@ def assess_readiness(approved, current, repository_snapshot, evidence, *, guard=
                 'template_digest', 'configuration_digest', 'guard_revision')):
             raise PackageError('execution-identity-unavailable')
         checks = task_outcomes.validate_checks(current['outcomes'])
-        capabilities = assess_capabilities('ready', current['mode'], guard=guard,
-                                          tracker=tracker, runtime=runtime, live=live)
+        def execution_capabilities():
+            assessment = assess_capabilities('ready', current['mode'], guard=guard,
+                                            tracker=tracker, runtime=runtime, live=live)
+            # An execution may explicitly require more than the built-in gates.
+            # Snapshot the complete union identically at every boundary.
+            extra = {name for names in current['execution']['capabilities'].values() for name in names}
+            ports = dict(guard=guard, tracker=tracker, runtime=runtime)
+            for name in sorted(extra - set(assessment['required_capabilities'])):
+                observed, blocker = _capability_evidence(name,
+                    ports[name.split('.')[0]].capabilities.get(name), live)
+                assessment['required_capabilities'].append(name)
+                assessment['evidence'].append(observed)
+                if blocker:
+                    assessment['blockers'].append(dict(capability=name, code=blocker))
+            assessment['capabilities_satisfied'] = not assessment['blockers']
+            return assessment
+
+        capabilities = execution_capabilities()
         result['blockers'].extend(capabilities['blockers'])
         if not capabilities['capabilities_satisfied']:
             return result
-        # Also require any extra capability named by the approved execution.
-        ports = dict(guard=guard, tracker=tracker, runtime=runtime)
-        for names in current['execution']['capabilities'].values():
-            for name in names:
-                _, blocker = _capability_evidence(name,
-                    ports[name.split('.')[0]].capabilities.get(name), live)
-                if blocker:
-                    raise PackageError('approved-capability-unavailable')
         actions = current['execution']['external_actions']
         if (type(authorized_actions) not in (tuple, list)
                 or any(type(action) is not str for action in authorized_actions)
@@ -1130,8 +1138,7 @@ def assess_readiness(approved, current, repository_snapshot, evidence, *, guard=
             repository_snapshot['accepted'], repository_snapshot['checker'],
             repository_snapshot['source_context'], current['context'], evidence,
             guard=guard, mode=current['mode'], live=live)
-        repeated_caps = assess_capabilities('ready', current['mode'], guard=guard,
-                                           tracker=tracker, runtime=runtime, live=live)
+        repeated_caps = execution_capabilities()
         if (not repeated_source['source_valid'] or repeated_source['snapshot'] != source['snapshot']
                 or repeated_caps != capabilities
                 or package_revision_digest(current) != result['revision_digest']):

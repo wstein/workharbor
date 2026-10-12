@@ -470,6 +470,27 @@ class SourceTests(unittest.TestCase):
             self.assertEqual(context, ci.source_context(self.root, *context))
         self.assertFalse(sentinel.exists())
 
+    def test_local_git_children_exclude_credentials_and_lazy_fetch(self):
+        context = self.proposal()
+        original = subprocess.run
+        children = []
+        def observe(argv, **kwargs):
+            if argv[0] == 'git':
+                children.append((argv, kwargs.get('env', {})))
+            return original(argv, **kwargs)
+        with mock.patch.dict(os.environ, {'GITHUB_TOKEN': 'secret-canary',
+                                         'UNRELATED_HOST_SECRET': 'secret-canary',
+                                         'PYTHONPATH': '/secret-canary'}), \
+                mock.patch.object(ci.subprocess, 'run', side_effect=observe):
+            self.assertEqual(context, ci.source_context(self.root, *context))
+        self.assertTrue(children)
+        for argv, environment in children:
+            self.assertFalse('secret-canary' in environment.values(), 'host credential inherited')
+            self.assertNotIn('PYTHONPATH', environment)
+            self.assertIn('--no-lazy-fetch', argv)
+            self.assertEqual('1', environment.get('GIT_NO_LAZY_FETCH'))
+            self.assertEqual('', environment.get('GIT_ALLOW_PROTOCOL'))
+
     def test_git_objects_refuse_replacements_and_grafts(self):
         context = self.proposal()
         self.git('replace', context.head, context.base)
