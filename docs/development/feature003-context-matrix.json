@@ -216,7 +216,7 @@
     },
     {
       "task": "T010",
-      "status": "implemented; exact independent review pending; CI policy proposal requires ordinary owner PR review and merge",
+      "status": "locally implemented and independently reviewed at 124858814a5ff93ef5825ffca91ab55d514a81e7; CI policy remains proposed until ordinary owner PR review and merge",
       "source_commit": "e24fcf1755655c4a0d2b3a252afafee6be0f727b",
       "integrated_code_commit": "51a4ac79110a429e9ce33cfc6ee9887549bf094b",
       "publication_base": "4bceed0901341e2d38932443ad99048b454b436a",
