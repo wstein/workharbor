@@ -1,9 +1,12 @@
 """T002 local data boundaries; no package/guard/execution authority."""
+import copy
+import hashlib
 import math
 import os
 from pathlib import Path
 import subprocess
 import stat
+import sys
 import tempfile
 import traceback
 import unittest
@@ -439,6 +442,258 @@ class CapabilityPortTests(unittest.TestCase):
                 package.assess_capabilities(action, mode, live=live)
             self.assertEqual('invalid-capability-request', raised.exception.code)
             self.assertNotIn('secret-canary', str(raised.exception))
+
+
+class PackageContractTests(unittest.TestCase):
+    git = RepositoryPrimitiveTests.git
+
+    def setUp(self):
+        RepositoryPrimitiveTests.setUp(self)
+        self.feature = '999-offline-fixture'
+        directory = self.root / 'specs' / self.feature
+        directory.mkdir(parents=True)
+        for name in ('spec.md', 'plan.md', 'tasks.md'):
+            (directory / name).write_text('synthetic ' + name + '\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'synthetic artifacts')
+        self.commit = self.git('rev-parse', 'HEAD').decode().strip()
+        tree = self.git('rev-parse', 'HEAD^{tree}').decode().strip()
+        self.input = dict(schema_version=1, repository='fixture/offline', issue=None,
+            feature=self.feature, task_id='fixture:documentation', mode='implement',
+            context={'opaque_guard_context': [1, {'unchanged': True}],
+                     'approval': {'context_digest': 'guard-owned-self-digest'}},
+            source=dict(accepted_commit=self.commit, accepted_tree=tree,
+                        proposal_commit=self.commit, proposal_tree=tree, proposal_commits=[],
+                        artifact_revisions=[dict(path=f'specs/{self.feature}/{name}', commit=self.commit,
+                            sha256=hashlib.sha256((directory / name).read_bytes()).hexdigest())
+                            for name in ('spec.md', 'plan.md', 'tasks.md')],
+                        equivalence_evidence_digest=None),
+            execution=dict(symphony_revision='be10a1b79df723d6d7612b5651c8522704dafb2e',
+                           build_provenance=None, workflow_digest='a' * 64,
+                           template_digest='b' * 64, configuration_digest='c' * 64,
+                           guard_revision=self.commit, capabilities={}, external_actions=[],
+                           publication_scope=None),
+            outcomes=[dict(id='fixture-documentation',
+                argv=[sys.executable, '-I', '-B', '-m', 'unittest', 'discover',
+                      '-s', 'tests', '-p', 'test_*.py', '-v'], deadline_seconds=10,
+                tool_revision='sha256:' + 'd' * 64, input_revision='sha256:' + 'e' * 64,
+                cases=[dict(id='fixture.documentation', expected='pass', fingerprint=None)], raw_exit=0)],
+            approval_refs=dict(spec=None, plan=None, execution=None, matrix=None, rework=None))
+        self.snapshot = dict(repository='fixture/offline', root=self.root,
+                             approved=object(), current=object())
+
+    def validator(self, checks):
+        self.assertEqual(self.input['outcomes'], checks)
+        return checks
+
+    def test_build_is_canonical_detached_and_deterministic(self):
+        value = package.build_package(self.input)
+        original_context = copy.deepcopy(self.input['context'])
+        self.assertEqual(value, package.build_package(copy.deepcopy(self.input)))
+        data = package.package_bytes(value)
+        self.assertFalse(data.endswith(b'\n'))
+        self.assertEqual(data, package.canonical_json(value))
+        self.assertEqual(original_context, value['context'])
+        self.input['context']['opaque_guard_context'].append('mutated')
+        self.assertEqual(original_context, value['context'])
+
+    def test_identity_excludes_approval_refs_and_retains_separate_raw_revision(self):
+        before = package.build_package(self.input)
+        self.input['approval_refs']['spec'] = 'sha256:' + 'a' * 64
+        after = package.build_package(self.input)
+        self.assertEqual(before['package_digest'], after['package_digest'])
+        self.assertNotEqual(package.package_revision_digest(before), package.package_revision_digest(after))
+        self.assertIsNone(before['approval_refs']['spec'])
+
+    def test_every_immutable_field_and_check_order_changes_identity(self):
+        before = package.build_package(self.input)['package_digest']
+        for field, replacement in (('mode', 'handoff-only'), ('task_id', 'fixture:other'),
+                                   ('context', {'different_opaque_context': True})):
+            changed = copy.deepcopy(self.input)
+            changed[field] = replacement
+            self.assertNotEqual(before, package.build_package(changed)['package_digest'])
+        changed = copy.deepcopy(self.input)
+        changed['outcomes'].append(copy.deepcopy(changed['outcomes'][0]))
+        changed['outcomes'][1]['id'] = 'second'
+        self.assertNotEqual(package.build_package(changed)['package_digest'],
+            package.build_package(dict(changed, outcomes=list(reversed(changed['outcomes']))))['package_digest'])
+
+    def test_transient_output_and_attempt_metadata_is_not_package_identity(self):
+        first = package.build_package(self.input, timestamp='first', output_path='/first', attempt_id='first')
+        second = package.build_package(self.input, timestamp='second', output_path='/second', attempt_id='second')
+        self.assertEqual(package.package_bytes(first), package.package_bytes(second))
+
+    def test_unknown_missing_version_and_tampered_digest_rejected(self):
+        variants = []
+        changed = copy.deepcopy(self.input)
+        changed['secret-canary'] = True
+        variants.append(changed)
+        changed = copy.deepcopy(self.input)
+        del changed['source']
+        variants.append(changed)
+        variants.append(dict(self.input, schema_version=True))
+        variants.append(dict(self.input, schema_version=2))
+        for value in variants:
+            with self.subTest(keys=list(value)), self.assertRaises(package.PackageError):
+                package.build_package(value)
+        sealed = package.build_package(self.input)
+        sealed['context'] = {'changed': True}
+        with self.assertRaises(package.PackageError):
+            package.package_bytes(sealed)
+
+    def test_nested_source_execution_and_approval_keys_rejected(self):
+        for section in ('source', 'execution', 'approval_refs'):
+            changed = copy.deepcopy(self.input)
+            changed[section]['secret-canary'] = True
+            with self.subTest(section=section), self.assertRaises(package.PackageError) as raised:
+                package.build_package(changed)
+            self.assertNotIn('secret-canary', str(raised.exception))
+
+    def test_missing_nested_fields_artifact_inventory_and_credential_refs_rejected(self):
+        variants = []
+        for section, field in (('source', 'accepted_tree'), ('execution', 'guard_revision'),
+                               ('approval_refs', 'plan')):
+            changed = copy.deepcopy(self.input)
+            del changed[section][field]
+            variants.append(changed)
+        changed = copy.deepcopy(self.input)
+        changed['source']['artifact_revisions'][1] = copy.deepcopy(changed['source']['artifact_revisions'][0])
+        variants.append(changed)
+        changed = copy.deepcopy(self.input)
+        changed['approval_refs']['spec'] = 'https://secret-canary@github.com/owner/repo/pull/1?token=secret-canary'
+        variants.append(changed)
+        for value in variants:
+            with self.subTest(section=list(value)), self.assertRaises(package.PackageError) as raised:
+                package.build_package(value)
+            self.assertNotIn('secret-canary', str(raised.exception))
+
+    def test_guard_raw_errors_and_invalid_results_do_not_escape(self):
+        for raw_result in (None, True, package.GuardValidation(True, ('secret-canary',))):
+            class Guard(package.UnavailableGuard):
+                def validate_context(self, context, evidence):
+                    return raw_result
+            result = package.validate(package.build_package(self.input), self.snapshot, {}, {}, guard=Guard())
+            self.assertIs(result['execution_eligible'], False)
+            self.assertIn('guard-unavailable', [item['code'] for item in result['blockers']])
+            self.assertNotIn('secret-canary', str(result))
+
+    def test_issue_repository_and_required_reference_actions_are_distinct(self):
+        changed = copy.deepcopy(self.input)
+        changed['issue'] = {'repository': 'fixture/offline', 'number': 7}
+        changed['task_id'] = 'T002'
+        self.assertEqual(7, package.build_package(changed)['issue']['number'])
+        changed['issue']['repository'] = 'other/repository'
+        with self.assertRaises(package.PackageError):
+            package.build_package(changed)
+        for number in (0, True, -1):
+            changed['issue'] = {'repository': 'fixture/offline', 'number': number}
+            with self.subTest(number=number), self.assertRaises(package.PackageError):
+                package.build_package(changed)
+        changed = copy.deepcopy(self.input)
+        changed['approval_refs'] = {'spec': 'sha256:' + 'a' * 64}
+        with self.assertRaises(package.PackageError):
+            package.build_package(changed)
+
+    def test_default_validation_is_structural_ineligible_and_side_effect_free(self):
+        value = package.build_package(self.input)
+        before = {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        result = package.validate(value, self.snapshot, {}, {})
+        self.assertIs(result['structural_valid'], True)
+        self.assertIs(result['execution_eligible'], False)
+        self.assertIsNone(result['authenticated_approval'])
+        self.assertIsNone(result['independent_review'])
+        self.assertIsNone(result['live_execution'])
+        self.assertEqual([], result['raw_exits'])
+        self.assertIn('guard-unavailable', [item['code'] for item in result['blockers']])
+        self.assertIn('outcome-validator-unavailable', [item['code'] for item in result['blockers']])
+        self.assertEqual(before, {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()})
+
+    def test_trusted_repository_mismatch_and_source_tree_missing_ids_block(self):
+        value = package.build_package(self.input)
+        result = package.validate(value, dict(self.snapshot, repository='other/repo'), {}, {})
+        self.assertIs(result['structural_valid'], False)
+        self.assertIn('repository-mismatch', [item['code'] for item in result['blockers']])
+        for key, identity in (('accepted_commit', '0' * 40), ('proposal_tree', self.commit)):
+            changed = copy.deepcopy(self.input)
+            changed['source'][key] = identity
+            result = package.validate(package.build_package(changed), self.snapshot, {}, {})
+            self.assertIs(result['structural_valid'], False)
+
+    def test_distinct_artifact_revisions_checked_locally_without_guard_schema(self):
+        changed = copy.deepcopy(self.input)
+        changed['source']['artifact_revisions'][0]['sha256'] = '0' * 64
+        result = package.validate(package.build_package(changed), self.snapshot, {}, {})
+        self.assertIs(result['structural_valid'], False)
+        self.assertIn('artifact-identity-mismatch', [item['code'] for item in result['blockers']])
+
+    def test_injected_guard_owns_context_comparison_scope_and_acceptance(self):
+        calls = []
+        test = self
+        class Guard:
+            capabilities = {}
+            def validate_context(self, context, evidence):
+                test.assertEqual(test.input['context'], context)
+                calls.append('context')
+                return package.GuardValidation(True)
+            def compare_artifacts(self, approved, current, evidence):
+                test.assertIs(test.snapshot['approved'], approved)
+                test.assertIs(test.snapshot['current'], current)
+                calls.append('comparison')
+                return 'identical'
+            def validate_scope(self, snapshot, context, evidence):
+                calls.append('scope')
+                return package.GuardValidation(True)
+            def validate_acceptance(self, context, evidence):
+                calls.append('acceptance')
+                return package.GuardValidation(True)
+        self.input['approval_refs'] = {key: 'sha256:' + str(index) * 64
+            for index, key in enumerate(self.input['approval_refs'])}
+        value = package.build_package(self.input)
+        result = package.validate(value, self.snapshot, {}, {}, guard=Guard(), outcome_validator=self.validator)
+        self.assertEqual(['context', 'comparison', 'scope', 'acceptance'], calls)
+        self.assertIs(result['structural_valid'], True)
+        self.assertIs(result['execution_eligible'], False)
+        self.assertEqual('supplied-local', result['approval_assurance'])
+        self.assertIsNone(result['authenticated_approval'])
+
+    def test_unmet_prerequisites_are_reported_without_running_them(self):
+        class Guard(package.UnavailableGuard):
+            def validate_context(self, context, evidence):
+                return package.GuardValidation(False, ('fixture:missing-dependency',))
+        result = package.validate(package.build_package(self.input), self.snapshot, {}, {}, guard=Guard())
+        self.assertEqual(['fixture:missing-dependency'], result['unmet_prerequisites'])
+        self.assertIs(result['execution_eligible'], False)
+
+    def test_outcome_validator_is_delegated_without_execution_or_raw_error(self):
+        value = package.build_package(self.input)
+        result = package.validate(value, self.snapshot, {}, {}, outcome_validator=self.validator)
+        self.assertNotIn('outcome-validator-unavailable', [item['code'] for item in result['blockers']])
+        def broken(_checks):
+            raise ValueError('secret-canary')
+        result = package.validate(value, self.snapshot, {}, {}, outcome_validator=broken)
+        self.assertIn('invalid-outcomes', [item['code'] for item in result['blockers']])
+        self.assertNotIn('secret-canary', str(result))
+
+    def test_renewal_and_ambiguous_guard_comparisons_block_without_normalization(self):
+        for comparison in ('renewal-required', 'ambiguous', 'secret-canary'):
+            class Guard(package.UnavailableGuard):
+                def validate_context(self, context, evidence):
+                    return package.GuardValidation(True)
+                def compare_artifacts(self, approved, current, evidence):
+                    return comparison
+            result = package.validate(package.build_package(self.input), self.snapshot, {}, {}, guard=Guard())
+            self.assertIn('guard-comparison-blocked', [item['code'] for item in result['blockers']])
+            self.assertNotIn('secret-canary', str(result))
+
+    def test_assertion_matrix_and_rework_need_their_own_reference(self):
+        changed = copy.deepcopy(self.input)
+        changed['outcomes'][0]['cases'][0].update(expected='assertion', fingerprint='sha256:' + 'f' * 64)
+        changed['outcomes'][0]['raw_exit'] = 1
+        result = package.validate(package.build_package(changed), self.snapshot, {}, {}, outcome_validator=lambda value: value)
+        self.assertIn('matrix-approval-reference-missing', [item['code'] for item in result['blockers']])
+        changed['mode'] = 'owner-authorized rework'
+        result = package.validate(package.build_package(changed), self.snapshot, {}, {})
+        self.assertIn('rework-approval-reference-missing', [item['code'] for item in result['blockers']])
 
 
 if __name__ == '__main__':
