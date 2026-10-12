@@ -1,7 +1,8 @@
 # Feature 003 T018 recovery-test proposal
 
-Preparation only for issue #19. T018 is pending; this record grants no test-authoring
-acceptance, implementation, owner approval, publication or live execution authority.
+Historical preparation and owner-approved test-authoring acceptance for issue #19.
+T018 completion means the exact reviewed red matrix matched; successor behavior is
+still unimplemented. This record grants no publication or live execution authority.
 
 Authoritative scope: `specs/003-single-task-entry/tasks.md` T018 and
 `data-model.md` completion/recovery transitions. Changes are confined to the existing
@@ -150,11 +151,42 @@ canonical `sys.executable` spelling):
 
 Invoke the native wrapper through `/opt/homebrew/bin/python3.14` with command
 `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`; no shell evaluation is part of
-the approved discovery argv. No `--matrix-approved` invocation has occurred.
-The new checks digest is a proposed expectation binding, not a fresh raw capture or
-an acceptance result. Capture4 remains the actual observed outcome provenance.
+the approved discovery argv. At preparation freeze no `--matrix-approved` invocation had occurred, and the
+rebound checks were expectations only. Capture4 remains the historical outcome
+provenance; the subsequent approved current run is recorded below.
 
 The coordinator retains required prior-behavior checks, native negative checks and
-the source-immutability guard, then obtains a concrete revision-bound owner decision
-on the final package. A current approved run is required before T018 acceptance;
-this preparation checks no task marker. Raw red suites remain red.
+the source-immutability guard. The preparation itself checked no task marker.
+The owner decision and matched current run below authorize T018 test-authoring
+completion only. Raw red suites remain red.
+
+## Owner-approved test-authoring acceptance
+
+The owner approved the exact final package in the active session after the combined
+explicit package and issue-contract recommendation. This is supplied session
+operator authority, not independently authenticated owner identity or live dispatch.
+The original issue contract and preparation provenance remain retained.
+
+- Approved execution source: `e090cfd698976286f69fb74abd8499fc26eec6c5`.
+- Exact native checks digest:
+  `sha256:37987a0991a476cda2ca71e3f5707f1635c01cef16f26d250e0fff84b2a2b78e`.
+- Exact package, native argv and command PATH: `/private/tmp/t018-owner-approval-package.json`;
+  package digest `sha256:8c48b978748bdb350e948e7abb1133e598209cc74b587a3b319f44476b594e12`.
+- Actual approved native wrapper exit: **0**, accepted true. Its raw child exit was
+  **1**: exactly 60 collected/observed IDs, 13 passes and 47 expected body assertions,
+  with every approved fingerprint matched. No import/setup/skip outcome qualified.
+- Source snapshot before and after the approved run was identical:
+  `sha256:1399648f6a40d7d4ee102e58b671280197f94fdb239c00ec97b6746ffe8ec57e`.
+- Full native result: `/private/tmp/t018-approved-acceptance.stdout`, digest
+  `sha256:b8692778d33ea1576fa0602d9cabf7934899facf9adcde344c7aa84f84f7fd7e`;
+  stderr was empty. Actual argv/PATH/exits/snapshots are retained in
+  `/private/tmp/t018-approved-acceptance-execution.json`; supplied authority is retained
+  in `/private/tmp/t018-approved-execution-authority.json`.
+
+All tracked completion bookkeeping followed the matched approved run. Only T018's
+checkbox and this task's evidence change. No guard or test code changes, successor
+implementation, new CI exception, publication, merge or live execution is included.
+The 47 reds still stop at unsupported public-command behavior; deeper recovery and
+binding assertions remain unexecuted. T020/T021/T023 must implement that behavior,
+with genuine checked-rework entry requiring T022/T023. A matching red matrix does
+not claim those behaviors work or a green raw/full repository suite.
