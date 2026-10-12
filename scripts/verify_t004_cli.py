@@ -152,7 +152,7 @@ class CliBoundaryTests(unittest.TestCase):
         self.assertFalse((self.root/'.symphony/single-task.json').exists())
         value = self.response(self.cli(*self.verify_arguments()), 0)
         self.assertEqual('passed', value['local_verification'])
-        self.assertEqual('active', value['progress'])
+        self.assertEqual('acceptance-recorded', value['progress'])
 
     def test_argument_errors_are_safe_and_stable(self):
         secret = 'synthetic-T004-secret-argv'
@@ -172,7 +172,9 @@ class CliBoundaryTests(unittest.TestCase):
         marker.write_bytes(b'keep prior evidence')
         for argv in [command for command in self.commands() if command[0] not in ('begin', 'status')]:
             with self.subTest(command=argv[0]):
-                value = self.response(self.cli(*argv), 2, code='command_unavailable')
+                implemented = argv[0] in ('inspect', 'verify', 'complete')
+                value = self.response(self.cli(*argv), 3 if implemented else 2,
+                                      code='state_blocker' if implemented else 'command_unavailable')
                 self.assertEqual('not-run', value['local_verification'])
                 self.assertIsNone(value['attempt_id'])
                 self.assertIsNone(value['mode'])
@@ -201,7 +203,7 @@ class CliBoundaryTests(unittest.TestCase):
         (self.root/'outside.md').write_text('out of scope\n', encoding='utf-8')
         result = self.cli(*self.verify_arguments())
         self.response(result, 3, code='scope_blocker', legacy=True)
-        self.assertIn('Out-of-scope', result.stderr)
+        self.assertIn('outside.md', json.loads(result.stdout)['errors'][0]['affected_paths'])
 
     def test_acceptance_exit_four_does_not_echo_output_or_argv(self):
         secret = 'synthetic-T004-secret-check'
@@ -212,9 +214,13 @@ class CliBoundaryTests(unittest.TestCase):
         self.assertEqual('failed', value['local_verification'])
         self.assertNotIn(secret, result.stdout + result.stderr)
         self.assertNotIn(check[2], result.stdout + result.stderr)
-        saved = json.loads((self.root/'.symphony/single-task.json').read_bytes())
-        self.assertIn('last_failure', saved)
-        self.assertNotIn(secret, json.dumps(saved['last_failure']))
+        with backend.open_store(self.root, require_existing=True) as store:
+            events = store.read_events(self.attempt)
+        failed = [event['payload'] for event in events if event['kind'] == 'check-result']
+        self.assertEqual(1, len(failed))
+        self.assertEqual('nonzero_exit', failed[0]['category'])
+        self.assertEqual(7, failed[0]['exit'])
+        self.assertNotIn(secret, json.dumps({key: value for key, value in failed[0].items() if key != 'argv'}))
 
     def test_persistence_exit_six_is_safe(self):
         injection = '''import os, runpy, sys

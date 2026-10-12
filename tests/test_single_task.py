@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -45,7 +46,7 @@ class SingleTaskFixture:
     def __init__(self, directory):
         if not GIT:
             raise RuntimeError('Git is required for fixture creation')
-        self.directory = Path(directory)
+        self.directory = Path(directory).resolve()
         self.root = self.directory/'repo'
         self.root.mkdir()
         self.private = self.directory/'private'
@@ -431,7 +432,7 @@ class SingleTaskTests(unittest.TestCase):
                              env=self.fixture.env, capture_output=True, text=True, timeout=10)
         if ok:
             self.assertEqual(0, run.returncode, run.stderr)
-        else:
+        elif ok is False:
             self.assertNotEqual(0, run.returncode)
             if args[0] in ('verify', 'complete'):
                 self.assertNotEqual('command_unavailable', json.loads(run.stdout)['errors'][0]['code'],
@@ -472,39 +473,57 @@ class SingleTaskTests(unittest.TestCase):
         self.assertEqual(expected, (self.feature/'tasks.md').read_text())
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'docs: guide')
+        bound = self.cli('record-commit', '--attempt', self.attempt, '--commit',
+                         self.git('rev-parse', 'HEAD').stdout.decode().strip(), ok=None)
+        self.assertEqual(0, bound.returncode, 'T023 must bind the same completed implementation commit')
         self.cli('verify')
         self.cli('complete')
         self.assertEqual(expected, (self.feature/'tasks.md').read_text())
         self.cli('begin', '--feature', 'demo', '--task', 'T002', '--allow', 'guide.md',
                  '--check', '["true"]', ok=False)
         (self.root/'guide.md').write_text('Unauthorized rework\n')
-        self.assertIn('rework', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_interruption_after_checkbox_before_phase_update(self):
         self.begin()
         (self.root/'guide.md').write_text('After\n')
         self.cli('verify')
         (self.feature/'tasks.md').write_text(self.tasks.replace('[ ] T001', '[x] T001'))
-        state = json.loads((self.root/'.symphony/single-task.json').read_text())
-        self.assertEqual('implement', state['phase'])
-        self.cli('complete')
-        state = json.loads((self.root/'.symphony/single-task.json').read_text())
-        self.assertEqual('handoff-only', state['phase'])
+        # Prepare a real interrupted intent using the same publication API;
+        # recovery belongs to T021/T023 and must remain an explicit body blocker.
+        sys.path.insert(0, str(SCRIPT.parent))
+        import single_task_state as backend
+        (self.feature/'tasks.md').write_text(self.tasks)
+        flush = os.fsync
+        def interrupt(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode) and b'[x] T001' in (self.feature/'tasks.md').read_bytes():
+                raise OSError('Synthetic interrupted publication')
+            return flush(fd)
+        with backend.open_store(self.root, require_existing=True, writable_existing=True) as store:
+            with mock.patch.object(backend.os, 'fsync', side_effect=interrupt):
+                with self.assertRaises(backend.PersistenceFailure):
+                    backend.publish_completion(self.root, store, self.attempt)
+            self.assertEqual('completion-prepared', store.read_attempt(self.attempt)['progress'])
+        completed = (self.feature/'tasks.md').read_bytes()
+        result = self.cli('resume', '--attempt', self.attempt, '--review', str(self.fixture.private/'review.json'), ok=None)
+        self.assertEqual(0, result.returncode, 'T023 must recover the same interrupted completion')
+        self.assertEqual(completed, (self.feature/'tasks.md').read_bytes())
+        self.assertEqual('handoff-only', json.loads(result.stdout)['mode'])
 
     def test_reject_outside_scope_committed_and_untracked(self):
         self.begin()
         (self.root/'outside.md').write_text('Unexpected\n')
-        self.assertIn('Out-of-scope', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'docs: unexpected')
-        self.assertIn('Out-of-scope', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_reject_other_checkbox_and_selected_description(self):
         self.begin()
         path = self.feature/'tasks.md'
         for content in (self.tasks.replace('[ ] T002', '[x] T002'), self.tasks.replace('Document guide', 'Changed scope')):
             path.write_text(content)
-            self.assertIn('checkbox', self.cli('verify', ok=False).stderr)
+            self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_staged_violation_hidden_by_worktree_restore(self):
         self.begin()
@@ -513,7 +532,7 @@ class SingleTaskTests(unittest.TestCase):
         path.write_text('Unauthorized staged change\n')
         self.git('add', 'specs/demo/spec.md')
         path.write_bytes(original)
-        self.assertIn('Out-of-scope', self.cli('complete', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('complete', ok=False).stdout)['errors'][0]['code'])
         self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
 
     def test_committed_violation_hidden_by_revert(self):
@@ -525,7 +544,7 @@ class SingleTaskTests(unittest.TestCase):
             self.git('add', '.')
             self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
                      'commit', '-m', 'test: change then revert')
-        self.assertIn('Out-of-scope', self.cli('complete', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('complete', ok=False).stdout)['errors'][0]['code'])
         self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
 
     def test_staged_other_task_hidden_by_worktree_restore(self):
@@ -534,7 +553,7 @@ class SingleTaskTests(unittest.TestCase):
         path.write_text(self.tasks.replace('[ ] T002', '[x] T002'))
         self.git('add', 'specs/demo/tasks.md')
         path.write_text(self.tasks)
-        self.assertIn('checkbox', self.cli('complete', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('complete', ok=False).stdout)['errors'][0]['code'])
         self.assertEqual(self.tasks, path.read_text())
 
     def test_historical_other_task_hidden_by_revert(self):
@@ -545,7 +564,7 @@ class SingleTaskTests(unittest.TestCase):
             self.git('add', '.')
             self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
                      'commit', '-m', 'test: task change then revert')
-        self.assertIn('checkbox', self.cli('complete', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('complete', ok=False).stdout)['errors'][0]['code'])
         self.assertEqual(self.tasks, path.read_text())
 
     def test_mode_change_requires_rework_even_without_git_filemode(self):
@@ -553,14 +572,14 @@ class SingleTaskTests(unittest.TestCase):
         self.cli('complete')
         self.git('config', 'core.filemode', 'false')
         (self.root/'guide.md').chmod(0o755)
-        self.assertIn('rework', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_absent_file_differs_from_sentinel_contents(self):
         self.begin()
         (self.root/'guide.md').unlink()
         self.cli('complete')
         (self.root/'guide.md').write_bytes(b'<absent>')
-        self.assertIn('rework', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_staged_symlink_hidden_by_worktree_restore(self):
         self.begin()
@@ -570,7 +589,7 @@ class SingleTaskTests(unittest.TestCase):
         self.git('add', 'guide.md')
         path.unlink()
         path.write_text('Before\n')
-        self.assertIn('Unsafe file type', self.cli('complete', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('complete', ok=False).stdout)['errors'][0]['code'])
         self.assertEqual(self.tasks, (self.feature/'tasks.md').read_text())
 
     def test_failed_acceptance_does_not_complete(self):
@@ -581,7 +600,7 @@ class SingleTaskTests(unittest.TestCase):
     def test_early_completion_without_evidence_rejected(self):
         self.begin()
         (self.feature/'tasks.md').write_text(self.tasks.replace('[ ] T001', '[x] T001'))
-        self.assertIn('evidence', self.cli('verify', ok=False).stderr)
+        self.assertEqual('scope_blocker', json.loads(self.cli('verify', ok=False).stdout)['errors'][0]['code'])
 
     def test_acceptance_cannot_mutate_scope_or_complete(self):
         self.begin([sys.executable, '-c', "from pathlib import Path; Path('outside.md').write_text('unexpected')"])
@@ -903,6 +922,31 @@ class SingleTaskAcceptanceTests(unittest.TestCase):
         self.assertEqual('implement', value['mode'])
         self.assertEqual([], value['errors'])
         self.assertEqual(self.before_tasks, self.tasks.read_bytes())
+
+    def test_review_duplicate_keys_rejected(self):
+        self.begin([self.tracing_check()])
+        content = self.review_path.read_bytes()
+        self.review_path.write_bytes(content.replace(b'"approved":true', b'"approved":false,"approved":true'))
+        self.blocked()
+
+    def test_review_nonfinite_json_rejected(self):
+        self.begin([self.tracing_check()])
+        self.review_path.write_bytes(self.review_path.read_bytes().replace(b'"schema_version":1', b'"schema_version":NaN'))
+        self.blocked()
+
+    def test_review_invalid_utf8_rejected(self):
+        self.begin([self.tracing_check()])
+        self.review_path.write_bytes(b'{"reviewer_ref":"\xff"}')
+        self.blocked()
+
+    def test_rejected_review_retains_safe_blocker(self):
+        self.begin([self.tracing_check()])
+        self.review(approved=False)
+        self.blocked()
+        with closing(__import__('sqlite3').connect(self.root/'.symphony/single-task/journal.sqlite3')) as db:
+            kind, payload = db.execute('SELECT kind,payload FROM events ORDER BY sequence DESC LIMIT 1').fetchone()
+        self.assertEqual('blocker', kind)
+        self.assertEqual({'code': 'scope_blocker'}, json.loads(payload))
 
     def test_review_missing(self):
         self.begin([self.tracing_check()])
