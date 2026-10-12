@@ -172,6 +172,18 @@ Docker/browser acceptance. Missing tools or credentials are blockers, not passes
 Update specs, ADRs and quality register when required. Preserve existing work on
 retry. Open a PR only when the configured forge and authorization allow it; otherwise
 hand off commits and local evidence. Review feedback before final handoff.
+
+<a id="pr-readiness"></a>
+Mark an authorized PR ready for review only when independent review of its exact
+current head has no material findings, every actionable finding is resolved, and
+all required checks on that head have completed successfully. Keep it draft while
+any actionable finding remains unresolved or any required check is missing,
+pending or failing, including known reds accepted for a scoped task handoff.
+Distinguish optional, nonblocking suggestions from actionable findings. If the
+head changes, keep or return the PR to draft and refresh independent review and
+check evidence before marking ready again. Ready for review does not grant owner
+merge, product scope/spec/plan or dispatch approval; their existing gates still apply.
+
 If the owner selects operator-assisted Git handoff, preserve sealed evidence when
 .git writes are denied and hand off as blocked for the operator to commit and
 reverify. Never widen sandbox permissions or reset completed work to obtain a commit.
