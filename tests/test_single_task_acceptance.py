@@ -10,7 +10,7 @@ import tempfile
 import time
 import unittest
 
-from test_single_task import SingleTaskFixture, canonical_bytes, context_digest
+from test_single_task import SingleTaskFixture, canonical_bytes, context_digest, digest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'scripts'))
@@ -86,7 +86,30 @@ class AcceptanceExecutionTests(unittest.TestCase):
         second.update(id='second', cwd='checks')
         second['argv'] += literal
         self.begin([first, second])
+        (self.root/'guide.md').write_bytes(b'Reviewed committed output')
+        self.fixture.git('add', 'guide.md')
+        self.fixture.git('commit', '-m', 'test: reviewed allowed output')
+        expected_head = self.fixture.git('rev-parse', 'HEAD').stdout.strip()
+        self.assertNotEqual(self.attempt['baseline'], expected_head)
+        self.review = self.fixture.review(self.context)
+        self.review['attempt_id'] = self.attempt_id
+        expected_manifest = self.fixture.manifest(['guide.md', 'specs/synthetic/tasks.md'], 'T001')
+        manifest_digest = digest(canonical_bytes(expected_manifest))
+        review_digest = digest(canonical_bytes(self.review))
         evidence = self.execute()
+        self.assertEqual({'schema_version': 1, 'attempt_id': self.attempt_id,
+                          'task_id': 'T001', 'context_digest': context_digest(self.context),
+                          'content_manifest': expected_manifest,
+                          'content_manifest_digest': manifest_digest,
+                          'semantic_review': self.review, 'semantic_review_digest': review_digest,
+                          'verification_head': expected_head, 'checks': [
+                              {'schema_version': 1, 'id': check['id'], 'argv': check['argv'],
+                               'cwd': check['cwd'], 'expected_exit': 0, 'exit': 0,
+                               'category': 'passed', 'timed_out': False,
+                               'context_digest': context_digest(self.context),
+                               'content_manifest_digest': manifest_digest,
+                               'semantic_review_digest': review_digest}
+                              for check in (first, second)]}, evidence)
         lines = self.trace.read_text().splitlines()
         self.assertEqual('first', lines[0])
         self.assertEqual([str((self.root/'checks').resolve()), literal], json.loads(lines[1]))
