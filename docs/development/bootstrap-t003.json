@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "feature": "003-single-task-entry",
+  "task": "T003",
+  "dependencies": [
+    "T002"
+  ],
+  "minimum_baseline": "029a4ec83e1240b40f72eed004f513ff8fb8b5b0",
+  "prerequisite_implementation": "ac8bcb6f4d7c23682c0a66d7c2d7a31fd9dcb4f2",
+  "prerequisite_merge": "029a4ec83e1240b40f72eed004f513ff8fb8b5b0",
+  "prerequisite_record_sha256": "0b0d03180dc53c83c2f8e9d5f8ebb212ee16e20c91227296297f1dc97218528d",
+  "prerequisite_evidence_ref": "https://github.com/wstein/workharbor-nxt/issues/3#issuecomment-6115756644",
+  "allowed_paths": [
+    "scripts/single_task_state.py"
+  ],
+  "guard_sha256": "7c50b5170e31eed9c5c0dbeb047919c8845f6c266a32def55868a4ab9b863bc4",
+  "primitive_verifier_sha256": "3bba2eeff6d6e1abe14ead36ce98c5f4e2a749fbb71f7d4c03012af9e6e78b0f",
+  "red_verifier_sha256": "c863cb1f16f5c0eda3c57631e24401612fd56abf49708dd294b389974a9cfffb",
+  "green_cases": [
+    "StatePrimitiveTests.test_durable_immutable_attempt",
+    "StatePrimitiveTests.test_one_active_attempt",
+    "StatePrimitiveTests.test_cross_process_lock_and_release",
+    "StatePrimitiveTests.test_lock_released_after_holder_exit",
+    "StatePrimitiveTests.test_append_only_events_and_progress",
+    "StatePrimitiveTests.test_transaction_failure_rolls_back",
+    "StatePrimitiveTests.test_corrupt_journal_retained",
+    "StatePrimitiveTests.test_unsupported_version_retained",
+    "StatePrimitiveTests.test_legacy_evidence_retained",
+    "StatePrimitiveTests.test_unsafe_state_path_rejected",
+    "StatePrimitiveTests.test_unsafe_context_copy_rejected",
+    "StatePrimitiveTests.test_durability_failure_blocks"
+  ],
+  "checks": [
+    [
+      "python3",
+      "scripts/verify_t003_state.py"
+    ],
+    [
+      "python3",
+      "scripts/verify_t002_red.py"
+    ],
+    [
+      "python3",
+      "scripts/check_repo.py"
+    ],
+    [
+      "git",
+      "diff",
+      "--check"
+    ]
+  ],
+  "cwd": ".",
+  "expected_exit": 0,
+  "handoff": "operator-assisted"
+}
