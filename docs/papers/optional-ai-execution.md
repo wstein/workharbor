@@ -1,6 +1,6 @@
 # WorkHarbor as an optional execution home
 
-Date: 2026-10-12
+Date: 2026-10-12 | Proposal updated: 2026-10-13
 Status: Concept proposal; neither an accepted feature nor implementation evidence.
 
 ## Motivation and boundary
@@ -42,6 +42,62 @@ issues and pull requests, including updates that affect the underlying items.
 Any future synchronization therefore needs an explicit field owner and conflict
 rule. A card movement cannot authorize execution. See
 [GitHub's Projects documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects).
+
+## First increment: revision-bound Spec Kit explorer
+
+Begin with a read-only feature list and detail view: select a repository and Git
+revision, follow the feature's spec/plan/tasks links, inspect a task's prerequisites
+and blockers, then follow its attempts, workspaces and acceptance/review evidence.
+Display the current and reviewed artifact revisions and stale/disconnected
+observations explicitly. An unavailable source or unrecognized parser format
+cannot silently become an empty feature or completed task.
+
+For example, a future view of `005-provider-aware-orchestration` could link its
+approved artifacts and the separate T002/T003 attempts. As results arrive, it
+would show implementation, checks, independent review, PR merge and live evidence
+as separate observations. A checkbox alone cannot establish those results. This
+is an illustrative future view, not evidence of a dashboard or live execution.
+
+A task card uses `(repository_id, feature_id, task_id)` and includes the reviewed
+commit, prerequisites, exact blockers, next permitted action, latest attempt and
+workspace, acceptance evidence and PR. Retry must distinguish retained
+handoff-only work from separately owner-authorized rework. Manual and orchestrated
+attempts are equally visible; permission, verified adapter capability, profile
+opt-in and task approval remain distinct decisions.
+
+The team rated the proposed sequence for this project's current stage:
+
+| Suggestion | Value |
+| --- | ---: |
+| Show spec, plan and tasks from an identified commit; Git stays authoritative | 10/10 |
+| Use repository + feature + task IDs, with separate attempts and workspaces | 10/10 |
+| Show approval, implementation, checks, review, merge and live evidence separately | 10/10 |
+| Explain blockers and the next permitted action on each task card | 10/10 |
+| Offer a concise approval packet with scope, checks and changes since approval | 9/10 |
+| Add guarded command buttons after the read-only view is proven | 8/10 later |
+| Let dragging a card approve or dispatch work | 2/10 |
+
+Ratings are design judgments, not measured performance or implementation evidence.
+The approval packet would bind paths, literal acceptance commands, source and
+artifact revisions, prerequisite evidence and the semantic changes since prior
+approval. It reduces repeated administration without hiding an authorization
+change. A progress-only comparison preserves approval only when the existing
+recorded guard proof permits it; the UI invents no normalization rule.
+
+Current [Spec Kit workflow documentation](https://github.github.com/spec-kit/reference/workflows.html)
+describes human checkpoints. Any later command integration must pin and verify its
+actual installed workflow capabilities instead of assuming the pinned version
+supports every current upstream command. The view must not execute commands
+parsed from repository Markdown or issues.
+[LiveView security guidance](https://phoenix-live-view.hexdocs.pm/security-model.html)
+requires authorization within LiveView callbacks as well as route controls.
+Owner/project checks therefore apply to reads, subscriptions and each later action;
+public issue visibility cannot expose private prompts or execution logs.
+
+No implementation follows from this paper. The read-only product increment still
+needs the scope/governance and spec/plan approvals in ADR 0006. The next separately
+approved design would freeze the read-model/parser contract, missing/stale-data
+behavior and owner-visible acceptance cases before adding guarded controls.
 
 ## Stable identity and a frozen execution request
 
