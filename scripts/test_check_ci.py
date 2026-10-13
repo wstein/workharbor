@@ -5,6 +5,8 @@ import io
 import json
 import os
 import py_compile
+import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,6 +25,110 @@ SPEC.loader.exec_module(ci)
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_nested_check_processes_stop_before_disposable_checkout_cleanup(self):
+        # A real grandchild ignores TERM and inherits the check's output pipe.
+        # Observe EOF inside the cleanup boundary, before removing its cwd.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = root/'child.py'
+            child.write_text(
+                'import os,signal,time\nfrom pathlib import Path\n'
+                'signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
+                'print("nested child ready", flush=True)\n'
+                'Path("ready").write_text(str(os.getpid()))\n'
+                'while True:\n    Path("heartbeat").write_text("alive")\n    time.sleep(.01)\n')
+            parent = root/'parent.py'
+            parent.write_text(
+                'import os,subprocess,sys,time\nfrom pathlib import Path\n'
+                'if os.getpid() != os.getpgrp(): os.setsid()\n'
+                'Path("group").write_text(str(os.getpid()))\n'
+                'subprocess.Popen([sys.executable, "child.py"])\n'
+                'while not Path("ready").exists(): time.sleep(.01)\n'
+                'if sys.argv[1] == "timeout": time.sleep(30)\n')
+            for mode in ('timeout', 'success'):
+                with self.subTest(mode=mode):
+                    execution = root/mode
+                    execution.mkdir()
+                    shutil.copy(child, execution/'child.py')
+                    shutil.copy(parent, execution/'parent.py')
+                    code = (
+                        'import runpy,shutil,subprocess,sys; from pathlib import Path; '
+                        'ci=runpy.run_path(sys.argv[1]); root=Path(sys.argv[2]); '
+                        'mode=sys.argv[3]\n'
+                        'try: result=ci["run"]([sys.executable,"parent.py",mode],root,timeout=2)\n'
+                        'except subprocess.TimeoutExpired:\n'
+                        ' assert mode == "timeout"\n'
+                        'else:\n'
+                        ' assert mode == "success" and result == 0\n'
+                        'assert root.is_dir() and (root/"ready").is_file()\n'
+                        '# Observe actual process state at the root-removal boundary.\n'
+                        'group=int((root/"group").read_text())\n'
+                        'snapshot=subprocess.run(["ps","-axo","pgid=,stat="],'
+                        'capture_output=True,text=True,check=True,timeout=2)\n'
+                        'states=[state for pgid,state in '
+                        '(line.split() for line in snapshot.stdout.splitlines()) if int(pgid)==group]\n'
+                        'assert all(state.startswith("Z") for state in states),states\n'
+                        'shutil.rmtree(root)\n'
+                        'print("cleanup boundary reached",flush=True)\n')
+                    try:
+                        result = subprocess.run(
+                            ci.python_argv('-c', code, str(Path(ci.__file__)), str(execution), mode),
+                            capture_output=True, text=True, timeout=8)
+                    finally:
+                        # Keep a failing pre-fix regression from orphaning its probe.
+                        if (execution/'group').exists():
+                            try:
+                                os.killpg(int((execution/'group').read_text()), signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertIn('nested child ready', result.stdout)
+                    self.assertIn('cleanup boundary reached', result.stdout)
+                    self.assertFalse(execution.exists())
+
+    def test_process_cleanup_observation_failure_retains_checkout(self):
+        process = mock.Mock(pid=123456789)
+        failure = subprocess.CalledProcessError(1, ['ps'])
+        for stage in ('observation', 'leader wait'):
+            with self.subTest(stage=stage):
+                process.wait.side_effect = (subprocess.TimeoutExpired(['probe'], 10)
+                                            if stage == 'leader wait' else None)
+                with mock.patch.object(ci.os, 'killpg'), \
+                        mock.patch.object(ci.subprocess, 'run', side_effect=failure):
+                    with self.assertRaises(ci.ProcessCleanupError):
+                        ci.drain_group(process)
+        process.wait.side_effect = None
+        # Signal permission alone says nothing about absence or live work.
+        for states in ('', '123456789 Z\n', '123456789 R\n'):
+            with self.subTest(states=states), \
+                    mock.patch.object(ci.os, 'killpg', side_effect=PermissionError), \
+                    mock.patch.object(ci.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, states)), \
+                    mock.patch.object(ci.time, 'monotonic', side_effect=[0, 10, 10]):
+                if states.endswith('R\n'):
+                    with self.assertRaises(ci.ProcessCleanupError):
+                        ci.drain_group(process)
+                else:
+                    self.assertIsNone(ci.drain_group(process))
+        execution = None
+        def fake_git(root, *args):
+            if args[0] == 'rev-parse':
+                return b'a' * 40 + b'\n'
+            if args[:2] == ('worktree', 'add'):
+                Path(args[-2]).mkdir()
+            return b''
+        try:
+            with mock.patch.object(ci, 'git', side_effect=fake_git) as git_call, \
+                    mock.patch.object(ci, 'clean_checkout'), \
+                    mock.patch('sys.stderr', new_callable=io.StringIO):
+                with self.assertRaises(ci.ProcessCleanupError):
+                    with ci.baseline_execution(ci.ROOT) as execution:
+                        raise ci.ProcessCleanupError('unavailable process observation')
+                self.assertTrue(execution.is_dir())
+                self.assertFalse(any(call.args[1:3] == ('worktree', 'remove') for call in git_call.call_args_list))
+        finally:
+            if execution is not None:
+                shutil.rmtree(execution.parent)
+
     def run_cases(self, body, retained=()):
         namespace = {'unittest': unittest}
         exec(body, namespace)
@@ -564,11 +670,16 @@ class SourceTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_command_timeouts_remain_finite_and_explicit(self):
-        with mock.patch.object(ci.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+        process = mock.Mock(pid=123456789)
+        process.wait.return_value = 0
+        with mock.patch.object(ci.subprocess, 'Popen', return_value=process), \
+                mock.patch.object(ci, 'drain_group'):
+            process.stdout = io.BytesIO()
             self.assertEqual(0, ci.run(['probe'], self.root))
-            self.assertEqual(300, run.call_args.kwargs['timeout'])
+            self.assertEqual(300, process.wait.call_args.kwargs['timeout'])
+            process.stdout = io.BytesIO()
             self.assertEqual(0, ci.run(['suite'], self.root, timeout=600))
-            self.assertEqual(600, run.call_args.kwargs['timeout'])
+            self.assertEqual(600, process.wait.call_args.kwargs['timeout'])
 
     def test_aggregate_suite_timeout_is_bounded_and_fails_closed(self):
         original_run = ci.subprocess.run
