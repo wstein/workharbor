@@ -33,13 +33,20 @@ live verification.
 
 ## Notes
 
-- No markers remain. Owner decisions H8, H9, H13:a (approved for planning), H14:a, H15:b, H16:b, H17:a, H18:a
-  and #223 are recorded in the spec.
+- No markers remain. Owner decisions H8, H9, H10:a, H11:a, H14:a, H15:b (superseding H12:c), H16:b, H17:a,
+  H18:a, H23:a, H24:a and wstein/workharbor#223 (closed) are recorded in the spec.
+- H13:a (approved for planning) covers this revised text only once independent re-review of its exact head is
+  CLEAR; until then the revision is pending re-review.
+- Second review round applied: owner API hosted by the control plane over TLS (FR-033, FR-036–FR-038); ADR 0001
+  amendment prerequisite (#67); needs-human and incompatible-version categories (FR-018, FR-013, FR-029);
+  `whr ssh` exit status and filtering scope, client-config generation (FR-008a, FR-019, FR-022a); credential
+  permission checks split between `auth status` and `doctor` (FR-021); `console --status` acceptance (SC-010).
 - Review items applied: read-only dashboard enforced by API scope (FR-033, SC-008); resumable offboarding with
   confirmed revocation (FR-011, SC-005); console persistence separate from attachments (FR-007a, SC-010);
   generated idempotency keys, waiting and operation retrieval (FR-003–FR-003b, SC-011); typed JSON stream events
-  (FR-015); local API browser boundary (FR-036–FR-038, SC-009); first-use authentication (FR-035); separate
+  (FR-015); browser boundary of the owner API (FR-036–FR-038, SC-009); first-use authentication (FR-035); separate
   client and host platform matrices (FR-026); remote exit 0–255 distinguished from CLI failures (FR-019);
   rebuild acceptance (FR-005a).
-- Implementation prerequisites: documentation reconciliation (#66, #68), exit-code ADR (#70), session interface
-  contract (#71) and the Feature 001 terminal-cleanup reconciliation for the console model.
+- Implementation prerequisites: documentation reconciliation (#66, #68), ADR 0001 amendment (#67), exit-code ADR
+  (#70), session interface contract (#71) and the Feature 001 terminal-cleanup reconciliation for the console
+  model.

@@ -3,8 +3,9 @@
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
-**Status**: Approved for planning (owner H13:a, 2026-10-13); not implemented. Owner decisions H8, H9, H14:a–H18:a
-and #223 are recorded below. Implementation prerequisites are listed under "Prerequisites".
+**Status**: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
+covers this revised text only once that re-review is CLEAR for its exact head. Not implemented. Owner decisions
+are recorded below; implementation prerequisites are listed under "Prerequisites".
 **Input**: Specify the product CLI `whr` for workspace lifecycle plus host and operations commands (`ws`, `open`,
 `shell`, `console`, `ssh`, `setup`, `doctor`, `offboard`, `service`, `version`), release and packaging conventions,
 exit codes, output formats, secret handling and terminal-text safety, plus the owner's later decisions on
@@ -19,8 +20,8 @@ first wave an AI agent runs inside the workspace container, and `whr` interopera
 decisions below are recorded here; the constitution, product document, architecture and ADRs are reconciled in a
 separate documentation lane, and this specification does not change them.
 Feature [001](../001-workspace-lifecycle/spec.md) delivers the lifecycle through the browser. This specification
-describes a command-line path to the same owner-scoped operations. The owner approved it for planning (H13:a);
-that approval does not authorize implementation.
+describes a command-line path to the same owner-scoped operations. Planning approval (H13:a) does not authorize
+implementation.
 
 The legacy WorkHarbor `whr` tool (Go, single binary, Apple Container) is reference material only. Its task and
 agent supervision commands are not adopted as such: session interoperation follows decision H9 below, and
@@ -31,22 +32,31 @@ agent supervision commands are not adopted as such: session interoperation follo
 ### Owner decisions (2026-10-13)
 
 - **H8 - Spec Kit dashboard**: a read-only web dashboard shows specs, plans, tasks, review evidence and
-  workspace/agent status. It shares one local API with the CLI and offers no editing or dispatch.
+  workspace/agent status. It shares one API with the CLI and offers no editing or dispatch.
+- **H24:a - Owner API host**: the control plane serves one owner-authenticated API over TLS. The dashboard is a
+  page of the control plane's web interface and the CLI is a client of the same API. "Local" in H8 means
+  owner-scoped, not loopback-only.
 - **H9 - Agent session interoperation**: an agent runs inside the workspace container and exposes a small session
   interface: list, attach, status, send input, stop. `whr` uses only that interface and does not wrap, install,
   configure or authenticate the agent's native tool.
 - **H14:a - Documentation reconciliation first**: constitution, product and architecture documents are reconciled
   with this feature in the documentation lane (issue #66) before implementation starts.
-- **H15:b - Exit codes**: a fresh exit-code table is recorded in an ADR (issue #70). The legacy `whr` table and
-  the development-script tables of Features 003/004 are reference material only.
+- **H15:b - Exit codes**: a fresh exit-code table is recorded in an ADR (issue #70). This supersedes the earlier
+  H12:c wording. The legacy `whr` table and the development-script tables of Features 003/004 are reference
+  material only.
 - **H16:b - Session interface contract**: the in-container session interface is a separate, versioned contract
   under `contracts/` (issue #71). This specification references it and does not define its wire format.
 - **H17:a - Dashboard and ADR 0006**: the read-only dashboard supersedes the first increment proposed in ADR 0006;
   the documentation lane records this (issue #68).
 - **H18:a - Console**: `whr console` is a reattachable workspace session, not the legacy host-VM console.
+- **H10:a, H11:a - CLI implementation language**: `whr` is implemented in Go, which requires an amendment of
+  ADR 0001 (issue #67).
+- **H23:a - Code layout**: the host agent and `whr` are separate Go modules under `apps/` (`apps/host_agent`,
+  `apps/whr`) with a shared API client package.
 - **Deferred**: `run`, `pause`, `resume`, `usage` and `purge` are not part of this feature.
-- **#223 - Interactive streams**: OSC, DCS, APC, PM and SOS sequences are filtered by default in `shell`,
-  `console`, `ssh` and `agent attach`; unfiltered output requires an explicit per-session raw opt-in.
+- **wstein/workharbor#223 (closed) - Interactive streams**: OSC, DCS, APC, PM and SOS sequences are filtered by
+  default in `shell`, `console`, `agent attach` and sessions that `whr ssh` relays itself; unfiltered output
+  requires an explicit per-session raw opt-in.
 
 ### Prerequisites
 
@@ -54,6 +64,7 @@ Implementation MUST NOT start before all of the following exist:
 
 - Constitution, product and architecture reconciliation merged (documentation lane, issue #66), including the
   ADR 0006 supersession note (issue #68).
+- The ADR 0001 amendment for the Go CLI and the `apps/` module layout (issue #67, H10:a, H11:a, H23:a).
 - The exit-code ADR with the fresh numeric table (issue #70).
 - The versioned in-container session interface contract under `contracts/` (issue #71).
 - A reconciliation of Feature 001's terminal cleanup rule with the console persistence model of FR-007a, recorded
@@ -135,10 +146,13 @@ single use, session limits, resize bounds, disconnect cleanup and console reatta
    `whr console <ws>` with a new grant reattaches and shows the retained output tail.
 6. **Given** a console, **When** the workspace is stopped or rebuilt or `whr console <ws> --close` runs, **Then**
    the console session ends; a later `whr console <ws>` starts a new session and says so.
-7. **Given** a remote shell or console that exits with status 0–255, **When** `whr shell` or `whr console` ends,
+7. **Given** a workspace with and without a console session, **When** `whr console <ws> --status` runs, **Then** it
+   reports whether a session exists, its start time and current attachments, without creating or attaching to a
+   session; for a disconnected host it reports the state as unknown.
+8. **Given** a remote shell or console that exits with status 0–255, **When** `whr shell` or `whr console` ends,
    **Then** the CLI exits with that status; with `--json`, the exit event marks it as a remote status, distinct
    from any CLI failure.
-8. **Given** any access command, **When** it succeeds, **Then** it provides no raw host shell, Docker socket or host
+9. **Given** any access command, **When** it succeeds, **Then** it provides no raw host shell, Docker socket or host
    secret access.
 
 ---
@@ -165,7 +179,7 @@ changes, credentials on disk and the control-plane host list.
 4. **Given** a host with a missing prerequisite, **When** `whr doctor` runs, **Then** each check reports pass, fail,
    skipped or unknown with a remediation, and a missing tool is never reported as passing.
 5. **Given** an unattended invocation, **When** a step requires a human decision (trust, destructive removal,
-   offboarding), **Then** the CLI refuses rather than assuming consent.
+   offboarding), **Then** the CLI refuses rather than assuming consent and exits with the needs-human code.
 6. **Given** an enrolled host and confirmation, **When** `whr offboard host` runs and every step succeeds,
    **Then** it reports success only after the control plane confirms revocation and the service and local host
    credentials are removed; workspace data is deleted only with a separate flag and confirmation.
@@ -209,7 +223,7 @@ and stops it; the owner reviews Spec Kit progress and agent status in a read-onl
 (H8). Neither is needed to create or access a workspace.
 **Independent Test**: With a stub agent implementing the session interface contract in a test workspace, exercise
 every `whr agent` action for an owned and a foreign workspace; call every mutating API endpoint directly with the
-dashboard's credential; load a hostile web page in the same browser against the local API.
+dashboard's credential; load a hostile web page in the same browser against the owner API.
 
 **Acceptance Scenarios**:
 
@@ -219,14 +233,16 @@ dashboard's credential; load a hostile web page in the same browser against the 
    through the session interface contract under a workspace- and owner-bound grant.
 3. **Given** input for `whr agent send`, **When** it is supplied, **Then** it is read from an argument, a file or
    standard input with a bounded size, and is never interpreted by `whr`.
-4. **Given** a workspace without a compatible session interface, **When** any `whr agent` action runs, **Then** it
-   fails with the not-found code and a remediation; `whr` never starts or configures the agent's native tool.
+4. **Given** a workspace without a session interface, **When** any `whr agent` action runs, **Then** it fails with
+   the not-found code and a remediation; **Given** a session interface with an incompatible contract version,
+   **Then** it fails with the incompatible-version code and names both versions. In neither case does `whr` start
+   or configure the agent's native tool.
 5. **Given** the dashboard, **When** the owner views specs, plans, tasks, review evidence and status, **Then** each
    item shows its Git revision or observation time, and no control edits files, approves or dispatches work.
 6. **Given** the dashboard's read-scoped credential, **When** any mutating API endpoint is called directly, **Then**
    the API rejects it with an authorization error, changes no state and records the denial.
 7. **Given** a hostile website open in the owner's browser, **When** it attempts cross-origin reads, form posts,
-   DNS-rebinding requests or streaming connections to the local API, **Then** each is rejected and no state or
+   DNS-rebinding requests or streaming connections to the owner API, **Then** each is rejected and no state or
    data is exposed.
 
 ---
@@ -236,8 +252,8 @@ dashboard's credential; load a hostile web page in the same browser against the 
 The owner connects an SSH client or IDE to a workspace using short-lived credentials.
 
 **Why this priority**: External IDE access is sequenced after Feature 001 (product sequence 003/004).
-**Independent Test**: Connect with `whr ssh <ws>` and with a generated client configuration; verify host-key
-pinning, credential lifetime and refusal for foreign workspaces.
+**Independent Test**: Connect with `whr ssh <ws>` and with a configuration from `whr ssh <ws> --print-config`;
+verify host-key pinning, credential lifetime, exit status and refusal for foreign workspaces.
 
 **Acceptance Scenarios**:
 
@@ -246,6 +262,11 @@ pinning, credential lifetime and refusal for foreign workspaces.
    never trusted on first use.
 2. **Given** the owner's personal SSH configuration and agent, **When** `whr ssh` runs, **Then** neither is read or
    used; WorkHarbor keeps its own isolated client state.
+3. **Given** `whr ssh <ws> --print-config`, **When** an external client or IDE uses the generated configuration,
+   **Then** it pins the same server key and uses short-lived credentials; the output states that such
+   connections are not relayed or filtered by `whr`.
+4. **Given** a remote command or shell started by `whr ssh` that exits with status 0–255, **When** the connection
+   ends, **Then** `whr ssh` exits with that status; on transport loss it exits with the interrupted code.
 
 ---
 
@@ -312,6 +333,9 @@ pinning, credential lifetime and refusal for foreign workspaces.
   - `whr console <ws> --status` reports whether a session exists, its start time and current attachments.
 - **FR-008**: `whr ssh` MUST pin the workspace server key from the authenticated control plane, use short-lived
   client credentials refreshed before each connection, and ignore the user's personal SSH configuration and agent.
+- **FR-008a**: `whr ssh <ws> --print-config` MUST generate a client configuration for external SSH clients and IDEs
+  with the pinned server key and a short-lived credential reference, and MUST state that connections made with it
+  are neither relayed nor filtered by `whr` (FR-022a does not apply to them).
 - **FR-009**: `whr setup` MUST support dry-run, list every intended change, consume a one-time enrollment code and
   install the host agent service; it MUST be resumable after interruption.
 - **FR-010**: `whr doctor` MUST report each check as pass, fail, skipped or unknown with a remediation, support a
@@ -326,21 +350,25 @@ pinning, credential lifetime and refusal for foreign workspaces.
   as unconfirmed and exit non-zero. Workspace data is deleted only with a separate flag and confirmation.
 - **FR-012**: `whr service` MUST install, uninstall and report the host agent service state without exposing
   credentials in output.
-- **FR-013**: Unattended or answer-file modes MUST NOT approve trust, destructive deletion or offboarding.
+- **FR-013**: Unattended or answer-file modes MUST NOT approve trust, destructive deletion or offboarding; such
+  refusals MUST exit with the needs-human code.
 
-**Authentication and local API**
+**Authentication and owner API**
 
-- **FR-035**: `whr auth login` MUST select an endpoint, verify its server identity before sending any credential,
-  authenticate the owner without placing a credential in arguments, URLs or output, and store the result per
-  FR-021. `whr auth status` MUST show endpoint, server identity, owner identity, scope and expiry without secrets.
-  Expired or revoked credentials MUST yield the authentication code with a re-login hint; `whr auth logout` MUST
-  delete local credentials and request server-side invalidation.
-- **FR-036**: The local API shared by the CLI and the dashboard MUST listen only on loopback or a local socket by
-  default; any wider exposure MUST require explicit configuration, encrypted transport and owner authentication.
-- **FR-037**: The local API MUST reject requests whose Host is not an expected name (DNS-rebinding defense) and
-  whose Origin is not the dashboard's own origin, MUST NOT enable permissive cross-origin access, and MUST
-  require an anti-forgery token on every state-changing browser request, including streaming upgrades.
-- **FR-038**: Browser session credentials for the local API MUST be inaccessible to page scripts and not sent on
+- **FR-035**: `whr auth login` MUST select a control-plane endpoint, verify its server identity before sending any
+  credential, authenticate the owner without placing a credential in arguments, URLs or output, and store the
+  result per FR-021. `whr auth status` MUST show endpoint, server identity, owner identity, scope and expiry
+  without secrets. Expired or revoked credentials MUST yield the authentication code with a re-login hint;
+  `whr auth logout` MUST delete local credentials and request server-side invalidation.
+- **FR-036**: The control plane MUST serve one owner API over TLS for both the CLI and the dashboard (H24:a). Every
+  endpoint except login MUST require owner authentication and scope requests to the owner; "local" means
+  owner-scoped, not loopback-only. The listening address and network exposure are explicit operator
+  configuration, and the CLI MUST refuse plaintext endpoints.
+- **FR-037**: The owner API MUST reject requests whose Host is not a configured name (DNS-rebinding defense) and
+  browser requests whose Origin is not the control plane's own origin, MUST NOT enable permissive cross-origin
+  access, and MUST require an anti-forgery token on every state-changing browser request, including streaming
+  upgrades.
+- **FR-038**: Browser session credentials for the owner API MUST be inaccessible to page scripts and not sent on
   cross-site requests.
 
 **Output formats**
@@ -360,12 +388,14 @@ pinning, credential lifetime and refusal for foreign workspaces.
 
 - **FR-018**: `whr` MUST publish one exit-code table, freeze it with automated tests and document it with the
   release. Usage errors, not-found, authentication failure, authorization failure, conflict or wrong state,
-  timeout, interruption and partial failure MUST have distinct codes. The numbers MUST come from the fresh table
-  recorded in the exit-code ADR (H15:b, issue #70). The legacy `whr` table (0 OK, 1 error, 2 usage, 3 not found,
+  incompatible contract version, needs-human (a required human decision was refused in unattended mode or not
+  given), timeout, interruption and partial failure MUST have distinct codes. The numbers, and how remote
+  statuses 0–255 passed through by FR-019 relate to them, MUST come from the fresh table recorded in the
+  exit-code ADR (H15:b, issue #70). The legacy `whr` table (0 OK, 1 error, 2 usage, 3 not found,
   4 auth, 5 conflict, 6 needs-human, 7 timeout, 8 quit, 9 interrupted, 10 task failed) and the development-script
   tables of Features 003/004 are reference material only.
-- **FR-019**: `shell`, `console` and `agent attach` MUST exit with the remote status 0–255 when the remote side
-  exits, and with the interrupted code when the transport is lost. Because remote statuses can overlap CLI codes,
+- **FR-019**: `shell`, `console`, `ssh` and `agent attach` MUST exit with the remote status 0–255 when the remote
+  side exits, and with the interrupted code when the transport is lost. Because remote statuses can overlap CLI codes,
   CLI failures MUST also be announced on standard error with the `whr:` prefix, and the JSON exit event MUST
   distinguish a remote status from a CLI failure.
 
@@ -374,18 +404,20 @@ pinning, credential lifetime and refusal for foreign workspaces.
 - **FR-020**: Credentials and enrollment codes MUST be accepted only through a file readable solely by the owner,
   standard input, an inherited pipe or the interactive login flow; they MUST be refused in arguments, URLs and
   command history, and never written to output, logs, reports or Git.
-- **FR-021**: Locally stored CLI and host credentials MUST be kept outside workspaces with owner-only permissions;
-  `doctor` MUST flag wider permissions.
+- **FR-021**: Locally stored CLI and host credentials MUST be kept outside workspaces with owner-only permissions.
+  `whr auth status` MUST flag wider permissions on client credentials on every client platform; `whr doctor`
+  MUST flag them on host credentials on supported host platforms.
 
 **Terminal-text safety**
 
 - **FR-022**: Human output that includes untrusted text MUST replace C0 controls except tab, DEL, C1 controls,
   bidirectional controls and Unicode line/paragraph separators with a visible placeholder; JSON output MUST escape
   them.
-- **FR-022a**: Interactive streams (`shell`, `console`, `ssh`, `agent attach`) MUST filter OSC, DCS, APC, PM and
-  SOS sequences by default, including sequences split across frames or left unterminated. Unfiltered output
-  MUST require an explicit per-session raw opt-in that is shown when the session starts and never persisted
-  (owner decision on #223).
+- **FR-022a**: Interactive streams relayed by `whr` (`shell`, `console`, `agent attach`, and `ssh` sessions that
+  `whr ssh` relays itself) MUST filter OSC, DCS, APC, PM and SOS sequences by default, including sequences split
+  across frames or left unterminated. Unfiltered output MUST require an explicit per-session raw opt-in that is
+  shown when the session starts and never persisted (owner decision on wstein/workharbor#223, closed).
+  Connections made by external clients with FR-008a configuration are out of this requirement's reach.
 
 **Release, packaging and platforms**
 
@@ -407,14 +439,15 @@ pinning, credential lifetime and refusal for foreign workspaces.
   account.
 - **FR-029**: `whr agent` MUST support list, attach, status, send input and stop through the versioned session
   interface contract (H16:b, issue #71) only, under the owner, workspace and grant authorization of FR-002 and
-  FR-006, and MUST refuse incompatible contract versions with a remediation.
+  FR-006. A missing interface MUST yield the not-found code; an incompatible contract version MUST yield the
+  incompatible-version code with both versions and a remediation.
 - **FR-030**: `whr` MUST NOT install, configure, authenticate, launch or wrap an agent's native tool, and MUST NOT
   receive or relay provider credentials.
 - **FR-031**: `whr agent send` input MUST be size-bounded and passed as data; `whr` MUST NOT interpret it.
 - **FR-032**: A read-only web dashboard MUST show specs, plans, tasks, review evidence and workspace/agent status,
   each with its Git revision or observation time, and MUST offer no editing, approval or dispatch (H8). It
   supersedes the first increment proposed in ADR 0006 (H17:a).
-- **FR-033**: The CLI and the dashboard MUST share one local, owner-authenticated API. The dashboard MUST use a
+- **FR-033**: The CLI and the dashboard MUST share the owner API of FR-036. The dashboard MUST use a
   read-scoped credential, and the API MUST enforce that scope server-side on every endpoint, so that a direct
   call to any mutating endpoint with the dashboard credential is rejected, changes no state and is audited.
 - **FR-034**: `run`, `pause`, `resume`, `usage` and `purge` are deferred and MUST NOT be added by this feature.
@@ -431,7 +464,7 @@ pinning, credential lifetime and refusal for foreign workspaces.
 - **Host enrollment**: one-time code, resulting host identity, service state and revocation status.
 - **Offboarding record**: ordered offboarding steps with completed, failed and remaining status.
 - **Agent session**: an agent process inside one workspace, reached only through the session interface contract.
-- **API credential scope**: owner (full) or dashboard (read-only), enforced by the local API.
+- **API credential scope**: owner (full) or dashboard (read-only), enforced by the control plane's owner API.
 - **Dashboard view**: a read-only projection of Git-revisioned Spec Kit artifacts, review evidence and status.
 - **Doctor report**: ordered checks with status, evidence and remediation, redacted for sharing.
 - **Output envelope / stream event**: schema version, typed data or error, exit kind and code, operation reference.
@@ -444,7 +477,7 @@ pinning, credential lifetime and refusal for foreign workspaces.
 
 - **SC-001**: Starting from an empty client profile, the Feature 001 lifecycle (sign in, create, inspect, stop,
   start, rebuild, delete runtime) completes using only `whr` on the acceptance host, with operations and audit
-  records indistinguishable from browser-initiated ones.
+  records equivalent to browser-initiated ones except for the recorded client channel.
 - **SC-002**: Automated tests prove that cross-owner commands, reused or expired grants, unapproved revisions,
   secrets in arguments, expired credentials and unattended destructive actions are rejected with the published
   exit codes.
@@ -464,17 +497,22 @@ pinning, credential lifetime and refusal for foreign workspaces.
   mutating API endpoint called directly with the dashboard credential is rejected with no state change, in
   automated tests.
 - **SC-009**: A hostile web page test (cross-origin read, form post, DNS rebinding, streaming upgrade) against the
-  local API produces no data exposure and no state change.
+  owner API produces no data exposure and no state change.
 - **SC-010**: A console reattach test (attach, start a long-running command, disconnect, verify relay release within
   five seconds, reattach with a new grant) shows the command still running and its retained output; stop, rebuild
-  and `--close` each end the session.
+  and `--close` each end the session, and `--status` reports existence, start time and attachments correctly
+  before, during and after each step without creating a session.
+- **SC-012**: Automated tests map every exit path (missing and incompatible session interface, unattended refusals,
+  remote statuses 0, 1 and 255 for `shell`, `console`, `ssh` and `agent attach`) to the code the exit-code ADR
+  assigns.
 - **SC-011**: A lost-response test (drop the reply to a mutating request) yields exactly one operation, retrievable
   with `whr op show --key`.
 
 ## Assumptions
 
-- The CLI talks to the control plane for every workspace operation; it never contacts a host agent or provider
-  directly. Host commands (`setup`, `doctor`, `service`, `offboard`) run on the host itself with local privileges.
+- The CLI talks to the control plane's owner API over TLS for every workspace, access, agent and operation
+  command; it never contacts a host agent or provider directly. Host commands (`setup`, `doctor`, `service`,
+  `offboard`) run on the host itself with local privileges.
 - Linux Docker is the first supported host platform; Apple container and other providers follow the product
   sequence. The initial client platform matrix is settled in planning and published per FR-026.
 - The exact login flow is a planning decision within FR-020 and FR-035.
