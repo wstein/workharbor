@@ -3,12 +3,14 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 from test_single_task import SingleTaskFixture, canonical_bytes, context_digest, digest
 
@@ -19,6 +21,33 @@ import single_task_scope as scope
 
 
 class AcceptanceExecutionTests(unittest.TestCase):
+    def test_signal_permission_requires_observed_group_state(self):
+        owner = self.owner()
+        pid = 123456789
+        process = mock.Mock(pid=pid)
+        for stage in (0, signal.SIGTERM, signal.SIGKILL):
+            for states in ('', f'{pid} Z\n', f'{pid} R\n', 'unavailable', 'malformed'):
+                with self.subTest(stage=stage, states=states):
+                    def signal_group(group, signum):
+                        self.assertEqual(pid, group)
+                        if signum == stage:
+                            raise PermissionError
+                    snapshot = (subprocess.CalledProcessError(1, ['ps']) if states == 'unavailable'
+                                else subprocess.CompletedProcess([], 0, states))
+                    kwargs = ({'side_effect': snapshot} if isinstance(snapshot, Exception)
+                              else {'return_value': snapshot})
+                    with mock.patch.object(owner.os, 'killpg', side_effect=signal_group), \
+                            mock.patch.object(owner.subprocess, 'run', **kwargs) as observe:
+                        if states in ('unavailable', 'malformed') or (stage and states.endswith('R\n')):
+                            with self.assertRaises(owner.AcceptanceFailure) as caught:
+                                owner._group_exists(pid) if stage == 0 else owner._stop_group(process)
+                            self.assertEqual('process_cleanup', caught.exception.category)
+                        elif stage == 0:
+                            self.assertEqual(bool(states), owner._group_exists(pid))
+                        else:
+                            self.assertIsNone(owner._stop_group(process))
+                        self.assertEqual(1, observe.call_args.kwargs['timeout'])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

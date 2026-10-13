@@ -21,28 +21,46 @@ class AcceptanceFailure(Exception):
         super().__init__('Local acceptance did not pass')
 
 
+def _observed_group_states(pid):
+    """Resolve signal permission races without treating EPERM as disappearance."""
+    try:
+        snapshot = subprocess.run(['ps', '-axo', 'pgid=,stat='], capture_output=True,
+                                  text=True, check=True, timeout=1)
+        return [state for group, state in
+                (line.split() for line in snapshot.stdout.splitlines()) if int(group) == pid]
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise AcceptanceFailure('process_cleanup') from None
+
+
 def _group_exists(pid):
     try:
         os.killpg(pid, 0)
         return True
     except ProcessLookupError:
         return False
+    except PermissionError:
+        # Retain background-process rejection even for a zombie-only group.
+        return bool(_observed_group_states(pid))
+
+
+def _signal_group(pid, signum):
+    try:
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if any(not state.startswith('Z') for state in _observed_group_states(pid)):
+            raise AcceptanceFailure('process_cleanup') from None
 
 
 def _stop_group(process):
     if _group_exists(process.pid):
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        _signal_group(process.pid, signal.SIGTERM)
         try:
             process.wait(timeout=.2)
         except subprocess.TimeoutExpired:
             pass
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        _signal_group(process.pid, signal.SIGKILL)
     try:
         process.wait(timeout=1)
     except subprocess.TimeoutExpired:
