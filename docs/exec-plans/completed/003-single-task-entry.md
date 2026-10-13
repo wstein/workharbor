@@ -1,8 +1,8 @@
 # Feature 003 local single-task evidence
 
-Status: T024–T027 are locally accepted with independent review and the corrected
-Linux canonical results below. T028 remains pending because current macOS canonical
-acceptance is unmet; the full feature is not verified and PR #55 remains draft.
+Status: T024–T028 are locally accepted with independent review and actual native
+Linux/macOS canonical results below. Feature 003 is verified for the supported
+local POSIX matrix; live dispatch and product runtimes remain unverified.
 Scope is [Feature 003](../../../specs/003-single-task-entry/spec.md) local tooling.
 The [task list](../../../specs/003-single-task-entry/tasks.md),
 [acceptance matrix](../../../specs/003-single-task-entry/quickstart.md) and
@@ -164,7 +164,7 @@ and independent exact review; a full canonical suite is not rerun for that delta
 | FR-001–004; selected entry, artifact approval and prerequisites | Context suites validate explicit dependency tables, local commit/content evidence, semantic drift, dirty entry and unsafe identities. The corrected Linux full suite passes these cases. |
 | FR-005–006; paths, task markers, reviews and acceptance | Scope/acceptance suites inspect staged, physical, untracked and historical changes; reject stale review, missing tools, failed/timed-out/mutating checks. T025 retains all 16 original guard scenarios from `95b5bed59c918bc100880771ac6be4d127b8edb7` with context/attempt/review equivalents. |
 | FR-007–009; handoff, rework, interruption and concurrency | T024 adds synchronized command conflicts, one completion owner, killed-owner lock release, SQLite/flush fault recovery and retained history. Recovery/rework/binding suites retain the same attempt or explicitly linked correction and exact prior identity. |
-| FR-010–012; offline fixtures, protected features, safe reporting | Synthetic fixture isolation and versioned responses distinguish supplied approvals from authentication and live dispatch. T025 audits command availability and legacy bypass rejection. Corrected Linux full-suite/offline/protected-tree evidence passes; current macOS canonical acceptance remains blocked. |
+| FR-010–012; offline fixtures, protected features, safe reporting | Synthetic fixture isolation and versioned responses distinguish supplied approvals from authentication and live dispatch. T025 audits command availability and legacy bypass rejection. The corrected T028 Linux/macOS canonical gates below pass the full collection, including offline and protected-tree controls. |
 
 The original regression migration audit preserves path/checkbox/failure/retry
 invariants; it neither defers migration nor treats unavailable commands as passing.
@@ -217,7 +217,7 @@ actual legacy evidence and blocks implicit adoption. The migration audit also
 exercises every contract command's safe versioned response and rejects missing
 commands/tools rather than accepting empty discovery or unavailable behavior.
 
-## Historical macOS failure and outstanding acceptance
+## Historical macOS failure
 
 The earlier canonical run at
 `abebbd637e470e7eb94febb26a14c3964f2163cb` is a **failed historical run**:
@@ -229,19 +229,185 @@ cases with 44 missing-file errors and two assertions. That cascade is retained a
 failure evidence, not accepted behavior. See the
 [historical combined-check record](../../development/bootstrap-t018-proposal.md#final-local-combined-check-incomplete-at-aggregate-deadline).
 
-The **current** macOS canonical `make check` has not run and remains an unmet
-acceptance gate. The historical native story measurements of 391 cases/405.181s
-and 400 cases/426.535s exceed the canonical raw phase's 300-second
-limit; this explains a runtime concern but is neither a current canonical outcome
-nor permission to waive the gate. Windows and network-filesystem lock behavior
-remain outside the initial supported local POSIX matrix.
+The earlier T027 record left macOS canonical acceptance unmet. Its native story
+measurements of 391 cases/405.181s and 400 cases/426.535s explained a runtime
+concern without qualifying the canonical gate. The separately scoped T028
+diagnosis and actual corrected-platform gates below resolve that criterion;
+they do not convert this historical failure into a pass. Windows and
+network-filesystem lock behavior remain outside the supported local POSIX matrix.
 
-T027 corrected-source local/offline/protected-tree and Linux qualification is
-accepted. T028 remains unchecked: current macOS canonical acceptance is unmet.
-Resolving that platform criterion requires a separately scoped, reviewed diagnosis
-and validation path; this record changes no timeout, harness or acceptance rule.
-The separately authorized draft [PR #55](https://github.com/wstein/workharbor-nxt/pull/55)
-is a publication action, not a result established by the local CLI. CLI success
+T027 corrected-source local/offline/protected-tree and Linux qualification was
+accepted before the T028 unblock. Historical
+[PR #55](https://github.com/wstein/workharbor-nxt/pull/55) was a separately authorized
+publication action, not a result established by the local CLI. CLI success
 proves no authenticated owner identity, PR publication, label change, tracker
 mutation, successful live Symphony dispatch, provider runtime, deployment or
 unattended operation.
+
+## T028 macOS diagnosis and canonical acceptance
+
+The separately authorized unblock starts from accepted main
+`fe5dcda4d25107808f1aa2e02d35f74741f52ad2`. The dedicated `--no-local`
+author clone uses the actual GitHub origin and branch `fix/macos-canonical-checks`;
+the existing workspace and live work were preserved. Diagnostic execution used
+a separate frozen clone and pristine disposable worktrees of that accepted SHA.
+
+The same native macOS 27.0.1 arm64 setup and pinned PATH above were used. Both
+the outer `/opt/homebrew/bin/python3.14` and nested PATH-resolved `python3`
+reported Python 3.14.8 and resolved to
+`/opt/homebrew/opt/python@3.14/bin/python3.14`.
+
+The raw and qualified phases were measured **sequentially**, each with a finite
+900-second diagnostic deadline and process-group cleanup before removing its
+scratch checkout. The accepted checker's own phase deadlines were not modified
+for those measurements. Actual harness invocations were:
+
+```sh
+env PATH=/opt/homebrew/opt/python@3.14/libexec/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  /opt/homebrew/bin/python3.14 -I -B /private/tmp/workharbor-macos-diagnostic.py raw
+env PATH=/opt/homebrew/opt/python@3.14/libexec/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  /opt/homebrew/bin/python3.14 -I -B /private/tmp/workharbor-macos-diagnostic.py qualified
+```
+
+The raw child ran `make check-raw` with the host interpreter's `-I -B` flags and
+an external `pycache_prefix`. The qualified child used that same interpreter and
+flags to invoke the accepted checker's `acceptance_suite` in a fresh process.
+Exact child argv, disposable cwd, revisions, versions, elapsed times and exits
+are retained in the corresponding JSON records alongside the unedited logs at
+`/private/tmp/workharbor-macos-diagnostic-evidence/`.
+
+| Frozen accepted-main diagnostic | Actual result |
+| --- | --- |
+| Raw `make check-raw` | 410 tests, 489.194s; outer elapsed 490.104s; exit 0 |
+| Manifest-qualified collection | 808 tests, 836.836s; outer elapsed 837.411s; exit 0; zero failures/errors |
+
+These are **diagnostic observations, not canonical acceptance**. They establish
+that the old raw 300-second and qualified 600-second aggregate limits are both
+below actual native completion time. The focused implementation commits are:
+
+- `845264f05ed1dfacbf09232187592f2a4cf5ef8f`: own the ordinary POSIX check process
+  group, kill it on timeout/interruption/parent exit, reap the leader, observe
+  absence or zombie-only state with bounded native `ps`, and drain inherited
+  output before checkout removal. Unavailable cleanup evidence retains the
+  disposable checkout and fails closed. This is process cleanup, not a sandbox
+  for deliberately detached owner-approved commands.
+- `3e625c7b3a2d0e76aca517814169fac4e42a46c0`: set separate finite raw/qualified
+  aggregate budgets to 600/1200 seconds, approximately 22%/43% above the measured
+  elapsed times. The 300-second utility-command default, approved per-task and
+  package deadlines, required IDs, retained-failure policy and existing assertions
+  are preserved.
+
+Independent lifecycle review passed the complete owning suite: 48 tests in
+33.078s, exit 0. The new real-grandchild regression exercises timeout and successful
+parent exit, asserting that the group has no live member before removing its
+actual disposable cwd. Against the frozen original checker, both scenarios fail
+at the inherited-pipe deadline (16.017s total); failing probes are cleaned up.
+The final budget/timeout checks passed two tests in 0.932s, exit 0. Independent
+review cleared exact code head `3e625c7b3a2d0e76aca517814169fac4e42a46c0`.
+
+Initial required-file preflight at that head passed all ten quickstart files and
+validated 810 unique collected cases against all 485 required manifest IDs, with
+no retained failures. The full collection includes all 401 Feature 003 story
+cases and the offline, protected-tree, recovery and three-mode matrix above;
+the canonical run executes those cases, so no additional duplicate story run is
+claimed. Protected Feature 001/002 trees match the immutable `95b5bed5` baseline,
+accepted `fe5dcda4` and this implementation head.
+
+The first native canonical run on `3e625c7b3a2d0e76aca517814169fac4e42a46c0`
+**failed**: raw 410 tests/425.529s, exit 0; qualified 810 tests/781.427s,
+zero assertion failures but one error, manifest-qualified RED. Make exited 2,
+the wrapper exited 1 after 1209.826s, and source identity remained unchanged.
+`test_successful_parent_cannot_leave_background_descendant` raised `EPERM`
+at the existing acceptance runner's final group `SIGKILL`; the raw OS error
+became `PersistenceFailure`. The failed group's state was not captured, so no
+retrospective zombie or sandbox-permission conclusion is claimed. Three bounded
+native repeats and 20 direct owned-background cleanup probes did not reproduce
+the error. The failed logs/JSON remain intact at
+`/private/tmp/workharbor-macos-canonical-failed-3e-evidence/` (log SHA-256
+`affc8dfcfb2e486414627d6fa70a06738d07391c0ab2935e4bd357ec360226b5`, JSON
+`c25e86d2ccba44d8880bbdbe2f3a1d85e8de6184168f0c17b0c2dc09d77ac558`).
+
+The separately authorized focused correction
+`31ce19813a980877402a43d48e5ed5a57366d08a` observes native group state only when
+signal 0, TERM or KILL returns `EPERM`. A zombie-only group still counts as
+background for acceptance rejection; TERM/KILL permission failures are cleared
+only for confirmed absent/zombie-only groups. Live, unavailable or malformed
+observations raise safe `AcceptanceFailure('process_cleanup')`. All per-check,
+TERM-grace and leader-reap deadlines and previous assertions are unchanged.
+Its complete owning suite passed 12 tests/11.822s, including real background and
+timeout controls plus deterministic absent/zombie/live/unobservable/malformed
+cases for each signal stage. This correction requires a fresh full native run
+and matching Linux gates; the earlier `3e625c7` result is not a passing native run.
+Independent exact review cleared `31ce198`: the deterministic control and both
+real background/timeout controls passed three tests/5.772s. Against frozen
+`3e625c7`, the new deterministic test fails all 15 EPERM subcases in 0.200s.
+Corrected-head preflight passed 811 unique cases/485 required IDs, including all
+402 Feature 003 story cases and the same ten required files/protected trees.
+
+The corrected native canonical command was run from the pristine dedicated
+checkout at exact `31ce19813a980877402a43d48e5ed5a57366d08a`:
+
+```sh
+env PATH=/opt/homebrew/opt/python@3.14/libexec/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  make check PYTHON=/opt/homebrew/bin/python3.14
+```
+
+The native wrapper `/private/tmp/workharbor-macos-corrected-run.py` recorded
+that command with a finite 2700-second outer deadline, source/version evidence,
+unedited output and process-group drain. Its actual result is **PASS**:
+
+| Corrected native macOS gate | Actual result |
+| --- | --- |
+| Raw `make check-raw` | 411 tests, 425.257s, exit 0 |
+| Manifest-qualified collection | 811 tests, 783.530s, exit 0; zero failures/errors; GREEN |
+| Canonical command and wrapper | Both exit 0; no timeout; 1211.603s total; source unchanged; groups drained |
+
+Both outer and nested interpreters remained Python 3.14.8 on macOS 27.0.1 arm64.
+The unedited raw output retains pre-existing SQLite resource warnings; this is
+zero test failures/errors, not a warning-free claim. The corrected evidence is
+retained at `/private/tmp/workharbor-macos-corrected-evidence/`: canonical log
+SHA-256 `3f5204aa3f7de5f3b17445192825f55f8504fc77696a5426887e67372cbec653`,
+JSON `98db27a0d76f88922a6f508809b1ca2007ee078824dc4483da6afae5f7ea933d`.
+
+The earlier `3e625c7` Linux CI ran `python3 -I -B scripts/check_ci.py`, the same checker that
+`make check` delegates to, on Ubuntu 24.04.5 LTS. Both jobs invoked
+`/usr/bin/python3`; its version was not logged. Both reported successful canonical
+acceptance with zero raw failures/errors and no retained-failure exception:
+
+| Linux code-head gate | Raw `make check-raw` | Qualified acceptance |
+| --- | --- | --- |
+| [Push 38347200559](https://github.com/wstein/workharbor-nxt/actions/runs/38347200559) | 410 tests, 168.748s, exit 0 | 810 tests, 248.443s, exit 0 |
+| [PR 38347235698](https://github.com/wstein/workharbor-nxt/actions/runs/38347235698) | 410 tests, 104.354s, exit 0 | 810 tests, 168.368s, exit 0 |
+
+The push checkout is exact code head
+`3e625c7b3a2d0e76aca517814169fac4e42a46c0`. The PR checkout is actual synthetic
+merge `10079b012ac49a4b680f76036408a7d8290ce771`, with ordered baseline
+`fe5dcda4d25107808f1aa2e02d35f74741f52ad2` and that same head. These historical
+results do not stand in for corrected `31ce198` acceptance or CI on the later
+evidence/marker bookkeeping head.
+
+Corrected `31ce198` Linux gates also passed on native Ubuntu 24.04.5 LTS using
+`python3 -I -B scripts/check_ci.py`; the `/usr/bin/python3` version was not logged.
+Both qualified runs reported zero raw failures/errors, manifest-qualified GREEN:
+
+| Corrected Linux gate | Raw `make check-raw` | Qualified acceptance |
+| --- | --- | --- |
+| [Push 38349598810](https://github.com/wstein/workharbor-nxt/actions/runs/38349598810) | 411 tests, 124.008s, exit 0 | 811 tests, 189.233s, exit 0 |
+| [PR 38349602352](https://github.com/wstein/workharbor-nxt/actions/runs/38349602352) | 411 tests, 137.541s, exit 0 | 811 tests, 219.447s, exit 0 |
+
+The push checkout is exact `31ce19813a980877402a43d48e5ed5a57366d08a`.
+The PR checkout is synthetic merge `ae5be657e5511bae77227a2083584ea2a371e26e`
+with ordered baseline `fe5dcda4d25107808f1aa2e02d35f74741f52ad2` and that head.
+Later evidence/marker bookkeeping still requires its own exact review and fresh CI.
+
+Retained diagnostic SHA-256 identities:
+
+- raw log: `c56aee117feea5b84be7a0c9832238c98c3920b8537c596cf7a96f6dd4f87b7e`;
+  raw JSON: `863829c49f288e721c738e6f651c32bd788b84d6c3237726302204d89a33d5e8`.
+- qualified log: `c58013e71ffcae5c36ba8a63e845847934e7c4afecf0d3cacdf5104cb0885e86`;
+  qualified JSON: `ea70e75331c504c774a5d0eb45f3965430343ec78b45b87441f8b77674547ac6`.
+
+This record names implementation revisions that already existed before its
+bookkeeping commit; it does not embed that bookkeeping commit's own hash.
+Local POSIX acceptance still proves no owner authentication, successful live
+Symphony dispatch, provider runtime, deployment or unattended operation.

@@ -1,7 +1,7 @@
 # Feature 003 local validation guide
 
-Status: the context/attempt/review/journal CLI and T024–T027 local/Linux checks
-are accepted; current macOS canonical acceptance remains unmet and T028 is pending.
+Status: the context/attempt/review/journal CLI and T024–T028 local Linux/macOS
+canonical checks are accepted for the supported local POSIX matrix.
 See the [evidence record](../../docs/exec-plans/completed/003-single-task-entry.md)
 and [operator guide](../../docs/development/single-task.md).
 No live tracker, Symphony service, credentials or product host is required; live
