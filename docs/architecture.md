@@ -51,6 +51,13 @@ project. Full future devenv integration would build project-specific OCI images
 from those inputs and use the existing container boundary. This is not implemented
 and does not add Nix or devenv to the current runtime requirements.
 
+## In-container AI agents (wave one)
+Agents run inside the workspace container. A small in-container session interface
+(list, attach, status, send input, stop) gives owner-authorized interop through
+existing workspace access ([ADR 0009](adr/0009-in-container-ai-agents.md)). The
+control plane does not schedule agents; orchestration is wave two. Wire format and
+authorization binding are undesigned.
+
 ## Isolation
 Host agent can control Docker and is privileged infrastructure. A compromised
 workspace must not obtain agent credentials, control sockets or other owners' data.
