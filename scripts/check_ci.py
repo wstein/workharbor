@@ -14,8 +14,11 @@ import os
 import re
 import runpy
 import shlex
+import signal
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -136,15 +139,27 @@ def isolated_python_cache():
 
 @contextmanager
 def baseline_execution(root):
-    with tempfile.TemporaryDirectory(prefix='workharbor-baseline-') as directory:
+    # Keep the worktree if process cleanup cannot be established. Removing its
+    # files would race a surviving check and manufacture missing-file failures.
+    directory = tempfile.mkdtemp(prefix='workharbor-baseline-')
+    retain = False
+    try:
         execution = Path(directory)/'checkout'
         revision = git(root, 'rev-parse', 'HEAD').decode().strip()
         git(root, 'worktree', 'add', '--quiet', '--detach', str(execution), revision)
         try:
             clean_checkout(execution, revision)
             yield execution
+        except ProcessCleanupError:
+            retain = True
+            print(f'CI blocked: retained check checkout at {execution}', file=sys.stderr)
+            raise
         finally:
-            git(root, 'worktree', 'remove', '--force', str(execution))
+            if not retain:
+                git(root, 'worktree', 'remove', '--force', str(execution))
+    finally:
+        if not retain:
+            os.rmdir(directory)
 
 
 def git(root, *args):
@@ -313,9 +328,77 @@ def source_identity(root, source):
             raise ValueError('Source pin must match loaded and checked runner code; it is not approval')
 
 
+class ProcessCleanupError(ValueError):
+    """The disposable checkout must survive uncertain process cleanup."""
+
+
+def drain_group(process):
+    """Stop ordinary descendants and establish that no live group member remains."""
+    try:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        process.wait(timeout=10)
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                # macOS may reparent a zombie group to a different owner. The
+                # native snapshot must still establish absence or zombie state.
+                pass
+            # Orphan zombies can remain visible on Linux. They cannot execute or
+            # hold files; do not mistake them for work still using the checkout.
+            snapshot = subprocess.run(['ps', '-axo', 'pgid=,stat='],
+                                      capture_output=True, text=True, check=True,
+                                      timeout=max(.01, deadline - time.monotonic()))
+            states = [state for group, state in
+                      (line.split() for line in snapshot.stdout.splitlines())
+                      if int(group) == process.pid]
+            if not states or all(state.startswith('Z') for state in states):
+                return
+            if time.monotonic() >= deadline:
+                raise ProcessCleanupError('Check process group did not stop')
+            time.sleep(.01)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        raise ProcessCleanupError('Unable to establish check process group cleanup') from error
+
+
 def run(argv, root, *, timeout=300):
     print('+ ' + shlex.join(argv), flush=True)
-    return subprocess.run(argv, cwd=root, timeout=timeout).returncode
+    # Make and test runners spawn children. Own their ordinary process group so
+    # no check can keep using the disposable checkout after this call finishes.
+    process = subprocess.Popen(argv, cwd=root, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output_errors = []
+
+    def forward_output():
+        try:
+            for line in process.stdout:
+                sys.stdout.buffer.write(line)
+                sys.stdout.buffer.flush()
+        except OSError as error:
+            output_errors.append(error)
+
+    reader = threading.Thread(target=forward_output, daemon=True)
+    reader.start()
+    try:
+        return process.wait(timeout=timeout)
+    finally:
+        # Also stop background children when their immediate parent has exited,
+        # and on interruption. SIGKILL cannot be ignored by a nested test.
+        drain_group(process)
+        # Drain inherited output before baseline_execution removes its checkout.
+        # A zombie owns no pipe; polling group existence would mistake it for work.
+        reader.join(timeout=10)
+        if reader.is_alive():
+            raise ProcessCleanupError('Check process output did not close after group termination')
+        process.stdout.close()
+        if output_errors:
+            raise output_errors[0]
 
 
 def check(root, context=None, source=None):
