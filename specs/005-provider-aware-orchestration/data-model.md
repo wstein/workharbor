@@ -51,10 +51,20 @@ expiry/revocation does not destroy history. Policy/evidence/profile changes requ
 
 ## Assessment
 
-Fields: profile_digest, action, permission, capability, authorization, checked_at, evidence_digests, eligible,
-blockers, next_action, provenance. eligible is true only when permitted + verified + active applies to the exact
-action and all applicable task/source/ownership prerequisites also pass. Pure profile preview may report its three
-axes without asserting task eligibility. Invalid inputs return sanitized blocker codes; do not echo raw content.
+Fields: profile_digest, action, permission, capability, authorization, checked_at, evidence_digests, profile_eligible,
+task_eligible, blockers, next_action, provenance. Both eligibility fields are required booleans; no eligible alias,
+null or omitted eligibility field is valid.
+
+For an execution action, profile_eligible is true only when permitted + verified + active applies to that exact
+profile/action/evidence binding. It says nothing about task approval. task_eligible is true only when profile_eligible
+is true and all applicable task/source/scope/prerequisite/mode/review/ownership/capability gates have freshly passed
+for the identified task and action. Therefore task_eligible=true with profile_eligible=false is invalid.
+
+Pure assess output always has task_eligible=false because it has not validated a task. An authenticated host assessment
+may report profile_eligible=true while a task is absent or blocked; the default CLI's unavailable authorities yield
+both false. Authorized observations and separately authorized safe-stop are not execution eligibility: report both
+false even when the requested observation succeeds. Their separate authority rules remain defined by the host contract.
+Invalid inputs return sanitized blocker codes; do not echo raw content.
 
 ## TaskClaim and Transition
 

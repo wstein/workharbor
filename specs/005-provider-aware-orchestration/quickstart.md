@@ -39,7 +39,7 @@ before execution; no test-authoring expected-red exception is granted here.
 
 | Acceptance group | Required observation |
 | --- | --- |
-| SC-001 matrix | Three candidate families represented; permission/capability/grant independently visible; all invalid combinations block with no remote calls. |
+| SC-001 matrix | Required profile_eligible/task_eligible booleans; pure preview task_eligible=false; no eligible alias; three candidate families represented; permission/capability/grant independently visible; all invalid combinations block with no remote calls. |
 | SC-002 parity | Normal, interrupted-handoff and authorized-rework scenarios through both routes; matching task guard decisions; retained single implementation/publication identity. |
 | SC-003 inherited guards | Applicable source/index/history/mode/scope/prerequisite/review/acceptance negative cases remain rejected through both bridges. |
 | SC-004 authority/recovery | Expiry, revocation, clock rollback, changed evidence, competing claim, stale generation and uncertain transfer block and retain state. |

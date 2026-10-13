@@ -17,7 +17,9 @@ Future entry: `python3 scripts/profile_execution.py COMMAND`. No shell interpret
 OP is begin, inspect, verify, complete, record-commit, resume or rework; inputs retain the existing Feature 003 CLI
 contract. Status/inspection of revoked work require authorized inspection, not an active execution grant. The default
 reference CLI has no real-provider transport or live host ports; protected requests fail closed when those are absent.
-An assess exit 0 means assessment completed, not eligibility: report eligible=false for unavailable authorities.
+An assess exit 0 means assessment completed, not task eligibility. Always report task_eligible=false for assess;
+report profile_eligible=false when authorities are unavailable. Use exactly the two required boolean fields defined
+in data-model.md; reject the legacy eligible alias. Successful authorized observation does not set either flag true.
 Fixture exercise must refuse a real repository/state root or any injected live port; synthetic grants cannot escape
 into ordinary guard requests. Fixtures use isolated HOME/environment and may execute only their reviewed checks.
 
@@ -29,7 +31,9 @@ success never sets live_verified=true. External handoff incomplete remains expli
 Exit 0: requested step succeeded; 2: invalid input/interface; 3: permission/capability/authorization/task blocker;
 4: acceptance failure; 5: ownership/generation conflict; 6: persistence or external uncertainty.
 Preserve the original guard exit in raw_exit and map it explicitly; never turn an existing failure into success.
-Pure assessment blockers can coexist with exit 0; protected actions cannot.
+Pure assessment blockers can coexist with exit 0. Successful authorized observations may also return both flags
+false; a normal execution action requires both true and cannot return success with an execution blocker. Safe-stop
+uses only its separately attributable safety authority; neither false execution flag constitutes its permission.
 
 ## Trusted host ports
 
