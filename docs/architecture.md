@@ -62,7 +62,11 @@ Runtime backups and Git configuration backups are separate recovery concerns.
 [ADR 0006](adr/0006-optional-ai-execution.md) describes a future option outside this
 target baseline. An internal LiveView board would connect execution evidence to
 WorkHarbor's authorized workspaces and resources; Symphony alone would schedule
-agents. The first proposed topology keeps separate OS processes/BEAM instances,
+agents. The first proposed increment is a read-only, revision-bound Spec Kit view:
+Git owns spec/plan/tasks; the view links distinct approvals, attempts, workspaces,
+acceptance, review, merge and live evidence. Cards explain blockers and the next
+permitted action. Guarded controls follow only after that view is proven; card
+movement grants no approval or dispatch authority. The first proposed topology keeps separate OS processes/BEAM instances,
 versioned integration boundaries, updates and restarts. Same-BEAM hosting needs
 later proof of instanceable names, configuration and compatible dependencies.
 Neither topology is implemented or approved for product work. The
