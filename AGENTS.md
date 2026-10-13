@@ -21,6 +21,11 @@ Resume existing work on retries; use a per-issue branch. Submit review evidence.
 After independent review, always create a PR; the owner authorizes PR publication
 by default. Target `main` explicitly and follow [linear history](WORKFLOW.md#pr-target);
 follow the [PR readiness gate](WORKFLOW.md#pr-readiness) before marking ready for review.
+Evaluate each PR's scope independently: unfinished follow-up work does not block
+readiness when the PR's own scope is accepted, independent review is CLEAR for its
+exact current head, and all required checks are green. Unmet acceptance criteria
+within that scope remain blockers. Task/feature completion, merge and live-operation
+gates remain separate.
 Merge, other publication, runtime/dispatch activation and deployment require separate
 owner authorization. Respect native permissions and automatic approval review. Keep AI tooling outside
 product dependencies. Update the authoritative spec/ADR when decisions change.
