@@ -3,7 +3,8 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md),
 [data-model.md](data-model.md), [CLI/host contract](contracts/cli-and-host.md) and [quickstart.md](quickstart.md).
 **Accepted design baseline**: `362fd864e126b33fd793b3013d566f27c3cce176` (owner-merged PR #60).
-**Status**: Generated tasks only; all work below is pending. Owner requested generation, not implementation or dispatch.
+**Status**: Generated task baseline; revision-bound progress below records separately approved increments.
+Task generation itself grants neither implementation nor dispatch authority.
 
 **Tests**: Required by SC-001–SC-006. Each code task writes its named regression cases first and implements the bounded
 behavior in the same task. Initial RED is development evidence only: final task acceptance requires every named case
@@ -52,8 +53,8 @@ New paths in task descriptions are future deliverables, not currently runnable s
 **Goal**: Provide strict shared identity primitives and isolated synthetic fixtures.
 **Independent test/checkpoint**: T002/T003 classes pass; fixture authorities cannot escape into live workflows. Both tasks block story work.
 
-- [ ] T002 [P] Implement shared parsing and digest primitives: "UTF-8, unique keys, no unknown fields, no floats/non-finite values", "UTC integer timestamps", "1 MiB", "100 profiles", "100 evidence references per record" and canonical SHA-256 JSON. Reject unsafe artifact paths; IDs use bounded ASCII identifiers (1–128 characters, ASCII letters/digits plus . _ : -; no slash for individual IDs). Define the contract's closed action tokens, classes and shared operation/boundary/capability mapping; reject unknown tokens and aliases. Add trusted adjacent-module test bootstrapping without importing repository-selected plugins. Deliver in `scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`.
-- [ ] T003 [P] Create reusable disposable Git repositories, synthetic profile/owner/time/claim/runtime ports and fault hooks. Separate synthetic repository/state roots from the real checkout, isolate HOME/environment, refuse live ports and fail on attempted provider/network access. Tests must demonstrate fixture confinement rather than merely assert a fixture flag. Deliver in `scripts/test_profile_fixtures.py`.
+- [x] T002 [P] Implement shared parsing and digest primitives: "UTF-8, unique keys, no unknown fields, no floats/non-finite values", "UTC integer timestamps", "1 MiB", "100 profiles", "100 evidence references per record" and canonical SHA-256 JSON. Reject unsafe artifact paths; IDs use bounded ASCII identifiers (1–128 characters, ASCII letters/digits plus . _ : -; no slash for individual IDs). Define the contract's closed action tokens, classes and shared operation/boundary/capability mapping; reject unknown tokens and aliases. Add trusted adjacent-module test bootstrapping without importing repository-selected plugins. Deliver in `scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`.
+- [x] T003 [P] Create reusable disposable Git repositories, synthetic profile/owner/time/claim/runtime ports and fault hooks. Separate synthetic repository/state roots from the real checkout, isolate HOME/environment, refuse live ports and fail on attempted provider/network access. Tests must demonstrate fixture confinement rather than merely assert a fixture flag. Deliver in `scripts/test_profile_fixtures.py`.
 
 ## Phase 3: User Story 1 — Assess exact profile compatibility (P1, MVP)
 
@@ -232,3 +233,31 @@ raw exits and provenance. Do not weaken existing negative tests or redefine expe
 Task completion needs bounded acceptance and independent review of its actual revision. Feature completion needs
 T029's full evidence and owner acceptance. Issue export, queuing, profile grants, provider installation, merge and
 live activation remain separately authorized actions; no unchecked task is automatically dispatchable.
+
+## Approved foundation execution evidence — 2026-10-13
+
+Owner approved only T002 and T003 bounded implementation scopes and parallel workers after merging T001's
+acceptance preparation in PR #63. Execution baseline: `a8de03954756d49292e2398e5b5372c9617b286d`; accepted
+T001 inventory/source identities remain unchanged. Prerequisite acceptance uses reviewed/merged evidence, not
+a checkbox. This increment does not alter T001's existing marker or approve later tasks, provider activation,
+product dashboard work or live dispatch.
+
+Implementation revision: `96873a798626c405371d249524738d35db8774d2`. Exactly three new files: T002 owns
+`scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`; T003 owns `scripts/test_profile_fixtures.py`.
+Existing executable modules, acceptance policy and Features 001–004 are unchanged.
+
+- T002: `/opt/homebrew/bin/python3.14 -I -B scripts/test_provider_profiles.py T002Tests -v`: four required methods
+  PASS within the approved 180-second envelope. Covers seven frozen canonical vectors, strict JSON/types, inclusive
+  input limits, confined artifact paths and all 15 action recipes; no policy/authority decision is implemented.
+- T003: `/opt/homebrew/bin/python3.14 -I -B scripts/test_profile_fixtures.py T003Tests -v`: three required methods
+  PASS within the approved 180-second envelope. Demonstrates private synthetic roots, target-bound authority, refused
+  live ports/network/credential/fallback access and Git-metadata escape rejection with an external disposable index
+  unchanged. These controlled fixture probes are not an OS sandbox or live-provider verification.
+- Independent exact-implementation review: CLEAR. Reviewer reran all seven methods and adversarial JSON/path/Git
+  probes. Repository validation and `git diff --check` PASS.
+- Full macOS repository acceptance and pristine required Linux CI are integration handoff gates; results remain
+  pending until recorded in the PR. The two markers record reviewed focused task results, not a full-suite or live pass.
+
+The T001 preparation verifier intentionally freezes the pre-implementation script closure. Do not relax it or run
+its imports on these additions as an alleged acceptance pass. The new files above are authorized by this separate
+bounded scope and reviewed revision; ordinary repository discovery must add exactly seven required method IDs.
