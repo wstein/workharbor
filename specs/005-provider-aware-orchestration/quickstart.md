@@ -48,7 +48,10 @@ before execution; no test-authoring expected-red exception is granted here.
 
 Inject crashes before/after intent, guard entry, completion, commit binding, result persistence, transfer and publication.
 Resume must reconcile existing records; after interrupted begin, discover the existing attempt rather than create a
-second one. Local completed-awaiting-publication is an allowed intermediate outcome, not final handoff success.
+second one. Specifically lose begin and rework responses after the guard transaction commits but before the
+coordinator records the ID: lookup must adopt exactly one intent-matching new attempt. Cover an old matching-context
+attempt, wrong predecessor/baseline, two candidates, missing/corrupt journal and unproven creator exclusivity; each
+ambiguous/unavailable case blocks without repeating creation or mutating guard records. Local completed-awaiting-publication is an allowed intermediate outcome, not final handoff success.
 Test same-owner route changes and reject owner changes unsupported by Feature 004's fixed ownership journal.
 
 ## Evidence and next gates
