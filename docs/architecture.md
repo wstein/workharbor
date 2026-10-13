@@ -52,9 +52,10 @@ from those inputs and use the existing container boundary. This is not implement
 and does not add Nix or devenv to the current runtime requirements.
 
 ## In-container AI agents (wave one)
-Agents run inside the workspace container. A small in-container session interface
-(list, attach, status, send input, stop) gives owner-authorized interop through
-existing workspace access ([ADR 0009](adr/0009-in-container-ai-agents.md)). The
+Agents run inside the workspace container. A small in-container agent session interface
+gives owner-authorized interop through
+existing workspace access; its details belong to a future versioned contract
+under `contracts/` (#71) ([ADR 0009](adr/0009-in-container-ai-agents.md)). The
 control plane does not schedule agents; orchestration is wave two. Wire format and
 authorization binding are undesigned.
 
