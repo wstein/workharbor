@@ -24,7 +24,8 @@ superseded non-goal wording is in [product](../product.md).
   contract, not this ADR, defines the interface details. It is exposed to the
   owner through existing authorized workspace access, never as raw host shell
   access.
-- Owner decision H18:a: the agent console is a reattachable workspace session.
+- Owner decision H18:a: the workspace console is a reattachable
+  session (see [ADR 0012](0012-persistent-workspace-console.md)).
 - Agents hold no host-agent credentials, control sockets or other workspaces' data
   (see the isolation section of the [architecture](../architecture.md)).
 - Ordinary lifecycle and terminal access remain usable without an AI subscription

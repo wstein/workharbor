@@ -25,6 +25,7 @@
 - [Optional execution integration (proposed)](adr/0006-optional-ai-execution.md)
 - [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
 - [In-container AI agents, wave one (proposed)](adr/0009-in-container-ai-agents.md)
+- [Persistent workspace console (proposed)](adr/0012-persistent-workspace-console.md)
 
 ## Background and references
 
