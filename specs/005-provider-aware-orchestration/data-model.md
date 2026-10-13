@@ -59,7 +59,9 @@ axes without asserting task eligibility. Invalid inputs return sanitized blocker
 ## TaskClaim and Transition
 
 Key: host-pinned repository + feature + task_id. Claim fields: executor_id, host_id, worktree_id, guard_attempt_id,
-profile_digest, generation (strictly increasing), state, grant_id and last_confirmed_operation_id. Task identity is
+profile_digest, generation (strictly increasing), state, grant_id and last_confirmed_operation_id. guard_attempt_id is
+nullable only before creation is confirmed; bind it once after validated creation/lookup, never substitute another ID.
+Task identity is
 stable across routes and handoff. Link the existing immutable commit and Feature 004 handoff identity where present;
 never replace or mutate them. Rework creates the guard's authorized successor attempt and records predecessor linkage.
 
@@ -73,6 +75,29 @@ lock, record old/new routes, generation and operation ID, prove old-executor ces
 task context, check every downstream owner constraint, then commit the new generation. Uncertain cessation, divergent
 guard attempts, unavailable transfer APIs or changed Feature 004 owner block and preserve the old identity. No automatic
 claim stealing on expiry or process death; lock release alone is insufficient evidence of completed remote cancellation.
+
+## Creation intent and lost-response correlation
+
+Before begin/rework, retain an immutable creation intent: operation_id, repository/feature/task, host/worktree/executor,
+claim generation, guard source revision, exact context-copy SHA-256, approval context digest, expected baseline,
+entry_mode, predecessor (null for begin; exact prior_attempt_id for rework), and the validated pre-call attempt-ID set.
+Context-copy SHA-256 hashes the complete canonical context; approval context digest uses the existing guard rule that
+excludes approval.context_digest. Neither digest is the other. Capture the pre-call snapshot under the guard store
+lock while holding the coordinator task lock; prove exclusive host ownership for the outstanding operation.
+
+If creation commits but its response or coordinator result is lost, do not call begin/rework again. The GuardBridge's
+read-only lookup opens only an existing validated guard journal under its lock and enumerates retained attempt IDs.
+Use the existing store's read_attempt/read_events validation for every candidate; filter to IDs absent from the
+pre-call set and match the full intent context digests, task, baseline, mode and predecessor. Host/worktree/executor
+and generation must still match the claim; no other creator may have used this worktree while the intent was pending.
+A matching entry event must agree with the context digest and predecessor. Adopt exactly one matching new attempt,
+persist its ID and creation-confirmed result, then continue via normal resume with fresh authorization/review/checks.
+
+No match, multiple matches, conflicting records, missing/corrupt journal or unproven creator exclusivity yields
+reconcile-required; preserve the intent and block new creation. An unavailable result is not permission to retry.
+A caller retaining an attempt ID must still compare it to the intent rather than replacing it with a discovered ID.
+Missing source/schema compatibility blocks lookup. This correlation records evidence only and grants no task or
+execution approval. Release the guard read lock before any CLI call; retain the coordinator lock throughout.
 
 ## Persistence and trust boundary
 

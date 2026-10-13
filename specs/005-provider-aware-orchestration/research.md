@@ -65,6 +65,17 @@ writers. Ordinary read/PUT/read cannot establish that guarantee. Existing safe-l
 **Alternatives considered**: Add stock GitHub writes to appear operational, silently skip final labels, or call local
 fixture outcomes live success.
 
+## 7. Correlate guard creation when its response is lost (U1)
+
+**Decision**: Retain the complete creation intent/pre-call attempt set, then use a pinned read-only guard-store reader
+for lost-response lookup. Existing begin/rework choose random IDs internally; CLI status/resume require a known ID.
+**Rationale**: single_task_state.open_store(require_existing=True) supplies locked validated reads; read_attempt and
+read_events validate retained context/events. active_attempt returns one row, so uniqueness needs an explicitly
+reviewed read-only schema-v1 enumeration of IDs in that same locked store. Exact context/baseline/predecessor and
+exclusive-creator proof correlate one new record to the intent. No match or ambiguity remains blocked.
+**Alternatives considered**: Retry creation, take the first active row, mutate the guard schema, or add a new guard
+CLI option. These duplicate attempts, lose correlation or change protected Feature 003 implementation.
+
 ## Evidence and resolved questions
 
 Research used the accepted local source at main `d646bd565daff85b03519ac1873b534e9c0c2288`, especially

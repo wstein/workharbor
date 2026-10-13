@@ -43,6 +43,15 @@ Trusted host construction pins repository, tool/interpreter versions, state root
 - **GuardBridge**: invoke the accepted Feature 003 CLI with pinned interpreter, script revision and literal argv,
   approved cwd, isolated secret-free environment and finite approved deadlines. Validate one JSON response and exact
   exit mapping; revalidate source/inventory between boundaries. Never duplicate its scope, acceptance or recovery logic.
+  Add an internal lookup_creation(intent) observation, not a new Feature 003 CLI command. The source-pinned reference
+  reader uses single_task_state.open_store(root, require_existing=True, writable_existing=False), a narrowly scoped
+  read-only schema-v1 SELECT of attempt IDs, and store.read_attempt/read_events to validate records. Enumeration is
+  necessary: active_attempt() returns only one row and cannot prove uniqueness. Do not copy lifecycle mutation logic.
+  Preflight existing journal/directories/lock before opening the store so an absent journal cannot create state.
+  The reader participates in the existing guard lock protocol; validate exact source/schema before reading and fail
+  closed on incompatibility. Return absent/unique/ambiguous/unavailable with sanitized IDs and matching digests.
+  Only unique + full intent/ownership correspondence permits the coordinator to bind the previously unknown ID;
+  absent/ambiguous/unavailable/conflicting results block. No raw SQL or journal path is selected by repository input.
 - **ClaimAuthority**: obtain a task claim, compare-and-swap generation, prove old executor cessation/fencing and observe
   current ownership. Local reference implementation supports only demonstrated single-host ownership. Multi-host or
   changed downstream owners require proven compatible authority; otherwise unavailable.
