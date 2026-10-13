@@ -24,6 +24,7 @@
 - [Development methodology](adr/0005-development.md)
 - [Optional execution integration (proposed)](adr/0006-optional-ai-execution.md)
 - [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
+- [In-container AI agents, wave one (proposed)](adr/0009-in-container-ai-agents.md)
 
 ## Background and references
 
