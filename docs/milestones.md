@@ -19,11 +19,11 @@ Local verification requires neither a tracker nor a running Symphony service.
 - [x] T024: synchronized competing processes, interrupted lock ownership and persistence failures accepted locally with independent review; published in unmerged draft PR [#55](https://github.com/wstein/workharbor-nxt/pull/55).
 - [x] T025–T026: all 16 original regression cases audited and the current local interface documented, with independent review; published in unmerged PR [#55](https://github.com/wstein/workharbor-nxt/pull/55).
 - [x] T027: offline modes, attempted-network rejection and protected-tree identities verified. The corrected retained-file durability implementation at `b103d7ef` passed affected native checks and both required Linux canonical jobs (808 tests, zero failures/errors). See the [revision-bound evidence](exec-plans/completed/003-single-task-entry.md); PR [#55](https://github.com/wstein/workharbor-nxt/pull/55) remains unmerged and draft.
-- [ ] T028: final platform acceptance remains blocked by unmet current macOS canonical `make check`; actual commands, historical failures and current evidence limits are recorded. No deadline or acceptance waiver is applied.
+- [x] T028: local platform acceptance passed on reviewed `31ce198` with actual macOS and matching Linux canonical results; commands, retained failed runs and evidence limits are [recorded](exec-plans/completed/003-single-task-entry.md#t028-macos-diagnosis-and-canonical-acceptance). Published in unmerged PR [#57](https://github.com/wstein/workharbor-nxt/pull/57); owner adoption remains pending.
 - [ ] Owner accepts the final independently reviewed and merged implementation; required checks are green and all required guard scenarios pass.
 
-The owner-authorized local implementation route covers T024–T028. T024–T027 have
-local acceptance; T028 and final M1 acceptance remain open. This roadmap grants no
+The owner-authorized local implementation route covers T024–T028, which have
+local acceptance; final owner M1 acceptance remains open. This roadmap grants no
 live dispatch, runtime activation or M2 authorization.
 
 ## M2 — First live Symphony smoke test
