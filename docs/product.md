@@ -20,8 +20,8 @@ Podman, Kubernetes, multiple users, OAuth, Forgejo/Gitea/Codeberg/GitHub integra
 CI integration and a broader CLI follow demonstrated demand and adapter tests.
 
 ## Non-goals
-Orchestration of AI agents (wave two), agent management as a product, general container administration,
-built-in Git hosting, billing, managed SaaS, collaborative editing and arbitrary
+AI agent orchestration (deferred to wave two), agent fleet management beyond the
+in-container session interface, general container administration, built-in Git hosting, billing, managed SaaS, collaborative editing and arbitrary
 multi-tenant execution. A browser editor is planned, not delivered by feature 001.
 
 ## Workspace repository
@@ -34,7 +34,9 @@ workspace. Imported repos are never implicitly rewritten or recursively cloned.
 ## AI scope
 Wave one: AI agents run inside the workspace container as ordinary processes. A small
 in-container agent session interface provides interop; its details live in a
-future versioned contract under `contracts/` (#71); see [ADR 0009](adr/0009-in-container-ai-agents.md). Wave two:
+future versioned contract under `contracts/`
+([#71](https://github.com/wstein/workharbor-nxt/issues/71)); see
+[ADR 0009](adr/0009-in-container-ai-agents.md). Wave two:
 Symphony/OpenAI-style orchestration, proposed in ADR 0006. Not yet implemented.
 
 ## Success criteria
