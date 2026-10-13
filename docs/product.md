@@ -20,7 +20,7 @@ Podman, Kubernetes, multiple users, OAuth, Forgejo/Gitea/Codeberg/GitHub integra
 CI integration and a broader CLI follow demonstrated demand and adapter tests.
 
 ## Non-goals
-AI features, agent management as a product, general container administration,
+Orchestration of AI agents (wave two), agent management as a product, general container administration,
 built-in Git hosting, billing, managed SaaS, collaborative editing and arbitrary
 multi-tenant execution. A browser editor is planned, not delivered by feature 001.
 
@@ -30,6 +30,12 @@ and pinned project submodules under `projects/`. It can be stored locally, on an
 existing minimal Git server or beside project repositories. Per-user forks are
 optional provenance, not an authorization mechanism. MVP uses one config repo per
 workspace. Imported repos are never implicitly rewritten or recursively cloned.
+
+## AI scope
+Wave one: AI agents run inside the workspace container as ordinary processes. A small
+in-container session interface (list, attach, status, send input, stop) provides
+interop; see [ADR 0009](adr/0009-in-container-ai-agents.md). Wave two:
+Symphony/OpenAI-style orchestration, proposed in ADR 0006. Not yet implemented.
 
 ## Success criteria
 The owner can create, inspect, access, stop and restart a workspace using only the
@@ -47,7 +53,7 @@ feature is approved and verified; the current Docker/devcontainer baseline remai
 [ADR 0006](adr/0006-optional-ai-execution.md) proposes a later optional internal
 execution board linking Spec Kit artifacts, Symphony scheduling and WorkHarbor
 workspaces, resources, interventions and evidence. This is outside the accepted
-baseline and the sequence above; AI features remain current non-goals. Start with
+baseline and the sequence above; orchestration remains a wave-two non-goal. Start with
 a proposed read-only Spec Kit view at an identified Git revision, linking task
 prerequisites, attempts, workspaces and separate approval/check/review/merge/live
 evidence. Add guarded controls only after that view is proven; moving a card
