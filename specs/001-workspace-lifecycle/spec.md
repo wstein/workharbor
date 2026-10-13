@@ -19,7 +19,8 @@ require explicit trust. Clone/build errors expose redacted diagnostic events.
 ### US3 (P1): Access terminal
 From the running workspace, owner opens a browser terminal inside the container.
 Terminal grants are single-use, expire and cannot access another workspace/owner.
-Disconnect cleans up the PTY; resizing and reconnect are bounded and observable.
+Disconnect ends only the connection and releases its
+relay; resizing and reconnect are bounded and observable.
 Host secrets, Docker socket and host shell are inaccessible through the session.
 
 ### US4 (P1): Stop, restart and recover
@@ -46,13 +47,17 @@ host: UI displays unknown/stale state, then converges after authenticated reconn
 - Enrollment codes expire five minutes after creation. Expired, consumed and
   revoked codes fail without issuing an identity; consumption is atomic.
 - Terminal grants expire 60 seconds after issuance and are consumed atomically on
-  connection. An established session lasts at most eight hours and expires after
-  15 minutes without owner input. Reconnect requires a new grant. At most two
-  sessions per workspace and eight per owner may be active; excess requests fail
-  with an explicit limit error. Each relay direction buffers at most 1 MiB per
-  session; overflow terminates that session with a diagnostic. Dimensions must be
-  within 1–500 columns and 1–200 rows. Disconnect releases the PTY within five
-  seconds, including when the transport disappears without a close frame.
+  connection. An established connection lasts at most eight hours and expires after
+  15 minutes without owner input; either limit ends only the connection. Reconnect
+  requires a new grant. At most two connections per workspace and eight per owner
+  may be active; excess requests fail with an explicit limit error. Each relay
+  direction buffers at most 1 MiB per connection; overflow ends that connection
+  with a diagnostic. Dimensions must be within 1–500 columns and 1–200 rows.
+  Disconnect, grant expiry and idle timeout end only the connection and release
+  its relay within five seconds, including when the transport disappears without a
+  close frame; stop, rebuild, runtime deletion or an explicit close end the
+  console session
+  ([ADR 0012](../../docs/adr/0012-persistent-workspace-console.md)).
 - Before any config-provided executable hook, the owner explicitly approves a
   resolved config commit and the complete set of resolved submodule commits.
   Store this approval with owner, repository identity, revisions and timestamp.
