@@ -20,7 +20,8 @@ git diff --check
 Use a pristine committed scratch checkout for `make check`; the checker rejects dirty and ignored local state.
 Run `make check PYTHON=/absolute/path/to/supported/python3` there. Run matching required Linux CI for the exact
 candidate. Failure, timeout, cancellation and missing tools must remain visible; no waived expected outcomes.
-Do not run --require-tasks as a planning check: this delivery intentionally contains no tasks.md.
+The planning delivery created no tasks.md; tasks have since been generated. For cross-artifact analysis, use
+check-prerequisites.sh --json --require-spec --require-tasks --include-tasks without treating success as dispatch approval.
 
 ## Future offline acceptance
 
@@ -49,7 +50,9 @@ before execution; no test-authoring expected-red exception is granted here.
 Inject crashes before/after intent, guard entry, completion, commit binding, result persistence, transfer and publication.
 Resume must reconcile existing records; after interrupted begin, discover the existing attempt rather than create a
 second one. Specifically lose begin and rework responses after the guard transaction commits but before the
-coordinator records the ID: lookup must adopt exactly one intent-matching new attempt. Cover an old matching-context
+coordinator records the ID: lookup must adopt exactly one intent-matching new attempt. First begin must prove an empty
+namespace under the canonical lock; missing-journal recovery must remain blocked. Rework must preserve the predecessor
+binding/result and advance only to its confirmed linked successor. Cover an old matching-context
 attempt, wrong predecessor/baseline, two candidates, missing/corrupt journal and unproven creator exclusivity; each
 ambiguous/unavailable case blocks without repeating creation or mutating guard records. Local completed-awaiting-publication is an allowed intermediate outcome, not final handoff success.
 Test same-owner route changes and reject owner changes unsupported by Feature 004's fixed ownership journal.

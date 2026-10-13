@@ -71,8 +71,11 @@ fixture outcomes live success.
 for lost-response lookup. Existing begin/rework choose random IDs internally; CLI status/resume require a known ID.
 **Rationale**: single_task_state.open_store(require_existing=True) supplies locked validated reads; read_attempt and
 read_events validate retained context/events. active_attempt returns one row, so uniqueness needs an explicitly
-reviewed read-only schema-v1 enumeration of IDs in that same locked store. Exact context/baseline/predecessor and
-exclusive-creator proof correlate one new record to the intent. No match or ambiguity remains blocked.
+reviewed read-only schema-v1 enumeration of IDs in that same locked store. First-entry preparation uses the existing
+lock_only helper to prove an empty guard namespace without creating a journal; lookup itself never bootstraps state.
+Exact context/baseline/predecessor and exclusive-creator proof correlate one new record to the intent. Rework retains
+the old binding and records a new linked creation binding before advancing the current reference after confirmation.
+No match or ambiguity remains blocked.
 **Alternatives considered**: Retry creation, take the first active row, mutate the guard schema, or add a new guard
 CLI option. These duplicate attempts, lose correlation or change protected Feature 003 implementation.
 

@@ -75,8 +75,14 @@ targets and finite validity as defined there; neither overrides an execution eli
 ## TaskClaim and Transition
 
 Key: host-pinned repository + feature + task_id. Claim fields: executor_id, host_id, worktree_id, guard_attempt_id,
-profile_digest, generation (strictly increasing), state, grant_id and last_confirmed_operation_id. guard_attempt_id is
-nullable only before creation is confirmed; bind it once after validated creation/lookup, never substitute another ID.
+profile_digest, generation (strictly increasing), state, grant_id, current_binding_id and last_confirmed_operation_id.
+Retain an append-only CreationBinding history keyed by creation operation_id. Each binding records context/baseline,
+mode, predecessor binding/guard ID and its own created_attempt_id (nullable until confirmed, then immutable).
+guard_attempt_id is a projection of the current confirmed binding, not an independently overwritten payload.
+First begin installs its binding only after validated creation/lookup. Authorized rework prepares a new linked binding
+and advances current_binding_id with a generation increment only after its unique successor is confirmed; retain the predecessor and all old
+results unchanged. A transfer retains the same binding. Pending/uncertain creation does not advance the reference;
+its intent identifies the separate pending binding. Exactly one current binding may authorize subsequent task work.
 Task identity is
 stable across routes and handoff. Link the existing immutable commit and Feature 004 handoff identity where present;
 never replace or mutate them. Rework creates the guard's authorized successor attempt and records predecessor linkage.
@@ -98,8 +104,17 @@ Before begin/rework, retain an immutable creation intent: operation_id, reposito
 claim generation, guard source revision, exact context-copy SHA-256, approval context digest, expected baseline,
 entry_mode, predecessor (null for begin; exact prior_attempt_id for rework), and the validated pre-call attempt-ID set.
 Context-copy SHA-256 hashes the complete canonical context; approval context digest uses the existing guard rule that
-excludes approval.context_digest. Neither digest is the other. Capture the pre-call snapshot under the guard store
-lock while holding the coordinator task lock; prove exclusive host ownership for the outstanding operation.
+excludes approval.context_digest. Neither digest is the other. Capture the pre-call snapshot under the canonical
+guard lock while holding the coordinator task lock; prove exclusive host ownership for the outstanding operation.
+
+For an existing journal, use the locked validated read-only store and enumerate its retained IDs. For first begin
+with no journal, a separately authorized creation-preparation step uses the pinned single_task.lock_only(root)
+helper to establish the same canonical lock inode without creating SQLite/contexts/attempts. Require no legacy JSON,
+unfinished publication, journal sidecar or orphan context/publication state and a guard directory containing only
+the canonical lock. Only this proved empty namespace plus exclusive-creator proof permits an empty pre-call ID set.
+Unexpected state or a journal appearing during preparation blocks; do not call open_store on absent state to make an
+empty snapshot. Metadata lock/directory creation is allowed only for this authorized preparation, never for lookup.
+Release the guard lock before invoking begin; host exclusivity and the coordinator lock remain effective.
 
 If creation commits but its response or coordinator result is lost, do not call begin/rework again. The GuardBridge's
 read-only lookup opens only an existing validated guard journal under its lock and enumerates retained attempt IDs.
@@ -107,11 +122,14 @@ Use the existing store's read_attempt/read_events validation for every candidate
 pre-call set and match the full intent context digests, task, baseline, mode and predecessor. Host/worktree/executor
 and generation must still match the claim; no other creator may have used this worktree while the intent was pending.
 A matching entry event must agree with the context digest and predecessor. Adopt exactly one matching new attempt,
-persist its ID and creation-confirmed result, then continue via normal resume with fresh authorization/review/checks.
+bind its ID to this creation operation and persist creation-confirmed. For rework, verify the still-current predecessor
+binding before atomically advancing the current reference and generation to the confirmed successor. Retain every predecessor binding/result;
+then continue via normal resume with fresh authorization/review/checks.
 
 No match, multiple matches, conflicting records, missing/corrupt journal or unproven creator exclusivity yields
 reconcile-required; preserve the intent and block new creation. An unavailable result is not permission to retry.
-A caller retaining an attempt ID must still compare it to the intent rather than replacing it with a discovered ID.
+If this creation operation already retained its created_attempt_id, lookup must match that exact ID; never replace it.
+The current predecessor ID in a rework claim is a separate field, not an alleged response ID for the new operation.
 Missing source/schema compatibility blocks lookup. This correlation records evidence only and grants no task or
 execution approval. Release the guard read lock before any CLI call; retain the coordinator lock throughout.
 
