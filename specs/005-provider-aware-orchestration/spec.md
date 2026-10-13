@@ -3,7 +3,7 @@
 **Feature identifier**: `005-provider-aware-orchestration`
 **Feature Branch**: `docs/005-provider-aware-orchestration`
 **Created**: 2026-10-13
-**Status**: Draft — specification only; awaiting owner review. No implementation or live verification claimed.
+**Status**: Owner-approved for planning on 2026-10-13. No implementation or live verification claimed.
 **Input**: Define an explicit provider/authentication/execution-mode compatibility matrix, project-owner opt-in
 per profile, equivalent guarded manual and orchestrated workflows, and boundaries for future API/cloud adapters.
 Keep Symphony optional and outside product dependencies. Leave Features 001–004 unchanged.
