@@ -3,7 +3,8 @@
 **Branch**: `docs/005-provider-aware-plan` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
 **Input**: Owner-approved Feature 005 specification; accepted content in main at
 `d646bd565daff85b03519ac1873b534e9c0c2288`. Owner approved the specification and requested planning in this session.
-**Status**: Proposed design awaiting owner plan review. No implementation, tasks or activation included.
+**Status**: Accepted design; owner requested task generation on 2026-10-13 after PR #60 merged.
+The planning delivery contained no implementation, tasks or activation.
 
 ## Summary
 
