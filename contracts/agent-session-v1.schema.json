@@ -1,0 +1,430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent-session/1.0 (design baseline, not implemented)",
+  "$defs": {
+    "category": {
+      "enum": [
+        "usage",
+        "not-found",
+        "authorization",
+        "conflict",
+        "timeout",
+        "interrupted",
+        "needs-human",
+        "incompatible-version"
+      ]
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "idle",
+        "needs-input",
+        "stopped",
+        "failed"
+      ]
+    },
+    "contract": {
+      "type": "string",
+      "pattern": "^agent-session/[0-9]+\\.[0-9]+$"
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "contract",
+        "op",
+        "request_id"
+      ],
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract"
+        },
+        "op": {
+          "enum": [
+            "hello",
+            "list",
+            "status",
+            "attach",
+            "send",
+            "stop"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "grant": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "session": {
+          "$ref": "#/$defs/session_id"
+        },
+        "data_b64": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 87384
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "hello"
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "grant"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "status",
+                  "attach",
+                  "send",
+                  "stop"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "session"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "send"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data_b64"
+            ]
+          }
+        }
+      ],
+      "not": {
+        "required": [
+          "t"
+        ]
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "send_max_bytes": {
+          "type": "integer",
+          "maximum": 65536
+        },
+        "frame_max_bytes": {
+          "type": "integer",
+          "maximum": 16384
+        },
+        "idle_timeout_seconds": {
+          "type": "integer"
+        },
+        "max_attachment_seconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": [
+        "id",
+        "status",
+        "started_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/session_id"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_activity_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "attachments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "contract",
+        "request_id",
+        "ok"
+      ],
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract"
+        },
+        "request_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "sessions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/session"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "session": {
+          "$ref": "#/$defs/session"
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        },
+        "supported_versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "type": "object",
+          "required": [
+            "category",
+            "message",
+            "retryable"
+          ],
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/category"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "supported_versions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "client_version": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "ok": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "error"
+            ]
+          }
+        }
+      ],
+      "not": {
+        "required": [
+          "t"
+        ]
+      }
+    },
+    "frame": {
+      "type": "object",
+      "required": [
+        "t"
+      ],
+      "properties": {
+        "t": {
+          "enum": [
+            "out",
+            "in",
+            "resize",
+            "dropped",
+            "end"
+          ]
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "data_b64": {
+          "type": "string",
+          "maxLength": 21848
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "enum": [
+            "client-detached",
+            "grant-expired",
+            "idle-timeout",
+            "max-duration",
+            "overflow",
+            "session-stopped",
+            "error"
+          ]
+        },
+        "exit_status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "t": {
+                "const": "out"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "seq",
+              "data_b64"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "t": {
+                "const": "in"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data_b64"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "t": {
+                "const": "resize"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "cols",
+              "rows"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "t": {
+                "const": "dropped"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "bytes"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "t": {
+                "const": "end"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        }
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "op"
+            ]
+          },
+          {
+            "required": [
+              "ok"
+            ]
+          },
+          {
+            "required": [
+              "contract"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    },
+    {
+      "$ref": "#/$defs/frame"
+    }
+  ]
+}
