@@ -37,3 +37,6 @@ verified integrity, dependencies, tool paths and attachment requirements.
 `attach(resolved, runtime, operation)` returns a recorded attachment. Removal must
 not alter the language image or delete project data. Feature 002 tests one real
 Bundledock artifact after examining its upstream documentation and format.
+
+## CLI contracts
+- [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, proposed in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
