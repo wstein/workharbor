@@ -47,7 +47,11 @@ feature is approved and verified; the current Docker/devcontainer baseline remai
 [ADR 0006](adr/0006-optional-ai-execution.md) proposes a later optional internal
 execution board linking Spec Kit artifacts, Symphony scheduling and WorkHarbor
 workspaces, resources, interventions and evidence. This is outside the accepted
-baseline and the sequence above; AI features remain current non-goals. The
+baseline and the sequence above; AI features remain current non-goals. Start with
+a proposed read-only Spec Kit view at an identified Git revision, linking task
+prerequisites, attempts, workspaces and separate approval/check/review/merge/live
+evidence. Add guarded controls only after that view is proven; moving a card
+cannot approve or dispatch work. The
 [concept paper](papers/optional-ai-execution.md) describes the owner experience.
 Product implementation requires separate explicit owner scope and constitutional
 approval, followed by an approved feature spec and plan. Saving this proposal
