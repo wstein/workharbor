@@ -28,6 +28,7 @@
 - [Go product code and whr CLI layout (proposed)](adr/0010-go-whr-cli-layout.md)
 - [Read-only Spec Kit dashboard (proposed)](adr/0011-readonly-spec-dashboard.md)
 - [Persistent workspace console (proposed)](adr/0012-persistent-workspace-console.md)
+- [Fresh whr exit-code table (proposed)](adr/0013-whr-exit-codes.md)
 
 ## Background and references
 
