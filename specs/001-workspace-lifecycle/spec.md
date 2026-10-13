@@ -72,7 +72,7 @@ host: UI displays unknown/stale state, then converges after authenticated reconn
   of 1, 2 and 4 seconds; exhausted or timed-out work remains visibly failed or
   unknown, retains storage, and requires an explicit retry operation.
 - Acceptance environment: one Linux Docker host, one control plane and one owner,
-  with up to five workspaces and eight terminal sessions. Record exact machine,
+  with up to five workspaces and eight terminal connections. Record exact machine,
   OS and tool versions. Measure time from the triggering event; timing tests use
   a responsive provider and report unavailable-host/provider cases separately.
 - Backup/restore must recover control-plane metadata and persistent project files

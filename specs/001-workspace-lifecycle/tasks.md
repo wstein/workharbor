@@ -38,9 +38,9 @@ config and unapproved revisions produce no hooks or provider mutation.
 ## Phase 5: US3 — Access terminal
 Goal: browser terminal confined to the authorized container with finite resources.
 Independent acceptance: owner can type and resize; other-owner, expired/reused grants,
-quota overflow and buffer overflow fail; transport loss cleans up the PTY.
+quota overflow and buffer overflow fail; transport loss ends only the connection and releases its relay.
 
-- [ ] T008 [US3] Implement atomic 60-second grants in `apps/control_plane/lib/workharbor/sessions.ex`, relay in `apps/control_plane/lib/workharbor_web/channels/terminal_channel.ex` and PTY service in `apps/host_agent/internal/terminal/`; enforce eight-hour maximum, 15-minute input idle expiry, two sessions/workspace, eight/owner, 1 MiB/direction, 1–500 columns, 1–200 rows and five-second disconnect cleanup; verify boundary/concurrent-use tests in both suites plus a real container PTY (FR-008, FR-011; SC-004).
+- [ ] T008 [US3] Implement atomic 60-second grants in `apps/control_plane/lib/workharbor/sessions.ex`, relay in `apps/control_plane/lib/workharbor_web/channels/terminal_channel.ex` and PTY service in `apps/host_agent/internal/terminal/`; enforce eight-hour maximum, 15-minute input idle expiry, two connections/workspace, eight/owner, 1 MiB/direction, 1–500 columns and 1–200 rows, all per connection; disconnect, grant expiry and idle timeout end only the connection with the relay released within five seconds, while stop, rebuild, runtime deletion or an explicit close end the console session; verify boundary/concurrent-use tests in both suites plus a real container PTY (FR-008, FR-011; SC-004).
 - [ ] T018 [US3] Implement browser terminal UI in `apps/control_plane/lib/workharbor_web/live/terminal_live.ex` and `apps/control_plane/assets/js/terminal.js`; test input, resize, fresh-grant reconnect, limit diagnostics and absence of host-shell/socket access; record browser walkthrough in `docs/quality.md` (FR-008, FR-012).
 
 ## Phase 6: US4 — Stop, restart and recover
@@ -54,7 +54,7 @@ one outcome, changed payload conflicts; interrupted provision reconciles safely.
 
 ## Phase 7: Release evidence and recovery
 - [ ] T019 Implement quiesced backup and clean-install restore in `scripts/backup-workharbor.sh`, `scripts/restore-workharbor.sh` and `docs/development/backup-restore.md`; verify retained owner/host/workspace associations, operation outcomes and exact uncommitted file contents, unknown restored observations, revoked-identity rejection and no automatic runtime start on a clean host; abort backup if quiescence fails (plan: backup/restore gate; SC-005).
-- [ ] T010 Run US1–US4 and all SC-001–SC-006 at the specified five-workspace/eight-session load on a real host; record exact startup/test/browser commands, versions, timings, idle/load measurements and failure evidence in `specs/001-workspace-lifecycle/quickstart.md` and `docs/quality.md`; include tested rotation and backup/restore runbooks and rerun `make check` plus both application gates; missing tools/hosts block release (FR-001–FR-012).
+- [ ] T010 Run US1–US4 and all SC-001–SC-006 at the specified five-workspace/eight-connection load on a real host; record exact startup/test/browser commands, versions, timings, idle/load measurements and failure evidence in `specs/001-workspace-lifecycle/quickstart.md` and `docs/quality.md`; include tested rotation and backup/restore runbooks and rerun `make check` plus both application gates; missing tools/hosts block release (FR-001–FR-012).
 
 ## Dependencies
 T001/T011 → T012 → T002 → T013 → T003 → T004 → T014 → T015.

@@ -22,6 +22,12 @@ which conflicts with a console that outlives its connections.
 
 ## Consequences
 
-The [feature 001 spec](../../specs/001-workspace-lifecycle/spec.md) is reconciled
-to this rule. Retained output, host-disconnect state and CLI behavior belong to
+The feature 001 [spec](../../specs/001-workspace-lifecycle/spec.md),
+[tasks](../../specs/001-workspace-lifecycle/tasks.md) and
+[data model](../../specs/001-workspace-lifecycle/data-model.md) are reconciled
+to this rule. The wording of the feature 001 plan (lines 61-62) is flagged for
+the plan's next revision. The persistent console-session state model (entity and
+end events: stop, rebuild, deletion, explicit close) is follow-up work for the
+spec that uses it; the existing Session entity and migration naming refers to the
+single-use grant. Retained output, host-disconnect state and CLI behavior belong to
 the specs that use the console. Nothing is implemented or verified.
