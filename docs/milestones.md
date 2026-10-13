@@ -64,3 +64,14 @@ authorization. Link shared evidence rather than repeat a live exercise needlessl
 - [ ] **M5 — Execution cards visible:** obtain the owner-approved product scope and constitution amendment or scoped exception required by [proposed ADR 0006](adr/0006-optional-ai-execution.md), then approve a separate dashboard feature and its boundaries; deliver a read-only task/attempt/blocker/check/PR view first. These gates apply to that first read-only product view too.
 
 Dates remain unset until the first live smoke test provides useful timing evidence.
+
+## Future development-tooling candidates — not queued
+
+- [ ] **Optional Shiplight browser-testing pilot (8/10):** after a usable Feature 001 UI exists, evaluate spec-derived end-to-end tests and browser walkthrough evidence on local or self-hosted CI. Keep it outside Feature 005 and product dependencies; compare against the existing deterministic acceptance checks before adopting it.
+
+Shiplight documents [browser MCP and testing skills](https://www.shiplight.ai/coding-agents),
+[local/own-CI execution](https://docs.shiplight.ai/local/where-tests-run.html) and
+[locator self-healing and test repair](https://docs.shiplight.ai/guides/how-self-healing-works.html)
+(reviewed 2026-10-13). A pilot needs separately approved scope, provider/data-handling review and an explicit acceptance
+policy: preserve approved assertions, review test changes, record healing/cache provenance and retain deterministic
+checks for critical outcomes. This candidate grants no installation, credentials, hosted-service use or activation.
