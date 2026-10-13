@@ -3,8 +3,8 @@
 **Purpose**: Validate specification completeness and quality before planning.
 **Created**: 2026-10-13
 **Feature**: [spec.md](../spec.md)
-**Marker semantics**: Checked items mean requirements quality was reviewed; they do not mean owner approval,
-implementation or live verification.
+**Marker semantics**: Checked items mean requirements quality was reviewed; they do not mean implementation or
+live verification.
 
 ## Content Quality
 
@@ -33,7 +33,13 @@ implementation or live verification.
 
 ## Notes
 
-- No markers remain. Owner decisions H8, H9, H12:c (new exit-code table in an ADR, tracked in a new issue) and
-  #223 are recorded in the spec; the owner approved planning (H13:a, 2026-10-13).
-- Before implementation: the exit-code ADR fixes FR-018 numbers. The product document still lists a broader CLI
-  as later work and agent management as a non-goal; it is revised in the separate documentation lane.
+- No markers remain. Owner decisions H8, H9, H13:a (approved for planning), H14:a, H15:b, H16:b, H17:a, H18:a
+  and #223 are recorded in the spec.
+- Review items applied: read-only dashboard enforced by API scope (FR-033, SC-008); resumable offboarding with
+  confirmed revocation (FR-011, SC-005); console persistence separate from attachments (FR-007a, SC-010);
+  generated idempotency keys, waiting and operation retrieval (FR-003–FR-003b, SC-011); typed JSON stream events
+  (FR-015); local API browser boundary (FR-036–FR-038, SC-009); first-use authentication (FR-035); separate
+  client and host platform matrices (FR-026); remote exit 0–255 distinguished from CLI failures (FR-019);
+  rebuild acceptance (FR-005a).
+- Implementation prerequisites: documentation reconciliation (#66, #68), exit-code ADR (#70), session interface
+  contract (#71) and the Feature 001 terminal-cleanup reconciliation for the console model.
