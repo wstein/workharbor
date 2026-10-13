@@ -397,3 +397,211 @@ class ProfileFixture:
             stack.enter_context(patch.dict(os.environ, self.env, clear=True))
             yield self
 
+
+class T003Tests(unittest.TestCase):
+    def test_isolated_fixture(self):
+        source_bytes = (SOURCE_ROOT / 'README.md').read_bytes()
+        with tempfile.TemporaryDirectory() as external:
+            outside = Path(external)
+            marker = outside / 'hook-ran'
+            hooks = outside / 'hooks'
+            hooks.mkdir()
+            hook = hooks / 'pre-commit'
+            hook.write_text('#!/bin/sh\ntouch "' + str(marker) + '"\nexit 99\n')
+            hook.chmod(0o755)
+            config = outside / 'gitconfig'
+            config.write_text(f'[core]\n hooksPath = {hooks}\n[commit]\n gpgSign = true\n')
+            hostile = {'HOME': str(outside), 'GIT_CONFIG_GLOBAL': str(config),
+                       'GIT_DIR': str(outside / 'wrong.git'), 'GITHUB_TOKEN': 'synthetic-secret',
+                       'ANTHROPIC_API_KEY': 'synthetic-secret', 'OPENAI_API_KEY': 'synthetic-secret'}
+            with patch.dict(os.environ, hostile):
+                with ProfileFixture() as fixture:
+                    owned = fixture.directory
+                    self.assertFalse(fixture.state.is_relative_to(fixture.root))
+                    self.assertEqual('', fixture.git('status', '--porcelain').stdout)
+                    self.assertEqual(['T001', 'T002'], [line.split()[3] for line in
+                        (fixture.guard.feature / 'tasks.md').read_text().splitlines()
+                        if line.startswith('- [ ] T')])
+                    for root, state in ((SOURCE_ROOT, fixture.state),
+                                        (fixture.root, outside),
+                                        (str(fixture.root) + '/.', fixture.state)):
+                        with self.assertRaises(FixtureBoundaryError):
+                            fixture.require_roots(root, state)
+                    for name in ('../escape', str(outside / 'escape'), 'specs/synthetic/spec.md'):
+                        with self.assertRaises(FixtureBoundaryError):
+                            fixture.write(name, 'forbidden')
+                    fixture.write('guide.md', 'Synthetic change\n')
+                    fixture.git('add', 'guide.md')
+                    fixture.git('commit', '-m', 'test: synthetic output')
+                    self.assertFalse(marker.exists())
+                    local_config = fixture.root / '.git/config'
+                    original_config = local_config.read_bytes()
+                    local_config.write_bytes(original_config + b'\n[filter \"hostile\"]\n clean = false\n')
+                    with self.assertRaises(FixtureBoundaryError):
+                        fixture.git('add', 'guide.md')
+                    local_config.write_bytes(original_config)
+                    attributes = fixture.root / '.gitattributes'
+                    attributes.write_text('guide.md filter=hostile\n')
+                    with self.assertRaises(FixtureBoundaryError):
+                        fixture.git('add', 'guide.md')
+                    attributes.unlink()
+                    self.assertNotEqual(fixture.guard.baseline, fixture.git('rev-parse', 'HEAD').stdout.strip())
+                    context = fixture.guard.context()
+                    self.assertEqual('T001', context['task_id'])
+                    self.assertEqual([], context['dependencies'])
+                    self.assertEqual(context['approval']['context_digest'],
+                                     fixture.guard.review(context)['context_digest'])
+                    self.assertTrue(fixture.guard.context('T002')['dependencies'])
+                    with fixture.offline():
+                        self.assertEqual(str(fixture.home), os.environ['HOME'])
+                        self.assertNotIn('GITHUB_TOKEN', os.environ)
+                        self.assertNotIn('ANTHROPIC_API_KEY', os.environ)
+                        self.assertNotIn('OPENAI_API_KEY', os.environ)
+                        self.assertNotIn('GIT_DIR', os.environ)
+                    # A hostile symlink/hardlink never writes its external target.
+                    output = fixture.root / 'followup.md'
+                    sentinel = outside / 'sentinel'
+                    sentinel.write_text('unchanged')
+                    output.symlink_to(sentinel)
+                    with self.assertRaises(FixtureBoundaryError):
+                        fixture.write('followup.md', 'forbidden')
+                    output.unlink()
+                    os.link(sentinel, output)
+                    with self.assertRaises(FixtureBoundaryError):
+                        fixture.write('followup.md', 'forbidden')
+                    output.unlink()
+                    self.assertEqual('unchanged', sentinel.read_text())
+                    spec = fixture.guard.feature / 'spec.md'
+                    before = spec.read_bytes()
+                    spec.write_bytes(before + b'corruption')
+                    with self.assertRaises(FixtureBoundaryError):
+                        fixture.assert_oracles_unchanged()
+                    spec.write_bytes(before)
+                    fixture.assert_oracles_unchanged()
+                    with ProfileFixture() as other:
+                        foreign_index = other.root / '.git/index'
+                        index_bytes = foreign_index.read_bytes()
+                        metadata = fixture.root / '.git'
+                        saved = fixture.root / '.git-saved'
+                        metadata.rename(saved)
+                        try:
+                            metadata.symlink_to(other.root / '.git', target_is_directory=True)
+                            with self.assertRaises(FixtureBoundaryError):
+                                fixture.git('add', 'guide.md')
+                            metadata.unlink()
+                            metadata.write_text('gitdir: ' + str(other.root / '.git') + '\n')
+                            with self.assertRaises(FixtureBoundaryError):
+                                fixture.git('add', 'guide.md')
+                            metadata.unlink()
+                        finally:
+                            if metadata.is_symlink() or metadata.is_file():
+                                metadata.unlink()
+                            saved.rename(metadata)
+                        pointer = metadata / 'commondir'
+                        pointer.write_text(str(other.root / '.git') + '\n')
+                        with self.assertRaises(FixtureBoundaryError):
+                            fixture.git('add', 'guide.md')
+                        pointer.unlink()
+                        nested = metadata / 'objects/info/alternates'
+                        nested.write_text(str(other.root / '.git/objects') + '\n')
+                        with self.assertRaises(FixtureBoundaryError):
+                            fixture.git('add', 'guide.md')
+                        nested.unlink()
+                        self.assertEqual(index_bytes, foreign_index.read_bytes())
+                    self.assertEqual(source_bytes, (SOURCE_ROOT / 'README.md').read_bytes())
+                self.assertFalse(owned.exists())
+                with self.assertRaises(FixtureBoundaryError):
+                    fixture.runtime.emit(fixture.target(), 'after close')
+
+    def test_fixture_authority(self):
+        from dataclasses import replace
+        with ProfileFixture() as fixture, ProfileFixture() as other:
+            target = fixture.target()
+            record = fixture.profile_record()
+            self.assertEqual(target.project, record['project_id'])
+            self.assertEqual(target.profile, record['profile_id'])
+            record['secret_ref'] = 'forged'
+            self.assertIsNone(fixture.profile_record()['secret_ref'])
+            self.assertFalse(fixture.authority.observe('owner', target))
+            fixture.authority.attest('owner', target)
+            self.assertTrue(fixture.authority.observe('owner', target))
+            self.assertFalse(fixture.authority.observe('policy', target))
+            self.assertFalse(fixture.authority.observe('capability', target))
+            for role in ('policy', 'capability'):
+                fixture.authority.attest(role, target)
+                self.assertTrue(fixture.authority.observe(role, target))
+            for changed in (replace(target, task='T002'), replace(target, action='complete'),
+                            replace(target, route='orchestrated'),
+                            replace(target, profile='fixture:other')):
+                self.assertFalse(fixture.authority.observe('owner', changed))
+            for forged in ({'owner_ref': 'owner', 'approved': True},
+                           replace(target, repository=str(SOURCE_ROOT)), other.target()):
+                with self.assertRaises(FixtureBoundaryError):
+                    fixture.authority.observe('owner', forged)
+            fixture.authority.revoke('owner', target)
+            self.assertFalse(fixture.authority.observe('owner', target))
+            self.assertEqual(1800000000, fixture.time.observe())
+            fixture.time.available = False
+            with self.assertRaises(FixtureBoundaryError):
+                fixture.time.observe()
+            self.assertEqual(1, fixture.claim.acquire(target, 'fixture:executor', 0))
+            with self.assertRaises(FixtureBoundaryError):
+                fixture.claim.acquire(target, 'fixture:competitor', 0)
+            fixture.faults.fail_on('runtime.emit')
+            with self.assertRaises(InjectedFixtureFault):
+                fixture.runtime.emit(target, 'first')
+            self.assertEqual([], fixture.runtime.calls)
+            result = fixture.runtime.emit(target, 'explicit synthetic output')
+            self.assertEqual({'text': 'explicit synthetic output', 'provenance': 'offline',
+                              'live_verified': False}, result)
+            self.assertEqual(2, fixture.faults.calls.count('runtime.emit'))
+
+    def test_no_live_ports(self):
+        with ProfileFixture() as fixture:
+            self.assertEqual(fixture.ports, fixture.require_ports(fixture.ports))
+            invoked = []
+            class LiveRuntime:
+                def emit(self, *args):
+                    invoked.append(args)
+                    raise AssertionError('live callback must not run')
+            ports = fixture.ports
+            ports['runtime'] = LiveRuntime()
+            for submitted in (ports, {'live_verified': False},
+                              {**fixture.ports, 'tracker': LiveRuntime()}):
+                with self.assertRaises(FixtureBoundaryError):
+                    fixture.require_ports(submitted)
+            self.assertEqual([], invoked)
+            with self.assertRaises(FixtureBoundaryError):
+                fixture.git('fetch', 'https://example.invalid/repo.git')
+            with fixture.offline():
+                probes = [lambda: socket.create_connection(('example.invalid', 443)),
+                          lambda: socket.getaddrinfo('example.invalid', 443),
+                          lambda: urllib.request.urlopen('https://example.invalid'),
+                          lambda: subprocess.run(['codex', '--version']),
+                          lambda: os.system('claude --version'),
+                          fixture.provider, fixture.credential, fixture.fallback]
+                with socket.socket() as connection:
+                    probes += [lambda: connection.connect(('127.0.0.1', 9)),
+                               lambda: connection.connect_ex(('127.0.0.1', 9)),
+                               lambda: connection.sendto(b'x', ('127.0.0.1', 9)),
+                               lambda: connection.send(b'x'),
+                               lambda: connection.sendall(b'x'),
+                               lambda: connection.bind(('127.0.0.1', 0)),
+                               lambda: connection.listen()]
+                    for probe in probes:
+                        with self.assertRaises(FixtureBoundaryError):
+                            probe()
+                # Both routes operate on injected synthetic ports without tracker,
+                # provider, credentials or Symphony being installed or invoked.
+                for route in ('manual', 'orchestrated'):
+                    result = fixture.runtime.emit(fixture.target(route=route), 'offline')
+                    self.assertEqual('offline', result['provenance'])
+                    self.assertIs(result['live_verified'], False)
+            self.assertEqual(16, len(fixture.denied_calls))
+            self.assertIn('credential.discovery', fixture.denied_calls)
+            self.assertIn('account-or-agent.fallback', fixture.denied_calls)
+            fixture.assert_oracles_unchanged()
+
+
+if __name__ == '__main__':
+    unittest.main()
