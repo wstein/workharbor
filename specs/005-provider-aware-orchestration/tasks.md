@@ -53,8 +53,8 @@ New paths in task descriptions are future deliverables, not currently runnable s
 **Goal**: Provide strict shared identity primitives and isolated synthetic fixtures.
 **Independent test/checkpoint**: T002/T003 classes pass; fixture authorities cannot escape into live workflows. Both tasks block story work.
 
-- [x] T002 [P] Implement shared parsing and digest primitives: "UTF-8, unique keys, no unknown fields, no floats/non-finite values", "UTC integer timestamps", "1 MiB", "100 profiles", "100 evidence references per record" and canonical SHA-256 JSON. Reject unsafe artifact paths; IDs use bounded ASCII identifiers (1–128 characters, ASCII letters/digits plus . _ : -; no slash for individual IDs). Define the contract's closed action tokens, classes and shared operation/boundary/capability mapping; reject unknown tokens and aliases. Add trusted adjacent-module test bootstrapping without importing repository-selected plugins. Deliver in `scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`.
-- [x] T003 [P] Create reusable disposable Git repositories, synthetic profile/owner/time/claim/runtime ports and fault hooks. Separate synthetic repository/state roots from the real checkout, isolate HOME/environment, refuse live ports and fail on attempted provider/network access. Tests must demonstrate fixture confinement rather than merely assert a fixture flag. Deliver in `scripts/test_profile_fixtures.py`.
+- [ ] T002 [P] Implement shared parsing and digest primitives: "UTF-8, unique keys, no unknown fields, no floats/non-finite values", "UTC integer timestamps", "1 MiB", "100 profiles", "100 evidence references per record" and canonical SHA-256 JSON. Reject unsafe artifact paths; IDs use bounded ASCII identifiers (1–128 characters, ASCII letters/digits plus . _ : -; no slash for individual IDs). Define the contract's closed action tokens, classes and shared operation/boundary/capability mapping; reject unknown tokens and aliases. Add trusted adjacent-module test bootstrapping without importing repository-selected plugins. Deliver in `scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`.
+- [ ] T003 [P] Create reusable disposable Git repositories, synthetic profile/owner/time/claim/runtime ports and fault hooks. Separate synthetic repository/state roots from the real checkout, isolate HOME/environment, refuse live ports and fail on attempted provider/network access. Tests must demonstrate fixture confinement rather than merely assert a fixture flag. Deliver in `scripts/test_profile_fixtures.py`.
 
 ## Phase 3: User Story 1 — Assess exact profile compatibility (P1, MVP)
 
@@ -242,21 +242,30 @@ T001 inventory/source identities remain unchanged. Prerequisite acceptance uses 
 a checkbox. This increment does not alter T001's existing marker or approve later tasks, provider activation,
 product dashboard work or live dispatch.
 
-Implementation revision: `96873a798626c405371d249524738d35db8774d2`. Exactly three new files: T002 owns
-`scripts/provider_profiles.py` and `scripts/test_provider_profiles.py`; T003 owns `scripts/test_profile_fixtures.py`.
-Existing executable modules, acceptance policy and Features 001–004 are unchanged.
+Implementation revisions (rebound after the pre-publication history rewrite): `cc2b1de` freezes the T002 tests,
+`fcc51f3` adds `scripts/provider_profiles.py`, `26bc628` and `0ee58e9` add `scripts/test_profile_fixtures.py`. The
+earlier recorded revision `96873a7` is not an ancestor of main and predates the rewrite; its evidence is superseded.
+Against baseline `a8de039` the implementation adds exactly three new scripts: T002 owns `scripts/provider_profiles.py`
+and `scripts/test_provider_profiles.py`; T003 owns `scripts/test_profile_fixtures.py`. Intervening commits also changed
+unrelated design documents (ADR 0006, architecture, product, paper) and this file; those are outside T002/T003 scope.
+Existing executable modules, acceptance policy and Features 001-004 are unchanged by the implementation.
 
-- T002: `/opt/homebrew/bin/python3.14 -I -B scripts/test_provider_profiles.py T002Tests -v`: four required methods
+- T002: `<supported-python-3.11+> -I -B scripts/test_provider_profiles.py T002Tests -v`: four required methods
   PASS within the approved 180-second envelope. Covers seven frozen canonical vectors, strict JSON/types, inclusive
   input limits, confined artifact paths and all 15 action recipes; no policy/authority decision is implemented.
-- T003: `/opt/homebrew/bin/python3.14 -I -B scripts/test_profile_fixtures.py T003Tests -v`: three required methods
+- T003: `<supported-python-3.11+> -I -B scripts/test_profile_fixtures.py T003Tests -v`: three required methods
   PASS within the approved 180-second envelope. Demonstrates private synthetic roots, target-bound authority, refused
   live ports/network/credential/fallback access and Git-metadata escape rejection with an external disposable index
   unchanged. These controlled fixture probes are not an OS sandbox or live-provider verification.
-- Independent exact-implementation review: CLEAR. Reviewer reran all seven methods and adversarial JSON/path/Git
+- Vector provenance: V01-V07 are parsed from `contracts/task-acceptance.md` at test time, not copied. The 15-row
+  action table in `test_canonical_actions` is a literal transcription, re-compared by hand against the table in
+  `contracts/cli-and-host.md` (class, boundary, operation, capability and package action); no automatic comparison
+  against the contract text exists yet and none was added here.
+- Independent review of the pre-rewrite revision: CLEAR; re-review of the rebound revisions is required. Reviewer reran all seven methods and adversarial JSON/path/Git
   probes. Repository validation and `git diff --check` PASS.
 - Full macOS repository acceptance and pristine required Linux CI are integration handoff gates; results remain
-  pending until recorded in the PR. The two markers record reviewed focused task results, not a full-suite or live pass.
+  pending until recorded in the PR. T002/T003 stay unchecked: T001's marker is open and full macOS/Linux acceptance is pending, so these results are
+focused evidence only, not task completion, a full-suite pass or live verification.
 
 The T001 preparation verifier intentionally freezes the pre-implementation script closure. Do not relax it or run
 its imports on these additions as an alleged acceptance pass. The new files above are authorized by this separate
