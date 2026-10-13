@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "contract": "whr-exit-codes",
+  "decision": "H15:b",
+  "adr": "docs/adr/0013-whr-exit-codes.md",
+  "status": "proposed",
+  "cli_range": { "min": 64, "max": 79, "reserved_unassigned": [75, 76, 77, 78, 79] },
+  "codes": [
+    { "code": 0, "name": "ok", "category": "success" },
+    { "code": 64, "name": "usage", "category": "usage" },
+    { "code": 65, "name": "not_found", "category": "not-found", "note": "includes a missing session interface" },
+    { "code": 66, "name": "unauthenticated", "category": "authentication" },
+    { "code": 67, "name": "forbidden", "category": "authorization" },
+    { "code": 68, "name": "conflict", "category": "conflict-or-wrong-state" },
+    { "code": 69, "name": "incompatible_contract", "category": "incompatible-contract-version", "note": "both versions named; a missing interface is 65" },
+    { "code": 70, "name": "needs_human", "category": "needs-human" },
+    { "code": 71, "name": "timeout", "category": "timeout" },
+    { "code": 72, "name": "interrupted", "category": "interrupted" },
+    { "code": 73, "name": "partial_failure", "category": "partial-failure" },
+    { "code": 74, "name": "internal", "category": "unclassified-failure" }
+  ],
+  "remote_status": {
+    "commands": ["shell", "console", "ssh", "agent attach"],
+    "passthrough_range": { "min": 0, "max": 255 },
+    "ambiguity": "A remote status may equal a CLI code in 64-79; with --json (not available for ssh) the exit kind disambiguates; for ssh a status in 64-79 is ambiguous by design.",
+    "json_exit_event_kind": ["cli", "remote"],
+    "human_mode_cli_failure": "stderr line prefixed 'whr:' (FR-017)",
+    "transport_loss": 72
+  },
+  "freeze": {
+    "test_file": "apps/whr/internal/exitcode/table_test.go",
+    "test_ids": [
+      "TestExitTableMatchesContract",
+      "TestExitTableCodesUniqueAndInRange",
+      "TestEveryExitPathMapsToCode",
+      "TestRemoteStatusPassthrough0_1_255",
+      "TestCLIFailureAnnouncedOnStderrAndKindCLI"
+    ],
+    "offline": true
+  }
+}
