@@ -35,6 +35,57 @@ Pure assessment blockers can coexist with exit 0. Successful authorized observat
 false; a normal execution action requires both true and cannot return success with an execution blocker. Safe-stop
 uses only its separately attributable safety authority; neither false execution flag constitutes its permission.
 
+## Canonical actions and capability mapping
+
+The closed action vocabulary is begin, inspect, verify, complete, record-commit, resume, rework, status, lookup,
+transfer, ready, publish, final-labels, provider-execute and safe-stop. Use these exact case-sensitive tokens in
+assess --action, PolicyEvidence.applicable_actions, CapabilityEvidence.action_results and authorization targets.
+ProfileAuthorization.allowed_actions may contain only execution-class tokens from the table. Unknown tokens,
+wildcards, duplicated tokens and aliases such as entry/completion are invalid; do not normalize them.
+Entry/completion/resume/eligibility/handoff are internal boundary labels, not additional grant actions.
+
+guard --operation accepts only begin/inspect/verify/complete/record-commit/resume/rework and maps one-to-one to the
+same action token; status maps to status, transfer to transfer and internal lookup_creation to lookup. assess previews
+the requested table action without performing it. exercise runs the mapped actions with confined synthetic ports;
+it is not an authorization action and cannot mint grants. ready/publish/final-labels are host API operations only,
+not new CLI subcommands. provider-execute/safe-stop are assessment-only future boundaries with no reference executor.
+
+Let G(a,m) mean the unchanged task_package.required_capabilities(a,m), where m is the separately validated task mode.
+It selects existing guard/transport requirements; it never supplies profile or task authorization. Each bridge.*
+capability additionally requires source-bound, action-specific bridge test evidence. A capability for one operation
+cannot stand in for another. All execution rows require current profile_eligible=true and task_eligible=true.
+
+| Action | Class / guard boundary | Required capability and delegation |
+| --- | --- | --- |
+| begin | Execution / entry | bridge.begin + G(entry,m); existing guard begin --context. |
+| inspect | Observation | bridge.inspect; existing guard inspect --attempt; scoped inspection authority. |
+| verify | Execution / completion | bridge.verify + G(completion,m); existing guard verify with current review. |
+| complete | Execution / completion | bridge.complete + G(completion,m); existing guard complete with current review. |
+| record-commit | Execution / completion | bridge.record-commit + G(completion,m); existing guard binds the exact commit. |
+| resume | Execution / resume | bridge.resume + G(resume,m); existing guard resume; actual retained phase/checks remain authoritative. |
+| rework | Execution / entry | bridge.rework + G(entry,owner-authorized rework); existing guard rework with separate corrective approval. |
+| status | Observation | ledger.read and bridge.status when a guard ID is retained; scoped inspection authority. |
+| lookup | Observation | bridge.lookup; validated creation-intent lookup under existing guard lock; scoped inspection authority. |
+| transfer | Execution / eligibility | claim.fenced-transfer, new-profile revalidation and every downstream transfer/ownership capability. |
+| ready | Execution / eligibility | G(ready,m), existing Feature 004 ready; separate eligibility-write authorization. |
+| publish | Execution / handoff | G(handoff,m), existing Feature 004 publication recovery; separate publication authorization/review. |
+| final-labels | Execution / handoff | G(handoff,m), existing final-label reconciliation after durable publication/evidence; separate label-write authorization. |
+| provider-execute | Execution / provider | Verified live provider.execution and task/claim gates; unavailable in this reference implementation. |
+| safe-stop | Safety | Verified runtime.safe-stop, applicable safety policy/capability and separately attributable bounded safety authorization; unavailable in the reference executor. |
+
+Observations require a fresh host-authenticated inspection decision scoped to project, task/worktree, retained attempt
+or creation intent, requested action and finite validity. They do not require an active execution grant and never
+run checks, implement, publish or call providers. Report both eligibility booleans false for these observation
+requests even if they succeed; record their sanitized observation result separately. Creation lookup may append its
+correlation result to the coordinator ledger under this authority, but never mutate guard/task state or authorize
+subsequent execution. A revoked execution grant cannot substitute for inspection authority.
+
+Safety similarly requires a distinct host-authenticated owner decision bound to project/profile/task/attempt,
+claim generation, the safe-stop action, its finite deadline and current cancellation capability. A revoked execution
+grant is not that decision. Report both execution eligibility flags false and retain uncertain cancellation as a
+blocker; no implicit continuation, credential access or remote call follows. This contract permits no real stop
+adapter implementation in Feature 005. Missing inspection/safety authority blocks that requested observation/action.
+
 ## Trusted host ports
 
 Profiles and configuration JSON cannot instantiate ports, authenticate owners or select executable/import paths.
@@ -43,7 +94,9 @@ Trusted host construction pins repository, tool/interpreter versions, state root
 - **ProfileAuthority**: independently authenticate owner decisions against exact project/profile/evidence/action/validity
   targets; observe revocation and trusted time; authenticate policy/capability reviewer attestations. Missing authority
   yields unknown/absent, not local file-based trust. A future production authority is separately approved; offline
-  reference authority is synthetic only. Existing task approval ports remain independently required.
+  reference authority is synthetic only. Expose separate authorize_inspection(target) and authorize_safety(target)
+  observations matching the table's targets and validity; execution grants cannot impersonate either decision.
+  Existing task approval ports remain independently required.
 - **GuardBridge**: invoke the accepted Feature 003 CLI with pinned interpreter, script revision and literal argv,
   approved cwd, isolated secret-free environment and finite approved deadlines. Validate one JSON response and exact
   exit mapping; revalidate source/inventory between boundaries. Never duplicate its scope, acceptance or recovery logic.
@@ -66,9 +119,12 @@ Trusted host construction pins repository, tool/interpreter versions, state root
   credential handling, cancellation/deadlines, provenance, uncertainty and recovery. No implementation or credential
   broker is included. A real provider call requires new reviewed adapter work and separate activation authorization.
 
-## Protected action protocol
+## Execution action protocol
 
-1. Resolve the host-pinned task/profile/tool identities and acquire the coordinator task lock.
+Observation/safety requests use their separately scoped authority from the action table, not the active execution
+grant required below. They still enforce trusted source, task ownership, applicable locks and the exact read/stop scope.
+
+1. Resolve the exact canonical action via the table, then host-pinned task/profile/tool identities, and acquire the coordinator task lock.
 2. Reobserve policy validity, capability applicability, current owner grant/revocation/time and claim generation.
 3. Validate applicable existing task/source/scope/mode/rework prerequisites. Never require Symphony/tracker for local
    manual actions; never skip their existing gates for orchestrated eligibility or external publication.

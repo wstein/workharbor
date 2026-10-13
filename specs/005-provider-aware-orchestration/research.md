@@ -76,6 +76,16 @@ exclusive-creator proof correlate one new record to the intent. No match or ambi
 **Alternatives considered**: Retry creation, take the first active row, mutate the guard schema, or add a new guard
 CLI option. These duplicate attempts, lose correlation or change protected Feature 003 implementation.
 
+## 8. Use one action vocabulary and two eligibility flags (I1/A1)
+
+**Decision**: The CLI/host action table defines exact tokens, operation/boundary mapping, capability requirements and
+separate execution, observation and safety authority. The model and CLI use only profile_eligible/task_eligible.
+**Rationale**: An entry boundary is not a begin grant alias; a profile-only preview cannot establish task eligibility.
+Inspection of revoked work and future safe-stop require their own attributable authority, not an execution-grant
+exception that silently re-enables implementation. Both execution flags stay false for observations/safety.
+**Alternatives considered**: Free-form action aliases, a single eligible flag, or accepting revoked execution grants
+for other actions. These conflate intent, capabilities and authorization.
+
 ## Evidence and resolved questions
 
 Research used the accepted local source at main `d646bd565daff85b03519ac1873b534e9c0c2288`, especially

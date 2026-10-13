@@ -95,6 +95,8 @@ provider-evidence questions. New provider policy verdicts are deliberately not i
 1. Implement strict profile/evidence validation and pure assessment; initially enumerate candidate profiles as
    unknown/unverified/disabled unless independently supplied evidence establishes otherwise.
 2. Add trusted host authority ports and immutable authorization bindings; file JSON alone never authenticates an owner.
+   Use the contract's closed action table for every operation/capability/grant comparison. Separate execution grants
+   from scoped inspection and safety decisions; pure previews and observations never claim task execution eligibility.
 3. Add a bounded ledger with transaction, lock and recovery tests before any coordinator side effects.
 4. Add the Feature 003 bridge preserving its JSON, exit categories, acceptance commands and immutable attempt identity.
    Its internal read-only creation lookup correlates lost begin/rework responses against a durable pre-call intent and
