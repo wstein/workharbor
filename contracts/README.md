@@ -40,3 +40,9 @@ Bundledock artifact after examining its upstream documentation and format.
 
 ## CLI contracts
 - [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, proposed in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
+
+## Agent session interface
+[agent-session-v1.md](agent-session-v1.md) with its
+[schema](agent-session-v1.schema.json): the versioned in-container session
+interface (list, attach, status, send input, stop) of owner decision H16:b,
+wstein/workharbor-nxt#71. Design baseline only; not implemented or verified.
