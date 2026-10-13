@@ -55,7 +55,7 @@ and does not add Nix or devenv to the current runtime requirements.
 Agents run inside the workspace container. A small in-container agent session interface
 gives owner-authorized interop through
 existing workspace access; its details belong to a future versioned contract
-under `contracts/` (#71) ([ADR 0009](adr/0009-in-container-ai-agents.md)). The
+under `contracts/` ([#71](https://github.com/wstein/workharbor-nxt/issues/71)) ([ADR 0009](adr/0009-in-container-ai-agents.md)). The
 control plane does not schedule agents; orchestration is wave two. Wire format and
 authorization binding are undesigned.
 
