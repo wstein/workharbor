@@ -26,6 +26,10 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = 'docs/development/ci-acceptance.json'
+# Native macOS observations: raw 490s, qualified 838s. Keep aggregate
+# headroom separate from the 300s utility-command and approved task deadlines.
+RAW_AGGREGATE_TIMEOUT_SECONDS = 600
+QUALIFIED_AGGREGATE_TIMEOUT_SECONDS = 1200
 
 
 def _source_context(root, event=None, base=None, head=None, checkout=None):
@@ -347,7 +351,7 @@ def drain_group(process):
             except ProcessLookupError:
                 return
             except PermissionError:
-                # macOS may reparent a zombie group to a different owner. The
+                # macOS can report EPERM for an exiting process group. The
                 # native snapshot must still establish absence or zombie state.
                 pass
             # Orphan zombies can remain visible on Linux. They cannot execute or
@@ -411,7 +415,8 @@ def check(root, context=None, source=None):
         with isolated_python_cache(), baseline_execution(root) as execution:
             # Raw make remains honest. Its expected assertion reds stop Make
             # before shell/prerequisite checks, so run those independently below.
-            raw = run(['make', 'check-raw', 'PYTHON=' + shlex.join(python_argv())], execution)
+            raw = run(['make', 'check-raw', 'PYTHON=' + shlex.join(python_argv())], execution,
+                      timeout=RAW_AGGREGATE_TIMEOUT_SECONDS)
             state = 'retained assertions remain RED' if manifest['retained_assertion_failures'] else 'full suite must be GREEN'
             print(f'Raw make check-raw exit: {raw}; {state}.', flush=True)
             valid = raw == (2 if manifest['retained_assertion_failures'] else 0)
@@ -430,7 +435,7 @@ def check(root, context=None, source=None):
             # Aggregate repository discovery needs its own finite budget as green suites grow.
             # This does not change any approved package per-check deadline.
             valid = run(python_argv('-c', code, str(execution/'scripts/check_ci.py'), str(execution)),
-                        execution, timeout=600) == 0 and valid
+                        execution, timeout=QUALIFIED_AGGREGATE_TIMEOUT_SECONDS) == 0 and valid
             clean_checkout(execution, context.checkout, allow_generated=True)
         if source_context(root, *context) != context:
             raise ValueError('Source changed during checks')

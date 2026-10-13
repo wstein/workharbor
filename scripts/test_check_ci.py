@@ -690,15 +690,16 @@ class SourceTests(unittest.TestCase):
             return original_run(argv, *args, **kwargs)
         def checks(argv, root, **kwargs):
             observed.append(kwargs)
-            if kwargs.get('timeout') == 600:
-                raise subprocess.TimeoutExpired(argv, 600)
+            if kwargs.get('timeout') == ci.QUALIFIED_AGGREGATE_TIMEOUT_SECONDS:
+                raise subprocess.TimeoutExpired(argv, ci.QUALIFIED_AGGREGATE_TIMEOUT_SECONDS)
             return 0
         with mock.patch.object(ci, 'load_manifest', return_value={'retained_assertion_failures': []}), \
                 mock.patch.object(ci, 'run', side_effect=checks), \
                 mock.patch.object(ci.subprocess, 'run', side_effect=commands):
             self.assertEqual(1, ci.check(self.root))
-        self.assertEqual({'timeout': 600}, observed[-1])
-        self.assertTrue(all(not arguments for arguments in observed[:-1]))
+        self.assertEqual({'timeout': ci.RAW_AGGREGATE_TIMEOUT_SECONDS}, observed[0])
+        self.assertEqual({'timeout': ci.QUALIFIED_AGGREGATE_TIMEOUT_SECONDS}, observed[-1])
+        self.assertTrue(all(not arguments for arguments in observed[1:-1]))
 
     def test_post_check_source_drift_blocks(self):
         manifest = {'retained_assertion_failures': []}
