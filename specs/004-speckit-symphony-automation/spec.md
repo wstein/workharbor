@@ -160,3 +160,21 @@ credential disclosure in files, diagnostics and children.
   remain necessary.
 - This specification creates no plan/tasks/implementation/approval/issue/queue/runtime change. Human specification
   review is the next gate.
+
+## Provider facts — reviewed 2026-10-13
+
+This dated context supplements the historical specification; it changes no FR, SC or approved execution.
+Additional providers remain out of scope. Detailed primary sources, interpretation and future options appear in
+[provider policy context](../../docs/development/provider-policy.md).
+
+- Anthropic's consumer automation restriction has API-key and explicit-permission exceptions. Current Claude Code
+  guidance permits conditional use of its unmodified binary with each user's own authentication; the October 7
+  Agent SDK notice also describes subscription-limit usage. Neither a blanket subscription automation ban nor
+  universal permission to reuse Claude login credentials follows from these sources.
+- Antigravity distinguishes direct headless scripting/CI from unsupported consumer third-party agent/application
+  wrapping and account rotation. Enterprise agreements and Gemini API access need separate assessment.
+- Pinned Symphony launches Codex App Server. Changing the executable alone does not demonstrate a compatible
+  Claude or Antigravity adapter.
+
+These new documentation bytes do not automatically retain, renew or transfer execution approval. FR-003 still
+requires the applicable recorded comparison and renewed approval for semantic or ambiguous changes.
