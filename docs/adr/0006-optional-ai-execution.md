@@ -1,6 +1,6 @@
 # 0006-optional-ai-execution: Optional execution board after the baseline
 
-Date: 2026-10-12
+Date: 2026-10-12 | Proposal updated: 2026-10-13
 Status: Proposed; no product implementation authorization
 
 ## Context
@@ -47,6 +47,38 @@ record and those exact inputs. Board movement, a label or an agent-authored fiel
 cannot grant approval. Semantic contract changes require renewed owner approval;
 the existing [bounded execution rules](../development/symphony.md#spec-kit-and-bounded-implementation-issues)
 continue to govern current development.
+
+## Read-only Spec Kit view first
+
+The first proposed increment is an authenticated, owner/project-scoped read-only
+view of `spec.md`, `plan.md` and `tasks.md` at an identified Git commit. Git stays
+authoritative; the dashboard stores a derived view and evidence references, never
+a second editable specification. Pin the parser/schema capability and retain the
+artifact paths, commit and content identities. Unknown layouts or unavailable
+objects produce an explicit unavailable/stale view, not inferred task state.
+
+Use the repository + feature + task key above, with separate attempts and
+workspaces. Show artifact approval, implementation progress, acceptance checks,
+independent review, PR/merge and live-verification evidence separately. A checked
+task is a reported progress marker; it establishes neither merge nor live success.
+Every observed result identifies its source revision, evidence and observation time.
+
+Each task card explains unmet prerequisites, blockers and the next permitted
+action. A later approval packet would show exact scope, allowed paths, commands,
+reviewed revision and changes since the previous approval. Semantic changes need
+renewed approval; progress-only changes retain it only when the existing recorded
+comparison proves that preservation. Missing evidence stays unknown.
+
+Prove the read-only view before proposing guarded command buttons. Such controls
+would use canonical trusted-host operations and freshly revalidate authorization,
+source, scope and recovery at invocation. Markdown, issue text and arbitrary
+workflow strings are never executable authority. Dragging a card cannot approve,
+dispatch or mutate scope. Manual and orchestrated attempts share the same task
+view while retaining distinct route and provider-compatibility observations.
+
+This sequence adds no approved product scope, live dispatch or Spec Kit command
+execution. Product reads/subscriptions themselves require the governance approval
+below; "read-only first" does not bypass that gate.
 
 ## Integration boundary
 
