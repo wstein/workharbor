@@ -361,3 +361,879 @@ T001 remains unchecked until separately accepted under its bounded contract. A r
 not implement profiles or prove live dispatch. No provider/tracker credentials, source fetching, live service or
 Symphony installation is required by the collection/vector verifier. Source inventory below scopes existing oracle
 inputs only; it adds no CI policy, adoption setting, task-specific exemption or historical-hash acceptance gate.
+
+## Inherited source and collection inventory
+
+Collection at the guard/oracle baseline observed **811 unique existing repository tests**, including **426 guard-related
+IDs** (402 under tests/test_single_task*.py and 24 direct verification cases). No test body was run by collection.
+The 385 other repository cases stay in normal acceptance; they are outside the inherited guard replay scope, not waived.
+All 426 native guard cases remain required PASS outcomes. Eight fixture/metadata audits below are native-only with
+explicit counterpart tests; the remaining **418 scenarios** require semantic replay through both guarded routes,
+yielding **836 paired scenario observations**, which may be grouped under T024 rather than added as 836 test methods.
+
+A native case ID is the complete prefix key concatenated with each method name in route_replay. Each paired ID is
+NATIVE_ID::manual or NATIVE_ID::orchestrated. Full ID lists, counts and canonical sorted-ID digest must match exactly.
+Every native-only exclusion is listed individually with its reason; no other exclusion is permitted. Positive guard
+controls are deliberately included in replay so a universally-blocking stub cannot satisfy a negative matrix.
+The synthetic-protected-tree mutation case remains replay-required; only the real-repository identity audit is native-only.
+
+Replay means the same source-pinned scenario/safety property and retained-state assertions through the coordinator,
+not merely calling an existing unit method outside it. Prime valid profile/task authority so missing unrelated gates
+cannot pass a negative case. Reuse approved source fixtures/fault conditions; instrumentation must prove the mapped
+production guard/bridge gate was reached. Internal unit exceptions map to their documented CLI/envelope category;
+retain the native unit test unchanged as the independent internal oracle. A positive native primitive/control must
+also yield the corresponding guarded positive observation. No mock-only success may count as an actual guard replay.
+All parameterized variants inside the pinned source case remain required, not a chosen representative.
+
+| Native class family | Guarded replay entry/safety property |
+| --- | --- |
+| ContextEntry / ContextRework | begin/rework and context/prerequisite/artifact entry rejection/retention. |
+| SingleTaskTests / SingleTaskAcceptanceTests / ScopeTests | begin/inspect/verify/complete; same source/index/history/mode/review/acceptance and marker assertions. |
+| StatePrimitiveTests / SingleTaskStateTests | begin/status/resume and owned store locking/schema/immutability/rollback; source fault conditions remain native controls as well. |
+| AcceptanceExecutionTests | verify/complete with the same check argv/output/mutation/timeout/process-cleanup condition. |
+| CompletionPublicationTests / CompletionRecoveryTests / TaskRecoveryTests | complete/resume/record-commit under the same intent/check/rename/fsync/crash/state conditions. |
+| ImplementationBindingTests / HandoffFreshnessTests | record-commit/resume with exact source/content/mode/commit/freshness rejection and retained identities. |
+| AuthorizedReworkTests | rework/resume with exact predecessor/corrective scope/check/review and retained history. |
+| CompetingTaskProcessTests / CliBoundaryTests | Synchronized competing command/claim transitions and stable sanitized failures, not sleep-based assertions. |
+| OfflineCommandMatrixTests / remaining MigrationAudit / synthetic ProtectedFeatureIdentity case | All task modes/no-provider behavior, versioned command lifecycle and protected-output rejection. |
+
+For a low-level scenario, replay must exercise its corresponding real guard-backed safety property, not invent a
+new public mutation API or change existing code to accept a test shim. Source-pinned fault instrumentation is allowed
+only in disposable fixtures with explicit offline provenance; it may inject the failure, never replace the owning
+validation/assertion with a manufactured result. Runtime collection/evidence must demonstrate every paired ID and
+all of its original applicable assertions. An unimplemented replay or inability to expose its property is a blocking
+acceptance gap requiring owner-reviewed refinement, not an automatic native-only reclassification.
+
+```json
+{
+  "kind": "inherited-guard-inventory",
+  "source_revision": "cdc47c4a6878b541b4a9425775c98561da157bdd",
+  "native_guard_count": 426,
+  "route_replay_count": 418,
+  "paired_observation_count": 836,
+  "guard_ids_sha256": "26f3a7ac47f4dfaf7f9b227dc312be4ac69c0805ef93f44af4ec9da1fd314ffb",
+  "native_only": {
+    "test_single_task.SingleTaskFixtureTests.test_fixture_creation_rejects_network": "Fixture-construction negative control, not a guard request; retain native proof and T003.test_no_live_ports counterpart.",
+    "test_single_task.SingleTaskFixtureTests.test_git_configuration_hooks_and_signing_are_isolated": "Fixture Git configuration audit; retain native proof and T003.test_isolated_fixture counterpart.",
+    "test_single_task.SingleTaskFixtureTests.test_protected_features_remain_unchanged": "Fixture/repository identity audit; retain native proof and T028.test_protected_trees counterpart.",
+    "test_single_task.SingleTaskFixtureTests.test_runtime_context_prerequisite_review": "Fixture data/approval preparation audit; retain native proof and T003.test_fixture_authority counterpart.",
+    "test_single_task.SingleTaskFixtureTests.test_tracker_credentials_are_removed_without_logging": "Fixture environment/redaction audit; retain native proof plus T003.test_no_live_ports and T028.test_secret_redaction counterparts.",
+    "test_single_task.SingleTaskFixtureTests.test_two_task_feature": "Fixture shape audit; retain native proof and T003.test_isolated_fixture counterpart.",
+    "test_single_task.SingleTaskMigrationAuditTests.test_original_cases_remain_required_and_discoverable": "Collection/retention audit, not guard execution; retain native proof and T028.test_generic_discovery counterpart.",
+    "test_single_task_scope.ProtectedFeatureIdentityTests.test_source_tree_ids_index_and_bytes_match_recorded_baseline": "Real repository physical/index/tree identity audit; retain native proof and T028.test_protected_trees counterpart."
+  },
+  "route_replay": {
+    "test_single_task.SingleTaskAcceptanceTests.": [
+      "test_acceptance_does_not_reuse_old_success",
+      "test_acceptance_literal_metacharacters",
+      "test_acceptance_local_only_envelope",
+      "test_acceptance_missing_executable",
+      "test_acceptance_missing_required_check",
+      "test_acceptance_nonzero_exit",
+      "test_acceptance_ordered_argv",
+      "test_acceptance_safe_failure_evidence",
+      "test_acceptance_timeout",
+      "test_acceptance_validated_cwd",
+      "test_check_mutates_allowed_content",
+      "test_check_mutates_allowed_mode",
+      "test_check_mutates_outside_scope",
+      "test_check_mutates_task_content",
+      "test_check_removes_allowed_content",
+      "test_complete_failed_check_preserves_marker",
+      "test_complete_idempotent_same_attempt",
+      "test_complete_preserves_immutable_entry_mode",
+      "test_complete_rejects_manual_marker",
+      "test_complete_reruns_after_verify",
+      "test_complete_selected_checkbox_only",
+      "test_inspect_after_completion_is_read_only",
+      "test_inspect_canonical_manifest",
+      "test_inspect_does_not_execute_checks",
+      "test_inspect_identities",
+      "test_inspect_preserves_content_and_events",
+      "test_inspect_reflects_current_content",
+      "test_inspect_rejects_invalid_scope",
+      "test_inspect_respects_worktree_lock",
+      "test_rejected_review_retains_safe_blocker",
+      "test_review_duplicate_keys_rejected",
+      "test_review_invalid_utf8_rejected",
+      "test_review_missing",
+      "test_review_nonfinite_json_rejected",
+      "test_review_not_approved",
+      "test_review_stale_absence",
+      "test_review_stale_bytes",
+      "test_review_stale_mode",
+      "test_review_wrong_attempt",
+      "test_review_wrong_context_digest",
+      "test_review_wrong_manifest_digest",
+      "test_review_wrong_task",
+      "test_verify_preserves_pending_marker"
+    ],
+    "test_single_task.SingleTaskMigrationAuditTests.": [
+      "test_all_contract_commands_have_local_versioned_outcomes",
+      "test_legacy_and_missing_commands_cannot_bypass_context"
+    ],
+    "test_single_task.SingleTaskTests.": [
+      "test_absent_file_differs_from_sentinel_contents",
+      "test_acceptance_cannot_mutate_scope_or_complete",
+      "test_committed_violation_hidden_by_revert",
+      "test_complete_and_retry_preserve_other_task",
+      "test_dirty_checkout_and_unknown_task_rejected",
+      "test_early_completion_without_evidence_rejected",
+      "test_failed_acceptance_does_not_complete",
+      "test_historical_other_task_hidden_by_revert",
+      "test_interruption_after_checkbox_before_phase_update",
+      "test_mode_change_requires_rework_even_without_git_filemode",
+      "test_reject_other_checkbox_and_selected_description",
+      "test_reject_outside_scope_committed_and_untracked",
+      "test_staged_other_task_hidden_by_worktree_restore",
+      "test_staged_symlink_hidden_by_worktree_restore",
+      "test_staged_violation_hidden_by_worktree_restore",
+      "test_traversal_and_symlink_rejected",
+      "test_valid_context_cannot_replace_attempt_awaiting_handoff"
+    ],
+    "test_single_task_acceptance.AcceptanceExecutionTests.": [
+      "test_event_payload_survives_reopen_and_rejects_tampering",
+      "test_existing_write_adapter_preserves_read_only_default",
+      "test_missing_executable",
+      "test_mutation_of_allowed_content",
+      "test_mutation_of_outside_scope",
+      "test_mutation_of_tasks",
+      "test_nonzero_exit_and_discarded_output",
+      "test_ordered_literal_argv_and_cwd_with_durable_success",
+      "test_signal_permission_requires_observed_group_state",
+      "test_stale_review_blocks_before_execution",
+      "test_successful_parent_cannot_leave_background_descendant",
+      "test_timeout_kills_descendant_group"
+    ],
+    "test_single_task_binding.ImplementationBindingTests.": [
+      "test_candidate_content_mismatch_rejected",
+      "test_candidate_mode_mismatch_rejected",
+      "test_checked_rework_binding_preserves_uppercase_marker",
+      "test_commit_without_completed_marker_rejected",
+      "test_matching_binding_is_immutable_and_separate_from_verification",
+      "test_physical_mode_drift_rejected",
+      "test_physical_sealed_content_drift_rejected",
+      "test_reverted_other_task_history_rejected",
+      "test_staged_hidden_allowed_drift_rejected",
+      "test_staged_hidden_outside_change_rejected",
+      "test_unavailable_commit_rejected",
+      "test_unreachable_existing_commit_rejected"
+    ],
+    "test_single_task_completion.CompletionPublicationTests.": [
+      "test_changed_content_after_acceptance_cannot_publish",
+      "test_corrupt_acceptance_binding_cannot_publish",
+      "test_corrupt_manifest_type_cannot_publish",
+      "test_directory_flush_failure_keeps_exact_post_bytes_and_intent",
+      "test_intent_failure_keeps_marker_pending",
+      "test_intent_is_durable_before_atomic_replace",
+      "test_later_failed_acceptance_invalidates_prior_success",
+      "test_manual_marker_cannot_become_completion_intent",
+      "test_missing_acceptance_cannot_publish",
+      "test_replace_failure_retains_durable_intent"
+    ],
+    "test_single_task_context.OfflineCommandMatrixTests.": [
+      "test_all_three_modes_run_offline_without_credentials_or_services",
+      "test_network_attempt_in_entry_code_is_detected_before_attempt_creation",
+      "test_protected_feature_paths_cannot_be_approved_as_outputs"
+    ],
+    "test_single_task_context.TaskContextEntryTests.": [
+      "test_artifact_digest_mismatch",
+      "test_artifacts_append_existing_footer",
+      "test_artifacts_binding_fields",
+      "test_artifacts_crlf_bytes",
+      "test_artifacts_fenced_checkbox",
+      "test_artifacts_fenced_footer",
+      "test_artifacts_footer_records",
+      "test_artifacts_rework_binding",
+      "test_artifacts_spec_plan_footer",
+      "test_canonical_vector",
+      "test_changed_approval_binding",
+      "test_changed_existing_evidence",
+      "test_context_table_mismatch",
+      "test_contradictory_dependency_rows",
+      "test_dependency_bare_cr",
+      "test_dependency_cycle",
+      "test_dependency_sorted_lists",
+      "test_dirty_index",
+      "test_dirty_tracked",
+      "test_dirty_untracked",
+      "test_duplicate_dependency_ids",
+      "test_duplicate_dependency_row",
+      "test_duplicate_dependency_table",
+      "test_duplicate_json_key",
+      "test_duplicate_prerequisite_evidence",
+      "test_duplicate_task_id",
+      "test_entry_event_rollback",
+      "test_entry_legacy_rejected",
+      "test_entry_rejections_preserve_evidence",
+      "test_entry_status_readonly",
+      "test_extra_dependency_row",
+      "test_extra_field",
+      "test_extra_prerequisite_evidence",
+      "test_failed_prerequisite_check",
+      "test_fenced_duplicate_ignored",
+      "test_fenced_pseudo_task",
+      "test_invalid_evidence_footer",
+      "test_malformed_dependency_table",
+      "test_malformed_json",
+      "test_missing_approval",
+      "test_missing_artifact",
+      "test_missing_dependency_table",
+      "test_missing_field",
+      "test_missing_prerequisite_evidence",
+      "test_multiple_task_ids",
+      "test_nonancestor_artifact_commit",
+      "test_omitted_dependency_row",
+      "test_prerequisite_manifest_types",
+      "test_prerequisites_fenced_crlf",
+      "test_prerequisites_valid",
+      "test_progress_checkbox_only",
+      "test_progress_evidence_footer",
+      "test_removed_existing_evidence",
+      "test_schema_allowed_paths",
+      "test_schema_checks",
+      "test_schema_nested_fields",
+      "test_schema_primitive_types",
+      "test_schema_rework_fields",
+      "test_schema_unicode_feature",
+      "test_schema_valid",
+      "test_schema_valid_rework",
+      "test_scope_alias_paths",
+      "test_scope_allowed_directory",
+      "test_scope_allowed_symlink_component",
+      "test_scope_changed_gitlink",
+      "test_scope_check_cwd_symlink",
+      "test_scope_checked_implement",
+      "test_scope_clean_gitlink",
+      "test_scope_executable_filter",
+      "test_scope_feature_symlink",
+      "test_scope_fence_lengths",
+      "test_scope_git_hooks",
+      "test_scope_gitlink_output",
+      "test_scope_hidden_mode",
+      "test_scope_hidden_tracked",
+      "test_scope_nonregular_artifact",
+      "test_scope_specs_symlink",
+      "test_scope_symlink_artifact",
+      "test_scope_traversal",
+      "test_scope_unicode_feature",
+      "test_self_dependency",
+      "test_semantic_plan_drift",
+      "test_semantic_spec_drift",
+      "test_semantic_task_description",
+      "test_semantic_task_order",
+      "test_source_digest_mismatch",
+      "test_source_excerpt_mismatch",
+      "test_stale_prerequisite_check",
+      "test_stale_prerequisite_commit",
+      "test_stale_prerequisite_digest",
+      "test_unchecked_prerequisite",
+      "test_unknown_artifact_commit",
+      "test_unknown_dependency_id",
+      "test_unknown_feature",
+      "test_unknown_task_id",
+      "test_unsorted_dependency_rows",
+      "test_unsupported_schema",
+      "test_valid_empty_dependencies",
+      "test_valid_satisfied_dependency"
+    ],
+    "test_single_task_context.TaskContextReworkTests.": [
+      "test_absent_retained_predecessor",
+      "test_authorized_entry_retains_marker_and_prior_evidence",
+      "test_corrective_completion_retains_checked_bytes_and_old_history",
+      "test_dirty_rework_baseline_preserves_work",
+      "test_missing_prior_attempt",
+      "test_missing_prior_implementation",
+      "test_missing_rework_approval",
+      "test_ready_assertion_cannot_authorize_rework",
+      "test_renewed_corrective_scope_and_checks_are_bound",
+      "test_retry_counter_cannot_authorize_rework",
+      "test_semantic_artifact_drift_requires_renewal",
+      "test_unavailable_prior_implementation_commit",
+      "test_unbound_prior_implementation_cannot_authorize_rework",
+      "test_unrenewed_corrective_checks",
+      "test_unrenewed_corrective_scope",
+      "test_wrong_predecessor_task",
+      "test_wrong_prior_implementation_commit"
+    ],
+    "test_single_task_handoff.HandoffFreshnessTests.": [
+      "test_argument_failure_after_completion_stays_safe_and_stable",
+      "test_head_change_after_checks_and_binding_cannot_mark_ready",
+      "test_ready_record_binds_exact_fresh_acceptance"
+    ],
+    "test_single_task_recovery.CompletionRecoveryTests.": [
+      "test_active_reruns_checks_and_completes_same_attempt",
+      "test_changed_sealed_pre_intent_blocks",
+      "test_claimed_applied_phase_with_pre_bytes_blocks",
+      "test_corrupt_checkbox_phase_blocks_before_checks_and_keeps_evidence",
+      "test_manual_marker_without_intent_blocks_before_checks",
+      "test_missing_later_intent_is_corruption",
+      "test_prepared_after_replace_reruns_and_finishes_original_intent",
+      "test_prepared_before_replace_reruns_and_finishes_original_intent",
+      "test_prepared_failed_check_does_not_publish",
+      "test_prepared_stale_review_blocks_without_publication",
+      "test_prepared_unexpected_private_temporary_is_retained",
+      "test_publication_file_swapped_to_fifo_rejects_without_blocking",
+      "test_real_crash_after_temporary_fsync_recovers_without_scope_orphan",
+      "test_repeated_recovery_reruns_without_duplicate_transition",
+      "test_sealed_pre_intent_reruns_checks"
+    ],
+    "test_single_task_rework.AuthorizedReworkTests.": [
+      "test_absent_predecessor_rejected",
+      "test_actual_corrective_completion_keeps_checked_marker_and_old_events",
+      "test_authorized_entry_links_new_immutable_attempt",
+      "test_clean_later_reviewed_baseline_keeps_original_binding",
+      "test_corrupt_predecessor_completion_phase_is_rejected",
+      "test_missing_authorization_rejected",
+      "test_retained_schema_rejects_boolean_versions_and_sequence",
+      "test_unbound_predecessor_rejected",
+      "test_unrenewed_corrective_checks_rejected",
+      "test_unrenewed_corrective_scope_rejected",
+      "test_wrong_bound_commit_rejected"
+    ],
+    "test_single_task_scope.ProtectedFeatureIdentityTests.": [
+      "test_synthetic_protected_tree_mutation_is_rejected_by_scope"
+    ],
+    "test_single_task_scope.SingleTaskScopeTests.": [
+      "test_absent_is_distinct_from_sentinel_file",
+      "test_allowed_committed_edits",
+      "test_allowed_staged_edits",
+      "test_allowed_worktree_edits",
+      "test_canonical_unicode_binary_mode_and_absence_vector",
+      "test_fixed_checkbox_normalization_vector",
+      "test_fixed_normalization_preserves_other_checked_marker",
+      "test_inspection_without_checks_task_or_acceptance_mutation",
+      "test_manifest_entry_missing_mode",
+      "test_manifest_entry_missing_path",
+      "test_manifest_entry_missing_sha256",
+      "test_manifest_entry_missing_type",
+      "test_manifest_missing_entries",
+      "test_manifest_missing_schema_version",
+      "test_manifest_reject_absent_nonnull_digest",
+      "test_manifest_reject_absent_nonnull_mode",
+      "test_manifest_reject_boolean_version",
+      "test_manifest_reject_duplicate_path",
+      "test_manifest_reject_entries_wrong_type",
+      "test_manifest_reject_entry_unknown_field",
+      "test_manifest_reject_unknown_field",
+      "test_manifest_reject_unpaired_surrogate_path",
+      "test_manifest_reject_unsafe_path",
+      "test_manifest_reject_unsorted_paths",
+      "test_manifest_reject_unsupported_version",
+      "test_manifest_reject_wrong_digest",
+      "test_manifest_reject_wrong_mode",
+      "test_manifest_reject_wrong_type",
+      "test_normalize_only_selected_checkbox_with_crlf",
+      "test_physical_executable_mode_in_manifest",
+      "test_reject_baseline_submodule_content_drift",
+      "test_reject_committed_change_hidden_by_revert",
+      "test_reject_directory_output",
+      "test_reject_file_swapped_to_fifo_at_open",
+      "test_reject_hidden_physical_outside_bytes_and_mode",
+      "test_reject_historical_gitlink_hidden_by_revert",
+      "test_reject_historical_symlink_hidden_by_revert",
+      "test_reject_historical_task_mutation_hidden_by_revert",
+      "test_reject_index_gitlink",
+      "test_reject_missing_semantic_review",
+      "test_reject_negative_semantic_review",
+      "test_reject_nonignored_untracked_change",
+      "test_reject_other_task_marker",
+      "test_reject_review_stale_after_absent_output_creation",
+      "test_reject_review_stale_after_output_bytes_change",
+      "test_reject_review_stale_after_output_mode_change",
+      "test_reject_selected_task_text",
+      "test_reject_staged_change_hidden_by_worktree_restore",
+      "test_reject_staged_symlink_hidden_by_worktree_restore",
+      "test_reject_staged_task_mutation_hidden_by_worktree_restore",
+      "test_reject_symlink_worktree",
+      "test_reject_task_order",
+      "test_reject_unauthorized_worktree_change",
+      "test_review_mismatched_attempt_id",
+      "test_review_mismatched_content_manifest_digest",
+      "test_review_mismatched_context_digest",
+      "test_review_mismatched_task_id",
+      "test_review_missing_approved",
+      "test_review_missing_attempt_id",
+      "test_review_missing_content_manifest_digest",
+      "test_review_missing_context_digest",
+      "test_review_missing_evidence_ref",
+      "test_review_missing_reviewer_ref",
+      "test_review_missing_schema_version",
+      "test_review_missing_task_id",
+      "test_review_reject_boolean_version",
+      "test_review_reject_empty_evidence_ref",
+      "test_review_reject_empty_reviewer_ref",
+      "test_review_reject_unknown_field",
+      "test_review_reject_unsupported_version",
+      "test_review_wrong_type_approved",
+      "test_review_wrong_type_attempt_id",
+      "test_review_wrong_type_content_manifest_digest",
+      "test_review_wrong_type_context_digest",
+      "test_review_wrong_type_evidence_ref",
+      "test_review_wrong_type_reviewer_ref",
+      "test_review_wrong_type_schema_version",
+      "test_review_wrong_type_task_id",
+      "test_unchanged_baseline_gitlink_and_symlink",
+      "test_valid_manifest_schema",
+      "test_valid_semantic_review"
+    ],
+    "test_single_task_state.CompetingTaskProcessTests.": [
+      "test_begin_has_one_owner_with_all_competitors_blocked",
+      "test_complete_has_one_owner_and_conflicting_commands_do_not_write",
+      "test_killed_owner_releases_lock_and_same_attempt_resumes",
+      "test_marker_directory_flush_failure_retains_intent_and_recovers",
+      "test_publication_flush_failure_retains_intent_and_recovers",
+      "test_repeated_retained_file_flush_failure_blocks_publication",
+      "test_rework_has_one_owner_and_preserves_predecessor_history",
+      "test_sqlite_intent_failure_retains_acceptance_and_recovers"
+    ],
+    "test_single_task_state.SingleTaskStateTests.": [
+      "test_append_only_events",
+      "test_corrupt_state_retained",
+      "test_immutable_context",
+      "test_invalid_entry_preserves_tasks",
+      "test_legacy_state_retained",
+      "test_lock_released_after_exit",
+      "test_one_lock_owner",
+      "test_sanitized_structured_error",
+      "test_transaction_rollback",
+      "test_unsupported_state_retained"
+    ],
+    "test_single_task_state.TaskRecoveryTests.": [
+      "test_block_after_acceptance_check",
+      "test_block_after_acceptance_content",
+      "test_block_after_acceptance_missing_review",
+      "test_block_after_acceptance_review",
+      "test_block_after_acceptance_task_bytes",
+      "test_block_after_intent_check",
+      "test_block_after_intent_content",
+      "test_block_after_intent_missing_review",
+      "test_block_after_intent_review",
+      "test_block_after_intent_task_bytes",
+      "test_block_after_replace_check",
+      "test_block_after_replace_content",
+      "test_block_after_replace_missing_review",
+      "test_block_after_replace_review",
+      "test_block_after_replace_task_bytes",
+      "test_block_before_acceptance_check",
+      "test_block_before_acceptance_missing_review",
+      "test_block_before_acceptance_review",
+      "test_block_before_acceptance_task_bytes",
+      "test_checked_rework_after_acceptance",
+      "test_checked_rework_before_acceptance",
+      "test_checked_rework_block_check",
+      "test_checked_rework_block_content",
+      "test_checked_rework_block_missing_intent",
+      "test_checked_rework_block_review",
+      "test_contradictory_intent_blocks_recovery",
+      "test_corrupt_context_copy_is_retained",
+      "test_corrupt_journal_is_retained",
+      "test_corrupt_latest_acceptance_blocks_recovery",
+      "test_failed_handoff_rerun_preserves_bound_evidence",
+      "test_later_progress_without_intent_is_corruption",
+      "test_missing_journal_is_not_reconstructed",
+      "test_record_commit_rejects_changed_mode",
+      "test_record_commit_rejects_reverted_history_violation",
+      "test_record_commit_rejects_staged_hidden_violation",
+      "test_record_commit_with_mismatched_sealed_output",
+      "test_record_commit_without_completed_marker",
+      "test_record_matching_commit_and_fresh_handoff",
+      "test_record_unavailable_commit_retains_evidence",
+      "test_record_unreachable_existing_commit",
+      "test_resume_after_acceptance",
+      "test_resume_after_check_result",
+      "test_resume_after_checkbox",
+      "test_resume_after_completion",
+      "test_resume_after_directory_flush",
+      "test_resume_after_intent",
+      "test_resume_after_replace",
+      "test_resume_before_acceptance",
+      "test_resume_before_intent",
+      "test_verification_retains_original_implementation_identity"
+    ],
+    "verify_t003_state.StatePrimitiveTests.": [
+      "test_append_only_events_and_progress",
+      "test_corrupt_journal_retained",
+      "test_cross_process_lock_and_release",
+      "test_durability_failure_blocks",
+      "test_durable_immutable_attempt",
+      "test_legacy_evidence_retained",
+      "test_lock_released_after_holder_exit",
+      "test_one_active_attempt",
+      "test_transaction_failure_rolls_back",
+      "test_unsafe_context_copy_rejected",
+      "test_unsafe_state_path_rejected",
+      "test_unsupported_version_retained"
+    ],
+    "verify_t004_cli.CliBoundaryTests.": [
+      "test_acceptance_exit_four_does_not_echo_output_or_argv",
+      "test_all_commands_share_nonblocking_store_lock",
+      "test_argument_errors_are_safe_and_stable",
+      "test_deferred_commands_do_not_enter_or_execute",
+      "test_legacy_acceptance_holds_lock_against_all_commands",
+      "test_legacy_success_envelope",
+      "test_lock_released_after_cli_error",
+      "test_malformed_context_is_not_echoed",
+      "test_mixed_legacy_and_sqlite_is_never_adopted",
+      "test_persistence_exit_six_is_safe",
+      "test_scope_blocker_exit_three",
+      "test_unsafe_lock_paths_rejected_without_external_writes"
+    ]
+  }
+}
+```
+
+## Protected oracle identities
+
+The following reference records preserve the existing guard/automation/test oracle for this bounded feature. Existing
+files keep bytes and modes, including physical executable bits and index entries. Additive Feature 005 script/test
+paths are allowed only by their reviewed task scope; do not compare the whole scripts tree against the old tree and
+thereby reject legitimate additions. Protected tests and source-data trees stay unchanged. New Feature 005 contract
+and progress updates are outside these protected trees; their separate artifact approvals still apply.
+The runnable verifier below is frozen for T001 preparation and rejects every additive script path before import.
+Later tasks need a separately reviewed source closure for their approved additions before using an updated verifier;
+this T001 snapshot does not authorize loading future code.
+
+These identities are task-scope/provenance records, not a new global CI historical-hash whitelist. The generic checker,
+acceptance manifest, source-pin semantics and deadlines are unchanged. A changed oracle requires reviewed inventory
+and renewed affected task/source authorization; do not update a pin solely to make a failing comparison pass.
+
+```json
+{
+  "kind": "protected-oracle-source",
+  "source_revision": "cdc47c4a6878b541b4a9425775c98561da157bdd",
+  "trees": {
+    "specs/001-workspace-lifecycle": "0fda80d6f62c7576394495969187f349f7d0a81a",
+    "specs/002-symphony-doc-smoke": "3b2dce04b696b247e21535c741759cc5633b514a",
+    "specs/003-single-task-entry": "214442b5fbccde328af7188e84bf80f3a72a5ff1",
+    "specs/004-speckit-symphony-automation": "51710b73b581efada60fa8318fa7c71959cef794",
+    "tests": "777cd5843b3f7b39ce1b1ea52871792cd86dadf7",
+    "docs/development": "6a161c73175f0618d776054bad244d63f39a898d"
+  },
+  "existing_files": {
+    "scripts/approval_binding.py": {
+      "mode": "100644",
+      "blob": "8edafae1d55b0c2d9d76874bfc20a3f9de8967b0",
+      "sha256": "89653f8f0ffabe42ee8ff04dfb94365caa4f63838cff7b27571fdfb76e9bda06"
+    },
+    "scripts/check_ci.py": {
+      "mode": "100644",
+      "blob": "ea7a191140a4d5645e488d93e3959ded74719d5c",
+      "sha256": "65952398778133fd57dc980a066f41d64d03244fbbd740ce124eac571f7e525c"
+    },
+    "scripts/check_repo.py": {
+      "mode": "100644",
+      "blob": "44b6735b9164963ec64b5bbd0a066fa9ad87a6ad",
+      "sha256": "8f8d7077a58586b0cf0b5d345a5caafee4570be3e61188873a2649bd7dd07c6b"
+    },
+    "scripts/prepare_publication.py": {
+      "mode": "100644",
+      "blob": "3a16da54dcbeac431955efc879d88912e2bed9d5",
+      "sha256": "f9b2556b54b61cd7294b2f1a5ff12d6d9962661fdc4c2dd9c547d38ab91b9745"
+    },
+    "scripts/prepare_symphony.py": {
+      "mode": "100644",
+      "blob": "452d9c07307ce2f99e6c75a7c027409411097737",
+      "sha256": "debc98e90f5c9a90c023e116bcac3371e2921ce7dd3a99d0c5f28f778e5bcbf1"
+    },
+    "scripts/select_feature.py": {
+      "mode": "100644",
+      "blob": "13bf8590701e9194d10a9b450181c08906009e4d",
+      "sha256": "336f026f4d5c78b60f19d2e41aad0a751dfd247a393ed7bb974d2b7bfca6acf5"
+    },
+    "scripts/single_task.py": {
+      "mode": "100644",
+      "blob": "bae3d398418aa86086f26bd7e9e07bd9479ca4f3",
+      "sha256": "a95edc02a1803df7f6491a90ea53bbd790ddb34c68e5252ac1574e39ab7af87b"
+    },
+    "scripts/single_task_acceptance.py": {
+      "mode": "100644",
+      "blob": "8511387407f5d0b1becf7beabc3adb4c306ed286",
+      "sha256": "af1157b5981fb7d5d0f0c3ac27bae8b9be61095e289410048b4749445819ef16"
+    },
+    "scripts/single_task_context.py": {
+      "mode": "100644",
+      "blob": "d510d9d0b7fd72b0dd18699a590917e2d45d8b47",
+      "sha256": "87acb4351f4b51e2585228315a36832b4a08ba6ff26bed80698a878dd60c9164"
+    },
+    "scripts/single_task_scope.py": {
+      "mode": "100644",
+      "blob": "fe2f67b72d7b1a438b31bb91764977b4cd0c2767",
+      "sha256": "9e5f3f05e6f970128beb84274ad584ccae16a66bf21cf048ded731a0128a52b5"
+    },
+    "scripts/single_task_state.py": {
+      "mode": "100644",
+      "blob": "d31bdaf3ceba4dd9396e79faf17e04409d8d82ba",
+      "sha256": "b0029bb1a5fe47e367dee737f4d45ce3e2229c3a5a6f7c3afa0062984f97b270"
+    },
+    "scripts/symphony-before-run.sh": {
+      "mode": "100755",
+      "blob": "2578480dfe54fbdf2b03d0de026727ffb78c1cd4",
+      "sha256": "09b6abea6ca623e3424c284f15364ced2069626f73092cf9cffdb0c766f2af41"
+    },
+    "scripts/task_automation.py": {
+      "mode": "100644",
+      "blob": "0017771ded18e23d7dcc67dc109819345398c17b",
+      "sha256": "5e42c61d99092528e008467ad09ea41e6040a52023f43dbe0d77a727d292b895"
+    },
+    "scripts/task_handoff.py": {
+      "mode": "100644",
+      "blob": "e2fbda2eafa4c6ef50973b249e8ae169e822eafd",
+      "sha256": "5fc7d3640c4638218e6295b76f9408fe55ed55b4baca6357b97ee595153fe014"
+    },
+    "scripts/task_outcomes.py": {
+      "mode": "100644",
+      "blob": "9d17ec2b3a4df4cc368a04dd8b2532e523b490a9",
+      "sha256": "3683aa2283e219e8e253b619cc3a41ec51c5bc2ba29c161305ee1e3e2c4938cd"
+    },
+    "scripts/task_package.py": {
+      "mode": "100644",
+      "blob": "1b0034cce68b6fd43e0a7fde0bc699101a676d4d",
+      "sha256": "1a2fdde7bbd58126cb2b12f686b2913aa3ae3f918e25bd269e1a6a611b2724d0"
+    },
+    "scripts/task_source.py": {
+      "mode": "100644",
+      "blob": "12bcca0bc7102a2ec9ba5cda64a174747b501101",
+      "sha256": "6179fa6176762f9fb436d6d474f2a09656d8d72bcb73ea65d2ac2f1c729183a3"
+    },
+    "scripts/task_tracker.py": {
+      "mode": "100644",
+      "blob": "1a4fa12b81a93f1fe56ebe7a7f41eb5df2349d49",
+      "sha256": "42780c26a2f6cb2a55e16ec5ea72507f9292d1950db4f39083dafc5a19ecc679"
+    },
+    "scripts/test_approval_binding.py": {
+      "mode": "100644",
+      "blob": "91701e759e445359b8f2bc7bfd027bd1cb1c7a0f",
+      "sha256": "337cb855da95e31685acc12b8c9422ac2f6de83bf52bf74ce7dcc94db8f161f6"
+    },
+    "scripts/test_check_ci.py": {
+      "mode": "100644",
+      "blob": "740eefbeeb02351ed26b1e594ce9fbec650c70b4",
+      "sha256": "f598e61a09cf8388dd1a49adf622b8e7a72c64b3fd48229beb7def4660b2841b"
+    },
+    "scripts/test_prepare_publication.py": {
+      "mode": "100644",
+      "blob": "97de74f93d1e3d1319db37156316f7b6faa7de98",
+      "sha256": "1669e81085d58f1f23fba6c7f48a3e8ef8304370891d8f86d39ae1322d6b4f65"
+    },
+    "scripts/test_task_automation.py": {
+      "mode": "100644",
+      "blob": "a05af078adb24d0b7e29ccbc21daea8f8b044faf",
+      "sha256": "2a625f7cdc3f29f27ab7b234754a58f25ddde1fbe96fa7d7d4e907dd529aeee1"
+    },
+    "scripts/test_task_fixtures.py": {
+      "mode": "100644",
+      "blob": "51c8156a11fe7ff4079bc7a494ea15a4a0a4cdfa",
+      "sha256": "b34cbd55f1355689abe4ef28c22065d17da70ff43324bf236d6034f3f93c43d6"
+    },
+    "scripts/test_task_handoff.py": {
+      "mode": "100644",
+      "blob": "1ce7865323281bbd091f6437c5a9d9d8d6983c23",
+      "sha256": "85a5a42c3c2ce786f899d611e709398d31adb0c759c89b871885699863b5e26e"
+    },
+    "scripts/test_task_measurement.py": {
+      "mode": "100644",
+      "blob": "3578c8e5ba6da4b67e33d2fae53f86a360dd8a19",
+      "sha256": "92168ad3a7eeed8334670c3b923ed4d1f4be5d45a23170b4df6605d26e52049b"
+    },
+    "scripts/test_task_outcomes.py": {
+      "mode": "100644",
+      "blob": "7e41b4b03c882d07714ca5d795e97b685308753c",
+      "sha256": "7c4fe29c30c96dd9fc030d9e96a04282f7edfd854b8b3acce02ce05f7933f50c"
+    },
+    "scripts/test_task_package.py": {
+      "mode": "100644",
+      "blob": "18bf9eaae0cdf783e6f949d71033b052db5ac676",
+      "sha256": "aafb6877882b1db1554af759306d60b9ea76b0acc0aa033cf4d652d7aef7159f"
+    },
+    "scripts/test_task_readiness.py": {
+      "mode": "100644",
+      "blob": "389b2530625bf358659006f4fd5778048238aba0",
+      "sha256": "e4887b65ee770db2ed001d58c6bc56760681180937fcaf47ac1250df072857c0"
+    },
+    "scripts/test_task_runtime.py": {
+      "mode": "100644",
+      "blob": "10b83903f06f13f4fb298f8f81f0b9cc891f16ff",
+      "sha256": "9b8d298681e55cda7a0b7e626cd63f502a81feaf84cecde27b20107ad3fefc71"
+    },
+    "scripts/test_task_source.py": {
+      "mode": "100644",
+      "blob": "2b3e680868f6deb40a4a254fdb892962b529b7b4",
+      "sha256": "9214ec195dcef695cfc064f0c3d47fffbedad6276a53dad7192703952c94a0a1"
+    },
+    "scripts/test_task_tracker.py": {
+      "mode": "100644",
+      "blob": "321bffa267840fafd67b7dd32a6bc24a9b46a9ae",
+      "sha256": "22864e5fb663924bb5eb5e96f247d5b373694f856ccf3aa9ca03c4930239c4e2"
+    },
+    "scripts/verify_t002_red.py": {
+      "mode": "100644",
+      "blob": "6084b17b12799f147314da2db18305c6931f2db2",
+      "sha256": "c863cb1f16f5c0eda3c57631e24401612fd56abf49708dd294b389974a9cfffb"
+    },
+    "scripts/verify_t003_state.py": {
+      "mode": "100644",
+      "blob": "aa0d2830ba348b4221819cf2a2b9308e1ee92a05",
+      "sha256": "3bba2eeff6d6e1abe14ead36ce98c5f4e2a749fbb71f7d4c03012af9e6e78b0f"
+    },
+    "scripts/verify_t004_cli.py": {
+      "mode": "100755",
+      "blob": "21fc038e19af533bf54be8da7b1f546f5bd993b1",
+      "sha256": "ec739102e3e120df2106c32af3ef1d301f66b27bd4b7c0746269bcfe2b4c24e6"
+    },
+    ".github/workflows/check.yml": {
+      "mode": "100644",
+      "blob": "fbb0ceb1ff7ec3d2fc25e855832952eff49e922b",
+      "sha256": "b5e9d214366cb1f3310b2c2aaef4a4108bc07b3e57fc0142356025357cf2c520"
+    },
+    "Makefile": {
+      "mode": "100644",
+      "blob": "b2259ff17d0ab8b4e3b56ba55147a1d5013c9f89",
+      "sha256": "73dccd78abe703fcf3e9aa75dbbb477b1ff3d3dd36234fe8a6fa7ae59c24a4be"
+    }
+  }
+}
+```
+
+## Runnable collection/vector verification (does not execute tests)
+
+Run from a checkout containing the accepted baseline and this contract, using the selected absolute Python 3.11+
+interpreter with -I -B and the exact code below on stdin. The 60-second envelope is supplied by the approved check
+runner, not a shell-specific timeout utility. This verifier imports accepted local test definitions only after source
+checks, collects IDs without executing test bodies, and writes no repository file. No network or credentials required.
+A passing verifier validates the document's identities/inventory/math only; it is not future implementation acceptance.
+
+```python
+import hashlib, json, os, re, runpy, stat, subprocess
+from pathlib import Path
+
+root = Path.cwd()
+source = 'cdc47c4a6878b541b4a9425775c98561da157bdd'
+contract = root / 'specs/005-provider-aware-orchestration/contracts/task-acceptance.md'
+text = contract.read_text(encoding='utf-8')
+blocks = [json.loads(x) for x in re.findall(r'```json\n(.*?)\n```', text, re.S)]
+inventory = next(x for x in blocks if x.get('kind') == 'inherited-guard-inventory')
+protected = next(x for x in blocks if x.get('kind') == 'protected-oracle-source')
+assert inventory['source_revision'] == protected['source_revision'] == source
+
+# Inspect local objects without executing repository hooks or external configuration.
+git_env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR') if key in os.environ}
+git_env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0',
+               GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1',
+               GIT_TERMINAL_PROMPT='0', GIT_ALLOW_PROTOCOL='')
+git_command = ['git', '--no-replace-objects', '--no-lazy-fetch',
+               '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
+               '-c', 'core.attributesFile=' + os.devnull, '-c', 'submodule.recurse=false']
+def git(*argv):
+    return subprocess.check_output(git_command + list(argv), cwd=root, env=git_env, timeout=10)
+config = git('config', '--null', '--list', '--no-includes')
+for entry in filter(None, config.split(b'\0')):
+    key = entry.split(b'\n', 1)[0].lower()
+    assert not (key.startswith((b'filter.', b'include.', b'includeif.'))
+                or (key.startswith(b'merge.') and key.endswith(b'.driver'))
+                or (key.startswith(b'diff.') and key.endswith((b'.command', b'.textconv')))
+                or key == b'diff.external'), 'Executable/external Git configuration is unsupported'
+common = Path(os.fsdecode(git('rev-parse', '--path-format=absolute', '--git-common-dir').strip()))
+info = common / 'info'
+assert not info.is_symlink() and not (info / 'grafts').exists() and not (info / 'grafts').is_symlink()
+assert not git('for-each-ref', '--format=%(refname)', 'refs/replace/')
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'),
+                      ensure_ascii=False, allow_nan=False).encode('utf-8')
+def sha(value):
+    return hashlib.sha256(canonical(value)).hexdigest()
+
+for path, expected in protected['trees'].items():
+    assert git('rev-parse', source + ':' + path).decode().strip() == expected
+    assert git('rev-parse', 'HEAD:' + path).decode().strip() == expected
+    # Check current bytes and index too; never trust assume-unchanged metadata.
+    entries = git('ls-tree', '-rz', source, '--', path).split(b'\0')
+    expected_paths = set()
+    for entry in filter(None, entries):
+        metadata, raw_name = entry.split(b'\t', 1)
+        mode, kind, blob = metadata.split()
+        name = raw_name.decode('utf-8'); expected_paths.add(name)
+        assert kind == b'blob' and mode in (b'100644', b'100755')
+        file = root / name
+        assert stat.S_ISREG(file.stat().st_mode) and file.stat().st_nlink == 1 and not file.is_symlink()
+        assert all(not parent.is_symlink() for parent in file.parents)
+        assert bool(file.stat().st_mode & 0o111) == (mode == b'100755')
+        assert file.read_bytes() == git('show', source + ':' + name)
+        assert git('ls-files', '--stage', '--', name).split()[:3] == [mode, blob, b'0']
+    # Include ignored paths: new/untracked files in protected trees are not approved additions.
+    descendants = list((root / path).rglob('*'))
+    assert all(not x.is_symlink() for x in descendants)
+    actual_paths = {str(x.relative_to(root)) for x in descendants if not x.is_dir()}
+    assert actual_paths == expected_paths
+for path, record in protected['existing_files'].items():
+    content = git('show', source + ':' + path)
+    assert hashlib.sha256(content).hexdigest() == record['sha256']
+    assert git('ls-tree', source, '--', path).split()[:3] == [record['mode'].encode(), b'blob', record['blob'].encode()]
+    file = root / path
+    assert stat.S_ISREG(file.stat().st_mode) and file.stat().st_nlink == 1 and not file.is_symlink()
+    assert all(not parent.is_symlink() for parent in file.parents)
+    assert file.read_bytes() == content
+    assert bool(file.stat().st_mode & 0o111) == (record['mode'] == '100755')
+    assert git('ls-files', '--stage', '--', path).split()[:3] == [record['mode'].encode(), record['blob'].encode(), b'0']
+
+vectors = re.findall(r'### (V[0-9]+)\n\n```json\n(.*?)\n```\n\nSHA-256: `([0-9a-f]{64})`', text, re.S)
+assert len(vectors) == 7
+values = {}
+for name, raw, expected in vectors:
+    value = json.loads(raw); values[name] = value
+    assert canonical(value) == raw.encode('utf-8')
+    assert sha(value) == expected
+assert sha(values['V02']) != sha(values['V03'])
+basis = {k: v for k, v in values['V04'].items() if k not in ('policy_digest', 'capability_digest')}
+assert basis == values['V05']
+context = json.loads(json.dumps(values['V07']))
+context['approval'].pop('context_digest')
+assert sha(context) == values['V07']['approval']['context_digest']
+assert sha(values['V07']) != sha(context)
+
+expected_ids = set(inventory['native_only'])
+for prefix, methods in inventory['route_replay'].items():
+    assert len(methods) == len(set(methods))
+    expected_ids.update(prefix + method for method in methods)
+assert len(expected_ids) == inventory['native_guard_count'] == 426
+route_ids = {p + m for p, methods in inventory['route_replay'].items() for m in methods}
+assert not route_ids.intersection(inventory['native_only'])
+assert len(route_ids) == inventory['route_replay_count'] == 418
+assert 2 * len(route_ids) == inventory['paired_observation_count'] == 836
+assert sha(sorted(expected_ids)) == inventory['guard_ids_sha256']
+# Collection imports Python modules. Reject additions BEFORE any module import,
+# including ignored/untracked files, packages and symlinks that introduce no test IDs.
+expected_scripts = {p for p in protected['existing_files'] if p.startswith('scripts/')}
+script_entries = list((root / 'scripts').rglob('*'))
+assert all(not p.is_symlink() for p in script_entries)
+actual_scripts = {str(p.relative_to(root)) for p in script_entries if not p.is_dir()}
+assert actual_scripts == expected_scripts, 'T001 requires the exact approved script source closure'
+for revision in (source, 'HEAD'):
+    tracked_scripts = {p.decode('utf-8') for p in git('ls-tree', '-rz', '--name-only', revision, '--', 'scripts').split(b'\0') if p}
+    assert tracked_scripts == expected_scripts
+indexed_scripts = {p.decode('utf-8') for p in git('ls-files', '-z', '--', 'scripts').split(b'\0') if p}
+assert indexed_scripts == expected_scripts
+ci = runpy.run_path(str(root / 'scripts/check_ci.py'))
+all_ids = [case.id() for case in ci['flatten'](ci['collect'](root))]
+assert len(all_ids) == len(set(all_ids))
+assert not any('_FailedTest.' in x for x in all_ids)
+ci['validate_collection'](all_ids, ci['load_manifest'](root)['required_test_ids'])
+guard_ids = {x for x in all_ids if x.startswith(('test_single_task', 'verify_t003_state.', 'verify_t004_cli.'))}
+assert guard_ids == expected_ids
+future_ids = re.findall(r'^\| T[0-9]{3} \| `(test_[^.]+\.T[0-9]{3}Tests\.test_[^`]+)` \|', text, re.M)
+assert len(future_ids) == len(set(future_ids)) == 93
+# Absence is allowed only while corresponding tasks are pending, never a future test pass.
+tasks = (root / 'specs/005-provider-aware-orchestration/tasks.md').read_text()
+declared_ids = set()
+completed = set(re.findall(r'^- \[[xX]\] (T[0-9]{3}) ', tasks, re.M))
+for task, filename, tail in re.findall(r'^\| (T[0-9]{3}) \| [^|]+ \| `scripts/([^`]+)`:(.*?) \|$', tasks, re.M):
+    for method in re.findall(r'`(test_[a-z_]+)`', tail):
+        ident = filename[:-3] + '.' + task + 'Tests.' + method
+        declared_ids.add(ident)
+        if task in completed:
+            assert ident in all_ids
+assert declared_ids == set(future_ids)
+profile_modules = {x.split('.', 1)[0] for x in future_ids}
+assert {x for x in all_ids if x.split('.', 1)[0] in profile_modules} <= declared_ids
+print('Verified: 7 mathematical vectors; 426 native IDs; 418 paired scenarios; 93 future method IDs. No tests executed.')
+```
