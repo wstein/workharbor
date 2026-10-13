@@ -1,7 +1,6 @@
 """Feature 005 T002: inert parsing, identities and action requirements only."""
 from pathlib import Path
 import hashlib
-import json
 import os
 import subprocess
 import sys
@@ -147,6 +146,10 @@ class T002Tests(unittest.TestCase):
             'safe-stop': ('safety', None, None, ('runtime.safe-stop',), None),
         }
         self.assertEqual(set(rows), set(profiles.ACTIONS))
+        with self.assertRaises(TypeError):
+            profiles.ACTIONS['begin'] = profiles.ACTIONS['inspect']
+        with self.assertRaises(AttributeError):
+            profiles.ACTIONS['begin'].boundary = 'handoff'
         for action, expected in rows.items():
             with self.subTest(action=action):
                 spec = profiles.action_spec(action)
