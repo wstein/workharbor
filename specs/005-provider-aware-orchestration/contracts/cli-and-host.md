@@ -109,6 +109,11 @@ Trusted host construction pins repository, tool/interpreter versions, state root
   closed on incompatibility. Return absent/unique/ambiguous/unavailable with sanitized IDs and matching digests.
   Only unique + full intent/ownership correspondence permits the coordinator to bind the previously unknown ID;
   absent/ambiguous/unavailable/conflicting results block. No raw SQL or journal path is selected by repository input.
+  A separate prepare_creation_snapshot observation is invoked only inside an authorized creation action. For absent
+  first-entry state, use the pinned single_task.lock_only helper and prove the empty namespace described in the model;
+  it may create canonical lock metadata but no journal/context/attempt. This is not lookup_creation: recovery lookup
+  always requires an existing journal and cannot create state. Rework uses an existing predecessor journal and new
+  linked CreationBinding; it never overwrites the prior binding or reuses the old operation's response ID.
 - **ClaimAuthority**: obtain a task claim, compare-and-swap generation, prove old executor cessation/fencing and observe
   current ownership. Local reference implementation supports only demonstrated single-host ownership. Multi-host or
   changed downstream owners require proven compatible authority; otherwise unavailable.

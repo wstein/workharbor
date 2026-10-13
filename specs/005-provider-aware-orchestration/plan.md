@@ -100,8 +100,11 @@ provider-evidence questions. New provider policy verdicts are deliberately not i
 3. Add a bounded ledger with transaction, lock and recovery tests before any coordinator side effects.
 4. Add the Feature 003 bridge preserving its JSON, exit categories, acceptance commands and immutable attempt identity.
    Its internal read-only creation lookup correlates lost begin/rework responses against a durable pre-call intent and
-   validated pre-existing attempt IDs. Use the existing locked store plus a source/schema-pinned read-only enumeration
-   adapter; no new Feature 003 command, schema or lifecycle mutation is permitted. Ambiguous/missing evidence blocks.
+   validated pre-existing attempt IDs. First-entry preparation can establish only canonical lock metadata through
+   the existing lock_only helper and prove an empty namespace; recovery lookup never bootstraps missing journals.
+   Use the existing locked store plus a source/schema-pinned read-only enumeration adapter; no new Feature 003 command,
+   schema or lifecycle mutation is permitted. Authorized rework creates a new linked immutable binding, advancing the
+   current reference only after successor confirmation. Ambiguous/missing evidence blocks.
    A Feature 004 GuardPort bridge may translate verified observations, but cannot synthesize unavailable capabilities.
 5. Coordinate manual actions independently of Symphony/tracker readiness. Delegate orchestrated eligibility/handoff to
    existing Feature 004 interfaces only when host-injected guard/runtime/tracker capabilities are actually present.
