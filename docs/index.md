@@ -26,6 +26,7 @@
 - [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
 - [In-container AI agents, wave one (proposed)](adr/0009-in-container-ai-agents.md)
 - [Go product code and whr CLI layout (proposed)](adr/0010-go-whr-cli-layout.md)
+- [Read-only Spec Kit dashboard (proposed)](adr/0011-readonly-spec-dashboard.md)
 - [Persistent workspace console (proposed)](adr/0012-persistent-workspace-console.md)
 
 ## Background and references
