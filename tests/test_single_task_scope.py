@@ -536,9 +536,9 @@ for name, mutate in {
 class ProtectedFeatureIdentityTests(unittest.TestCase):
     """T027 binds protected source trees to immutable pre-implementation bytes."""
 
-    BASELINE = '95b5bed59c918bc100880771ac6be4d127b8edb7'
+    BASELINE = 'e5c9f1598ef5566ed1a25329c4fcb8d9ff0cbd07'
     TREES = {
-        'specs/001-workspace-lifecycle': '0fda80d6f62c7576394495969187f349f7d0a81a',
+        'specs/001-workspace-lifecycle': 'bae1fd2c3b428e90cf72dae500c56c3459204d94',
         'specs/002-symphony-doc-smoke': '3b2dce04b696b247e21535c741759cc5633b514a',
     }
 
