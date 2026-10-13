@@ -66,6 +66,12 @@ both false. Authorized observations and separately authorized safe-stop are not 
 false even when the requested observation succeeds. Their separate authority rules remain defined by the host contract.
 Invalid inputs return sanitized blocker codes; do not echo raw content.
 
+Action tokens, operation mappings and capability requirements are defined in the
+[canonical action table](contracts/cli-and-host.md#canonical-actions-and-capability-mapping). Apply the same closed
+vocabulary to policy/capability records and approval targets; execution grants accept execution-class actions only.
+Boundary labels are not grant aliases. Observation/safety decisions remain separate host attestations, with exact
+targets and finite validity as defined there; neither overrides an execution eligibility flag or task approval.
+
 ## TaskClaim and Transition
 
 Key: host-pinned repository + feature + task_id. Claim fields: executor_id, host_id, worktree_id, guard_attempt_id,
