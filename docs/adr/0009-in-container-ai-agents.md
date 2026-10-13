@@ -18,9 +18,13 @@ supersedes its AI non-goal wording.
   schedule, dispatch or approve agent work.
 - Wave two: Symphony/OpenAI-style orchestration and the execution board of ADR 0006
   remain proposed and keep every approval and evidence gate stated there.
-- Interop uses a small in-container session interface with five operations:
-  list, attach, status, send input, stop. It is exposed to the owner through
-  existing authorized workspace access, never as raw host shell access.
+- Interop uses a small in-container agent session interface (list, attach,
+  status, send input, stop). Owner decision H16:b: it becomes its own versioned
+  contract under `contracts/`, tracked as #71 (held, depends on #66). That future
+  contract, not this ADR, defines the interface details. It is exposed to the
+  owner through existing authorized workspace access, never as raw host shell
+  access.
+- Owner decision H18:a: the console is a reattachable workspace session.
 - Agents hold no host-agent credentials, control sockets or other workspaces' data
   (see the isolation section of the [architecture](../architecture.md)).
 - Ordinary lifecycle and terminal access remain usable without an AI subscription
@@ -37,6 +41,6 @@ Nothing here authorizes orchestration, dispatch or board work.
 [Product](../product.md) and [architecture](../architecture.md) state the wave-one
 scope. The constitution still lists AI orchestration as excluded; its amendment or
 scoped exception needs owner action under its governance and is not made here.
-The session interface wire format, authorization binding and failure behavior are
+The session interface contract (#71) and its wire format, authorization binding and failure behavior are
 undesigned and belong to a feature spec. Credential handling for agent
 subscriptions is open. Nothing is implemented or verified.
