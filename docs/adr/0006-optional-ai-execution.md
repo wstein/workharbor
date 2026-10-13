@@ -3,6 +3,8 @@
 Date: 2026-10-12 | Proposal updated: 2026-10-13
 Status: Proposed; no product implementation authorization
 Amended by: [ADR 0009](0009-in-container-ai-agents.md) (in-container agents, wave one)
+Superseded in part by: [ADR 0011](0011-readonly-spec-dashboard.md), for the first
+increment only (read-only Spec Kit view)
 
 ## Context
 
