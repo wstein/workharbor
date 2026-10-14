@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: EUPL-1.2
+
 defmodule WorkHarbor.Application do
   # See https://elixir.hexdocs.pm/Application.html
   # for more information on OTP Applications
@@ -7,10 +9,22 @@ defmodule WorkHarbor.Application do
 
   @impl true
   def start(_type, _args) do
+    identity = Application.get_env(:workharbor, :host_identity)
+
+    {:ok, endpoint} =
+      WorkHarborWeb.RuntimeSecurity.identity_config(
+        Application.fetch_env!(:workharbor, WorkHarborWeb.Endpoint),
+        identity
+      )
+
+    Application.put_env(:workharbor, WorkHarborWeb.Endpoint, endpoint)
+
     WorkHarborWeb.RuntimeSecurity.validate!(
-      Application.fetch_env!(:workharbor, WorkHarborWeb.Endpoint),
+      endpoint,
       Application.fetch_env!(:workharbor, :owner_http)
     )
+
+    if identity, do: :ok = WorkHarborWeb.AgentLogFilter.install()
 
     children = [
       WorkHarborWeb.Telemetry,
@@ -18,11 +32,15 @@ defmodule WorkHarbor.Application do
       {Ecto.Migrator,
        repos: Application.fetch_env!(:workharbor, :ecto_repos), skip: skip_migrations?()},
       {Phoenix.PubSub, name: WorkHarbor.PubSub},
+      # Liveness is initialized before the listener when host identity is configured.
       # Start a worker by calling: WorkHarbor.Worker.start_link(arg)
       # {WorkHarbor.Worker, arg},
       # Start to serve requests, typically the last entry
       WorkHarborWeb.Endpoint
     ]
+
+    children =
+      if identity, do: List.insert_at(children, -2, WorkHarbor.HostConnections), else: children
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options

@@ -41,3 +41,8 @@ if System.get_env("PHX_SERVER") == "true" do
       http_2_options: [enabled: false]
     ]
 end
+
+# The issuer must already exist; initialization is a separate explicit command.
+if issuer_dir = System.get_env("WORKHARBOR_ISSUER_DIR") do
+  config :workharbor, :host_identity, issuer_dir: issuer_dir
+end

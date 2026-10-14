@@ -19,3 +19,10 @@ func TestScaffoldRefusesProductCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestRunRefusesMissingIdentityWithFixedDiagnostic(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := run([]string{"run", "--identity-dir", "/missing/identity"}, &out, &errOut); code != 1 || out.Len() != 0 || errOut.String() != "workharbor-agent: host_transport_unavailable\n" {
+		t.Fatalf("unexpected run refusal: %d %q %q", code, out.String(), errOut.String())
+	}
+}

@@ -21,7 +21,12 @@ defmodule WorkHarborWeb.Endpoint do
 
   # Phoenix inserts socket_dispatch before user plugs. Wrap its entry explicitly.
   def call(conn, opts) do
-    case WorkHarborWeb.Security.call(conn, []) do
+    admission =
+      if String.starts_with?(conn.request_path, "/agent"),
+        do: WorkHarborWeb.AgentIngress.call(conn, []),
+        else: WorkHarborWeb.Security.call(conn, [])
+
+    case admission do
       %{halted: true} = conn -> conn
       conn -> super(conn, opts)
     end

@@ -53,6 +53,36 @@ defmodule WorkHarborWeb.Router do
     plug RequireOwner, :dashboard_page
   end
 
+  pipeline :host_enrollment do
+    plug RequireOwner, :host_enrollment_issue
+    plug :api_csrf
+  end
+
+  pipeline :host_revocation do
+    plug RequireOwner, :host_revoke
+    plug :api_csrf
+  end
+
+  pipeline :host_status do
+    plug RequireOwner, :host_status
+    plug :api_csrf
+  end
+
+  scope "/api/v1/hosts", WorkHarborWeb do
+    pipe_through [:session, :host_enrollment]
+    post "/enrollments", HostController, :issue, log: false
+  end
+
+  scope "/api/v1/hosts", WorkHarborWeb do
+    pipe_through [:session, :host_revocation]
+    post "/:id/revoke", HostController, :revoke, log: false
+  end
+
+  scope "/api/v1/hosts", WorkHarborWeb do
+    pipe_through [:session, :host_status]
+    get "/:id", HostController, :status, log: false
+  end
+
   scope "/", WorkHarborWeb do
     pipe_through :session
     get "/login/owner", AuthController, :form, log: false

@@ -9,6 +9,42 @@ defmodule WorkHarborWeb.RuntimeSecurity do
     "4XBsLMaWd4lPmLPEtg7KgIs8803lJErmCoNVLqsywrCNiiRCgTgMU4U5WdOI+TAl"
   ]
   @https_keys ~w(ip port certfile keyfile http_1_options http_2_options)a
+  @peer_keys ~w(cacerts verify fail_if_no_peer_cert)a
+
+  def identity_config(config, nil), do: {:ok, config}
+
+  def identity_config(config, opts) do
+    with true <- Keyword.keyword?(opts) and Keyword.keys(opts) == [:issuer_dir],
+         {:ok, issuer} <- WorkHarbor.Hosts.Issuer.load(opts[:issuer_dir]) do
+      tls = Keyword.get(config, :https, [])
+
+      if Keyword.has_key?(tls, :thousand_island_options) or
+           Enum.any?(@peer_keys, &Keyword.has_key?(tls, &1)),
+         do: throw(:invalid_identity)
+
+      {:ok,
+       Keyword.put(
+         config,
+         :https,
+         tls ++
+           [
+             thousand_island_options: [
+               transport_options: [
+                 cacerts: [issuer.certificate],
+                 verify: :verify_peer,
+                 fail_if_no_peer_cert: false
+               ]
+             ]
+           ]
+       )}
+    else
+      _ -> {:error, :invalid_identity}
+    end
+  rescue
+    _ -> {:error, :invalid_identity}
+  catch
+    _ -> {:error, :invalid_identity}
+  end
 
   def validate!(config, owner_http) do
     # Phoenix treats other truthy values as active and missing values can inherit
@@ -39,11 +75,35 @@ defmodule WorkHarborWeb.RuntimeSecurity do
 
   # GHSA-69m6-wcv4-rwcf: locked Bandit is mitigated, not patched. Keep this
   # current profile narrow: lower-layer handler/ALPN overrides bypass switches.
-  # T008 client-CA options require separate review while preserving HTTP/1 only.
+  # Optional client roots below are the exact reviewed T008 nested exception.
   defp http1_profile?(config, tls) do
     config[:adapter] == Bandit.PhoenixAdapter and Keyword.keyword?(tls) and
-      Enum.sort(Keyword.keys(tls)) == Enum.sort(@https_keys) and
+      tls_keys?(tls) and
       tls[:http_1_options] == [enabled: true] and tls[:http_2_options] == [enabled: false]
+  end
+
+  defp tls_keys?(tls) do
+    keys = Enum.sort(Keyword.keys(tls))
+
+    keys == Enum.sort(@https_keys) or
+      (keys == Enum.sort(@https_keys ++ [:thousand_island_options]) and
+         peer_options?(tls[:thousand_island_options]))
+  end
+
+  defp peer_options?(opts) do
+    Keyword.keyword?(opts) and Keyword.keys(opts) == [:transport_options] and
+      case opts[:transport_options] do
+        values when is_list(values) ->
+          Keyword.keyword?(values) and Enum.sort(Keyword.keys(values)) == Enum.sort(@peer_keys) and
+            values[:verify] == :verify_peer and values[:fail_if_no_peer_cert] == false and
+            case values[:cacerts] do
+              [der] when is_binary(der) -> WorkHarbor.Hosts.Issuer.valid_issuer?(der)
+              _ -> false
+            end
+
+        _ ->
+          false
+      end
   end
 
   defp regular?(p), do: is_binary(p) and Path.type(p) == :absolute and File.regular?(p)
