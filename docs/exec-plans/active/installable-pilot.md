@@ -799,3 +799,29 @@ Focused eight transport cases passed with warnings-as-errors. Source bootstrap a
 `git diff --check` passed; Python collection846 / required520 and unchanged
 Feature001 tasks were checked. Exact committed/pristine verification and independent
 Sol candidate review follow; no full canonical Python or live-host/browser claim.
+
+
+## S001 exact acceptance and T008 contract-first start
+
+S001 independently Sol CLEAR at c88f33959a4c0a767f638afaccc446a8040c55b4.
+Author: /private/tmp/workharbor-s001-validation-h_fb25q3/evidence.json;
+independent: /private/tmp/workharbor-s001-independent-leo2snzz/summary.json.
+Actual full application gates: Phoenix114,whr1,host_agent132,api_client162 green;
+846 Python collected/520 required retained, source pristine and prior IDs retained.
+Mitigation only: locked Bandit remains affected; no dependency security clearance,
+full canonical/live browser/pilot claim. Only Feature006 S001 is checked.
+
+Root authorized T008 after T007/S001 exact acceptance. Its one complete
+[accepted V2 contract](../../../specs/006-whr-cli/contracts/host-enrollment.md)
+includes the final empty-subject enrollment CSR addendum and actual interface
+alignment. Same retained Sol reviewer must confirm faithful consolidation before
+failure-first tests/behavior. No superseded descriptor/manual-only issuer/owner
+bearer renewal design applies. T008 remains unchecked; Feature001/migration and
+ignored selector unchanged. Resource review precedes disposable OrbStack activation.
+
+
+The retained independent Sol reviewer confirmed faithful consolidation of the
+complete T008 contract before tests/behavior. No superseded alternatives remain.
+T008 implementation/failure-first tests may now proceed under root GO; no runtime
+acceptance is claimed. The S001 transport contract status is refreshed to exact
+c88f339 acceptance without changing its mitigation/advisory boundary.

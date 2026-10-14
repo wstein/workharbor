@@ -6,8 +6,9 @@ Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `191c62baf227f64122770244d62d289900bb4d8d`; T004 independently CLEAR at
 `6abb7419c77b3712a6ac276bc798b102503d3144`; T005 and T006 are accepted at
 `1189c81` and `ef399f5`. T007 is independently CLEAR at
-`e10c6997c24407e0f472a7ea22ba2dd1b42067e3` for its pure protocol scope. S001 blocks
-T008 until its exact-candidate transport mitigation review and checks pass.
+`e10c6997c24407e0f472a7ea22ba2dd1b42067e3` for its pure protocol scope. S001 is independently CLEAR at
+`c88f33959a4c0a767f638afaccc446a8040c55b4`; T008 implementation is authorized
+and remains unchecked pending its exact-candidate acceptance.
 No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
@@ -39,7 +40,7 @@ Independent check: negative vectors, cross-language bytes and no runtime Python.
 - [x] T006 Implement owner bootstrap/login, revocable scoped credentials and browser request protections in `apps/control_plane/lib/workharbor/accounts.ex`, `apps/control_plane/lib/workharbor_web/` and tests; prove TLS-first auth, wrong owner, expired/revoked token, read-only dashboard scope, Host/Origin/anti-forgery rejection and secret redaction (001 T013; FR-035–038).
 - [x] T007 Define/validate versioned host protocol in `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/host_agent/internal/protocol/`; reject invalid version/scope/replay before provider calls and redact diagnostics in both suites (001 T003).
 
-- [ ] S001 Mitigate locked Bandit 1.12.5 HTTP/2 resource exhaustion advisory GHSA-69m6-wcv4-rwcf before T008: enforce the reviewed HTTP/1-only authenticated listener profile, refuse unsafe overrides, and prove actual ephemeral TLS protocol rejection plus HTTP/1 authentication and WSS success. Follow [the bounded transport contract](contracts/transport-security.md); retain the dependency advisory and require a released fixed version plus new independent review before re-enabling HTTP/2. No dependency update, proxy or T008 behavior belongs to this follow-up.
+- [x] S001 Mitigate locked Bandit 1.12.5 HTTP/2 resource exhaustion advisory GHSA-69m6-wcv4-rwcf before T008: enforce the reviewed HTTP/1-only authenticated listener profile, refuse unsafe overrides, and prove actual ephemeral TLS protocol rejection plus HTTP/1 authentication and WSS success. Follow [the bounded transport contract](contracts/transport-security.md); retain the dependency advisory and require a released fixed version plus new independent review before re-enabling HTTP/2. No dependency update, proxy or T008 behavior belongs to this follow-up.
 
 ## Phase 3: US1 — Authenticate and manage workspaces (P1)
 
@@ -129,3 +130,11 @@ evidence, including earlier failed runs, is retained in
 T005 independently Sol CLEAR at `1189c81ba81b79a47a0485a9d5148fb8286c8eb0`;
 its native persistence scope does not establish authentication or raw JSON decoding.
 T006 follows [the consolidated authentication contract](contracts/authentication.md).
+
+S001 independently Sol CLEAR at `c88f33959a4c0a767f638afaccc446a8040c55b4`.
+Author evidence: `/private/tmp/workharbor-s001-validation-h_fb25q3/evidence.json`;
+independent: `/private/tmp/workharbor-s001-independent-leo2snzz/summary.json`.
+Actual gates: Phoenix114, whr1, host_agent132, api_client162 green; Python846
+collected/520required retained. HTTP1-only mitigation; Bandit remains affected.
+No full canonical/live browser/pilot acceptance is claimed. T008 follows
+[the consolidated enrollment contract](contracts/host-enrollment.md).
