@@ -51,3 +51,9 @@ these accepted ports or approve runtime integration.
 [schema](agent-session-v1.schema.json): the versioned in-container session
 interface (list, attach, status, send input, stop) of owner decision H16:b,
 wstein/workharbor-nxt#71. Design baseline only; not implemented or verified.
+
+## Selective Python migration
+
+[migration/README.md](migration/README.md) records the pinned pure JSON/path
+profiles, deliberate product restrictions and offline source/product vectors.
+T003 implementation review is pending; no Go port or caller switch is claimed.

@@ -1,0 +1,4491 @@
+{
+  "cases": [
+    {
+      "decision": "parity",
+      "id": "json.negative-zero",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d30",
+          "length": 2,
+          "sha256": "ed79f26d03f412bde3db206601a698e0bb451bea9e3cc25289636ac17ea74b0a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.null",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "6e756c6c",
+          "length": 4,
+          "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "6e756c6c",
+          "length": 4,
+          "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "digest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "6e756c6c",
+          "length": 4,
+          "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "digest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.true",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "74727565",
+          "length": 4,
+          "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "74727565",
+          "length": 4,
+          "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+        },
+        "digest": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "74727565",
+          "length": 4,
+          "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+        },
+        "digest": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.false",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "66616c7365",
+          "length": 5,
+          "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "66616c7365",
+          "length": 5,
+          "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+        },
+        "digest": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "66616c7365",
+          "length": 5,
+          "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+        },
+        "digest": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.zero",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.negative-integer",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d3432",
+          "length": 3,
+          "sha256": "fec80006df0542549b4cbaafb8987eee00bb49bca396eefe9ac8be5b5928e8f6"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "2d3432",
+          "length": 3,
+          "sha256": "fec80006df0542549b4cbaafb8987eee00bb49bca396eefe9ac8be5b5928e8f6"
+        },
+        "digest": "fec80006df0542549b4cbaafb8987eee00bb49bca396eefe9ac8be5b5928e8f6",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "2d3432",
+          "length": 3,
+          "sha256": "fec80006df0542549b4cbaafb8987eee00bb49bca396eefe9ac8be5b5928e8f6"
+        },
+        "digest": "fec80006df0542549b4cbaafb8987eee00bb49bca396eefe9ac8be5b5928e8f6",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.empty-object",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "digest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "digest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.empty-array",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b5d",
+          "length": 2,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5d",
+          "length": 2,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5d",
+          "length": 2,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.nested",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b227a223a5b6e756c6c2c747275652c2d322c7b2261223a2262227d5d7d",
+          "length": 30,
+          "sha256": "4b718052b1dac653c1e26da30804a669adf55f576da6a67245ecbc3d62f50114"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b227a223a5b6e756c6c2c747275652c2d322c7b2261223a2262227d5d7d",
+          "length": 30,
+          "sha256": "4b718052b1dac653c1e26da30804a669adf55f576da6a67245ecbc3d62f50114"
+        },
+        "digest": "4b718052b1dac653c1e26da30804a669adf55f576da6a67245ecbc3d62f50114",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b227a223a5b6e756c6c2c747275652c2d322c7b2261223a2262227d5d7d",
+          "length": 30,
+          "sha256": "4b718052b1dac653c1e26da30804a669adf55f576da6a67245ecbc3d62f50114"
+        },
+        "digest": "4b718052b1dac653c1e26da30804a669adf55f576da6a67245ecbc3d62f50114",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.boolean-integer",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2269223a312c2262223a747275657d",
+          "length": 16,
+          "sha256": "556764e342492127be823ed1520ffd242e4ee7719e2b139a1d302f458c78a2e9"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2262223a747275652c2269223a317d",
+          "length": 16,
+          "sha256": "1dc08b312fcdfc60ec48be27868b868ea4846bcb42e831b21f5db31162f31c63"
+        },
+        "digest": "1dc08b312fcdfc60ec48be27868b868ea4846bcb42e831b21f5db31162f31c63",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2262223a747275652c2269223a317d",
+          "length": 16,
+          "sha256": "1dc08b312fcdfc60ec48be27868b868ea4846bcb42e831b21f5db31162f31c63"
+        },
+        "digest": "1dc08b312fcdfc60ec48be27868b868ea4846bcb42e831b21f5db31162f31c63",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.html",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "223c3e262f22",
+          "length": 6,
+          "sha256": "396adbc953af00557241e2c859a735e8a11b03279d475359cf45dffed8746492"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "223c3e262f22",
+          "length": 6,
+          "sha256": "396adbc953af00557241e2c859a735e8a11b03279d475359cf45dffed8746492"
+        },
+        "digest": "396adbc953af00557241e2c859a735e8a11b03279d475359cf45dffed8746492",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "223c3e262f22",
+          "length": 6,
+          "sha256": "396adbc953af00557241e2c859a735e8a11b03279d475359cf45dffed8746492"
+        },
+        "digest": "396adbc953af00557241e2c859a735e8a11b03279d475359cf45dffed8746492",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.line-separators",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c75323032385c753230323922",
+          "length": 14,
+          "sha256": "b36c0076c7e28a52a8a9cb89306b164f887df89d715680d7b1ca8a858a8f3d33"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22e280a8e280a922",
+          "length": 8,
+          "sha256": "e3a0e2262ac7790f4df36b522a8fbdd4ee3370d568eb15dc25c5f1775f14ed6c"
+        },
+        "digest": "e3a0e2262ac7790f4df36b522a8fbdd4ee3370d568eb15dc25c5f1775f14ed6c",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22e280a8e280a922",
+          "length": 8,
+          "sha256": "e3a0e2262ac7790f4df36b522a8fbdd4ee3370d568eb15dc25c5f1775f14ed6c"
+        },
+        "digest": "e3a0e2262ac7790f4df36b522a8fbdd4ee3370d568eb15dc25c5f1775f14ed6c",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.supplementary-order",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b225c75643830305c7564633030223a322c225c7565303030223a317d",
+          "length": 29,
+          "sha256": "107815178221b988e51a6fedd200e03563d4a6e0729c196abd1e8417170bb181"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b22ee8080223a312c22f0908080223a327d",
+          "length": 18,
+          "sha256": "8706b5798a29d65739b3d1bbb1d009f87d005c71c8130c5353c4990c15ddfec8"
+        },
+        "digest": "8706b5798a29d65739b3d1bbb1d009f87d005c71c8130c5353c4990c15ddfec8",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b22ee8080223a312c22f0908080223a327d",
+          "length": 18,
+          "sha256": "8706b5798a29d65739b3d1bbb1d009f87d005c71c8130c5353c4990c15ddfec8"
+        },
+        "digest": "8706b5798a29d65739b3d1bbb1d009f87d005c71c8130c5353c4990c15ddfec8",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.surrogate-pair",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c75643833645c756465303022",
+          "length": 14,
+          "sha256": "e30439cb87e140c0b998ad3095285abfec0294e2a8916f9a8f30d85734e6f82b"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22f09f988022",
+          "length": 6,
+          "sha256": "7a0c50b92434b015545fe93ab723db2d4b2cdd14a441405624a9ce8be29f1d5a"
+        },
+        "digest": "7a0c50b92434b015545fe93ab723db2d4b2cdd14a441405624a9ce8be29f1d5a",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22f09f988022",
+          "length": 6,
+          "sha256": "7a0c50b92434b015545fe93ab723db2d4b2cdd14a441405624a9ce8be29f1d5a"
+        },
+        "digest": "7a0c50b92434b015545fe93ab723db2d4b2cdd14a441405624a9ce8be29f1d5a",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.literal-replacement",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22efbfbd22",
+          "length": 5,
+          "sha256": "568601070314e0f4489c9944b3c151d5251d379330008293bb7e1a826a22a845"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22efbfbd22",
+          "length": 5,
+          "sha256": "568601070314e0f4489c9944b3c151d5251d379330008293bb7e1a826a22a845"
+        },
+        "digest": "568601070314e0f4489c9944b3c151d5251d379330008293bb7e1a826a22a845",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22efbfbd22",
+          "length": 5,
+          "sha256": "568601070314e0f4489c9944b3c151d5251d379330008293bb7e1a826a22a845"
+        },
+        "digest": "568601070314e0f4489c9944b3c151d5251d379330008293bb7e1a826a22a845",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.del",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c753030376622",
+          "length": 8,
+          "sha256": "226453a6508483054f1ddc449c26b45077f5a45d993034f0f5f04f3f9801c32c"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "227f22",
+          "length": 3,
+          "sha256": "6fe76740e12a93d5598fe685cb6ad3d3c94e44609065a56866b69647772026ec"
+        },
+        "digest": "6fe76740e12a93d5598fe685cb6ad3d3c94e44609065a56866b69647772026ec",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "227f22",
+          "length": 3,
+          "sha256": "6fe76740e12a93d5598fe685cb6ad3d3c94e44609065a56866b69647772026ec"
+        },
+        "digest": "6fe76740e12a93d5598fe685cb6ad3d3c94e44609065a56866b69647772026ec",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.unicode-noncharacter",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c756666666622",
+          "length": 8,
+          "sha256": "1ef1b6da15ca38e4564f03db3fa65252bcdd156176731c3b671fb2a6734fd8f2"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22efbfbf22",
+          "length": 5,
+          "sha256": "7c6c5c98a320272b95b2a73e2a2ff15825794b0460f8af7835c9dfd9e76b38bb"
+        },
+        "digest": "7c6c5c98a320272b95b2a73e2a2ff15825794b0460f8af7835c9dfd9e76b38bb",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22efbfbf22",
+          "length": 5,
+          "sha256": "7c6c5c98a320272b95b2a73e2a2ff15825794b0460f8af7835c9dfd9e76b38bb"
+        },
+        "digest": "7c6c5c98a320272b95b2a73e2a2ff15825794b0460f8af7835c9dfd9e76b38bb",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.normalization-distinct",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b225c7530306539223a312c22655c7530333031223a327d",
+          "length": 24,
+          "sha256": "30e2fc370c72a0a9f660cd87d6ee2487e62318b63897f4acac5609eb10843056"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2265cc81223a322c22c3a9223a317d",
+          "length": 16,
+          "sha256": "a7962fb10dc1255be368ece9c22b2256605921dc6d0a8c9409d3ee406bcb86e5"
+        },
+        "digest": "a7962fb10dc1255be368ece9c22b2256605921dc6d0a8c9409d3ee406bcb86e5",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2265cc81223a322c22c3a9223a317d",
+          "length": 16,
+          "sha256": "a7962fb10dc1255be368ece9c22b2256605921dc6d0a8c9409d3ee406bcb86e5"
+        },
+        "digest": "a7962fb10dc1255be368ece9c22b2256605921dc6d0a8c9409d3ee406bcb86e5",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22c3a922",
+          "length": 4,
+          "sha256": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22c3a922",
+          "length": 4,
+          "sha256": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086"
+        },
+        "digest": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22c3a922",
+          "length": 4,
+          "sha256": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086"
+        },
+        "digest": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.controls",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c75303030305c625c745c6e5c665c725c753030316622",
+          "length": 24,
+          "sha256": "1835422ca790a3c1cebce2873a512b81d9caf590b7fa2d0af6189f8ab2ce7b06"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "225c75303030305c625c745c6e5c665c725c753030316622",
+          "length": 24,
+          "sha256": "1835422ca790a3c1cebce2873a512b81d9caf590b7fa2d0af6189f8ab2ce7b06"
+        },
+        "digest": "1835422ca790a3c1cebce2873a512b81d9caf590b7fa2d0af6189f8ab2ce7b06",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "225c75303030305c625c745c6e5c665c725c753030316622",
+          "length": 24,
+          "sha256": "1835422ca790a3c1cebce2873a512b81d9caf590b7fa2d0af6189f8ab2ce7b06"
+        },
+        "digest": "1835422ca790a3c1cebce2873a512b81d9caf590b7fa2d0af6189f8ab2ce7b06",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.slashes-quotes",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22615c2f625c5c635c226422",
+          "length": 12,
+          "sha256": "805887ebcac6b69a153215b7b0c8970db97061892eb7e7e1095de2658b0bc038"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22612f625c5c635c226422",
+          "length": 11,
+          "sha256": "c14bab927eef918118da48179abdb8d84d4a9e4a13f17a67d48252813731a61a"
+        },
+        "digest": "c14bab927eef918118da48179abdb8d84d4a9e4a13f17a67d48252813731a61a",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "22612f625c5c635c226422",
+          "length": 11,
+          "sha256": "c14bab927eef918118da48179abdb8d84d4a9e4a13f17a67d48252813731a61a"
+        },
+        "digest": "c14bab927eef918118da48179abdb8d84d4a9e4a13f17a67d48252813731a61a",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.i64-over",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "39323233333732303336383534373735383038",
+          "length": 19,
+          "sha256": "c5c29af0c2b1ba23907ca40686689919361601e7740335050476b290f2f87ee8"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "39323233333732303336383534373735383038",
+          "length": 19,
+          "sha256": "c5c29af0c2b1ba23907ca40686689919361601e7740335050476b290f2f87ee8"
+        },
+        "digest": "c5c29af0c2b1ba23907ca40686689919361601e7740335050476b290f2f87ee8",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "39323233333732303336383534373735383038",
+          "length": 19,
+          "sha256": "c5c29af0c2b1ba23907ca40686689919361601e7740335050476b290f2f87ee8"
+        },
+        "digest": "c5c29af0c2b1ba23907ca40686689919361601e7740335050476b290f2f87ee8",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.u64-over",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "3138343436373434303733373039353531363136",
+          "length": 20,
+          "sha256": "8b292fc2d32f1fd491784610c61b90dc4632a6e4add19261eca4c3979e4ea6d2"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "3138343436373434303733373039353531363136",
+          "length": 20,
+          "sha256": "8b292fc2d32f1fd491784610c61b90dc4632a6e4add19261eca4c3979e4ea6d2"
+        },
+        "digest": "8b292fc2d32f1fd491784610c61b90dc4632a6e4add19261eca4c3979e4ea6d2",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "3138343436373434303733373039353531363136",
+          "length": 20,
+          "sha256": "8b292fc2d32f1fd491784610c61b90dc4632a6e4add19261eca4c3979e4ea6d2"
+        },
+        "digest": "8b292fc2d32f1fd491784610c61b90dc4632a6e4add19261eca4c3979e4ea6d2",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.negative-i64-over",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d39323233333732303336383534373735383039",
+          "length": 20,
+          "sha256": "a11b7b6918ba4e84f8e3ab75638e7325e9f891fcf575dd801756523d4bc8a966"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "2d39323233333732303336383534373735383039",
+          "length": 20,
+          "sha256": "a11b7b6918ba4e84f8e3ab75638e7325e9f891fcf575dd801756523d4bc8a966"
+        },
+        "digest": "a11b7b6918ba4e84f8e3ab75638e7325e9f891fcf575dd801756523d4bc8a966",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "2d39323233333732303336383534373735383039",
+          "length": 20,
+          "sha256": "a11b7b6918ba4e84f8e3ab75638e7325e9f891fcf575dd801756523d4bc8a966"
+        },
+        "digest": "a11b7b6918ba4e84f8e3ab75638e7325e9f891fcf575dd801756523d4bc8a966",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.whitespace",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "20090a0d207b20226122203a2031207d20090a",
+          "length": 19,
+          "sha256": "8453cc908e20c95c3ecbb3090499bbb33b4c77b238553d7b04ba23af23803286"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2261223a317d",
+          "length": 7,
+          "sha256": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+        },
+        "digest": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2261223a317d",
+          "length": 7,
+          "sha256": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+        },
+        "digest": "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.duplicate",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2261223a312c2261223a327d",
+          "length": 13,
+          "sha256": "1c53ee0df7b12fd4d65b976120c7fa6b847dc41dffd7f0331c3237a1ceab1756"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.duplicate-nested",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2261223a312c2261223a327d5d7d",
+          "length": 21,
+          "sha256": "24301f19d56b15953041afa480032bd1940f460294a193ac098dcc468ca1ceff"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.duplicate-escaped",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2261223a312c225c7530303631223a327d",
+          "length": 18,
+          "sha256": "c95ba945b310a34906bbfc28ce1346b87741d5a2b3066d1d3ecfa0acbd86392c"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.duplicate-supplementary",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b225c75643830305c7564633030223a312c22f0908080223a327d",
+          "length": 27,
+          "sha256": "019f8e22d82f1180f336bb1b284534f5c6a8c2224155b5e40b164ff603d41cf4"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.empty",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "",
+          "length": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.truncated",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2261223a",
+          "length": 5,
+          "sha256": "ffb38b22ee3e0ca90325ebce953a9846990f292faf44c50498771602e31cb61f"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.trailing-value",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b7d205b5d",
+          "length": 5,
+          "sha256": "6c1bd26e549ea058bfb8f4be8dcc58632031fde4c153afa7474579c66013a238"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.trailing-comma",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b312c5d",
+          "length": 4,
+          "sha256": "886ad6246ed150b2930495926ba07d579307bc7fecaf4b391650dca8bae7bc66"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.comment",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2f2a782a2f7d",
+          "length": 7,
+          "sha256": "593aa521cee0e776bef3dbab2634f9cfa6c568c7cfdcb77bac82c03036074cc5"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.unquoted-key",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b613a317d",
+          "length": 5,
+          "sha256": "f09a9231c12685ac5f0b6f0b06c9154f13dc3a5b3548db5142c19bde1383f261"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bad-escape",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c78343122",
+          "length": 6,
+          "sha256": "9619e42d6b4c7f7b79f8798042e5aebdc50ed48cd24d93f5e22cff7a66036405"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.raw-control",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "221f22",
+          "length": 3,
+          "sha256": "1521d03826a6641b193920a8c097c44f6930e7cc48751ce16ba551e3f5afc5ea"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.float",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "312e30",
+          "length": 3,
+          "sha256": "d0ff5974b6aa52cf562bea5921840c032a860a91a3512f7fe8f768f6bbe005f6"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.exponent",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "316530",
+          "length": 3,
+          "sha256": "bcac40fbed4ed4e1042a0c9dafbe9cdd58447415f19a11e59add45fdc083e2f5"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.float-nested",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2261223a5b312e355d7d",
+          "length": 11,
+          "sha256": "f181a1f8be1008c718a4b13c9161d340ff9ad840b5bd7476a57a748f09fc1bb7"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.nan",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "4e614e",
+          "length": 3,
+          "sha256": "d5b592c05dc25b5032553f1b27f4139be95e881f73db33b02b05ab20c3f9981e"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.infinity",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "496e66696e697479",
+          "length": 8,
+          "sha256": "d0067cad9a63e0813759a2bb841051ca73570c0da2e08e840a8eb45db6a7a010"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.negative-infinity",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d496e66696e697479",
+          "length": 9,
+          "sha256": "c64ddf11bcd45660f0cf66dd0c22d2b4570ef3d3fc6527a9a6f6c722aefa3c39"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.plus",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2b31",
+          "length": 2,
+          "sha256": "c59dc4e44ff99288156d4dff2168f6ac7ddee6b1fc7ccc0754656ffaa6d351ea"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.leading-zero",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "3031",
+          "length": 2,
+          "sha256": "938db8c9f82c8cb58d3f3ef4fd250036a48d26a712753d2fde5abd03a85cabf4"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.negative-leading-zero",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d3031",
+          "length": 3,
+          "sha256": "feba731c642f4032a06ddddcc422802c811a9d32ec28f63e367f3010fbb29ea6"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bad-minus",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "2d",
+          "length": 1,
+          "sha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bom",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "efbbbf7b7d",
+          "length": 5,
+          "sha256": "aa25e978046d680ef8740d837e6de5bc1e2a2dc6089dbda1012544b538d53f65"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-invalid",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22ff22",
+          "length": 3,
+          "sha256": "2c1ba6ac713bfc21e74f3429be952fca3e7a796734394fd18a48eb6713880d89"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-truncated",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22e28222",
+          "length": 4,
+          "sha256": "83cb8dd8849f887edb0a1419ab55d5ee5058b4bcc6c8e97dcc4afcda83ad3c95"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-overlong",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22c08022",
+          "length": 4,
+          "sha256": "3152957e025ba54af72846da0e2759f93a45dcc9c2e2392bd5f9be63e95359bf"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-continuation",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "228022",
+          "length": 3,
+          "sha256": "0fd123b00f85e9b35ca0addf705a2f45e2b0b4a9944fe66457daeee1d4d16ca8"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-surrogate",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22eda08022",
+          "length": 5,
+          "sha256": "ee4a76500d4d714ca691afe56c1fd9e0a5fbcb42d6c8f8d7178aae4ddb683cf7"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-out-of-range",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "22f490808022",
+          "length": 6,
+          "sha256": "a0b68d72ba326dc7655b0da4c65889da62eda33c43e5b8aa7abccc3e80658ea6"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.surrogate-high",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c756438303022",
+          "length": 8,
+          "sha256": "8c0c59dd0d275aadcd462a5fe12eb352cbdfeaf961eae4f85a4660521df7d2f5"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.surrogate-low",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c756463303022",
+          "length": 8,
+          "sha256": "353c7370beca95e64c258c908edac60c2ab30d355ca1b5b7fc31c5bce4a4c65a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.surrogate-reversed",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c75646330305c756438303022",
+          "length": 14,
+          "sha256": "21b59caaa12b2965ce063778289864b88a44d120c1a47f639d6fb9f6c3ad7a78"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.surrogate-bad-pair",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225c75643830307822",
+          "length": 9,
+          "sha256": "ed16755f1ed92058a4a7b869df2e56cc6d596e5ca5d1ff3e73a182e19779cad9"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.digits-4300",
+      "input": {
+        "data": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "kind": "bytes"
+      },
+      "note": "Independent anchor: 4300 ones, canonical length 4300 and SHA-256 5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.digits-4301",
+      "input": {
+        "data": {
+          "count": 4301,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "",
+          "sha256": "8afececf38e8946df9cff0bb388b1f2909aaa9f595a91450a1c0d69407c3ec36",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.digits-negative-4300",
+      "input": {
+        "data": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d",
+          "sha256": "95d9863c61475d18ae195f74e0dc421fddaf3057de3f6b4e6db550448ce6740c",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d",
+          "sha256": "95d9863c61475d18ae195f74e0dc421fddaf3057de3f6b4e6db550448ce6740c",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "95d9863c61475d18ae195f74e0dc421fddaf3057de3f6b4e6db550448ce6740c",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d",
+          "sha256": "95d9863c61475d18ae195f74e0dc421fddaf3057de3f6b4e6db550448ce6740c",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "95d9863c61475d18ae195f74e0dc421fddaf3057de3f6b4e6db550448ce6740c",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.digits-negative-4301",
+      "input": {
+        "data": {
+          "count": 4301,
+          "encoding": "repeat",
+          "length": 4302,
+          "prefix_hex": "2d",
+          "sha256": "2fd1cbe6f99e6a187b6c3cb4124528a409448280725bf474e6d43b642f0d9335",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bytes-max",
+      "input": {
+        "data": {
+          "count": 1048575,
+          "encoding": "repeat",
+          "length": 1048576,
+          "prefix_hex": "30",
+          "sha256": "72f82c5d541d5dbc6af026ab81f09c21606a20cd512252585601309a64d00809",
+          "suffix_hex": "",
+          "unit_hex": "20"
+        },
+        "kind": "bytes"
+      },
+      "note": "Exactly 1 MiB is accepted; input-byte identity includes trailing spaces.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "30",
+          "length": 1,
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bytes-over",
+      "input": {
+        "data": {
+          "count": 1048576,
+          "encoding": "repeat",
+          "length": 1048577,
+          "prefix_hex": "30",
+          "sha256": "fcc6e4d3d6da8ed46735c269b8f4887ddbc19a41a651e0a55a663678507ca1ee",
+          "suffix_hex": "",
+          "unit_hex": "20"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.bytes-over-malformed",
+      "input": {
+        "data": {
+          "count": 1048577,
+          "encoding": "repeat",
+          "length": 1048577,
+          "prefix_hex": "",
+          "sha256": "97f1b26601b4e889c9c1fa0c9fbffccd15eb2900e3a326f53715dd578c72b0a7",
+          "suffix_hex": "",
+          "unit_hex": "ff"
+        },
+        "kind": "bytes"
+      },
+      "note": "Input byte-size rejection precedes UTF-8 and syntax validation.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.depth-127",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 255,
+          "sha256": "4a4b332ecdf55e888291f75aa4995102b57a3139a60317913bccac1ef2c2a6df"
+        },
+        "kind": "bytes"
+      },
+      "note": "Root container counts as depth one; source accepts 129, product deliberately rejects it.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 255,
+          "sha256": "4a4b332ecdf55e888291f75aa4995102b57a3139a60317913bccac1ef2c2a6df"
+        },
+        "digest": "4a4b332ecdf55e888291f75aa4995102b57a3139a60317913bccac1ef2c2a6df",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 255,
+          "sha256": "4a4b332ecdf55e888291f75aa4995102b57a3139a60317913bccac1ef2c2a6df"
+        },
+        "digest": "4a4b332ecdf55e888291f75aa4995102b57a3139a60317913bccac1ef2c2a6df",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.depth-128",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 257,
+          "sha256": "a87f12d34d179c4dd058f06d205b96585bd84797eab5360fe32bc414d56028ba"
+        },
+        "kind": "bytes"
+      },
+      "note": "Root container counts as depth one; source accepts 129, product deliberately rejects it.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 257,
+          "sha256": "a87f12d34d179c4dd058f06d205b96585bd84797eab5360fe32bc414d56028ba"
+        },
+        "digest": "a87f12d34d179c4dd058f06d205b96585bd84797eab5360fe32bc414d56028ba",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 257,
+          "sha256": "a87f12d34d179c4dd058f06d205b96585bd84797eab5360fe32bc414d56028ba"
+        },
+        "digest": "a87f12d34d179c4dd058f06d205b96585bd84797eab5360fe32bc414d56028ba",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "depth-128",
+      "id": "json.depth-129",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 259,
+          "sha256": "e1b6a767efda695ed26993a0a7ddd323c19c0cc20f97685ee2a8e203e531f766"
+        },
+        "kind": "bytes"
+      },
+      "note": "Root container counts as depth one; source accepts 129, product deliberately rejects it.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b305d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+          "length": 259,
+          "sha256": "e1b6a767efda695ed26993a0a7ddd323c19c0cc20f97685ee2a8e203e531f766"
+        },
+        "digest": "e1b6a767efda695ed26993a0a7ddd323c19c0cc20f97685ee2a8e203e531f766",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.depth-string-markers",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "225b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d22",
+          "length": 402,
+          "sha256": "17fb12b44989dc9abf7912dc8d29a4453c6fa9adcfe2bc093105423fc3dad91f"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "225b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d22",
+          "length": 402,
+          "sha256": "17fb12b44989dc9abf7912dc8d29a4453c6fa9adcfe2bc093105423fc3dad91f"
+        },
+        "digest": "17fb12b44989dc9abf7912dc8d29a4453c6fa9adcfe2bc093105423fc3dad91f",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "225b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d22",
+          "length": 402,
+          "sha256": "17fb12b44989dc9abf7912dc8d29a4453c6fa9adcfe2bc093105423fc3dad91f"
+        },
+        "digest": "17fb12b44989dc9abf7912dc8d29a4453c6fa9adcfe2bc093105423fc3dad91f",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.type-text",
+      "input": {
+        "codepoints": [
+          123,
+          125
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.type-null",
+      "input": {
+        "kind": "null"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.type-bytearray",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "kind": "bytearray"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.4300-positive",
+      "input": {
+        "exponent": 4299,
+        "kind": "power10",
+        "negative": false
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "31",
+          "sha256": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "31",
+          "sha256": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.4300-negative",
+      "input": {
+        "exponent": 4299,
+        "kind": "power10",
+        "negative": true
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d31",
+          "sha256": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d31",
+          "sha256": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.4301-positive",
+      "input": {
+        "exponent": 4300,
+        "kind": "power10",
+        "negative": false
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.4301-negative",
+      "input": {
+        "exponent": 4300,
+        "kind": "power10",
+        "negative": true
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.depth-128",
+      "input": {
+        "depth": 128,
+        "kind": "nested",
+        "leaf": {
+          "decimal": "0",
+          "kind": "integer"
+        },
+        "shape": "alternating"
+      },
+      "note": "Mixed object/array containers count equally; source accepts 129.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "depth-128",
+      "id": "canonical.depth-129",
+      "input": {
+        "depth": 129,
+        "kind": "nested",
+        "leaf": {
+          "decimal": "0",
+          "kind": "integer"
+        },
+        "shape": "alternating"
+      },
+      "note": "Mixed object/array containers count equally; source accepts 129.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d",
+          "length": 515,
+          "sha256": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5"
+        },
+        "digest": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.float",
+      "input": {
+        "kind": "float",
+        "value": "1.5"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.nan",
+      "input": {
+        "kind": "float",
+        "value": "nan"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.infinity",
+      "input": {
+        "kind": "float",
+        "value": "inf"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.negative-infinity",
+      "input": {
+        "kind": "float",
+        "value": "-inf"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.tuple",
+      "input": {
+        "items": [
+          {
+            "decimal": "1",
+            "kind": "integer"
+          }
+        ],
+        "kind": "tuple"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.bytes",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.surrogate-value",
+      "input": {
+        "codepoints": [
+          55296
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.nonstring-key",
+      "input": {
+        "entries": [
+          {
+            "key": {
+              "decimal": "1",
+              "kind": "integer"
+            },
+            "value": {
+              "codepoints": [
+                120
+              ],
+              "kind": "string"
+            }
+          }
+        ],
+        "kind": "object"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.surrogate-key",
+      "input": {
+        "entries": [
+          {
+            "key": {
+              "codepoints": [
+                55296
+              ],
+              "kind": "string"
+            },
+            "value": {
+              "decimal": "1",
+              "kind": "integer"
+            }
+          }
+        ],
+        "kind": "object"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.4300-positive",
+      "input": {
+        "exponent": 4299,
+        "kind": "power10",
+        "negative": false
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "31",
+          "sha256": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "31",
+          "sha256": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "916d8027b50598a584c7e66ba229c3b0363c6ad352b31dbbe5e228676aa09f22",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.4300-negative",
+      "input": {
+        "exponent": 4299,
+        "kind": "power10",
+        "negative": true
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d31",
+          "sha256": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4299,
+          "encoding": "repeat",
+          "length": 4301,
+          "prefix_hex": "2d31",
+          "sha256": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+          "suffix_hex": "",
+          "unit_hex": "30"
+        },
+        "digest": "5963a977c205e4573202db4eb2ce60553c9cd4fe1bc24b594b685db48e5144d7",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.4301-positive",
+      "input": {
+        "exponent": 4300,
+        "kind": "power10",
+        "negative": false
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.4301-negative",
+      "input": {
+        "exponent": 4300,
+        "kind": "power10",
+        "negative": true
+      },
+      "note": "Native bounded arithmetic constructs bigint before the selected source operation; sign is not a digit.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.depth-128",
+      "input": {
+        "depth": 128,
+        "kind": "nested",
+        "leaf": {
+          "decimal": "0",
+          "kind": "integer"
+        },
+        "shape": "alternating"
+      },
+      "note": "Mixed object/array containers count equally; source accepts 129.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "depth-128",
+      "id": "digest.depth-129",
+      "input": {
+        "depth": 129,
+        "kind": "nested",
+        "leaf": {
+          "decimal": "0",
+          "kind": "integer"
+        },
+        "shape": "alternating"
+      },
+      "note": "Mixed object/array containers count equally; source accepts 129.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d",
+          "length": 515,
+          "sha256": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5"
+        },
+        "digest": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.float",
+      "input": {
+        "kind": "float",
+        "value": "1.5"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.nan",
+      "input": {
+        "kind": "float",
+        "value": "nan"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.infinity",
+      "input": {
+        "kind": "float",
+        "value": "inf"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.negative-infinity",
+      "input": {
+        "kind": "float",
+        "value": "-inf"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.tuple",
+      "input": {
+        "items": [
+          {
+            "decimal": "1",
+            "kind": "integer"
+          }
+        ],
+        "kind": "tuple"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.bytes",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b7d",
+          "length": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.surrogate-value",
+      "input": {
+        "codepoints": [
+          55296
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.nonstring-key",
+      "input": {
+        "entries": [
+          {
+            "key": {
+              "decimal": "1",
+              "kind": "integer"
+            },
+            "value": {
+              "codepoints": [
+                120
+              ],
+              "kind": "string"
+            }
+          }
+        ],
+        "kind": "object"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.surrogate-key",
+      "input": {
+        "entries": [
+          {
+            "key": {
+              "codepoints": [
+                55296
+              ],
+              "kind": "string"
+            },
+            "value": {
+              "decimal": "1",
+              "kind": "integer"
+            }
+          }
+        ],
+        "kind": "object"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.no-byte-cap",
+      "input": {
+        "codepoint": 120,
+        "count": 1048577,
+        "kind": "repeat-string"
+      },
+      "note": "Source canonical_bytes has no 1 MiB parse-input cap; product adds none.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "canonical": {
+          "count": 1048577,
+          "encoding": "repeat",
+          "length": 1048579,
+          "prefix_hex": "22",
+          "sha256": "64f74e9ed2280e81efbcb5b8c487a60d3fa61164e446f0f1e541fbd0332c742a",
+          "suffix_hex": "22",
+          "unit_hex": "78"
+        },
+        "digest": "64f74e9ed2280e81efbcb5b8c487a60d3fa61164e446f0f1e541fbd0332c742a",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 1048577,
+          "encoding": "repeat",
+          "length": 1048579,
+          "prefix_hex": "22",
+          "sha256": "64f74e9ed2280e81efbcb5b8c487a60d3fa61164e446f0f1e541fbd0332c742a",
+          "suffix_hex": "22",
+          "unit_hex": "78"
+        },
+        "digest": "64f74e9ed2280e81efbcb5b8c487a60d3fa61164e446f0f1e541fbd0332c742a",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.normal",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          47,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          47,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.dot-default",
+      "input": {
+        "codepoints": [
+          46
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.empty",
+      "input": {
+        "codepoints": [],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.absolute",
+      "input": {
+        "codepoints": [
+          47,
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.double-leading",
+      "input": {
+        "codepoints": [
+          47,
+          47,
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.trailing-slash",
+      "input": {
+        "codepoints": [
+          97,
+          47
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.empty-component",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.dot-component",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.parent",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          46,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.parent-leading",
+      "input": {
+        "codepoints": [
+          46,
+          46,
+          47,
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.git-root",
+      "input": {
+        "codepoints": [
+          46,
+          103,
+          105,
+          116
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.git-component",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          103,
+          105,
+          116,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.backslash",
+      "input": {
+        "codepoints": [
+          97,
+          92,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.nul",
+      "input": {
+        "codepoints": [
+          97,
+          0,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.cr",
+      "input": {
+        "codepoints": [
+          97,
+          13,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.lf",
+      "input": {
+        "codepoints": [
+          97,
+          10,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.tab",
+      "input": {
+        "codepoints": [
+          97,
+          9,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.star",
+      "input": {
+        "codepoints": [
+          97,
+          42,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.question",
+      "input": {
+        "codepoints": [
+          97,
+          63,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.open-bracket",
+      "input": {
+        "codepoints": [
+          97,
+          91,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.close-bracket",
+      "input": {
+        "codepoints": [
+          97,
+          93,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.colon",
+      "input": {
+        "codepoints": [
+          67,
+          58,
+          120
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          67,
+          58,
+          120
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          67,
+          58,
+          120
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.drive-shaped",
+      "input": {
+        "codepoints": [
+          67,
+          58,
+          47,
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          67,
+          58,
+          47,
+          97
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          67,
+          58,
+          47,
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.git-case",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          71,
+          105,
+          116,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          71,
+          105,
+          116,
+          47,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          47,
+          46,
+          71,
+          105,
+          116,
+          47,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.space",
+      "input": {
+        "codepoints": [
+          97,
+          32,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          32,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          32,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.padded-space",
+      "input": {
+        "codepoints": [
+          32,
+          97,
+          32
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          32,
+          97,
+          32
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          32,
+          97,
+          32
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.percent",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          37,
+          50,
+          101,
+          37,
+          50,
+          101,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          47,
+          37,
+          50,
+          101,
+          37,
+          50,
+          101,
+          47,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          47,
+          37,
+          50,
+          101,
+          37,
+          50,
+          101,
+          47,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.tilde",
+      "input": {
+        "codepoints": [
+          97,
+          47,
+          126,
+          47,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          47,
+          126,
+          47,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          47,
+          126,
+          47,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.escape-control",
+      "input": {
+        "codepoints": [
+          97,
+          27,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          27,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          27,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.other-control",
+      "input": {
+        "codepoints": [
+          97,
+          1,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          1,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          1,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.line-separator",
+      "input": {
+        "codepoints": [
+          97,
+          8232,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97,
+          8232,
+          98
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          8232,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.unicode",
+      "input": {
+        "codepoints": [
+          233,
+          47,
+          128512
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          233,
+          47,
+          128512
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          233,
+          47,
+          128512
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "scalar-path",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.surrogate",
+      "input": {
+        "codepoints": [
+          97,
+          55296,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Source accepts lone surrogates; product path inputs are Unicode scalar strings.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          55296,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": true
+      },
+      "id": "path.dot-true",
+      "input": {
+        "codepoints": [
+          46
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          46
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          46
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": true
+      },
+      "id": "path.normal-dot-true",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "decimal": "1",
+        "kind": "integer"
+      },
+      "id": "path.dot-integer",
+      "input": {
+        "codepoints": [
+          46
+        ],
+        "kind": "string"
+      },
+      "note": "Exact boolean dot is a deliberate product restriction, including non-dot paths.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          46
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "decimal": "1",
+        "kind": "integer"
+      },
+      "id": "path.normal-dot-integer",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Exact boolean dot is a deliberate product restriction, including non-dot paths.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "kind": "null"
+      },
+      "id": "path.normal-dot-null",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Exact boolean dot is a deliberate product restriction, including non-dot paths.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "codepoints": [
+          121,
+          101,
+          115
+        ],
+        "kind": "string"
+      },
+      "id": "path.normal-dot-text",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Exact boolean dot is a deliberate product restriction, including non-dot paths.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.type-null",
+      "input": {
+        "kind": "null"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.type-integer",
+      "input": {
+        "decimal": "1",
+        "kind": "integer"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.type-bytes",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "61",
+          "length": 1,
+          "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+        },
+        "kind": "bytes"
+      },
+      "note": "Pinned source classification and exact canonical bytes.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.depth-object-128",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a307d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d",
+          "length": 769,
+          "sha256": "a388f22d84ccc3c1efb76115a3a0af2e01ae9815c44c1adbcdeb0382fdd0bc92"
+        },
+        "kind": "bytes"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a307d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d",
+          "length": 769,
+          "sha256": "a388f22d84ccc3c1efb76115a3a0af2e01ae9815c44c1adbcdeb0382fdd0bc92"
+        },
+        "digest": "a388f22d84ccc3c1efb76115a3a0af2e01ae9815c44c1adbcdeb0382fdd0bc92",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a307d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d",
+          "length": 769,
+          "sha256": "a388f22d84ccc3c1efb76115a3a0af2e01ae9815c44c1adbcdeb0382fdd0bc92"
+        },
+        "digest": "a388f22d84ccc3c1efb76115a3a0af2e01ae9815c44c1adbcdeb0382fdd0bc92",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "depth-128",
+      "id": "json.depth-object-129",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a307d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d",
+          "length": 775,
+          "sha256": "027bb257fe07337629dd5091d64a067eb2d9262df3567580b216bf4be388c04a"
+        },
+        "kind": "bytes"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a7b2278223a307d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d",
+          "length": 775,
+          "sha256": "027bb257fe07337629dd5091d64a067eb2d9262df3567580b216bf4be388c04a"
+        },
+        "digest": "027bb257fe07337629dd5091d64a067eb2d9262df3567580b216bf4be388c04a",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.depth-alternating-128",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "kind": "bytes"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "parse-json",
+      "product_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+          "length": 513,
+          "sha256": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007"
+        },
+        "digest": "4e5e7de7972a8b9318160a5dfed8ff16b808339ab9168801a98dd804f8ae7007",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "depth-128",
+      "id": "json.depth-alternating-129",
+      "input": {
+        "data": {
+          "encoding": "hex",
+          "hex": "5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d",
+          "length": 515,
+          "sha256": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5"
+        },
+        "kind": "bytes"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "canonical": {
+          "encoding": "hex",
+          "hex": "5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b7b2278223a5b305d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d",
+          "length": 515,
+          "sha256": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5"
+        },
+        "digest": "a5a81b8764994c8043079826ccc06e53f1657d21b510b824f55736bf61d0fca5",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.decimal-chunks-4300",
+      "input": {
+        "decimal": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "integer"
+      },
+      "note": "Chunk constructor reaches actual oracle for an oversized native decimal integer.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "canonical.decimal-chunks-4301",
+      "input": {
+        "decimal": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "integer"
+      },
+      "note": "Chunk constructor reaches actual oracle for an oversized native decimal integer.",
+      "operation": "canonical-bytes",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.decimal-chunks-4300",
+      "input": {
+        "decimal": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "integer"
+      },
+      "note": "Chunk constructor reaches actual oracle for an oversized native decimal integer.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      },
+      "source_expected": {
+        "canonical": {
+          "count": 4300,
+          "encoding": "repeat",
+          "length": 4300,
+          "prefix_hex": "",
+          "sha256": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+          "suffix_hex": "",
+          "unit_hex": "31"
+        },
+        "digest": "5155e7af4f6c5b0853aa65153bf170836c773666b83ae909760596f07154c950",
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "digest.decimal-chunks-4301",
+      "input": {
+        "decimal": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "integer"
+      },
+      "note": "Chunk constructor reaches actual oracle for an oversized native decimal integer.",
+      "operation": "canonical-digest",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "decimal": "0",
+        "kind": "integer"
+      },
+      "id": "path.normal-dot-zero",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "codepoints": [],
+        "kind": "string"
+      },
+      "id": "path.normal-dot-empty-text",
+      "input": {
+        "codepoints": [
+          97
+        ],
+        "kind": "string"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "boolean-dot",
+      "dot": {
+        "kind": "float",
+        "value": "1.5"
+      },
+      "id": "path.dot-float",
+      "input": {
+        "codepoints": [
+          46
+        ],
+        "kind": "string"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          46
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "scalar-path",
+      "dot": {
+        "kind": "boolean",
+        "value": false
+      },
+      "id": "path.surrogate-low",
+      "input": {
+        "codepoints": [
+          97,
+          56320,
+          98
+        ],
+        "kind": "string"
+      },
+      "note": "Additional independently inspectable boundary case.",
+      "operation": "canonical-path",
+      "product_expected": {
+        "code": "context_schema",
+        "status": "reject"
+      },
+      "source_expected": {
+        "codepoints": [
+          97,
+          56320,
+          98
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.utf8-byte-size",
+      "input": {
+        "data": {
+          "count": 524288,
+          "encoding": "repeat",
+          "length": 1048578,
+          "prefix_hex": "22",
+          "sha256": "1e83320962a680a1d9d46f59d05210d5a3e3b1a7a5ef4640fd0ba5dbe2a7cfc5",
+          "suffix_hex": "22",
+          "unit_hex": "c3a9"
+        },
+        "kind": "bytes"
+      },
+      "note": "Limit counts UTF-8 bytes, not decoded characters.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "input-limit-exceeded",
+        "status": "reject"
+      }
+    },
+    {
+      "decision": "parity",
+      "id": "json.type-bytearray-over",
+      "input": {
+        "data": {
+          "count": 1048576,
+          "encoding": "repeat",
+          "length": 1048577,
+          "prefix_hex": "30",
+          "sha256": "fcc6e4d3d6da8ed46735c269b8f4887ddbc19a41a651e0a55a663678507ca1ee",
+          "suffix_hex": "",
+          "unit_hex": "20"
+        },
+        "kind": "bytearray"
+      },
+      "note": "Wrong native type is invalid-json before input byte-size inspection.",
+      "operation": "parse-json",
+      "product_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      },
+      "source_expected": {
+        "code": "invalid-json",
+        "status": "reject"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_revision": "fd0019b7711438a2dbf7255ce3a43572d5a3a6fd"
+}

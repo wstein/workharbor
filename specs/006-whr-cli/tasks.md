@@ -1,7 +1,8 @@
 # Feature 006 pilot work items
 
 Status: execution in progress. T001 scaffold independently Sol CLEAR at
-`d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 and later work items remain open.
+`d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 is independently CLEAR at
+`bc18034164597aa841bea561cf6a882e9c0715e2`; T003 and later work items remain open.
 No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
@@ -20,14 +21,14 @@ Goal: locked, reproducible buildable applications, not a usable product.
 Independent check: clean-checkout format/build/tests with missing-tool failures.
 
 - [x] T001 Scaffold and pin Phoenix/Ecto/SQLite in `apps/control_plane/`, Go modules `apps/host_agent/go.mod`, `apps/whr/go.mod`, `apps/api_client/go.mod`, root `go.work` and `.tool-versions`; lock dependencies and pass each application format/build/test gate (Feature 001 T001/T011).
-- [ ] T002 Add explicit application checks and meaningful required test inventory to `scripts/check_ci.py`, `docs/development/ci-acceptance.json`, `Makefile` and `.github/workflows/check.yml`, with fixed gate/event-validation helper `scripts/application_checks.py`, negative fixtures `scripts/test_application_checks.py`, complete real-checker fixture copy lists in `scripts/test_task_readiness.py` and `scripts/test_task_source.py`, and test-only ExUnit reporter `apps/control_plane/test/support/acceptance_formatter.ex`; the helpers keep application argv out of manifest data and report actual ExUnit outcomes without adding product behavior. Prove local/CI equivalence, fail on missing tools and preserve all inherited tests (001 T012; ADR 0007/0010).
+- [x] T002 Add explicit application checks and meaningful required test inventory to `scripts/check_ci.py`, `docs/development/ci-acceptance.json`, `Makefile` and `.github/workflows/check.yml`, with fixed gate/event-validation helper `scripts/application_checks.py`, negative fixtures `scripts/test_application_checks.py`, complete real-checker fixture copy lists in `scripts/test_task_readiness.py` and `scripts/test_task_source.py`, and test-only ExUnit reporter `apps/control_plane/test/support/acceptance_formatter.ex`; the helpers keep application argv out of manifest data and report actual ExUnit outcomes without adding product behavior. Prove local/CI equivalence, fail on missing tools and preserve all inherited tests (001 T012; ADR 0007/0010).
 
 ## Phase 2: Foundations and migration
 
 Goal: product boundary, durable owner state and reviewed Python-to-Go parity.
 Independent check: negative vectors, cross-language bytes and no runtime Python.
 
-- [ ] T003 Freeze the selected Python behavior inventory, source/tool digests and independently inspected vectors in `contracts/migration/`, with offline generator `scripts/generate_go_vectors.py`; cover nested duplicate keys, malformed UTF-8, integer bounds, float/non-finite rejection, non-ASCII ordering and paths. Retain development-only rows in `specs/006-whr-cli/migration.md` (ADR 0010).
+- [ ] T003 Freeze the selected Python behavior inventory, source/tool digests and independently inspected vectors in `contracts/migration/`, with offline generator `scripts/generate_go_vectors.py`, strict fixture schema, meaningful negative tests in `tests/test_go_vectors.py` and their required IDs in `docs/development/ci-acceptance.json`; cover nested duplicate keys, malformed UTF-8, integer bounds, float/non-finite rejection, non-ASCII ordering and paths. Retain development-only rows in `specs/006-whr-cli/migration.md` (ADR 0010).
 - [ ] T004 Port only accepted pure JSON/path behavior into `apps/api_client/wirejson/` and `apps/host_agent/internal/config/`; write Go negative/golden tests first and reproduce frozen vectors independently in Python; no caller switches before parity and independent review (T003).
 - [ ] T005 Implement ownership, separate storage/runtime records, durable operations/canonical request hash, generation checks and audit in `apps/control_plane/lib/workharbor/` and migrations/tests in `apps/control_plane/`; prove owner/workspace key uniqueness, changed-payload conflicts and crash-safe intent-before-side-effect (001 T002).
 - [ ] T006 Implement owner bootstrap/login, revocable scoped credentials and browser request protections in `apps/control_plane/lib/workharbor/accounts.ex`, `apps/control_plane/lib/workharbor_web/` and tests; prove TLS-first auth, wrong owner, expired/revoked token, read-only dashboard scope, Host/Origin/anti-forgery rejection and secret redaction (001 T013; FR-035–038).
@@ -110,4 +111,8 @@ acceptance and task completion rules; review evidence is appended, never fabrica
 
 ## Evidence log
 
-Planning only. No product task is checked and no runtime acceptance is claimed.
+T001 and T002 are independently accepted at the revisions above. T003 candidate
+preparation is captured in contracts/migration and awaits independent review;
+no Go port or product runtime acceptance is claimed. Durable check and review
+evidence, including earlier failed runs, is retained in
+[the pilot execution record](../../docs/exec-plans/active/installable-pilot.md).

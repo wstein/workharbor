@@ -1,0 +1,507 @@
+{
+  "$defs": {
+    "bytes": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "hex"
+            },
+            "hex": {
+              "maxLength": 4194304,
+              "pattern": "(?:[0-9a-f]{2})*",
+              "type": "string"
+            },
+            "length": {
+              "maximum": 2097152,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sha256": {
+              "maxLength": 64,
+              "pattern": "[0-9a-f]{64}",
+              "type": "string"
+            }
+          },
+          "required": [
+            "encoding",
+            "hex",
+            "length",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "maximum": 2097152,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "encoding": {
+              "const": "repeat"
+            },
+            "length": {
+              "maximum": 2097152,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "prefix_hex": {
+              "maxLength": 4194304,
+              "pattern": "(?:[0-9a-f]{2})*",
+              "type": "string"
+            },
+            "sha256": {
+              "maxLength": 64,
+              "pattern": "[0-9a-f]{64}",
+              "type": "string"
+            },
+            "suffix_hex": {
+              "maxLength": 4194304,
+              "pattern": "(?:[0-9a-f]{2})*",
+              "type": "string"
+            },
+            "unit_hex": {
+              "maxLength": 4194304,
+              "pattern": "(?:[0-9a-f]{2})+",
+              "type": "string"
+            }
+          },
+          "required": [
+            "encoding",
+            "prefix_hex",
+            "unit_hex",
+            "count",
+            "suffix_hex",
+            "length",
+            "sha256"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "parity",
+            "depth-128",
+            "scalar-path",
+            "boolean-dot"
+          ]
+        },
+        "dot": {
+          "$ref": "#/$defs/value"
+        },
+        "id": {
+          "maxLength": 80,
+          "pattern": "[a-z0-9][a-z0-9.-]{0,79}",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/value"
+        },
+        "note": {
+          "maxLength": 512,
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "parse-json",
+            "canonical-bytes",
+            "canonical-digest",
+            "canonical-path"
+          ]
+        },
+        "product_expected": {
+          "$ref": "#/$defs/expected"
+        },
+        "source_expected": {
+          "$ref": "#/$defs/expected"
+        }
+      },
+      "required": [
+        "id",
+        "operation",
+        "input",
+        "source_expected",
+        "product_expected",
+        "decision",
+        "note"
+      ],
+      "type": "object"
+    },
+    "expected": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "enum": [
+                "invalid-json",
+                "input-limit-exceeded",
+                "context_schema"
+              ]
+            },
+            "status": {
+              "const": "reject"
+            }
+          },
+          "required": [
+            "status",
+            "code"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "canonical": {
+              "$ref": "#/$defs/bytes"
+            },
+            "digest": {
+              "maxLength": 64,
+              "pattern": "[0-9a-f]{64}",
+              "type": "string"
+            },
+            "status": {
+              "const": "ok"
+            }
+          },
+          "required": [
+            "status",
+            "canonical",
+            "digest"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "codepoints": {
+              "items": {
+                "maximum": 1114111,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 8192,
+              "type": "array"
+            },
+            "status": {
+              "const": "ok"
+            }
+          },
+          "required": [
+            "status",
+            "codepoints"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "value": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "null"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "decimal": {
+              "maxLength": 5001,
+              "pattern": "-?(0|[1-9][0-9]*)",
+              "type": "string"
+            },
+            "kind": {
+              "const": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "decimal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "exponent": {
+              "maximum": 5000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "power10"
+            },
+            "negative": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "exponent",
+            "negative"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "codepoints": {
+              "items": {
+                "maximum": 1114111,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 8192,
+              "type": "array"
+            },
+            "kind": {
+              "const": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "codepoints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "codepoint": {
+              "maximum": 127,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "count": {
+              "maximum": 1048577,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "repeat-string"
+            }
+          },
+          "required": [
+            "kind",
+            "codepoint",
+            "count"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "float"
+            },
+            "value": {
+              "enum": [
+                "1.5",
+                "nan",
+                "inf",
+                "-inf"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/bytes"
+            },
+            "kind": {
+              "const": "bytes"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/bytes"
+            },
+            "kind": {
+              "const": "bytearray"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/$defs/value"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "kind": {
+              "const": "list"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/$defs/value"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "kind": {
+              "const": "tuple"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "entries": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "$ref": "#/$defs/value"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/value"
+                  }
+                },
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "kind": {
+              "const": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "entries"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "depth": {
+              "maximum": 256,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "nested"
+            },
+            "leaf": {
+              "$ref": "#/$defs/value"
+            },
+            "shape": {
+              "enum": [
+                "array",
+                "object",
+                "alternating"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "shape",
+            "depth",
+            "leaf"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://workharbor.invalid/contracts/migration/vectors.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/case"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_revision": {
+      "const": "fd0019b7711438a2dbf7255ce3a43572d5a3a6fd"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_revision",
+    "cases"
+  ],
+  "title": "WorkHarbor selected migration vectors v1",
+  "type": "object"
+}

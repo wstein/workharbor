@@ -1,0 +1,58 @@
+{
+  "files": {
+    "scripts/generate_go_vectors.py": "2fbcf8e7a244841431492784ec027acaed6e13930dd6392692f2073941d09693",
+    "vectors.json": "0070cf8057253dca19abe7eaaa55e9c9e17313ba53c6cd820014443e3708a04c",
+    "vectors.schema.json": "1ac759b5cbdff1ae239632c33379c7879156e72d2ad6dc3f543479226d639f20"
+  },
+  "runtime": {
+    "implementation": "cpython",
+    "int_max_str_digits": 4300,
+    "provenance": "Exact .tool-versions pin and observed CPython sys.version; upstream archive digest not claimed.",
+    "recursion_limit": 1000,
+    "release": "CPython v3.14.8",
+    "release_reference": "https://github.com/python/cpython/tree/v3.14.8",
+    "version": "3.14.8"
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "blob": "9f5f1e0379c76ed7a704470c787abb0aae9e221a",
+      "definitions": [
+        "MAX_JSON_BYTES",
+        "ProfileError",
+        "_json_value",
+        "_unique_object",
+        "_reject_number",
+        "parse_json",
+        "canonical_bytes",
+        "canonical_digest"
+      ],
+      "imports": [
+        "hashlib",
+        "json"
+      ],
+      "license": "EUPL-1.2",
+      "original": "scripts/provider_profiles.py",
+      "profile": "json",
+      "revision": "fd0019b7711438a2dbf7255ce3a43572d5a3a6fd",
+      "sha256": "c199ba25ff55c87474d18a6ccd5e0c03ff529f01678246eea76d566ae27a1026",
+      "snapshot": "oracle/provider_profiles.py"
+    },
+    {
+      "blob": "d510d9d0b7fd72b0dd18699a590917e2d45d8b47",
+      "definitions": [
+        "ContextError",
+        "_require",
+        "_text",
+        "canonical_path"
+      ],
+      "imports": [],
+      "license": "EUPL-1.2",
+      "original": "scripts/single_task_context.py",
+      "profile": "path",
+      "revision": "fd0019b7711438a2dbf7255ce3a43572d5a3a6fd",
+      "sha256": "87acb4351f4b51e2585228315a36832b4a08ba6ff26bed80698a878dd60c9164",
+      "snapshot": "oracle/single_task_context.py"
+    }
+  ]
+}

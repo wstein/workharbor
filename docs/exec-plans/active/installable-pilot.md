@@ -11,7 +11,8 @@ Status: independent Sol planning review cleared
 `602ae81c63be52ccb2ee18aa9802a50d3e35260d`, and the internal-pilot/release ordering
 correction cleared `0c2c135d8d82d8ed708095f7f1596760df38696b`. T001 scaffold is
 accepted after independent Sol CLEAR of `d3d84c8361a1389292fad96d02a828ac9fabc2e3`.
-T002 is implemented and under validation; its independent review remains pending.
+T002 is independently accepted at `bc18034164597aa841bea561cf6a882e9c0715e2`.
+T003 preparation is being implemented and remains unchecked pending independent review.
 No product runtime acceptance is claimed.
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
 The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
@@ -311,3 +312,93 @@ including every previously failing positive path and all unchanged negative guar
 The 61 direct CI/application controls also passed after repair. Repository and
 whitespace checks pass. The fixture-only correction is folded into the T002
 candidate for fresh exact-head independent review and coherent full acceptance.
+
+
+## T002 final independent CLEAR and coherent acceptance
+
+Independent Sol review cleared exact candidate
+`bc18034164597aa841bea561cf6a882e9c0715e2`. Its final canonical
+`make check PYTHON=/opt/homebrew/bin/python3.14` exited 0 in 1304.597s:
+raw 411 tests GREEN in 413.799s; qualified 831 tests GREEN in 856.364s;
+all three fresh Go format/vet/build/test gates passed (whr 1, host agent 1,
+API client doc-only 0), followed by Phoenix format, warnings-as-errors compile,
+assets and all five ExUnit cases. The same independent reviewer verified cleanup:
+private execution worktree removed and owned check process group absent.
+Logs: `/private/tmp/workharbor-t002-canonical-bc18034.log` and adjacent `.json`.
+These local logs are execution evidence, not published artifacts.
+
+The complete earlier RED/interrupted history above is retained: `3900757` raw
+one failure/two errors from an old child interpreter, qualified interrupted;
+`345972d` raw GREEN but qualified 19 failure records/one error from two stale
+real-checker fixture copy lists, with actual application gates GREEN. Both causes
+were fixed without waivers and the final coherent run passed. Feature 006 T002 is
+now checked. Original Feature 001 task markers remain untouched. Linux CI and
+real-host/browser/install/release acceptance remain unexecuted.
+
+## T003 selected oracle contracts — author candidate, review pending
+
+Prerequisite: exact T002 CLEAR above. Scope is only selected behavior inventory,
+full pinned source snapshots/provenance, strict bounded self-contained vectors,
+`scripts/generate_go_vectors.py`, meaningful negatives in `tests/test_go_vectors.py`,
+their required IDs in `docs/development/ci-acceptance.json`, contract/harness links
+and this evidence. The owner-authorized intermediate Sol review route permits the
+reviewed profile choices; final owner review is reserved for the combined PR.
+No Go product code, caller, dependency or runtime is changed.
+
+Fifteen new controls were written before behavior: all 15 initially errored on the
+absent generator (0.003s). The first implemented run passed 14 but exposed one test
+setup inconsistency: changing only source_expected while labeling parity makes the
+fixture invalid before candidate generation. The tamper control now changes both
+expected digests equally, retaining a valid parity classification while proving
+verification fails and only the explicit external candidate receives repaired
+bytes. No validator was relaxed. All 15 then passed in 0.924s; initial 145 cases
+reproduced byte-for-byte. Additional object/mixed-depth, decimal-chunk, Unicode
+byte-size and option-domain cases are included in the final focused checks below.
+
+Source snapshots exactly match commit
+`fd0019b7711438a2dbf7255ce3a43572d5a3a6fd` and their original Git blob/SHA-256
+identities. Only the JSON helper closure plus json/hashlib and the path helper
+closure with no imports execute. Release provenance records CPython 3.14.8 and
+explicit 4300-digit/1000-recursion settings. Actual macOS executable SHA-256
+`1b5cb11d163e5ba34e2a05fc533c0ed89574d4425f9749a9d89405f651980e0d`
+is per-run evidence, not a portable fixture precondition. No upstream archive
+checksum or Linux reproduction is claimed. No source-linked resource is fetched.
+
+Independent Sol anchors supplied before freezing cover -0, Unicode scalar key
+ordering, literal HTML/U+2028/U+2029, boolean/integer separation and 4300 decimal
+ones. Product depth 128, Unicode scalar paths and exact-boolean dot are explicit
+restrictions with source-success/product-rejection pairs. Native oversized integers
+reach the real canonical/digest oracle through bounded arithmetic/chunk construction.
+The decimal limit covers parsing, direct canonicalization and digest equally.
+
+T003 remains unchecked until independent review of the committed exact candidate.
+T004 Go implementation/caller parity and all later runtime acceptance remain open.
+The complete canonical T002 result is prior-revision evidence, not a full-suite
+claim for this new candidate. No new runner behavior is introduced; focused
+contract/manifest/source/repository checks are recorded separately below.
+
+
+Final author focused checks for the T003 candidate:
+
+- `python3.14 -I -B -m unittest discover -s tests -p test_go_vectors.py -v`:
+  15 controls GREEN in 0.967s after the complete 159-case inventory.
+- `python3.14 -I -B scripts/generate_go_vectors.py`: all 159 cases reproduced
+  byte-for-byte. The self-contained fixture is 163,819 bytes: 78 parse, 18 direct
+  canonical, 17 direct digest and 46 path cases. Fourteen explicit restriction
+  pairs retain source success/product rejection; 145 cases retain parity.
+- Trusted checker `load_manifest`/`collect`/`validate_collection`: 520 required
+  IDs present among 846 discovered tests. All 505 prior required IDs are retained
+  in their original order; retained-failure and application inventories are
+  unchanged. This is collection validation, not an execution of those 846 tests.
+- Both source snapshots compared byte-for-byte with `git show` at the pinned
+  original commit. Both added Python files compile through builtin `compile`
+  without writing bytecode. Original Feature 001 tasks diff is empty.
+- `python3.14 -I -B scripts/check_repo.py` and `git diff --check` pass.
+  Staged checks and post-commit source identity are checked during handoff.
+
+Native write permission was requested for the authorized WorkHarbor paths; no
+sandbox workaround or global configuration change was used. Standalone candidate
+mode and default read-only mode are exercised by the focused controls. No runtime
+Python/AI orchestration dependency was added to product code. Full new-head
+canonical acceptance is not claimed; the final combined pilot candidate still
+requires its own complete canonical and runtime acceptance.
