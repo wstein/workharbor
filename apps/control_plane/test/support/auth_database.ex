@@ -4,12 +4,14 @@ defmodule WorkHarbor.AuthDatabase do
   def open!(path) do
     pid = WorkHarbor.FoundationDatabase.open!(path)
 
-    Code.require_file(
-      Application.app_dir(
-        :workharbor,
-        "priv/repo/migrations/20261014010000_owner_authentication.exs"
+    unless Code.ensure_loaded?(WorkHarbor.Repo.Migrations.OwnerAuthentication) do
+      Code.require_file(
+        Application.app_dir(
+          :workharbor,
+          "priv/repo/migrations/20261014010000_owner_authentication.exs"
+        )
       )
-    )
+    end
 
     Ecto.Migrator.run(
       WorkHarbor.Repo,

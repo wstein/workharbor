@@ -654,3 +654,11 @@ repository/bootstrap and whitespace checks. Fresh dev-profile compilation exited
 0 with the pinned Plug dependency's Mix xref deprecation warning; application
 compilation had no warning. This dependency warning is recorded rather than
 represented as warning-free output. No listener started during either compile.
+
+Initial pristine candidate `65af90c937a5f2e50a3651a0351611ca80b2bb8d` passed
+source/context/identity, manifest/collection (846 collected, 520 required Python
+IDs), repository, format, compile and 86/86 actual Phoenix outcomes. Its fresh
+default test database exposed a migration module redefinition warning in the
+auth test helper. The helper now follows the accepted foundation helper's loaded
+module guard; the predecessor run remains truthful evidence, superseded for exact
+acceptance by the corrective candidate. Product behavior is unchanged.
