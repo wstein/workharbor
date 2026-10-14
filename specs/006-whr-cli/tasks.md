@@ -86,11 +86,11 @@ Independent check: key/cert failures, remote statuses and external config disclo
 ## Phase 9: Pilot install and final acceptance
 
 Goal: installed recoverable product and exact-head reviewable handoff.
-Independent check: clean client/host install, real loaded journey, restore and release verification.
+Independent check: clean client/host install, real loaded journey, restore and local package/release-policy checks.
 
 - [ ] T022 Implement quiesced backup/clean restore in `scripts/backup-workharbor.sh`, `scripts/restore-workharbor.sh`, `docs/development/backup-restore.md`; prove exact uncommitted hashes, owner/storage/operation associations, revoked identity rejection, unknown restored observations, no auto-start and failure to quiesce aborts (001 T019).
-- [ ] T023 Implement local archive/install/uninstall, pinned toolchain instructions, checksums, SBOM/provenance and draft-only release machinery in `scripts/pilot/`, `.github/workflows/`, `docs/development/installable-pilot.md`; test clean installation and contents; separately authorized allowlisted human-signed tag exercise is required for SC-006, never claimed from unsigned local artifacts (FR-023–027).
-- [ ] T024 Run every story/criterion at five-workspace/eight-attachment load on the authorized real host, record exact commands/versions/timings/failures in `specs/006-whr-cli/quickstart.md`, `specs/001-workspace-lifecycle/quickstart.md`, `docs/quality.md`; fix findings, run exact-head canonical/application gates, obtain independent final review and open the combined PR to main (001 T010; SC-001–012).
+- [ ] T023 Implement local archive/install/uninstall, pinned toolchain instructions, checksums, SBOM, recorded build inputs/provenance and draft-only release machinery in `scripts/pilot/`, `.github/workflows/`, `docs/development/installable-pilot.md`; test clean installation/uninstallation, archive contents and release policy, including signed-tag/allowlist/main/check requirements and refusal to publish automatically. The owner-authorized allowlisted human-signed release exercise and SC-006 are a separate follow-up outside internal-pilot acceptance; unsigned local artifacts never satisfy SC-006 (FR-023–027).
+- [ ] T024 Run every applicable internal-pilot story/criterion, including SC-001–005 and SC-007–012, at five-workspace/eight-attachment load on the authorized real host, record exact commands/versions/timings/failures in `specs/006-whr-cli/quickstart.md`, `specs/001-workspace-lifecycle/quickstart.md`, `docs/quality.md`; fix findings, run exact-head canonical/application gates, obtain independent Sol final review and open the combined PR to main for owner review (001 T010). SC-006 signed-release verification is excluded only from this internal-pilot handoff and remains a separately authorized follow-up; full Feature 006 completion remains open until SC-006 passes.
 
 ## Dependencies and execution
 

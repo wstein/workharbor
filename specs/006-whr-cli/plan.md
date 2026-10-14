@@ -11,7 +11,9 @@ re-review is pending. No implementation or runtime verification is claimed.
 The owner explicitly requested on 2026-10-14 that work continue in this WorkHarbor
 worktree, on this branch, through the installable pilot, including selective
 Python-to-Go migration, independent review and fixes after each work item, and
-one PR after all pilot work items are accepted. The same worktree is retained.
+one PR after all internal-pilot work items are accepted, for final human review.
+The pilot is internal; release publication is outside this execution scope. The
+same worktree is retained.
 This is a WorkHarbor task; no SheetMill files or sibling product scope are changed.
 
 ## Work-item sequence
@@ -112,10 +114,13 @@ supply a live host grant, signed release, merge or evidence that checks passed.
 
 ## Installable-pilot acceptance
 
-All Feature 001 tasks and Feature 006 stories remain required. Additional command
-surface (rebuild/removal, CLI auth/operations, host administration, agent controls,
-dashboard, SSH and release verification) is not completed by a scaffold. Each task
-requires its own meaningful failure-path tests and independent review.
+All Feature 001 tasks and applicable Feature 006 internal-pilot stories remain
+required, including SC-001–005 and SC-007–012. Additional command surface
+(rebuild/removal, CLI auth/operations, host administration, agent controls,
+dashboard and SSH) and local packaging/release-policy checks are not completed
+by a scaffold. Each task requires its own meaningful failure-path tests and
+independent review. SC-006 is excluded only from internal-pilot acceptance; full
+Feature 006 completion remains open until its signed-release verification passes.
 Application checks: Go format/vet/build/tests per module, Phoenix format,
 warnings-as-errors compile and tests, plus inherited `make check` using Python
 3.11+ in a pristine committed checkout. Extend the reviewed acceptance runner and
@@ -128,8 +133,19 @@ agent interface, dashboard authorization/browser-origin negatives, SSH, resumabl
 offboarding and quiesced clean restore. Measure Feature 001 five-workspace/eight-
 attachment load, timings and idle/load footprint. Stub tests do not prove real use.
 
-Local unsigned archives are labelled development artifacts. Signed root release
-tag, public distribution, package channels and deployment need separate owner
-authorization. Do not claim SC-006 from an unsigned archive. Actual disposable
-Linux host, TLS hostname/certificate, live-test scope and signer allowlist are
-owner-controlled inputs; a configured Docker context establishes none of them.
+T023 produces local unsigned archives labelled development artifacts, checksums,
+SBOM and recorded build inputs/provenance, plus clean install/uninstall evidence
+and draft-only release machinery/policy tests. T024 requires the real-host,
+browser and load acceptance above and exact-head checks/independent Sol review
+before the combined PR is handed to the owner for final human review.
+
+The owner-authorized allowlisted human-signed release exercise on `main` and
+end-to-end SC-006 verification are a separate follow-up after this internal-pilot
+handoff; they cannot be prerequisites for the PR introducing the implementation.
+Full Feature 006 remains open until SC-006 passes. No signed-release evidence is
+claimed from an unsigned archive. Signed release tags, public distribution,
+package channels and deployment need separate owner authorization. Actual
+disposable Linux host, TLS hostname/certificate and live-test scope remain
+owner-controlled inputs required for pilot acceptance; signer allowlist and
+release authorization are inputs to the later release exercise. A configured
+Docker context establishes none of them.
