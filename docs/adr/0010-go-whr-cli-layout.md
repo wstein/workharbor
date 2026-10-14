@@ -24,8 +24,10 @@ Owner decision H10:a/H11:a, 2026-10-13.
    needs a reviewed decision, not a silent Go-side edit. Vectors do not define `whr`
    exit codes: those come only from the separate exit-code ADR (H15:b, fresh table).
 4. Layout: each Go component is its own module under `apps/`, consistent with
-   `apps/host_agent`. `whr` is another module, `apps/whr`, and the shared API client
-   is its own package (module) used by both. Within a module (paths relative to it):
+   `apps/host_agent`. `whr` is another module, `apps/whr`. The shared API client
+   is its own package in a module of its own under `apps/`, outside either
+   `internal/` (other modules cannot import it), used by both. Its name and path
+   are left to the whr spec or a later ADR. Within a module (paths relative to it):
    - `cmd/whr/` (in `apps/whr`) is the thin CLI entry point; no domain logic.
    - `internal/` holds domain logic, not importable outside its module.
    The host agent keeps its existing location and plans.
