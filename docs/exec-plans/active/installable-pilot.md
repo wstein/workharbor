@@ -737,3 +737,35 @@ canonical precreated-directory output corrected it. One gofmt invocation used th
 wrong cwd-relative path and was corrected. Neither failed command is counted passing.
 No helper policy/runner behavior changed; root reserves full make check for combined
 head unless new concern requires it. Exact-candidate pristine gates follow externally.
+
+## T007 exact acceptance and S001 transport follow-up
+
+T007 is independently Sol CLEAR at exact candidate
+`e10c6997c24407e0f472a7ea22ba2dd1b42067e3` for the pure protocol scope.
+Author pristine evidence: `/private/tmp/workharbor-t007-validation-nbe2oy8a/evidence.json`;
+independent evidence: `/var/folders/g3/fzgcpsts26j_bzpn6ymprbwm0000gn/T/workharbor-t007-independent-yof68sbl/summary.json`.
+Actual application counts: host_agent132, api_client162, whr1, Phoenix106; all
+inherited IDs retained. Source/manifest collection retains 846 Python / 520 required.
+Only Feature006 T007 is checked; Feature001 markers are unchanged. Full canonical,
+real-host/browser acceptance and dependency security clearance are not claimed.
+
+Locked Bandit1.12.5 emits EEF-CVE-2026-105659 / GHSA-69m6-wcv4-rwcf HIGH.
+Primary upstream facts were checked on 2026-10-14: affected through1.12.5,
+patched-version TODO, Hex latest1.12.5, fix in Unreleased. Root authorized S001
+as a blocking follow-up before T008; independent Sol transport reviewer cleared
+[the finite contract](../../../specs/006-whr-cli/contracts/transport-security.md)
+before tests/behavior. Same worktree/branch, sole S001 writer; T008 remains held.
+No dependency update, proxy, persistent listener, release/deploy or publication.
+
+S001 failure-first suite is now actual RED before mitigation:
+`MIX_ENV=test MIX_BUILD_PATH=/private/tmp/workharbor-t007-fresh-build mix test test/workharbor_web/transport_security_test.exs`
+exited2, 2/7 passed and five behavior failures. Log:
+`/private/tmp/workharbor-s001-linked-red.log`. HTTP1 browser/bearer authentication
+and real WSS positives/negatives passed; guards accepted unsafe protocol/override
+settings, runtime omitted restrictions, dual ALPN chose h2 and no-ALPN HTTP2 preface
+received a SETTINGS frame. Initial disposable PEM encoding / request-process DB
+ownership setup errors were corrected first and are not counted as behavior RED.
+Actual tests use all three merged base/runtime environment configurations and
+PhoenixAdapter child specs. Network request processes share the named repository's
+sandbox transaction; generated certificates/keys and listeners are ephemeral.
+Seven required transport IDs were appended without removing inherited IDs.
