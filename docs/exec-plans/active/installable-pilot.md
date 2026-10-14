@@ -769,3 +769,33 @@ Actual tests use all three merged base/runtime environment configurations and
 PhoenixAdapter child specs. Network request processes share the named repository's
 sandbox transaction; generated certificates/keys and listeners are ephemeral.
 Seven required transport IDs were appended without removing inherited IDs.
+
+Independent early S001 review found a listener-activation bypass: Phoenix treats
+truthy server values as active and missing values may inherit serve_endpoints,
+while the guard originally validated only literal true. A new actual selected
+regression failed first (exit2,0/1; `/private/tmp/workharbor-s001-activation-red.log`).
+The guard now requires exactly one explicit boolean server setting; false remains
+inert and true requires full validation. Duplicate activation is also rejected.
+The eighth required transport ID is appended; inherited Phoenix relative order is
+restored to minimize manifest churn. Endpoint fixture cleanup is registered before
+later setup assertions so failed setup restores shared state.
+
+First normal author `make check-apps` exited2: all Go gates passed, Phoenix111/113
+with only the same two inherited 4300-digit stale Jason failures seen in T007.
+Raw log `/private/tmp/workharbor-s001-apps.log` is retained. No tests are waived.
+Root authorized recompilation of the disposable locked Jason test artifact under
+the committed4301configuration before rerunning normal application checks; fresh
+pristine exact-candidate validation remains separately required.
+
+S001 normal author application gate is now GREEN after explicit locked Jason
+`MIX_ENV=test mix deps.compile jason --force` (exit0, log
+`/private/tmp/workharbor-s001-jason-recompile.log`). Full normal
+`make check-apps PYTHON=/opt/homebrew/opt/python@3.14/bin/python3.14` exited0;
+log `/private/tmp/workharbor-s001-apps-repaired.log`: host_agent132, api_client162,
+whr1, Phoenix114 including all106 inherited and eight new transport IDs.
+All Go format/vet/build/uncached test and Phoenix format/compile/assets/test gates
+ran through the unchanged fixed helper. The advisory warning remains visible.
+Focused eight transport cases passed with warnings-as-errors. Source bootstrap and
+`git diff --check` passed; Python collection846 / required520 and unchanged
+Feature001 tasks were checked. Exact committed/pristine verification and independent
+Sol candidate review follow; no full canonical Python or live-host/browser claim.

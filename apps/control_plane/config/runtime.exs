@@ -35,6 +35,9 @@ if System.get_env("PHX_SERVER") == "true" do
       ip: bind,
       port: uri.port,
       certfile: required.("WORKHARBOR_TLS_CERT_FILE"),
-      keyfile: required.("WORKHARBOR_TLS_KEY_FILE")
+      keyfile: required.("WORKHARBOR_TLS_KEY_FILE"),
+      # Temporary GHSA-69m6-wcv4-rwcf mitigation; see transport-security contract.
+      http_1_options: [enabled: true],
+      http_2_options: [enabled: false]
     ]
 end
