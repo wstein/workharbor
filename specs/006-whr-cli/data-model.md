@@ -18,3 +18,46 @@ Status: proposed extension of Feature 001 domain contracts.
 Retain Feature 001 ownership, separate storage lifecycle, desired/observed state,
 generation checks and operation outcomes. Restore resets observations to unknown
 and does not start runtime. Lost agent-input delivery is unknown, never auto-resend.
+
+## Accepted T005 persistence foundation
+
+[Native identity and guards](contracts/owner-api.md#accepted-t005-foundation-contract)
+are authoritative. SQLite foreign keys enforce owner/host/workspace scope;
+changesets alone are insufficient. Hosts have mandatory owner_id and cannot be
+reassigned in the pilot. Workspace host/owner, operation workspace/owner, and
+storage/runtime workspace/host references are composite pairs. Binding records
+pair operation/workspace and runtime/workspace. Use pairwise references because
+the locked adapter supports only two-column total composite FK helpers.
+
+Operations enforce unique (owner, workspace, key), unique (workspace, intent_version)
+and one queued/executing operation/workspace. Runtime generations are unique per
+workspace; a reservation belongs to one operation with at most one candidate.
+One runtime may be marked current; pending candidates are not current. Opaque
+provider handles are nullable until allocation and runtime IDs immutable once set.
+
+Workspace intent_version starts at zero and advances once/new accepted operation.
+last_runtime_generation is a separate allocator: only a new RuntimeInstance
+reservation advances it. Pending reservation is not a running/current replacement.
+Replay allocates nothing; abandoned generations are never reused. Start/stop of
+the same target keep runtime generation. Results bind operation+intent version
+and runtime ID+generation, preventing old same-runtime results from overwriting
+new intent. Desired states remain running/stopped, not deleted.
+
+Requested configuration is immutable in operation identity. Workspace requested
+config is only desired projection. Runtime effective_config remains null until
+validated observation, and never changes on an older runtime just because rebuild
+was queued/failed. Candidate config comes solely from its requesting operation.
+T005 start requires an existing current runtime with nonnull effective config,
+captures that immutable execution_config_snapshot, and cannot reserve replacement;
+reviewed replacement-start behavior remains T010. Failed rebuild workspace display
+and session invalidation are later lifecycle work, not metadata success claims.
+
+Storage outlives runtime. Runtime removal preserves workspace/storage, and only
+confirmed outcomes set tombstones. Retain IDs and operation key/outcome history
+indefinitely for internal pilot. Data deletion remains unsupported in T005.
+
+Explicit file-backed WAL, foreign_keys=on, synchronous=full, busy_timeout=2000 ms
+are required. Verify FK/synchronous on every writer connection. Race/crash tests
+use independently committed connections outside wrapping SQL Sandbox transactions:
+Exqlite turns nested immediate transactions into SAVEPOINT. Reopen/process-kill
+results do not establish hardware power-loss resilience.
