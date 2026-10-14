@@ -316,7 +316,7 @@ class ReadinessTests(unittest.TestCase):
         # Exercise the real source helper with its exact checker pin, rather
         # than replacing source/history validation with a permissive fake.
         (self.root / 'scripts').mkdir()
-        for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py'):
+        for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py', 'application_checks.py'):
             shutil.copy2(Path(package.__file__).with_name(name), self.root / 'scripts' / name)
         self.git('add', '.')
         self.git('commit', '-qm', 'fixture checker')

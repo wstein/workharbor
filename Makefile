@@ -1,7 +1,10 @@
 PYTHON ?= python3
-.PHONY: check check-raw test
+.PHONY: check check-raw check-apps test
 check:
 	$(PYTHON) -I -B scripts/check_ci.py
+
+check-apps:
+	$(PYTHON) -I -B scripts/check_ci.py --applications-only
 
 check-raw:
 	$(PYTHON) scripts/check_repo.py

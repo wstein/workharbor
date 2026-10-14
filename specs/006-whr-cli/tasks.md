@@ -1,7 +1,8 @@
 # Feature 006 pilot work items
 
-Status: proposed intermediate execution baseline; independent Sol re-review of
-the terminal-safety ordering correction is pending. No product task is complete.
+Status: execution in progress. T001 scaffold independently Sol CLEAR at
+`d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 and later work items remain open.
+No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
 [data model](data-model.md), [migration](migration.md), [owner API](contracts/owner-api.md).
@@ -18,8 +19,8 @@ silently weaken Feature 001 or mark its tasks complete.
 Goal: locked, reproducible buildable applications, not a usable product.
 Independent check: clean-checkout format/build/tests with missing-tool failures.
 
-- [ ] T001 Scaffold and pin Phoenix/Ecto/SQLite in `apps/control_plane/`, Go modules `apps/host_agent/go.mod`, `apps/whr/go.mod`, `apps/api_client/go.mod`, root `go.work` and `.tool-versions`; lock dependencies and pass each application format/build/test gate (Feature 001 T001/T011).
-- [ ] T002 Add explicit application checks and meaningful required test inventory to `scripts/check_ci.py`, `docs/development/ci-acceptance.json`, `Makefile` and `.github/workflows/check.yml`; prove local/CI equivalence, fail on missing tools and preserve all inherited tests (001 T012; ADR 0007/0010).
+- [x] T001 Scaffold and pin Phoenix/Ecto/SQLite in `apps/control_plane/`, Go modules `apps/host_agent/go.mod`, `apps/whr/go.mod`, `apps/api_client/go.mod`, root `go.work` and `.tool-versions`; lock dependencies and pass each application format/build/test gate (Feature 001 T001/T011).
+- [ ] T002 Add explicit application checks and meaningful required test inventory to `scripts/check_ci.py`, `docs/development/ci-acceptance.json`, `Makefile` and `.github/workflows/check.yml`, with fixed gate/event-validation helper `scripts/application_checks.py`, negative fixtures `scripts/test_application_checks.py`, complete real-checker fixture copy lists in `scripts/test_task_readiness.py` and `scripts/test_task_source.py`, and test-only ExUnit reporter `apps/control_plane/test/support/acceptance_formatter.ex`; the helpers keep application argv out of manifest data and report actual ExUnit outcomes without adding product behavior. Prove local/CI equivalence, fail on missing tools and preserve all inherited tests (001 T012; ADR 0007/0010).
 
 ## Phase 2: Foundations and migration
 

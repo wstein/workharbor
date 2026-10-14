@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "required_test_ids": [
     "test_approval_binding.ApprovalBindingTests.test_changed_scope_requirements_checks_dependencies_or_mode_requires_renewal",
     "test_approval_binding.ApprovalBindingTests.test_clean_and_process_filters_are_refused_without_executing_shell",
@@ -492,7 +492,36 @@
     "verify_t004_cli.CliBoundaryTests.test_mixed_legacy_and_sqlite_is_never_adopted",
     "verify_t004_cli.CliBoundaryTests.test_persistence_exit_six_is_safe",
     "verify_t004_cli.CliBoundaryTests.test_scope_blocker_exit_three",
-    "verify_t004_cli.CliBoundaryTests.test_unsafe_lock_paths_rejected_without_external_writes"
+    "verify_t004_cli.CliBoundaryTests.test_unsafe_lock_paths_rejected_without_external_writes",
+    "test_application_checks.ApplicationChecksTests.test_inventory_rejects_missing_duplicate_empty_critical_and_command_fields",
+    "test_application_checks.ApplicationChecksTests.test_go_missing_skip_fail_duplicate_and_incomplete_events_block",
+    "test_application_checks.ApplicationChecksTests.test_go_doc_only_library_still_rejects_unexpected_bad_tests",
+    "test_application_checks.ApplicationChecksTests.test_exunit_missing_skipped_excluded_failed_duplicate_and_incomplete_block",
+    "test_application_checks.ApplicationChecksTests.test_malformed_event_bytes_never_qualify",
+    "test_application_checks.ApplicationChecksTests.test_missing_tool_blocks_before_any_application_command",
+    "test_application_checks.ApplicationChecksTests.test_wrong_tool_version_unformatted_source_and_failed_gates_block",
+    "test_application_checks.ApplicationChecksTests.test_fixed_gates_locked_setup_external_caches_and_all_modules",
+    "test_application_checks.ApplicationChecksTests.test_ci_and_local_share_the_application_gate",
+    "test_check_ci.SourceTests.test_application_failure_blocks_even_when_all_python_checks_pass",
+    "test_check_ci.SourceTests.test_captured_output_keeps_raw_bytes_and_refuses_existing_file_before_spawn",
+    "test_application_checks.ApplicationChecksTests.test_concurrent_nested_packages_keep_exact_test_ownership",
+    "test_check_ci.SourceTests.test_python3_children_use_selected_interpreter_and_path_restores_on_exception"
   ],
-  "retained_assertion_failures": []
+  "retained_assertion_failures": [],
+  "application_tests": {
+    "whr": [
+      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestScaffoldRefusesProductCommands"
+    ],
+    "host_agent": [
+      "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands"
+    ],
+    "api_client": [],
+    "control_plane": [
+      "WorkHarborWeb.ErrorHTMLTest/test renders 404.html",
+      "WorkHarborWeb.ErrorHTMLTest/test renders 500.html",
+      "WorkHarborWeb.ErrorJSONTest/test renders 404",
+      "WorkHarborWeb.ErrorJSONTest/test renders 500",
+      "WorkHarborWeb.PageControllerTest/test GET /"
+    ]
+  }
 }

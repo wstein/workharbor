@@ -224,7 +224,7 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertFalse(ci.evaluate(ids, manifest, result))
 
     def test_manifest_rejects_duplicates_missing_rationale_and_unknown_fields(self):
-        good = {'schema_version': 1, 'required_test_ids': ['probe.test'], 'retained_assertion_failures': [
+        good = {'schema_version': 2, 'application_tests': ci.load_manifest(ci.ROOT)['application_tests'], 'required_test_ids': ['probe.test'], 'retained_assertion_failures': [
             {'id': 'probe.test', 'message': 'known', 'reason': 'pending behavior', 'removal_condition': 'reviewed implementation'}]}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -234,7 +234,7 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(good, ci.load_manifest(root))
             variants = []
             for field, value in (('required_test_ids', []), ('required_test_ids', ['probe.test'] * 2),
-                                 ('schema_version', 2), ('schema_version', True), ('schema_version', 1.0),
+                                 ('schema_version', 1), ('schema_version', True), ('schema_version', 2.0),
                                  ('retained_assertion_failures', good['retained_assertion_failures'] * 2)):
                 variants.append(dict(good, **{field: value}))
             for field in ('id', 'message', 'reason', 'removal_condition'):
@@ -477,7 +477,7 @@ class SourceTests(unittest.TestCase):
         (self.root/'scripts/check_ci.py').write_bytes(Path(ci.__file__).read_bytes())
         (self.root/'scripts/check_ci.py').chmod(Path(ci.__file__).stat().st_mode & 0o777)
         (self.root/'scripts/task_outcomes.py').write_bytes(Path(ci.__file__).with_name('task_outcomes.py').read_bytes())
-        for name in ('task_package.py', 'single_task_state.py'):
+        for name in ('task_package.py', 'single_task_state.py', 'application_checks.py'):
             (self.root/'scripts'/name).write_bytes(Path(ci.__file__).with_name(name).read_bytes())
         self.git('add', '.')
         self.git('commit', '--quiet', '-m', 'test: baseline')
@@ -641,7 +641,7 @@ class SourceTests(unittest.TestCase):
         with self.assertRaises(ValueError): ci.source_identity(self.root, self.base)
 
     def test_source_pin_binds_package_and_traversal_dependencies(self):
-        for name in ('task_package.py', 'single_task_state.py'):
+        for name in ('task_package.py', 'single_task_state.py', 'application_checks.py'):
             with self.subTest(name=name):
                 ci.source_identity(self.root, self.base)
                 self.commit('scripts/' + name, 'pass\n')
@@ -656,6 +656,33 @@ class SourceTests(unittest.TestCase):
                                     capture_output=True, text=True, check=True)
             self.assertEqual([1, str(prefix), True], json.loads(result.stdout))
         self.assertFalse(prefix.exists()); self.assertEqual(before, (sys.pycache_prefix, sys.dont_write_bytecode))
+
+    def test_python3_children_use_selected_interpreter_and_path_restores_on_exception(self):
+        fake_bin = Path(self.temporary.name)/'incompatible-bin'
+        fake_bin.mkdir()
+        sentinel = fake_bin/'called'
+        incompatible = fake_bin/'python3'
+        incompatible.write_text('#!/bin/sh\nprintf incompatible-python >&2\nprintf called > "' + str(sentinel) + '"\nexit 97\n')
+        incompatible.chmod(0o755)
+        inherited_path = str(fake_bin) + os.pathsep + os.environ['PATH']
+        for raises in (False, True):
+            with self.subTest(raises=raises), mock.patch.dict(os.environ, PATH=inherited_path):
+                alias = None
+                try:
+                    with ci.isolated_python_cache():
+                        result = subprocess.run(['python3', '-c', 'import sys;print(sys.version_info[:3])'],
+                                                capture_output=True, text=True)
+                        self.assertEqual(0, result.returncode, result.stderr)
+                        self.assertEqual(str(sys.version_info[:3]), result.stdout.strip())
+                        alias = Path(shutil.which('python3'))
+                        self.assertEqual(Path(sys.executable).resolve(), alias.resolve())
+                        if raises: raise RuntimeError('fixture exception')
+                except RuntimeError:
+                    self.assertTrue(raises)
+                self.assertEqual(inherited_path, os.environ['PATH'])
+                self.assertFalse(sentinel.exists())
+                self.assertIsNotNone(alias)
+                self.assertFalse(alias.exists())
 
     def test_normal_cli_subprocess_retains_adjacent_module_imports(self):
         (self.root/'scripts/adjacent_module.py').write_text('VALUE = 7\n')
@@ -699,6 +726,18 @@ class SourceTests(unittest.TestCase):
             self.assertEqual(0, ci.run(['suite'], self.root, timeout=600))
             self.assertEqual(600, process.wait.call_args.kwargs['timeout'])
 
+    def test_captured_output_keeps_raw_bytes_and_refuses_existing_file_before_spawn(self):
+        capture = Path(self.temporary.name)/'captured-output'
+        env = {'PATH': os.environ['PATH'], 'APPLICATION_PROBE': 'explicit fixture'}
+        argv = [sys.executable, '-I', '-B', '-c',
+                'import os,sys;sys.stdout.buffer.write(os.environ["APPLICATION_PROBE"].encode()+b"\\n");'
+                'sys.stderr.buffer.write(b"stderr fixture\\n")']
+        self.assertEqual(0, ci.run(argv, self.root, env=env, output_path=capture))
+        self.assertEqual([b'explicit fixture', b'stderr fixture'], sorted(capture.read_bytes().splitlines()))
+        with mock.patch.object(ci.subprocess, 'Popen') as spawn:
+            with self.assertRaises(FileExistsError): ci.run(argv, self.root, env=env, output_path=capture)
+            spawn.assert_not_called()
+
     def test_aggregate_suite_timeout_is_bounded_and_fails_closed(self):
         original_run = ci.subprocess.run
         observed = []
@@ -711,7 +750,8 @@ class SourceTests(unittest.TestCase):
             if kwargs.get('timeout') == ci.QUALIFIED_AGGREGATE_TIMEOUT_SECONDS:
                 raise subprocess.TimeoutExpired(argv, ci.QUALIFIED_AGGREGATE_TIMEOUT_SECONDS)
             return 0
-        with mock.patch.object(ci, 'load_manifest', return_value={'retained_assertion_failures': []}), \
+        with mock.patch.object(ci, 'load_manifest', return_value={'retained_assertion_failures': [], 'application_tests': {}}), \
+                mock.patch.object(ci, 'check_applications', return_value=True), \
                 mock.patch.object(ci, 'run', side_effect=checks), \
                 mock.patch.object(ci.subprocess, 'run', side_effect=commands):
             self.assertEqual(1, ci.check(self.root))
@@ -720,7 +760,7 @@ class SourceTests(unittest.TestCase):
         self.assertTrue(all(not arguments for arguments in observed[1:-1]))
 
     def test_post_check_source_drift_blocks(self):
-        manifest = {'retained_assertion_failures': []}
+        manifest = {'retained_assertion_failures': [], 'application_tests': {}}
         original_run = ci.subprocess.run
         def commands(argv, *args, **kwargs):
             if argv[:2] == ['bash', '.specify/scripts/bash/check-prerequisites.sh']:
@@ -732,9 +772,26 @@ class SourceTests(unittest.TestCase):
                     (self.root/'guide.md').write_text('changed\n')
                 return 0
             with self.subTest(drift=drift), mock.patch.object(ci, 'load_manifest', return_value=manifest), \
+                    mock.patch.object(ci, 'check_applications', return_value=True), \
                     mock.patch.object(ci, 'run', side_effect=successful_checks), \
                     mock.patch.object(ci.subprocess, 'run', side_effect=commands):
                 self.assertEqual(1 if drift else 0, ci.check(self.root))
+
+    def test_application_failure_blocks_even_when_all_python_checks_pass(self):
+        original_run = ci.subprocess.run
+        def commands(argv, *args, **kwargs):
+            if argv[:2] == ['bash', '.specify/scripts/bash/check-prerequisites.sh']:
+                return subprocess.CompletedProcess(argv, 0)
+            return original_run(argv, *args, **kwargs)
+        inventory = {'fixture': 'not shell argv'}
+        with mock.patch.object(ci, 'load_manifest', return_value={
+                'retained_assertion_failures': [], 'application_tests': inventory}), \
+                mock.patch.object(ci, 'run', return_value=0), \
+                mock.patch.object(ci.subprocess, 'run', side_effect=commands), \
+                mock.patch.object(ci, 'check_applications', side_effect=ValueError('missing required Go test')) as apps:
+            self.assertEqual(1, ci.check(self.root))
+            self.assertEqual(inventory, apps.call_args.args[1])
+            self.assertIs(ci.run, apps.call_args.args[2])
 
     def test_workflow_checks_ordinary_merge_without_external_policy_source(self):
         workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
