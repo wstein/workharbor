@@ -500,3 +500,27 @@ are identical, and existing application IDs retain their order with six addition
 The author worktree's ignored `.specify/feature.json` is preserved (SHA-256
 `05caf1787466a6410ce0cc3d1cdb371eae6187e38babba78a0c08d21edf1af83`);
 source-context checks must run in a pristine validation clone instead.
+
+
+## T004 independent acceptance and T005 foundation start
+
+Independent Sol exact-implementation CLEAR accepted
+`6abb7419c77b3712a6ac276bc798b102503d3144`. All 159 frozen Go cases and independent
+Unicode/native probes passed. All three Go modules passed format/vet/build/tests.
+Pristine source-context/identity, manifest/collection (520 required / 846 discovered),
+repository and whitespace checks passed; exact-head resolved-root validation took
+7.442 seconds. Separate Python reproduction covered 159 cases and 15 controls;
+author fuzz observed 197471 JSON and 42174 path executions. These are macOS results;
+no full new-head canonical, Linux or runtime acceptance is claimed.
+
+Two author command errors remain evidence: library build with -o incorrectly
+requested executable output, and logical /var versus physical /private validation
+clone spelling caused GOWORK-root mismatch. Both were corrected without production
+changes. Feature 006 T004 is checked; original Feature 001 markers remain untouched.
+
+T005 implementation GO followed independent Sol design CLEAR of consolidated V3
+with explicit native boundary, transport-neutral literal repository identity,
+separate intent/runtime counters, start-existing-runtime restriction, immutable
+requested/effective configs, guarded terminal results and atomic reservation audit.
+The accepted contract is now persisted in Feature 006 owner API/data model/plan
+before tests/behavior. T005 remains unchecked pending exact-candidate review.

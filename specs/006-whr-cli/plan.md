@@ -150,3 +150,26 @@ disposable Linux host, TLS hostname/certificate and live-test scope remain
 owner-controlled inputs required for pilot acceptance; signer allowlist and
 release authorization are inputs to the later release exercise. A configured
 Docker context establishes none of them.
+
+## T005 accepted foundation and verification
+
+Independent Sol design CLEAR covers the consolidated V3 contract in the
+[owner API](contracts/owner-api.md#accepted-t005-foundation-contract) and
+[data model](data-model.md#accepted-t005-persistence-foundation). Implementation
+is limited to native normalization/canonical bytes, scoped records/constraints,
+atomic intent/reservations/audit, metadata claim/result guards and retained
+storage/history. No auth, raw HTTP decoder, trust/fetch, provider, effect consumer,
+replacement-start, delete_data acceptance or repeatable observation API is added.
+
+Source lives in apps/control_plane/lib/workharbor/foundation/, migrations in
+apps/control_plane/priv/repo/migrations/, tests in apps/control_plane/test/workharbor/,
+and isolated database helpers in apps/control_plane/test/support/. Scoped Repo
+configuration pins durability settings; migration formatting includes the new files.
+Meaningful Phoenix IDs append to the existing acceptance manifest without changing
+prior IDs/policy. Write tests before behavior and record actual absent-implementation
+RED. Verify native independent canonical anchors and all identity negatives;
+direct-SQL constraints; independent writer races; same-generation stale intent;
+immutable terminal replay; audit rollback/redaction; process crash and file reopen;
+per-writer effective pragmas. Run Phoenix format/compile warnings-as-errors/tests
+and pristine source/manifest/repository/whitespace checks. Assets need no change.
+Full combined-head canonical and live pilot evidence remain later required gates.
