@@ -1,0 +1,13 @@
+{
+  "name": "workharbor-devcontainer-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "license": "EUPL-1.2",
+  "engines": {
+    "node": "26.11.1"
+  },
+  "dependencies": {
+    "@devcontainers/cli": "0.89.0",
+    "jsonc-parser": "3.3.1"
+  }
+}

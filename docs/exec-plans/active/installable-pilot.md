@@ -1071,3 +1071,35 @@ head review must verify all exercised source/config/dependency/journey/input blo
 are unchanged from645, plus pristine/source/manifest/whitespace gates. Feature001
 markers/frozen migrations remain unchanged. S001 Bandit mitigation-only advisory,
 provider/browser/load/installable-pilot/release gates remain separate.
+
+## T009 contract-first source ownership
+
+Coordinator authorized sole T009 source ownership after accepted final T008
+7b041e4c28023b11aa9c8497ef27d219857efcf9, with clean retained worktree. The one
+[consolidated V3.3 contract](../../../specs/006-whr-cli/contracts/devcontainer-provider.md)
+preserves the independently CLEAR matrix plus runtime naming, official resource/hook
+phase split and immutable ORIGINAL seed binding. Faithful consolidation review is
+required before failure-first behavior. Native T007 approval_ref/request semantics
+and T008 authenticated heartbeat-only scope are preserved; no wire/dispatcher or
+terminal delivery change. Exact CLI/JSONC/parser/Buildx/Node selections are recorded;
+installed behavior and guest acceptance are not yet verified. T009 stays unchecked.
+
+Official npm/release metadata and checksums were read. Automatic native approval
+review rejected one combined lookup containing public BuildKit go.mod, citing the
+SheetMill source-fetch restriction. The coordinator verified WorkHarbor origin,
+current AGENTS and Feature006 owner scope/dependency authorization; the SAME bounded
+read-only lookup then succeeded with that explicit scope correction. BuildKit
+v0.34.0 declares Go1.26.8, below repository Go1.27.2. No indirect workaround or
+source execution occurred. Original rejection and successful tool outcomes remain
+in task evidence. No Docker/guest/services/runtime activity was authorized or run.
+
+Exact automatic-review rejection retained (no child process ran):
+
+> This action was rejected due to unacceptable risk.
+> Reason: The read-only metadata lookup is low risk, but it fetches a raw source-linked go.mod, which the repository instructions explicitly prohibit.
+> Do not bypass this rejection through a workaround or indirect execution. Continue with a safer alternative, or carry out checks to prove that the action is authorized or low risk before trying again. Complete unaffected work without asking for confirmation. Report anything that remains blocked, clarify why it was blocked by auto-review, inform the user of the risk and ask for approval.
+
+Scope-corrected SAME public URL read succeeded (exit0,0.252s), followed by explicit
+parser dependency selection/locking via Go (exit0) without executing fetched source.
+CLI/JSONC package-lock-only exited0; all npm runtime dependencies are pinned and
+integrity-checked in package-lock. No behavior or runtime proof is inferred.
