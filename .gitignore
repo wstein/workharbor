@@ -12,3 +12,7 @@ __pycache__/
 .codex/auth.json
 .codex/sessions/
 WORKFLOW.local.md
+
+# Local Go scaffold executables (build acceptance normally targets a temp dir).
+/apps/host_agent/workharbor-agent
+/apps/whr/whr
