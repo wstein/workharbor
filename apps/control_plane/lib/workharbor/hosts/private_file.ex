@@ -61,11 +61,11 @@ defmodule WorkHarbor.Hosts.PrivateFile do
 
       try do
         with {:ok, fd} <-
-               :file.open(String.to_charlist(temporary), [:write, :binary, :exclusive, :raw]),
+               io().open(String.to_charlist(temporary), [:write, :binary, :exclusive, :raw]),
              :ok <- File.chmod(temporary, 0o600),
              result <- write_close(fd, bytes),
              :ok <- result,
-             :ok <- :file.make_link(String.to_charlist(temporary), String.to_charlist(path)),
+             :ok <- io().make_link(String.to_charlist(temporary), String.to_charlist(path)),
              :ok <- sync_directory(Path.dirname(path)),
              do: :ok,
              else: (
@@ -79,21 +79,41 @@ defmodule WorkHarbor.Hosts.PrivateFile do
   end
 
   defp write_close(fd, bytes) do
-    try do
-      with :ok <- :file.write(fd, bytes), do: :file.sync(fd)
-    after
-      :file.close(fd)
-    end
+    result =
+      try do
+        with :ok <- io().write(fd, bytes), do: io().sync(fd)
+      rescue
+        _ -> {:error, :eio}
+      catch
+        _, _ -> {:error, :eio}
+      end
+
+    closed = io().close(fd)
+    if result == :ok, do: closed, else: result
   end
 
   defp sync_directory(dir) do
-    with {:ok, fd} <- :file.open(String.to_charlist(dir), [:read, :raw, :directory]) do
-      try do
-        :file.sync(fd)
-      after
-        :file.close(fd)
-      end
+    with {:ok, fd} <- io().open(String.to_charlist(dir), [:read, :raw, :directory]) do
+      result =
+        try do
+          io().sync(fd)
+        rescue
+          _ -> {:error, :eio}
+        catch
+          _, _ -> {:error, :eio}
+        end
+
+      closed = io().close(fd)
+      if result == :ok, do: closed, else: result
     end
+  end
+
+  # The process-local fault selector is compiled only into test builds. The
+  # production module has only the native :file implementation, no hook/config.
+  if Mix.env() == :test do
+    defp io, do: Process.get({__MODULE__, :test_io}, :file)
+  else
+    defp io, do: :file
   end
 
   # OTP has no public geteuid BIF. Fixed POSIX id has no caller-controlled argv,

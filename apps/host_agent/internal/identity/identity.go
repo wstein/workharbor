@@ -135,7 +135,7 @@ func save(dir string, state *State, exclusive bool) error {
 	if e != nil || len(bytes) > 32768 {
 		return ErrIdentity
 	}
-	file, e := os.CreateTemp(dir, ".identity-")
+	file, e := identityFiles.createTemp(dir, ".identity-")
 	if e != nil {
 		return ErrIdentity
 	}
@@ -155,14 +155,14 @@ func save(dir string, state *State, exclusive bool) error {
 		return ErrIdentity
 	}
 	if exclusive {
-		e = os.Link(temporary, path)
+		e = identityFiles.link(temporary, path)
 	} else {
-		e = os.Rename(temporary, path)
+		e = identityFiles.rename(temporary, path)
 	}
 	if e != nil {
 		return ErrIdentity
 	}
-	parent, e := os.Open(dir)
+	parent, e := identityFiles.openDir(dir)
 	if e != nil {
 		return ErrIdentity
 	}
