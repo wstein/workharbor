@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "selected; real provider verification pending",
+  "node": {
+    "version": "26.11.1",
+    "linux_arm64_sha256": "0945e2cde6aa0f54d980f03874dfe5cf3a549ce714c7fb9019e591ce0accf282",
+    "linux_amd64_sha256": "3883bfc73f9a680ca4eab04b196068aaaab1373ffa77d8fc1a4408222495b651",
+    "checksums_url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt"
+  },
+  "devcontainer_cli": {
+    "version": "0.89.0",
+    "integrity": "sha512-LzaoOGKQ/Zql6PsiZ4hVIYVZagzWkD65aG/1ou5/Kly5Y1PtjLg1yn7qu+LZCzVoAl6DZZ/pbz8qOO4RLNlqMg==",
+    "url": "https://registry.npmjs.org/@devcontainers/cli/-/cli-0.89.0.tgz"
+  },
+  "jsonc_parser": {
+    "version": "3.3.1",
+    "integrity": "sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==",
+    "url": "https://registry.npmjs.org/jsonc-parser/-/jsonc-parser-3.3.1.tgz"
+  },
+  "dockerfile_parser": {
+    "module": "github.com/moby/buildkit",
+    "version": "v0.34.0",
+    "package": "frontend/dockerfile/parser",
+    "license": "Apache-2.0"
+  },
+  "buildx": {
+    "version": "v0.38.0",
+    "linux_arm64_sha256": "38e890e1a162bfdbf32fbe91404991dc4fc28e55b0de901b34374a061bab4d2c",
+    "linux_amd64_sha256": "4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287"
+  },
+  "docker_engine": {
+    "version": "29.8.2",
+    "guest_package_verification": "pending runtime preparation"
+  }
+}
