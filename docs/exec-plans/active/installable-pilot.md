@@ -596,3 +596,20 @@ malformed optional provider/deletion fields, normalized config defaults and exac
 immutable replay as well as scalar/list/map config rejection. Repository and
 whitespace checks passed before commit. Pristine exact-head evidence remains a
 post-commit check; independent corrected-head review is still required.
+
+
+## T006 — accepted authentication design
+
+T005 independently Sol CLEAR at `1189c81ba81b79a47a0485a9d5148fb8286c8eb0`
+with no open findings. Its pristine acceptance evidence includes 39/39 Phoenix
+tests and malformed-config/nil probes; it establishes native persistence, not
+authentication or strict raw JSON. Original Feature 001 completion markers and
+frozen migration artifacts remain unchanged.
+
+The single [consolidated T006 contract](../../../specs/006-whr-cli/contracts/authentication.md)
+was independently design/consolidation CLEAR before behavior at SHA-256
+`eeb455009081ec12a48eb3b64834b18ea9273fbd7a3bfd353f81cba8ebc29491`.
+Three separate session stores, server-checked 600-second preauth expiry, explicit
+owner/dashboard context and no automatic credential revocation replace prior
+proposals. T006 implementation is authorized; its checkbox remains open until
+exact-candidate tests and independent review. No activation is authorized.
