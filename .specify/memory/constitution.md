@@ -1,11 +1,17 @@
 # WorkHarbor Constitution
 
-Version: 1.0.0 | Ratified: 2026-10-11 | Last amended: 2026-10-11
+Version: 1.1.0 | Ratified: 2026-10-11 | Last amended: 2026-10-14
 
 ## I. Product scope
 WorkHarbor is a self-hosted development workspace platform. Single user and Docker
-first. Browser dashboard and terminal are the first complete user journey. AI
-orchestration is development tooling only, never a product dependency or feature.
+first. Browser dashboard and terminal are the first complete user journey.
+AI coding agents may run inside a workspace container as ordinary processes,
+interoperating with `whr` and the dashboard through the versioned in-container
+session interface (ADR 0009). No AI agent, provider, model or subscription is a
+product dependency: every product path works without one. Orchestrating agents
+from the control plane (Symphony- or OpenAI-style) is not part of wave one.
+Repository AI orchestration used to build WorkHarbor remains development tooling
+and never enters product code or environments.
 Cloud accounts and proprietary hosted control planes must not be required.
 
 ## II. Portable configuration
