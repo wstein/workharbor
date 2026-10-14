@@ -14,11 +14,12 @@ rewrite conflicts as clarification questions rather than silent choices.
 
 ## Context and scope
 
-[Product scope](../../docs/product.md) currently lists "a broader CLI" as following demonstrated demand and lists
-AI features and agent management as non-goals. The owner has since stated that AI is not a second wave: in the
-first wave an AI agent runs inside the workspace container, and `whr` interoperates with its sessions. The owner
-decisions below are recorded here; the constitution, product document, architecture and ADRs are reconciled in a
-separate documentation lane, and this specification does not change them.
+[Product scope](../../docs/product.md) currently lists "a broader CLI" as following demonstrated demand and defers
+AI agent orchestration to wave two. The owner has stated that AI is not entirely a second wave: in the first
+wave an AI agent runs inside the workspace container as an ordinary process, and `whr` interoperates with its
+sessions through the in-container session interface; orchestrating agents from the control plane stays in
+wave two. The owner decisions below are recorded here; the constitution (v1.1.0, issue #75) and the product and
+architecture documents (issue #66) are reconciled with them.
 Feature [001](../001-workspace-lifecycle/spec.md) delivers the lifecycle through the browser. This specification
 describes a command-line path to the same owner-scoped operations. Planning approval (H13:a) does not authorize
 implementation.
@@ -40,7 +41,8 @@ agent supervision commands are not adopted as such: session interoperation follo
   interface: list, attach, status, send input, stop. `whr` uses only that interface and does not wrap, install,
   configure or authenticate the agent's native tool.
 - **H14:a - Documentation reconciliation first**: constitution, product and architecture documents are reconciled
-  with this feature in the documentation lane (issue #66) before implementation starts.
+  with this feature in the documentation lane (constitution via issue #75, product and architecture via
+  issue #66) before implementation starts.
 - **H15:b - Exit codes**: a fresh exit-code table is recorded in an ADR (issue #70). This supersedes the earlier
   H12:c wording. The legacy `whr` table and the development-script tables of Features 003/004 are reference
   material only.
@@ -62,8 +64,8 @@ agent supervision commands are not adopted as such: session interoperation follo
 
 Implementation MUST NOT start before all of the following exist:
 
-- Constitution, product and architecture reconciliation merged (documentation lane, issue #66), including the
-  ADR 0006 supersession note (issue #68).
+- Constitution amendment (issue #75) and product/architecture reconciliation (issue #66, merged), including the
+  ADR 0006 supersession note (#68).
 - The ADR 0001 amendment for the Go CLI and the `apps/` module layout (issue #67, H10:a, H11:a, H23:a).
 - The exit-code ADR with the fresh numeric table (issue #70).
 - The versioned in-container session interface contract under `contracts/` (issue #71).
