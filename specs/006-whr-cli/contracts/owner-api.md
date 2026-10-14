@@ -87,9 +87,9 @@ resolution remain T009.
 Reject empty strings, backslash, C0, DEL, `?`, `#` and Unicode White_Space:
 U+0009–000D, U+0020, U+0085, U+00A0, U+1680, U+2000–200A, U+2028–2029,
 U+202F, U+205F, U+3000. Every percent sign forms a two-ASCII-hex-digit triplet,
-retained unchanged. Unbracketed hosts are nonempty dot-separated labels matching
-`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?`, optionally one trailing dot; no
-underscores or interior empty labels. Numeric labels do not prove IPv4 validity;
+retained unchanged. Unbracketed hosts are nonempty dot-separated labels. Each starts and ends with
+an ASCII letter or digit; interior characters are ASCII letters, digits or hyphens.
+One trailing dot is optional; underscores and interior empty labels are rejected. Numeric labels do not prove IPv4 validity;
 there is no DNS length/network validity claim. Bracketed hosts are locally parsed
 IPv6 literals yielding eight components, without zone IDs, preserving spelling.
 
@@ -104,7 +104,8 @@ there is no port syntax, and its path may be relative/absolute with later colons
 
 ### Atomic acceptance and metadata guards
 
-Use a short immediate SQLite transaction. Scope-authorized owner/workspace/key
+Use a short top-level immediate SQLite transaction. Mutation primitives reject
+nested transactions so acceptance never escapes an uncommitted outer savepoint. Scope-authorized owner/workspace/key
 lookup precedes busy, tombstone and current-state preconditions or mutations.
 Equal normalized identity returns the same operation/status/outcome. Changed
 identity conflicts. New-key acceptance enforces owner/host scope, stable create
@@ -132,7 +133,9 @@ terminal->nonterminal. Foundation outcomes are exactly status/code pairs:
 `{"status":"succeeded","code":"ok"}` or
 `{"status":"failed","code":"operation_failed"}`. Optional typed observation
 metadata, terminal result/outcome and audit commit together. Provider ID cannot
-change once set. Effective config must match candidate requested revisions;
+change once set. Only a candidate may first populate effective config. A target with unknown/null
+effective config cannot acquire config from a stop/remove observation. Effective
+config must match candidate requested revisions;
 existing-target start cannot change effective config. Terminal equal result replay
 checks scope/bindings and returns immutable recorded outcome even after newer
 intent; conflicting status/code/observation cannot overwrite or append audit.
@@ -155,3 +158,48 @@ reserved delete_data until later explicit confirmation/authorization. Runtime an
 storage tombstones represent confirmed outcomes only, never queued removal.
 Preserve workspace identity, keys, outcomes and audit indefinitely in the pilot;
 no destructive cascades/identity reuse. T010/T011 define rm --data coordination.
+
+Scoped lookup validates the same exact key domain before querying, returning not_found
+for malformed keys. Native array fields require proper lists, including before Enum
+traversal. Runtime binding comparison is strict structural equality, so integer
+and float generations never compare equal. Candidate bindings cannot borrow another
+operation's runtime, enforced in SQLite as well as the application context.
+
+### Foundation application results
+
+These are internal native APIs, not a published wire/output schema. accept returns
+`{:ok, {:accepted | :replayed, operation}}`; scoped lookup(owner, workspace, key)
+returns `{:ok, operation}` or not_found. bindings(owner, host, operation) returns
+exact target/candidate keys, each nil or an id/integer-generation map. claim returns
+claimed/already_executing; repeated claim never permits another effect.
+reserve_candidate returns reserved/replayed. finish returns finished/replayed.
+
+finish takes scoped IDs, intent version, expected status, exact binding map,
+status/code outcome, and optional native observation. Observation requires runtime_id,
+positive integer generation and observed_state; optional provider_instance_id and
+effective_config default null (preserve stored values), deleted defaults false.
+A nonnull effective_config must be a strict native config descriptor with the same
+required fields, unknown-field rejection, defaults and submodule ordering as request
+config. Malformed native scalar/list/map values return invalid_result before any
+runtime, operation or audit mutation. Optional fields use explicit null handling.
+Unknown fields fail. deleted=true requires succeeded remove_runtime, target role
+and stopped observation. Only a candidate can first populate effective config.
+A target's nonnull config remains equal; a null target config cannot be populated.
+No current-runtime promotion API or repeatable observation API exists in T005.
+Host metadata rows alone claim no enrollment, cryptographic agent identity or
+operational capability; those are T008.
+
+Stable native error atoms: invalid_request, invalid_channel, not_found,
+idempotency_conflict, workspace_busy, workspace_exists, runtime_unavailable,
+storage_unavailable, counter_exhausted, stale_intent, invalid_transition,
+invalid_action, runtime_mismatch, result_conflict, invalid_result,
+nested_transaction, persistence_busy, persistence_failed. Canonical native
+rejection is invalid_json. Errors never include input, SQL or adapter exceptions.
+CLI numeric mapping and HTTP responses remain later work.
+
+Audit scope is database-enforced for workspace/owner/host, operation/workspace/intent
+and runtime/workspace/generation pairs. Native primitives emit only fixed audit
+fields; direct SQL negatives verify the underlying constraints independently of
+immutable-update triggers. Race/crash tests run outside wrapping Sandbox; the
+precommit child pauses only after a successful final audit INSERT on the actual
+acceptance path, before top-level commit, with exact bounded signaling and cleanup.

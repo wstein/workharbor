@@ -13,7 +13,8 @@ correction cleared `0c2c135d8d82d8ed708095f7f1596760df38696b`. T001 scaffold is
 accepted after independent Sol CLEAR of `d3d84c8361a1389292fad96d02a828ac9fabc2e3`.
 T002 is independently accepted at `bc18034164597aa841bea561cf6a882e9c0715e2`.
 T003 is independently accepted at `191c62baf227f64122770244d62d289900bb4d8d`.
-T004 Go primitives are being implemented and remain unchecked pending independent review.
+T004 is independently accepted at `6abb7419c77b3712a6ac276bc798b102503d3144`.
+T005 foundation implementation is in progress; exact-candidate review remains open.
 No product runtime acceptance is claimed.
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
 The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
@@ -524,3 +525,74 @@ separate intent/runtime counters, start-existing-runtime restriction, immutable
 requested/effective configs, guarded terminal results and atomic reservation audit.
 The accepted contract is now persisted in Feature 006 owner API/data model/plan
 before tests/behavior. T005 remains unchecked pending exact-candidate review.
+
+
+## T005 — native scoped persistence (author candidate)
+
+The accepted V3 contract was committed first at
+`f51d6fe14764d37c3128f3a6e17439db21f76580`. No behavior existed when the initial
+18 meaningful tests were written. Actual initial RED used MIX_ENV=test and private
+MIX_BUILD_PATH/database override, then Mix.Task.run("test", foundation test files):
+exit 2, 0/18 passed; all failed for absent foundation modules. This is absent-module
+RED, not execution of a manufactured later stub.
+
+First implementation runs exposed strict-boolean code errors, then a test helper
+that accidentally queried the global Sandbox instead of its dynamic committed
+Repo. These were corrected; 17/19 then passed, with test-only child-code quoting
+and reused trigger-name failures. Correcting those fixtures yielded 19/19 in 1.2s.
+A formatter path was initially redundantly listed despite the existing scoped
+formatter; the duplicate was removed. These are author mistakes, not passing runs.
+
+Independent Sol preparatory inspection found target config population, improper
+native lists, loose integer/float binding equality, and malformed lookup keys.
+Real regressions preceded each correction. The expanded pre-fix run was exit 2,
+24/29 passing and five failing: those four classes plus a direct-SQL candidate
+binding borrowing another operation's runtime. The guards now reject these cases;
+29/29 passed in 4.2s. Precommit crash evidence was also corrected to reject nested
+acceptance and pause the actual top-level path only after successful final audit
+insertion; child cleanup runs on assertion failure. Post-claim restart is covered.
+
+Additional audit scope insert negatives produced real RED (31/32, exit 2) before
+adding workspace/host, operation/intent and runtime/workspace/generation FKs.
+A test-only default-argument escape typo first caused compilation failure and was
+corrected before this actual behavior RED. Complete envelope bytes/hash have an
+independent stdlib-derived constant, alongside accepted frozen Unicode/control
+anchors. All 32 meaningful Phoenix IDs are appended; existing Python/application
+IDs and retained policy are preserved. T005 and original Feature 001 remain unchecked.
+
+The foundation adds no credentials/auth, enrollment, trust/fetch, provider,
+dispatch/retry, replacement-start, data-deletion acceptance or repeatable
+observation API. No product runtime or hardware power-loss result is claimed.
+Pristine committed application/source/manifest/repository results follow after
+candidate validation; no full new-head canonical suite is claimed here.
+
+
+After audit scope constraints were added, the complete Phoenix suite passed 37/37
+in 4.3s (32 new foundation tests plus all 5 inherited tests), with actual ExUnit
+outcomes accepted by the unchanged event validator. Format and warnings-as-errors
+compile passed in the authorized native run. A later non-escalated lock check failed
+EPERM at Mix's TCP lock, not production behavior; it is rerun natively below.
+The repository link checker initially interpreted the host regex in inline Markdown
+as a link. The exact same lexical rule is now written in prose; checker policy
+was not changed. Frozen migration and original Feature 001 diffs remain empty.
+
+
+Exact-candidate Sol review of b179f2959209afc26df0426d27ad35cea2f66c47 was
+NOT CLEAR for one P2: false effective_config bypassed truthiness guards and could
+commit a malformed terminal observation. Its independently passing 37/37, format
+and warnings-as-errors results are superseded for acceptance by the correction.
+Two regression tests preceded the fix: actual RED was exit 2, 25/27 foundation
+tests passing and both new tests failing. The correction reuses strict config
+normalization at the result boundary and explicit nil handling for optional fields;
+malformed candidate and target results must leave runtime, operation and audit
+unchanged. Both new IDs are appended without modifying prior acceptance IDs.
+
+The correction's first warnings-as-errors compile caught misplaced private-function
+clauses. The test invocation then passed 39/39 but emitted that warning; this was
+not a clean compile result. After grouping the clauses, warnings-as-errors compile
+and format passed. The expanded complete suite passed 39/39 in 4.4s; the unchanged
+actual-event validator accepted all 39 required outcomes. The new tests include
+malformed optional provider/deletion fields, normalized config defaults and exact
+immutable replay as well as scalar/list/map config rejection. Repository and
+whitespace checks passed before commit. Pristine exact-head evidence remains a
+post-commit check; independent corrected-head review is still required.

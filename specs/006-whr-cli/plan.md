@@ -4,7 +4,8 @@ Branch: `feat/installable-pilot` | Date: 2026-10-14
 Spec: [spec.md](spec.md)
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53`
 Status: execution in progress. T001 scaffold independently Sol CLEAR at
-`d3d84c8361a1389292fad96d02a828ac9fabc2e3`; later work items remain open.
+`d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002–T004 are accepted as recorded in
+tasks/evidence. T005 is under implementation; later work remains open.
 Scaffold checks do not establish product runtime verification.
 
 ## Authorized objective

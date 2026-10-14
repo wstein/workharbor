@@ -3,7 +3,9 @@
 Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 is independently CLEAR at
 `bc18034164597aa841bea561cf6a882e9c0715e2`; T003 independently CLEAR at
-`191c62baf227f64122770244d62d289900bb4d8d`; T004 and later work items remain open.
+`191c62baf227f64122770244d62d289900bb4d8d`; T004 independently CLEAR at
+`6abb7419c77b3712a6ac276bc798b102503d3144`; T005 is under implementation and remains
+unchecked pending independent exact-candidate review. Later work items remain open.
 No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
@@ -113,8 +115,9 @@ acceptance and task completion rules; review evidence is appended, never fabrica
 ## Evidence log
 
 T001 and T002 are independently accepted at the revisions above. T003 is independently accepted at
-`191c62baf227f64122770244d62d289900bb4d8d`. T004 is being implemented and
-remains unchecked pending its independent review; no product runtime acceptance
-is claimed. Durable check and review
+`191c62baf227f64122770244d62d289900bb4d8d`. T004 is independently accepted at
+`6abb7419c77b3712a6ac276bc798b102503d3144`. T005 remains unchecked pending
+independent exact-candidate review; no product runtime acceptance is claimed.
+Durable check and review
 evidence, including earlier failed runs, is retained in
 [the pilot execution record](../../docs/exec-plans/active/installable-pilot.md).

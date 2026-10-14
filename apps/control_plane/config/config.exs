@@ -12,6 +12,14 @@ config :workharbor,
   ecto_repos: [WorkHarbor.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+# T005 metadata durability; no effect consumer or live server is enabled here.
+config :workharbor, WorkHarbor.Repo,
+  journal_mode: :wal,
+  synchronous: :full,
+  foreign_keys: :on,
+  busy_timeout: 2000,
+  log: false
+
 # Configure the endpoint
 config :workharbor, WorkHarborWeb.Endpoint,
   url: [host: "localhost"],
