@@ -313,12 +313,13 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   `version` and shell completion. Bare `whr` and `--help` print help; `--version` equals `version`.
 - **FR-002**: Every workspace command MUST act through the same owner-authenticated application operations as the
   browser, with identical authorization, idempotency, trust, audit and confirmation rules.
-- **FR-003**: Every mutating command MUST send an idempotency key: the caller's, or else one the CLI generates and
+- **FR-003**: Every workspace lifecycle mutation (`ws create`, `start`, `stop`, `rebuild`, `rm`) MUST send an idempotency key: the caller's, or else one the CLI generates and
   reports before sending. The CLI MUST reuse that key for its own bounded retries, report the durable operation
   identifier, and fail as a conflict when a key is reused with a changed payload.
-- **FR-003a**: Mutating commands MUST wait for a terminal operation state by default, support `--no-wait` (return
+- **FR-003a**: Workspace lifecycle mutations covered by FR-003 MUST wait for a terminal operation state by default, support `--no-wait` (return
   the operation identifier immediately) and `--timeout`. Interruption or timeout MUST NOT cancel the operation
   or report it complete; the CLI exits with the interrupted or timeout code and the operation identifier.
+- **FR-003c**: Interactive streams and agent controls follow their session contracts, not lifecycle-operation waiting. `agent send` MUST NOT be retried automatically after uncertain delivery; report delivery as unknown and require explicit owner resend. Host-local setup, service and offboarding use resumable local checkpoints rather than workspace operation records.
 - **FR-003b**: `whr op show` and `whr op wait` MUST retrieve an operation by identifier or idempotency key, so
   that an operation whose response was lost can be found without creating a duplicate.
 - **FR-004**: `ws rm` MUST delete runtime only by default; data deletion MUST require a separate flag and an
@@ -514,8 +515,8 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - **SC-012**: Automated tests map every exit path (missing and incompatible session interface, unattended refusals,
   remote statuses 0, 1 and 255 for `shell`, `console`, `ssh` and `agent attach`) to the code the exit-code ADR
   assigns.
-- **SC-011**: A lost-response test (drop the reply to a mutating request) yields exactly one operation, retrievable
-  with `whr op show --key`.
+- **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
+  with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
 ## Assumptions
 
