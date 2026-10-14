@@ -1,7 +1,8 @@
 # S001 authenticated transport mitigation
 
 Status: finite design independently Sol CLEAR on 2026-10-14 before tests/behavior;
-implementation candidate complete; exact-candidate acceptance pending. This follow-up blocks T008.
+implementation independently Sol CLEAR at c88f33959a4c0a767f638afaccc446a8040c55b4.
+The T008 prerequisite is satisfied; the mitigation-only advisory remains.
 It preserves the owner API, HTTPS origin/authority, browser sessions, WSS and CLI
 contracts. It changes the current listener protocol profile only.
 
