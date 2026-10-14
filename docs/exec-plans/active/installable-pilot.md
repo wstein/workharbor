@@ -98,3 +98,27 @@ No API, lifecycle/provider behavior, Python migration or harness change is inclu
 No web server, Docker host or live operation was activated. No build outputs or
 SQLite artifacts are tracked. Real-host/browser/install/release acceptance remains
 open, as does the final owner review of the combined PR.
+
+## Internal-pilot acceptance ordering correction (review pending)
+
+Independent Sol planning review found that T024's former all-SC-001–012 gate
+required a human-signed release on `main` before the PR introducing the product
+implementation. The owner requested an internal installable pilot and final human
+PR review, with no release publication; that release prerequisite cannot precede
+this handoff.
+
+- T023 retains local archive/install/uninstall, checksums, SBOM, recorded build
+  inputs/provenance and draft-only release machinery/policy tests.
+- T024 requires SC-001–005 and SC-007–012 and all real-host, browser and
+  five-workspace/eight-attachment load acceptance before the combined PR.
+- The owner-authorized allowlisted human-signed release exercise and SC-006 remain
+  a separate follow-up outside internal-pilot acceptance. Full Feature 006 remains
+  open until SC-006 passes; release publication remains separately authorized.
+- Plan, tasks and quickstart now agree on this boundary. No task is marked done.
+  The T001 author record above and product source at
+  `3dd0b7825ae78c13d9e4dba3f9da683ff486f0f9` are unchanged by this correction; its
+  independent scaffold review remains separate from planning-delta review.
+- `python3.14 scripts/check_repo.py` and `git diff --check` pass for this
+  documentation correction. Independent Sol planning re-review remains pending.
+  No runtime or signed-release result is claimed; full `make check` was not rerun
+  by this documentation author.

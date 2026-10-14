@@ -39,7 +39,15 @@ Run independent Python/Go golden-vector parity before switching migrated callers
 9. Exercise five workspaces/eight attachments; capture exact commands, timings and
    idle/load footprint. Missing real host/browser results block pilot acceptance.
 
-Package archives/checksums/SBOM/provenance and clean install/uninstall instructions.
-Unsigned local pilot artifacts are not signed releases; SC-006 remains open until
-an owner-authorized signed-tag verification exercise. Publish the combined PR only
-after all pilot WIs clear independent review and exact-head required checks pass.
+Package local unsigned archives, checksums, SBOM, recorded build inputs/provenance
+and clean install/uninstall instructions; verify archive contents and draft-only
+release machinery/policy tests without publishing a release. Internal-pilot
+acceptance requires SC-001–005 and SC-007–012, including every real-host/browser/
+load result above. Open the combined PR for final human review only after all
+internal-pilot WIs clear independent Sol review and exact-head required checks pass.
+
+The owner-authorized allowlisted human-signed release exercise on `main`, including
+end-to-end signature/checksum/SBOM/provenance verification for SC-006, is a separate
+follow-up outside internal-pilot acceptance. Unsigned local artifacts do not satisfy
+SC-006. Full Feature 006 completion remains open until SC-006 passes; no release
+publication, tag or package-channel update is authorized by this pilot handoff.
