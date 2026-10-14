@@ -68,4 +68,8 @@ config :phoenix, :json_library, Jason
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
+config :jason, :decoding_integer_digit_limit, 4301
+config :phoenix, :filter_parameters, {:keep, []}
+config :workharbor, :owner_http, authorities: [{"localhost", 443}], origin: "https://localhost"
+config :workharbor, WorkHarborWeb.Endpoint, debug_errors: false, code_reloader: false
 import_config "#{config_env()}.exs"
