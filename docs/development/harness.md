@@ -1,8 +1,12 @@
 # Development harness
 
 ## Bootstrap checks
-Python 3.11+ and Bash are enough for `make check`; no product runtime or container
-engine is needed. Checks validate project document links, tracked JSON, required
+`make check` requires the exact Python, Go, Node, Elixir and Erlang versions in
+`.tool-versions`, plus Git, Make, Bash and the native C build tools required by
+locked Phoenix dependencies. No container engine or product server is started.
+The application gate acquires locked dependencies and pinned build tools over
+HTTPS; an offline checkout needs a separately reviewed dependency supply path.
+Checks validate project document links, tracked JSON, required
 artifacts, pending feature status, contract shape of the workspace example, and
 coarse dependency boundaries. Harness regression tests inject broken references,
 unsafe paths and forbidden dependencies to prove rejection. These checks do not
@@ -18,7 +22,8 @@ scripts; create `001-workspace-lifecycle` for implementation.
 
 Run `make check`, targeted behavior tests, then appropriate real-host/browser
 acceptance. Record commands, versions, output summary, limitations and commit.
-Implement product format/build/test targets in T001 before claiming product checks.
+The application gate validates scaffold format/build/test behavior; it does not
+establish lifecycle, browser or real-host acceptance.
 The architecture lint catches obvious prohibited references only; add compiler-backed
 Elixir/Go dependency enforcement when application packages exist.
 
@@ -32,8 +37,9 @@ or background services implicitly.
 
 ## CI and explicit acceptance
 
-Run `make check PYTHON=python3.11` (or a newer Python) in a pristine isolated
-checkout. Local and CI acceptance both use `scripts/check_ci.py` and
+Run `make check PYTHON=python3.14` with Python 3.14.8 in a pristine isolated
+checkout and install the remaining `.tool-versions` pins first.
+Local and CI acceptance both use `scripts/check_ci.py` and
 [ci-acceptance.json](ci-acceptance.json), as proposed by
 [ADR 0007](../adr/0007-explicit-ci-acceptance.md). Owner review and merge are required
 for this policy, manifest inventory and retained-outcome changes. Neither a passing
@@ -42,19 +48,49 @@ check nor a candidate manifest authenticates its own approval.
 The runner discovers every baseline and operator regression module, and directly
 loads the twelve `verify_t004_cli.CliBoundaryTests` and twelve
 `verify_t003_state.StatePrimitiveTests`. Required IDs are a minimum: new green
-regressions need no task-specific exception or hash update. The initial manifest
-allows exactly five test-body AssertionErrors by ID and exact message, each with a
-reason and removal condition. Missing required IDs, new failures, unexpected passes,
-errors, skips, xfails, failed subtests, duplicates and empty discovery block.
-Setup, teardown and cleanup failures cannot impersonate a retained test assertion.
+regressions need no task-specific exception or hash update. The current manifest retains every inherited required Python ID
+and has no retained
+failures. Missing required IDs, new failures, errors, skips, xfails, failed subtests,
+duplicates and empty discovery block. Setup, teardown and cleanup failures cannot
+impersonate a retained test assertion. Historical checkpoint rules and measurements
+remain in ADR 0007; they do not describe current raw outcomes.
 
-`make check-raw` preserves the baseline suite's actual outcome: currently 41 tests,
-36 passes, five exact failures and Make exit 2 (direct unittest exit 1). The qualified
-runner prints that raw result and separately verifies the full discovered matrix.
-It also runs repository validation, diff whitespace, shell syntax and Feature 001
-prerequisites; raw test reds cannot skip these static checks. Qualified acceptance
-is not full-green product or task implementation evidence. The retained scenarios
-remain incomplete until their reviewed migration conditions are satisfied.
+`make check-raw` preserves the baseline suite's actual outcome. The qualified runner
+prints that raw result and separately verifies the full discovered matrix. It also
+runs repository validation, diff whitespace, shell syntax and Feature 001
+prerequisites; raw reds cannot skip these static checks. Raw and qualified aggregate
+budgets remain 600 and 1200 seconds, respectively; utility commands retain 300 seconds.
+
+Schema 2 adds an explicit `application_tests` inventory. Fixed repository code runs
+`gofmt -l`, `go mod download`, `go vet`, `go build` and uncached `go test -json` for
+all three Go modules. The two command refusal tests are required. The API client
+currently has documentation only and no required tests; any new test outcome must
+still pass. Package skips qualify only for an explicit `[no test files]` event,
+never for a skipped test. Phoenix runs locked dependency acquisition, format,
+warnings-as-errors compile, asset tool installation/build and warnings-as-errors
+tests. All five existing ExUnit tests are required. The test-only formatter records
+actual test outcomes alongside the ordinary CLI formatter; missing IDs, skipped or
+excluded tests, duplicate outcomes and incomplete streams fail. New green tests
+are collected without requiring new manifest entries. Thirteen required Python controls
+cover the added validators, tool/setup failures and integration into full acceptance.
+Manifest changes remain proposals until owner review and merge.
+
+Both CI and local full acceptance execute this gate inside the runner's fresh
+disposable checkout. `make check-apps` runs the same application function as a focused
+development check; it does not replace full `make check` or source qualification.
+Hex 2.5.2 is installed through Mix's signed installer and Rebar 3.27.3 through its
+exact official URL and SHA-512. `mix deps.get --check-locked` uses committed
+`mix.lock`; Tailwind/esbuild versions come from committed Phoenix configuration.
+No owner global tool state is written. A private temporary HOME, Mix/Hex state,
+Go module/build caches, Go command build output and acceptance event files live
+outside the source tree. Phoenix dependency checkouts, build intermediates, test
+SQLite files and assets are generated fresh inside the disposable checkout because
+the generated asset configuration uses their relative paths; none are copied in.
+The isolated Python cache also holds a temporary `python3` alias to the selected
+`PYTHON` executable for inherited tests that use that spelling; PATH is restored
+on success or exception. Ordinary script children retain script-directory imports.
+Inherited Go/BEAM flags, Hex mirrors and server activation variables are not passed
+to the gate. Tools are checked against `.tool-versions` before application work.
 
 GitHub Actions uses ordinary PR synthetic-merge checkout, contents read permission
 and `persist-credentials: false`. The runner checks exact source context and actual
@@ -108,6 +144,7 @@ python3 -I -B -c 'import sys,unittest;sys.path.insert(0,"scripts");raise SystemE
 
 Disposable Git fixtures exercise package provenance, host approval/argv drift,
 missing guard/capabilities, strict new outcomes and exact assertion/raw-exit handling.
-The prepublication source pin also covers the package and state traversal dependencies;
+The prepublication source pin also covers the package, state traversal and
+application-gate helper dependencies;
 it continues to identify code rather than establish owner approval. No prerequisites,
 network services or real feature execution are used by these fixtures.

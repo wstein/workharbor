@@ -123,9 +123,15 @@ def isolated_python_cache():
     with tempfile.TemporaryDirectory(prefix='workharbor-ci-cache-') as cache:
         # Runner/check interpreters use -I. Normal CLI subprocesses under test
         # still need Python's script-directory imports for adjacent modules.
+        # Legacy tests invoke python3 by name. Bind that spelling to the selected
+        # interpreter without adding isolated flags to ordinary script children.
+        aliases = Path(cache)/'bin'
+        aliases.mkdir()
+        (aliases/'python3').symlink_to(sys.executable)
         names = {'PYTHONPYCACHEPREFIX': cache, 'PYTHONDONTWRITEBYTECODE': '1',
-                 'PYTHONNOUSERSITE': '1', 'GIT_NO_REPLACE_OBJECTS': '1'}
-        previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON') or name == 'GIT_NO_REPLACE_OBJECTS'}
+                 'PYTHONNOUSERSITE': '1', 'GIT_NO_REPLACE_OBJECTS': '1',
+                 'PATH': str(aliases) + os.pathsep + os.environ.get('PATH', os.defpath)}
+        previous = {name: value for name, value in os.environ.items() if name.startswith('PYTHON') or name in ('PATH', 'GIT_NO_REPLACE_OBJECTS')}
         prefix, no_write = sys.pycache_prefix, sys.dont_write_bytecode
         for name in previous:
             os.environ.pop(name)
@@ -136,7 +142,7 @@ def isolated_python_cache():
         finally:
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, no_write
             for name in tuple(os.environ):
-                if name.startswith('PYTHON') or name == 'GIT_NO_REPLACE_OBJECTS':
+                if name.startswith('PYTHON') or name in ('PATH', 'GIT_NO_REPLACE_OBJECTS'):
                     os.environ.pop(name)
             os.environ.update(previous)
 
@@ -206,6 +212,10 @@ def python_argv(*args):
     return [sys.executable, '-I', '-B', *prefix, *args]
 
 
+_apps = runpy.run_path(str(Path(__file__).with_name('application_checks.py')))
+check_applications = _apps['check_applications']
+
+
 def load_manifest(root):
     def unique_object(pairs):
         result = {}
@@ -216,8 +226,8 @@ def load_manifest(root):
         return result
     value = json.loads((root/MANIFEST).read_text(), object_pairs_hook=unique_object)
     if (not isinstance(value, dict)
-            or set(value) != {'schema_version', 'required_test_ids', 'retained_assertion_failures'}
-            or type(value['schema_version']) is not int or value['schema_version'] != 1):
+            or set(value) != {'schema_version', 'required_test_ids', 'retained_assertion_failures', 'application_tests'}
+            or type(value['schema_version']) is not int or value['schema_version'] != 2):
         raise ValueError('Unsupported acceptance manifest')
     required = value['required_test_ids']
     if (not isinstance(required, list) or not required or
@@ -235,6 +245,7 @@ def load_manifest(root):
         ids.append(case['id'])
     if len(ids) != len(set(ids)):
         raise ValueError('Duplicate retained failure ID')
+    _apps['validate_inventory'](value['application_tests'])
     return value
 
 
@@ -320,7 +331,7 @@ def acceptance_suite(root):
 def source_identity(root, source):
     if not re.fullmatch('[0-9a-f]{40}', source) or git(root, 'cat-file', '-t', source) != b'commit\n':
         raise ValueError('Source must identify an exact available commit')
-    for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py'):
+    for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py', 'application_checks.py'):
         checker = Path(__file__).with_name(name)
         relative = 'scripts/' + name
         entry = git(root, 'ls-tree', source, '--', relative).split()
@@ -371,17 +382,25 @@ def drain_group(process):
         raise ProcessCleanupError('Unable to establish check process group cleanup') from error
 
 
-def run(argv, root, *, timeout=300):
+def run(argv, root, *, timeout=300, env=None, output_path=None):
     print('+ ' + shlex.join(argv), flush=True)
     # Make and test runners spawn children. Own their ordinary process group so
     # no check can keep using the disposable checkout after this call finishes.
-    process = subprocess.Popen(argv, cwd=root, start_new_session=True,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    capture = output_path.open('xb') if output_path is not None else None
+    try:
+        process = subprocess.Popen(argv, cwd=root, start_new_session=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+    except BaseException:
+        if capture is not None:
+            capture.close()
+        raise
     output_errors = []
 
     def forward_output():
         try:
             for line in process.stdout:
+                if capture is not None:
+                    capture.write(line)
                 sys.stdout.buffer.write(line)
                 sys.stdout.buffer.flush()
         except OSError as error:
@@ -401,6 +420,8 @@ def run(argv, root, *, timeout=300):
         if reader.is_alive():
             raise ProcessCleanupError('Check process output did not close after group termination')
         process.stdout.close()
+        if capture is not None:
+            capture.close()
         if output_errors:
             raise output_errors[0]
 
@@ -436,6 +457,7 @@ def check(root, context=None, source=None):
             # This does not change any approved package per-check deadline.
             valid = run(python_argv('-c', code, str(execution/'scripts/check_ci.py'), str(execution)),
                         execution, timeout=QUALIFIED_AGGREGATE_TIMEOUT_SECONDS) == 0 and valid
+            valid = check_applications(execution, manifest['application_tests'], run) and valid
             clean_checkout(execution, context.checkout, allow_generated=True)
         if source_context(root, *context) != context:
             raise ValueError('Source changed during checks')
@@ -450,6 +472,7 @@ def main(argv=None):
     parser.add_argument('--root', type=Path, default=ROOT)
     for name in ('event', 'base', 'head', 'checkout'):
         parser.add_argument('--' + name)
+    parser.add_argument('--applications-only', action='store_true', help='Focused application checks; full make check still required')
     parser.add_argument('--source', help='Exact checker code pin; does not establish owner review')
     parser.add_argument('--policy-source', help='Deprecated alias for --source (no adoption semantics)')
     args = parser.parse_args(argv)
@@ -460,6 +483,13 @@ def main(argv=None):
     pins = (args.event, args.base, args.head, args.checkout)
     if any(pins) and not all(pins):
         parser.error('Source context requires all four pins')
+    if args.applications_only:
+        try:
+            check_applications(args.root, load_manifest(args.root)['application_tests'], run)
+            return 0
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            print('Application checks blocked: ' + str(error), file=sys.stderr)
+            return 1
     return check(args.root, SourceContext(*pins) if all(pins) else None, args.source or args.policy_source)
 
 

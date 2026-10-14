@@ -90,3 +90,20 @@ publication or deployment is authorized by this decision.
 The bounded Feature 004 CI/prepublication contracts are updated to this decision;
 other planned interfaces remain proposed. Owner review and merge adopt this policy
 through the ordinary repository process, without a separate external pin ceremony.
+
+## Installable-pilot application extension (proposed)
+
+Feature 006 T002 extends the same runner and manifest to Go/Phoenix scaffold
+acceptance. Schema 2 retains all existing Python required IDs and retained-outcome
+semantics and adds typed application required test identities, with fixed argv in
+`scripts/application_checks.py`. Go JSON events and a test-only ExUnit formatter
+prove each required case actually passed; all other discovered test failures/skips
+remain blockers. The doc-only API client has no fabricated required test.
+
+The application gate performs pinned bootstrap/locked dependency acquisition from a
+fresh checkout, then Go format/vet/build/tests and Phoenix format/compile/assets/tests.
+Local and CI use the same function; focused `make check-apps` is development evidence
+only. Tool versions, cache boundaries, event semantics and unchanged budgets are in
+[the harness guide](../development/harness.md). This candidate inventory requires
+the combined pilot's final owner PR review and merge; neither a local pass nor
+independent code review adopts its own policy. No runtime or release is activated.

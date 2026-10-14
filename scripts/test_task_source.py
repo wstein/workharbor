@@ -24,7 +24,7 @@ class SourceTests(unittest.TestCase):
         self.git('config', 'user.name', 'Fixture')
         self.git('config', 'user.email', 'fixture@invalid')
         (self.root/'scripts').mkdir()
-        for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py'):
+        for name in ('check_ci.py', 'task_outcomes.py', 'task_package.py', 'single_task_state.py', 'application_checks.py'):
             origin = Path(__file__).with_name(name)
             target = self.root/'scripts'/name
             target.write_bytes(origin.read_bytes())
