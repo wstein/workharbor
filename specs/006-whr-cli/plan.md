@@ -2,8 +2,9 @@
 
 Branch: `feat/installable-pilot` | Date: 2026-10-14
 Spec: [spec.md](spec.md)
-Baseline: `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`
-Status: draft planning work in progress; no implementation or verification claim.
+Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53`
+Status: proposed intermediate execution baseline; separate independent Sol
+re-review is pending. No implementation or runtime verification is claimed.
 
 ## Authorized objective
 

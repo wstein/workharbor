@@ -1,6 +1,7 @@
 # Feature 006 pilot work items
 
-Status: proposed execution baseline; no product task is complete.
+Status: proposed intermediate execution baseline; independent Sol re-review of
+the terminal-safety ordering correction is pending. No product task is complete.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
 [data model](data-model.md), [migration](migration.md), [owner API](contracts/owner-api.md).
@@ -40,7 +41,7 @@ retained files and exactly one operation after lost responses.
 - [ ] T008 [US1] Implement one-time enrollment, mTLS identity/rotation/revocation and outbound heartbeat/reconnect in `apps/control_plane/lib/workharbor/hosts.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/host_agent/internal/identity/`, `apps/host_agent/internal/connection/`; exercise concurrency/expiry/scope and real handshake/reconnect; stale after 30 seconds (001 T004/T014).
 - [ ] T009 [US1] Implement trusted config/submodule resolution, owner revision approval, official pinned Dev Container CLI and Docker storage/provider operations in `apps/host_agent/internal/config/`, `apps/host_agent/internal/providers/docker/`, `apps/control_plane/lib/workharbor/config_trust.ex`, `examples/workspace/` and `docs/development/devcontainer-matrix.md`; prove refusal/unsupported config has no hooks/provider mutation and real Docker retains files (001 T005/T016/T006).
 - [ ] T010 [US1] Implement lifecycle reconciliation, bounded nonoverlapping retries and durable start/stop/rebuild/runtime-versus-data deletion in `apps/control_plane/lib/workharbor/operations.ex`, `apps/control_plane/lib/workharbor/workspaces.ex`, `apps/host_agent/internal/service/`, `apps/host_agent/internal/providers/docker/`; test interrupted provisioning, generations, failed rebuild, exhausted retries and exact uncommitted hashes on Docker (001 T007/T020; FR-003–005a).
-- [ ] T011 [US1] Implement typed TLS owner client and `auth`, `ws`, `op` commands in `apps/api_client/` and `apps/whr/internal/commands/`; test first login, secret refusal, profile permissions, server identity, stable preallocated workspace/key, lost-response lookup and wait timeout/detach (FR-002–005a/035).
+- [ ] T011 [US1] Implement typed TLS owner client and `auth`, `ws`, `op` commands in `apps/api_client/` and `apps/whr/internal/commands/`, with shared human-text escaping in `apps/whr/internal/terminal/` before displaying any untrusted names, errors or remote messages; replace every FR-022 control class with visible placeholders in human output and escape them in JSON. Write targeted hostile-text tests before behavior, alongside first login, secret refusal, profile permissions, server identity, stable preallocated workspace/key, lost-response lookup and wait timeout/detach tests (FR-002–005a/022/035).
 - [ ] T012 [US1] Implement enrollment/trust/workspace lifecycle browser views in `apps/control_plane/lib/workharbor_web/live/`; test and record real browser success/error/stale/retry/progress journeys with corresponding audit (001 T015/T017/T009).
 
 ## Phase 4: US2 — Shell and persistent console (P1)
@@ -49,7 +50,7 @@ Goal: scoped bounded access with session lifetime distinct from attachment lifet
 Independent check: type/resize, detach/reattach, retained tail and no host access.
 
 - [ ] T013 [US2] Implement scoped atomic grants, bounded relay, fresh shell and one persistent console per workspace in `apps/control_plane/lib/workharbor/sessions.ex`, `apps/control_plane/lib/workharbor_web/channels/`, `apps/host_agent/internal/terminal/`; test all Feature 001 bounds, 64 KiB tail/drop reporting, concurrent single use, endpoint restart replay and <=5s cleanup; stop/rebuild/delete/close end session (001 T008; FR-006–007a).
-- [ ] T014 [US2] Implement `open`, `shell`, `console` and browser terminal in `apps/whr/internal/commands/`, `apps/control_plane/lib/workharbor_web/live/terminal_live.ex`, `apps/control_plane/assets/js/terminal.js`; verify input/resize, fresh-grant reconnect, status/close, foreign scope, remote 0–255 and real browser/PTY evidence (001 T018).
+- [ ] T014 [US2] Implement `open`, `shell`, `console` and browser terminal in `apps/whr/internal/commands/`, `apps/control_plane/lib/workharbor_web/live/terminal_live.ex`, `apps/control_plane/assets/js/terminal.js`; implement the complete baseline FR-022a bounded stateful stream filter in `apps/whr/internal/terminal/` before accepting any CLI attachment. Filter OSC/DCS/APC/PM/SOS by default, including split-frame and unterminated strings; require explicit per-session raw opt-in displayed at session start and never persisted, and never emit raw terminal bytes in JSON. Write targeted hostile-stream, split-frame, unterminated-string, bounded-state and raw-opt-in/reset tests before behavior; verify input/resize, fresh-grant reconnect, status/close, foreign scope, remote 0–255 and real browser/PTY evidence (001 T018; FR-022/022a).
 
 ## Phase 5: US3 — Host operations (P2)
 
@@ -65,7 +66,7 @@ Goal: every command has frozen output/exit semantics and safe terminal rendering
 Independent check: success/failure schema validation and hostile bytes/corpus.
 
 - [ ] T017 [US4] Implement output envelopes/typed events, fresh exit table, color and framework error routing in `apps/whr/internal/output/`, `apps/whr/internal/exitcode/`, `contracts/cli/output.schema.json`; cover every command/exit path and stream event, stderr/stdout purity, 0/1/255 remote passthrough and unsupported JSON refusal (FR-014–019/027; SC-003/012).
-- [ ] T018 [US4] Implement bounded stateful control-string filtering and human-text escaping in `apps/whr/internal/terminal/`; fuzz split/unterminated OSC/DCS/APC/PM/SOS, C1, bidi, arbitrary binary and raw per-session opt-in; prove JSON never emits raw bytes (FR-020–022a; SC-004).
+- [ ] T018 [US4] Complete exhaustive hostile-corpus, fuzz and command-integration acceptance of the human-text escaping and bounded stateful stream filter already implemented in T011/T014 in `apps/whr/internal/terminal/`; fuzz split/unterminated OSC/DCS/APC/PM/SOS, C1, bidi, arbitrary binary and raw per-session opt-in, cover every existing output/attachment path and prove JSON never emits raw bytes. Later agent/SSH WIs must reuse the accepted shared filter and verify their own integration before acceptance (FR-020–022a; SC-004).
 
 ## Phase 7: US5 — Agent interoperation and read-only dashboard (P2)
 
@@ -100,7 +101,10 @@ T019 -> T020 -> T021 -> T022 -> T023 -> T024.
 This deliberately follows the owner's sequential WI/review route in one worktree;
 file-disjoint parallelism is not used. Output/error plumbing needed by an earlier
 WI is implemented minimally there and receives full matrix acceptance in T017,
-not a passing claim before T017. Feature 001 mappings above retain all original
+not a passing claim before T017. FR-022 text escaping is mandatory from T011,
+and the full baseline FR-022a stream filter is mandatory from T014; T018 expands
+corpus/fuzz/integration evidence rather than introducing either safety behavior.
+Feature 001 mappings above retain all original
 acceptance and task completion rules; review evidence is appended, never fabricated.
 
 ## Evidence log
