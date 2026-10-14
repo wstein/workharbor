@@ -15,7 +15,9 @@ T002 is independently accepted at `bc18034164597aa841bea561cf6a882e9c0715e2`.
 T003 is independently accepted at `191c62baf227f64122770244d62d289900bb4d8d`.
 T004 is independently accepted at `6abb7419c77b3712a6ac276bc798b102503d3144`.
 T005 foundation independently accepted at1189c81ba81b79a47a0485a9d5148fb8286c8eb0;
-T006/T007/S001 are accepted prerequisites. T008 exact-candidate review remains open.
+T006/T007/S001 are accepted prerequisites. T008 implementation and bounded
+macOS/Linux transport are independently accepted at
+64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c; documentation handoff review is separate.
 No product runtime acceptance is claimed.
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
 The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
@@ -1012,3 +1014,60 @@ Effective UID/group and cgroup ancestor privilege/escape measurements were missi
 no complete resource isolation proof is claimed. Docker absent/N/A for this TLS-only
 fixture. Corrected product runtime requires a fresh exact archive/Linux run and
 same independent review; predecessor results do not accept the changed candidate.
+
+### T008 accepted corrected runtime and documentation handoff
+
+Independent exact application/source review and separately measured Linux evidence
+are CLEAR for64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c, with no open material code
+findings. Author29-command pristine proof is
+/private/tmp/workharbor-t008-validation-dho78ci4/evidence.json; independent proof:
+/private/tmp/workharbor-t008-independent-645-kb8o8fqu/summary.json. Both passed
+173Phoenix tests including all12 actual MacTLS journeys,240host/162API/1CLI Go
+events, all required IDs,846Python collection/520required and unchanged frozen
+migrations/tasks/vectors. Native full-suite times were94.0s author/94.4s independent.
+Full canonical Python remains reserved for final combined head.
+
+Second Linux attempt for645 stopped BEFORE mix with guard125 because PolicyKit
+was absent despite a system bus. Zero candidate tests ran; all352 source hashes/
+modes matched and owned guest01M4Y478XAVKYYJNJ0J7B8RRKS was deleted. Failure evidence:
+/private/tmp/workharbor-t008-linux-rerun-plan/amended-run/transport/assessment.json.
+No policy package or weakened/cap-increased workaround was used. A narrowly reviewed
+systemd255.4 absent/nonactivatable-PolicyKit proof required typed AccessDenied for
+empty properties on the exact owned loaded unit, unchanged required properties,
+nonwritable cgroup ancestors and measured dedicated UID/groups/capabilities.
+
+Fresh corrected Linux actual12transport/9security tests then passed81.7s/4.7s
+(83.573s/8.33s unit wall). Aggregate peaks269557760B/161996800B;321/23 live/postexit
+samples and final OOM counters all zero. Both units measured UID/EUID999, GID990,
+groups[990], zero effective/permitted/ambient caps,12 nonwritable ancestor paths,
+memory.max536870912 and cpu.max100000/100000; root validated600s/512MiB/100%CPU/
+control-group limits and no delegation before release. NNP/ProtectControlGroups
+were actuallyno, not claimed enabled. Guest root2CPU/2GiB caps were measured;
+16GiB disk was configured but exhaustion not independently measured on shared backing.
+This bounded fixture is not capacity/load or broad host-isolation acceptance.
+
+Exact input SHA256s:
+
+- source archive:1ff20623b9b1bafe5adcce9487a597784f655187409a7b3c68a4727d387f012a
+- manifest:a8ebba13d392ccf85375796628d04d0456379875b23cd3b46c79c3fcbdcd60c4
+- bootstrap:d93f6a888217761a003cb2465a820da40a482a4fb89801d483ec2c4b6645601d
+- executor:98f7de450e01c563128d774a44294146df0c31c89f44134abe69b68810010c6d
+- guard:8bd2e99b085ffeb90c182d282da32e9d3ef7f3ed0d784f6308ba35502b9d1a21
+
+All352 original source hashes/modes matched before/prepared/after/final. Assessment:
+/private/tmp/workharbor-t008-linux-absent-pk-plan/amended-run/transport/assessment.json;
+independent evidence:/private/tmp/workharbor-t008-independent-linux-645.json.
+Owned guest01M4Y58JYJB5CEVCRHQD81R0ZP was deleted2026-10-14T21:37:44UTC, inventory[].
+Six outer probes passed; exact original BuildKit ID/image/rwvolume remained running
+and context/config hashes matched in that window. Historical hang continuity stays
+UNVERIFIED. Already-unloaded transient unit stop exit5 and UID-child broken-pipe
+output are retained/classified; they do not establish auth or test failure. No
+outer runtime/config repair or mutation occurred.
+
+Only Feature006 T008 is newly checked after independent runtime acceptance. The
+final consolidation changes documentation only (quality/execution/tasks/contract
+initial-ID wording); it does not claim Linux executed that later SHA. Exact final
+head review must verify all exercised source/config/dependency/journey/input blobs
+are unchanged from645, plus pristine/source/manifest/whitespace gates. Feature001
+markers/frozen migrations remain unchanged. S001 Bandit mitigation-only advisory,
+provider/browser/load/installable-pilot/release gates remain separate.

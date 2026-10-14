@@ -7,9 +7,10 @@ Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `6abb7419c77b3712a6ac276bc798b102503d3144`; T005 and T006 are accepted at
 `1189c81` and `ef399f5`. T007 is independently CLEAR at
 `e10c6997c24407e0f472a7ea22ba2dd1b42067e3` for its pure protocol scope. S001 is independently CLEAR at
-`c88f33959a4c0a767f638afaccc446a8040c55b4`; T008 implementation is authorized
-and remains unchecked pending its exact-candidate acceptance.
-No product runtime acceptance is claimed.
+`c88f33959a4c0a767f638afaccc446a8040c55b4`. T008 implementation and bounded
+macOS/Linux transport are independently Sol CLEAR at
+`64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c`; the documentation handoff retains that runtime source binding.
+Complete lifecycle/provider/browser/installable-pilot acceptance remains pending.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
 [data model](data-model.md), [migration](migration.md), [owner API](contracts/owner-api.md).
@@ -48,7 +49,7 @@ Goal: lifecycle and operation recovery shared by browser and CLI.
 Independent check: trusted image/Dockerfile create, start/stop/rebuild/removal,
 retained files and exactly one operation after lost responses.
 
-- [ ] T008 [US1] Implement one-time enrollment, mTLS identity/rotation/revocation and outbound heartbeat/reconnect in `apps/control_plane/lib/workharbor/hosts.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/host_agent/internal/identity/`, `apps/host_agent/internal/connection/`; exercise concurrency/expiry/scope and real handshake/reconnect; stale after 30 seconds (001 T004/T014).
+- [x] T008 [US1] Implement one-time enrollment, mTLS identity/rotation/revocation and outbound heartbeat/reconnect in `apps/control_plane/lib/workharbor/hosts.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/host_agent/internal/identity/`, `apps/host_agent/internal/connection/`; exercise concurrency/expiry/scope and real handshake/reconnect; stale after 30 seconds (001 T004/T014).
 - [ ] T009 [US1] Implement trusted config/submodule resolution, owner revision approval, official pinned Dev Container CLI and Docker storage/provider operations in `apps/host_agent/internal/config/`, `apps/host_agent/internal/providers/docker/`, `apps/control_plane/lib/workharbor/config_trust.ex`, `examples/workspace/` and `docs/development/devcontainer-matrix.md`; prove refusal/unsupported config has no hooks/provider mutation and real Docker retains files (001 T005/T016/T006).
 - [ ] T010 [US1] Implement lifecycle reconciliation, bounded nonoverlapping retries and durable start/stop/rebuild/runtime-versus-data deletion in `apps/control_plane/lib/workharbor/operations.ex`, `apps/control_plane/lib/workharbor/workspaces.ex`, `apps/host_agent/internal/service/`, `apps/host_agent/internal/providers/docker/`; test interrupted provisioning, generations, failed rebuild, exhausted retries and exact uncommitted hashes on Docker (001 T007/T020; FR-003–005a).
 - [ ] T011 [US1] Implement typed TLS owner client and `auth`, `ws`, `op` commands in `apps/api_client/` and `apps/whr/internal/commands/`, with shared human-text escaping in `apps/whr/internal/terminal/` before displaying any untrusted names, errors or remote messages; replace every FR-022 control class with visible placeholders in human output and escape them in JSON. Write targeted hostile-text tests before behavior, alongside first login, secret refusal, profile permissions, server identity, stable preallocated workspace/key, lost-response lookup and wait timeout/detach tests (FR-002–005a/022/035).
@@ -138,3 +139,19 @@ Actual gates: Phoenix114, whr1, host_agent132, api_client162 green; Python846
 collected/520required retained. HTTP1-only mitigation; Bandit remains affected.
 No full canonical/live browser/pilot acceptance is claimed. T008 follows
 [the consolidated enrollment contract](contracts/host-enrollment.md).
+
+T008 implementation independently Sol CLEAR at
+`64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c` after all scoped source/application
+checks and actual macOS/Linux transport. Author pristine evidence:
+`/private/tmp/workharbor-t008-validation-dho78ci4/evidence.json`; independent:
+`/private/tmp/workharbor-t008-independent-645-kb8o8fqu/summary.json` and
+`/private/tmp/workharbor-t008-independent-linux-645.json`. Actual corrected Linux:
+`/private/tmp/workharbor-t008-linux-absent-pk-plan/amended-run/transport/assessment.json`.
+Phoenix 173, Go host 240/API 162/CLI 1 events passed; all prior required IDs and
+Python 846 collection/520 required remain. Genuine Linux transport 12 and security 9
+passed with measured bounded resources and owned guest teardown. Earlier predecessor
+and blocked pretest guard attempts remain in the execution/quality record. This
+later documentation head does not claim a Linux run of its own SHA; exercised
+runtime/config/dependency/test-input blobs remain exactly the accepted 64541c1 source.
+Only Feature006 T008 is newly checked; Feature001 markers/frozen history are unchanged.
+S001 remains mitigation-only; no provider/browser/load/pilot/release acceptance follows.
