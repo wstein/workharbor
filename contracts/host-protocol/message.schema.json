@@ -1,0 +1,1022 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:workharbor:host-protocol:draft:1",
+  "title": "WorkHarbor unpublished host protocol v1",
+  "description": "Closed structural profile only. README and native validators additionally enforce strict raw JSON, canonical 1 MiB budget, lexical identities, normalized ordering, trusted scope and immutable state/replay bindings. No provider effect is authorized.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "kind": {
+          "const": "command"
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "owner_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "host_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "workspace_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "operation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "intent_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "bindings": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "runtime_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [
+                    "runtime_id",
+                    "generation"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "candidate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "runtime_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [
+                    "runtime_id",
+                    "generation"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "candidate"
+          ],
+          "additionalProperties": false
+        },
+        "request": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "workspace_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "action": {
+                  "const": "create"
+                },
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "host_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "repository_identity": {
+                          "type": "string"
+                        },
+                        "commit": {
+                          "type": "string",
+                          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                        },
+                        "submodules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "commit": {
+                                "type": "string",
+                                "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "commit"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "repository_identity",
+                        "commit",
+                        "submodules"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "host_id",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schema_version",
+                "workspace_id",
+                "action",
+                "parameters"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "workspace_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "action": {
+                  "const": "rebuild"
+                },
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "repository_identity": {
+                          "type": "string"
+                        },
+                        "commit": {
+                          "type": "string",
+                          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                        },
+                        "submodules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "commit": {
+                                "type": "string",
+                                "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "commit"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "repository_identity",
+                        "commit",
+                        "submodules"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schema_version",
+                "workspace_id",
+                "action",
+                "parameters"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "workspace_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "action": {
+                  "const": "start"
+                },
+                "parameters": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schema_version",
+                "workspace_id",
+                "action",
+                "parameters"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "workspace_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "action": {
+                  "const": "stop"
+                },
+                "parameters": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schema_version",
+                "workspace_id",
+                "action",
+                "parameters"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "workspace_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "action": {
+                  "const": "remove_runtime"
+                },
+                "parameters": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schema_version",
+                "workspace_id",
+                "action",
+                "parameters"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "execution_config": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "repository_identity": {
+                  "type": "string"
+                },
+                "commit": {
+                  "type": "string",
+                  "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                },
+                "submodules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "commit": {
+                        "type": "string",
+                        "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                      }
+                    },
+                    "required": [
+                      "path",
+                      "commit"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "repository_identity",
+                "commit",
+                "submodules"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "approval_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "command_id",
+        "owner_id",
+        "host_id",
+        "workspace_id",
+        "operation_id",
+        "idempotency_key",
+        "request_sha256",
+        "intent_version",
+        "bindings",
+        "request",
+        "execution_config",
+        "approval_ref"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "request": {
+                "properties": {
+                  "action": {
+                    "const": "create"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution_config": {
+                "type": "null"
+              },
+              "approval_ref": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "bindings": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "null"
+                  },
+                  "candidate": {
+                    "type": "object",
+                    "properties": {
+                      "runtime_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "generation": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9223372036854775807
+                      }
+                    },
+                    "required": [
+                      "runtime_id",
+                      "generation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "candidate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "request": {
+                "properties": {
+                  "action": {
+                    "const": "rebuild"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution_config": {
+                "type": "null"
+              },
+              "approval_ref": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "bindings": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "runtime_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "generation": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9223372036854775807
+                          }
+                        },
+                        "required": [
+                          "runtime_id",
+                          "generation"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "candidate": {
+                    "type": "object",
+                    "properties": {
+                      "runtime_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "generation": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9223372036854775807
+                      }
+                    },
+                    "required": [
+                      "runtime_id",
+                      "generation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "candidate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "request": {
+                "properties": {
+                  "action": {
+                    "const": "start"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution_config": {
+                "type": "object",
+                "properties": {
+                  "repository_identity": {
+                    "type": "string"
+                  },
+                  "commit": {
+                    "type": "string",
+                    "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                  },
+                  "submodules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "commit": {
+                          "type": "string",
+                          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "commit"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "repository_identity",
+                  "commit",
+                  "submodules"
+                ],
+                "additionalProperties": false
+              },
+              "approval_ref": {
+                "type": "null"
+              },
+              "bindings": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "runtime_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "generation": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9223372036854775807
+                      }
+                    },
+                    "required": [
+                      "runtime_id",
+                      "generation"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "candidate": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "target",
+                  "candidate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "request": {
+                "properties": {
+                  "action": {
+                    "const": "stop"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution_config": {
+                "type": "null"
+              },
+              "approval_ref": {
+                "type": "null"
+              },
+              "bindings": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "runtime_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "generation": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9223372036854775807
+                          }
+                        },
+                        "required": [
+                          "runtime_id",
+                          "generation"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "candidate": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "target",
+                  "candidate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "request": {
+                "properties": {
+                  "action": {
+                    "const": "remove_runtime"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution_config": {
+                "type": "null"
+              },
+              "approval_ref": {
+                "type": "null"
+              },
+              "bindings": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "runtime_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "generation": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9223372036854775807
+                          }
+                        },
+                        "required": [
+                          "runtime_id",
+                          "generation"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "candidate": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "target",
+                  "candidate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "kind": {
+          "const": "result"
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "owner_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "host_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "workspace_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "operation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "intent_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "bindings": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "runtime_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [
+                    "runtime_id",
+                    "generation"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "candidate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "runtime_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [
+                    "runtime_id",
+                    "generation"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "target",
+            "candidate"
+          ],
+          "additionalProperties": false
+        },
+        "outcome": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "succeeded"
+                },
+                "code": {
+                  "const": "ok"
+                }
+              },
+              "required": [
+                "status",
+                "code"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "failed"
+                },
+                "code": {
+                  "const": "operation_failed"
+                }
+              },
+              "required": [
+                "status",
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "observation": {
+          "type": "object",
+          "properties": {
+            "runtime_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            },
+            "observed_state": {
+              "enum": [
+                "pending",
+                "provisioning",
+                "running",
+                "stopping",
+                "stopped",
+                "failed",
+                "unknown"
+              ]
+            },
+            "provider_instance_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effective_config": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "repository_identity": {
+                      "type": "string"
+                    },
+                    "commit": {
+                      "type": "string",
+                      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                    },
+                    "submodules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "commit": {
+                            "type": "string",
+                            "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "commit"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "repository_identity",
+                    "commit",
+                    "submodules"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deleted": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "runtime_id",
+            "generation",
+            "observed_state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "command_id",
+        "owner_id",
+        "host_id",
+        "workspace_id",
+        "operation_id",
+        "idempotency_key",
+        "request_sha256",
+        "intent_version",
+        "bindings",
+        "outcome"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

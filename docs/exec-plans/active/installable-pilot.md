@@ -680,3 +680,60 @@ The complete independently CLEAR R2 plus actual-interface alignment is consolida
 in contracts/host-protocol/README.md before failure-first tests or behavior.
 Same Sol reviewer must confirm faithful consolidation. No T007 implementation
 acceptance, transport, provider, dispatcher or durable replay ledger is claimed.
+
+## T007 pure host protocol — author candidate, review pending
+
+Contract consolidation was independently Sol CLEAR before tests/behavior and committed
+at 5d81ae5. No owner-auth action registry, provider, transport, dispatcher or durable
+command ledger is changed. First-create/mTLS/trust expectations remain supplied native
+context; dispositions do not authorize execution.
+
+Actual initial RED: Elixir `mix test test/workharbor/host_protocol_test.exs` exited 1
+with undefined HostProtocol.Peer; Go private-cache `go test ./internal/protocol` exited 1
+with no non-test Go files. A preceding Go default-cache invocation failed permission
+setup and is not counted as behavior RED. Shared fixtures and both native suites preceded
+implementation. Two fixture-construction mistakes (inner create-host mismatch; escaped
+duplicate spelled kkind) were corrected without weakening expectations.
+
+Early independent review found missing final normalized-message byte-budget check and
+permissive observation effective-config normalization. New regressions failed first in
+both languages: Go two failures/exit1; Elixir17/19/exit2. Fixed by budgeting the final
+normalized message before canonical allocation and requiring already-normalized wire
+effective config, including schema-required submodules. Legitimate runtime reuse fixtures
+now have distinct operation/key/command IDs; changed same-key/action remains a negative.
+Focused Go and Elixir19/19 then passed.
+
+The artifact has 44 independently specified raw cases, four additional action
+fixtures, separate request/command hash anchors, 20 required Go IDs and 20 new required
+Phoenix IDs; every previous required ID is retained. Exact-candidate pristine
+source/manifest/application results and independent disposition follow separately.
+No full combined canonical, live TLS/browser/host acceptance is claimed.
+
+Additional failure-first scope check classified a foreign workspace as identity_conflict
+(Go exit1, selected Elixir exit2) rather than authorization denial. Explicit expected
+workspace scope admission now precedes operation identity comparison. Wrong peer plus
+nonnull malformed snapshot also proves peer rejection before expectation inspection.
+One initial selected Elixir line ran the preceding green test; it is not counted as RED.
+Fixture bytes are hash-pinned in both independently written native suites.
+
+Author-cache full Phoenix runs retained two inherited 4300-digit failures (103/105)
+from stale test-environment Jason artifacts. Default-environment force compilation
+did not repair the separate test build. Native Mix lock permission failures and a
+Go whr default-output source write denial are setup failures, not behavior results.
+Explicit private Go output succeeds; exact-candidate verification uses a fresh private
+Phoenix build with accepted compile-time Jason limit4301, without source changes.
+
+Fresh private `MIX_ENV=test MIX_BUILD_PATH=/private/tmp/workharbor-t007-fresh-build`
+format/compile warnings-as-errors/full tests passed: 106/106 including all86 inherited
+and20 T007 cases. Locked Jason was freshly compiled with limit4301; no auth source
+was changed. Exact committed-candidate source/application evidence remains the next
+gate; this author-build result is not pristine-source or independent review evidence.
+
+Final author application gates all exited0; event inventory validation passed: {'host_agent': 132, 'api_client': 162, 'whr': 1, 'control_plane': 106}.
+Logs/argv/exits: /private/tmp/workharbor-t007-local-final-_o3775ll/checks.json.
+All20 new protocol IDs per language and every inherited ID are present.
+An author Go multi-package build used a nonexistent non-directory output and failed;
+canonical precreated-directory output corrected it. One gofmt invocation used the
+wrong cwd-relative path and was corrected. Neither failed command is counted passing.
+No helper policy/runner behavior changed; root reserves full make check for combined
+head unless new concern requires it. Exact-candidate pristine gates follow externally.

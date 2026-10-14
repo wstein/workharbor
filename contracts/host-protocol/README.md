@@ -200,3 +200,28 @@ intent same generation; observation defaults/removal rules; admitted-envelope ov
 without identity change/partial emission; secret canaries. A test provider sentinel must
 remain untouched for rejected/replayed/refused inputs. It proves pure gate order, not a
 real dispatcher, durable restart/race, TLS, browser or Docker capability.
+
+## Concrete pure API and fixture provenance
+
+Elixir `decode(raw, %Context{})` and `validate(native, %Context{})` return
+`{:ok, %{message, canonical, native_bindings, native_result, disposition}}` or a
+fixed `{:error, code}`. Go `Decode(raw, Context)` and `Validate(native, Context)`
+return the same data via `Validated` or fixed `Error`. Neither API performs lookup.
+
+Peer has kind (control_plane for command, host for result), owner_id and host_id.
+Snapshot supplies expected closed command, owner-inclusive request_bytes/request_hash,
+exact native_bindings, current_intent, status, optional previously recorded command_bytes,
+optional normalized terminal_result and per-runtime provider/effective-config expectations.
+It is a trusted caller-created native type, with no wire decoder or credential fallback.
+The expected command and supplied bytes/bindings remain independently compared.
+Identity/scope negative tests use independent expectations; authored boundary/action
+fixtures explicitly supply expected snapshots. These fixtures do not prove production
+context construction.
+
+[Vectors](vectors.json) contain independently authored raw strings and expected codes,
+plus Python-standard-library sorted/scalar UTF-8 canonical request/whole-command anchors
+and SHA-256 digests. Python was used offline during authoring, never at product runtime.
+The same artifact runs in both suites; native constructors are independently written in
+each language. Four other lifecycle fixtures use distinct operation/key/command IDs and
+reuse runtime generation only under a new explicit intent. Schema is structural; README
+and validators additionally enforce byte budgets, normalization, scopes and state.
