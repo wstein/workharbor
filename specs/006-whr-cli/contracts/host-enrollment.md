@@ -3,7 +3,10 @@
 Status: consolidated V2 independently Sol DESIGN CLEAR, including the final
 empty-subject enrollment CSR addendum. Implementation GO follows accepted
 T005 1189c81, T006 ef399f5, T007 e10c6997 and S001 c88f339. This document
-freezes one proposal before tests/behavior; it claims no implementation evidence.
+freezes one proposal before tests/behavior. The implementation and bounded real
+macOS/Linux transport scope are independently Sol CLEAR at
+`64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c`; see [quality evidence](../../../docs/quality.md).
+Later documentation revisions do not claim that Linux executed their SHA.
 Author: assigned Sol author; independent reviewer: sol_enrollment_review.
 
 ## Authority and scope
@@ -107,7 +110,7 @@ CN, with expires_at exactly leaf NotAfter, before local acceptance.
 
 Initial CSR has EMPTY subject, version0, Ed25519 key/signature and no requested
 extensions. Verify possession; derive host/owner only from code-bound record.
-Initial pending host/owner stay null until verified HTTPS response; compare leaf
+Initial pending owner_id/host_id stay empty strings until the verified HTTPS response; compare leaf
 CN to returned host_id. Renewal CSR uses known host UUID subject and no requested
 extensions; compare to current mTLS assignment. Unknown CSR attributes/extensions
 are diagnosed, never silently admitted. No enrollment descriptor is used.

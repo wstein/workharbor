@@ -5,10 +5,10 @@ Reviewed: 2026-10-14. Owner: project maintainer.
 | Area | Evidence | Status / next gate |
 | --- | --- | --- |
 | Spec Kit | Upstream CLI-generated assets, pinned provenance | Scaffold ready |
-| Domain and ownership | Constitution, ADRs, contracts, feature requirements | Design only |
+| Domain and ownership | Constitution, ADRs, contracts and accepted foundation/auth/protocol | Lifecycle/provider integration pending |
 | Repository harness | Links/JSON/boundary checks plus negative regression tests | Executable |
 | Feature 004 local automation | [T017 evidence](../specs/004-speckit-symphony-automation/quickstart.md#t017-combined-local-acceptance): 422 qualified cases at `ebe4833`; raw 41/five failures separately | T001–T017 local tooling/fixture acceptance; T018–T020 pending, live guard/provider/isolation/safe-label gates blocked |
-| Product runtime | Pinned Phoenix/Go applications; accepted006 foundation/auth/protocol and HTTP1 mitigation; T008 exact candidate tests below | Lifecycle/provider/browser/installable-pilot acceptance pending |
+| Product runtime | Accepted foundation/auth/protocol, HTTP1 mitigation and bounded T008 transport at64541c1; evidence below | Lifecycle/provider/browser/installable-pilot acceptance pending |
 | Docker / persistence / PTY | Acceptance scenarios only | Real-host tests required |
 | Symphony | Pinned workflow and operator runbook | Not installed or activated |
 | Resource footprint | Bounded T008 loopback TLS fixtures measured below | No capacity/load acceptance |
@@ -17,7 +17,7 @@ Reviewed: 2026-10-14. Owner: project maintainer.
 Do not upgrade a design status to implemented without evidence. Review this register
 with every release; convert recurring drift into small, targeted fixes.
 
-## T008 genuine host transport evidence (candidate, not completion)
+## T008 genuine host transport evidence (historical predecessor)
 
 Exact predecessor source `e42fe27ec353d262dcd2dd3496e9fbc98cc56937` has independent
 fresh source/manifest/format/vet/build/compile/assets/full-test proof:
@@ -63,4 +63,71 @@ no complete no-escape isolation proof is claimed. Docker is absent/N/A for TLS-o
 transport; no Docker workspace/provider, browser, loaded capacity, release or pilot
 acceptance follows. Independent review also required additional deterministic
 filesystem durability/restart tests; those change runtime blobs, so a fresh exact
-candidate/Linux run and final independent acceptance remain pending. T008 is unchecked.
+candidate/Linux run and final independent acceptance were pending at this predecessor
+milestone. The accepted corrected runtime is recorded below.
+
+## T008 accepted corrected transport scope
+
+Implementation/runtime source **64541c1fa8b1f0d9f353272a0ea8ee6888ea5f5c** is
+independently Sol CLEAR with no open material code findings. The later documentation
+head retains identical exercised source/config/dependency/journey/input blobs;
+Linux executed 64541c1, not that later SHA. Author pristine proof:
+`/private/tmp/workharbor-t008-validation-dho78ci4/evidence.json`; independent:
+`/private/tmp/workharbor-t008-independent-645-kb8o8fqu/summary.json` and
+`/private/tmp/workharbor-t008-independent-linux-645.json`.
+
+| Platform / check | Actual result | Time |
+| --- | --- | --- |
+| macOS full native suite, author / independent | 173 / 173 passed, including 12 real TLS/WSS journeys each | 94.0s / 94.4s |
+| Go application gates | 240 host / 162 API / 1 CLI events; required IDs retained | Exact command logs above |
+| Isolated Ubuntu transport | 12 passed | 81.7s ExUnit, 83.573s unit |
+| Isolated Ubuntu HTTP1/TLS security | 9 passed | 4.7s ExUnit, 8.33s unit |
+
+Linux versions were Ubuntu 24.04.5 LTS aarch64, kernel
+`7.2.9-orbstack-00391-g2b298d05fbd4`, systemd/libsystemd0 `255.4-1ubuntu8.17`,
+OTP `29.1.1` (erts17.1), Elixir `1.20.4` compiled OTP29 and Go `1.27.2` linux/arm64.
+The two exact test commands match the historical commands above, using the corrected
+archive SHA256 `1ff20623b9b1bafe5adcce9487a597784f655187409a7b3c68a4727d387f012a`
+and manifest `a8ebba13d392ccf85375796628d04d0456379875b23cd3b46c79c3fcbdcd60c4`.
+All 352 source file hashes/modes matched before preparation and after final cleanup.
+Actual assessment and all five pinned input digests:
+`/private/tmp/workharbor-t008-linux-absent-pk-plan/amended-run/transport/assessment.json`.
+
+Production Go enrollment, heartbeat/reconnect, renewal/activation/revocation and
+pending crash recovery after predecessor expiry passed over genuine Elixir/Go
+TLS/WSS, together with the complete refusal/expiry/wire/HTTP1 matrix recorded above.
+New durability tests cover 40 Go syscall-fault cases across initial persistence and
+all four active/pending transitions, with fresh-process reloads; native issuer tests
+cover partial writes, sync/close/link/open failures and exclusive complete-state
+recovery. Original native ignored-close failure had actual 18/19 RED before the fix;
+19/19 identity tests now pass. Missing test seams are separately recorded as setup/
+instrumentation absence, not executed behavior RED.
+
+An earlier corrected-source Linux attempt stopped with pretest guard 125 because
+PolicyKit was absent; zero tests ran and its owned guest was deleted. Retained
+assessment: `/private/tmp/workharbor-t008-linux-rerun-plan/amended-run/transport/assessment.json`.
+The successful rerun used an independently reviewed narrow absent/nonactivatable
+PolicyKit proof: typed AccessDenied on empty properties of the exact owned loaded
+unit, unchanged required properties, measured UID/groups/capabilities and nonwritable
+cgroup ancestors. No policy installation or guard/cap relaxation occurred.
+
+Each sequential unit bounded the CP and all Go/build descendants together to
+512 MiB, one CPU, 600 seconds and control-group cleanup. Actual peaks were
+269557760 and 161996800 bytes; 321 and 23 live/postexit samples plus final OOM counters
+were zero. The dedicated UID/EUID was 999, sole group 990, with zero effective/
+permitted/ambient capabilities; 12 ancestor paths were nonwritable. Root guest
+2 CPU/2 GiB limits were measured. The configured 16 GiB disk exhaustion was not
+independently measured on shared backing. Optional NoNewPrivileges and
+ProtectControlGroups were actually **no** and are not claimed enabled. This is
+bounded fixture evidence, not broad isolation, loaded capacity or production hardening.
+
+Owned guest `01M4Y58JYJB5CEVCRHQD81R0ZP` was deleted at 2026-10-14 21:37:44 UTC and
+inventory was empty. Outer context/config hashes and original BuildKit ID/image/
+rwvolume matched and all six bounded probes passed in the observation window;
+historical hang continuity remains UNVERIFIED. Already-unloaded transient-unit stop
+exit 5 and UID helper broken-pipe output remain classified in the assessment.
+Docker is absent/N/A to this TLS-only guest. Bandit 1.12.5 remains affected under
+the S001 HTTP1-only mitigation. Full canonical Python is deferred to the combined
+head; provider, browser stale-display, five-workspace/eight-attachment load, installer,
+release and complete installable-pilot acceptance remain pending. Feature001 markers
+and frozen history are unchanged; only Feature006 T008 is newly checked.
