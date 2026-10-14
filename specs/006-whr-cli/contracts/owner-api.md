@@ -205,3 +205,14 @@ precommit child pauses only after a successful final audit INSERT on the actual
 acceptance path, before top-level commit, with exact bounded signaling and cleanup.
 
 Owner authentication/browser transport follows [the T006 contract](authentication.md).
+
+## T006 implemented authentication boundary
+
+The authentication foundation implements the consolidated
+[authentication contract](authentication.md): primary login, scoped status,
+explicit logout/revocation and dashboard credential installation/issuance. It adds
+owner-management and dashboard sign-in/control pages, not the later product views.
+All other HTTP groups above remain proposed and absent. Accounts returns a trusted
+server-created Principal; its owner ID and scopes are passed separately from the
+strictly decoded native string-key request map. Native body fields cannot supply
+or replace that authority. Owner credentials do not authenticate a host or agent.

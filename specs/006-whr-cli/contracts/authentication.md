@@ -201,3 +201,27 @@ Use secret canaries through actual errors/logs/audit/database. Append meaningful
 required test IDs without changing existing IDs. Run focused application/repository
 and pristine exact-candidate gates, record actual results and independent review.
 No synthetic test establishes real browser, transport TLS or future host capability.
+
+## T006 presentation and transport clarification
+
+The registered root `/` is an owner-context alias of `/owner`. The no-script owner
+page supplies fixed-context POST controls `/owner/logout` and `/owner/dashboard`.
+They authorize the closed actions `logout` and `issue_dashboard` before bounded
+form parsing, require exact own Origin and selected-session CSRF, and accept only
+the `_csrf_token` field. They preserve the consumed connection on every later
+schema, CSRF or authentication failure. `/owner/dashboard` installs a new read
+cookie without exposing its raw token, then redirects to initialize fresh dashboard
+CSRF. `/owner/logout` uses the label “Sign out of owner management”. The dashboard
+clear remains cookie-only and uses “Clear dashboard sign-in”. None enables form
+bodies on strict JSON API routes.
+
+Raw `/api/v1/auth/dashboard-credentials` issuance requires a `cli_owner` bearer
+secret channel; owner cookies use the explicit cookie-install presentation or API
+instead. Browser-readable raw credential responses are refused. These are auth
+controls, not management or Spec Kit data pages.
+
+Current fixed auth/control paths reject percent-encoded aliases, backslashes,
+duplicate slashes and trailing slashes before context/store selection. Non-socket
+routes admit no query. Socket query is closed to unique decoded `_csrf_token` and
+`vsn` fields with fixed bounds; credentials are never admitted in URLs. Upgrade
+header shape is bounded before adapter dispatch to prevent input reflection.

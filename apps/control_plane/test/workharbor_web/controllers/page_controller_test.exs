@@ -3,6 +3,6 @@ defmodule WorkHarborWeb.PageControllerTest do
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Peace of mind from prototype to production"
+    assert json_response(conn, 403) == %{"error" => %{"code" => "forbidden"}}
   end
 end

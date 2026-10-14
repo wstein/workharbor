@@ -7,6 +7,11 @@ defmodule WorkHarbor.Application do
 
   @impl true
   def start(_type, _args) do
+    WorkHarborWeb.RuntimeSecurity.validate!(
+      Application.fetch_env!(:workharbor, WorkHarborWeb.Endpoint),
+      Application.fetch_env!(:workharbor, :owner_http)
+    )
+
     children = [
       WorkHarborWeb.Telemetry,
       WorkHarbor.Repo,

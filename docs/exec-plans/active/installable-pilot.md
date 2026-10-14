@@ -613,3 +613,44 @@ Three separate session stores, server-checked 600-second preauth expiry, explici
 owner/dashboard context and no automatic credential revocation replace prior
 proposals. T006 implementation is authorized; its checkbox remains open until
 exact-candidate tests and independent review. No activation is authorized.
+
+### T006 behavior and finding ledger
+
+Failure-first behavior checkpoints included absent modules/migration (0/18),
+revocation actor/target audit (12/20), runtime configuration (10/11), ingress and
+cookie/channel boundaries (12/19 then 12/22), encoded route aliases (12/23),
+retention/audit (39/41), bootstrap audit (7/10), malformed effective authority
+(25/26), parsed connection/browser controls (37/39), and raw issuance channel
+(27/29). Initial wrong-directory and test-sigil compilation mistakes were corrected;
+they are not behavior evidence. Early shell-tail wrappers did not retain separate
+Mix exit codes; their counts are observed outcomes, not saved process exits.
+
+Independent precommit findings were closed with focused regressions: distinct
+actor/target revoke audit; real foreign credential preservation; literal debugger
+POSTs; positive custom-origin socket handshake and kind/expiry/revocation/CSRF
+negatives; fresh Jason compilation and integer boundaries; credential-lifetime
+cookie rewrite cap; strict authority/default-port/IPv6/UTF8 admission; isolated
+valid-baseline runtime negatives; empty logout schema; bearer-kind/query rejection;
+closed per-route denial labels; protected navigation Fetch Metadata; canonical
+route selection; root-context navigation; consumed adapter preservation; and
+no-script scoped owner controls with CLI-only raw-token issuance.
+
+The complete author Phoenix suite passed 86/86 with subprocess exit 0 in 5.2s.
+Fresh exclusive reporter outcomes were validated against the appended 86-ID
+manifest by the unchanged actual-event validator. All 39 inherited IDs and other
+application/Python inventories are retained. The prior 82-event artifact was stale
+because the reporter refuses overwrite; it is superseded by the fresh verified
+artifact, not represented as 86 events. A Foundation contention test emitted the
+expected Exqlite BEGIN IMMEDIATE database-lock error while passing; it is not a
+compile warning. The inherited public-root test ID now asserts plaintext denial.
+
+Author evidence is under `/private/tmp/workharbor-t006-author`; exact committed
+pristine evidence and independent code disposition follow separately. No real
+browser/network TLS, live listener, deployment, later-WI integration or full new-head
+canonical acceptance is claimed here. T006 remains unchecked pending review.
+
+Author test-profile format and warnings-as-errors compilation passed, as did
+repository/bootstrap and whitespace checks. Fresh dev-profile compilation exited
+0 with the pinned Plug dependency's Mix xref deprecation warning; application
+compilation had no warning. This dependency warning is recorded rather than
+represented as warning-free output. No listener started during either compile.

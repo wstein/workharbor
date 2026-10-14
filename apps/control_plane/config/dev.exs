@@ -5,7 +5,7 @@ config :workharbor, WorkHarbor.Repo,
   database: Path.expand("../workharbor_dev.db", __DIR__),
   pool_size: 5,
   stacktrace: true,
-  show_sensitive_data_on_connection_error: true
+  show_sensitive_data_on_connection_error: false
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -16,10 +16,10 @@ config :workharbor, WorkHarbor.Repo,
 config :workharbor, WorkHarborWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}],
-  check_origin: false,
-  code_reloader: true,
-  debug_errors: true,
+  http: false,
+  check_origin: ["https://localhost"],
+  code_reloader: false,
+  debug_errors: false,
   secret_key_base: "9kwSZZ3zqgPLCQHHHC7Q9KYXXSVttc/mmuUT4ZmFiV1BGre/cOXzP7jNrsMeH4N4",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:workharbor, ~w(--sourcemap=inline --watch)]},

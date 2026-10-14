@@ -13,7 +13,7 @@ config :workharbor, WorkHarbor.Repo,
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :workharbor, WorkHarborWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4002],
+  http: false,
   secret_key_base: "4XBsLMaWd4lPmLPEtg7KgIs8803lJErmCoNVLqsywrCNiiRCgTgMU4U5WdOI+TAl",
   server: false
 
