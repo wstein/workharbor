@@ -138,6 +138,20 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     assert :ok = RuntimeSecurity.validate!([server: false], [])
   end
 
+  test "listener activation requires explicit true or false before protocol validation", c do
+    cfg = independent(c)
+    unsafe = Keyword.put(cfg, :https, Keyword.put(cfg[:https], :http_2_options, enabled: true))
+
+    for value <- [nil, :enabled, "true", 1, []] do
+      refused(Keyword.put(unsafe, :server, value))
+    end
+
+    refused(Keyword.delete(unsafe, :server))
+    refused([{:server, false} | unsafe])
+    refused([{:server, true} | unsafe])
+    assert :ok = RuntimeSecurity.validate!([server: false], [])
+  end
+
   test "active transport profile refuses lower layer protocol and listener overrides", c do
     cfg = independent(c)
 
@@ -177,6 +191,11 @@ defmodule WorkHarborWeb.TransportSecurityTest do
       |> Enum.filter(&(tuple_size(&1) == 2))
       |> Keyword.delete(:__config__)
 
+    on_exit(fn ->
+      Application.put_env(:workharbor, :owner_http, prior_owner)
+      Endpoint.config_change([{Endpoint, prior_endpoint}], [])
+    end)
+
     {runtime, _} = runtime(c, :test, 0)
     cfg = Application.fetch_env!(:workharbor, Endpoint) |> Keyword.merge(runtime)
     [spec] = Bandit.PhoenixAdapter.child_specs(Endpoint, Keyword.put(cfg, :otp_app, :workharbor))
@@ -199,11 +218,6 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(WorkHarbor.Repo)
     :ok = Ecto.Adapters.SQL.Sandbox.mode(WorkHarbor.Repo, {:shared, self()})
     {owner_id, secret} = WorkHarbor.AuthDatabase.fixture!()
-
-    on_exit(fn ->
-      Application.put_env(:workharbor, :owner_http, prior_owner)
-      Endpoint.config_change([{Endpoint, prior_endpoint}], [])
-    end)
 
     Map.merge(c, %{port: port, origin: origin, owner_id: owner_id, secret: secret})
   end

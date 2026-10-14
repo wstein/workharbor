@@ -250,11 +250,19 @@ defmodule WorkHarborWeb.AuthenticationTest do
 
     config = [
       server: true,
+      adapter: Bandit.PhoenixAdapter,
       debug_errors: false,
       code_reloader: false,
       http: false,
       secret_key_base: String.duplicate("x", 64),
-      https: [ip: {127, 0, 0, 1}, port: 443, certfile: cert, keyfile: key]
+      https: [
+        ip: {127, 0, 0, 1},
+        port: 443,
+        certfile: cert,
+        keyfile: key,
+        http_1_options: [enabled: true],
+        http_2_options: [enabled: false]
+      ]
     ]
 
     owner = [origin: "https://localhost", authorities: [{"localhost", 443}]]

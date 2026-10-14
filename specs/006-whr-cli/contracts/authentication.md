@@ -125,6 +125,12 @@ precedes parsing. No router pipeline is assumed to have run for socket dispatch.
 
 ## 9. TLS and authority
 
+The current authenticated listener is explicitly HTTP/1-only as the temporary
+Bandit advisory mitigation in [the transport contract](transport-security.md).
+HTTP/2 authority parsing rules below remain defensive pure admission behavior;
+they do not enable HTTP/2 on a listener. T008 client-certificate options need a
+separately reviewed narrow profile extension preserving this restriction.
+
 Direct HTTPS is first. Reject plaintext before body/auth; never redirect credential
 requests. Active server configuration requires explicit bind, certificate/key,
 allowlisted authorities/origin and a generated non-demo session key. No default

@@ -1,7 +1,7 @@
 # S001 authenticated transport mitigation
 
 Status: finite design independently Sol CLEAR on 2026-10-14 before tests/behavior;
-implementation and exact-candidate acceptance pending. This follow-up blocks T008.
+implementation candidate complete; exact-candidate acceptance pending. This follow-up blocks T008.
 It preserves the owner API, HTTPS origin/authority, browser sessions, WSS and CLI
 contracts. It changes the current listener protocol profile only.
 
@@ -26,7 +26,10 @@ Real host/browser pilot acceptance and signed-release SC-006 remain separate gat
 
 Every actual PHX_SERVER profile (dev, test and prod) uses Bandit.PhoenixAdapter,
 HTTPS only, and explicit `http_1_options: [enabled: true]` plus
-`http_2_options: [enabled: false]`. Inert `server: false` remains allowed.
+`http_2_options: [enabled: false]`. Exactly one explicit `server: false` is
+inert; exactly one `server: true` requires the complete secure profile. Missing,
+nonboolean or duplicate activation settings are rejected because Phoenix treats
+truthy values as active and missing values can inherit `serve_endpoints`.
 RuntimeSecurity rejects active configurations that omit or alter these exact lists,
 use another adapter, contain duplicate HTTPS keys, or contain HTTPS keys outside
 `ip`, `port`, `certfile`, `keyfile`, `http_1_options`, `http_2_options`.
@@ -44,7 +47,7 @@ No mTLS behavior is implemented by S001.
 ## Required failure-first evidence
 
 Independently constructed valid active configuration and each real runtime env
-must pass. Missing, enabled, malformed or duplicated protocol settings, wrong
+must pass. Missing/nonboolean/duplicate activation, missing/enabled/malformed/duplicated protocol settings, wrong
 adapter, and handler/transport/ALPN override attempts must fail closed. Preserve
 all prior required Phoenix, Go and Python IDs; append meaningful transport IDs.
 
