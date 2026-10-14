@@ -566,7 +566,9 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestActivationRejectsIncompleteOrMismatchedIssuedIdentity",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestSharedHostConnectionFixtures",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestExpiryWatchdogCancelsBlockedIO",
-      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestAcknowledgementSequenceFailsClosed"
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestAcknowledgementSequenceFailsClosed",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/identity/TestAtomicIdentityPersistenceFailuresAndRestartTransitions",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/identity/TestInitialPossessionDurabilityFailureNeverReportsSuccess"
     ],
     "api_client": [
       "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestFrozenJSONVectors",
@@ -746,7 +748,8 @@
       "WorkHarborWeb.AgentLogFilterTest/test filter is total and leaves unrelated events unchanged",
       "WorkHarborWeb.AgentLogFilterTest/test owned filter installation is idempotent and refuses a conflicting owner",
       "WorkHarbor.HostIdentityTest/test serialized owner revocation wins concurrent issuance redemption renewal and activation",
-      "WorkHarbor.HostIdentityTest/test enrollment audit failure rolls back consumption identity and active fingerprint"
+      "WorkHarbor.HostIdentityTest/test enrollment audit failure rolls back consumption identity and active fingerprint",
+      "WorkHarbor.HostIdentityTest/test native issuer persistence faults return fixed errors and restart only complete exclusive state"
     ]
   }
 }

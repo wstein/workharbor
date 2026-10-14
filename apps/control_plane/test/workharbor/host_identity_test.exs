@@ -445,4 +445,41 @@ defmodule WorkHarbor.HostIdentityTest do
     Hosts.sql("DROP TRIGGER refuse_enrollment_audit")
     assert {:ok, _} = Hosts.redeem(issued.code, csr)
   end
+
+  test "native issuer persistence faults return fixed errors and restart only complete exclusive state",
+       c do
+    for stage <- [
+          :file_open,
+          :write,
+          {:file, :sync},
+          {:file, :close},
+          :link,
+          :parent_open,
+          {:parent, :sync},
+          {:parent, :close}
+        ] do
+      dir = Path.join(c.dir, "fault-#{Ecto.UUID.generate()}")
+      Process.put({WorkHarbor.Hosts.PrivateFile, :test_io}, WorkHarbor.HostFileFault)
+      Process.put({WorkHarbor.HostFileFault, :stage}, stage)
+
+      try do
+        assert {:error, :persistence_failed} = Issuer.initialize(dir)
+      after
+        Process.delete({WorkHarbor.Hosts.PrivateFile, :test_io})
+        Process.delete({WorkHarbor.HostFileFault, :stage})
+      end
+
+      if stage in [:parent_open, {:parent, :sync}, {:parent, :close}] do
+        assert {:ok, first} = Issuer.load(dir)
+        assert {:error, :already_initialized} = Issuer.initialize(dir)
+        assert {:ok, second} = Issuer.load(dir)
+        assert first.certificate == second.certificate and first.key == second.key
+      else
+        refute File.exists?(Path.join(dir, "issuer.json"))
+        assert {:ok, _} = Issuer.initialize(dir)
+      end
+
+      assert File.ls!(dir) == ["issuer.json"]
+    end
+  end
 end

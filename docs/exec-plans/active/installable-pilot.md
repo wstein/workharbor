@@ -14,7 +14,8 @@ accepted after independent Sol CLEAR of `d3d84c8361a1389292fad96d02a828ac9fabc2e
 T002 is independently accepted at `bc18034164597aa841bea561cf6a882e9c0715e2`.
 T003 is independently accepted at `191c62baf227f64122770244d62d289900bb4d8d`.
 T004 is independently accepted at `6abb7419c77b3712a6ac276bc798b102503d3144`.
-T005 foundation implementation is in progress; exact-candidate review remains open.
+T005 foundation independently accepted at1189c81ba81b79a47a0485a9d5148fb8286c8eb0;
+T006/T007/S001 are accepted prerequisites. T008 exact-candidate review remains open.
 No product runtime acceptance is claimed.
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
 The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
@@ -969,3 +970,45 @@ responded, original BuildKit container retained and running, machine inventory e
 Root authorized the retained helper to bootstrap the exact reviewed fixture; Linux
 product evidence remains separate and pending. Earlier unavailable baseline and
 UNVERIFIED evidence are retained as historical outcomes, not rewritten as success.
+
+### T008 exact candidate and durability correction
+
+Candidate e42fe27ec353d262dcd2dd3496e9fbc98cc56937 passed fresh isolated fixed gates:
+29commands, Phoenix172, Go host198/API162/CLI1 events, all prior required IDs retained,
+Python846collection/520required. Author evidence:
+/private/tmp/workharbor-t008-validation-psmexjz6/evidence.json; independent:
+/private/tmp/workharbor-t008-independent-zxtay0dp/summary.json. All12 genuine Mac
+TLS/WSS journeys passed in each full native run. Post-test tracked bytes and
+pristine source passed after deleting only generated scratch nested Git dependencies;
+initial cleanup-tool failure is retained. The wrapper's initially wrong foundation
+filename proof was corrected against actual owner_foundation/owner_authentication
+migrations plus001tasks; all unchanged. Fixed POSIX UID subprocess broken-pipe
+output during intentional teardown is retained, not authentication evidence.
+
+Independent exact review found the required file-failure/restart proof missing.
+Go now tests real temporary files and actual AcceptEnrollment/PrepareRenewal/AcceptPending/Promote
+and initial possession across partial-write, file sync/close, rename/link, parent
+open/sync/close failures. Unexported native-default syscall wrappers have no external
+configuration. Initial missing-seam compile failure is explicitly instrumentation
+absence, not executed behavior RED. Existing Go error handling passed all32 initial fault
+subcases on first wiring; the final matrix has40 subcases including AcceptEnrollment
+plus a separate fresh reload process at each transition boundary. Native test-only process-local
+IO instrumentation exposed original ignored file-close error:18/19 behavior RED
+(/private/tmp/workharbor-t008-durability-native-close-red.log). Close failures now
+propagate fixed persistence_failed, including parent close;19/19 identity tests
+pass. Production native module uses only :file, with no test selector. Restart
+retains one whole OLD or NEW valid state at its atomic commit boundary, never
+claims successful durability after a failed sync, and never replaces uncertain
+exclusive issuer/key possession. Required inventory now Phoenix173/Go host41topIDs.
+
+Predecessor e42 genuine isolated Ubuntu Linux passed12 transport journeys (81.2s,
+83.31s unit wall,216391680-byte memory peak) and9 transport-security tests (4.5s,
+6.185s unit wall,141455360-byte peak); all349 archive file hashes/modes unchanged.
+/private/tmp/workharbor-t008-linux-bootstrap-1qylii8h/amended-run/transport/assessment.json
+records actual outcomes and limitations. Owned guest01M4Y2J3CZXQ4JR69E1QGEY0QV was
+deleted and inventory empty; outer Engine/original BuildKit responding and config
+metadata preserved in that observation window, historical hang continuity UNVERIFIED.
+Effective UID/group and cgroup ancestor privilege/escape measurements were missing;
+no complete resource isolation proof is claimed. Docker absent/N/A for this TLS-only
+fixture. Corrected product runtime requires a fresh exact archive/Linux run and
+same independent review; predecessor results do not accept the changed candidate.
