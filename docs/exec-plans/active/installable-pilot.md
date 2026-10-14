@@ -2,7 +2,17 @@
 
 Owner request: 2026-10-14, continue on `feat/installable-pilot` in the same worktree,
 include Python-to-Go migration, independently review/fix each WI, PR after all WIs.
-Baseline: `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`.
+Latest owner instruction: while the owner is out of office, Sol subagents perform
+intermediate planning/WI reviews and fixes; the owner reviews the final combined PR.
+This supersedes the earlier intermediate human spec/plan-review workflow for this
+authorized pilot execution. No historical human artifact approval is asserted, and
+no pending intermediate human approval is treated as an execution blocker.
+Status: proposed intermediate planning baseline; the prior Sol planning review
+identified a terminal-safety ordering finding. Its correction awaits separate
+independent Sol re-review before successor work. No product WI is accepted.
+Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
+The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
+changing the design baseline does not change frozen Python behavior.
 Authority: [Feature 001](../../../specs/001-workspace-lifecycle/spec.md),
 [Feature 006 plan](../../../specs/006-whr-cli/plan.md),
 [tasks](../../../specs/006-whr-cli/tasks.md),
@@ -19,7 +29,14 @@ Authority: [Feature 001](../../../specs/001-workspace-lifecycle/spec.md),
 - Pilot plan, migration inventory, data model, owner API design, tasks and validation
   guide drafted. No product code, task completion or live result claimed.
 - Documentation checker and whitespace check passed before task-file generation;
-  final candidate checks/review remain pending.
+  those historical checks do not establish acceptance of later revisions.
+- Corrected the planning review finding: T011 requires baseline FR-022 human-text
+  escaping, T014 requires the full baseline FR-022a stream filter and targeted
+  hostile/split/unterminated tests, and T018 retains exhaustive corpus/fuzz and
+  integration acceptance. `python3.14 scripts/check_repo.py` and
+  `git diff --check` pass for this documentation correction; product runtime is
+  not evaluated. Independent Sol re-review remains pending; final human review
+  is reserved for the combined PR.
 
 ## Execution limitations
 
