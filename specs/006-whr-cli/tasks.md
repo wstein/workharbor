@@ -33,7 +33,7 @@ Independent check: negative vectors, cross-language bytes and no runtime Python.
 
 - [x] T003 Freeze the selected Python behavior inventory, source/tool digests and independently inspected vectors in `contracts/migration/`, with offline generator `scripts/generate_go_vectors.py`, strict fixture schema, meaningful negative tests in `tests/test_go_vectors.py` and their required IDs in `docs/development/ci-acceptance.json`; cover nested duplicate keys, malformed UTF-8, integer bounds, float/non-finite rejection, non-ASCII ordering and paths. Retain development-only rows in `specs/006-whr-cli/migration.md` (ADR 0010).
 - [x] T004 Port only accepted pure JSON/path behavior into `apps/api_client/wirejson/` and `apps/host_agent/internal/config/`; write Go negative/golden tests first and reproduce frozen vectors independently in Python; no caller switches before parity and independent review (T003).
-- [ ] T005 Implement ownership, separate storage/runtime records, durable operations/canonical request hash, generation checks and audit in `apps/control_plane/lib/workharbor/` and migrations/tests in `apps/control_plane/`; prove owner/workspace key uniqueness, changed-payload conflicts and crash-safe intent-before-side-effect (001 T002).
+- [x] T005 Implement ownership, separate storage/runtime records, durable operations/canonical request hash, generation checks and audit in `apps/control_plane/lib/workharbor/` and migrations/tests in `apps/control_plane/`; prove owner/workspace key uniqueness, changed-payload conflicts and crash-safe intent-before-side-effect (001 T002).
 - [ ] T006 Implement owner bootstrap/login, revocable scoped credentials and browser request protections in `apps/control_plane/lib/workharbor/accounts.ex`, `apps/control_plane/lib/workharbor_web/` and tests; prove TLS-first auth, wrong owner, expired/revoked token, read-only dashboard scope, Host/Origin/anti-forgery rejection and secret redaction (001 T013; FR-035–038).
 - [ ] T007 Define/validate versioned host protocol in `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/host_agent/internal/protocol/`; reject invalid version/scope/replay before provider calls and redact diagnostics in both suites (001 T003).
 
@@ -121,3 +121,7 @@ independent exact-candidate review; no product runtime acceptance is claimed.
 Durable check and review
 evidence, including earlier failed runs, is retained in
 [the pilot execution record](../../docs/exec-plans/active/installable-pilot.md).
+
+T005 independently Sol CLEAR at `1189c81ba81b79a47a0485a9d5148fb8286c8eb0`;
+its native persistence scope does not establish authentication or raw JSON decoding.
+T006 follows [the consolidated authentication contract](contracts/authentication.md).

@@ -203,3 +203,5 @@ fields; direct SQL negatives verify the underlying constraints independently of
 immutable-update triggers. Race/crash tests run outside wrapping Sandbox; the
 precommit child pauses only after a successful final audit INSERT on the actual
 acceptance path, before top-level commit, with exact bounded signaling and cleanup.
+
+Owner authentication/browser transport follows [the T006 contract](authentication.md).
