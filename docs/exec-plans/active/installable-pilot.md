@@ -12,7 +12,8 @@ Status: independent Sol planning review cleared
 correction cleared `0c2c135d8d82d8ed708095f7f1596760df38696b`. T001 scaffold is
 accepted after independent Sol CLEAR of `d3d84c8361a1389292fad96d02a828ac9fabc2e3`.
 T002 is independently accepted at `bc18034164597aa841bea561cf6a882e9c0715e2`.
-T003 preparation is being implemented and remains unchecked pending independent review.
+T003 is independently accepted at `191c62baf227f64122770244d62d289900bb4d8d`.
+T004 Go primitives are being implemented and remain unchecked pending independent review.
 No product runtime acceptance is claimed.
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53` (current design baseline).
 The migration oracle remains `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`;
@@ -402,3 +403,100 @@ mode and default read-only mode are exercised by the focused controls. No runtim
 Python/AI orchestration dependency was added to product code. Full new-head
 canonical acceptance is not claimed; the final combined pilot candidate still
 requires its own complete canonical and runtime acceptance.
+
+
+## T003 independent acceptance and T004 start
+
+Independent Sol review cleared exact T003 candidate
+`191c62baf227f64122770244d62d289900bb4d8d` (parent
+`bc18034164597aa841bea561cf6a882e9c0715e2`) before T004 writes were authorized.
+The reviewer independently reimplemented construction/evaluation and checked all
+159 results against the pinned original AST closures: 145 parity cases, five depth
+restrictions, two scalar-path restrictions and seven exact-dot restrictions. The
+offline verifier reproduced the frozen bytes and all 15 controls passed. The 505
+inherited required IDs/order/policy remained intact, with 15 added IDs; pristine
+clone source/manifest/collection/repository/whitespace checks passed. These are
+focused checks, not a full new-head canonical or Linux reproduction claim.
+Feature 006 T003 is now checked; T004 and original Feature 001 markers stay open.
+
+## T004 Go pure primitives — author candidate, review pending
+
+Scope: only `apps/api_client/wirejson/`,
+`apps/host_agent/internal/config/`, six meaningful Go required IDs in the existing
+acceptance manifest, Feature 006 migration/task status and this execution record.
+No callers, dependencies, provider operations, control-plane behavior or frozen
+migration artifacts change. Public native types and rejection semantics are
+specified in the migration inventory and package/function documentation.
+
+RED before implementation: `go test ./wirejson` in API client and
+`go test ./internal/config` in host agent both exited 1 because the test-only
+packages had no production Go files. This was compile RED for absent implementations,
+not a claim that production behavior had been executed. After implementation,
+`go test -count=1 ./wirejson` and `go test -count=1 ./internal/config` first passed
+in 0.261s and 0.269s. Test files were written before any product implementation.
+Caches were in private `/private/tmp/workharbor-t004-*` directories.
+
+Hash-pinned static Go tests execute all 113 JSON and 46 path product expectations;
+Go never invokes Python. Independent Go negatives/goldens cover malformed Unicode
+in keys/values, actual U+FFFD, valid surrogate pairs, duplicate decoded keys, EOF,
+positive/negative 4300/4301-digit integers through all three APIs, depth 128/129,
+cycles, exact native types and typed nils, literal controls/HTML/U+2028/U+2029,
+unbounded canonical output and unchanged lexical spellings. Every rejection is
+produced by a production entry point; adapters only materialize native inputs.
+Source successes outside the admitted product profile remain separate evidence.
+
+
+Focused author verification after the first GREEN:
+
+- Go 1.27.2 / darwin-arm64: all three modules passed `gofmt -l .` (empty),
+  `go vet ./...`, their library/executable build form and
+  `go test -json -count=1 ./...`. The first author script incorrectly applied
+  `go build -o <private-dir>/ ./...` to the library-only API module, which
+  returned `no main packages to build`; the repository runner already uses
+  `go build ./...` for that module. This was an author command error, corrected
+  without a product or runner change. Final command outcomes are validated again
+  from the pristine committed clone before handoff.
+- Bounded fuzz (`-run='^$' -fuzz=<target> -fuzztime=5s -parallel=2`,
+  `GOMAXPROCS=2`, private caches): JSON round-trip/digest target passed 197,471
+  executions in 6.196s; lexical identity target passed 42,174 in 6.192s.
+  No failure corpus or product files were written by fuzzing.
+- Separate `python3.14 -I -B scripts/generate_go_vectors.py` reproduced all
+  159 cases byte-for-byte; `python3.14 -I -B -m unittest discover -s tests
+  -p test_go_vectors.py -v` passed all 15 controls in 1.081s. Runtime was
+  CPython 3.14.8/macOS arm64, executable SHA-256
+  `1b5cb11d163e5ba34e2a05fc533c0ed89574d4425f9749a9d89405f651980e0d`,
+  integer limit 4300, recursion limit 1000. No Linux reproduction is claimed.
+- `python3.14 -I -B scripts/check_repo.py` and `git diff --check` pass;
+  the Feature 001 task and all accepted migration artifacts/generator/tests diff
+  is empty. Only six required Go IDs are appended; Python required IDs/order,
+  retained-failure policy and existing application IDs are preserved.
+
+The full canonical suite is not duplicated for unchanged runner behavior in this
+WI. Exact-head full canonical plus applicable real-host/browser/install acceptance
+remains mandatory on the final combined pilot candidate. T004 stays unchecked
+until its separately assigned Sol reviewer clears the committed implementation.
+
+
+Precommit independent Sol review identified an adapter evidence gap: the initial
+JSON fixture runner checked a shared error only after follow-on canonical/digest
+calls, so a later rejection could mask incorrect acceptance by the selected
+operation. Production depth enforcement was correct, but the test did not prove
+each operation's own rejection. The adapter now asserts the selected operation's
+status/code first and performs cross-API comparisons only for expected successes.
+Independent direct Parse regressions cover array/object/alternating shapes at both
+128 and 129 containers. No frozen fixture or production profile was changed.
+The original absent-package RED chronology above remains unchanged; no artificial
+stub or later mutation is represented as that original RED.
+
+
+After the precommit test correction, API-client `gofmt -l .`, `go vet ./...`,
+`go build ./...` and `go test -json -count=1 ./...` passed (vet 2.518s,
+build 0.065s, tests 1.016s). The unchanged repository event validator accepted
+actual outcomes for all three modules, including every required ID: whr 1,
+host agent 64 and API client 162 passing top-level/subtest/seed outcomes.
+Trusted `load_manifest`/`collect`/`validate_collection` also passed: 520 Python
+required IDs among 846 discovered; all prior Python IDs/order and failure policy
+are identical, and existing application IDs retain their order with six additions.
+The author worktree's ignored `.specify/feature.json` is preserved (SHA-256
+`05caf1787466a6410ce0cc3d1cdb371eae6187e38babba78a0c08d21edf1af83`);
+source-context checks must run in a pristine validation clone instead.

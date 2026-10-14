@@ -1,6 +1,8 @@
 # Selective Python-to-Go migration
 
-Status: proposed inventory and acceptance; ports not implemented.
+Status: T003 contracts independently accepted at
+`191c62baf227f64122770244d62d289900bb4d8d`; T004 Go candidate awaiting
+independent implementation review. No callers are switched.
 Source pin: `fd0019b7711438a2dbf7255ce3a43572d5a3a6fd`.
 Authority: [ADR 0010](../../docs/adr/0010-go-whr-cli-layout.md).
 
@@ -34,8 +36,9 @@ The [migration contract](../../contracts/migration/README.md),
 [strict schema](../../contracts/migration/vectors.schema.json),
 [vectors](../../contracts/migration/vectors.json) and
 [provenance manifest](../../contracts/migration/manifest.json) capture the selected
-candidate. Independent implementation review remains pending; no Go port or caller
-switch is included. Intermediate profile decisions were independently reviewed
+accepted T003 candidate. Independent Sol review cleared exact revision
+`191c62baf227f64122770244d62d289900bb4d8d`; no caller switch is included.
+Intermediate profile decisions were independently reviewed
 before authoring under the owner's delegated Sol review route.
 
 The product JSON domain fixes CPython's configurable integer-string limit to
@@ -80,3 +83,42 @@ of those behaviors or their digests:
 Task state/approval, recovery, publication, Symphony, provider eligibility and all
 filesystem readers remain Python development tooling. Existing Python tests remain
 intact. CLI exit/output contracts remain Feature 006 / ADR 0013.
+
+## T004 native Go boundary (candidate)
+
+`apps/api_client/wirejson` exposes `Parse(any)`, `CanonicalBytes(any)` and
+`CanonicalDigest(any)`. Parse accepts exact `[]byte`; source-native nonbytes and
+bytearray fixtures therefore reach production rejection before size inspection.
+It returns `nil`, `bool`, `string`, `*big.Int`, `[]any` and `map[string]any`.
+Canonical operations accept those exact types and built-in signed/unsigned integer
+types (`int` through `int64`, `uint` through `uint64`; not `uintptr`). Typed nil
+slices/maps mean empty containers; a nil `*big.Int` is invalid. Defined types,
+arrays, structs, other pointers, bytes, `json.Number`, floats and custom marshalers
+are not admitted. No reflection/coercion or custom marshaling runs in product code.
+Do not mutate native containers/integers concurrently with these read operations.
+
+`apps/host_agent/internal/config` exposes `CanonicalPath(any)` (dot false) and
+`CanonicalPathWithDot(any, any)`. Exact native string/bool validation belongs to
+production code; fixture adapters never generate rejection codes. Defined string
+or bool types, byte slices, pointers and malformed UTF-8 are `context_schema`.
+These are untrusted-value predicates before a future caller's typed schema.
+
+Go has no scalar-string representation for a source surrogate. The vector adapters
+preserve surrogate observations as invalid UTF-8 bytes in Go strings, so the real
+validator rejects them without replacing them with U+FFFD. Source results remain
+in the frozen fixture; only `product_expected` is normative for Go. A distinct
+native bytearray type, actual Go arrays for tuples and a non-string native map
+preserve unsupported-type cases through production validation. Native oversize
+integers are constructed as `big.Int` before canonicalization/digest calls.
+
+Both implementations apply the accepted 4300-digit and 128-container limits;
+JSON failures use fixed `invalid-json`, except oversized bytes parse input uses
+`input-limit-exceeded` first. Path failures use fixed `context_schema`. The Go
+errors expose only these safe codes. No Python, third-party library, filesystem
+resolution, provider behavior or caller switch is introduced.
+
+T004's narrow paths are the two Go primitive directories, required Go test IDs in
+`docs/development/ci-acceptance.json`, this migration inventory, Feature 006 status
+in `tasks.md` and the pilot execution record. Frozen vectors, schema, generator,
+source snapshots and manifest pins remain unchanged; Feature 001 task markers
+remain unchanged. Independent Python reproduction and Go tests remain separate.

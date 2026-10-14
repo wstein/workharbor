@@ -528,9 +528,16 @@
       "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestScaffoldRefusesProductCommands"
     ],
     "host_agent": [
-      "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands"
+      "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestFrozenPathVectors",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestLexicalPathNativeDomain"
     ],
-    "api_client": [],
+    "api_client": [
+      "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestFrozenJSONVectors",
+      "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestStrictJSONAdversarial",
+      "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestCanonicalNativeDomain",
+      "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestIntegerAndContainerLimits"
+    ],
     "control_plane": [
       "WorkHarborWeb.ErrorHTMLTest/test renders 404.html",
       "WorkHarborWeb.ErrorHTMLTest/test renders 500.html",
