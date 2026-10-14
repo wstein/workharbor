@@ -20,5 +20,5 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	fmt.Fprintln(errOut, "whr: product commands are not implemented; use --help")
-	return 1
+	return 64
 }
