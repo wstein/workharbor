@@ -15,6 +15,13 @@ in feature 001; no unvalidated JSON reaches provider operations.
 | BundleAttachment | workspace_id, artifact digest, platform, method, resolved paths |
 | Session | id, workspace_id, owner_id, expires_at, consumed_at; no reusable token in Git |
 
+## Host protocol
+
+[Closed draft v1](host-protocol/README.md) and its
+[structural schema](host-protocol/message.schema.json) define pure validation,
+trusted-context and replay-disposition boundaries. No transport/provider/dispatcher
+or durable ledger capability is implied.
+
 ## Lifecycle and idempotency
 Desired states: running, stopped. Observed states: pending, provisioning, running,
 stopping, stopped, failed, unknown. Unknown is required on stale/disconnected host.

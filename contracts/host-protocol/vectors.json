@@ -1,0 +1,330 @@
+{
+  "schema_version": 1,
+  "request_bytes": "{\"action\":\"create\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+  "request_sha256": "c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7",
+  "command_canonical": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+  "command_sha256": "9b5ebebc9504dbf577ac3922358f4c2fb67fe33d513ceafd76c15fa69d143279",
+  "cases": [
+    {
+      "id": "valid-create",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "ok",
+      "disposition": "new_eligible"
+    },
+    {
+      "id": "schema_version-2",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":2,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "unsupported_version",
+      "disposition": null
+    },
+    {
+      "id": "schema_version-1",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":\"1\",\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "kind-shell",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"shell\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "intent_version-True",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":true,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "intent_version-0",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":0,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "intent_version-9223372036854775808",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":9223372036854775808,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "owner_id-00000000-0000-0000-0000-000000000008",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000008\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "unauthorized_scope",
+      "disposition": null
+    },
+    {
+      "id": "host_id-00000000-0000-0000-0000-000000000008",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000008\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000008\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "unauthorized_scope",
+      "disposition": null
+    },
+    {
+      "id": "operation_id-00000000-0000-0000-0000-000000000008",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000008\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "command_id-00000000-0000-0000-0000-000000000008",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000008\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "request_sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "unknown-privileged-bag",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"argv\":[\"sh\",\"-c\",\"private-canary\"],\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "required-null-slot",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "create-config-in-wrong-slot",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "missing-approval-ref",
+      "raw": "{\"approval_ref\":null,\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "float-generation",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1.0,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "wrong-generation",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":2,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "native-binding-alias",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "null-submodules",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":null},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "wire-default-not-materialized",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\"},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "untrusted-request-owner",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "reserved-delete-data",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"delete_data\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "decoded-root-duplicate",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\",\"\\u006bind\":\"command\"}",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "nested-duplicate",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[],\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "float",
+      "raw": "1.0",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "exponent",
+      "raw": "1e0",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "surrogate",
+      "raw": "{\"x\":\"\\ud800\"}",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "trailing",
+      "raw": "{}{}",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "empty",
+      "raw": "",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "nonobject",
+      "raw": "[]",
+      "code": "invalid_json",
+      "disposition": null
+    },
+    {
+      "id": "unknown-field-canary",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"secret\":\"private-canary\",\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "bad-path",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[{\"path\":\"../secret\",\"commit\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-33",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"HTTPS://Example.test:000443/team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-34",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"ssh://git@[2001:db8::1]:0022/team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-35",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@[::ffff:192.0.2.1]:team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-36",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"https://user:secret@example.test/team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-37",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"https://example.test:0/team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-38",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"https://example.test/%zz\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-39",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team.git?token=secret\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-40",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"https://example_test/team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "invalid_message",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-41",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"https://example.test./team.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "literal-repository-42",
+      "raw": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"},\"target\":null},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":1,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"create\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/é.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\"},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"c1b01b3257bff722713fb5014fd471caf59e14d27ec4d06fd33088a337dfdcb7\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    },
+    {
+      "id": "same-operation-key-changed-action",
+      "raw": "{\"approval_ref\":null,\"bindings\":{\"candidate\":null,\"target\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"}},\"command_id\":\"00000000-0000-0000-0000-000000000005\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"create:1\",\"intent_version\":2,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000004\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"stop\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"fca641b8ef17a9e9ffcc7c035d94a5f85b880e5a2f45291eccac3b437105b556\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "code": "identity_conflict",
+      "disposition": null
+    }
+  ],
+  "actions": [
+    {
+      "action": "start",
+      "command_canonical": "{\"approval_ref\":null,\"bindings\":{\"candidate\":null,\"target\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"}},\"command_id\":\"00000000-0000-0000-0000-000000000020\",\"execution_config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]},\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"start:2\",\"intent_version\":2,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000010\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"start\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"e93a5e46041a7920aff7748201f815167e795a643c533b7afae79a101b52af61\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_bytes": "{\"action\":\"start\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_sha256": "e93a5e46041a7920aff7748201f815167e795a643c533b7afae79a101b52af61",
+      "native_bindings": {
+        "target": {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "generation": 1
+        },
+        "candidate": null
+      }
+    },
+    {
+      "action": "stop",
+      "command_canonical": "{\"approval_ref\":null,\"bindings\":{\"candidate\":null,\"target\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"}},\"command_id\":\"00000000-0000-0000-0000-000000000021\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"stop:2\",\"intent_version\":2,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000011\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"stop\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"fca641b8ef17a9e9ffcc7c035d94a5f85b880e5a2f45291eccac3b437105b556\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_bytes": "{\"action\":\"stop\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_sha256": "fca641b8ef17a9e9ffcc7c035d94a5f85b880e5a2f45291eccac3b437105b556",
+      "native_bindings": {
+        "target": {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "generation": 1
+        },
+        "candidate": null
+      }
+    },
+    {
+      "action": "remove_runtime",
+      "command_canonical": "{\"approval_ref\":null,\"bindings\":{\"candidate\":null,\"target\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"}},\"command_id\":\"00000000-0000-0000-0000-000000000022\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"remove_runtime:2\",\"intent_version\":2,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000012\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"remove_runtime\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"4fe92094990dcc75b6fa9f020a1ea5d76917103e830e13a832de146903a432ad\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_bytes": "{\"action\":\"remove_runtime\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_sha256": "4fe92094990dcc75b6fa9f020a1ea5d76917103e830e13a832de146903a432ad",
+      "native_bindings": {
+        "target": {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "generation": 1
+        },
+        "candidate": null
+      }
+    },
+    {
+      "action": "rebuild",
+      "command_canonical": "{\"approval_ref\":\"00000000-0000-0000-0000-000000000007\",\"bindings\":{\"candidate\":{\"generation\":2,\"runtime_id\":\"00000000-0000-0000-0000-000000000008\"},\"target\":{\"generation\":1,\"runtime_id\":\"00000000-0000-0000-0000-000000000006\"}},\"command_id\":\"00000000-0000-0000-0000-000000000023\",\"execution_config\":null,\"host_id\":\"00000000-0000-0000-0000-000000000002\",\"idempotency_key\":\"rebuild:2\",\"intent_version\":2,\"kind\":\"command\",\"operation_id\":\"00000000-0000-0000-0000-000000000013\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"request\":{\"action\":\"rebuild\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]}},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"},\"request_sha256\":\"9ea5a57c6cefd1c6da270e665d86a175fb10789c1bc8cf628e393d2d8704fa04\",\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_bytes": "{\"action\":\"rebuild\",\"owner_id\":\"00000000-0000-0000-0000-000000000001\",\"parameters\":{\"config\":{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"repository_identity\":\"git@example.test:team/workspace.git\",\"submodules\":[]}},\"schema_version\":1,\"workspace_id\":\"00000000-0000-0000-0000-000000000003\"}",
+      "request_sha256": "9ea5a57c6cefd1c6da270e665d86a175fb10789c1bc8cf628e393d2d8704fa04",
+      "native_bindings": {
+        "target": {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "generation": 1
+        },
+        "candidate": {
+          "id": "00000000-0000-0000-0000-000000000008",
+          "generation": 2
+        }
+      }
+    }
+  ]
+}
