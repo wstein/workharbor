@@ -121,8 +121,8 @@ acceptance and task completion rules; review evidence is appended, never fabrica
 
 T001 and T002 are independently accepted at the revisions above. T003 is independently accepted at
 `191c62baf227f64122770244d62d289900bb4d8d`. T004 is independently accepted at
-`6abb7419c77b3712a6ac276bc798b102503d3144`. T005 remains unchecked pending
-independent exact-candidate review; no product runtime acceptance is claimed.
+`6abb7419c77b3712a6ac276bc798b102503d3144`. T005 is independently accepted at
+`1189c81ba81b79a47a0485a9d5148fb8286c8eb0`; no product runtime acceptance is claimed.
 Durable check and review
 evidence, including earlier failed runs, is retained in
 [the pilot execution record](../../docs/exec-plans/active/installable-pilot.md).

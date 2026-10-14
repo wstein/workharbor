@@ -825,3 +825,147 @@ complete T008 contract before tests/behavior. No superseded alternatives remain.
 T008 implementation/failure-first tests may now proceed under root GO; no runtime
 acceptance is claimed. The S001 transport contract status is refreshed to exact
 c88f339 acceptance without changing its mitigation/advisory boundary.
+
+
+## T008 bounded identity progress and disposable resource plan
+
+Contract e99c170 was faithful-consolidation CLEAR before tests/behavior. Actual
+initial RED: Phoenix0/9 exit2 absent Issuer; Go identity/connection exit1 undefined
+implementation symbols. A wrong write cwd/reserved shell variable and Accounts
+login tuple setup error were corrected first, never counted behavior RED. Logs:
+/private/tmp/workharbor-t008-absent-phoenix-red.log and
+/private/tmp/workharbor-t008-initial-go-red.log. Native ASN.1 version/subject and
+strict-boolean errors were corrected before the initial9/9 focused identity pass.
+
+Independent early review identified six classes: cross-second certificate/response
+expiry mismatch; movable revoked tombstone scope; accepted DER suffixes; ancestor
+symlinks; permissive Go private-state case/default schema; incomplete issuer/leaf
+profiles. Real regressions preceded corrections: native9/13 and13/14, then14/15;
+Go case/missing/collision/ancestor and independently signed purpose/critical/subject/
+issuer path/duration negatives failed. Native15/15 and both Go packages now pass.
+Retained reviewer independently CLOSED all six on captured correction scope;
+/private/tmp/workharbor-t008-profile-closure-56i5mkf_ retains its evidence. This is
+not T008 code/runtime acceptance. Automatic native permission review timed out once;
+its explicitly permitted identical retry succeeded, separately from behavior.
+New liveness tests produced real0/4 absent-module RED before behavior; first4/4 now
+pass metadata/history/fencing cases. Further transport/clock/crash evidence remains.
+Meaningful new IDs append to the unchanged114Phoenix/132host/162API/1CLI inventory.
+
+### Proposed resource plan (review required before activation)
+
+Read-only preflight: host16GiB RAM/12logical CPUs; physical /private/tmp filesystem
+reported180000000KiB available. vm_stat free+inactive+speculative approximately
+5.1GiB, with existing compressor/swap activity, so do not allocate a6GiB guest.
+OrbStack inventory was empty. Repeat these checks immediately before create; defer
+if free+inactive+speculative<3GiB, disk available<20GiB or inventory/ownership unclear.
+One disposable owned Ubuntu24.04 arm64 guest only, exactly2CPU/2GiB/16GiB thin disk,
+--isolated and --isolate-network retained. This is a bounded T008 transport fixture,
+not five-workspace/eight-attachment load sizing or capacity evidence. Record immutable
+created machine ID and verify identity/isolation before every mutation; never reuse
+or stop an unrelated machine. No host Docker/BuildKit/context/cache changes.
+
+Transfer only explicit source/test inputs (exclude .git, host deps/build caches and
+all existing credentials). Install exact .tool-versions Linux toolchain and locked
+dependencies INSIDE guest. Bootstrap sequentially: build at most two jobs (OTP at
+one job if source build is necessary), no listeners while toolchain builds. If2GiB
+is insufficient, record failure and obtain reviewed revised sizing; no silent growth.
+Docker29.1.3 from the independently exercised guest package route can establish
+Linux Docker-host availability; T008 creates no workspace images or provider calls.
+Systemd is the Linux HOST service manager, never placed in a workspace image.
+Bootstrap may use up to45minutes; abort on capacity/identity/network failure. Tool
+calls yield at<=60seconds with progress; no isolation bypass or host mount sharing.
+
+Both genuine Elixir CP and Go client run INSIDE guest using guest loopback only,
+127.0.0.1 and explicitly verified localhost test TLS identity, no host port forward.
+Use exact source digest and record OTP/Elixir/Go/Linux/systemd/Docker versions.
+Private fixture root0700, keys/state/env/code inputs0600, dedicated fixture service
+UID. No secret in argv/stdout/journal: protected EnvironmentFile and private input
+files carry runtime material. Explicit native issuer initializer runs only in that
+fixture. Reviewed execution amendment: CP/test harness and ALL Go/build descendants share
+one transient dedicated-UID unit with MemoryMax=512M, CPUQuota=100%,
+RuntimeMaxSec=600 and KillMode=control-group. This stricter aggregate replaces the
+original separate512MiB CP/128MiB Go proposal; no child escape/unrestricted unit.
+Run host_transport then transport_security sequentially; no toolchain-build/listener
+overlap. OOM/timeouts are failures requiring review before any limit change.
+Stop processes between bounded journeys,
+record measurements and failures. No persistent enabled unit or deployed runtime.
+
+macOS first uses OS-assigned disposable loopback Elixir/Go TLS/WSS fixtures with
+cleanup, separately from Linux real-host evidence. Preserve HTTP1 ALPN/H2 refusal
+under narrow optional-client-cert extension. Linux journey must genuinely exercise
+private-key TLS identity, enrollment, hello/heartbeat, socket loss/reconnect, staged
+rotation/activation, old/pending/revoked/expired refusal. Lost activation ack plus
+client process restart uses durably saved pending material after retired predecessor
+expiry; label controlled clock/fixture setup explicitly and preserve real TLS.
+No runtime/provider/browser/load acceptance is inferred from this finite journey.
+
+Finally stop only recorded owned transient units/child processes, remove guest private
+fixture material, stop/delete owned machine by immutable ID, and verify inventory
+no longer contains it. Verify host Docker context/daemon/container inventory unchanged
+against entry. Cleanup runs on assertion/setup/timeout failure and records errors;
+never report success while owned resources remain. Generic prior fixture evidence
+/private/tmp/workharbor-systemd-fixture-iyZ4ILpH supplies smoke/cleanup precedent only.
+Review this plan before any guest or disposable listener activation.
+
+
+## T008 bounded corrections and actual transport progress
+
+All six early identity findings are independently closed. Three later liveness
+findings (stale heartbeat revival, caller-snapshot projection race, discarded close
+transaction failure) had actual8/11 RED, plus dedicated expiry timer made8/12 RED;
+correction27/27 and independent31/31 passed. Evidence:
+/private/tmp/workharbor-t008-liveness-closure-l0vh8_uy. Runtime/operation history
+remains untouched by the conservative connection-fenced overlay.
+
+Transport corrections had actual19/22 RED for consumed-Conn propagation and socket
+worker lifetime, then37/37 GREEN. Issuer signed oversized DER had15/16 RED, then
+44 non-network tests GREEN; independent signed12,320-byte issuer refusal proves
+code unconsumed/no identity. Go exact activation response uses independently
+signed saved pending positive and per-field negatives; expiry watchdog runs during
+blocked IO. First ingress Host-header fixture/setup errors and empty line-filter
+runs establish no behavior evidence. Actual TLS startup exposed unsupported peer
+options at Bandit top level; the reviewed exact nested placement is now the sole
+contract. Default OTP RSA test certificates failed strict Go parsing due missing
+RSA SPKI NULL; independent public-only P256 fixture diagnosis and Go CA/chain/
+positive+negative hostname preflight corrected test material without weakening
+production verification.
+
+First genuine Mac Elixir/Go TLS slice4/5 passed; actual reconnect exposed missing
+continuous reads during heartbeat wait. A bounded single reader plus cancellation
+fixed the real regression (1/1 rerun) and independently passed source/Go review.
+Expanded actual matrix10/12 passed; corrected foreign/expired explicit certificate
+presentation then2/2 passed. Generic TLS/dial failures never count as server401.
+Normal expected application closure is code1008. Actual malformed lower-level
+frames exposed recoverable raw bytes in OTP reports; owned total primary redaction
+rebuilds only exact agent crash/terminate events. Independent unit3/3 and actual
+post-primary wire1/1 prove four fixed events across both OTP report channels.
+Full native `mix test --warnings-as-errors` passed170/170 including all12 genuine
+Mac journeys (/private/tmp/workharbor-t008-native-full-first.log). Two additional
+transaction regressions passed18/18 identity tests: concurrent owner revocation
+wins issuance/redemption/renewal/activation, and enrollment audit failure rolls
+back code consumption/identity/fingerprint. Evidence:
+/private/tmp/workharbor-t008-trust-transaction-races.log. Required inventory now172
+Phoenix tests. Logs remain under /private/tmp/workharbor-t008-*; pristine application
+gates, exact candidate and separate Linux evidence remain pending.
+T008 stays unchecked; no provider, browser, capacity or pilot acceptance is claimed.
+
+### Reviewed Linux fixture amendment and ownership
+
+The bounded outer orbstack Engine info/ps baselines timed out30s then20s; no guest
+was created by the author. Root and independent Sol review allow the same isolated
+2CPU/2GiB/16GiB fixture using fresh capacity+empty machine inventory and read-only
+Docker context/config hashes/metadata while the outer Engine is unavailable. Outer
+runtime/BuildKit state remains UNVERIFIED: no unchanged-state claim and no outer
+restart/config/context/runtime mutation. Orb management works but shares resources;
+management/capacity failure aborts. Repeat bounded outer probes after owned teardown.
+Retained sol_systemd_fixture owns ALL guest mutations/bootstrap/ledger/teardown;
+source author owns code/Mac tests and sends exact source/input digests separately.
+Reviewed bootstrap script SHA256 d93f6a888217761a003cb2465a820da40a482a4fb89801d483ec2c4b6645601d,
+/private/tmp/workharbor-t008-linux-bootstrap-1qylii8h/bootstrap.py.
+No source transfer or Linux product test is inferred from infrastructure preparation.
+
+Outer Engine subsequently recovered without repair/restart: native ping/version/info/ps
+responded, original BuildKit container retained and running, machine inventory empty.
+Root authorized the retained helper to bootstrap the exact reviewed fixture; Linux
+product evidence remains separate and pending. Earlier unavailable baseline and
+UNVERIFIED evidence are retained as historical outcomes, not rewritten as success.

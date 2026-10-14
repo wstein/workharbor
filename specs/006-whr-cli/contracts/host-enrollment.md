@@ -43,10 +43,13 @@ The accepted Bandit HTTP1-only mitigation remains mandatory: Bandit.PhoenixAdapt
 exact http_1_options=[enabled:true], http_2_options=[enabled:false], explicit
 boolean activation, no HTTP/redirect, demo secret, debug or reloader. Existing
 HTTPS allowlist ip/port/certfile/keyfile/http_1_options/http_2_options may gain only
-cacerts (one validated internal issuer DER), verify=:verify_peer and
-fail_if_no_peer_cert=false as one complete optional-peer profile. Reject partial,
-duplicate, malformed or different values and all generic handler, transport,
-ALPN, plug or arbitrary overrides. Client roots are loaded from validated native
+thousand_island_options containing exactly one transport_options keyword list,
+which contains exactly cacerts=[one validated internal issuer DER<=4096bytes],
+verify=:verify_peer and fail_if_no_peer_cert=false as one complete optional-peer
+profile. Locked Bandit1.12.5 requires this nested placement; top-level peer aliases
+are invalid. Reject partial, duplicate, malformed or different values, any other
+nested key, preexisting ThousandIsland options in identity_config and all generic
+handler, transport, ALPN, plug or arbitrary overrides. Client roots are loaded from validated native
 issuer state, never token-selected input. No HTTP2 re-enable/dependency clearance
 is claimed. Existing owner-only profile remains valid when identity is inactive.
 
@@ -151,7 +154,7 @@ success even after old expiry. It cannot revive expired/revoked new identity.
 
 One atomic host identity.json contains closed version, endpoint/server-trust
 reference, known owner/host assignment, active key/cert/issuer, pending null or
-key/CSR/cert/issuer/predecessor identity. Initial assignment may be null and cannot
+key/CSR/cert/issuer/predecessor identity. Initial owner_id/host_id are empty strings until the verified enrollment response; they cannot
 connect. Persist pending key/CSR before stage and returned cert/issuer before first
 activation. Retain BOTH old/new until activation acknowledgement, then atomically
 promote pending. Startup pending cert first attempts activation/replay; pending
@@ -271,3 +274,20 @@ then same independent Sol reviewer fixes/CLEAR. T008 stays unchecked until exact
 acceptance; Feature001 markers/frozen migration remain unchanged. Full canonical
 Python is reserved for final combined head unless helper/policy concern arises.
 No push/PR/release/merge/deploy in this WI.
+
+
+## Runtime logging boundary
+
+Expected application policy/identity closure uses normal WSS closure with code1008,
+without raw input or state in an OTP termination diagnostic. Locked Bandit can
+emit non-shutdown gen_server terminate and proc_lib crash reports for malformed
+frames; raw masked bytes plus mask key are recoverable. Install an owned,
+idempotent native primary logger filter before an identity listener, failing
+startup on conflicting filter ownership/install failure. AgentSocket sets one
+internal process metadata marker. Only agent-marked gen_server terminate/proc_lib
+crash reports, plus the exact locked AgentSocket-state terminate fallback, match.
+Rebuild matched events as the fixed agent_transport_refused string, fixed domain,
+and optional typed pid/integer time. Retain no report/state/message/log/callback/
+extra metadata. Unmatched events pass unchanged. Synthetic full-event sentinels
+and genuine post-primary malformed-frame capture cover both OTP report channels.
+This is redaction, never an authentication or generic listener override.

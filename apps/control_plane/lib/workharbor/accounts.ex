@@ -34,8 +34,15 @@ defmodule WorkHarbor.Accounts do
   alias WorkHarbor.Foundation.{Owner, AuditEvent, Request}
   alias WorkHarbor.Accounts.{Authenticator, Credential, Principal}
   @kinds ["cli_owner", "owner_browser", "dashboard"]
-  @writes [:logout, :revoke, :issue_dashboard, :primary_login]
-  @reads [:status, :owner_page, :dashboard_page, :credential_list]
+  @writes [
+    :logout,
+    :revoke,
+    :issue_dashboard,
+    :primary_login,
+    :host_enrollment_issue,
+    :host_revoke
+  ]
+  @reads [:status, :owner_page, :dashboard_page, :credential_list, :host_status]
   def now, do: Application.get_env(:workharbor, :clock, fn -> System.system_time(:second) end).()
 
   def bootstrap(deliver, owner_id \\ nil) when is_function(deliver, 1) do
@@ -259,6 +266,7 @@ defmodule WorkHarbor.Accounts do
   defp action_allowed?(kind, a) when a in @writes, do: kind in ["cli_owner", "owner_browser"]
   defp action_allowed?(kind, :owner_page), do: kind == "owner_browser"
   defp action_allowed?(kind, :dashboard_page), do: kind == "dashboard"
+  defp action_allowed?(kind, :host_status), do: kind in ["cli_owner", "owner_browser"]
   defp action_allowed?(_, a) when a in [:status, :credential_list], do: true
   defp action_allowed?(_, _), do: false
   defp safe_action(a) when a in @writes or a in @reads, do: Atom.to_string(a)

@@ -97,6 +97,58 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     end
   end
 
+  test "optional client peer verification permits only validated native issuer trio", c do
+    dir =
+      Path.join(
+        WorkHarbor.HostFixture.physical_temp(),
+        "whr-transport-issuer-#{Ecto.UUID.generate()}"
+      )
+
+    on_exit(fn -> File.rm_rf!(dir) end)
+    {:ok, issuer} = WorkHarbor.Hosts.Issuer.initialize(dir)
+    cfg = independent(c)
+    trio = [cacerts: [issuer.certificate], verify: :verify_peer, fail_if_no_peer_cert: false]
+
+    valid =
+      Keyword.update!(cfg, :https, &(&1 ++ [thousand_island_options: [transport_options: trio]]))
+
+    owner = [origin: "https://localhost", authorities: [{"localhost", 443}]]
+    assert :ok = RuntimeSecurity.validate!(valid, owner)
+
+    for options <- [
+          Keyword.delete(trio, :cacerts),
+          Keyword.put(trio, :verify, :verify_none),
+          Keyword.put(trio, :cacerts, c.cacerts),
+          trio ++ [verify: :verify_peer],
+          trio ++ [alpn_preferred_protocols: ["h2"]],
+          trio ++ [thousand_island_options: [handler_module: __MODULE__]]
+        ] do
+      refused(
+        Keyword.update!(
+          cfg,
+          :https,
+          &(&1 ++ [thousand_island_options: [transport_options: options]])
+        )
+      )
+    end
+
+    refused(Keyword.update!(cfg, :https, &(&1 ++ trio)))
+
+    refused(
+      Keyword.update!(
+        cfg,
+        :https,
+        &(&1 ++
+            [
+              thousand_island_options: [
+                transport_options: trio,
+                handler_module: Bandit.HTTP2.Handler
+              ]
+            ])
+      )
+    )
+  end
+
   test "active transport profile requires exact explicit protocol settings and adapter", c do
     cfg = independent(c)
 
