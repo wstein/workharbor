@@ -4,8 +4,10 @@ Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 is independently CLEAR at
 `bc18034164597aa841bea561cf6a882e9c0715e2`; T003 independently CLEAR at
 `191c62baf227f64122770244d62d289900bb4d8d`; T004 independently CLEAR at
-`6abb7419c77b3712a6ac276bc798b102503d3144`; T005 is under implementation and remains
-unchecked pending independent exact-candidate review. Later work items remain open.
+`6abb7419c77b3712a6ac276bc798b102503d3144`; T005 and T006 are accepted at
+`1189c81` and `ef399f5`. T007 is independently CLEAR at
+`e10c6997c24407e0f472a7ea22ba2dd1b42067e3` for its pure protocol scope. S001 blocks
+T008 until its exact-candidate transport mitigation review and checks pass.
 No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
@@ -35,7 +37,9 @@ Independent check: negative vectors, cross-language bytes and no runtime Python.
 - [x] T004 Port only accepted pure JSON/path behavior into `apps/api_client/wirejson/` and `apps/host_agent/internal/config/`; write Go negative/golden tests first and reproduce frozen vectors independently in Python; no caller switches before parity and independent review (T003).
 - [x] T005 Implement ownership, separate storage/runtime records, durable operations/canonical request hash, generation checks and audit in `apps/control_plane/lib/workharbor/` and migrations/tests in `apps/control_plane/`; prove owner/workspace key uniqueness, changed-payload conflicts and crash-safe intent-before-side-effect (001 T002).
 - [x] T006 Implement owner bootstrap/login, revocable scoped credentials and browser request protections in `apps/control_plane/lib/workharbor/accounts.ex`, `apps/control_plane/lib/workharbor_web/` and tests; prove TLS-first auth, wrong owner, expired/revoked token, read-only dashboard scope, Host/Origin/anti-forgery rejection and secret redaction (001 T013; FR-035–038).
-- [ ] T007 Define/validate versioned host protocol in `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/host_agent/internal/protocol/`; reject invalid version/scope/replay before provider calls and redact diagnostics in both suites (001 T003).
+- [x] T007 Define/validate versioned host protocol in `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/host_agent/internal/protocol/`; reject invalid version/scope/replay before provider calls and redact diagnostics in both suites (001 T003).
+
+- [ ] S001 Mitigate locked Bandit 1.12.5 HTTP/2 resource exhaustion advisory GHSA-69m6-wcv4-rwcf before T008: enforce the reviewed HTTP/1-only authenticated listener profile, refuse unsafe overrides, and prove actual ephemeral TLS protocol rejection plus HTTP/1 authentication and WSS success. Follow [the bounded transport contract](contracts/transport-security.md); retain the dependency advisory and require a released fixed version plus new independent review before re-enabling HTTP/2. No dependency update, proxy or T008 behavior belongs to this follow-up.
 
 ## Phase 3: US1 — Authenticate and manage workspaces (P1)
 
