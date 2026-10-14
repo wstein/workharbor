@@ -662,3 +662,21 @@ default test database exposed a migration module redefinition warning in the
 auth test helper. The helper now follows the accepted foundation helper's loaded
 module guard; the predecessor run remains truthful evidence, superseded for exact
 acceptance by the corrective candidate. Product behavior is unchanged.
+
+## T006 exact acceptance and T007 contract consolidation
+
+T006 is independently Sol CLEAR at ef399f58f2d9343109e248a519231209a707a416,
+including author implementation 65af90c and helper fixture correction ef399f5;
+accepted contract is 5b28644. Author pristine evidence:
+/private/tmp/workharbor-t006-validation.ayhnvdv5/evidence.json. Independent reviewer
+evidence: /private/tmp/workharbor-t006-review-hw7l_5me/review-checks.json.
+Author source/context/identity/manifest/application evidence passed; independent
+compile and full 86/86 tests passed (47 new IDs, all 39 retained). These are
+synthetic application results, not full canonical, live TLS/browser/host evidence.
+Only Feature 006 T006 is checked here; Feature 001 markers remain unchanged.
+
+Coordinator explicitly authorized T007 after accepted T005 1189c81 and T006 ef399f5.
+The complete independently CLEAR R2 plus actual-interface alignment is consolidated
+in contracts/host-protocol/README.md before failure-first tests or behavior.
+Same Sol reviewer must confirm faithful consolidation. No T007 implementation
+acceptance, transport, provider, dispatcher or durable replay ledger is claimed.
