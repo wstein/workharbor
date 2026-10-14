@@ -2,7 +2,8 @@
 
 Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 is independently CLEAR at
-`bc18034164597aa841bea561cf6a882e9c0715e2`; T003 and later work items remain open.
+`bc18034164597aa841bea561cf6a882e9c0715e2`; T003 independently CLEAR at
+`191c62baf227f64122770244d62d289900bb4d8d`; T004 and later work items remain open.
 No product runtime acceptance is claimed.
 Branch/worktree: `feat/installable-pilot`, retained through final pilot acceptance.
 Input: [spec](spec.md), [plan](plan.md), [research](research.md),
@@ -28,7 +29,7 @@ Independent check: clean-checkout format/build/tests with missing-tool failures.
 Goal: product boundary, durable owner state and reviewed Python-to-Go parity.
 Independent check: negative vectors, cross-language bytes and no runtime Python.
 
-- [ ] T003 Freeze the selected Python behavior inventory, source/tool digests and independently inspected vectors in `contracts/migration/`, with offline generator `scripts/generate_go_vectors.py`, strict fixture schema, meaningful negative tests in `tests/test_go_vectors.py` and their required IDs in `docs/development/ci-acceptance.json`; cover nested duplicate keys, malformed UTF-8, integer bounds, float/non-finite rejection, non-ASCII ordering and paths. Retain development-only rows in `specs/006-whr-cli/migration.md` (ADR 0010).
+- [x] T003 Freeze the selected Python behavior inventory, source/tool digests and independently inspected vectors in `contracts/migration/`, with offline generator `scripts/generate_go_vectors.py`, strict fixture schema, meaningful negative tests in `tests/test_go_vectors.py` and their required IDs in `docs/development/ci-acceptance.json`; cover nested duplicate keys, malformed UTF-8, integer bounds, float/non-finite rejection, non-ASCII ordering and paths. Retain development-only rows in `specs/006-whr-cli/migration.md` (ADR 0010).
 - [ ] T004 Port only accepted pure JSON/path behavior into `apps/api_client/wirejson/` and `apps/host_agent/internal/config/`; write Go negative/golden tests first and reproduce frozen vectors independently in Python; no caller switches before parity and independent review (T003).
 - [ ] T005 Implement ownership, separate storage/runtime records, durable operations/canonical request hash, generation checks and audit in `apps/control_plane/lib/workharbor/` and migrations/tests in `apps/control_plane/`; prove owner/workspace key uniqueness, changed-payload conflicts and crash-safe intent-before-side-effect (001 T002).
 - [ ] T006 Implement owner bootstrap/login, revocable scoped credentials and browser request protections in `apps/control_plane/lib/workharbor/accounts.ex`, `apps/control_plane/lib/workharbor_web/` and tests; prove TLS-first auth, wrong owner, expired/revoked token, read-only dashboard scope, Host/Origin/anti-forgery rejection and secret redaction (001 T013; FR-035–038).
@@ -111,8 +112,9 @@ acceptance and task completion rules; review evidence is appended, never fabrica
 
 ## Evidence log
 
-T001 and T002 are independently accepted at the revisions above. T003 candidate
-preparation is captured in contracts/migration and awaits independent review;
-no Go port or product runtime acceptance is claimed. Durable check and review
+T001 and T002 are independently accepted at the revisions above. T003 is independently accepted at
+`191c62baf227f64122770244d62d289900bb4d8d`. T004 is being implemented and
+remains unchecked pending its independent review; no product runtime acceptance
+is claimed. Durable check and review
 evidence, including earlier failed runs, is retained in
 [the pilot execution record](../../docs/exec-plans/active/installable-pilot.md).
