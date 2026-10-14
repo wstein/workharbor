@@ -49,6 +49,9 @@ Signed release and live test/installation inputs are separate owner-controlled g
 ## T001 — pinned application scaffolds (candidate; review pending)
 
 Input: planning clearance at `602ae81c63be52ccb2ee18aa9802a50d3e35260d`.
+The measurements below describe original candidate
+`3dd0b7825ae78c13d9e4dba3f9da683ff486f0f9`; the reviewed usage-exit correction
+is recorded separately below.
 Only T001 is implemented by this candidate; T002 and all Feature 001/006 task
 completion markers remain pending. Independent review must evaluate the exact
 commit containing this record before successor work.
@@ -122,3 +125,21 @@ this handoff.
   documentation correction. Independent Sol planning re-review remains pending.
   No runtime or signed-release result is claimed; full `make check` was not rerun
   by this documentation author.
+
+## T001 review correction — CLI usage exit (re-review pending)
+
+Independent Sol review of `3dd0b7825ae78c13d9e4dba3f9da683ff486f0f9`
+returned NOT CLEAR with one P2 finding: the `whr` scaffold returned exit 1 for
+unsupported arguments instead of ADR 0013 usage exit 64. The refusal test now
+requires exactly 64, empty stdout and the `whr:` stderr prefix, including the
+unsupported `--version setup` combination. The strengthened test first failed
+with actual exit 1; the implementation then changed only `whr`'s refusal code.
+Host-agent exit behavior remains unchanged because ADR 0013 governs `whr`.
+
+Affected `whr` checks pass: empty `gofmt -l .`, `go vet ./...`,
+`go build -o /private/tmp/workharbor-pilot-build/whr/ ./...` and `go test ./...`.
+Built CLI refusal probes for `setup`, `ws create` and `--version setup` return
+64 with empty stdout and a `whr:` stderr line; help/version still return 0.
+`python3.14 scripts/check_repo.py` and staged/working-tree whitespace checks pass.
+No full-suite rerun, runtime activation, task-completion marker or publication is
+claimed. The exact corrective commit awaits the same independent Sol reviewer.
