@@ -247,6 +247,8 @@ func dockerAcceptance(t *testing.T, example string) {
 	}()
 	resolver, descriptor, mutate := fixtureConfig(t, ctx, root, example)
 	host := realHost(t, root, resolver)
+	var ledger string
+	host.DockerPath, ledger = installFixtureDockerLedger(t, root, host.DockerPath)
 	scope := scopeFixture()
 	binding := storage.Binding{OwnerID: scope.OwnerID, HostID: scope.HostID, WorkspaceID: scope.WorkspaceID, StorageID: scope.StorageID, ReservationOperationID: scope.AllocationOperationID, Initial: descriptor}
 	originalBytes, e := os.ReadFile(filepath.Join(root, "fixture-config/.devcontainer/devcontainer.json"))
@@ -257,7 +259,14 @@ func dockerAcceptance(t *testing.T, example string) {
 	if json.Unmarshal(originalBytes, &originalSource) != nil {
 		t.Fatal("fixture source malformed")
 	}
-	rawRegistryRefusals(t, ctx, host, binding, mutate, originalSource, root)
+	realAdmissionRefusals(t, ctx, host, binding, descriptor, root, ledger)
+	if t.Failed() {
+		return
+	}
+	rawRegistryRefusals(t, ctx, host, binding, mutate, originalSource, root, ledger)
+	if t.Failed() {
+		return
+	}
 	p, e := host.Prepare(ctx, realAdmission(descriptor, binding, 1))
 	if e != nil {
 		t.Fatal("real preparation", e)
@@ -279,6 +288,10 @@ func dockerAcceptance(t *testing.T, example string) {
 	reopened, e := p.runPhase(ctx, Resources, resource.Target.ContainerID)
 	if e != nil || reopened.Target != resource.Target {
 		t.Fatal("official exact-target reopen", e)
+	}
+	realRuntimeRefusals(t, ctx, host, binding, descriptor, p, root, ledger)
+	if t.Failed() {
+		return
 	}
 	realExec(t, ctx, p, "sh", "-c", "cd /workspace/app && git status --porcelain && chmod +x seed.bin && printf '\\000\\377\\200\\001' > seed.bin && printf '\\000untracked\\377' > untracked.bin && git status --porcelain")
 	data := p.Storage().Data
@@ -360,7 +373,7 @@ func dockerAcceptance(t *testing.T, example string) {
 		return out.String()
 	}
 	before := inventory()
-	for _, kind := range []string{"initializeCommand", "features", "mounts", "named-user", "VOLUME", "ONBUILD", "custom-frontend", "reserved-build-arg", "reserved-later-ARG"} {
+	for _, kind := range []string{"initializeCommand", "features", "mounts", "named-user", "VOLUME", "ONBUILD", "custom-frontend", "reserved-build-arg", "reserved-later-ARG", "compose", "source-runArgs"} {
 		t.Run("unsupported-"+kind, func(t *testing.T) {
 			bad := clone(source).(map[string]any)
 			switch kind {
@@ -372,6 +385,11 @@ func dockerAcceptance(t *testing.T, example string) {
 				bad["mounts"] = []any{"/var/run/docker.sock"}
 			case "named-user":
 				bad["remoteUser"] = "vscode"
+			case "compose":
+				bad["dockerComposeFile"] = "compose.yml"
+				bad["service"] = "workspace"
+			case "source-runArgs":
+				bad["runArgs"] = []any{"--privileged"}
 			default:
 				delete(bad, "image")
 				b := map[string]any{"dockerfile": "Dockerfile", "context": "."}
@@ -392,10 +410,13 @@ func dockerAcceptance(t *testing.T, example string) {
 				realWrite(t, filepath.Join(root, "fixture-config/.devcontainer/Dockerfile"), []byte(dockerfile))
 			}
 			unsupported := mutate(bad)
-			if candidate, e := host.Prepare(ctx, realAdmission(unsupported, binding, 4)); e == nil {
-				candidate.Close()
-				t.Fatal("unsupported input admitted", kind)
-			}
+			assertRealRefusal(t, ctx, p.port, ledger, "unsupported_configuration", func() error {
+				candidate, e := host.Prepare(ctx, realAdmission(unsupported, binding, 4))
+				if candidate != nil {
+					candidate.Close()
+				}
+				return e
+			})
 			if inventory() != before {
 				t.Fatal("refusal changed Docker inventory", kind)
 			}
@@ -406,7 +427,14 @@ func dockerAcceptance(t *testing.T, example string) {
 		})
 	}
 
-	proof := map[string]any{"example": example, "initial_config": descriptor.Map(), "replacement_config": changed.Map(), "target": resource.Target, "replacement_target": replacementResource.Target, "hashes": hashes, "owner_uid": p.Storage().Binding.DataUID, "owner_gid": p.Storage().Binding.DataGID, "real_normal_resource_hooks": true, "explicit_fixture_official_reopen": true, "automatic_resource_replay_refused": true, "retention_stop_start_replacement": true, "failed_build_retained": true, "authored_label_host_hook_absent": true, "unsupported_host_hook_refused": true, "guest_containment": "separate helper evidence required", "feature006_t010": "not executed"}
+	if t.Failed() {
+		return
+	}
+	forwarded := string(fixtureLedger(t, ledger))
+	if !strings.Contains(forwarded, "run\n") || !strings.Contains(forwarded, "pull\n") || (example == "admitted-dockerfile" && !strings.Contains(forwarded, "build\n")) {
+		t.Fatal("actual mutating-forward ledger positive control missing")
+	}
+	proof := map[string]any{"refusals_zero_mutating_forwards": true, "forwarded_categories": strings.Split(strings.TrimSpace(forwarded), "\n"), "example": example, "initial_config": descriptor.Map(), "replacement_config": changed.Map(), "target": resource.Target, "replacement_target": replacementResource.Target, "hashes": hashes, "owner_uid": p.Storage().Binding.DataUID, "owner_gid": p.Storage().Binding.DataGID, "real_normal_resource_hooks": true, "explicit_fixture_official_reopen": true, "automatic_resource_replay_refused": true, "retention_stop_start_replacement": true, "failed_build_retained": true, "authored_label_host_hook_absent": true, "unsupported_host_hook_refused": true, "guest_containment": "separate helper evidence required", "feature006_t010": "not executed"}
 	raw, _ := json.MarshalIndent(proof, "", "  ")
 	realWrite(t, filepath.Join(root, "proof.json"), append(raw, '\n'))
 	finished = true
