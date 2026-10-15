@@ -1,0 +1,20 @@
+{
+  "name": "WorkHarbor admitted dockerfile example",
+  "containerUser": "0:0",
+  "remoteUser": "1000:1000",
+  "overrideCommand": true,
+  "userEnvProbe": "none",
+  "updateRemoteUserUID": false,
+  "waitFor": "postStartCommand",
+  "shutdownAction": "none",
+  "onCreateCommand": [
+    "sh",
+    "-c",
+    "test \"$(id -u)\" = 1000 && touch .workharbor-created"
+  ],
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "target": "workspace"
+  }
+}

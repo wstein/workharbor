@@ -48,7 +48,18 @@ def boundary_errors(relative, text):
     if path.startswith('apps/control_plane/') and re.search(r'docker\.sock|github\.com/(docker|moby)/|DockerProvider', text):
         errors.append(f'{path}: provider implementation leaked into control plane; call a port')
     if path.startswith('apps/host_agent/') and '/providers/' not in path:
-        if re.search(r'"github\.com/(docker|moby)/|docker\.sock', text):
+        # These exact pure input-grammar imports implement the reviewed config
+        # capability gate; they expose no daemon/provider access. No module-prefix
+        # exception, alias, comment, mixed statement or other file is admitted.
+        grammar = 'github.com/moby/buildkit/frontend/dockerfile/'
+        pure_imports = {
+            'apps/host_agent/internal/config/dockerfile_plan.go': {'parser'},
+            'apps/host_agent/internal/config/trusted.go': {'parser', 'instructions', 'linter'},
+        }
+        allowed_lines = {'"' + grammar + name + '"' for name in pure_imports.get(path, set())}
+        import_scan = ''.join(line for line in text.splitlines(keepends=True)
+                              if line.strip() not in allowed_lines)
+        if re.search(r'"github\.com/(docker|moby)/', import_scan) or re.search(r'docker\.sock', text):
             errors.append(f'{path}: Docker access outside provider adapter; move it under providers/')
     if path.startswith('apps/') and re.search(r'openai/symphony|codex app-server', text):
         errors.append(f'{path}: development orchestrator entered product code; remove the dependency')

@@ -3,6 +3,8 @@ package config
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -46,5 +48,38 @@ func TestStrictMetadataJSONRefusesCommentsAndTrailingComma(t *testing.T) {
 	}
 	if _, e := parser.Parse(context.Background(), []byte(`[{"remoteUser":"vscode"}]`), true); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestJSONCPreservesExactNumericLexemes(t *testing.T) {
+	parser := jsoncTool(t)
+	for _, strict := range []bool{false, true} {
+		raw := []byte(`{"n":9007199254740993,"nested":[1.0000000000000001,{"n":1e2}],"negative":-0}`)
+		value, e := parser.Parse(context.Background(), raw, strict)
+		if e != nil {
+			t.Fatal(e)
+		}
+		object := value.(map[string]any)
+		nested := object["nested"].([]any)
+		if object["n"] != json.Number("9007199254740993") || nested[0] != json.Number("1.0000000000000001") || nested[1].(map[string]any)["n"] != json.Number("1e2") || object["negative"] != json.Number("-0") {
+			t.Fatalf("numeric lexemes changed: %#v", value)
+		}
+	}
+}
+func TestResolverRejectsNoncanonicalSchemaIntegerLexemes(t *testing.T) {
+	for _, number := range []string{"1.0000000000000001", "1e0", "9007199254740993", "18446744073709551616"} {
+		t.Run(number, func(t *testing.T) {
+			r, d := resolverFixture(t, func(root string) {
+				raw := `{"schema_version":` + number + `,"devcontainer_path":".devcontainer/devcontainer.json","projects_path":"projects","bundles":[]}`
+				if e := os.WriteFile(filepath.Join(root, "workharbor.json"), []byte(raw), 0600); e != nil {
+					t.Fatal(e)
+				}
+			})
+			result, e := r.Resolve(context.Background(), d)
+			if result != nil {
+				result.Close()
+			}
+			code(t, e, "invalid_configuration")
+		})
 	}
 }

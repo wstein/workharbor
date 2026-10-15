@@ -134,7 +134,7 @@ def check_applications(root, inventory, run):
     if '.'.join(map(str, sys.version_info[:3])) != pins['python']:
         raise ValueError('Python does not match .tool-versions')
     tools = {}
-    for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node'):
+    for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node', 'npm'):
         tools[name] = shutil.which(name)
         if not tools[name]:
             raise ValueError('Missing required tool: ' + name + '; install .tool-versions before checking')
@@ -174,6 +174,11 @@ def check_applications(root, inventory, run):
         for argv, matches in versions:
             if not matches(execute(argv).read_text()):
                 raise ValueError('Tool version does not match .tool-versions: ' + argv[0])
+        env['npm_config_cache'] = str(cache/'npm')
+        env['npm_config_userconfig'] = os.devnull
+        env['npm_config_globalconfig'] = os.devnull
+        execute([tools['npm'], 'ci', '--ignore-scripts', '--no-audit', '--no-fund',
+                 '--registry=https://registry.npmjs.org'], root/'apps/host_agent/tools/devcontainer')
         for module in GO_MODULES:
             cwd = root/'apps'/module
             if execute([tools['gofmt'], '-l', '.'], cwd).read_bytes():

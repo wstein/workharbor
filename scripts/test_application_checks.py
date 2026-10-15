@@ -151,6 +151,24 @@ class ApplicationChecksTests(unittest.TestCase):
             self.assertNotIn('ERL_AFLAGS', env)
             self.assertNotIn('PHX_SERVER', env)
 
+    def test_pinned_companion_setup_precedes_host_tests_and_refuses_scripts(self):
+        observed, root = self.exercise()
+        setup = [(i, argv, cwd, env) for i, (argv, cwd, env) in enumerate(observed)
+                 if Path(argv[0]).name == 'npm' and argv[1:2] == ['ci']]
+        self.assertEqual(1, len(setup))
+        index, argv, cwd, env = setup[0]
+        self.assertEqual(['ci', '--ignore-scripts', '--no-audit', '--no-fund',
+                          '--registry=https://registry.npmjs.org'], argv[1:])
+        self.assertEqual(root.resolve()/'apps/host_agent/tools/devcontainer', cwd)
+        self.assertFalse(Path(env['npm_config_cache']).is_relative_to(root))
+        host_test = next(i for i, (argv, cwd, _) in enumerate(observed)
+                         if Path(cwd).name == 'host_agent' and argv[1:3] == ['test', '-json'])
+        self.assertLess(index, host_test)
+        with self.assertRaisesRegex(ValueError, 'Missing required tool'):
+            self.exercise(missing='npm')
+        with self.assertRaises(ValueError):
+            self.exercise(fail=lambda argv: Path(argv[0]).name == 'npm' and 'ci' in argv)
+
     def test_ci_and_local_share_the_application_gate(self):
         root = Path(__file__).resolve().parents[1]
         make = (root/'Makefile').read_text()

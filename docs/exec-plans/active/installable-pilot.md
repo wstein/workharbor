@@ -1308,3 +1308,107 @@ focused vet exits0 in /private/tmp/workharbor-t009-storage-link-review-vet.log.
 This is author native Darwin correction evidence; exact independent source
 re-review and all real Linux/Docker acceptance remain pending. The new read-only
 Store.Inspect integration file/tests are separate WIP outside this checkpoint.
+
+### T009 complete provider candidate preparation (not accepted)
+
+The independent config/parser correction at1a38e97 and atomic-seed correction at
+ce1ce97 are scoped SOURCE CLEAR; their original P2 RED logs remain preserved.
+New provider/Inspect/native-port integration is separate source awaiting exact
+whole-candidate review. Feature006 T009 remains unchecked and NOT accepted;
+Feature006 T010 waits. T009 owns SEED crash recovery only, not provisioning or
+lifecycle reconciliation. T013 delivery remains excluded.
+
+The operator explicitly directed on2026-10-15: MAX3GB PER TEST GUEST, conservatively
+at most3,000,000,000 bytes. Planned actual guest memory remains2,147,483,648 bytes
+(2GiB), with no automatic increase. The separately proposed3GiB TOTAL host-available
+guard means2GiB guest plus1GiB reserve and remains proposed until exact independent
+runner review. Earlier P3's4GiB available threshold was self-imposed, not a physical
+RAM/spec requirement. Small prior source-free observations/pressure refusals are
+not full Docker acceptance; no actual T009 Docker guest has run.
+
+Native build IID behavior RED is /private/tmp/workharbor-t009-native-build-behavior-red.log
+(exit1, success assertion); focused superseding build/run checks pass3.012s in
+/private/tmp/workharbor-t009-native-build-green.log. The initial wrong-directory
+setup/no-tests log is retained separately as native-build-red.log, never called a
+behavior RED. Live CID discovery RED is native-live-reads-red.log (exit1); full
+focused native/Gateway/private-driver superseding pass is native-live-reads-green.log.
+All these paths are under /private/tmp/workharbor-t009-.
+
+Actual pinned CLI0.89.0 up reached image run AND Dockerfile build behind a test-only
+adapter refusing every mutation/no daemon. The generated Dockerfile and nonempty
+independently derived metadata passed in official-up-capture-first.log (exit0,2.443s).
+Subsequent exact build argv/tag/startup integrity assertions pass in
+final-provider-focused-superseding.log (exit0,4.221s); original wrong-directory
+final-provider-focused.log setup failure remains untouched. This is compatibility
+capture, not successful Docker provisioning/full normal official completion.
+
+The private HTTP stream cancellation test actually failed at5s in
+phase-result-native.log. Register-before-invoke/owned connection/input closure was
+independently DESIGN CLEAR. Race batches found additional peer-close-before-headers
+stdin hangs; provider-race.log, provider-race-superseding.log and
+private-pipe-race-final.log retain those failures. Exact invoke-connection input
+cleanup supersedes them: private-peer-close-race.log passes3 repeats1.347s;
+provider-race-complete-green.log passes all selected concurrency roots with race
+instrumentation6.181s, exit0. No daemon quiescence or lifecycle receipt is inferred.
+
+Full native host suite passes406 test/subtest outcomes with no failures in
+/private/tmp/workharbor-t009-host-agent-full-native.jsonl; subsequent focused
+source changes still require the final exact-candidate full application gate.
+Full host vet exits0 in host-agent-vet.log. Explicit Linux/Docker tagged entrypoints
+compile only in real-final-compile-only.log (exit0,0.264s,no tests run); they remain
+unrun. Numeric ownership DESIGN CLEAR does not substitute for actual nonroot Linux
+Git/chmod/retention, raw actual-tool registry refusal, image/Dockerfile fresh-cache,
+seed SIGKILL/competing-publisher and full phase evidence.
+
+Raw endpoint/CA gates have genuine assertion RED registry-trust-red.log and full
+registry superseding GREEN registry-trust-green.log (exit0,5.677s), with separate
+compile setup log retained. Metadata tool environment excludes fixture signing-key
+variables; ca-env-native.log passes. Dedicated disposable TLS fixture certificate
+assets are outside Git and must be exact-bound by the helper; no OS trust change or
+real credential is introduced. Registry DNS/CA/tool compatibility remains real proof.
+
+Required source checker originally failed on the already reviewed pure grammar
+imports; source-check.log retains that failure and exact pinned mise setup output.
+The same reviewer DESIGN CLEARed only four exact file/import-line exceptions, with
+all Docker clients/socket/other imports/CP scans preserved. New negative harness
+assertion RED is parser-boundary-red.log. Full Python3.14 canonical make check on
+an exact pristine candidate is now required for this harness change, in addition to
+native/app/source/manifest gates. No earlier docs405 canonical gate transfers.
+Original extended seed cleanup FAILs, all setup/behavior/race REDs and every earlier
+superseding GREEN remain retained; no failed log is deleted or relabeled passing.
+
+Final precommit native host suite reports420 passed test/subtest outcomes with no
+failures in /private/tmp/workharbor-t009-host-agent-final-native.jsonl; full vet
+exits0 in host-agent-final-vet.log and tagged Docker tests compile only in
+Docker-final-compile-only.log (actual filename docker-final-compile-only.log,
+exit0,0.277s,no tests run). The new parser-boundary positive/negative assertions
+pass; parser-boundary-green.log nevertheless retains a separate copied-checkout
+failure because the new example/matrix files were still untracked at that point.
+Do not call that aggregate passing. Stage/commit the complete candidate, then rerun
+that full harness and the required exact pristine canonical gate. No Linux/Docker
+acceptance, whole source review, task checkbox or Feature006 T010 GO follows.
+
+
+Exact-number input correction has author behavior RED in
+/private/tmp/workharbor-t009-jsonc-numeric-red.log (exit1,2.438s): the old companion
+rounded9007199254740993, fractional schema_version and exponent spelling. The
+wrong-directory no-tests setup output is separate jsonc-numeric-setup.log. The
+companion now renders validated AST numeric source slices directly, preserving
+all existing UTF-8/scalar/decoded-duplicate/finite and official syntax gates.
+Registry descriptor numeric RED is registry-number-red.log (exit1,0.921s).
+An attempted integer-only wirejson substitution failed two existing registry
+success fixtures in registry-number-green.log; despite its filename that log is
+FAIL and remains retained. It was superseded by the corrected strict companion,
+without imposing wirejson's integer-only profile on image JSON. Full relevant
+precision/strict JSONC/registry checks pass in numeric-superseding-green.log
+(exit0:config4.098s,registry5.995s). No real Docker evidence follows from these
+native checks. The exact complete candidate still requires independent source
+review, pinned pristine canonical/native application gates and real Linux proof.
+
+Complete provider candidate native suite after precision fix: 430 passing
+test/subtest outcomes, no failures, in
+/private/tmp/workharbor-t009-candidate-host-native.jsonl (exit0); full host vet
+exits0 in candidate-host-vet.log. Required IDs are appended, preserving the prior
+ordered inventory. The embedded companion source carries the AST correction;
+locked external package bytes/integrities are unchanged. Exact candidate source
+review/pristine canonical and actual Linux/Docker proof remain pending.

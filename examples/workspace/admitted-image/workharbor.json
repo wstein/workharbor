@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "devcontainer_path": ".devcontainer/devcontainer.json",
+  "projects_path": "projects",
+  "bundles": []
+}
