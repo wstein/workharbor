@@ -118,6 +118,91 @@ defmodule WorkHarbor.Foundation do
     end
   end
 
+  @doc "Fenced native storage scope and immutable ORIGINAL seed binding; no provider effects."
+  def storage_binding(owner, host, operation, intent, storage) do
+    transaction(fn ->
+      {op, workspace} = scoped_operation!(owner, host, operation)
+      current_intent!(op, workspace, intent)
+      storage_binding!(op, workspace, storage)
+    end)
+  end
+
+  @doc "Record the first completed provider handle without replacing retained storage."
+  def observe_storage(owner, host, operation, intent, storage, handle) do
+    if is_binary(handle) and String.valid?(handle) and handle != "" and
+         not String.contains?(handle, <<0>>) do
+      transaction(fn ->
+        {op, workspace} = scoped_operation!(owner, host, operation)
+        current_intent!(op, workspace, intent)
+        if op.status != "executing", do: Repo.rollback(:invalid_transition)
+        binding = storage_binding!(op, workspace, storage)
+
+        case binding.provider_handle do
+          nil ->
+            {count, _} =
+              Repo.update_all(
+                from(s in PersistentStorage,
+                  where: s.id == ^storage and is_nil(s.provider_handle)
+                ),
+                set: [provider_handle: handle, updated_at: now()]
+              )
+
+            if count != 1, do: Repo.rollback(:storage_mismatch)
+
+            audit!(op, workspace, "storage_observed", "internal", "recorded",
+              storage_ids: [storage]
+            )
+
+            %{binding | provider_handle: handle}
+
+          ^handle ->
+            binding
+
+          _ ->
+            Repo.rollback(:storage_mismatch)
+        end
+      end)
+    else
+      {:error, :invalid_request}
+    end
+  end
+
+  defp storage_binding!(operation, workspace, id) do
+    if operation.action not in ["create", "rebuild"], do: Repo.rollback(:invalid_action)
+    if operation.status not in ["queued", "executing"], do: Repo.rollback(:invalid_transition)
+
+    storage =
+      if Request.uuid?(id),
+        do:
+          Repo.get_by(PersistentStorage,
+            id: id,
+            workspace_id: workspace.id,
+            host_id: workspace.host_id
+          )
+
+    if is_nil(storage) or not is_nil(storage.deleted_at), do: Repo.rollback(:storage_unavailable)
+
+    original =
+      Repo.get_by(Operation,
+        id: storage.reservation_operation_id,
+        owner_id: operation.owner_id,
+        workspace_id: workspace.id,
+        action: "create"
+      )
+
+    if is_nil(original), do: Repo.rollback(:storage_mismatch)
+
+    %{
+      storage_id: storage.id,
+      owner_id: operation.owner_id,
+      host_id: workspace.host_id,
+      workspace_id: workspace.id,
+      reservation_operation_id: original.id,
+      initial_config: original.execution_config_snapshot,
+      provider_handle: storage.provider_handle
+    }
+  end
+
   def claim(owner_id, host_id, operation_id, intent_version) do
     transaction(fn ->
       {operation, workspace} = scoped_operation!(owner_id, host_id, operation_id)
