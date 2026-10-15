@@ -318,7 +318,8 @@ func (r Registry) Inspect(ctx context.Context, ref string) (AdmittedImage, error
 }
 
 func admitDockerConfig(ctx context.Context, p config.JSONC, cfg map[string]any) (ImageConfig, error) {
-	if !canonicalDockerKeys(cfg, []string{"User", "Env", "Entrypoint", "Cmd", "Volumes", "OnBuild", "Labels", "WorkingDir", "ExposedPorts", "StopSignal", "ArgsEscaped", "Healthcheck", "Shell", "StopTimeout"}) {
+	known := []string{"User", "Env", "Entrypoint", "Cmd", "Volumes", "OnBuild", "Labels", "WorkingDir", "ExposedPorts", "StopSignal", "ArgsEscaped", "Healthcheck", "Shell", "StopTimeout"}
+	if !exactKeys(cfg, nil, known...) || !canonicalDockerKeys(cfg, known) {
 		return ImageConfig{}, fail("metadata_unavailable")
 	}
 	var typed dockerspec.DockerOCIImage

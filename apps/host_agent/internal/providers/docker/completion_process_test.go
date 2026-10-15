@@ -51,7 +51,7 @@ func TestOfficialCompletionRequiresNormalWaitedExitAfterSuccessStdout(t *testing
 				if e != nil {
 					t.Fatal(e)
 				}
-				if _, e := phaseResult(raw, Hooks, ""); e != nil {
+				if _, e := phaseResult(context.Background(), registryParser(t), raw, Hooks, ""); e != nil {
 					t.Fatal(e)
 				}
 			} else if e == nil || len(raw) != 0 {

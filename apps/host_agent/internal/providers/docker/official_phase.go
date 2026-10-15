@@ -138,13 +138,13 @@ func (p *Prepared) runPhase(ctx context.Context, phase Phase, id string) (PhaseE
 	if e != nil {
 		return PhaseEvidence{}, e
 	}
-	result, e := phaseResult(raw, phase, observed.ContainerID)
+	result, e := phaseResult(ctx, config.JSONC{NodePath: p.tools.NodePath, CompanionDir: p.tools.Root}, raw, phase, observed.ContainerID)
 	if e != nil {
 		return PhaseEvidence{}, e
 	}
 	if phase == Resources {
-		if result["remoteUser"] != strings.SplitN(policy.RemoteUser, ":", 2)[0] {
-			return PhaseEvidence{}, fail("configuration_changed")
+		if e := validateResourceUser(result, policy.RemoteUser); e != nil {
+			return PhaseEvidence{}, e
 		}
 		effective := map[string]any{"configuration": result["configuration"], "mergedConfiguration": result["mergedConfiguration"], "workspace": p.effective["workspace"], "ociAuthDiagnostics": result["ociAuthDiagnostics"]}
 		if e = ValidateEffective(effective, p.source.Source, p.metadata, input); e != nil {
@@ -165,4 +165,22 @@ func (p *Prepared) runPhase(ctx context.Context, phase Phase, id string) (PhaseE
 	}
 	descriptor, _ := config.DecodeDescriptor(p.source.Descriptor.Map())
 	return PhaseEvidence{Phase: phase, Target: observed, Descriptor: descriptor}, nil
+}
+
+// The CLI display user is checked separately from the authoritative numeric pair.
+func validateResourceUser(result map[string]any, remotePair string) error {
+	uid, _, ok := parseUser(remotePair)
+	if !ok {
+		return fail("configuration_changed")
+	}
+	expected := strings.SplitN(remotePair, ":", 2)[0]
+	// Pinned CLI0.89.0 createContainerProperties displays UID0 as root.
+	// This does not resolve names or alter the enforced UID:GID pair.
+	if uid == 0 {
+		expected = "root"
+	}
+	if result["remoteUser"] != expected {
+		return fail("configuration_changed")
+	}
+	return nil
 }

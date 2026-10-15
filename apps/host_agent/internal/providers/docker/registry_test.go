@@ -125,3 +125,18 @@ func TestRegistryMalformedRuntimeFieldsRefuseBeforeOfficialCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistryUnknownRawDockerConfigFieldRefusesAfterDigestVerification(t *testing.T) {
+	parser := registryParser(t)
+	raw := `{"architecture":"arm64","os":"linux","config":{"WorkHarborUnknown":true}}`
+	selected := registrySelection{Reference: "example.test/fixture@sha256:" + strings.Repeat("a", 64), ConfigID: registryDigest(raw), ConfigSize: int64(len(raw))}
+	if _, e := decodeRegistryImage(context.Background(), parser, selected, "arm64", []byte(raw)); e == nil {
+		t.Fatal("unknown raw Config field silently admitted")
+	}
+	ancillary := `{"architecture":"arm64","os":"linux","WorkHarborAncillary":{"record":true},"config":{}}`
+	selected.ConfigID, selected.ConfigSize = registryDigest(ancillary), int64(len(ancillary))
+	image, e := decodeRegistryImage(context.Background(), parser, selected, "arm64", []byte(ancillary))
+	if e != nil || image.Document["WorkHarborAncillary"].(map[string]any)["record"] != true {
+		t.Fatalf("ancillary root field not preserved: %#v %v", image, e)
+	}
+}
