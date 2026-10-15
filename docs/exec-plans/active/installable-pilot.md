@@ -1412,3 +1412,12 @@ exits0 in candidate-host-vet.log. Required IDs are appended, preserving the prio
 ordered inventory. The embedded companion source carries the AST correction;
 locked external package bytes/integrities are unchanged. Exact candidate source
 review/pristine canonical and actual Linux/Docker proof remain pending.
+
+Exact2042586 pristine canonical preflight refused the newly added15 Fuzz* seed
+identities because the existing application required-ID schema accepts Test*
+identities only. Original exit2/log/result remain in
+/private/tmp/workharbor-t009-canonical-2042586-2uh5doa_/. Remove only those new
+non-schema inventory entries; every predecessor and newly required Test* identity
+is retained. Full go test still executes all fuzz seed cases (430 outcomes);
+415 Test* outcomes remain required. No schema/check relaxation or passing
+canonical claim is made; a new pristine exact candidate must run all gates.
