@@ -11,7 +11,7 @@ semantics, with locked JSONC/parser/tool integrity recorded in the contract and 
 | Configuration | Dedicated HTTPS/explicit-SSH Git origin; exact 40/64-hex root commit and complete sorted project gitlink set; separate owner approval |
 | Submodules | Explicit absolute HTTPS/SSH origins and exact approved commits; no recursive/nested or relative-origin resolution |
 | Dev Container input | Strict JSONC, comments/trailing commas; fatal UTF-8/scalar checks and recursive decoded duplicate-key refusal |
-| Image | Digest-qualified image; raw selected-platform registry config verified before any pull |
+| Image | Digest-qualified image; raw selected-platform registry config verified before any pull; closed raw Config keys as enumerated in the provider contract, unknown Config keys refuse (ancillary root fields preserved) |
 | Dockerfile | Pinned maintained grammar; static digest external FROM or prior stage; literal named/final target; official no-Features wrapper |
 | Execution users | Both explicit numeric UID:GID pairs, each ID 0..4294967294; containerUser equals remoteUser or 0:0 |
 | Ownership | Rootful unmapped Linux Docker and initial chown capability; preserve ordinary source modes; immutable original data UID/GID |

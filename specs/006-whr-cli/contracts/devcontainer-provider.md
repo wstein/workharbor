@@ -132,7 +132,13 @@ build. Reject source build.args and ARG declarations in BUILDKIT_ and
 _DEV_CONTAINERS_ namespaces. Scrub inherited frontend/Buildx/Docker configuration;
 use fixed provider endpoint/tool paths. Independently validate every external base's
 raw metadata, with Config.Volumes and Config.OnBuild absent/empty. No extra or
-anonymous-volume support. No bespoke shell/Dockerfile instruction interpreter.
+anonymous-volume support. Raw Docker Config keys are closed to User, Env,
+Entrypoint, Cmd, Volumes, OnBuild, Labels, WorkingDir, ExposedPorts, StopSignal,
+ArgsEscaped, Healthcheck, Shell and StopTimeout, with maintained Docker types,
+exact case and strict duplicate checks. Any other Config key diagnoses/refuses
+before effects; apply the same gate to local post-pull/build image Config.
+Ancillary root image-document fields are preserved in the raw Document and do not
+extend Config/metadata capabilities. No bespoke shell/Dockerfile interpreter.
 
 Raw image devcontainer.metadata is independently strict-decoded before CLI merge;
 malformed/duplicate/unknown content never becomes an accepted CLI empty fallback.
@@ -428,3 +434,11 @@ All Docker clients/sockets, other imports/files and control-plane provider acces
 remain rejected, with preserved inherited and new independent negative harness IDs.
 This checker alignment requires full canonical verification on the exact pristine
 candidate; earlier docs-only canonical evidence cannot cover it.
+
+Pinned CLI resource stdout displays canonical numeric UID0 as `root` and other
+UIDs as their decimal string. Validate exactly that derived display value; it
+provides no named-user resolution or ownership authority. Source/effective/run/exec
+users and immutable initial ownership remain the exact admitted numeric UID:GID.
+Normal resource/hook stdout uses the same strict companion/UseNumber path as
+preflight, so exact configFilePath.$mid=1 provenance retains its numeric type and
+noncanonical fractions/exponents never become accepted integers.

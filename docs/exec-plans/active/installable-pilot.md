@@ -1421,3 +1421,24 @@ non-schema inventory entries; every predecessor and newly required Test* identit
 is retained. Full go test still executes all fuzz seed cases (430 outcomes);
 415 Test* outcomes remain required. No schema/check relaxation or passing
 canonical claim is made; a new pristine exact candidate must run all gates.
+
+Whole-candidate static review reported three concrete integration issues, all
+reproduced before correction: phase-result provenance used integer-only wirejson
+(*big.Int) while effective provenance expects exact json.Number; unknown raw Docker
+Config keys were retained rather than refused by the claimed closed fixture;
+canonical numeric UID0 displays as root in pinned CLI0.89.0. Genuine assertion REDs
+are /private/tmp/workharbor-t009-phase-provenance-red.log (exit1,1.424s),
+raw-config-subset-red.log (exit1,0.432s), and resource-user-red.log (exit1,0.247s).
+Corrections reuse the strict companion for normal phase stdout, explicitly close
+raw Config keys consistently for registry/local images while preserving ancillary
+root fields, and derive root display only from an already canonical numeric UID0.
+No names grant ownership. Actual CLI preflight output flows through the resource
+result/effective validation regression, including fractional/exponent MID refusal.
+The full superseding host native batch passes 440 test/subtest outcomes,
+with 425 schema-valid required Test* IDs, in
+/private/tmp/workharbor-t009-three-fixes-full-native.jsonl (exit0). Original REDs
+remain retained. Chosen public-image capture currently contains tag/platform
+metadata only; its actual raw Config fit and tool compatibility remain mandatory
+real Linux gates, with no subset weakening if unsupported. These author fixes
+await exact retained-reviewer closure; canonical restart and real acceptance
+remain pending, Feature006 T009 unchecked and T010 waiting.

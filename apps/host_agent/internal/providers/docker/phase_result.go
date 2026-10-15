@@ -3,13 +3,13 @@ package docker
 
 import (
 	"context"
-	"github.com/wstein/workharbor-nxt/apps/api_client/wirejson"
+	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/config"
 )
 
 // phaseResult validates only a fully waited normal CLI exit's stdout. This
 // function alone grants no receipt: final native target inspection is required.
-func phaseResult(raw []byte, phase Phase, containerID string) (map[string]any, error) {
-	value, e := wirejson.Parse(raw)
+func phaseResult(ctx context.Context, parser config.JSONC, raw []byte, phase Phase, containerID string) (map[string]any, error) {
+	value, e := parser.Parse(ctx, raw, true)
 	if e != nil {
 		return nil, fail("phase_unknown")
 	}

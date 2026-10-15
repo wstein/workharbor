@@ -95,6 +95,36 @@ func TestPinnedOfficialCLIReadConfigurationPreservesSourceAndMetadata(t *testing
 		raw, _ := json.Marshal(result)
 		t.Fatalf("effective gate: %v candidate=%s", e, raw)
 	}
+	t.Run("resource-result-retains-actual-official-provenance", func(t *testing.T) {
+		id := strings.Repeat("a", 64)
+		up := map[string]any{"outcome": "success", "containerId": id, "remoteUser": "1000", "remoteWorkspaceFolder": "/workspace", "configuration": result["configuration"], "mergedConfiguration": result["mergedConfiguration"], "ociAuthDiagnostics": result["ociAuthDiagnostics"]}
+		raw, e := json.Marshal(up)
+		if e != nil {
+			t.Fatal(e)
+		}
+		decoded, e := phaseResult(context.Background(), registryParser(t), raw, Resources, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		effective := map[string]any{"configuration": decoded["configuration"], "mergedConfiguration": decoded["mergedConfiguration"], "workspace": result["workspace"], "ociAuthDiagnostics": decoded["ociAuthDiagnostics"]}
+		if e := ValidateEffective(effective, source, metadata, input); e != nil {
+			t.Fatalf("normal official resource result lost provenance: %v", e)
+		}
+		for _, number := range []string{"1.0000000000000001", "1e0", "9007199254740993"} {
+			bad := strings.ReplaceAll(string(raw), `"$mid":1`, `"$mid":`+number)
+			if bad == string(raw) {
+				t.Fatal("official provenance fixture has no numeric mid")
+			}
+			decoded, e := phaseResult(context.Background(), registryParser(t), []byte(bad), Resources, id)
+			if e != nil {
+				continue
+			}
+			effective["configuration"], effective["mergedConfiguration"] = decoded["configuration"], decoded["mergedConfiguration"]
+			if ValidateEffective(effective, source, metadata, input) == nil {
+				t.Fatalf("noncanonical provenance integer admitted: %s", number)
+			}
+		}
+	})
 	merged, ok := result["mergedConfiguration"].(map[string]any)
 	if !ok {
 		t.Fatal("missing effective config")

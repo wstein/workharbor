@@ -944,7 +944,17 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRawRegistryManifestIntegerLexemesAreNotRoundedByJSONC/size-fraction",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRawRegistryManifestIntegerLexemesAreNotRoundedByJSONC/size-exponent",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRawRegistryManifestIntegerLexemesAreNotRoundedByJSONC",
-      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/storage/TestSeedProcessHelper"
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/storage/TestSeedProcessHelper",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/0:0-root",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/1000:1000-1000",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/0:0-0",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/0:0-1000",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/1000:1000-root",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/1000:1000-vscode",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/1000-1000",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestPinnedOfficialCLIReadConfigurationPreservesSourceAndMetadata/resource-result-retains-actual-official-provenance",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRegistryUnknownRawDockerConfigFieldRefusesAfterDigestVerification"
     ],
     "api_client": [
       "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestFrozenJSONVectors",
