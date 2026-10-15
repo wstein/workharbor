@@ -1191,3 +1191,24 @@ containment, filesystem quota enforcement or retained runtime data. The P3 fresh
 or a product/spec requirement. Reviewed reversible plan amendments remain within
 existing authorization; no additional human approval gate is invented. Only a
 committed version of this section is a durable tracker; dirty edits are preparation.
+
+### T009 native approval/storage binding checkpoint
+
+The native control-plane approval and storage-binding slice is implemented; it is
+not Feature006 T009 acceptance. Exact-revision approval is separate from request
+identity, authenticated at the native Accounts/Hosts boundary, and immutable in
+SQLite. Storage binding retains the ORIGINAL create descriptor and first observed
+provider handle; later configuration revisions never replace that initial binding.
+No lifecycle dispatch, provider wire activation or terminal implementation is added.
+
+After formatting these files, bounded native `ERL_FLAGS='+S 2:2' MIX_ENV=test mix
+test --warnings-as-errors` passed all187 tests in92.3s. Original complete log:
+/private/tmp/workharbor-t009-control-plane-native-slices.log (exit0). Expected
+transport refusal and SQLite lock-contention diagnostics remain in the raw log;
+no failed test is hidden. Native host-agent `GOMAXPROCS=2 go test -p 1 -count=1
+./...` also passed its completed config/tool/storage/provider slice checkpoint:
+/private/tmp/workharbor-t009-host-native-slices.log (exit0). Subsequent admission
+scaffolding is separate unfinished source, so that checkpoint is not a claim for
+the eventual complete candidate. Independent exact-source review, pristine/native
+application and manifest gates, and required real Linux/Docker evidence remain
+outstanding. Feature006 T009 stays unchecked and Feature006 T010 still waits.
