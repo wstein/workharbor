@@ -1712,6 +1712,8 @@ are not actual Docker acceptance.
 | --- | --- |
 | original strategy.json | 80037ab1a6d38f27fcbbd5747c7564cbaa91db2d778b2e3597d0e464cc97a7bf |
 | reviewed strategy.revision2.json | 0b076903843253d46b1e50b99f50edef77cfba175a1499a8599f669ec46c713f |
+| later code3/code4 pressure-policy.json | 87a044dcfeb51a2a559663f33fe9968ed75be3d1458b033b75b4a221f626d33d |
+| later code3/code4 mechanism-clarifications.json | cbf1c8dbb0250791717de6f2564c93141beab7fa2ad0d7d8d91dd37ad9f0702e |
 | bounded-disk design assessment | ee3fd84123d92c31bd39d67bcc63b6727b8e9c06618293f9a98183feb41ec3b3 |
 | code3 review-packet.json | d9bbdd62a3e4f9f35513cc3472959b0253d8943919264ce735e1f634959433fe |
 | code3 independent assessment | a741f311739225cec3962e5a58f49eaf014c35db910e8d8c5f4bac6d8b41c0ac |
@@ -1724,8 +1726,12 @@ are not actual Docker acceptance.
 
 Strategy and packets are under
 `/private/tmp/workharbor-t009-bounded-disk-strategy-wlsha3bp/` (packets in
-`code3/` and `code4/`). The retained reviewed revision2 clarifies category accounting, OCI counting and
-the entry amendment.
+`code3/` and `code4/`). The retained reviewed revision2 clarifies category and OCI accounting; its
+`phase_safety` retains historical3GiB entry text. The later accepted2.75GiB entry
+amendment is bound by `code3/pressure-policy.json` and `code4/pressure-policy.json`,
+plus their `mechanism-clarifications.json`, and verified by the code3/code4
+independent assessments above. Each later artifact pair has identical bytes in
+code3 and code4, with exact hashes in the table.
 Independent assessment directories are, respectively,
 `/private/tmp/workharbor-t009-bounded-disk-design-review-m8uem5eh/`,
 `/private/tmp/workharbor-t009-code3-review-6wougg2b/` and
