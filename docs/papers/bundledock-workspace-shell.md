@@ -15,13 +15,15 @@ agent-written prompt commands.
 
 Issue #81 calls this future bundle integration "feature 002". That identifier is
 already used by [Symphony documentation smoke](../../specs/002-symphony-doc-smoke/spec.md).
-Allocate a distinct feature identifier before specifying BundleDock integration;
-do not repurpose that directory or change completed task history. Current `main`
+The bounded [Feature 007 policy port](../../specs/007-bundledock-shell-policy/spec.md)
+now uses a distinct identifier; it does not repurpose that directory or change
+completed task history. Its [data-only contract](../../contracts/workspace-shell-policy.md)
+implements deterministic planning with Starship off, not attachment or launch. Current `main`
 has no product attachment implementation. The installable pilot does not supply
 an approved BundleDock attachment contract either.
 
-The future feature needs a reviewed spec, plan, tasks and bounded implementation
-scope. It must choose the attachment method, supported image/shell matrix,
+The broader integration still needs a reviewed spec, plan, tasks and bounded
+implementation scope. It must choose the attachment method, supported image/shell matrix,
 immutable artifact and prompt policy. This paper supplies review input without
 inventing approved tasks or changing the accepted bundle ports.
 
