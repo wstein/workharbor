@@ -1470,3 +1470,13 @@ fixture source review and pristine pinned canonical remain mandatory.
 Tagged fixture vet has an original wrong-directory setup failure retained in
 /private/tmp/workharbor-t009-refusal-coverage-vet.log; the correct module invocation
 supersedes it in refusal-coverage-vet-superseding.log (exit0).
+
+Exact1d4bfa3 fixture review found one incorrect expected diagnostic for a relative
+source symlink: the actual resolver's filesystem-containment refusal is
+invalid_configuration, not lexical context_schema. The actual immutable HTTPS Git
+chain with source symlink ../../outside.json reproduced that expected-diagnostic
+mismatch in /private/tmp/workharbor-t009-symlink-fixture-diagnostic-red.log
+(exit1,1.085s); the deliberate corrected diagnostic passes the same native chain
+in symlink-fixture-diagnostic-green.log (exit0,1.147s). Product resolver behavior
+is unchanged and strict exact diagnostic checking remains. New native required
+ID is appended; same-reviewer exact correction/fixture closure remains pending.
