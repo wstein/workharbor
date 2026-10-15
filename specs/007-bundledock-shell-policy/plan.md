@@ -24,7 +24,8 @@ Document no-prompt policy and full Nushell shortcuts opt-out. Keep executable po
 acceptance separate from full runtime acceptance.
 
 Allowed paths: this feature directory; `contracts/workspace-shell-policy.md`;
-`apps/host_agent/internal/workspaceshell/`; a focused evidence record and links in
+`apps/host_agent/internal/workspaceshell/`; append only this package's required
+IDs in `docs/development/ci-acceptance.json`; a focused evidence record and links in
 `docs/index.md` and the issue-81 design paper. No existing accepted task edits.
 
 Checks from host-agent: `gofmt -l internal/workspaceshell`,
