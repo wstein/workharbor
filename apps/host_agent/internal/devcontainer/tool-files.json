@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "provenance": "npm ci --ignore-scripts from committed integrity lock; original package bytes",
+  "files": {
+    "@devcontainers/cli/devcontainer.js": "e6df20af860208e00365d7b73f64d3940bad087ea8049de12223d1e7376522e3",
+    "@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js": "22b5b3a7345608f552db2f1af589ca06c7274d116778d00aa67cbfe1e1cafc65",
+    "@devcontainers/cli/package.json": "6af5eeda6e4d9a2267a503c17816d74373f52005b1209dc92ab97249751c2971",
+    "jsonc-parser/lib/umd/impl/edit.js": "9ecd115039cf7a478f223e4a9649170c7f5e8fd8016df1b267723b57553f9483",
+    "jsonc-parser/lib/umd/impl/format.js": "f9e468e436bf1014a4395b1ac70374edb918739ba90b19e6e6a22ca0214564a9",
+    "jsonc-parser/lib/umd/impl/parser.js": "a35db1bfb9631dcba643fa42972e9ebe2a318b4de3cac239d29081577a43d688",
+    "jsonc-parser/lib/umd/impl/scanner.js": "581d82c4f1aa84b0605369c01f414fb0164ee462e03daa298cb960076a2a9e82",
+    "jsonc-parser/lib/umd/impl/string-intern.js": "e590d27909a7c132382fbf9b8c4668054ab425734c1e0789753063356826c30f",
+    "jsonc-parser/lib/umd/main.js": "6dc132e2e792a9616688ff93d10dd671c1fbcfa3301d76bff3e81193d049337d",
+    "jsonc-parser/package.json": "a7a9192caaac00d9330592f4fd572908bee037518128a0fc3db96d2cd652e2b5"
+  }
+}

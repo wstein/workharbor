@@ -1212,3 +1212,35 @@ scaffolding is separate unfinished source, so that checkpoint is not a claim for
 the eventual complete candidate. Independent exact-source review, pristine/native
 application and manifest gates, and required real Linux/Docker evidence remain
 outstanding. Feature006 T009 stays unchecked and Feature006 T010 still waits.
+
+### T009 immutable config/parser checkpoint (partial source only)
+
+Exact source follows accepted upstream CP checkpoint `ad3cb18` and the independently
+accepted disjoint documentation commit `405f936`. The configuration resolver owns
+fresh private Git staging, exact root/gitlink revisions and complete approved
+submodule sets; it never resets retained project data. Strict JSONC rejects malformed
+UTF-8, lone surrogates and decoded recursive duplicate keys before conversion.
+The maintained BuildKit grammar parser uses a non-nil maintained linter: the inline
+`#check=skip=JSONArgsRecommended` regression closes the reviewer's nil-linter finding.
+This does not broaden the supported Dockerfile frontend or runtime capability set.
+
+Meaningful SHA256/SSH transport reds are preserved in
+/private/tmp/workharbor-t009-resolver-hash-ssh-red.log (exit1, two assertions).
+The superseding exact command `GOMAXPROCS=2 go -C apps/host_agent test -p 1
+-count=1 ./internal/config -run 'TestResolverExactSHA256|TestResolverHTTPSRootUsesExplicitSSH'`
+passes in /private/tmp/workharbor-t009-resolver-hash-ssh-green.log (exit0,1.730s).
+Each approved commit/gitlink chooses explicit SHA1 or SHA256 initialization.
+The SHA256 fixture uses real HTTPS Git; the SSH fixture proves explicit approved
+transport dispatch with an intentionally failing test command, not real SSH success.
+No ambient SSH configuration, agent or credential fallback is admitted.
+
+Current serial native `GOMAXPROCS=2 go -C apps/host_agent test -p 1 -count=1
+./internal/config ./internal/devcontainer ./internal/storage` passes in
+/private/tmp/workharbor-t009-pure-slices-final.log: config12.189s,
+devcontainer0.454s, storage1.130s. Focused native vet passes in
+/private/tmp/workharbor-t009-pure-slices-vet.log; whitespace checks pass. Earlier
+raw RED/setup/cleanup failures retain their original logs and outcomes. Storage
+source is a separate checkpoint; this record does not accept unfinished provider
+integration. Real Linux/Docker, nonroot ownership/retention and source/pristine
+application/manifest gates remain outstanding. Feature006 T009 remains unchecked;
+Feature006 T010 waits, and lifecycle receipts/recovery remain outside this task.
