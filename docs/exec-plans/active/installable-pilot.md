@@ -1244,3 +1244,25 @@ source is a separate checkpoint; this record does not accept unfinished provider
 integration. Real Linux/Docker, nonroot ownership/retention and source/pristine
 application/manifest gates remain outstanding. Feature006 T009 remains unchecked;
 Feature006 T010 waits, and lifecycle receipts/recovery remain outside this task.
+
+### T009 atomic initial-seed checkpoint (partial source only)
+
+The host-internal store publishes the complete private parent with a kernel
+NO-REPLACE rename and parent fsync; only its data subtree is for workspace mounts.
+The marker binds the ORIGINAL storage reservation/descriptor/numeric owner. A known
+provider handle whose final path is missing refuses before copy or repair. Existing
+valid final data is reused without traversal, recopy, reset, chmod or chown. Current
+native authorization is checked before filesystem work, inside the storage lock
+and before publication/receipt. Maintained x/sys v0.48.0 supplies Linux/Darwin
+no-replace primitives; unsupported platforms/filesystems refuse without fallback.
+
+The native suite includes competing independent publishers, six actual own-child
+SIGKILL checkpoints, retained edited binary/untracked hashes and invalid/foreign
+final preservation. Latest serial package result is storage1.130s (exit0) in
+/private/tmp/workharbor-t009-pure-slices-final.log; focused vet also exits0. The
+original extended readonly test-cleanup failure and exact earlier superseding
+GREEN remain recorded above and untouched. These are Darwin native tests, not
+Linux/Docker or power-loss proof. Full provider integration/current immutable
+source checks and real Linux numeric-nonroot Git/chmod/retention/crash acceptance
+remain required. This checkpoint does not implement Feature006 T010 lifecycle
+reconciliation and does not accept Feature006 T009 or change any task checkbox.
