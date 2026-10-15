@@ -138,3 +138,17 @@ func TestDockerfileMaintainedGrammarCheckCommentsNeverPanic(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestDockerfileEveryReservedARGDeclarationRefuses(t *testing.T) {
+	base := "ubuntu@sha256:" + strings.Repeat("a", 64)
+	for _, arg := range []string{"ARG OK BUILDKIT_SYNTAX=evil/frontend", "ARG FIRST SECOND _DEV_CONTAINERS_BASE_IMAGE=evil", "ARG OK=1 BUILDKIT_INLINE_CACHE=1 LAST=2"} {
+		for _, prefix := range []string{"FROM " + base + "\n", ""} {
+			raw := prefix + arg + "\n"
+			if prefix == "" {
+				raw += "FROM " + base + "\n"
+			}
+			_, e := ValidateDockerfile([]byte(raw))
+			code(t, e, "unsupported_configuration")
+		}
+	}
+}

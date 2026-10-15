@@ -1266,3 +1266,23 @@ Linux/Docker or power-loss proof. Full provider integration/current immutable
 source checks and real Linux numeric-nonroot Git/chmod/retention/crash acceptance
 remain required. This checkpoint does not implement Feature006 T010 lifecycle
 reconciliation and does not accept Feature006 T009 or change any task checkbox.
+
+### T009 config/parser independent findings and corrections
+
+Independent review of exact `9a5be1535364e263503b62798ea4d01ee0bf2bc5` found
+two P2 issues: later names in a multi-name ARG could bypass reserved-argument
+refusal, and raw mixed-case AS names did not follow maintained case-insensitive
+target semantics. Reviewer baseline/probes are preserved at
+/private/tmp/workharbor-t009-config-review-vh0rswnl/ (baseline/probes/results).
+Author regression RED is /private/tmp/workharbor-t009-config-review-fixes-red.log
+(exit1, both assertions,0.340s). Every maintained AST ARG operand is now checked;
+stage names/target matching and generated reserved-name collisions normalize
+case consistently. Mixed-case alias chains and both generated reserved names
+have independent regression cases.
+
+Full native config/devcontainer packages pass after the corrections in
+/private/tmp/workharbor-t009-config-review-fixes-green.log (exit0,13.558s/0.505s),
+and focused vet exits0 in /private/tmp/workharbor-t009-config-review-fixes-vet.log.
+Exact independent correction review remains required; this is not a claim that
+all T009 source is reviewed. Provider implementation and real Linux/Docker gates
+remain unfinished and Feature006 T009 remains unchecked.
